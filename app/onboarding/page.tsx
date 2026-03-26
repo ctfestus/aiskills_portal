@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// -- Constants -----------------------------------------------------------------
 const INDUSTRIES = [
   'Accounting & Finance', 'Advertising & Marketing', 'Aerospace & Defence',
   'Agriculture & Farming', 'Architecture & Urban Planning', 'Arts & Entertainment',
@@ -50,7 +50,7 @@ const STEPS = [
   { title: 'Social links',    subtitle: 'Connect your platforms',            optional: true  },
 ];
 
-// ── Logo ─────────────────────────────────────────────────────────────────────
+// -- Logo ---------------------------------------------------------------------
 function Logo() {
   return (
     <div className="flex items-center gap-2">
@@ -60,7 +60,7 @@ function Logo() {
   );
 }
 
-// ── Industry dropdown ─────────────────────────────────────────────────────────
+// -- Industry dropdown ---------------------------------------------------------
 function IndustrySelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen]       = useState(false);
   const [query, setQuery]     = useState('');
@@ -114,7 +114,7 @@ function IndustrySelect({ value, onChange }: { value: string; onChange: (v: stri
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// -- Main page -----------------------------------------------------------------
 export default function OnboardingPage() {
   const router = useRouter();
 
@@ -141,7 +141,7 @@ export default function OnboardingPage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Init ──────────────────────────────────────────────────────────────────
+  // -- Init ------------------------------------------------------------------
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -170,7 +170,7 @@ export default function OnboardingPage() {
     })();
   }, [router]);
 
-  // ── Avatar upload ─────────────────────────────────────────────────────────
+  // -- Avatar upload ---------------------------------------------------------
   const handleAvatarFile = async (file: File) => {
     if (!file || !userId) return;
     setAvatarUploading(true);
@@ -184,7 +184,7 @@ export default function OnboardingPage() {
     setAvatarUploading(false);
   };
 
-  // ── Navigation ────────────────────────────────────────────────────────────
+  // -- Navigation ------------------------------------------------------------
   const canProceed = () => {
     if (step === 0) return name.trim().length >= 2;
     return true;
@@ -223,7 +223,7 @@ export default function OnboardingPage() {
 
   const isLastStep = step === STEPS.length - 1;
 
-  // ── Loading ───────────────────────────────────────────────────────────────
+  // -- Loading ---------------------------------------------------------------
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -232,7 +232,7 @@ export default function OnboardingPage() {
     );
   }
 
-  // ── Step content ──────────────────────────────────────────────────────────
+  // -- Step content ----------------------------------------------------------
   const variants = {
     enter:  (d: number) => ({ x: d > 0 ? 40 : -40, opacity: 0 }),
     center: { x: 0, opacity: 1 },
@@ -245,7 +245,7 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
 
-      {/* ── Top bar ───────────────────────────────────────────────────────── */}
+      {/* -- Top bar --------------------------------------------------------- */}
       <div className="flex items-center justify-between px-6 py-5 border-b border-[rgba(0,0,0,0.06)]">
         <Logo />
         <span className="text-xs text-[#888] font-medium">
@@ -253,7 +253,7 @@ export default function OnboardingPage() {
         </span>
       </div>
 
-      {/* ── Progress bar ─────────────────────────────────────────────────── */}
+      {/* -- Progress bar --------------------------------------------------- */}
       <div className="h-0.5 bg-[#f0f0f0]">
         <motion.div
           className="h-full bg-[#006128]"
@@ -262,7 +262,7 @@ export default function OnboardingPage() {
         />
       </div>
 
-      {/* ── Content ──────────────────────────────────────────────────────── */}
+      {/* -- Content -------------------------------------------------------- */}
       <div className="flex-1 flex items-start justify-center px-6 py-12 overflow-hidden">
         <div className="w-full max-w-md">
 
@@ -307,7 +307,7 @@ export default function OnboardingPage() {
               className="space-y-4"
             >
 
-              {/* ── Step 0: Identity ───────────────────────────────────── */}
+              {/* -- Step 0: Identity ------------------------------------- */}
               {step === 0 && (
                 <div>
                   <label className={labelCls}>Full name <span className="text-red-400 normal-case font-normal">required</span></label>
@@ -320,7 +320,7 @@ export default function OnboardingPage() {
                 </div>
               )}
 
-              {/* ── Step 1: Background ─────────────────────────────────── */}
+              {/* -- Step 1: Background ----------------------------------- */}
               {step === 1 && (
                 <>
                   <div>
@@ -361,7 +361,7 @@ export default function OnboardingPage() {
                 </>
               )}
 
-              {/* ── Step 2: Avatar ─────────────────────────────────────── */}
+              {/* -- Step 2: Avatar --------------------------------------- */}
               {step === 2 && (
                 <div className="flex flex-col items-center py-4">
                   <input
@@ -411,7 +411,7 @@ export default function OnboardingPage() {
               )}
 
 
-              {/* ── Step 3: Socials ────────────────────────────────────── */}
+              {/* -- Step 3: Socials -------------------------------------- */}
               {step === 3 && (
                 <div className="space-y-3">
                   {SOCIAL_FIELDS.map(({ key, label, Icon, placeholder }) => (
@@ -434,7 +434,7 @@ export default function OnboardingPage() {
             </motion.div>
           </AnimatePresence>
 
-          {/* ── Error ──────────────────────────────────────────────────── */}
+          {/* -- Error ---------------------------------------------------- */}
           <AnimatePresence>
             {error && (
               <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
@@ -443,7 +443,7 @@ export default function OnboardingPage() {
             )}
           </AnimatePresence>
 
-          {/* ── Actions ────────────────────────────────────────────────── */}
+          {/* -- Actions -------------------------------------------------- */}
           <div className="mt-8 flex items-center justify-between gap-3">
             {/* Back */}
             <button

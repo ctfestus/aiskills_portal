@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const adminSupabase = createClient(
@@ -6,7 +6,7 @@ const adminSupabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// ── Token refresh helpers ──────────────────────────────────────────────────────
+// -- Token refresh helpers ------------------------------------------------------
 async function refreshGoogle(refreshToken: string): Promise<string | null> {
   const r = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -55,7 +55,7 @@ async function getValidToken(integration: any, provider: string): Promise<string
   return newToken;
 }
 
-// ── Meeting creators ───────────────────────────────────────────────────────────
+// -- Meeting creators -----------------------------------------------------------
 async function createGoogleMeet(token: string, title: string, startIso: string): Promise<string> {
   const start = new Date(startIso);
   const end   = new Date(start.getTime() + 3_600_000);
@@ -102,7 +102,7 @@ async function createTeamsMeeting(token: string, title: string, startIso: string
   return d.joinWebUrl;
 }
 
-// ── Auth helper ────────────────────────────────────────────────────────────────
+// -- Auth helper ----------------------------------------------------------------
 async function getCallerUserId(req: NextRequest): Promise<string | null> {
   const auth = req.headers.get('authorization');
   if (!auth?.startsWith('Bearer ')) return null;
@@ -111,7 +111,7 @@ async function getCallerUserId(req: NextRequest): Promise<string | null> {
   return user.id;
 }
 
-// ── Handler ────────────────────────────────────────────────────────────────────
+// -- Handler --------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
     const userId = await getCallerUserId(req);

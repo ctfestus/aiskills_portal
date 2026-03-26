@@ -557,7 +557,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
     const isRegistered = item.regStatus && item.regStatus !== 'cancelled';
     const isExpanded = expandedEvent === item.id;
 
-    // Form-based cohort events → navigate to the form/event page
+    // Form-based cohort events -> navigate to the form/event page
     if (item.source === 'cohort' && item.formSlug) {
       return (
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} style={{ opacity: isPast ? 0.65 : 1 }}>
@@ -592,7 +592,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
       );
     }
 
-    // Already-registered events → expand inline to show status + join link
+    // Already-registered events -> expand inline to show status + join link
     return (
       <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} style={{ opacity: isPast ? 0.65 : 1 }}>
         <div onClick={() => setExpandedEvent(isExpanded ? null : item.id)}
@@ -1774,7 +1774,7 @@ function ScheduleSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   );
 }
 
-// ─── Leaderboard section ──────────────────────────────────────────────────────
+// --- Leaderboard section ------------------------------------------------------
 function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
   const [cohort, setCohort]     = useState<any>(null);
   const [rankings, setRankings] = useState<any[]>([]);
@@ -1887,7 +1887,7 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
   return (
     <div className="space-y-4">
 
-      {/* ── Hero header ── */}
+      {/* -- Hero header -- */}
       <div className="rounded-2xl px-5 py-4" style={{ background: HERO_BG }}>
         <div className="flex items-center gap-4">
           {/* Icon */}
@@ -1924,7 +1924,7 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
         </div>
       </div>
 
-      {/* ── Refresh ── */}
+      {/* -- Refresh -- */}
       <div className="flex justify-end">
         <button
           onClick={() => setRefreshKey(k => k + 1)}
@@ -1936,7 +1936,7 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
         </button>
       </div>
 
-      {/* ── Rankings table ── */}
+      {/* -- Rankings table -- */}
       <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
 
         {/* Cohort header */}

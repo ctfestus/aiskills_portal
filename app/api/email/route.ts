@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // ── Per-type authorization ─────────────────────────────────────────────
+    // -- Per-type authorization ---------------------------------------------
     let blastCreatorId = '';
 
     if (type === 'blast') {
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
       }
       // Cron path falls through to switch/send below
     } else if (type === 'confirmation' || type === 'course-result') {
-      // Test mode: single email + no responseId → creator-initiated test send
+      // Test mode: single email + no responseId -> creator-initiated test send
       if (typeof to === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim()) && !data?.responseId) {
         const auth = req.headers.get('authorization') ?? '';
         const jwt = auth.startsWith('Bearer ') ? auth.slice(7) : '';
@@ -265,7 +265,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (type === 'blast') {
-      // ── Test mode: single email address provided → send once, skip quota ──
+      // -- Test mode: single email address provided -> send once, skip quota --
       if (typeof to === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim())) {
         if (!data.subject?.trim()) {
           return NextResponse.json({ error: 'Subject is required' }, { status: 400 });
@@ -289,7 +289,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, test: true });
       }
 
-      // ── Daily blast quota ─────────────────────────────────────────────────
+      // -- Daily blast quota -------------------------------------------------
       const BLAST_DAILY_LIMIT = 10;
       const today = new Date().toISOString().split('T')[0];
       const supabase = getAdminSupabase();
@@ -317,7 +317,7 @@ export async function POST(req: NextRequest) {
 
       if (error) throw error;
 
-      // Build deduplicated map of email → response data (DB is authoritative)
+      // Build deduplicated map of email -> response data (DB is authoritative)
       const responseByEmail = new Map<string, Record<string, any>>();
       for (const response of responses || []) {
         const rowData = (response as any)?.data || {};

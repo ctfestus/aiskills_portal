@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from '@google/genai';
+﻿import { GoogleGenAI, Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { GEMINI_MODEL } from '@/lib/ai';
 
@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
   try {
     const ai = getAI();
 
-    // ── Generate a batch of questions from a topic ──────────────────────────
+    // -- Generate a batch of questions from a topic --------------------------
     if (action === 'generate_questions') {
       const topic = clamp(body.topic, 200);
       const count = Math.min(Math.max(Number(body.count) || 5, 1), 20);
@@ -224,7 +224,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(parse(res.text!));
     }
 
-    // ── Generate distractors (wrong answer options) ─────────────────────────
+    // -- Generate distractors (wrong answer options) -------------------------
     if (action === 'generate_distractors') {
       const question = clamp(body.question, 500);
       const correctAnswer = clamp(body.correctAnswer, 300);
@@ -246,7 +246,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(parse(res.text!));
     }
 
-    // ── Generate lesson content ─────────────────────────────────────────────
+    // -- Generate lesson content ---------------------------------------------
     if (action === 'generate_lesson') {
       const question = clamp(body.question, 500);
       const correctAnswer = clamp(body.correctAnswer, 300);
@@ -296,7 +296,7 @@ Also provide:
       });
     }
 
-    // ── Generate a hint ─────────────────────────────────────────────────────
+    // -- Generate a hint -----------------------------------------------------
     if (action === 'generate_hint') {
       const question = clamp(body.question, 500);
       const correctAnswer = clamp(body.correctAnswer, 300);
@@ -317,7 +317,7 @@ Also provide:
       return NextResponse.json(parse(res.text!));
     }
 
-    // ── Generate explanation ────────────────────────────────────────────────
+    // -- Generate explanation ------------------------------------------------
     if (action === 'generate_explanation') {
       const question = clamp(body.question, 500);
       const correctAnswer = clamp(body.correctAnswer, 300);
@@ -338,7 +338,7 @@ Also provide:
       return NextResponse.json(parse(res.text!));
     }
 
-    // ── Generate learning outcomes ──────────────────────────────────────────
+    // -- Generate learning outcomes ------------------------------------------
     if (action === 'generate_outcomes') {
       const questions: any[] = Array.isArray(body.questions) ? body.questions.slice(0, 30) : [];
       const summary = questions.map((q: any, i: number) => `${i + 1}. ${clamp(q.question, 300)}`).join('\n');

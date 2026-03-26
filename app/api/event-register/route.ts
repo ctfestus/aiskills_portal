@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // Service role — needed to call register_event_attendee (no public RLS policies)
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Not an event form' }, { status: 400 });
   }
 
-  // ── Single atomic transaction via Postgres RPC ────────────────────────────
+  // -- Single atomic transaction via Postgres RPC ----------------------------
   // register_event_attendee inserts into event_registrations and responses in
   // one transaction. If either insert fails the whole thing rolls back —
   // no compensation pattern, no ghost registrations possible.

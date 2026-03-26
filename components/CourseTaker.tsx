@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -53,7 +53,7 @@ interface CourseQuestion {
   };
 }
 
-// ── Web Audio sounds ──
+// -- Web Audio sounds --
 function playCorrectSound() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -92,7 +92,7 @@ function playWrongSound() {
   } catch { /* ignore */ }
 }
 
-// ── Confetti burst ──
+// -- Confetti burst --
 function burstConfetti(canvas: HTMLCanvasElement, accent: string) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -146,7 +146,7 @@ function burstConfetti(canvas: HTMLCanvasElement, accent: string) {
   animate();
 }
 
-// ── Sortable item for arrange questions ──
+// -- Sortable item for arrange questions --
 function SortableItem({ id, label, idx, accent, isDark, isChecking }: {
   id: string; label: string; idx: number; accent: string; isDark: boolean; isChecking: boolean;
 }) {
@@ -205,6 +205,7 @@ export function CourseTaker({
   const [phase, setPhase] = useState<'info' | 'course' | 'complete'>(
     collectStudentInfo || !!initialStudentName ? 'info' : 'course'
   );
+  const [reviewMode, setReviewMode] = useState(false); // true when student has already earned a cert — no XP/saves
   const [studentName, setStudentName] = useState(initialStudentName);
   const [studentEmail, setStudentEmail] = useState(initialStudentEmail);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -379,7 +380,7 @@ export function CourseTaker({
     }
   };
 
-  // ── Timer ──
+  // -- Timer --
   useEffect(() => {
     if (phase !== 'course' || !courseTimerMins) return;
 
@@ -406,7 +407,7 @@ export function CourseTaker({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // ── Tab / window / mouse detection ──
+  // -- Tab / window / mouse detection --
   useEffect(() => {
     if (phase !== 'course') return;
 
@@ -452,14 +453,14 @@ export function CourseTaker({
     };
   }, [phase]);
 
-  // ── Prevent copy / right-click on quiz content ──
+  // -- Prevent copy / right-click on quiz content --
   const noSelect: React.CSSProperties = { userSelect: 'none', WebkitUserSelect: 'none' };
   const blockCopy = (e: React.ClipboardEvent) => e.preventDefault();
   const blockMenu = (e: React.MouseEvent) => e.preventDefault();
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-  // ── Shared: run attempt/cert/progress checks after email is verified ──
+  // -- Shared: run attempt/cert/progress checks after email is verified --
   // All queries go through /api/course (service role) — anon client has no access to these tables.
   const runCourseChecks = useCallback(async (_email: string) => {
     setCheckingAttempts(true);
@@ -487,7 +488,8 @@ export function CourseTaker({
       }
 
       if (d.cert?.id) {
-        // Passed & certified — start fresh retake, DB trigger preserves XP
+        // Already certified — enter review mode: no saves, no XP, no new attempt
+        setReviewMode(true);
         setCheckingAttempts(false);
         setPhase('course');
         return;
@@ -512,7 +514,7 @@ export function CourseTaker({
     setPhase('course');
   }, [maxAttempts, formId]);
 
-  // ── Start course — get Supabase session token then run checks ──
+  // -- Start course — get Supabase session token then run checks --
   const handleStartCourse = useCallback(async () => {
     if (!studentName.trim() || !studentEmail.trim()) return;
 
@@ -551,6 +553,7 @@ export function CourseTaker({
     newHintsUsed: Set<string>,
   ) => {
     if (!formId || !studentEmail.trim()) return;
+    if (reviewMode) return; // review mode — never write new attempts
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (sessionTokenRef.current) headers['Authorization'] = `Bearer ${sessionTokenRef.current}`;
     fetch('/api/course', {
@@ -569,11 +572,12 @@ export function CourseTaker({
         hints_used:             [...newHintsUsed],
       }),
     }).catch(() => {});
-  }, [formId, studentEmail, studentName]);
+  }, [formId, studentEmail, studentName, reviewMode]);
 
   // Mark active attempt as completed via API
   const clearProgress = useCallback((finalScore: number) => {
     if (!formId || !studentEmail.trim()) return;
+    if (reviewMode) return; // review mode — keep original completed attempt intact
     const scorePct = totalQuestions > 0 ? Math.round((finalScore / totalQuestions) * 100) : 0;
     const passed   = scorePct >= passmark;
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -593,7 +597,7 @@ export function CourseTaker({
         }),
       }).catch(err => console.error('[clearProgress] failed:', err));
     });
-  }, [formId, studentEmail, totalQuestions, passmark, totalPoints]);
+  }, [formId, studentEmail, totalQuestions, passmark, totalPoints, reviewMode]);
 
   // Resume from saved progress
   const handleResume = useCallback(() => {
@@ -630,7 +634,7 @@ export function CourseTaker({
     setPhase('course');
   }, [formId, studentEmail]);
 
-  // ── Answer checking helpers ──
+  // -- Answer checking helpers --
   const checkFillBlank = (userAnswer: string, correctAnswer: string): boolean => {
     const accepted = correctAnswer.split('|').map(s => s.trim().toLowerCase());
     return accepted.includes(userAnswer.trim().toLowerCase());
@@ -653,11 +657,11 @@ export function CourseTaker({
     return selectedOption !== null; // covers multiple_choice, image, code
   };
 
-  // ── Format answer for review display ──
+  // -- Format answer for review display --
   const formatAnswer = (q: any, answer: string) => {
     if (!answer) return null;
     const qType: QuestionType = q.type ?? 'multiple_choice';
-    if (qType === 'arrange') return answer.split('|||').join(' → ');
+    if (qType === 'arrange') return answer.split('|||').join(' -> ');
     if (qType === 'image') {
       const idx = q.options.indexOf(answer);
       return idx >= 0 ? `Option ${String.fromCharCode(65 + idx)}` : answer;
@@ -672,11 +676,11 @@ export function CourseTaker({
     return answer === q.correctAnswer;
   };
 
-  // ── Points system ──
+  // -- Points system --
   const ps = (config as any).pointsSystem;
   const pointsEnabled = ps?.enabled === true;
 
-  // ── Animated points counter ──
+  // -- Animated points counter --
   useEffect(() => {
     if (displayedPoints === totalPoints) return;
     const step = Math.ceil(Math.abs(totalPoints - displayedPoints) / 20);
@@ -686,7 +690,7 @@ export function CourseTaker({
     return () => clearTimeout(timer);
   }, [totalPoints, displayedPoints]);
 
-  // ── Fetch leaderboard rank when result appears ──
+  // -- Fetch leaderboard rank when result appears --
   useEffect(() => {
     if (!isSuccess || !formId || !studentEmail) return;
     supabase
@@ -720,7 +724,17 @@ export function CourseTaker({
       });
   }, [isSuccess, formId, studentEmail]);
 
-  // ── Success screen (shown after submission) ──
+  // -- All questions answered but student never hit Submit (e.g. closed tab) --
+  // Detect on mount/resume and auto-transition to the completion screen.
+  useEffect(() => {
+    if (phase === 'course' && !reviewMode && totalQuestions > 0 && currentQuestionIndex >= totalQuestions) {
+      clearProgress(score);
+      setPhase('complete');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, currentQuestionIndex, totalQuestions, reviewMode]);
+
+  // -- Success screen (shown after submission) --
   if (isSuccess) {
     const submittedPct = Math.round((score / totalQuestions) * 100);
     const submittedPassed = submittedPct >= passmark;
@@ -733,7 +747,7 @@ export function CourseTaker({
     return (
       <div className={`max-w-2xl mx-auto space-y-3`} style={fontStyle}>
 
-        {/* ── Hero card ── */}
+        {/* -- Hero card -- */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -900,14 +914,14 @@ export function CourseTaker({
                 className="text-xs font-semibold transition-opacity hover:opacity-75"
                 style={{ color: accent }}
               >
-                Create your own course →
+                Create your own course &rarr;
               </button>
             )}
             <p className={`text-xs ${mutedColor}`}>Results recorded</p>
           </div>
         </motion.div>
 
-        {/* ── Leaderboard rank card ── */}
+        {/* -- Leaderboard rank card -- */}
         {rankCtx && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -968,7 +982,7 @@ export function CourseTaker({
           </motion.div>
         )}
 
-        {/* ── Answer review ── */}
+        {/* -- Answer review -- */}
         {showAnswers === 'after_quiz' && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -986,7 +1000,7 @@ export function CourseTaker({
                 const correct = isAnswerCorrect(q, userAnswer);
                 const qType: QuestionType = q.type ?? 'multiple_choice';
                 const correctDisplay = qType === 'arrange'
-                  ? q.correctAnswer.split('|||').join(' → ')
+                  ? q.correctAnswer.split('|||').join(' -> ')
                   : qType === 'fill_blank'
                     ? q.correctAnswer.split('|').map((s: string) => s.trim()).join(' / ')
                     : qType === 'image'
@@ -1027,7 +1041,7 @@ export function CourseTaker({
           </motion.div>
         )}
 
-        {/* ── Post-submission ── */}
+        {/* -- Post-submission -- */}
         {postSubmission?.type && postSubmission.type !== 'default' && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -1104,7 +1118,7 @@ export function CourseTaker({
     );
   }
 
-  // ── Loading state while progress check runs silently ──
+  // -- Loading state while progress check runs silently --
   if (checkingAttempts && initialStudentName) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 320, gap: 16, ...fontStyle }}>
@@ -1117,9 +1131,9 @@ export function CourseTaker({
     );
   }
 
-  // ── Student info screen ──
+  // -- Student info screen --
   if (phase === 'info') {
-    // ── Auto-start mode (pre-filled from overview modal) → render as portal popup ──
+    // -- Auto-start mode (pre-filled from overview modal) -> render as portal popup --
     if (initialStudentName) {
       if (typeof document === 'undefined') return null;
 
@@ -1232,7 +1246,7 @@ export function CourseTaker({
       return null;
     }
 
-    // ── Normal info form (no pre-filled info) ──
+    // -- Normal info form (no pre-filled info) --
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -1369,7 +1383,7 @@ export function CourseTaker({
     );
   }
 
-  // ── Complete screen ──
+  // -- Complete screen --
   if (phase === 'complete') {
     const percentage = Math.round((score / totalQuestions) * 100);
     const passed = percentage >= passmark;
@@ -1487,7 +1501,7 @@ export function CourseTaker({
     return { earned, label, isTimeBonus: withinTimeBonus, isStreak };
   };
 
-  // ── Swipe navigation ──
+  // -- Swipe navigation --
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
@@ -1504,7 +1518,7 @@ export function CourseTaker({
     if ((currentQuestion?.type ?? 'multiple_choice') === 'arrange') return;
 
     if (deltaX < 0) {
-      // Swipe left → next
+      // Swipe left -> next
       if (isChecking) {
         // Feedback already shown — advance
         handleNext();
@@ -1513,7 +1527,7 @@ export function CourseTaker({
         handleNextDirect();
       }
     } else {
-      // Swipe right → previous (only when not locked in feedback)
+      // Swipe right -> previous (only when not locked in feedback)
       if (!isChecking && currentQuestionIndex > 0) {
         setDirection(-1);
         setCurrentQuestionIndex(prev => prev - 1);
@@ -1521,7 +1535,7 @@ export function CourseTaker({
     }
   };
 
-  // ── Quiz questions ──
+  // -- Quiz questions --
   if (!currentQuestion) return null;
 
   const handleCheck = () => {
@@ -1545,7 +1559,7 @@ export function CourseTaker({
       playCorrectSound();
       if (confettiRef.current) burstConfetti(confettiRef.current, accent);
       // Points system
-      if (pointsEnabled) {
+      if (pointsEnabled && !reviewMode) {
         const { earned, label, isStreak } = calcPoints(hintVisible);
         setTotalPoints(prev => prev + earned);
         const newStreak = streak + 1;
@@ -1555,7 +1569,7 @@ export function CourseTaker({
       }
     } else {
       playWrongSound();
-      if (pointsEnabled) {
+      if (pointsEnabled && !reviewMode) {
         setStreak(0);
       }
     }
@@ -1579,8 +1593,18 @@ export function CourseTaker({
       setIsChecking(false);
       setIsCorrect(null);
     } else {
-      clearProgress(score);
-      setPhase('complete');
+      if (reviewMode) {
+        // Review complete — just reset to start without saving anything
+        setCurrentQuestionIndex(0);
+        setAnswers({});
+        setSelectedOption(null);
+        setFillBlankAnswer('');
+        setIsChecking(false);
+        setIsCorrect(null);
+      } else {
+        clearProgress(score);
+        setPhase('complete');
+      }
     }
   };
 
@@ -1652,13 +1676,13 @@ export function CourseTaker({
   const progressPct = (currentQuestionIndex / totalQuestions) * 100;
   const timerWarning = timeLeft !== null && timeLeft <= 60;
 
-  // ── Correct answer display for after-check feedback ──
+  // -- Correct answer display for after-check feedback --
   const correctAnswerDisplay = () => {
     if (questionType === 'fill_blank') {
       return currentQuestion.correctAnswer.split('|').map((s: string) => s.trim()).join(' / ');
     }
     if (questionType === 'arrange') {
-      return currentQuestion.options.join(' → ');
+      return currentQuestion.options.join(' -> ');
     }
     if (questionType === 'image') {
       const idx = currentQuestion.options.indexOf(currentQuestion.correctAnswer);
@@ -1680,14 +1704,14 @@ export function CourseTaker({
 
   const quizUI = (
     <>
-      {/* ── Confetti canvas ── */}
+      {/* -- Confetti canvas -- */}
       <canvas
         ref={confettiRef}
         className="fixed inset-0 pointer-events-none z-[9998]"
         style={{ width: '100vw', height: '100vh' }}
       />
 
-      {/* ── Obscure overlay ── */}
+      {/* -- Obscure overlay -- */}
       <AnimatePresence>
         {isObscured && (
           <motion.div
@@ -1717,7 +1741,7 @@ export function CourseTaker({
         )}
       </AnimatePresence>
 
-      {/* ── Quiz UI — full screen overlay (or inline in editor) ── */}
+      {/* -- Quiz UI — full screen overlay (or inline in editor) -- */}
       <div
         className={`${inlineMode ? 'relative flex flex-col rounded-xl overflow-hidden min-h-[500px]' : 'fixed inset-0 z-[200] overflow-y-auto flex flex-col'} ${isDark ? 'bg-black' : 'bg-zinc-50'}`}
         style={{ ...noSelect, color: isDark ? '#ffffff' : '#18181b', ...fontStyle }}
@@ -1751,7 +1775,12 @@ export function CourseTaker({
                     {formatTime(timeLeft)}
                   </span>
                 )}
-                {pointsEnabled && (
+                {reviewMode ? (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                    style={{ background: isDark ? 'rgba(99,102,241,0.2)' : '#ede9fe', color: isDark ? '#a5b4fc' : '#6d28d9' }}>
+                    Review Mode
+                  </span>
+                ) : pointsEnabled && (
                   <div className="flex items-center gap-1 text-xs font-bold tabular-nums" style={{ color: isDark ? '#facc15' : '#10b981' }}>
                     ⭐ {displayedPoints.toLocaleString()} XP
                     {streak >= 2 && <span className="text-orange-400 ml-1">🔥 {streak}</span>}
@@ -1874,7 +1903,7 @@ export function CourseTaker({
                 {currentQuestion.question}
               </h2>
 
-              {/* ── Fill in the blank ── */}
+              {/* -- Fill in the blank -- */}
               {questionType === 'fill_blank' && (
                 <div>
                   <AnimatedField theme={config.theme || 'forest'} mode={config.mode || 'dark'}>
@@ -1905,7 +1934,7 @@ export function CourseTaker({
                 </div>
               )}
 
-              {/* ── Arrange in order ── */}
+              {/* -- Arrange in order -- */}
               {questionType === 'arrange' && (
                 <div>
                   <p className={`text-xs mb-3 ${mutedColor}`}>Drag to reorder — put items in the correct sequence.</p>
@@ -1937,7 +1966,7 @@ export function CourseTaker({
                       ) : (
                         <div className="space-y-1">
                           <span className="flex items-center gap-2"><XCircle className="w-4 h-4" /> Incorrect order.</span>
-                          <p className="text-xs opacity-80">Correct: {currentQuestion.options.join(' → ')}</p>
+                          <p className="text-xs opacity-80">Correct: {currentQuestion.options.join(' -> ')}</p>
                         </div>
                       )}
                     </motion.div>
@@ -1945,7 +1974,7 @@ export function CourseTaker({
                 </div>
               )}
 
-              {/* ── Image options (each option is an image) ── */}
+              {/* -- Image options (each option is an image) -- */}
               {questionType === 'image' && (
                 <div className="grid grid-cols-2 gap-4">
                   {currentQuestion.options.map((option: string, idx: number) => {
@@ -1994,7 +2023,7 @@ export function CourseTaker({
                 </div>
               )}
 
-              {/* ── Code snippet (shown above options for code type) ── */}
+              {/* -- Code snippet (shown above options for code type) -- */}
               {questionType === 'code' && currentQuestion.codeSnippet && (
                 <div className="mb-8 rounded-2xl overflow-hidden border border-zinc-700/60 shadow-lg">
                   {/* Language badge */}
@@ -2019,7 +2048,7 @@ export function CourseTaker({
                 </div>
               )}
 
-              {/* ── Multiple choice (also renders for code type) ── */}
+              {/* -- Multiple choice (also renders for code type) -- */}
               {(questionType === 'multiple_choice' || questionType === 'code') && (
                 <div className="space-y-2.5">
                   {currentQuestion.options.map((option: string, idx: number) => {
@@ -2145,7 +2174,7 @@ export function CourseTaker({
                     onClick={handleSkip}
                     className={`w-full py-2.5 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
                   >
-                    Skip →
+                    Skip &rarr;
                   </button>
                 </>
               )
@@ -2168,7 +2197,7 @@ export function CourseTaker({
                   onClick={handleSkip}
                   className={`w-full py-2.5 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
                 >
-                  Skip →
+                  Skip &rarr;
                 </button>
               </>
             )}

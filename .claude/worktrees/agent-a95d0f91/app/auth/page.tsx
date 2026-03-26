@@ -1,11 +1,11 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 
-// ── Google logo ───────────────────────────────────────────────────────────────
+// -- Google logo ---------------------------------------------------------------
 function GoogleLogo() {
   return (
     <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0">
@@ -17,7 +17,7 @@ function GoogleLogo() {
   );
 }
 
-// ── Kente strip ───────────────────────────────────────────────────────────────
+// -- Kente strip ---------------------------------------------------------------
 function KenteStrip({ height = 10 }: { height?: number }) {
   const seq = ['#ADEE66', '#006128', '#F4F1EB', '#008F34', '#ADEE66', '#003d18', '#F4F1EB', '#008F34'];
   return (
@@ -29,7 +29,7 @@ function KenteStrip({ height = 10 }: { height?: number }) {
   );
 }
 
-// ── Adinkra dot background ────────────────────────────────────────────────────
+// -- Adinkra dot background ----------------------------------------------------
 function AdinkraPattern() {
   return (
     <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
@@ -47,12 +47,12 @@ function AdinkraPattern() {
   );
 }
 
-// ── Brand illustration ────────────────────────────────────────────────────────
+// -- Brand illustration --------------------------------------------------------
 function Illustration() {
   return (
     <svg viewBox="0 0 360 300" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-xs mx-auto">
 
-      {/* ── EVENT PAGE CARD (top-left, tilted) ── */}
+      {/* -- EVENT PAGE CARD (top-left, tilted) -- */}
       <g transform="rotate(-6 130 110)">
         {/* Card body */}
         <rect x="28" y="48" width="140" height="108" rx="14" fill="#F4F1EB" />
@@ -80,7 +80,7 @@ function Illustration() {
         <rect x="40" y="133" width="116" height="0" rx="0" fill="none" />
       </g>
 
-      {/* ── COURSE CARD (top-right, tilted opposite) ── */}
+      {/* -- COURSE CARD (top-right, tilted opposite) -- */}
       <g transform="rotate(5 250 110)">
         {/* Card body */}
         <rect x="192" y="42" width="140" height="130" rx="14" fill="#F4F1EB" />
@@ -108,7 +108,7 @@ function Illustration() {
         <rect x="255" y="151" width="28" height="5" rx="2.5" fill="#006128" fillOpacity="0.4" />
       </g>
 
-      {/* ── LEADERBOARD CARD (bottom center, floating) ── */}
+      {/* -- LEADERBOARD CARD (bottom center, floating) -- */}
       <g transform="translate(88, 192)">
         {/* Card */}
         <rect x="0" y="0" width="184" height="96" rx="14" fill="#F4F1EB" />
@@ -150,12 +150,12 @@ function Illustration() {
         <rect x="152" y="79" width="16" height="4" rx="2" fill="#006128" fillOpacity="0.3" />
       </g>
 
-      {/* ── Connecting dashed lines ── */}
+      {/* -- Connecting dashed lines -- */}
       <line x1="152" y1="165" x2="192" y2="160" stroke="#ADEE66" strokeWidth="1.2" strokeDasharray="4 3" strokeOpacity="0.5" />
       <line x1="130" y1="168" x2="165" y2="198" stroke="#ADEE66" strokeWidth="1.2" strokeDasharray="4 3" strokeOpacity="0.4" />
       <line x1="240" y1="178" x2="220" y2="198" stroke="#ADEE66" strokeWidth="1.2" strokeDasharray="4 3" strokeOpacity="0.4" />
 
-      {/* ── Diamond sparkle accents ── */}
+      {/* -- Diamond sparkle accents -- */}
       <rect x="16"  y="28"  width="9" height="9" rx="1" transform="rotate(45 20 32)"  fill="#ADEE66" fillOpacity="0.45" />
       <rect x="330" y="28"  width="9" height="9" rx="1" transform="rotate(45 334 32)" fill="#ADEE66" fillOpacity="0.45" />
       <rect x="10"  y="220" width="7" height="7" rx="1" transform="rotate(45 13 223)" fill="#F4F1EB" fillOpacity="0.3" />
@@ -167,7 +167,7 @@ function Illustration() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 export default function AuthPage() {
   const [email, setEmail]             = useState('');
@@ -222,7 +222,7 @@ export default function AuthPage() {
 
       <main className="min-h-screen bg-[#F4F1EB] flex flex-col lg:flex-row">
 
-        {/* ── Left: brand panel ─────────────────────────────────────────── */}
+        {/* -- Left: brand panel ------------------------------------------- */}
         <div className="relative lg:w-[58%] bg-[#006128] flex flex-col overflow-hidden">
 
 
@@ -272,7 +272,7 @@ export default function AuthPage() {
 
         </div>
 
-        {/* ── Right: form panel ─────────────────────────────────────────── */}
+        {/* -- Right: form panel ------------------------------------------- */}
         <div className="flex-1 flex items-center justify-center px-6 py-12 lg:px-14">
           <motion.div
             initial={{ opacity: 0, y: 24 }}

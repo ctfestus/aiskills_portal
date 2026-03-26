@@ -8,7 +8,7 @@ import {
   FolderOpen, Calendar, Trophy, Award, ChevronDown, LogOut,
   Settings, User, ShieldCheck, Sun, Moon, Menu, X,
   CheckCircle, Clock, AlertCircle, Star, ExternalLink,
-  GraduationCap, TrendingUp, Loader2, ChevronRight,
+  GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
   Play, Lock, FileText, BarChart3, Bell, Plus, ArrowLeft, Upload, Video,
   ThumbsUp, Bookmark, MapPin, Zap, RefreshCw,
 } from 'lucide-react';
@@ -69,14 +69,9 @@ const DARK_C = {
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
 // â"€â"€â"€ Skeleton â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-function Sk({ w = '100%', h = 16, r = 8, className = '' }: { w?: string | number; h?: number; r?: number; className?: string }) {
+function Sk({ w = '100%', h = 16, r = 8 }: { w?: string | number; h?: number; r?: number }) {
   const C = useC();
-  return (
-    <div 
-      style={{ width: w, height: h, borderRadius: r, background: C.skeleton, flexShrink: 0 }} 
-      className={`animate-pulse ${className}`.trim()}
-    />
-  );
+  return <div style={{ width: w, height: h, borderRadius: r, background: C.skeleton, flexShrink: 0 }} className="animate-pulse"/>;
 }
 
 // â"€â"€â"€ ProfileMenu â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -240,7 +235,21 @@ function CourseCard({ course, C }: { course: any; C: typeof LIGHT_C }) {
   const progress = completed ? 100 : (totalQ > 0 ? Math.round((currentIdx / totalQ) * 100) : 0);
   const score = course.score ?? 0;
   const coverImage = course.form?.config?.coverImage;
+  const certId: string | null = course.cert_id ?? null;
   const [imgErr, setImgErr] = useState(false);
+
+  // Action button logic:
+  // passed + cert -> "View Certificate" -> /certificate/[id]
+  // completed (failed) -> "Retake" -> course URL
+  // in-progress -> "Continue" -> course URL
+  // not started -> "Start" -> course URL
+  const actionHref = completed && passed && certId
+    ? `/certificate/${certId}`
+    : `/${course.form?.slug || course.form_id}`;
+  const actionLabel = completed
+    ? (passed && certId ? 'View Certificate' : 'Retake')
+    : currentIdx > 0 ? 'Continue' : 'Start';
+  const actionIcon = completed && passed && certId ? <Award className="w-3 h-3"/> : <Play className="w-3 h-3"/>;
 
   return (
     <motion.div
@@ -287,12 +296,26 @@ function CourseCard({ course, C }: { course: any; C: typeof LIGHT_C }) {
           <span className="text-xs" style={{ color: C.faint }}>
             {totalQ > 0 ? `${Math.min(currentIdx, totalQ)} / ${totalQ} questions` : 'No questions'}
           </span>
-          <a href={`/${course.form?.slug || course.form_id}`} target="_blank" rel="noreferrer"
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70"
-            style={{ background: completed ? C.pill : C.cta, color: completed ? C.muted : C.ctaText }}>
-            <Play className="w-3 h-3"/>
-            {completed ? 'Review' : currentIdx > 0 ? 'Continue' : 'Start'}
-          </a>
+          <div className="flex items-center gap-2">
+            {/* For passed courses: secondary "Review" link to revisit course content */}
+            {completed && passed && certId && (
+              <a href={`/${course.form?.slug || course.form_id}`} target="_blank" rel="noreferrer"
+                className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-xl transition-opacity hover:opacity-70"
+                style={{ background: C.pill, color: C.muted }}>
+                <Play className="w-3 h-3"/>
+                Review
+              </a>
+            )}
+            <a href={actionHref} target="_blank" rel="noreferrer"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70"
+              style={{
+                background: completed ? (passed && certId ? C.green : C.pill) : C.cta,
+                color: completed ? (passed && certId ? 'white' : C.muted) : C.ctaText,
+              }}>
+              {actionIcon}
+              {actionLabel}
+            </a>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -317,16 +340,38 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
         .eq('id', user.id)
         .single();
 
-      // Load cohort courses + student attempts in parallel
-      const [{ data: cohortForms }, { data: attempts }] = await Promise.all([
+      // Get session token for authenticated API calls
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? '';
+
+      // Load cohort courses + student attempts + certificates in parallel
+      // Fetch all cohort forms (no content_type filter) and classify client-side
+      // so that legacy rows with content_type='form' are still caught by config flags
+      const [{ data: cohortForms }, { data: attempts }, certsRes] = await Promise.all([
         student?.cohort_id
-          ? supabase.from('forms').select('id, title, slug, config').contains('cohort_ids', [student.cohort_id]).eq('content_type', 'course')
+          ? supabase.from('forms').select('id, title, slug, config, content_type').contains('cohort_ids', [student.cohort_id])
           : Promise.resolve({ data: [] }),
         supabase.from('course_attempts')
           .select('form_id, score, points, current_question_index, completed_at, passed, updated_at')
           .eq('student_email', userEmail)
           .order('started_at', { ascending: false }),
+        token
+          ? fetch('/api/course', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ action: 'get-my-certificates' }),
+            }).then(r => r.json())
+          : Promise.resolve({ certs: [] }),
       ]);
+
+      // Build cert lookup: form_id -> cert id
+      const certMap: Record<string, string> = {};
+      for (const c of (certsRes?.certs ?? [])) certMap[c.form_id] = c.id;
+
+      // Classify cohort items — course if content_type='course' OR config.isCourse is set
+      const isCourseRow = (f: any) =>
+        f.content_type === 'course' || f.config?.isCourse === true || f.config?.isCourse === 'true';
+      const cohortCourses = (cohortForms ?? []).filter(isCourseRow);
 
       // Deduplicate: one row per course — prefer active (in-progress) over completed; highest score among completed
       const progressMap: Record<string, any> = {};
@@ -340,17 +385,17 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
       }
 
       // Merge: cohort courses + any extra courses the student has attempted
-      const cohortIds = new Set((cohortForms ?? []).map((f: any) => f.id));
+      const cohortIds = new Set(cohortCourses.map((f: any) => f.id));
       const extraIds  = Object.keys(progressMap).filter(id => !cohortIds.has(id));
 
       let extraForms: any[] = [];
       if (extraIds.length) {
-        const { data } = await supabase.from('forms').select('id, title, slug, config').in('id', extraIds);
-        extraForms = data ?? [];
+        const { data } = await supabase.from('forms').select('id, title, slug, config, content_type').in('id', extraIds);
+        extraForms = (data ?? []).filter(isCourseRow);
       }
 
-      const allForms = [...(cohortForms ?? []), ...extraForms];
-      setCourses(allForms.map(f => ({ ...progressMap[f.id], form: f, form_id: f.id })));
+      const allForms = [...cohortCourses, ...extraForms];
+      setCourses(allForms.map(f => ({ ...progressMap[f.id], form: f, form_id: f.id, cert_id: certMap[f.id] ?? null })));
       setLoading(false);
     };
     load();
@@ -399,12 +444,17 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
             .eq('student_id', userId)
             .order('registered_at', { ascending: false }),
           student?.cohort_id
-            ? supabase.from('forms').select('id, title, slug, config').contains('cohort_ids', [student.cohort_id]).eq('content_type', 'event')
+            ? supabase.from('forms').select('id, title, slug, config, content_type')
+                .contains('cohort_ids', [student.cohort_id])
             : Promise.resolve({ data: [] }),
         ]);
 
         setRegs(regsData ?? []);
-        setCohortEvents(cohortData ?? []);
+        // Include content_type='event' OR form with eventDetails.isEvent=true
+        const eventsOnly = (cohortData ?? []).filter((f: any) =>
+          f.content_type === 'event' || f.config?.eventDetails?.isEvent === true
+        );
+        setCohortEvents(eventsOnly);
       } finally {
         setLoading(false);
       }
@@ -519,7 +569,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
       body="No events have been assigned to the cohort yet." />
   );
 
-  // ── Realistic provider logos ───────────────────────────────────────────────
+  // -- Realistic provider logos -----------------------------------------------
   const LOGOS: Record<string, string> = {
     meet:  'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Meet.png',
     zoom:  'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Zoom.png',
@@ -531,7 +581,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
     return <img src={src} alt={provider} style={{ width: 16, height: 16, objectFit: 'contain', flexShrink: 0 }}/>;
   };
 
-  const EventCard = ({ item, past: isPast, index }: { item: any; past?: boolean; index: number }) => {
+  const EventCard = ({ item, past: isPast, index, isLast }: { item: any; past?: boolean; index: number; isLast?: boolean }) => {
     const showImage = item.imageUrl && !imgErrors.has(item.id);
     const dateLabel = item.startsAt
       ? item.startsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -551,8 +601,8 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
       >
         <div className="rounded-2xl p-4 flex gap-4"
           style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-          {/* Cover image — 180×180 rounded square, card padding = whitespace */}
-          <div className="w-[180px] h-[180px] rounded-2xl overflow-hidden flex-shrink-0"
+          {/* Cover image — 165×165 rounded square, card padding = whitespace */}
+          <div className="w-[165px] h-[165px] rounded-2xl overflow-hidden flex-shrink-0"
             style={{ background: C.thumbBg }}>
             {showImage
               ? <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover"
@@ -574,7 +624,10 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
                 </span>
               )}
               <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
-                style={{ border: `1.5px solid ${isVirtual ? C.green + '70' : C.faint + '60'}`, color: isVirtual ? C.green : C.muted }}>
+                style={{
+                  background: isVirtual ? `${C.green}15` : C.pill,
+                  color: isVirtual ? C.green : C.muted,
+                }}>
                 {item.eventType}
               </span>
               {isRegistered && (
@@ -585,19 +638,25 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
               )}
             </div>
 
-            {/* Row 2: Provider logo + name + note / location */}
-            <div className="flex items-center gap-1.5">
-              <ProviderIcon provider={item.meetingProvider}/>
-              <span className="text-xs" style={{ color: C.muted }}>
-                <span className="font-medium">{item.meetingProvider}</span>
-                {isVirtual
-                  ? <span style={{ color: C.faint }}> · Link shared after registration</span>
-                  : item.locationText
-                  ? <span style={{ color: C.faint }}> · {item.locationText}</span>
-                  : null
-                }
-              </span>
-            </div>
+            {/* Row 2: Meeting provider (virtual) or venue (in-person) */}
+            {isVirtual ? (
+              <div className="flex items-center gap-1.5">
+                <ProviderIcon provider={item.meetingProvider}/>
+                <span className="text-xs font-medium" style={{ color: C.muted }}>
+                  {item.meetingProvider}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 flex-shrink-0" style={{ color: C.faint }}/>
+                <span className="text-xs" style={{ color: C.muted }}>
+                  {item.locationText
+                    ? <span className="font-medium">{item.locationText}</span>
+                    : <span style={{ color: C.faint }}>Venue TBC</span>
+                  }
+                </span>
+              </div>
+            )}
 
             {/* Title */}
             <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: C.text }}>
@@ -626,14 +685,24 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
     );
 
     return (
-      <div className="relative flex gap-3">
-        {/* Timeline dot + dashed line */}
-        <div className="flex flex-col items-center flex-shrink-0" style={{ paddingTop: '26px' }}>
-          <div className="w-3 h-3 rounded-full border-2 z-10 flex-shrink-0"
+      <div className="relative flex gap-3" style={{ paddingBottom: isLast ? 0 : 20 }}>
+        {/* Dot */}
+        <div className="flex-shrink-0" style={{ width: 12, paddingTop: 26 }}>
+          <div className="w-3 h-3 rounded-full border-2"
             style={{ borderColor: isPast ? '#ccc' : C.green, background: isPast ? '#e0e0e0' : C.lime }}/>
-          <div className="w-px mt-1 flex-1"
-            style={{ minHeight: '20px', background: `repeating-linear-gradient(to bottom, ${C.faint}70 0px, ${C.faint}70 5px, transparent 5px, transparent 9px)` }}/>
         </div>
+        {/* Dashed line — absolutely positioned so bottom:0 covers the paddingBottom gap */}
+        {!isLast && (
+          <div style={{
+            position: 'absolute',
+            left: 5,   // (12px column - 2px line) / 2 = 5px -> perfectly centred on dot
+            top: 42,   // paddingTop(26) + dot(12) + gap(4)
+            bottom: 0, // extends into paddingBottom, connecting to next card's dot
+            width: 2,
+            background: 'repeating-linear-gradient(to bottom, rgba(128,128,128,0.45) 0px, rgba(128,128,128,0.45) 5px, transparent 5px, transparent 10px)',
+          }}/>
+        )}
+        {/* Card */}
         {item.source === 'cohort' && item.formSlug
           ? <Link href={`/${item.formSlug}`} className="flex-1 hover:opacity-90 transition-opacity" style={{ textDecoration: 'none' }}>{card}</Link>
           : <div className="flex-1">{card}</div>
@@ -642,31 +711,29 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
     );
   };
 
-  return (
-    <div className="space-y-6">
-      {upcoming.length > 0 ? (
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: C.faint }}>
-            Upcoming · {upcoming.length}
-          </p>
-          <div className="space-y-5">
-            {upcoming.map((item, i) => <EventCard key={item.id} item={item} index={i}/>)}
-          </div>
-        </div>
-      ) : (
-        <EmptyState icon={CalendarDays} title="No upcoming events" body="Your upcoming events will appear here." />
-      )}
+  const orderedEvents = [
+    ...upcoming,
+    ...past.slice().reverse(), // past sorted most-recent-past first
+  ];
 
-      {past.length > 0 && (
-        <div className={upcoming.length > 0 ? 'mt-6' : ''}>
-          <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: C.faint }}>
-            Past · {past.length}
-          </p>
-          <div className="space-y-5">
-            {past.map((item, i) => <EventCard key={item.id} item={item} past index={i}/>)}
-          </div>
-        </div>
-      )}
+  if (!orderedEvents.length) return (
+    <EmptyState icon={CalendarDays} title="No upcoming events" body="Your upcoming events will appear here." />
+  );
+
+  return (
+    <div>
+      {orderedEvents.map((item, i) => {
+        const isPastItem = item.startsAt && item.startsAt.getTime() < now;
+        return (
+          <EventCard
+            key={item.id}
+            item={item}
+            past={isPastItem}
+            index={i}
+            isLast={i === orderedEvents.length - 1}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -812,7 +879,14 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
       {/* Assignment brief */}
       <div className="rounded-2xl p-6 mb-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
         <div className="flex items-start justify-between gap-3 mb-4">
-          <h2 className="text-base font-bold" style={{ color: C.text }}>{assignment.title}</h2>
+          <div>
+            {assignment._course_title && (
+              <p className="text-xs font-semibold mb-1 flex items-center gap-1" style={{ color: C.green }}>
+                <BookOpen className="w-3 h-3"/> {assignment._course_title}
+              </p>
+            )}
+            <h2 className="text-base font-bold" style={{ color: C.text }}>{assignment.title}</h2>
+          </div>
           {submission && <StatusBadge status={submission.status}/>}
         </div>
         {assignment.scenario && <div className="mb-4"><p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: C.faint }}>Scenario</p><div className={"rich-content"} dangerouslySetInnerHTML={{ __html: sanitizeRichText(assignment.scenario) }}/></div>}
@@ -1007,7 +1081,7 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
       if (!student?.cohort_id) { setLoading(false); return; }
       const [{ data: assignments }, { data: subs }] = await Promise.all([
         supabase.from('assignments')
-          .select('id, title, scenario, brief, tasks, requirements, cover_image, status, created_at')
+          .select('id, title, scenario, brief, tasks, requirements, cover_image, status, created_at, related_course')
           .contains('cohort_ids', [student.cohort_id])
           .eq('status', 'published')
           .order('created_at', { ascending: false }),
@@ -1015,8 +1089,21 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
           .select('assignment_id, status, score')
           .eq('student_id', userId),
       ]);
+
+      // Resolve related course names from forms table
+      const courseIds = [...new Set((assignments ?? []).map((a: any) => a.related_course).filter(Boolean))];
+      let courseNameMap: Record<string, string> = {};
+      if (courseIds.length) {
+        const { data: courses } = await supabase.from('forms').select('id, title').in('id', courseIds);
+        courseNameMap = Object.fromEntries((courses ?? []).map((c: any) => [c.id, c.title]));
+      }
+
       const subMap = Object.fromEntries((subs ?? []).map(s => [s.assignment_id, s]));
-      setItems((assignments ?? []).map(a => ({ ...a, _sub: subMap[a.id] ?? null })));
+      setItems((assignments ?? []).map((a: any) => ({
+        ...a,
+        _sub: subMap[a.id] ?? null,
+        _course_title: a.related_course ? (courseNameMap[a.related_course] ?? null) : null,
+      })));
       setLoading(false);
     };
     load();
@@ -1036,49 +1123,74 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
     <EmptyState icon={ClipboardList} title="No assignments" body="You don't have any assignments assigned yet."/>
   );
 
+  const AssignmentCard = ({ item, i }: { item: any; i: number }) => (
+    <motion.button key={item.id} onClick={() => setSelected(item)}
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+      className="text-left rounded-2xl overflow-hidden group"
+      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, cursor: 'pointer' }}
+      onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
+      onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
+      <div className="relative h-36 overflow-hidden" style={{ background: C.thumbBg }}>
+        {item.cover_image
+          ? <img src={item.cover_image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
+          : <div className="w-full h-full flex items-center justify-center text-4xl font-black" style={{ color: C.green, opacity: 0.25 }}>{item.title?.[0]?.toUpperCase()}</div>}
+        <div className="absolute bottom-2 left-2">
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: C.thumbBg, color: C.green }}>Assignment</span>
+        </div>
+        {item._sub && (
+          <div className="absolute top-2 right-2">
+            {item._sub.status === 'graded'
+              ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: item._sub.score >= 85 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: item._sub.score >= 85 ? '#10b981' : '#ef4444', border: `1px solid ${item._sub.score >= 85 ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
+                  {item._sub.score >= 85 ? 'Passed' : 'Failed'}
+                </span>
+              : item._sub.status === 'submitted'
+              ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: 'rgba(124,58,237,0.12)', color: '#7c3aed', border: '1px solid rgba(124,58,237,0.25)' }}>
+                  Submitted
+                </span>
+              : item._sub.status === 'draft'
+              ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  style={{ background: 'rgba(0,0,0,0.08)', color: '#888', border: '1px solid rgba(0,0,0,0.12)' }}>
+                  Draft
+                </span>
+              : null}
+          </div>
+        )}
+      </div>
+      <div className="p-4">
+        <h3 className="text-sm font-semibold leading-snug mb-1 line-clamp-2" style={{ color: C.text }}>{item.title}</h3>
+        {item.scenario && <p className="text-xs line-clamp-2 mb-3" style={{ color: C.muted }}>{item.scenario.replace(/<[^>]*>/g, ' ').trim()}</p>}
+        <span className="text-xs font-semibold" style={{ color: C.green }}>View &amp; Submit &rarr;</span>
+      </div>
+    </motion.button>
+  );
+
+  // Group by course
+  const grouped: Record<string, any[]> = {};
+  for (const item of items) {
+    const key = item._course_title ?? '__none__';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(item);
+  }
+  const courseKeys = Object.keys(grouped).filter(k => k !== '__none__').sort();
+  if (grouped['__none__']) courseKeys.push('__none__');
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {items.map((item, i) => (
-        <motion.button key={item.id} onClick={() => setSelected(item)}
-          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-          className="text-left rounded-2xl overflow-hidden group"
-          style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, cursor: 'pointer' }}
-          onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
-          onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
-          <div className="relative h-36 overflow-hidden" style={{ background: C.thumbBg }}>
-            {item.cover_image
-              ? <img src={item.cover_image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
-              : <div className="w-full h-full flex items-center justify-center text-4xl font-black" style={{ color: C.green, opacity: 0.25 }}>{item.title?.[0]?.toUpperCase()}</div>}
-            <div className="absolute bottom-2 left-2">
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: C.thumbBg, color: C.green }}>Assignment</span>
-            </div>
-            {item._sub && (
-              <div className="absolute top-2 right-2">
-                {item._sub.status === 'graded'
-                  ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                      style={{ background: item._sub.score >= 85 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: item._sub.score >= 85 ? '#10b981' : '#ef4444', border: `1px solid ${item._sub.score >= 85 ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
-                      {item._sub.score >= 85 ? 'Passed' : 'Failed'}
-                    </span>
-                  : item._sub.status === 'submitted'
-                  ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                      style={{ background: 'rgba(124,58,237,0.12)', color: '#7c3aed', border: '1px solid rgba(124,58,237,0.25)' }}>
-                      Submitted
-                    </span>
-                  : item._sub.status === 'draft'
-                  ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                      style={{ background: 'rgba(0,0,0,0.08)', color: '#888', border: '1px solid rgba(0,0,0,0.12)' }}>
-                      Draft
-                    </span>
-                  : null}
-              </div>
-            )}
+    <div className="space-y-8">
+      {courseKeys.map(key => (
+        <div key={key}>
+          <div className="flex items-center gap-2 mb-4">
+            {key !== '__none__'
+              ? <><BookOpen className="w-3.5 h-3.5" style={{ color: C.green }}/><p className="text-xs font-bold uppercase tracking-widest" style={{ color: C.green }}>{key}</p></>
+              : <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>General</p>
+            }
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: C.pill, color: C.faint }}>{grouped[key].length}</span>
           </div>
-          <div className="p-4">
-            <h3 className="text-sm font-semibold leading-snug mb-1 line-clamp-2" style={{ color: C.text }}>{item.title}</h3>
-            {item.scenario && <p className="text-xs line-clamp-2 mb-3" style={{ color: C.muted }}>{item.scenario.replace(/<[^>]*>/g, ' ').trim()}</p>}
-            <span className="text-xs font-semibold" style={{ color: C.green }}>View & Submit â†'</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {grouped[key].map((item, i) => <AssignmentCard key={item.id} item={item} i={i}/>)}
           </div>
-        </motion.button>
+        </div>
       ))}
     </div>
   );
@@ -1361,7 +1473,7 @@ function AnnouncementsSection({ C }: { C: typeof LIGHT_C }) {
       {[0,1,2].map(i => (
         <div key={i} className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
           <div className="flex gap-3 mb-4"><Sk w={40} h={40} r={99}/><div className="flex-1 space-y-2"><Sk h={14} w="40%"/><Sk h={11} w="25%"/></div></div>
-          <Sk h={15} w="75%" className="mb-3"/>
+          <Sk h={15} w="75%"/>
           <Sk h={11}/><Sk h={11} w="85%"/><Sk h={11} w="60%"/>
           <div className="flex gap-4 mt-4 pt-4" style={{ borderTop: `1px solid ${C.divider}` }}>
             <Sk h={32} w="50%" r={8}/><Sk h={32} w="50%" r={8}/>
@@ -1401,6 +1513,11 @@ function ProjectDetail({ project, C, onBack }: { project: any; C: typeof LIGHT_C
         <ArrowLeft className="w-4 h-4"/> Back to projects
       </button>
       <div className="rounded-2xl p-6" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        {project._course_title && (
+          <p className="text-[11px] font-semibold mb-1 flex items-center gap-1" style={{ color: C.green }}>
+            <BookOpen className="w-3 h-3"/> {project._course_title}
+          </p>
+        )}
         <h2 className="text-base font-bold mb-4" style={{ color: C.text }}>{project.title}</h2>
         {project.scenario && (
           <div className="mb-4">
@@ -1459,11 +1576,21 @@ function ProjectsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
       if (!student?.cohort_id) { setLoading(false); return; }
       const { data } = await supabase
         .from('projects')
-        .select('id, title, scenario, brief, tasks, requirements, cover_image, status, created_at')
+        .select('id, title, scenario, brief, tasks, requirements, cover_image, status, created_at, related_course')
         .contains('cohort_ids', [student.cohort_id])
         .eq('status', 'published')
         .order('created_at', { ascending: false });
-      setItems(data ?? []);
+
+      const courseIds = [...new Set((data ?? []).map((p: any) => p.related_course).filter(Boolean))];
+      let courseNameMap: Record<string, string> = {};
+      if (courseIds.length) {
+        const { data: courses } = await supabase.from('forms').select('id, title').in('id', courseIds);
+        courseNameMap = Object.fromEntries((courses ?? []).map((c: any) => [c.id, c.title]));
+      }
+      setItems((data ?? []).map((p: any) => ({
+        ...p,
+        _course_title: p.related_course ? (courseNameMap[p.related_course] ?? null) : null,
+      })));
       setLoading(false);
     };
     load();
@@ -1485,37 +1612,62 @@ function ProjectsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
     <EmptyState icon={FolderOpen} title="No projects" body="You don't have any projects assigned yet."/>
   );
 
+  const ProjectCard = ({ item, i }: { item: any; i: number }) => (
+    <motion.button key={item.id} onClick={() => setSelected(item)}
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+      className="text-left rounded-2xl overflow-hidden group"
+      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, cursor: 'pointer' }}
+      onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
+      onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
+      <div className="relative h-36 overflow-hidden" style={{ background: '#eff6ff' }}>
+        {item.cover_image
+          ? <img src={item.cover_image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
+          : <div className="w-full h-full flex items-center justify-center text-4xl font-black" style={{ color: '#2563eb', opacity: 0.2 }}>{item.title?.[0]?.toUpperCase()}</div>}
+        <div className="absolute bottom-2 left-2">
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#2563eb' }}>Project</span>
+        </div>
+      </div>
+      <div className="p-4">
+        <h3 className="text-sm font-semibold leading-snug mb-1 line-clamp-2" style={{ color: C.text }}>{item.title}</h3>
+        {(item.scenario || item.brief) && (
+          <p className="text-xs line-clamp-2 mb-3" style={{ color: C.muted }}>{item.scenario || item.brief}</p>
+        )}
+        <span className="text-xs font-semibold" style={{ color: '#2563eb' }}>View Details &rarr;</span>
+      </div>
+    </motion.button>
+  );
+
+  // Group by course
+  const grouped: Record<string, any[]> = {};
+  for (const item of items) {
+    const key = item._course_title ?? '__none__';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(item);
+  }
+  const courseKeys = Object.keys(grouped).filter(k => k !== '__none__').sort();
+  if (grouped['__none__']) courseKeys.push('__none__');
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {items.map((item, i) => (
-        <motion.button key={item.id} onClick={() => setSelected(item)}
-          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-          className="text-left rounded-2xl overflow-hidden group"
-          style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, cursor: 'pointer' }}
-          onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
-          onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
-          <div className="relative h-36 overflow-hidden" style={{ background: '#eff6ff' }}>
-            {item.cover_image
-              ? <img src={item.cover_image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
-              : <div className="w-full h-full flex items-center justify-center text-4xl font-black" style={{ color: '#2563eb', opacity: 0.2 }}>{item.title?.[0]?.toUpperCase()}</div>}
-            <div className="absolute bottom-2 left-2">
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#2563eb' }}>Project</span>
-            </div>
+    <div className="space-y-8">
+      {courseKeys.map(key => (
+        <div key={key}>
+          <div className="flex items-center gap-2 mb-4">
+            {key !== '__none__'
+              ? <><BookOpen className="w-3.5 h-3.5" style={{ color: C.green }}/><p className="text-xs font-bold uppercase tracking-widest" style={{ color: C.green }}>{key}</p></>
+              : <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>General</p>
+            }
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: C.pill, color: C.faint }}>{grouped[key].length}</span>
           </div>
-          <div className="p-4">
-            <h3 className="text-sm font-semibold leading-snug mb-1 line-clamp-2" style={{ color: C.text }}>{item.title}</h3>
-            {(item.scenario || item.brief) && (
-              <p className="text-xs line-clamp-2 mb-3" style={{ color: C.muted }}>{item.scenario || item.brief}</p>
-            )}
-            <span className="text-xs font-semibold" style={{ color: '#2563eb' }}>View Details â†'</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {grouped[key].map((item, i) => <ProjectCard key={item.id} item={item} i={i}/>)}
           </div>
-        </motion.button>
+        </div>
       ))}
     </div>
   );
 }
 
-// â"€â"€â"€ Schedule section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Schedule section ---------------------------------------------------------
 function ScheduleDetail({ schedule, C, onBack }: { schedule: any; C: typeof LIGHT_C; onBack: () => void }) {
   const [topics, setTopics] = useState<any[]>([]);
   const [resources, setResources] = useState<any[]>([]);
@@ -1524,124 +1676,136 @@ function ScheduleDetail({ schedule, C, onBack }: { schedule: any; C: typeof LIGH
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const [{ data: topicData }, { data: resourceData }] = await Promise.all([
-        supabase
-          .from('schedule_topics')
-          .select('id, name, description, order_index')
-          .eq('schedule_id', schedule.id)
-          .order('order_index', { ascending: true }),
-        supabase
-          .from('schedule_resources')
-          .select('id, name, url')
-          .eq('schedule_id', schedule.id)
-          .order('created_at', { ascending: true }),
-      ]);
-      setTopics(topicData ?? []);
-      setResources(resourceData ?? []);
-      setLoading(false);
+      try {
+        const res = await fetch(`/api/schedule?id=${schedule.id}`);
+        const d = await res.json();
+        setTopics(d.topics ?? []);
+        setResources(d.resources ?? []);
+      } catch {
+        setTopics([]);
+        setResources([]);
+      } finally {
+        setLoading(false);
+      }
     };
     load();
   }, [schedule.id]);
 
-  const startLabel = schedule.startDate?.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
-  const endLabel = schedule.endDate?.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+  const fmt = (d?: Date | null, opts?: Intl.DateTimeFormatOptions) =>
+    d ? d.toLocaleDateString('en-US', opts ?? { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+  const startLabel = fmt(schedule.startDate);
+  const endLabel   = fmt(schedule.endDate);
+  const dateRange  = endLabel && endLabel !== startLabel ? `${startLabel} -> ${endLabel}` : startLabel ?? 'Date TBA';
+
+  const getDomain = (url: string) => { try { return new URL(url).hostname.replace('www.', ''); } catch { return url; } };
 
   return (
-    <div className="space-y-5">
-      <button onClick={onBack}
-        className="inline-flex items-center gap-2 text-sm font-medium"
-        style={{ color: C.muted, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
-        <ArrowLeft className="w-4 h-4"/> Back to schedule
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+      {/* Back */}
+      <button onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-medium rounded-xl px-3 py-1.5 transition-colors"
+        style={{ color: C.muted, background: C.pill, border: 'none', cursor: 'pointer' }}>
+        <ArrowLeft className="w-3.5 h-3.5"/> Back
       </button>
 
+      {/* Hero */}
       <div className="rounded-3xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-        {schedule.coverImage && (
-          <div className="aspect-[16/6] w-full" style={{ background: C.thumbBg }}>
+        <div className="relative" style={{ height: schedule.coverImage ? 220 : 0 }}>
+          {schedule.coverImage && (
             <img src={schedule.coverImage} alt={schedule.title} className="w-full h-full object-cover"/>
-          </div>
-        )}
-        <div className="p-6">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div>
-              <h2 className="text-xl font-bold" style={{ color: C.text }}>{schedule.title}</h2>
-              <p className="text-sm mt-1" style={{ color: C.faint }}>
-                {endLabel && endLabel !== startLabel ? `${startLabel} - ${endLabel}` : startLabel || 'Date to be announced'}
-              </p>
-            </div>
-            <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
-              style={{ background: '#eff6ff', color: '#2563eb' }}>
-              Published
-            </span>
-          </div>
+          )}
+        </div>
 
+        <div className="p-6">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <h2 className="text-xl font-bold leading-tight" style={{ color: C.text }}>{schedule.title}</h2>
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0"
+              style={{ background: `${C.green}12`, color: C.green }}>Active</span>
+          </div>
+          <div className="flex items-center gap-1.5 mb-4">
+            <Calendar className="w-3.5 h-3.5 flex-shrink-0" style={{ color: C.faint }}/>
+            <span className="text-sm" style={{ color: C.muted }}>{dateRange}</span>
+          </div>
           {schedule.description && (
-            <p className="text-sm leading-relaxed mb-6" style={{ color: C.muted }}>{schedule.description}</p>
+            <p className="text-sm leading-relaxed pb-5 mb-5" style={{ color: C.muted, borderBottom: `1px solid ${C.divider}` }}>
+              {schedule.description}
+            </p>
           )}
 
           {loading ? (
-            <div className="space-y-3">
-              <Sk h={16} w="35%"/>
-              <Sk h={64} r={16}/>
-              <Sk h={16} w="30%"/>
-              <Sk h={52} r={14}/>
-            </div>
+            <div className="space-y-3"><Sk h={14} w="30%"/><Sk h={56} r={16}/><Sk h={56} r={16}/><Sk h={14} w="25%"/><Sk h={48} r={14}/></div>
           ) : (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: C.faint }}>Topics</h3>
-                {topics.length ? (
-                  <div className="space-y-3">
-                    {topics.map((topic, index) => (
-                      <div key={topic.id} className="rounded-2xl p-4" style={{ background: C.page, border: `1px solid ${C.divider}` }}>
-                        <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0"
-                            style={{ background: C.pill, color: C.muted }}>
-                            {index + 1}
+            <div className="space-y-8">
+              {/* Topics — vertical stepper */}
+              {topics.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: C.faint }}>
+                    Topics · {topics.length}
+                  </p>
+                  <div className="space-y-0">
+                    {topics.map((topic, i) => (
+                      <motion.div key={topic.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.05 }} className="flex gap-4">
+                        {/* Dot + connector column */}
+                        <div className="flex flex-col items-center flex-shrink-0" style={{ width: 32 }}>
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                            style={{ background: C.lime, color: '#0f2d0f', border: `2px solid ${C.green}` }}>
+                            {i + 1}
                           </div>
-                          <div className="min-w-0">
-                            <h4 className="text-sm font-semibold" style={{ color: C.text }}>{topic.name}</h4>
-                            {topic.description && <p className="text-sm mt-1" style={{ color: C.muted }}>{topic.description}</p>}
-                          </div>
+                          {i < topics.length - 1 && (
+                            <div className="flex-1 w-px mt-1"
+                              style={{ background: `repeating-linear-gradient(to bottom, ${C.green}40 0px, ${C.green}40 5px, transparent 5px, transparent 10px)`, minHeight: 16 }}/>
+                          )}
                         </div>
-                      </div>
+                        {/* Content */}
+                        <div className="flex-1 rounded-2xl p-4 mb-3" style={{ background: C.page, border: `1px solid ${C.divider}` }}>
+                          <p className="text-sm font-semibold leading-snug" style={{ color: C.text }}>{topic.name}</p>
+                          {topic.description && (
+                            <p className="text-xs mt-1.5 leading-relaxed" style={{ color: C.muted }}>{topic.description}</p>
+                          )}
+                        </div>
+                      </motion.div>
                     ))}
                   </div>
-                ) : (
-                  <p className="text-sm" style={{ color: C.faint }}>No topics have been added to this schedule yet.</p>
-                )}
-              </div>
+                </div>
+              )}
 
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: C.faint }}>Resources</h3>
-                {resources.length ? (
+              {/* Resources */}
+              {resources.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: C.faint }}>
+                    Resources · {resources.length}
+                  </p>
                   <div className="space-y-2">
-                    {resources.map(resource => (
-                      <a key={resource.id} href={resource.url} target="_blank" rel="noreferrer"
-                        className="flex items-center justify-between gap-3 rounded-2xl p-4"
-                        style={{ background: C.page, border: `1px solid ${C.divider}`, color: 'inherit', textDecoration: 'none' }}>
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                            style={{ background: C.pill }}>
-                            <FileText className="w-4 h-4" style={{ color: C.faint }}/>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{resource.name}</p>
-                            <p className="text-xs truncate" style={{ color: C.faint }}>{resource.url}</p>
-                          </div>
+                    {resources.map((r, i) => (
+                      <motion.a key={r.id} href={r.url} target="_blank" rel="noreferrer"
+                        initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        className="flex items-center gap-3 rounded-2xl p-3.5 group"
+                        style={{ background: C.page, border: `1px solid ${C.divider}`, textDecoration: 'none' }}>
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                          <FileText className="w-4 h-4" style={{ color: C.green }}/>
                         </div>
-                        <ExternalLink className="w-4 h-4 flex-shrink-0" style={{ color: C.faint }}/>
-                      </a>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{r.name}</p>
+                          <p className="text-xs truncate" style={{ color: C.faint }}>{getDomain(r.url)}</p>
+                        </div>
+                        <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: C.green }}/>
+                      </motion.a>
                     ))}
                   </div>
-                ) : (
-                  <p className="text-sm" style={{ color: C.faint }}>No resources have been attached to this schedule yet.</p>
-                )}
-              </div>
+                </div>
+              )}
+
+              {!topics.length && !resources.length && (
+                <p className="text-sm text-center py-4" style={{ color: C.faint }}>No content added yet.</p>
+              )}
             </div>
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -1655,32 +1819,25 @@ function ScheduleSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
       setLoading(true);
       const { data: student } = await supabase.from('students').select('cohort_id').eq('id', userId).single();
       const cohortId = student?.cohort_id;
-
       const schedulesRes = cohortId
-        ? await supabase
-            .from('schedules')
-            .select('id, title, description, cover_image, start_date, end_date, status, created_at')
-            .contains('cohort_ids', [cohortId])
-            .eq('status', 'published')
+        ? await supabase.from('schedules').select('id, title, description, cover_image, start_date, end_date, status, created_at, course_id')
+            .contains('cohort_ids', [cohortId]).eq('status', 'published')
         : { data: [] };
-
-      const items: any[] = [];
-
-      (schedulesRes.data ?? []).forEach((r: any) => {
-        items.push({
-          id: r.id,
-          type: 'schedule',
-          date: new Date(r.start_date || r.created_at),
-          startDate: r.start_date ? new Date(r.start_date) : null,
-          endDate: r.end_date ? new Date(r.end_date) : null,
-          title: r.title,
-          description: r.description,
-          coverImage: r.cover_image,
-          subtitle: r.end_date ? 'Schedule window' : r.start_date ? 'Schedule starts' : 'Schedule available',
-          status: r.status,
-        });
-      });
-
+      const scheduleRows = schedulesRes.data ?? [];
+      const scheduleCourseIds = [...new Set(scheduleRows.map((r: any) => r.course_id).filter(Boolean))];
+      let scheduleCourseMap: Record<string, string> = {};
+      if (scheduleCourseIds.length) {
+        const { data: cForms } = await supabase.from('forms').select('id, title').in('id', scheduleCourseIds);
+        (cForms ?? []).forEach((f: any) => { scheduleCourseMap[f.id] = f.title; });
+      }
+      const items: any[] = scheduleRows.map((r: any) => ({
+        id: r.id, type: 'schedule',
+        date: new Date(r.start_date || r.created_at),
+        startDate: r.start_date ? new Date(r.start_date) : null,
+        endDate:   r.end_date   ? new Date(r.end_date)   : null,
+        title: r.title, description: r.description, coverImage: r.cover_image, status: r.status,
+        _course_title: r.course_id ? (scheduleCourseMap[r.course_id] ?? null) : null,
+      }));
       items.sort((a, b) => a.date.getTime() - b.date.getTime());
       setScheduleItems(items);
       setLoading(false);
@@ -1689,10 +1846,10 @@ function ScheduleSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   }, [userId]);
 
   if (loading) return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {[0,1,2,3].map(i => (
-        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-          <Sk h={140} r={0}/><div className="p-4 space-y-2"><Sk h={15} w="70%"/><Sk h={11} w="45%"/></div>
+    <div className="space-y-3">
+      {[0, 1, 2].map(i => (
+        <div key={i} className="rounded-2xl p-4 flex gap-3" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <Sk w={72} h={72} r={16}/><div className="flex-1 space-y-2 pt-1"><Sk h={14} w="60%"/><Sk h={11} w="40%"/><Sk h={11} w="30%"/></div>
         </div>
       ))}
     </div>
@@ -1700,76 +1857,114 @@ function ScheduleSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
 
   if (selected) return <ScheduleDetail schedule={selected} C={C} onBack={() => setSelected(null)}/>;
 
-  const upcoming = events.filter(e => !e.startDate || e.startDate >= new Date());
-  const past     = events.filter(e => e.startDate && e.startDate < new Date());
-
   if (!events.length) return (
-    <EmptyState icon={Calendar} title="Schedule is clear"
-      body="No published schedules are available for your cohort yet."/>
+    <EmptyState icon={Calendar} title="Schedule is clear" body="No published schedules are available for your cohort yet."/>
   );
 
-  const ScheduleRow = ({ item }: { item: any }) => {
-    const isPast = item.startDate ? item.startDate < new Date() : false;
-    const isToday = item.startDate ? item.startDate.toDateString() === new Date().toDateString() : false;
-    const isSoon = item.startDate ? (!isPast && item.startDate.getTime() - Date.now() < 48 * 60 * 60 * 1000) : false;
-    const endLabel = item.endDate?.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-    const startLabel = item.startDate?.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-    const dateLabel = endLabel && endLabel !== startLabel ? `${startLabel} - ${endLabel}` : startLabel ?? 'Date TBA';
+  const now = new Date();
+  const upcoming = events.filter(e => !e.startDate || e.startDate >= now);
+  const past     = events.filter(e => e.startDate && e.startDate < now);
+
+  const ScheduleCard = ({ item, index }: { item: any; index: number }) => {
+    const isPast  = item.startDate ? item.startDate < now : false;
+    const isToday = item.startDate ? item.startDate.toDateString() === now.toDateString() : false;
+    const isSoon  = item.startDate ? (!isPast && item.startDate.getTime() - now.getTime() < 48 * 3600 * 1000) : false;
+    const startFmt = item.startDate?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const endFmt   = item.endDate?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const dateRange = endFmt && endFmt !== startFmt ? `${startFmt} -> ${endFmt}` : startFmt ?? 'Date TBA';
+
     return (
-      <motion.button onClick={() => setSelected(item)}
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: isPast ? 0.65 : 1, y: 0 }}
-        className="text-left rounded-2xl overflow-hidden group w-full"
-        style={{ background: C.card, border: `1px solid ${isToday ? '#2563eb40' : C.cardBorder}`, boxShadow: C.cardShadow, cursor: 'pointer' }}
-        onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
-        onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
-        <div className="relative h-36 overflow-hidden" style={{ background: isPast ? C.pill : '#eff6ff' }}>
-          {item.coverImage
-            ? <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
-            : item.startDate
-              ? <div className="w-full h-full flex flex-col items-center justify-center gap-0.5">
-                  <span className="text-4xl font-black leading-none" style={{ color: isPast ? C.faint : '#2563eb', opacity: 0.3 }}>{item.startDate.getDate()}</span>
-                  <span className="text-sm font-bold tracking-widest uppercase" style={{ color: isPast ? C.faint : '#2563eb', opacity: 0.3 }}>
-                    {item.startDate.toLocaleDateString(undefined, { month: 'short' })}
-                  </span>
+      <motion.button onClick={() => setSelected(item)} className="w-full text-left"
+        initial={{ opacity: 0, y: 8 }} animate={{ opacity: isPast ? 0.6 : 1, y: 0 }}
+        transition={{ delay: index * 0.06, duration: 0.35 }}
+        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+        <div className="relative rounded-2xl p-4 flex gap-4 transition-shadow"
+          style={{ background: C.card, border: `1px solid ${isToday ? C.green + '50' : C.cardBorder}`, boxShadow: C.cardShadow }}
+          onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
+          onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
+
+          {/* Cover thumbnail */}
+          <div className="w-[72px] h-[72px] rounded-2xl overflow-hidden flex-shrink-0"
+            style={{ background: C.thumbBg }}>
+            {item.coverImage
+              ? <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover"/>
+              : <div className="w-full h-full flex flex-col items-center justify-center gap-0.5">
+                  {item.startDate
+                    ? <>
+                        <span className="text-xl font-black leading-none" style={{ color: C.green }}>
+                          {item.startDate.getDate()}
+                        </span>
+                        <span className="text-[9px] font-bold tracking-widest uppercase" style={{ color: C.green }}>
+                          {item.startDate.toLocaleDateString('en-US', { month: 'short' })}
+                        </span>
+                      </>
+                    : <Calendar className="w-6 h-6" style={{ color: C.faint }}/>
+                  }
                 </div>
-              : <div className="w-full h-full flex items-center justify-center"><Calendar className="w-10 h-10 opacity-20" style={{ color: '#2563eb' }}/></div>}
-          <div className="absolute bottom-2 left-2 flex gap-1.5">
-            {isToday && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#2563eb' }}>Today</span>}
-            {isSoon && !isToday && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: '#fff7ed', color: '#ea580c' }}>Soon</span>}
+            }
           </div>
-        </div>
-        <div className="p-4">
-          <h3 className="text-sm font-semibold leading-snug mb-1 line-clamp-2" style={{ color: C.text }}>{item.title}</h3>
-          <p className="text-xs mb-1" style={{ color: C.faint }}>{dateLabel}</p>
-          {item.description && <p className="text-xs line-clamp-1" style={{ color: C.muted }}>{item.description}</p>}
+
+          {/* Text */}
+          <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
+            {/* Status badges */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {isToday && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: `${C.green}15`, color: C.green }}>Today</span>
+              )}
+              {isSoon && !isToday && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#fff7ed', color: '#ea580c' }}>Starting soon</span>
+              )}
+              {isPast && (
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: C.pill, color: C.faint }}>Past</span>
+              )}
+            </div>
+            <p className="text-sm font-bold leading-snug line-clamp-1" style={{ color: C.text }}>{item.title}</p>
+            <div className="flex items-center gap-1.5">
+              <Calendar className="w-3 h-3 flex-shrink-0" style={{ color: C.faint }}/>
+              <span className="text-xs" style={{ color: C.muted }}>{dateRange}</span>
+            </div>
+            {item.description && (
+              <p className="text-xs line-clamp-1 mt-0.5" style={{ color: C.faint }}>{item.description}</p>
+            )}
+          </div>
+
+          <ChevronRight className="w-4 h-4 self-center flex-shrink-0" style={{ color: C.faint }}/>
         </div>
       </motion.button>
     );
   };
 
+  // Group by course
+  const grouped: Record<string, any[]> = {};
+  for (const item of events) {
+    const key = item._course_title ?? '__none__';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(item);
+  }
+  const courseKeys = Object.keys(grouped).filter(k => k !== '__none__').sort();
+  if (grouped['__none__']) courseKeys.push('__none__');
+
   return (
-    <div className="space-y-6">
-      {upcoming.length > 0 && (
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: C.faint }}>Upcoming</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {upcoming.map(i => <ScheduleRow key={`${i.type}-${i.id}`} item={i}/>)}
+    <div className="space-y-8">
+      {courseKeys.map(key => (
+        <div key={key}>
+          <div className="flex items-center gap-2 mb-4">
+            {key !== '__none__'
+              ? <><BookOpen className="w-3.5 h-3.5" style={{ color: C.green }}/><p className="text-xs font-bold uppercase tracking-widest" style={{ color: C.green }}>{key}</p></>
+              : <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>General</p>
+            }
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: C.pill, color: C.faint }}>{grouped[key].length}</span>
+          </div>
+          <div className="space-y-3">
+            {grouped[key].map((item, i) => <ScheduleCard key={`${item.type}-${item.id}`} item={item} index={i}/>)}
           </div>
         </div>
-      )}
-      {past.length > 0 && (
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: C.faint }}>Past</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {past.slice(0, 6).map(i => <ScheduleRow key={`${i.type}-${i.id}`} item={i}/>)}
-          </div>
-        </div>
-      )}
+      ))}
     </div>
   );
 }
 
-// ─── Leaderboard section ──────────────────────────────────────────────────────
+// --- Leaderboard section ------------------------------------------------------
 function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
   const [cohort, setCohort]     = useState<any>(null);
   const [rankings, setRankings] = useState<any[]>([]);
@@ -1849,7 +2044,7 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
   return (
     <div className="space-y-4">
 
-      {/* ── Hero header ── */}
+      {/* -- Hero header -- */}
       <div className="rounded-2xl px-5 py-4" style={{ background: HERO_BG }}>
         <div className="flex items-center gap-4">
           {/* Icon */}
@@ -1886,7 +2081,7 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
         </div>
       </div>
 
-      {/* ── Refresh ── */}
+      {/* -- Refresh -- */}
       <div className="flex justify-end">
         <button
           onClick={() => setRefreshKey(k => k + 1)}
@@ -1898,7 +2093,7 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
         </button>
       </div>
 
-      {/* ── Rankings table ── */}
+      {/* -- Rankings table -- */}
       <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
 
         {/* Cohort header */}
@@ -2065,6 +2260,7 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<SectionId>('courses');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(false);
 
   useEffect(() => {
     const apply = () => {
@@ -2171,38 +2367,59 @@ export default function StudentDashboard() {
           {(sidebarOpen || true) && (
             <motion.aside
               initial={false}
-              className={`fixed lg:static inset-y-0 left-0 z-40 lg:z-auto flex flex-col border-r overflow-y-auto transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
-              style={{ width: 220, background: C.nav, borderColor: C.navBorder, top: 57 }}>
+              animate={{ width: navCollapsed ? 56 : 220 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
+              className={`fixed lg:static inset-y-0 left-0 z-40 lg:z-auto flex flex-col border-r overflow-hidden transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+              style={{ background: C.nav, borderColor: C.navBorder, top: 57 }}>
+              {/* Collapse toggle — desktop only */}
+              <div className="px-2 pt-2 pb-1 hidden lg:flex" style={{ justifyContent: navCollapsed ? 'center' : 'flex-end' }}>
+                <button
+                  onClick={() => setNavCollapsed(o => !o)}
+                  className="p-1.5 rounded-lg transition-all"
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.pill; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                  {navCollapsed
+                    ? <ChevronRight className="w-4 h-4" style={{ color: C.faint }}/>
+                    : <ChevronLeft className="w-4 h-4" style={{ color: C.faint }}/>}
+                </button>
+              </div>
+
               {/* Nav items */}
-              <nav className="flex-1 px-3 py-3 space-y-0.5">
+              <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-hidden">
                 {NAV_ITEMS.map(item => {
                   const isActive = activeSection === item.id;
                   return (
                     <button key={item.id}
                       onClick={() => { goSection(item.id); setSidebarOpen(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left"
+                      title={navCollapsed ? item.label : undefined}
+                      className="w-full flex items-center gap-3 rounded-xl text-sm font-medium transition-all text-left"
                       style={{
+                        padding: navCollapsed ? '10px 0' : '10px 12px',
+                        justifyContent: navCollapsed ? 'center' : 'flex-start',
                         background: isActive ? C.lime : 'transparent',
-                        color: isActive ? C.green : C.muted,
+                        color: isActive ? '#0f2d0f' : C.muted,
                       }}
                       onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = C.pill; }}
                       onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                      <item.Icon className="w-4 h-4 flex-shrink-0" style={{ color: isActive ? C.green : C.faint }}/>
-                      <span className="truncate">{item.label}</span>
+                      <item.Icon className="w-4 h-4 flex-shrink-0" style={{ color: isActive ? '#0f2d0f' : C.faint }}/>
+                      {!navCollapsed && <span className="truncate">{item.label}</span>}
                     </button>
                   );
                 })}
               </nav>
 
               {/* Sidebar footer */}
-              <div className="px-3 pb-4 pt-2 border-t space-y-0.5" style={{ borderColor: C.divider }}>
-                <Link href="/settings"
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
-                  style={{ color: C.muted }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.pill; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                  <Settings className="w-4 h-4 flex-shrink-0" style={{ color: C.faint }}/> Settings
-                </Link>
+              <div className="px-2 pb-3 pt-2 border-t space-y-0.5" style={{ borderColor: C.divider }}>
+                {!navCollapsed && (
+                  <Link href="/settings"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
+                    style={{ color: C.muted }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.pill; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                    <Settings className="w-4 h-4 flex-shrink-0" style={{ color: C.faint }}/> Settings
+                  </Link>
+                )}
               </div>
             </motion.aside>
           )}

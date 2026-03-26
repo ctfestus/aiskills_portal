@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { sanitizeRichText } from '@/lib/sanitize';
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
+// --- Design tokens ------------------------------------------------------------
 const LIGHT_C = {
   page: '#EEEAE3', card: 'white', cardBorder: 'rgba(0,0,0,0.07)',
   cardShadow: '0 1px 4px rgba(0,0,0,0.06)', green: '#006128', lime: '#ADEE66',
@@ -43,7 +43,7 @@ function labelStyle(C: typeof LIGHT_C) {
   return { display: 'block', fontSize: 13, fontWeight: 600, color: C.muted, marginBottom: 6 } as React.CSSProperties;
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// --- Page ---------------------------------------------------------------------
 export default function CreateCommunityPage() {
   const C = useC();
   const router = useRouter();
@@ -161,7 +161,7 @@ export default function CreateCommunityPage() {
             </div>
           )}
 
-          {/* ── Details card ──────────────────────────────────────────────── */}
+          {/* -- Details card ------------------------------------------------ */}
           <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>Details</h2>
 
@@ -241,7 +241,7 @@ export default function CreateCommunityPage() {
             </div>
           </section>
 
-          {/* ── Cohorts ───────────────────────────────────────────────────── */}
+          {/* -- Cohorts ----------------------------------------------------- */}
           {cohorts.length > 0 && (
             <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginTop: 20 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16, marginTop: 0 }}>Assign to Cohorts</h2>

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -53,7 +53,7 @@ interface CourseQuestion {
   };
 }
 
-// ── Web Audio sounds ──
+// -- Web Audio sounds --
 function playCorrectSound() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -92,7 +92,7 @@ function playWrongSound() {
   } catch { /* ignore */ }
 }
 
-// ── Confetti burst ──
+// -- Confetti burst --
 function burstConfetti(canvas: HTMLCanvasElement, accent: string) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -146,7 +146,7 @@ function burstConfetti(canvas: HTMLCanvasElement, accent: string) {
   animate();
 }
 
-// ── Sortable item for arrange questions ──
+// -- Sortable item for arrange questions --
 function SortableItem({ id, label, idx, accent, isDark, isChecking }: {
   id: string; label: string; idx: number; accent: string; isDark: boolean; isChecking: boolean;
 }) {
@@ -411,7 +411,7 @@ export function CourseTaker({
     }
   };
 
-  // ── Timer ──
+  // -- Timer --
   useEffect(() => {
     if (phase !== 'course' || !courseTimerMins) return;
 
@@ -438,7 +438,7 @@ export function CourseTaker({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // ── Tab / window / mouse detection ──
+  // -- Tab / window / mouse detection --
   useEffect(() => {
     if (phase !== 'course') return;
 
@@ -484,14 +484,14 @@ export function CourseTaker({
     };
   }, [phase]);
 
-  // ── Prevent copy / right-click on quiz content ──
+  // -- Prevent copy / right-click on quiz content --
   const noSelect: React.CSSProperties = { userSelect: 'none', WebkitUserSelect: 'none' };
   const blockCopy = (e: React.ClipboardEvent) => e.preventDefault();
   const blockMenu = (e: React.MouseEvent) => e.preventDefault();
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-  // ── Shared: run attempt/cert/progress checks after email is verified ──
+  // -- Shared: run attempt/cert/progress checks after email is verified --
   // All queries go through /api/course (service role) — anon client has no access to these tables.
   const runCourseChecks = useCallback(async (_email: string) => {
     setCheckingAttempts(true);
@@ -544,7 +544,7 @@ export function CourseTaker({
     setPhase('course');
   }, [maxAttempts, formId]);
 
-  // ── Attempt check + start — sends OTP or skips if session already matches ──
+  // -- Attempt check + start — sends OTP or skips if session already matches --
   const handleStartCourse = useCallback(async () => {
     if (!studentName.trim() || !studentEmail.trim()) return;
 
@@ -582,7 +582,7 @@ export function CourseTaker({
     setPhase('otp');
   }, [studentName, studentEmail, runCourseChecks]);
 
-  // ── Verify the OTP code the student received ──
+  // -- Verify the OTP code the student received --
   const handleVerifyOtp = useCallback(async () => {
     if (otpCode.length !== 6) return;
     setOtpVerifying(true);
@@ -616,7 +616,7 @@ export function CourseTaker({
     }
   }, [otpCode, studentEmail, runCourseChecks]);
 
-  // ── Resend OTP ──
+  // -- Resend OTP --
   const handleResendOtp = useCallback(async () => {
     setOtpCode('');
     setOtpError('');
@@ -736,7 +736,7 @@ export function CourseTaker({
     setPhase('course');
   }, [formId, studentEmail]);
 
-  // ── Answer checking helpers ──
+  // -- Answer checking helpers --
   const checkFillBlank = (userAnswer: string, correctAnswer: string): boolean => {
     const accepted = correctAnswer.split('|').map(s => s.trim().toLowerCase());
     return accepted.includes(userAnswer.trim().toLowerCase());
@@ -759,11 +759,11 @@ export function CourseTaker({
     return selectedOption !== null; // covers multiple_choice, image, code
   };
 
-  // ── Format answer for review display ──
+  // -- Format answer for review display --
   const formatAnswer = (q: any, answer: string) => {
     if (!answer) return null;
     const qType: QuestionType = q.type ?? 'multiple_choice';
-    if (qType === 'arrange') return answer.split('|||').join(' → ');
+    if (qType === 'arrange') return answer.split('|||').join(' -> ');
     if (qType === 'image') {
       const idx = q.options.indexOf(answer);
       return idx >= 0 ? `Option ${String.fromCharCode(65 + idx)}` : answer;
@@ -778,11 +778,11 @@ export function CourseTaker({
     return answer === q.correctAnswer;
   };
 
-  // ── Points system ──
+  // -- Points system --
   const ps = (config as any).pointsSystem;
   const pointsEnabled = ps?.enabled === true;
 
-  // ── Animated points counter ──
+  // -- Animated points counter --
   useEffect(() => {
     if (displayedPoints === totalPoints) return;
     const step = Math.ceil(Math.abs(totalPoints - displayedPoints) / 20);
@@ -792,7 +792,7 @@ export function CourseTaker({
     return () => clearTimeout(timer);
   }, [totalPoints, displayedPoints]);
 
-  // ── Fetch leaderboard rank when result appears ──
+  // -- Fetch leaderboard rank when result appears --
   useEffect(() => {
     if (!isSuccess || !formId || !studentEmail) return;
     supabase
@@ -826,7 +826,7 @@ export function CourseTaker({
       });
   }, [isSuccess, formId, studentEmail]);
 
-  // ── Success screen (shown after submission) ──
+  // -- Success screen (shown after submission) --
   if (isSuccess) {
     const submittedPct = Math.round((score / totalQuestions) * 100);
     const submittedPassed = submittedPct >= passmark;
@@ -839,7 +839,7 @@ export function CourseTaker({
     return (
       <div className={`max-w-2xl mx-auto space-y-3`} style={fontStyle}>
 
-        {/* ── Hero card ── */}
+        {/* -- Hero card -- */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1006,14 +1006,14 @@ export function CourseTaker({
                 className="text-xs font-semibold transition-opacity hover:opacity-75"
                 style={{ color: accent }}
               >
-                Create your own course →
+                Create your own course ->
               </button>
             )}
             <p className={`text-xs ${mutedColor}`}>Results recorded</p>
           </div>
         </motion.div>
 
-        {/* ── Leaderboard rank card ── */}
+        {/* -- Leaderboard rank card -- */}
         {rankCtx && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -1074,7 +1074,7 @@ export function CourseTaker({
           </motion.div>
         )}
 
-        {/* ── Answer review ── */}
+        {/* -- Answer review -- */}
         {showAnswers === 'after_quiz' && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -1092,7 +1092,7 @@ export function CourseTaker({
                 const correct = isAnswerCorrect(q, userAnswer);
                 const qType: QuestionType = q.type ?? 'multiple_choice';
                 const correctDisplay = qType === 'arrange'
-                  ? q.correctAnswer.split('|||').join(' → ')
+                  ? q.correctAnswer.split('|||').join(' -> ')
                   : qType === 'fill_blank'
                     ? q.correctAnswer.split('|').map((s: string) => s.trim()).join(' / ')
                     : qType === 'image'
@@ -1133,7 +1133,7 @@ export function CourseTaker({
           </motion.div>
         )}
 
-        {/* ── Post-submission ── */}
+        {/* -- Post-submission -- */}
         {postSubmission?.type && postSubmission.type !== 'default' && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -1210,8 +1210,8 @@ export function CourseTaker({
     );
   }
 
-  // ── Student info screen ──
-  // ── OTP verification screen ──
+  // -- Student info screen --
+  // -- OTP verification screen --
   if (phase === 'otp') {
     return (
       <motion.div
@@ -1288,7 +1288,7 @@ export function CourseTaker({
   }
 
   if (phase === 'info') {
-    // ── Auto-start mode (pre-filled from overview modal) → render as portal popup ──
+    // -- Auto-start mode (pre-filled from overview modal) -> render as portal popup --
     if (initialStudentName) {
       if (typeof document === 'undefined') return null;
 
@@ -1409,7 +1409,7 @@ export function CourseTaker({
       return null;
     }
 
-    // ── Normal info form (no pre-filled info) ──
+    // -- Normal info form (no pre-filled info) --
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -1546,7 +1546,7 @@ export function CourseTaker({
     );
   }
 
-  // ── Complete screen ──
+  // -- Complete screen --
   if (phase === 'complete') {
     const percentage = Math.round((score / totalQuestions) * 100);
     const passed = percentage >= passmark;
@@ -1664,7 +1664,7 @@ export function CourseTaker({
     return { earned, label, isTimeBonus: withinTimeBonus, isStreak };
   };
 
-  // ── Swipe navigation ──
+  // -- Swipe navigation --
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
@@ -1681,7 +1681,7 @@ export function CourseTaker({
     if ((currentQuestion?.type ?? 'multiple_choice') === 'arrange') return;
 
     if (deltaX < 0) {
-      // Swipe left → next
+      // Swipe left -> next
       if (isChecking) {
         // Feedback already shown — advance
         handleNext();
@@ -1690,7 +1690,7 @@ export function CourseTaker({
         handleNextDirect();
       }
     } else {
-      // Swipe right → previous (only when not locked in feedback)
+      // Swipe right -> previous (only when not locked in feedback)
       if (!isChecking && currentQuestionIndex > 0) {
         setDirection(-1);
         setCurrentQuestionIndex(prev => prev - 1);
@@ -1698,7 +1698,7 @@ export function CourseTaker({
     }
   };
 
-  // ── Quiz questions ──
+  // -- Quiz questions --
   if (!currentQuestion) return null;
 
   const handleCheck = () => {
@@ -1829,13 +1829,13 @@ export function CourseTaker({
   const progressPct = (currentQuestionIndex / totalQuestions) * 100;
   const timerWarning = timeLeft !== null && timeLeft <= 60;
 
-  // ── Correct answer display for after-check feedback ──
+  // -- Correct answer display for after-check feedback --
   const correctAnswerDisplay = () => {
     if (questionType === 'fill_blank') {
       return currentQuestion.correctAnswer.split('|').map((s: string) => s.trim()).join(' / ');
     }
     if (questionType === 'arrange') {
-      return currentQuestion.options.join(' → ');
+      return currentQuestion.options.join(' -> ');
     }
     if (questionType === 'image') {
       const idx = currentQuestion.options.indexOf(currentQuestion.correctAnswer);
@@ -1857,14 +1857,14 @@ export function CourseTaker({
 
   const quizUI = (
     <>
-      {/* ── Confetti canvas ── */}
+      {/* -- Confetti canvas -- */}
       <canvas
         ref={confettiRef}
         className="fixed inset-0 pointer-events-none z-[9998]"
         style={{ width: '100vw', height: '100vh' }}
       />
 
-      {/* ── Obscure overlay ── */}
+      {/* -- Obscure overlay -- */}
       <AnimatePresence>
         {isObscured && (
           <motion.div
@@ -1894,7 +1894,7 @@ export function CourseTaker({
         )}
       </AnimatePresence>
 
-      {/* ── Quiz UI — full screen overlay (or inline in editor) ── */}
+      {/* -- Quiz UI — full screen overlay (or inline in editor) -- */}
       <div
         className={`${inlineMode ? 'relative flex flex-col rounded-xl overflow-hidden min-h-[500px]' : 'fixed inset-0 z-[200] overflow-y-auto flex flex-col'} ${isDark ? 'bg-black' : 'bg-zinc-50'}`}
         style={{ ...noSelect, color: isDark ? '#ffffff' : '#18181b', ...fontStyle }}
@@ -2051,7 +2051,7 @@ export function CourseTaker({
                 {currentQuestion.question}
               </h2>
 
-              {/* ── Fill in the blank ── */}
+              {/* -- Fill in the blank -- */}
               {questionType === 'fill_blank' && (
                 <div>
                   <AnimatedField theme={config.theme || 'forest'} mode={config.mode || 'dark'}>
@@ -2082,7 +2082,7 @@ export function CourseTaker({
                 </div>
               )}
 
-              {/* ── Arrange in order ── */}
+              {/* -- Arrange in order -- */}
               {questionType === 'arrange' && (
                 <div>
                   <p className={`text-xs mb-3 ${mutedColor}`}>Drag to reorder — put items in the correct sequence.</p>
@@ -2114,7 +2114,7 @@ export function CourseTaker({
                       ) : (
                         <div className="space-y-1">
                           <span className="flex items-center gap-2"><XCircle className="w-4 h-4" /> Incorrect order.</span>
-                          <p className="text-xs opacity-80">Correct: {currentQuestion.options.join(' → ')}</p>
+                          <p className="text-xs opacity-80">Correct: {currentQuestion.options.join(' -> ')}</p>
                         </div>
                       )}
                     </motion.div>
@@ -2122,7 +2122,7 @@ export function CourseTaker({
                 </div>
               )}
 
-              {/* ── Image options (each option is an image) ── */}
+              {/* -- Image options (each option is an image) -- */}
               {questionType === 'image' && (
                 <div className="grid grid-cols-2 gap-4">
                   {currentQuestion.options.map((option: string, idx: number) => {
@@ -2171,7 +2171,7 @@ export function CourseTaker({
                 </div>
               )}
 
-              {/* ── Code snippet (shown above options for code type) ── */}
+              {/* -- Code snippet (shown above options for code type) -- */}
               {questionType === 'code' && currentQuestion.codeSnippet && (
                 <div className="mb-8 rounded-2xl overflow-hidden border border-zinc-700/60 shadow-lg">
                   {/* Language badge */}
@@ -2196,7 +2196,7 @@ export function CourseTaker({
                 </div>
               )}
 
-              {/* ── Multiple choice (also renders for code type) ── */}
+              {/* -- Multiple choice (also renders for code type) -- */}
               {(questionType === 'multiple_choice' || questionType === 'code') && (
                 <div className="space-y-2.5">
                   {currentQuestion.options.map((option: string, idx: number) => {
@@ -2322,7 +2322,7 @@ export function CourseTaker({
                     onClick={handleSkip}
                     className={`w-full py-2.5 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
                   >
-                    Skip →
+                    Skip ->
                   </button>
                 </>
               )
@@ -2345,7 +2345,7 @@ export function CourseTaker({
                   onClick={handleSkip}
                   className={`w-full py-2.5 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
                 >
-                  Skip →
+                  Skip ->
                 </button>
               </>
             )}

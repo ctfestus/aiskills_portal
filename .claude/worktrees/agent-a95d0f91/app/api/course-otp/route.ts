@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { signStudentToken } from '@/lib/course-token';
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   const supabase = adminClient();
 
-  // ── Send OTP ──────────────────────────────────────────────────────────────
+  // -- Send OTP --------------------------------------------------------------
   if (action === 'send') {
     // Rate limit: max 3 sends per email per 5 minutes
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // ── Verify OTP ────────────────────────────────────────────────────────────
+  // -- Verify OTP ------------------------------------------------------------
   if (action === 'verify') {
     if (!code) {
       return NextResponse.json({ error: 'code is required' }, { status: 400 });

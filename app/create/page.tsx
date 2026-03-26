@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -31,7 +31,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// --- Types --------------------------------------------------------------------
 type FieldType = 'text' | 'email' | 'textarea' | 'number' | 'select' | 'phone' | 'company' | 'social' | 'description';
 
 interface FormField {
@@ -142,7 +142,7 @@ interface FormConfig {
   pointsSystem?: PointsSystem;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// --- Constants ----------------------------------------------------------------
 const buttonThemes: Record<ThemeColor, string> = {
   forest:  'bg-[#006128] hover:bg-[#004d1e] text-white',
   lime:    'bg-[#ADEE66] hover:bg-[#9ad94d] text-black',
@@ -349,7 +349,7 @@ const TEMPLATES: { key: string; label: string; description: string; icon: React.
   },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// --- Helpers ------------------------------------------------------------------
 const formatDateParts = (dateString?: string) => {
   if (!dateString) return null;
   try {
@@ -425,7 +425,7 @@ const mergeEventFields = (existingFields: FormField[] = [], generatedFields: any
   return Array.from(byName.values());
 };
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
+// --- Design tokens ------------------------------------------------------------
 const LIGHT_C = {
   page: '#ffffff', nav: 'rgba(255,255,255,0.97)', navBorder: 'rgba(0,0,0,0.06)',
   card: '#ffffff', cardBorder: 'rgba(0,0,0,0.07)', cardShadow: '0 1px 3px rgba(0,0,0,0.04)',
@@ -446,7 +446,7 @@ const DARK_C = {
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
-// ─── UI primitives ────────────────────────────────────────────────────────────
+// --- UI primitives ------------------------------------------------------------
 const inputCls = "w-full rounded-lg px-3 py-2 text-sm outline-none transition-colors placeholder:text-[#bbb]";
 const labelCls = "block text-xs mb-1.5";
 
@@ -499,7 +499,7 @@ function EditorSection({ title, children, defaultOpen = false }: { title: string
   );
 }
 
-// ─── FormPreview ──────────────────────────────────────────────────────────────
+// --- FormPreview --------------------------------------------------------------
 function FormPreview({ config, isSubmitting, onSubmit, isSuccess, onReset, isSharedView }: {
   config: FormConfig;
   isSubmitting: boolean;
@@ -551,7 +551,7 @@ function FormPreview({ config, isSubmitting, onSubmit, isSuccess, onReset, isSha
         <h2 className={`text-3xl font-medium ${textColor}`}>Successfully Submitted!</h2>
         <p className={mutedTextColor}>Your response has been recorded.</p>
         {!isSharedView && <button onClick={onReset} className="text-brand-accent hover:text-brand-accent text-sm transition-colors">← Back to Editor</button>}
-        {isSharedView && <button onClick={() => window.location.href = '/create'} className="text-brand-accent hover:text-brand-accent text-sm transition-colors">Create your own AI form →</button>}
+        {isSharedView && <button onClick={() => window.location.href = '/create'} className="text-brand-accent hover:text-brand-accent text-sm transition-colors">Create your own AI form &rarr;</button>}
       </motion.div>
     );
   }
@@ -727,7 +727,7 @@ function FormPreview({ config, isSubmitting, onSubmit, isSuccess, onReset, isSha
   );
 }
 
-// ─── Sortable Field Card ──────────────────────────────────────────────────────
+// --- Sortable Field Card ------------------------------------------------------
 interface FieldCardProps {
   f: FormField;
   isExpanded: boolean;
@@ -833,7 +833,7 @@ function SortableFieldCard({ f, isExpanded, toggleExpand, onRemove, onUpdate, in
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// --- Main Page ----------------------------------------------------------------
 export default function Page() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
@@ -977,7 +977,7 @@ const [isSaving, setIsSaving] = useState(false);
     })();
   }, [formConfig?.postSubmission?.type]);
 
-  // ── Create meeting via integration ──
+  // -- Create meeting via integration --
   const handleCreateMeeting = async (provider: string) => {
     if (!user) return;
     setCreatingMeeting(provider);
@@ -999,7 +999,7 @@ const [isSaving, setIsSaving] = useState(false);
     setCreatingMeeting(null);
   };
 
-  // ── Supabase save/share ──
+  // -- Supabase save/share --
   const handleShare = async () => {
     if (!formConfig) return;
     if (!user) { showToast('Please sign in to save and share your work.', 'info'); window.location.href = '/auth'; return; }
@@ -1057,7 +1057,7 @@ const [isSaving, setIsSaving] = useState(false);
     } finally { setIsSaving(false); }
   };
 
-  // ── Template selection ──
+  // -- Template selection --
   const handleSelectTemplate = (template: typeof TEMPLATES[number]) => {
     setFormConfig(template.config);
     setIsSuccess(false);
@@ -1065,7 +1065,7 @@ const [isSaving, setIsSaving] = useState(false);
     setCustomSlug('');
   };
 
-  // ── AI generation ──
+  // -- AI generation --
   const handleGenerate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!prompt.trim()) return;
@@ -1339,7 +1339,7 @@ const [isSaving, setIsSaving] = useState(false);
     });
   };
 
-  // ── Field management ──
+  // -- Field management --
   const handleUpdateField = (id: string, updates: Partial<FormField>) => {
     if (!formConfig) return;
     updateConfig({ fields: formConfig.fields.map(f => f.id === id ? { ...f, ...updates } : f) });
@@ -1385,7 +1385,7 @@ const [isSaving, setIsSaving] = useState(false);
     setNewFieldRequired(true);
   };
 
-  // ── Course management ──
+  // -- Course management --
   const handleAddQuestion = () => {
     if (!formConfig) return;
     const id = Math.random().toString(36).substring(7);
@@ -1466,7 +1466,7 @@ const [isSaving, setIsSaving] = useState(false);
     updateConfig({ coverImage: publicUrl });
   };
 
-  // ── Shared view ──
+  // -- Shared view --
   if (isSharedView && formConfig) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center p-6 py-16">
@@ -1475,7 +1475,7 @@ const [isSaving, setIsSaving] = useState(false);
     );
   }
 
-  // ── Loading edit ──
+  // -- Loading edit --
   if (isLoadingEdit) {
     return (
       <main className="min-h-screen flex items-center justify-center" style={{ background: C.page }}>
@@ -1484,7 +1484,7 @@ const [isSaving, setIsSaving] = useState(false);
     );
   }
 
-  // ── Landing ──
+  // -- Landing --
   if (!formConfig) {
     return (
       <main className="min-h-screen flex flex-col" style={{ background: C.page, color: C.text }}>
@@ -1575,7 +1575,7 @@ const [isSaving, setIsSaving] = useState(false);
                       <p className="text-xs mt-0.5 leading-snug" style={{ color: C.faint }}>{t.description}</p>
                     </div>
                     <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>
-                      Use →
+                      Use &rarr;
                     </span>
                   </motion.button>
                 );
@@ -1588,7 +1588,7 @@ const [isSaving, setIsSaving] = useState(false);
     );
   }
 
-  // ── Editor ──
+  // -- Editor --
   const accentColor = formConfig.customAccent ?? themeAccentColors[formConfig.theme];
 
   const defaultPoints: PointsSystem = {
@@ -1609,7 +1609,7 @@ const [isSaving, setIsSaving] = useState(false);
       {/* Decorative blob */}
       <div className="fixed top-0 right-0 pointer-events-none" style={{ width:200, height:200, borderRadius:'50%', background:C.lime, transform:'translate(35%,-25%)', opacity:0.45, zIndex:0 }} />
 
-      {/* ── Editor header: Logo + Dashboard link + Save ── */}
+      {/* -- Editor header: Logo + Dashboard link + Save -- */}
       <header className="sticky top-0 z-30 backdrop-blur-md" style={{ background: C.nav, borderBottom: `1px solid ${C.navBorder}` }}>
         <div className="flex items-center justify-between px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3">
@@ -1639,7 +1639,7 @@ const [isSaving, setIsSaving] = useState(false);
       </header>
 
       <div className="relative z-10 flex flex-1 overflow-hidden">
-        {/* ── Left Editor Panel ── */}
+        {/* -- Left Editor Panel -- */}
         <aside className="w-full md:w-[400px] flex-shrink-0 overflow-y-auto custom-scrollbar" style={{ background: C.card, borderRight: `1px solid ${C.cardBorder}` }}>
           <div className="px-5 py-4 space-y-0">
 
@@ -3078,7 +3078,7 @@ const [isSaving, setIsSaving] = useState(false);
           </div>
         </aside>
 
-        {/* ── Right Preview Panel ── */}
+        {/* -- Right Preview Panel -- */}
         <div className="hidden md:block flex-1 overflow-y-auto" style={{ background: C.page }}>
           <div className="px-8 py-4" style={{ borderBottom: `1px solid ${C.cardBorder}`, background: C.nav }}>
             <form onSubmit={handleGenerate} className="flex items-center gap-3 max-w-2xl mx-auto">
@@ -3386,7 +3386,7 @@ const [isSaving, setIsSaving] = useState(false);
         )}
       </AnimatePresence>
 
-      {/* ── Toast notification ── */}
+      {/* -- Toast notification -- */}
       <AnimatePresence>
         {toast && (
           <motion.div

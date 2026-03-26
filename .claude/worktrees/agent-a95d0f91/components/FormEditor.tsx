@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/components/ThemeProvider';
@@ -24,7 +24,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// --- Types --------------------------------------------------------------------
 type FieldType = 'text' | 'email' | 'textarea' | 'number' | 'select' | 'phone' | 'company' | 'social' | 'description';
 
 interface FormField {
@@ -135,7 +135,7 @@ interface FormConfig {
   pointsSystem?: PointsSystem;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// --- Constants ----------------------------------------------------------------
 const buttonThemes: Record<ThemeColor, string> = {
   forest:  'bg-[#006128] hover:bg-[#004d1e] text-white',
   lime:    'bg-[#ADEE66] hover:bg-[#9ad94d] text-black',
@@ -236,7 +236,7 @@ const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   description: 'Description Block',
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// --- Helpers ------------------------------------------------------------------
 const formatDateParts = (dateString?: string) => {
   if (!dateString) return null;
   try {
@@ -312,7 +312,7 @@ const mergeEventFields = (existingFields: FormField[] = [], generatedFields: any
   return Array.from(byName.values());
 };
 
-// ─── Design tokens (light / dark) ─────────────────────────────────────────────
+// --- Design tokens (light / dark) ---------------------------------------------
 const FE_LIGHT = {
   page: '#ffffff', card: '#ffffff', cardBorder: 'rgba(0,0,0,0.07)', cardShadow: '0 1px 3px rgba(0,0,0,0.04)',
   input: '#f5f6f7', inputBorder: '#e2e4e8',
@@ -337,7 +337,7 @@ const FE_DARK = {
 };
 function useFEC() { const { theme } = useTheme(); return theme === 'dark' ? FE_DARK : FE_LIGHT; }
 
-// ─── UI primitives ────────────────────────────────────────────────────────────
+// --- UI primitives ------------------------------------------------------------
 const inputCls = "w-full rounded-lg px-3 py-2 text-sm outline-none transition-colors placeholder:text-zinc-400";
 const labelCls = "block text-[13.5px] mb-1.5";
 
@@ -390,7 +390,7 @@ function EditorSection({ title, children, defaultOpen = true }: { title: string;
   );
 }
 
-// ─── Sortable Field Card ──────────────────────────────────────────────────────
+// --- Sortable Field Card ------------------------------------------------------
 interface FieldCardProps {
   f: FormField;
   isExpanded: boolean;
@@ -493,7 +493,7 @@ function SortableFieldCard({ f, isExpanded, toggleExpand, onRemove, onUpdate, in
   );
 }
 
-// ─── FormEditor Component ─────────────────────────────────────────────────────
+// --- FormEditor Component -----------------------------------------------------
 interface FormEditorProps {
   formId: string;
   onSaved?: (id: string) => void;
@@ -2927,7 +2927,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
         )}
       </AnimatePresence>
 
-      {/* ── Generate Questions modal ─────────────────────────────────────── */}
+      {/* -- Generate Questions modal --------------------------------------- */}
       <AnimatePresence>
         {aiPromptModalOpen && (
           <motion.div
@@ -3071,7 +3071,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
         )}
       </AnimatePresence>
 
-      {/* ── Toast notification ── */}
+      {/* -- Toast notification -- */}
       <AnimatePresence>
         {toast && (
           <motion.div

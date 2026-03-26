@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { adminClient } from '@/lib/subscription';
 
@@ -6,12 +6,12 @@ export const dynamic = 'force-dynamic';
 
 function shortSlug() {
   // Use cryptographically secure random bytes — Math.random() is predictable.
-  // 5 bytes → base64url gives 7 URL-safe chars from a ~1 trillion space.
+  // 5 bytes -> base64url gives 7 URL-safe chars from a ~1 trillion space.
   return randomBytes(5).toString('base64url').slice(0, 7).toLowerCase();
 }
 
 export async function POST(req: NextRequest) {
-  // ── Auth ────────────────────────────────────────────────────────────────────
+  // -- Auth --------------------------------------------------------------------
   const authHeader = req.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // ── Parse body ───────────────────────────────────────────────────────────────
+  // -- Parse body ---------------------------------------------------------------
   let body: any;
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const { title, description, config, slug: preferredSlug } = body;
   if (!config) return NextResponse.json({ error: 'config is required' }, { status: 400 });
 
-  // ── Insert with slug retry (up to 3 attempts on collision) ──────────────────
+  // -- Insert with slug retry (up to 3 attempts on collision) ------------------
   // The BEFORE INSERT trigger enforces plan limits atomically — no separate
   // check needed here. If the limit is exceeded, Postgres raises P0001 which
   // PostgREST surfaces as error code "P0001".

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell, CheckCheck, Trophy, CalendarDays, FileText, X } from 'lucide-react';
@@ -46,7 +46,7 @@ export default function NotificationBell() {
 
   const unread = notifs.filter(n => !n.read).length;
 
-  // ── Load user + initial notifications ──
+  // -- Load user + initial notifications --
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session?.user) return;
@@ -65,7 +65,7 @@ export default function NotificationBell() {
     if (data) setNotifs(data as Notification[]);
   }, []);
 
-  // ── Realtime subscription ──
+  // -- Realtime subscription --
   useEffect(() => {
     if (!userId) return;
 
@@ -83,7 +83,7 @@ export default function NotificationBell() {
     return () => { supabase.removeChannel(channel); };
   }, [userId]);
 
-  // ── Mark all read when opening ──
+  // -- Mark all read when opening --
   const handleOpen = useCallback(async () => {
     setOpen(true);
     const unreadIds = notifs.filter(n => !n.read).map(n => n.id);
@@ -95,7 +95,7 @@ export default function NotificationBell() {
       .in('id', unreadIds);
   }, [notifs]);
 
-  // ── Close on outside click ──
+  // -- Close on outside click --
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {

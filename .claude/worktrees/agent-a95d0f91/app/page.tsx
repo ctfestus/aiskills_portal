@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { motion, useInView, AnimatePresence } from 'motion/react';
@@ -6,14 +6,14 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Zap, Sparkles, ArrowRight, Check, LayoutDashboard, ChevronDown, User, Settings, LogOut } from 'lucide-react';
 
-// ─── Brand palette ─────────────────────────────────────────────────────────────
+// --- Brand palette -------------------------------------------------------------
 // Base:    #0703c2  (deep brand blue)
 // Mid:     #0d08f7  (vivid brand blue)
 // Accent:  #00a4ef  (sky blue)
 // Warm:    #ff9933  (orange highlight)
-// ──────────────────────────────────────────────────────────────────────────────
+// ------------------------------------------------------------------------------
 
-// ─── SVG Illustrations ────────────────────────────────────────────────────────
+// --- SVG Illustrations --------------------------------------------------------
 const IllustrationAI = () => (
   <svg viewBox="0 0 280 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
     <ellipse cx="140" cy="100" rx="100" ry="68" fill="#0d08f7" fillOpacity="0.18"/>
@@ -127,7 +127,7 @@ const IllustrationProfile = () => (
   </svg>
 );
 
-// ─── FadeIn on scroll ─────────────────────────────────────────────────────────
+// --- FadeIn on scroll ---------------------------------------------------------
 function FadeIn({ children, delay = 0, className = '' }: { children: React.ReactNode; delay?: number; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: '-60px' });
@@ -141,7 +141,7 @@ function FadeIn({ children, delay = 0, className = '' }: { children: React.React
   );
 }
 
-// ─── Data ──────────────────────────────────────────────────────────────────────
+// --- Data ----------------------------------------------------------------------
 const FEATURES = [
   { title: 'AI-Powered Forms',      description: 'Describe what you need in plain English. Our AI designs a beautiful, fully-configured form in seconds — fields, validation, and all.',                          illustration: <IllustrationAI />,      accent: 'rgba(255,255,255,0.9)', badge: 'AI',      border: 'rgba(255,255,255,0.18)' },
   { title: 'Smart Courses',         description: 'Build graded courses with multiple choice, fill-in-the-blank, drag-to-order, and image questions. Set pass marks, timers, and retake limits.',              illustration: <IllustrationCourse />,    accent: '#ff9933',               badge: 'Course',    border: 'rgba(255,153,51,0.3)' },
@@ -166,7 +166,7 @@ const HIGHLIGHTS = [
   'Light & dark mode on dashboard',
 ];
 
-// ─── Floating orb ─────────────────────────────────────────────────────────────
+// --- Floating orb -------------------------------------------------------------
 function Orb({ x, y, size, color, delay }: { x: string; y: string; size: number; color: string; delay: number }) {
   return (
     <motion.div className="absolute rounded-full pointer-events-none"
@@ -177,7 +177,7 @@ function Orb({ x, y, size, color, delay }: { x: string; y: string; size: number;
   );
 }
 
-// ─── Nav profile menu (landing page) ──────────────────────────────────────────
+// --- Nav profile menu (landing page) ------------------------------------------
 function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -281,7 +281,7 @@ function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
   );
 }
 
-// ─── Page ──────────────────────────────────────────────────────────────────────
+// --- Page ----------------------------------------------------------------------
 export default function LandingPage() {
   const [user, setUser]       = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -304,7 +304,7 @@ export default function LandingPage() {
   return (
     <main data-theme="dark" className="min-h-screen text-white overflow-x-hidden" style={{ background: '#0703c2' }}>
 
-      {/* ── Nav ── */}
+      {/* -- Nav -- */}
       <motion.nav
         initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
         className={`fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 py-4 transition-all duration-300 ${scrolled ? 'border-b border-white/10' : ''}`}
@@ -336,7 +336,7 @@ export default function LandingPage() {
         </div>
       </motion.nav>
 
-      {/* ── Hero ── */}
+      {/* -- Hero -- */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-24 pb-16 overflow-hidden">
         {/* Orbs */}
         <Orb x="-8%"  y="2%"  size={500} color="#0d08f7" delay={0} />
@@ -481,7 +481,7 @@ export default function LandingPage() {
         </motion.div>
       </section>
 
-      {/* ── Features ── */}
+      {/* -- Features -- */}
       <section className="py-24 px-6 max-w-6xl mx-auto">
         <FadeIn className="text-center mb-16 space-y-3">
           <p className="text-xs font-semibold uppercase tracking-widest text-white/50">Everything you need</p>
@@ -524,14 +524,14 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Divider wave ── */}
+      {/* -- Divider wave -- */}
       <div className="w-full overflow-hidden leading-none" style={{ height: 60 }}>
         <svg viewBox="0 0 1440 60" preserveAspectRatio="none" className="w-full h-full">
           <path d="M0,30 C360,60 1080,0 1440,30 L1440,60 L0,60 Z" fill="rgba(255,255,255,0.04)"/>
         </svg>
       </div>
 
-      {/* ── How it works ── */}
+      {/* -- How it works -- */}
       <section className="py-24 px-6" style={{ background: 'rgba(0,0,0,0.15)' }}>
         <div className="max-w-4xl mx-auto">
           <FadeIn className="text-center mb-16 space-y-3">
@@ -558,14 +558,14 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Divider wave ── */}
+      {/* -- Divider wave -- */}
       <div className="w-full overflow-hidden leading-none rotate-180" style={{ height: 60 }}>
         <svg viewBox="0 0 1440 60" preserveAspectRatio="none" className="w-full h-full">
           <path d="M0,30 C360,60 1080,0 1440,30 L1440,60 L0,60 Z" fill="rgba(0,0,0,0.15)"/>
         </svg>
       </div>
 
-      {/* ── Feature checklist ── */}
+      {/* -- Feature checklist -- */}
       <section className="py-24 px-6 max-w-5xl mx-auto">
         <div className="grid md:grid-cols-2 gap-12 items-center">
           <FadeIn className="space-y-5">
@@ -597,7 +597,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── CTA banner ── */}
+      {/* -- CTA banner -- */}
       <section className="py-24 px-6">
         <FadeIn>
           <div className="relative max-w-4xl mx-auto rounded-3xl p-12 md:p-16 text-center overflow-hidden border border-white/15"
@@ -633,7 +633,7 @@ export default function LandingPage() {
         </FadeIn>
       </section>
 
-      {/* ── Footer ── */}
+      {/* -- Footer -- */}
       <footer className="border-t border-white/10 px-6 py-10">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">

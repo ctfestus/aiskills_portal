@@ -27,7 +27,7 @@ export async function GET(
   const { data: form } = await adminSupabase.from('forms').select('title, config, user_id').eq('id', formId).single();
 
   const { data: rawSettings } = form?.user_id
-    ? await adminSupabase.from('certificate_defaults').select('*').eq('user_id', form.user_id).single()
+    ? await adminSupabase.from('certificate_defaults').select('*').eq('user_id', form.user_id).maybeSingle()
     : { data: null };
 
   const settings = rawSettings

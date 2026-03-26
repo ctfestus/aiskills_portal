@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -64,7 +64,7 @@ const SOCIAL_FIELDS = [
   { key: 'website',   label: 'Website',      icon: Globe,     placeholder: 'https://yoursite.com' },
 ];
 
-// ─── Pexels Picker ────────────────────────────────────────────────────────────
+// --- Pexels Picker ------------------------------------------------------------
 function PexelsPicker({ onSelect, onClose }: { onSelect: (url: string) => void; onClose: () => void }) {
   const C = useC();
   const [query, setQuery]   = useState('');
@@ -158,7 +158,7 @@ function PexelsPicker({ onSelect, onClose }: { onSelect: (url: string) => void; 
   );
 }
 
-// ─── Cover Editor ─────────────────────────────────────────────────────────────
+// --- Cover Editor -------------------------------------------------------------
 function CoverEditor({ coverUrl, coverPosition, onUrlChange, onPositionChange, onFileChange, onBrowse }: {
   coverUrl: string; coverPosition: { x: number; y: number };
   onUrlChange: (url: string) => void; onPositionChange: (pos: { x: number; y: number }) => void;
@@ -240,7 +240,7 @@ function CoverEditor({ coverUrl, coverPosition, onUrlChange, onPositionChange, o
   );
 }
 
-// ─── Settings Page ────────────────────────────────────────────────────────────
+// --- Settings Page ------------------------------------------------------------
 export default function SettingsPage() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();

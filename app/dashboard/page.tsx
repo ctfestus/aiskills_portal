@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -21,7 +21,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { sanitizeRichText } from '@/lib/sanitize';
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
+// --- Design tokens ------------------------------------------------------------
 const LIGHT_C = {
   page:        'white',
   nav:         'rgba(255,255,255,0.95)',
@@ -84,7 +84,7 @@ const DARK_C = {
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
-// ─── Social share SVGs ────────────────────────────────────────────────────────
+// --- Social share SVGs --------------------------------------------------------
 const SHARE_PLATFORMS = [
   { id: 'twitter',  label: 'X',         icon: <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>, href: (u:string,t:string,d:string) => `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${t}\n${d}`)}&url=${encodeURIComponent(u)}` },
   { id: 'linkedin', label: 'LinkedIn',   icon: <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>, href: (u:string) => `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(u)}` },
@@ -92,7 +92,7 @@ const SHARE_PLATFORMS = [
   { id: 'whatsapp', label: 'WhatsApp',   icon: <svg viewBox="0 0 24 24" fill="#25D366" className="w-4 h-4"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>, href: (u:string,t:string,d:string) => `https://wa.me/?text=${encodeURIComponent(`${t}\n${d}\n\n${u}`)}` },
 ];
 
-// ─── ProfileMenu ───────────────────────────────────────────────────────────────
+// --- ProfileMenu ---------------------------------------------------------------
 function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; onSignOut: () => void }) {
   const C = useC();
   const [open, setOpen] = useState(false);
@@ -183,7 +183,7 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
   );
 }
 
-// ─── ShareMenu (portal) ───────────────────────────────────────────────────────
+// --- ShareMenu (portal) -------------------------------------------------------
 function ShareMenu({ form, triggerRect, onClose }: { form: any; triggerRect: DOMRect; onClose: () => void }) {
   const C = useC();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -291,7 +291,7 @@ function ShareButton({ form, shareMenuOpen, setShareMenuOpen }: { form: any; sha
   );
 }
 
-// ─── Form type helpers ────────────────────────────────────────────────────────
+// --- Form type helpers --------------------------------------------------------
 function getFormType(form: any): 'course' | 'event' | 'form' {
   if (form.content_type === 'course' || form.config?.isCourse) return 'course';
   if (form.content_type === 'event'  || form.config?.eventDetails?.isEvent) return 'event';
@@ -306,7 +306,7 @@ function getTypeMeta(C: typeof LIGHT_C) {
   };
 }
 
-// ─── Card illustrations ───────────────────────────────────────────────────────
+// --- Card illustrations -------------------------------------------------------
 function EventIllustration() {
   return (
     <svg viewBox="0 0 240 148" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', width: '100%' }}>
@@ -506,7 +506,7 @@ function StorefrontIllustration() {
   );
 }
 
-// ─── CreateSection ────────────────────────────────────────────────────────────
+// --- CreateSection ------------------------------------------------------------
 const CREATE_CARDS = [
   {
     type: 'event',
@@ -618,7 +618,7 @@ function CreateSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// ─── FormCard ─────────────────────────────────────────────────────────────────
+// --- FormCard -----------------------------------------------------------------
 function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelete }: {
   form: any; index: number; shareMenuOpen: string | null; setShareMenuOpen: (id: string | null) => void; setFormToDelete: (id: string) => void;
 }) {
@@ -702,7 +702,7 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
   );
 }
 
-// ─── EventCard (timeline) ─────────────────────────────────────────────────────
+// --- EventCard (timeline) -----------------------------------------------------
 const MEETING_LOGOS: Record<string, string> = {
   meet:  'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Meet.png',
   zoom:  'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Zoom.png',
@@ -851,7 +851,7 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
   );
 }
 
-// ─── Sidebar navigation ───────────────────────────────────────────────────────
+// --- Sidebar navigation -------------------------------------------------------
 const NAV_ITEMS = [
   { id: 'courses',       label: 'Courses',       Icon: BookOpen,      adminOnly: false },
   { id: 'assignments',   label: 'Assignments',    Icon: ClipboardList, adminOnly: false },
@@ -870,7 +870,7 @@ type SectionId = typeof NAV_ITEMS[number]['id'];
 
 const COMING_SOON: SectionId[] = [];
 
-// ─── Coming Soon placeholder ──────────────────────────────────────────────────
+// --- Coming Soon placeholder --------------------------------------------------
 function ComingSoon({ id, C }: { id: SectionId; C: typeof LIGHT_C }) {
   const item = NAV_ITEMS.find(n => n.id === id)!;
   return (
@@ -886,7 +886,7 @@ function ComingSoon({ id, C }: { id: SectionId; C: typeof LIGHT_C }) {
   );
 }
 
-// ─── Reports section ──────────────────────────────────────────────────────────
+// --- Reports section ----------------------------------------------------------
 type ReportTab = 'progress' | 'submissions' | 'logins';
 
 function reportExportCSV(headers: string[], rows: (string | number | null | undefined)[][], filename: string) {
@@ -917,7 +917,7 @@ function relTime(dateStr: string | null | undefined): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
-// ── Shared UI primitives ────────────────────────────────────────────────────
+// -- Shared UI primitives ----------------------------------------------------
 function StudentAvatar2({ name, email, size = 36, C }: { name?: string; email?: string; size?: number; C: typeof LIGHT_C }) {
   const label = ((name || email || '?').trim().slice(0, 2)).toUpperCase();
   const hue = ((name || email || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) * 47) % 360;
@@ -1068,7 +1068,7 @@ function RTableHeader({ cols, C }: { cols: { label: string; className?: string }
   );
 }
 
-// ── Tab 1 – Course Progress ─────────────────────────────────────────────────
+// -- Tab 1 – Course Progress -------------------------------------------------
 function CourseProgressTab({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
   const [rows, setRows]         = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
@@ -1197,7 +1197,7 @@ function CourseProgressTab({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
                 ))}
               </div>
               {visible.map((r, idx) => (
-                <div key={r.id}
+                <div key={`${r.form_id}-${r.student_email}`}
                   className="md:grid items-center px-5 py-3.5"
                   style={{ gridTemplateColumns: '2.5fr 1.2fr 2fr 180px 120px',
                     borderBottom: idx < visible.length - 1 ? `1px solid ${C.divider}` : 'none',
@@ -1250,7 +1250,7 @@ function CourseProgressTab({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
   );
 }
 
-// ── Tab 2 – Assignment Submissions ─────────────────────────────────────────
+// -- Tab 2 – Assignment Submissions -----------------------------------------
 function AssignmentSubmissionsTab({ C }: { C: typeof LIGHT_C }) {
   const [rows, setRows]               = useState<any[]>([]);
   const [cohorts, setCohorts]         = useState<any[]>([]);
@@ -1440,7 +1440,7 @@ function AssignmentSubmissionsTab({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// ── Tab 3 – Student Logins ─────────────────────────────────────────────────
+// -- Tab 3 – Student Logins -------------------------------------------------
 function StudentLoginsTab({ C }: { C: typeof LIGHT_C }) {
   const [students, setStudents] = useState<any[]>([]);
   const [cohorts, setCohorts]   = useState<any[]>([]);
@@ -1589,7 +1589,7 @@ function StudentLoginsTab({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// ── ReportsSection shell ───────────────────────────────────────────────────
+// -- ReportsSection shell ---------------------------------------------------
 function ReportsSection({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
   const [tab, setTab] = useState<ReportTab>('progress');
 
@@ -1640,7 +1640,7 @@ function ReportsSection({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
   );
 }
 
-// ─── Generic list section ─────────────────────────────────────────────────────
+// --- Generic list section -----------------------------------------------------
 function GenericListSection({ table, label, createHref, createLabel, Icon, C, renderRow }: {
   table: string; label: string; createHref: string; createLabel: string;
   Icon: React.ElementType; C: typeof LIGHT_C;
@@ -1802,7 +1802,7 @@ function SchedulesManageSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// ─── Assignments manage section ───────────────────────────────────────────────
+// --- Assignments manage section -----------------------------------------------
 function exportCSV(rows: any[], title: string) {
   const headers = ['Name', 'Email', 'Status', 'Score', 'Result', 'Submitted At'];
   const csvRows = rows.map(row => {
@@ -1903,7 +1903,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     <div className="space-y-3">{[0,1,2].map(i => <div key={i} className="h-20 rounded-2xl animate-pulse" style={{ background: C.card }}/>)}</div>
   );
 
-  // ── Grading view ─────────────────────────────────────────────────────────────
+  // -- Grading view -------------------------------------------------------------
   if (viewingSub) {
     const isPassed = viewingSub.score != null && viewingSub.score >= 85;
     const isFailed = viewingSub.score != null && viewingSub.score < 85;
@@ -1995,7 +1995,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     );
   }
 
-  // ── Assignment detail with tabs ───────────────────────────────────────────────
+  // -- Assignment detail with tabs -----------------------------------------------
   if (selected) {
     const subMap    = Object.fromEntries(submissions.map(s => [s.student_id, s]));
     const rows      = assignedStudents.map(st => ({ ...st, sub: subMap[st.id] ?? null }));
@@ -2044,7 +2044,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
           ))}
         </div>
 
-        {/* ── Details tab ── */}
+        {/* -- Details tab -- */}
         {activeTab === 'details' && (
           <div className="space-y-4">
             {[
@@ -2061,13 +2061,13 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
             ))}
             {!selected.scenario && !selected.brief && !selected.tasks && !selected.requirements && (
               <div className="text-center py-16 rounded-2xl" style={{ background: C.card, border: `1px solid ${C.green}50`, boxShadow: C.cardShadow }}>
-                <p className="text-sm" style={{ color: C.faint }}>No details added yet. <Link href={`/create/assignment?edit=${selected.id}`} style={{ color: C.green }}>Edit assignment →</Link></p>
+                <p className="text-sm" style={{ color: C.faint }}>No details added yet. <Link href={`/create/assignment?edit=${selected.id}`} style={{ color: C.green }}>Edit assignment &rarr;</Link></p>
               </div>
             )}
           </div>
         )}
 
-        {/* ── Responses tab ── */}
+        {/* -- Responses tab -- */}
         {activeTab === 'responses' && (
           <div>
             {/* Stats */}
@@ -2168,7 +2168,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     );
   }
 
-  // ── Assignment list ───────────────────────────────────────────────────────────
+  // -- Assignment list -----------------------------------------------------------
   if (!assignments.length) return (
     <div className="text-center py-24 rounded-3xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
       <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: C.lime }}>
@@ -2236,7 +2236,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// ─── Empty state for non-form sections ────────────────────────────────────────
+// --- Empty state for non-form sections ----------------------------------------
 function SectionEmptyState({ Icon, label, createHref, createLabel, C }: {
   Icon: React.ElementType; label: string; createHref: string; createLabel: string; C: typeof LIGHT_C;
 }) {
@@ -2255,7 +2255,7 @@ function SectionEmptyState({ Icon, label, createHref, createLabel, C }: {
   );
 }
 
-// ─── Certificates section ─────────────────────────────────────────────────────
+// --- Certificates section -----------------------------------------------------
 const CERT_W = 1860;
 const CERT_H = 1200;
 
@@ -2277,37 +2277,43 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
   useEffect(() => {
     const el = previewWrapRef.current;
     if (!el) return;
-    const obs = new ResizeObserver(entries => {
-      const w = entries[0].contentRect.width;
-      if (w > 0) setPreviewScale(w / CERT_W);
-    });
+    const update = (w: number) => { if (w > 0) setPreviewScale(w / CERT_W); };
+    // Measure immediately so the preview renders correctly on first paint
+    update(el.getBoundingClientRect().width);
+    const obs = new ResizeObserver(entries => update(entries[0].contentRect.width));
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const { data: { user }, } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
       setUser(user);
-      const { data } = await supabase.from('certificate_defaults').select('*').eq('user_id', user.id).single();
-      if (data) setSettings({
-        institutionName:    data.institution_name    ?? DEFAULT_CERT_SETTINGS.institutionName,
-        primaryColor:       data.primary_color       ?? DEFAULT_CERT_SETTINGS.primaryColor,
-        accentColor:        data.accent_color        ?? DEFAULT_CERT_SETTINGS.accentColor,
-        backgroundImageUrl: data.background_image_url ?? null,
-        logoUrl:            data.logo_url            ?? null,
-        signatureUrl:       data.signature_url       ?? null,
-        signatoryName:      data.signatory_name      ?? DEFAULT_CERT_SETTINGS.signatoryName,
-        signatoryTitle:     data.signatory_title     ?? DEFAULT_CERT_SETTINGS.signatoryTitle,
-        certifyText:        data.certify_text        ?? DEFAULT_CERT_SETTINGS.certifyText,
-        completionText:     data.completion_text     ?? DEFAULT_CERT_SETTINGS.completionText,
-        fontFamily:         (data.font_family        ?? DEFAULT_CERT_SETTINGS.fontFamily) as CertificateSettings['fontFamily'],
-        headingSize:        (data.heading_size       ?? DEFAULT_CERT_SETTINGS.headingSize) as CertificateSettings['headingSize'],
-        paddingTop:         data.padding_top         ?? DEFAULT_CERT_SETTINGS.paddingTop,
-        paddingLeft:        data.padding_left        ?? DEFAULT_CERT_SETTINGS.paddingLeft,
-        lineSpacing:        (data.line_spacing       ?? DEFAULT_CERT_SETTINGS.lineSpacing) as CertificateSettings['lineSpacing'],
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/certificate-defaults', {
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
       });
+      if (res.ok) {
+        const { data } = await res.json();
+        if (data) setSettings({
+          institutionName:    data.institution_name    ?? DEFAULT_CERT_SETTINGS.institutionName,
+          primaryColor:       data.primary_color       ?? DEFAULT_CERT_SETTINGS.primaryColor,
+          accentColor:        data.accent_color        ?? DEFAULT_CERT_SETTINGS.accentColor,
+          backgroundImageUrl: data.background_image_url ?? null,
+          logoUrl:            data.logo_url            ?? null,
+          signatureUrl:       data.signature_url       ?? null,
+          signatoryName:      data.signatory_name      ?? DEFAULT_CERT_SETTINGS.signatoryName,
+          signatoryTitle:     data.signatory_title     ?? DEFAULT_CERT_SETTINGS.signatoryTitle,
+          certifyText:        data.certify_text        ?? DEFAULT_CERT_SETTINGS.certifyText,
+          completionText:     data.completion_text     ?? DEFAULT_CERT_SETTINGS.completionText,
+          fontFamily:         (data.font_family        ?? DEFAULT_CERT_SETTINGS.fontFamily) as CertificateSettings['fontFamily'],
+          headingSize:        (data.heading_size       ?? DEFAULT_CERT_SETTINGS.headingSize) as CertificateSettings['headingSize'],
+          paddingTop:         data.padding_top         ?? DEFAULT_CERT_SETTINGS.paddingTop,
+          paddingLeft:        data.padding_left        ?? DEFAULT_CERT_SETTINGS.paddingLeft,
+          lineSpacing:        (data.line_spacing       ?? DEFAULT_CERT_SETTINGS.lineSpacing) as CertificateSettings['lineSpacing'],
+        });
+      }
       setLoading(false);
     })();
   }, []);
@@ -2332,26 +2338,19 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
   const save = async () => {
     if (!user) return;
     setSaving(true); setSaveMsg(null);
-    const { error } = await supabase.rpc('save_certificate_defaults', {
-      p_institution_name:     settings.institutionName,
-      p_primary_color:        settings.primaryColor,
-      p_accent_color:         settings.accentColor,
-      p_background_image_url: settings.backgroundImageUrl ?? null,
-      p_logo_url:             settings.logoUrl ?? null,
-      p_signature_url:        settings.signatureUrl ?? null,
-      p_signatory_name:       settings.signatoryName,
-      p_signatory_title:      settings.signatoryTitle,
-      p_certify_text:         settings.certifyText,
-      p_completion_text:      settings.completionText,
-      p_font_family:          settings.fontFamily,
-      p_heading_size:         settings.headingSize,
-      p_padding_top:          settings.paddingTop ?? 280,
-      p_padding_left:         settings.paddingLeft ?? 182,
-      p_line_spacing:         settings.lineSpacing ?? 'normal',
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/certificate-defaults', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify(settings),
     });
-    if (error) {
-      console.error('[cert save]', error);
-      setSaveMsg({ ok: false, msg: `Save failed: ${error.message} (code: ${error.code})` });
+    const json = await res.json();
+    if (!res.ok) {
+      console.error('[cert save]', json.error);
+      setSaveMsg({ ok: false, msg: `Save failed: ${json.error}` });
     } else {
       setSaveMsg({ ok: true, msg: 'Certificate default saved.' });
     }
@@ -2480,14 +2479,8 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
         <div className="px-5 py-3 border-b" style={{ borderColor: C.divider }}>
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Preview</p>
         </div>
-        {/* Responsive preview: measures container width then scales certificate to fit */}
-        <div ref={previewWrapRef} className="w-full overflow-hidden" style={{ height: Math.round(CERT_H * previewScale) }}>
-          <div style={{
-            width: CERT_W,
-            height: CERT_H,
-            transform: `scale(${previewScale})`,
-            transformOrigin: 'top left',
-          }}>
+        <div ref={previewWrapRef} style={{ width: '100%', overflow: 'hidden', height: previewScale > 0 ? Math.round(CERT_H * previewScale) : 'auto' }}>
+          <div style={{ width: CERT_W, height: CERT_H, transform: `scale(${previewScale})`, transformOrigin: 'top left' }}>
             <CertificateTemplate
               settings={settings}
               studentName="Sample Student"
@@ -2501,7 +2494,7 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// ─── Integrations section ─────────────────────────────────────────────────────
+// --- Integrations section -----------------------------------------------------
 function IntegrationsSection({ C }: { C: typeof LIGHT_C }) {
   const [integrations, setIntegrations] = useState<Record<string, { connected: boolean; email?: string }>>({});
   const [msg, setMsg]       = useState<{ ok: boolean; text: string } | null>(null);
@@ -2613,7 +2606,7 @@ function IntegrationsSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// ─── Cohorts section ──────────────────────────────────────────────────────────
+// --- Cohorts section ----------------------------------------------------------
 function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   const isLight = C.text === '#111';
   const [cohorts, setCohorts]           = useState<any[]>([]);
@@ -2740,7 +2733,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
 
       <div className="grid grid-cols-[260px_1fr] gap-5 items-start">
 
-        {/* ── Left: Cohort list ── */}
+        {/* -- Left: Cohort list -- */}
         <div className="rounded-2xl overflow-hidden" style={card}>
           <div className="px-4 py-3 flex items-center justify-between border-b" style={{ borderColor: C.divider }}>
             <p className="text-sm font-semibold" style={{ color: C.text }}>Cohorts</p>
@@ -2807,7 +2800,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
           </div>
         </div>
 
-        {/* ── Right: Student panel ── */}
+        {/* -- Right: Student panel -- */}
         <div className="rounded-2xl overflow-hidden" style={card}>
           {!selectedCohort ? (
             <div className="flex flex-col items-center justify-center py-24 gap-3">
@@ -2869,7 +2862,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                       <button onClick={() => setView('unassigned')}
                         className="text-xs font-semibold mt-1 underline underline-offset-2"
                         style={{ color: C.green }}>
-                        Add from unassigned →
+                        Add from unassigned &rarr;
                       </button>
                     </div>
                   ) : cohortStudents
@@ -2995,7 +2988,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// ─── Leaderboard section (admin/instructor) ───────────────────────────────────
+// --- Leaderboard section (admin/instructor) -----------------------------------
 const HERO_LB = 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)';
 
 function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
@@ -3191,7 +3184,7 @@ function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// ─── Section content router ───────────────────────────────────────────────────
+// --- Section content router ---------------------------------------------------
 function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFormToDelete, C }: {
   section: SectionId; forms: any[]; shareMenuOpen: string | null;
   setShareMenuOpen: (id: string | null) => void; setFormToDelete: (id: string) => void; C: typeof LIGHT_C;
@@ -3275,10 +3268,10 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
   );
 }
 
-// ─── Cache ────────────────────────────────────────────────────────────────────
+// --- Cache --------------------------------------------------------------------
 const _cache: { forms: any[] | null; profile: any | null; user: any | null } = { forms: null, profile: null, user: null };
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
+// --- Dashboard ----------------------------------------------------------------
 export default function DashboardPage() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
@@ -3379,7 +3372,7 @@ export default function DashboardPage() {
     window.location.href = '/';
   };
 
-  // ── Loading skeleton ────────────────────────────────────────────────────────
+  // -- Loading skeleton --------------------------------------------------------
   if (loading) {
     return (
       <div className="min-h-screen animate-pulse" style={{ background: C.page }}>
@@ -3411,7 +3404,7 @@ export default function DashboardPage() {
     );
   }
 
-  // ── Main render ─────────────────────────────────────────────────────────────
+  // -- Main render -------------------------------------------------------------
   const activeItem = NAV_ITEMS.find(n => n.id === activeSection)!;
   const courseCount = forms.filter(f => getFormType(f) === 'course').length;
   const eventCount  = forms.filter(f => getFormType(f) === 'event').length;
@@ -3427,7 +3420,7 @@ export default function DashboardPage() {
     <div className="min-h-screen flex flex-col" style={{ background: C.page }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'); *{font-family:'Inter',sans-serif;}`}</style>
 
-      {/* ── Navbar ── */}
+      {/* -- Navbar -- */}
       <nav className="sticky top-0 z-30 border-b h-14 flex items-center justify-between px-4 md:px-6 backdrop-blur-md flex-shrink-0"
         style={{ background: C.nav, borderColor: C.navBorder }}>
         <div className="flex items-center gap-3">
@@ -3449,7 +3442,7 @@ export default function DashboardPage() {
         </div>
       </nav>
 
-      {/* ── Body ── */}
+      {/* -- Body -- */}
       <div className="flex flex-1 relative">
 
         {/* Mobile overlay */}
@@ -3461,7 +3454,7 @@ export default function DashboardPage() {
           )}
         </AnimatePresence>
 
-        {/* ── Sidebar ── */}
+        {/* -- Sidebar -- */}
         <aside
           className={`fixed md:sticky top-14 z-20 md:z-10 h-[calc(100vh-56px)] flex-shrink-0 flex flex-col border-r overflow-y-auto transition-transform duration-300
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
@@ -3531,7 +3524,7 @@ export default function DashboardPage() {
           </div>
         </aside>
 
-        {/* ── Main content ── */}
+        {/* -- Main content -- */}
         <main className="flex-1 min-w-0 px-5 md:px-8 py-7">
           <motion.div
             key={activeSection}
