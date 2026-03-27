@@ -67,3 +67,46 @@ export async function POST(req: NextRequest) {
     { status: 409 }
   );
 }
+
+export async function DELETE(req: NextRequest) {
+  // -- Auth ---
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const jwt = authHeader.slice(7);
+
+  const supabase = adminClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const formId = searchParams.get('id');
+  if (!formId) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+  // Verify ownership -- only the creator (or an admin) can delete
+  const { data: form } = await supabase.from('forms').select('id, user_id, config').eq('id', formId).single();
+  if (!form) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+  const isAdmin = profile?.role === 'admin';
+  if (form.user_id !== user.id && !isAdmin) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  // Delete related records first
+  await supabase.from('certificates').delete().eq('form_id', formId);
+  await supabase.from('course_attempts').delete().eq('form_id', formId);
+  await supabase.from('responses').delete().eq('form_id', formId);
+
+  // Delete the form itself
+  const { error: deleteError } = await supabase.from('forms').delete().eq('id', formId);
+  if (deleteError) {
+    console.error('[api/forms] delete error:', deleteError.message);
+    return NextResponse.json({ error: 'Failed to delete form' }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Loader2, Save, Check, Plus, Trash2, Image as ImageIcon, Sun, Moon,
   X, MapPin, ArrowUpRight, ChevronDown, ChevronUp, Sparkles,
-  Building2, GripVertical, BookOpen, Pencil, Monitor, Smartphone, RotateCcw, ExternalLink,
+  Building2, GripVertical, BookOpen, Pencil, Monitor, Smartphone, RotateCcw, ExternalLink, Video, Search,
 } from 'lucide-react';
 import { ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import dynamic from 'next/dynamic';
@@ -537,6 +537,15 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
   const [aiError, setAiError] = useState('');
   const [aiSuccess, setAiSuccess] = useState('');
   const [aiFailed, setAiFailed] = useState(false);
+  // Bunny video picker
+  const [bunnyPickerOpen, setBunnyPickerOpen] = useState(false);
+  const [bunnyPickerQId, setBunnyPickerQId] = useState<string | null>(null);
+  const [bunnyVideos, setBunnyVideos] = useState<any[]>([]);
+  const [bunnyCollections, setBunnyCollections] = useState<any[]>([]);
+  const [bunnyCollection, setBunnyCollection] = useState('');
+  const [bunnyLoading, setBunnyLoading] = useState(false);
+  const [bunnySearch, setBunnySearch] = useState('');
+  const [bunnyError, setBunnyError] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (message: string, type: 'error' | 'success' | 'info' = 'error') => {
@@ -1017,6 +1026,46 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
   const handleUpdateQuestion = (id: string, updates: Partial<CourseQuestion>) => {
     if (!formConfig) return;
     updateConfig({ questions: formConfig.questions?.map(q => q.id === id ? { ...q, ...updates } : q) || [] });
+  };
+
+  const openBunnyPicker = async (qId: string, search = '', collection = '') => {
+    setBunnyPickerQId(qId);
+    setBunnyPickerOpen(true);
+    setBunnyLoading(true);
+    setBunnyError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? '';
+      const qs = new URLSearchParams({ ...(search ? { search } : {}), ...(collection ? { collection } : {}) });
+      const [videosRes, collectionsRes] = await Promise.all([
+        fetch(`/api/bunny?${qs}`, { headers: { Authorization: `Bearer ${token}` } }),
+        bunnyCollections.length === 0
+          ? fetch('/api/bunny?collections=1', { headers: { Authorization: `Bearer ${token}` } })
+          : Promise.resolve(null),
+      ]);
+      const videosJson = await videosRes.json();
+      if (!videosRes.ok) { setBunnyError(videosJson.error || 'Failed to load videos'); return; }
+      setBunnyVideos(videosJson.videos ?? []);
+      if (collectionsRes) {
+        const colJson = await collectionsRes.json();
+        setBunnyCollections(colJson.collections ?? []);
+      }
+    } catch {
+      setBunnyError('Network error. Please try again.');
+    } finally {
+      setBunnyLoading(false);
+    }
+  };
+
+  const selectBunnyVideo = (embedUrl: string) => {
+    if (!bunnyPickerQId || !formConfig) return;
+    const q = formConfig.questions?.find(q => q.id === bunnyPickerQId);
+    if (!q) return;
+    handleUpdateQuestion(bunnyPickerQId, { lesson: { ...q.lesson, videoUrl: embedUrl } });
+    setBunnyPickerOpen(false);
+    setBunnyPickerQId(null);
+    setBunnySearch('');
+    setBunnyCollection('');
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2214,14 +2263,25 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                                     </div>
                                   </label>
                                 )}
-                                <input
-                                  type="text"
-                                  value={q.lesson.videoUrl || ''}
-                                  onChange={e => handleUpdateQuestion(q.id, { lesson: { ...q.lesson, videoUrl: e.target.value } })}
-                                  className={inputCls}
-                                  style={inputStyle}
-                                  placeholder="YouTube or Vimeo URL (optional)..."
-                                />
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={q.lesson.videoUrl || ''}
+                                    onChange={e => handleUpdateQuestion(q.id, { lesson: { ...q.lesson, videoUrl: e.target.value } })}
+                                    className={`${inputCls} flex-1`}
+                                    style={inputStyle}
+                                    placeholder="YouTube, Vimeo or Bunny URL..."
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => openBunnyPicker(q.id)}
+                                    title="Pick from Bunny library"
+                                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-opacity hover:opacity-70 flex-shrink-0"
+                                    style={{ background: '#FF6B35', color: 'white' }}
+                                  >
+                                    <Video className="w-3.5 h-3.5"/> Bunny
+                                  </button>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -3136,6 +3196,135 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
             <button onClick={() => setToast(null)} className="flex-shrink-0 mt-0.5 hover:opacity-60 transition-opacity" style={{ color: FE.faint }}>
               <X className="w-3.5 h-3.5" />
             </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Bunny Video Picker Modal */}
+      <AnimatePresence>
+        {bunnyPickerOpen && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setBunnyPickerOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-2xl rounded-2xl overflow-hidden flex flex-col"
+              style={{ background: FE.card, border: `1px solid ${FE.cardBorder}`, maxHeight: '80vh' }}
+            >
+              <div className="flex items-center justify-between px-5 py-4 flex-shrink-0"
+                style={{ borderBottom: `1px solid ${FE.cardBorder}` }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: '#FF6B35' }}>
+                    <Video className="w-3.5 h-3.5 text-white"/>
+                  </div>
+                  <span className="text-sm font-semibold" style={{ color: FE.label }}>Pick from Bunny Library</span>
+                </div>
+                <button onClick={() => setBunnyPickerOpen(false)} style={{ color: FE.faint }}>
+                  <X className="w-4 h-4"/>
+                </button>
+              </div>
+              <div className="px-5 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${FE.cardBorder}` }}>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-1 px-3 py-2 rounded-xl" style={{ background: FE.inputBg, border: `1px solid ${FE.inputBorder}` }}>
+                    <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: FE.faint }}/>
+                    <input
+                      type="text"
+                      value={bunnySearch}
+                      onChange={e => setBunnySearch(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && openBunnyPicker(bunnyPickerQId!, bunnySearch)}
+                      placeholder="Search videos..."
+                      className="flex-1 bg-transparent text-sm outline-none"
+                      style={{ color: FE.label }}
+                    />
+                  </div>
+                  <button
+                    onClick={() => openBunnyPicker(bunnyPickerQId!, bunnySearch)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80"
+                    style={{ background: '#FF6B35', color: 'white' }}
+                  >Search</button>
+                </div>
+              </div>
+              {/* Body: collections sidebar + video grid */}
+              <div className="flex flex-1 overflow-hidden">
+                {bunnyCollections.length > 0 && (
+                  <div className="w-44 flex-shrink-0 overflow-y-auto py-2" style={{ borderRight: `1px solid ${FE.cardBorder}` }}>
+                    <button
+                      onClick={() => { setBunnyCollection(''); openBunnyPicker(bunnyPickerQId!, bunnySearch, ''); }}
+                      className="w-full text-left px-4 py-2 text-xs font-medium transition-colors"
+                      style={{ background: bunnyCollection === '' ? 'rgba(0,97,40,0.1)' : 'transparent', color: bunnyCollection === '' ? '#006128' : FE.muted }}
+                    >All videos</button>
+                    {bunnyCollections.map(col => (
+                      <button
+                        key={col.guid}
+                        onClick={() => { setBunnyCollection(col.guid); openBunnyPicker(bunnyPickerQId!, bunnySearch, col.guid); }}
+                        className="w-full text-left px-4 py-2 text-xs transition-colors"
+                        style={{ background: bunnyCollection === col.guid ? 'rgba(0,97,40,0.1)' : 'transparent', color: bunnyCollection === col.guid ? '#006128' : FE.muted }}
+                      >
+                        <span className="block font-medium truncate">{col.name}</span>
+                        <span className="text-[10px]" style={{ color: FE.faint }}>{col.videoCount} videos</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex-1 overflow-y-auto p-4">
+                  {bunnyLoading && (
+                    <div className="flex items-center justify-center py-16">
+                      <Loader2 className="w-6 h-6 animate-spin" style={{ color: FE.faint }}/>
+                    </div>
+                  )}
+                  {bunnyError && !bunnyLoading && (
+                    <div className="text-center py-10 text-sm" style={{ color: '#ef4444' }}>{bunnyError}</div>
+                  )}
+                  {!bunnyLoading && !bunnyError && bunnyVideos.length === 0 && (
+                    <div className="text-center py-10 text-sm" style={{ color: FE.faint }}>No videos found.</div>
+                  )}
+                  {!bunnyLoading && !bunnyError && bunnyVideos.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {bunnyVideos.map(v => (
+                        <button
+                          key={v.guid}
+                          onClick={() => selectBunnyVideo(v.embedUrl)}
+                          className="text-left rounded-xl overflow-hidden transition-all hover:scale-[1.02] hover:shadow-lg group"
+                          style={{ border: `1px solid ${FE.cardBorder}`, background: FE.inputBg }}
+                        >
+                          <div className="relative aspect-video bg-black overflow-hidden">
+                            {v.thumbnail
+                              ? <img src={v.thumbnail} alt={v.title}
+                                  className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+                                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget.nextSibling as HTMLElement).style.display = 'flex'; }}
+                                />
+                              : null}
+                            <div className="w-full h-full items-center justify-center" style={{ display: v.thumbnail ? 'none' : 'flex' }}>
+                              <Video className="w-6 h-6 opacity-30" style={{ color: FE.faint }}/>
+                            </div>
+                            {v.status !== 4 && (
+                              <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+                                <span className="text-xs text-white font-medium">Processing...</span>
+                              </div>
+                            )}
+                            {v.duration > 0 && (
+                              <span className="absolute bottom-1.5 right-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                                style={{ background: 'rgba(0,0,0,0.75)', color: 'white' }}>
+                                {Math.floor(v.duration / 60)}:{String(v.duration % 60).padStart(2, '0')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="px-2.5 py-2">
+                            <p className="text-xs font-medium line-clamp-2 leading-snug" style={{ color: FE.label }}>{v.title}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

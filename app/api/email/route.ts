@@ -310,20 +310,37 @@ export async function POST(req: NextRequest) {
       }
 
       // Load recipients from DB -- never trust the client-supplied to list
-      const { data: responses, error } = await supabase
-        .from('responses')
-        .select('data')
-        .eq('form_id', data.formId);
+      const [{ data: responses, error }, { data: formRow }] = await Promise.all([
+        supabase.from('responses').select('data').eq('form_id', data.formId),
+        supabase.from('forms').select('cohort_ids').eq('id', data.formId).single(),
+      ]);
 
       if (error) throw error;
 
-      // Build deduplicated map of email -> response data (DB is authoritative)
+      // Build deduplicated map of email -> merge data (responses first, then cohort students fill gaps)
       const responseByEmail = new Map<string, Record<string, any>>();
+
       for (const response of responses || []) {
         const rowData = (response as any)?.data || {};
         const emailKey = normalizeEmail(rowData.email);
         if (emailKey && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey) && !responseByEmail.has(emailKey)) {
           responseByEmail.set(emailKey, rowData);
+        }
+      }
+
+      // Also include students assigned via cohorts (catches students who haven't completed yet)
+      const cohortIds: string[] = Array.isArray(formRow?.cohort_ids) ? formRow.cohort_ids : [];
+      if (cohortIds.length > 0) {
+        const { data: cohortStudents } = await supabase
+          .from('students')
+          .select('full_name, email')
+          .in('cohort_id', cohortIds);
+
+        for (const student of cohortStudents || []) {
+          const emailKey = normalizeEmail(student.email);
+          if (emailKey && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey) && !responseByEmail.has(emailKey)) {
+            responseByEmail.set(emailKey, { name: student.full_name, email: student.email });
+          }
         }
       }
 

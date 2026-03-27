@@ -10,7 +10,7 @@ import {
   CheckCircle, Clock, AlertCircle, Star, ExternalLink,
   GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
   Play, Lock, FileText, BarChart3, Bell, Plus, ArrowLeft, Upload, Video,
-  ThumbsUp, Bookmark, MapPin, Zap, RefreshCw,
+  ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -164,8 +164,9 @@ const NAV_ITEMS = [
   { id: 'assignments',   label: 'Assignments',    Icon: ClipboardList },
   { id: 'community',     label: 'Community',      Icon: Users         },
   { id: 'announcements', label: 'Announcements',  Icon: Megaphone     },
-  { id: 'projects',      label: 'Projects',       Icon: FolderOpen    },
-  { id: 'schedule',      label: 'Schedule',       Icon: Calendar      },
+  { id: 'projects',         label: 'Projects',         Icon: FolderOpen  },
+  { id: 'guided_projects',  label: 'Guided Projects',  Icon: Briefcase   },
+  { id: 'schedule',         label: 'Schedule',         Icon: Calendar    },
   { id: 'leaderboard',   label: 'Leaderboard',    Icon: Trophy        },
   { id: 'certificates',  label: 'Certificates',   Icon: Award         },
 ] as const;
@@ -224,9 +225,7 @@ function ProgressBar({ value, max = 100, color }: { value: number; max?: number;
 }
 
 // --- Course card ---
-function CourseCard({ course, C }: { course: any; C: typeof LIGHT_C }) {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
+function CourseCard({ course, C, onDetails }: { course: any; C: typeof LIGHT_C; onDetails: () => void }) {
   const questions = course.form?.config?.questions ?? [];
   const totalQ = questions.length;
   const currentIdx = course.current_question_index ?? 0;
@@ -238,29 +237,18 @@ function CourseCard({ course, C }: { course: any; C: typeof LIGHT_C }) {
   const certId: string | null = course.cert_id ?? null;
   const [imgErr, setImgErr] = useState(false);
 
-  // Action button logic:
-  // passed + cert -> "View Certificate" -> /certificate/[id]
-  // completed (failed) -> "Retake" -> course URL
-  // in-progress -> "Continue" -> course URL
-  // not started -> "Start" -> course URL
-  const actionHref = completed && passed && certId
-    ? `/certificate/${certId}`
-    : `/${course.form?.slug || course.form_id}`;
-  const actionLabel = completed
-    ? (passed && certId ? 'View Certificate' : 'Retake')
-    : currentIdx > 0 ? 'Continue' : 'Start';
-  const actionIcon = completed && passed && certId ? <Award className="w-3 h-3"/> : <Play className="w-3 h-3"/>;
+  const courseUrl = `/${course.form?.slug || course.form_id}?go=1`;
+  const actionHref = completed && passed && certId ? `/certificate/${certId}` : courseUrl;
+  const actionLabel = completed ? (passed && certId ? 'View Certificate' : 'Retake') : currentIdx > 0 ? 'Continue' : 'Start';
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl overflow-hidden group cursor-pointer"
+      className="rounded-2xl overflow-hidden"
       style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}
-      onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
-      onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}
     >
-      {/* Cover */}
-      <div className="relative h-36 overflow-hidden" style={{ background: C.thumbBg }}>
+      {/* Cover -- clicking opens the detail pane */}
+      <div className="relative h-36 overflow-hidden cursor-pointer group" style={{ background: C.thumbBg }} onClick={onDetails}>
         {coverImage && !imgErr
           ? <img src={coverImage} alt={course.form?.title} onError={() => setImgErr(true)}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
@@ -280,39 +268,47 @@ function CourseCard({ course, C }: { course: any; C: typeof LIGHT_C }) {
 
       {/* Content */}
       <div className="p-4">
-        <h3 className="text-sm font-semibold mb-1 line-clamp-2 leading-snug" style={{ color: C.text }}>
+        <h3 className="text-sm font-semibold mb-1 line-clamp-2 leading-snug cursor-pointer hover:opacity-70 transition-opacity"
+          style={{ color: C.text }} onClick={onDetails}>
           {course.form?.title ?? 'Untitled Course'}
         </h3>
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs" style={{ color: C.faint }}>
-            {completed ? 'Completed' : `${progress}% done`}
+            {completed ? 'Completed' : currentIdx > 0 ? `${progress}% done` : `${totalQ} questions`}
           </span>
           {completed && score > 0 && (
             <span className="text-xs font-semibold" style={{ color: passed ? '#16a34a' : '#dc2626' }}>Score: {score}%</span>
           )}
         </div>
         <ProgressBar value={progress} color={passed ? '#16a34a' : C.green}/>
-        <div className="mt-4 flex items-center justify-between">
-          <span className="text-xs" style={{ color: C.faint }}>
-            {totalQ > 0 ? `${Math.min(currentIdx, totalQ)} / ${totalQ} questions` : 'No questions'}
-          </span>
+
+        <div className="mt-4 flex items-center justify-between gap-2">
+          {/* Details button */}
+          <button onClick={onDetails}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70"
+            style={{ background: C.pill, color: C.muted }}>
+            <FileText className="w-3 h-3"/>
+            Details
+          </button>
+
           <div className="flex items-center gap-2">
-            {/* For passed courses: secondary "Review" link to revisit course content */}
+            {/* Review -- only for passed+cert */}
             {completed && passed && certId && (
-              <a href={`/${course.form?.slug || course.form_id}`} target="_blank" rel="noreferrer"
+              <a href={courseUrl} target="_blank" rel="noreferrer"
                 className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-xl transition-opacity hover:opacity-70"
                 style={{ background: C.pill, color: C.muted }}>
                 <Play className="w-3 h-3"/>
                 Review
               </a>
             )}
+            {/* Primary action */}
             <a href={actionHref} target="_blank" rel="noreferrer"
               className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70"
               style={{
                 background: completed ? (passed && certId ? C.green : C.pill) : C.cta,
                 color: completed ? (passed && certId ? 'white' : C.muted) : C.ctaText,
               }}>
-              {actionIcon}
+              {completed && passed && certId ? <Award className="w-3 h-3"/> : <Play className="w-3 h-3"/>}
               {actionLabel}
             </a>
           </div>
@@ -322,10 +318,183 @@ function CourseCard({ course, C }: { course: any; C: typeof LIGHT_C }) {
   );
 }
 
+// --- Course detail right pane ---
+function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT_C; onClose: () => void }) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const config = course.form?.config ?? {};
+  const questions: any[] = config.questions ?? [];
+  const lessons = questions.filter((q: any) => q.lesson?.title || q.lesson?.body);
+  const lessonCount = lessons.length;
+  const assessmentCount = questions.length;
+  const currentIdx = course.current_question_index ?? 0;
+  const completed = !!course.completed_at;
+  const passed = course.passed === true;
+  const score = course.score ?? 0;
+  const certId: string | null = course.cert_id ?? null;
+  const progress = completed ? 100 : (assessmentCount > 0 ? Math.round((currentIdx / assessmentCount) * 100) : 0);
+  const [imgErr, setImgErr] = useState(false);
+
+  const courseUrl = `/${course.form?.slug || course.form_id}?go=1`;
+  const actionHref = completed && passed && certId ? `/certificate/${certId}` : courseUrl;
+  const actionLabel = completed ? (passed && certId ? 'View Certificate' : 'Retake') : currentIdx > 0 ? 'Continue' : 'Start';
+
+  return (
+    <>
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 z-40"
+        style={{ background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(2px)' }}
+        onClick={onClose}
+      />
+      {/* Drawer */}
+      <motion.div
+        initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+        className="fixed right-0 top-0 bottom-0 z-50 flex flex-col"
+        style={{ width: 'min(600px, 100vw)', background: C.card, boxShadow: '-4px 0 40px rgba(0,0,0,0.18)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 flex-shrink-0"
+          style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+          <span className="text-sm font-semibold" style={{ color: C.text }}>Course Details</span>
+          <button onClick={onClose}
+            className="p-1.5 rounded-lg transition-opacity hover:opacity-70"
+            style={{ color: C.muted }}>
+            <X className="w-4 h-4"/>
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Cover image */}
+          {config.coverImage && !imgErr && (
+            <div style={{ height: 180, overflow: 'hidden', flexShrink: 0 }}>
+              <img src={config.coverImage} alt={course.form?.title}
+                onError={() => setImgErr(true)}
+                className="w-full h-full object-cover"/>
+            </div>
+          )}
+
+          <div className="p-5 space-y-5">
+            {/* Title + status badge */}
+            <div>
+              <h2 className="text-base font-bold leading-snug mb-2" style={{ color: C.text }}>
+                {course.form?.title ?? 'Untitled Course'}
+              </h2>
+              {completed && (
+                <span className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full"
+                  style={{ background: passed ? '#f0fdf4' : '#fef2f2', color: passed ? '#16a34a' : '#dc2626' }}>
+                  {passed ? `Passed  Score: ${score}%` : `Not passed  Score: ${score}%`}
+                </span>
+              )}
+              {!completed && currentIdx > 0 && (
+                <div className="mt-2 space-y-1">
+                  <div className="flex justify-between text-xs" style={{ color: C.faint }}>
+                    <span>{progress}% complete</span>
+                    <span>{Math.min(currentIdx, assessmentCount)} / {assessmentCount} questions</span>
+                  </div>
+                  <ProgressBar value={progress} color={C.green}/>
+                </div>
+              )}
+            </div>
+
+            {/* Stats grid */}
+            <div className="flex gap-2">
+              {[
+                lessonCount > 0 && { icon: <BookOpen className="w-4 h-4" style={{ color: C.green }}/>, value: lessonCount, label: 'Lessons' },
+                assessmentCount > 0 && { icon: <FileText className="w-4 h-4" style={{ color: C.green }}/>, value: assessmentCount, label: 'Assessments' },
+                { icon: <Trophy className="w-4 h-4" style={{ color: C.green }}/>, value: `${config.passmark ?? 50}%`, label: 'Pass mark' },
+                config.courseTimer && { icon: <Clock className="w-4 h-4" style={{ color: C.green }}/>, value: `${config.courseTimer}m`, label: 'Time limit' },
+              ].filter(Boolean).map((s: any, i) => (
+                <div key={i} className="flex flex-1 items-center gap-2 px-3 py-2.5 rounded-xl"
+                  style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)' }}>
+                  {s.icon}
+                  <div>
+                    <div className="text-sm font-bold" style={{ color: C.text }}>{s.value}</div>
+                    <div className="text-xs" style={{ color: C.faint }}>{s.label}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Description */}
+            {config.description && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>About this course</p>
+                <div className="rich-preview text-sm leading-relaxed" style={{ color: C.muted }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(config.description) }}/>
+              </div>
+            )}
+
+            {/* Learning outcomes */}
+            {(config.learnOutcomes ?? []).length > 0 && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: C.faint }}>What you will learn</p>
+                <div className="space-y-2">
+                  {(config.learnOutcomes as string[]).map((outcome: string, i: number) => (
+                    <div key={i} className="flex items-start gap-2.5">
+                      <div className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5"
+                        style={{ background: `${C.green}1a` }}>
+                        <CheckCircle className="w-3 h-3" style={{ color: C.green }}/>
+                      </div>
+                      <span className="text-sm leading-snug" style={{ color: C.text }}>{outcome}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Course outline */}
+            {lessonCount > 0 && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: C.faint }}>Course outline</p>
+                <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+                  {lessons.map((q: any, i: number) => (
+                    <div key={q.id} className="flex items-center gap-3 px-4 py-3"
+                      style={{ borderBottom: i < lessonCount - 1 ? `1px solid ${C.cardBorder}` : 'none' }}>
+                      <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ background: `${C.green}18` }}>
+                        <span className="text-[10px] font-bold" style={{ color: C.green }}>{i + 1}</span>
+                      </div>
+                      <span className="text-sm flex-1 leading-snug" style={{ color: C.text }}>
+                        {q.lesson?.title || `Lesson ${i + 1}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer CTA */}
+        <div className="p-4 flex-shrink-0 space-y-2" style={{ borderTop: `1px solid ${C.cardBorder}` }}>
+          {completed && passed && certId && (
+            <a href={courseUrl} target="_blank" rel="noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-70"
+              style={{ background: C.pill, color: C.muted }}>
+              <Play className="w-4 h-4"/> Review course
+            </a>
+          )}
+          <a href={actionHref} target="_blank" rel="noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+            style={{ background: completed && passed && certId ? C.green : C.cta, color: C.ctaText }}>
+            {completed && passed && certId ? <Award className="w-4 h-4"/> : <Play className="w-4 h-4"/>}
+            {actionLabel}
+          </a>
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
 // --- Courses section ---
 function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detailCourse, setDetailCourse] = useState<any>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -417,8 +586,15 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {courses.map(c => <CourseCard key={c.form_id} course={c} C={C}/>)}
+        {courses.map(c => (
+          <CourseCard key={c.form_id} course={c} C={C} onDetails={() => setDetailCourse(c)}/>
+        ))}
       </div>
+      <AnimatePresence>
+        {detailCourse && (
+          <CourseDetailPane course={detailCourse} C={C} onClose={() => setDetailCourse(null)}/>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -1564,6 +1740,112 @@ function ProjectDetail({ project, C, onBack }: { project: any; C: typeof LIGHT_C
   );
 }
 
+// -- Guided Projects Section ---
+const IND_COLORS: Record<string, string> = {
+  fintech: '#6366f1', marketing: '#f59e0b', hr: '#10b981', finance: '#3b82f6',
+  edtech: '#8b5cf6', healthcare: '#ef4444', ecommerce: '#f97316', consulting: '#14b8a6',
+};
+
+function GuidedProjectsSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
+  const [items,    setItems]    = useState<any[]>([]);
+  const [attempts, setAttempts] = useState<Record<string, any>>({});
+  const [loading,  setLoading]  = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      // Get student profile to find cohort
+      const { data: profile } = await supabase.from('students').select('cohort_id').eq('email', userEmail).maybeSingle();
+      if (!profile?.cohort_id) { setLoading(false); return; }
+
+      // Get guided projects assigned to this cohort
+      const { data: forms } = await supabase
+        .from('forms')
+        .select('*')
+        .eq('content_type', 'guided_project')
+        .contains('cohort_ids', [profile.cohort_id]);
+
+      setItems(forms ?? []);
+
+      // Get attempts for this student
+      if (forms?.length) {
+        const ids = forms.map((f: any) => f.id);
+        const { data: attRows } = await supabase
+          .from('guided_project_attempts')
+          .select('*')
+          .eq('student_email', userEmail.toLowerCase())
+          .in('form_id', ids);
+        const map: Record<string, any> = {};
+        for (const a of attRows ?? []) map[a.form_id] = a;
+        setAttempts(map);
+      }
+      setLoading(false);
+    };
+    load();
+  }, [userEmail]);
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.faint }}/></div>;
+  if (!items.length) return <EmptyState icon={Briefcase} title="No Guided Projects" body="Guided projects assigned to your cohort will appear here." />;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {items.map((form: any) => {
+          const cfg     = form.config || {};
+          const attempt = attempts[form.id];
+          const totalReqs = (cfg.modules || []).reduce((a: number, m: any) =>
+            a + (m.lessons || []).reduce((b: number, l: any) => b + (l.requirements?.length || 0), 0), 0);
+          const doneReqs  = attempt?.progress
+            ? Object.values(attempt.progress as Record<string, any>).filter((v: any) => v.completed).length
+            : 0;
+          const pct = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 0;
+          const isCompleted = !!attempt?.completed_at;
+          const isStarted   = !!attempt && !isCompleted;
+          const color = IND_COLORS[cfg.industry] || '#6366f1';
+          const slug  = form.slug || form.id;
+
+          return (
+            <a key={form.id} href={`/${slug}`}
+              className="block rounded-2xl overflow-hidden transition-all hover:shadow-lg"
+              style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, textDecoration: 'none' }}>
+              {cfg.coverImage
+                ? <img src={cfg.coverImage} alt="" className="w-full h-32 object-cover" />
+                : <div className="w-full h-32 flex items-center justify-center" style={{ background: `${color}18` }}>
+                    <Briefcase className="w-10 h-10" style={{ color }} />
+                  </div>}
+              <div className="p-4 space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: `${color}18`, color }}>{cfg.industry}</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: C.faint }}>{cfg.difficulty}</span>
+                </div>
+                <p className="font-semibold text-sm leading-snug" style={{ color: C.text }}>{form.title}</p>
+                {cfg.company && <p className="text-xs" style={{ color: C.faint }}>{cfg.company} · {cfg.role}</p>}
+
+                {/* Progress bar */}
+                <div>
+                  <div className="flex justify-between text-xs mb-1" style={{ color: C.faint }}>
+                    <span>{isCompleted ? 'Completed' : isStarted ? 'In Progress' : 'Not Started'}</span>
+                    <span>{pct}%</span>
+                  </div>
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: C.cardBorder }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: isCompleted ? '#10b981' : color }} />
+                  </div>
+                </div>
+
+                {attempt?.review && (
+                  <div className="text-xs rounded-xl px-3 py-2" style={{ background: `${color}12`, color }}>
+                    Instructor score: <strong>{attempt.review.score}/100</strong>
+                  </div>
+                )}
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ProjectsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2453,6 +2735,9 @@ export default function StudentDashboard() {
             )}
             {activeSection === 'projects' && user && (
               <ProjectsSection userId={user.id} C={C}/>
+            )}
+            {activeSection === 'guided_projects' && user && (
+              <GuidedProjectsSection userEmail={user.email} C={C}/>
             )}
             {activeSection === 'schedule' && user && (
               <ScheduleSection userId={user.id} C={C}/>

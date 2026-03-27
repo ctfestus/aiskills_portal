@@ -35,16 +35,18 @@ const TABS: { id: TabId; label: string; Icon: any; courseOnly?: boolean }[] = [
   { id: 'more',         label: 'More',         Icon: MoreHorizontal                 },
 ];
 
-function getFormType(config: any): 'course' | 'event' | 'form' {
+function getFormType(config: any): 'course' | 'event' | 'form' | 'guided_project' {
+  if (config?.isGuidedProject) return 'guided_project';
   if (config?.isCourse) return 'course';
   if (config?.eventDetails?.isEvent) return 'event';
   return 'form';
 }
 
 const TYPE_META = {
-  course:  { label: 'Course',  Icon: HelpCircle,  color: '#f59e0b', badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-  event: { label: 'Event', Icon: CalendarDays, color: '#1f1bc3', badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20'   },
-  form:  { label: 'Form',  Icon: AlignLeft,   color: '#10b981', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  course:          { label: 'Course',          Icon: HelpCircle,  color: '#f59e0b', badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  event:           { label: 'Event',           Icon: CalendarDays, color: '#1f1bc3', badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20'   },
+  form:            { label: 'Form',            Icon: AlignLeft,   color: '#10b981', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  guided_project:  { label: 'Guided Project',  Icon: Award,       color: '#6366f1', badge: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' },
 };
 
 // -- Helpers ---
@@ -61,10 +63,10 @@ function useCopy(timeout = 2000) {
 // -- Responses Tab ---
 function ResponsesTab({
   form, responses, totalCount, page, pageLoading,
-  onExport, onPageChange, courseProgress,
+  onExport, onPageChange, courseProgress, cohortStudents,
 }: {
   form: any; responses: any[]; totalCount: number; page: number; pageLoading: boolean;
-  onExport: () => void; onPageChange: (p: number) => void; courseProgress: any[];
+  onExport: () => void; onPageChange: (p: number) => void; courseProgress: any[]; cohortStudents: any[];
 }) {
   const { theme } = useTheme();
   const isDark = theme !== 'light';
@@ -165,7 +167,7 @@ function ResponsesTab({
       };
     });
 
-    // Build enrolled student list: combine in-progress (courseProgress) + completed (responses)
+    // Build enrolled student list: combine in-progress (courseProgress) + completed (responses) + not started (cohorts)
     const completedByEmail = new Map<string, any>();
     for (const r of responses) {
       const key = (r.data?.email || '').trim().toLowerCase();
@@ -177,7 +179,12 @@ function ResponsesTab({
       const key = (p.student_email || '').trim().toLowerCase();
       return key && !completedByEmail.has(key);
     });
-    const totalEnrolled = completedByEmail.size + inProgressStudents.length;
+    const inProgressEmails = new Set(inProgressStudents.map((p: any) => (p.student_email || '').trim().toLowerCase()));
+    const notStartedStudents = (cohortStudents || []).filter(s => {
+      const key = (s.email || '').trim().toLowerCase();
+      return key && !completedByEmail.has(key) && !inProgressEmails.has(key);
+    });
+    const totalEnrolled = completedByEmail.size + inProgressStudents.length + notStartedStudents.length;
 
     return (
       <div className="space-y-6">
@@ -284,12 +291,12 @@ function ResponsesTab({
         </div>
 
         {/* Enrolled Students */}
-        {(totalEnrolled > 0 || courseProgress.length > 0) && (
+        {(totalEnrolled > 0 || courseProgress.length > 0 || notStartedStudents.length > 0) && (
           <div className={`rounded-3xl border overflow-hidden ${card}`}>
             <div className={`px-6 py-4 border-b flex items-center justify-between ${cardHeader}`}>
               <div>
                 <h3 className={`text-base font-semibold ${textPrim}`}>Students</h3>
-                <p className={`text-xs mt-0.5 ${textMut}`}>{inProgressStudents.length} in progress · {completedByEmail.size} completed</p>
+                <p className={`text-xs mt-0.5 ${textMut}`}>{notStartedStudents.length} not started · {inProgressStudents.length} in progress · {completedByEmail.size} completed</p>
               </div>
               <span className={`rounded-full px-3 py-1 text-xs font-medium ${isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-[#f1f2f3] text-[#555]'}`}>
                 {totalEnrolled} total
@@ -307,6 +314,28 @@ function ResponsesTab({
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${dividerCls}`}>
+                  {/* Not started students (assigned via cohort but haven't begun) */}
+                  {notStartedStudents.map((s: any) => (
+                    <tr key={`ns_${s.id}`} className={`transition-colors ${tableRow}`}>
+                      <td className={`px-6 py-3 font-medium ${textPrim}`}>{s.full_name || <span className={`italic ${textMut}`}>Unknown</span>}</td>
+                      <td className={`px-6 py-3 ${textMut}`}>{s.email || '--'}</td>
+                      <td className="px-6 py-3">
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${isDark ? 'bg-zinc-700/60 text-zinc-400' : 'bg-zinc-100 text-zinc-500'}`}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                          Not Started
+                        </span>
+                      </td>
+                      <td className="px-6 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className={`h-1.5 w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
+                            <div className="h-full rounded-full bg-zinc-400" style={{ width: '0%' }} />
+                          </div>
+                          <span className={`text-xs ${textMut}`}>0/{questions.length || 0}</span>
+                        </div>
+                      </td>
+                      <td className={`px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>--</td>
+                    </tr>
+                  ))}
                   {/* In-progress students */}
                   {inProgressStudents.map((p: any) => {
                     const qTotal = questions.length || 1;
@@ -749,7 +778,7 @@ function WhatsAppIcon({ className }: { className?: string }) {
 }
 
 // -- Email Tab ---
-function EmailTab({ form, formUrl, isFreePlan }: { form: any; formUrl: string; isFreePlan?: boolean }) {
+function EmailTab({ form, formUrl }: { form: any; formUrl: string }) {
   const cfg = form.config ?? {};
   const isEvent = cfg.eventDetails?.isEvent === true;
   const isCourse  = cfg.isCourse === true;
@@ -1114,18 +1143,11 @@ function EmailTab({ form, formUrl, isFreePlan }: { form: any; formUrl: string; i
               <span>{blastResult.msg}</span>
             </div>
           )}
-          {isFreePlan && (
-            <div className={`rounded-xl px-4 py-3 text-sm flex items-center gap-2 ${isDark ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400' : 'bg-amber-50 border border-amber-200 text-amber-700'}`}>
-              <span className="text-base">✦</span>
-              Email broadcasts are not available on the free plan. Upgrade to Pro.
-            </div>
-          )}
           <button
             onClick={handleBlast}
-            disabled={blasting || !blastSubject.trim() || !blastBody.trim() || isFreePlan}
-            title={isFreePlan ? 'Upgrade to Pro to send broadcast emails' : undefined}
+            disabled={blasting || !blastSubject.trim() || !blastBody.trim()}
             className={primaryBtn}
-            style={{ background: isFreePlan ? undefined : '#059669', opacity: isFreePlan ? 0.5 : undefined, cursor: isFreePlan ? 'not-allowed' : undefined }}
+            style={{ background: '#059669' }}
           >
             {blasting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Send Broadcast</>}
           </button>
@@ -1173,18 +1195,11 @@ function EmailTab({ form, formUrl, isFreePlan }: { form: any; formUrl: string; i
                 <span>{reminderResult.msg}</span>
               </div>
             )}
-            {isFreePlan && (
-              <div className={`rounded-xl px-4 py-3 text-sm flex items-center gap-2 ${isDark ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400' : 'bg-amber-50 border border-amber-200 text-amber-700'}`}>
-                <span className="text-base">✦</span>
-                Email reminders are not available on the free plan. Upgrade to Pro.
-              </div>
-            )}
             <button
               onClick={handleReminder}
-              disabled={reminding || !!isFreePlan}
-              title={isFreePlan ? 'Upgrade to Pro to send email reminders' : undefined}
+              disabled={reminding}
               className={primaryBtn}
-              style={{ background: isFreePlan ? undefined : '#059669', opacity: isFreePlan ? 0.5 : undefined, cursor: isFreePlan ? 'not-allowed' : undefined }}
+              style={{ background: '#059669' }}
             >
               {reminding ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Send {reminderType === '1hr' ? '1-Hour' : '24-Hour'} Reminder</>}
             </button>
@@ -1238,12 +1253,6 @@ function EmailTab({ form, formUrl, isFreePlan }: { form: any; formUrl: string; i
               </div>
             </div>
           )}
-          {isFreePlan && (
-            <div className={`rounded-xl px-4 py-3 text-sm flex items-center gap-2 ${isDark ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400' : 'bg-amber-50 border border-amber-200 text-amber-700'}`}>
-              <span className="text-base">✦</span>
-              Email features are not available on the free plan. Upgrade to Pro.
-            </div>
-          )}
           {quickResult && (
             <div className={feedback(quickResult.ok)}>
               {quickResult.ok ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <XCircle className="w-4 h-4 flex-shrink-0" />}
@@ -1252,10 +1261,9 @@ function EmailTab({ form, formUrl, isFreePlan }: { form: any; formUrl: string; i
           )}
           <button
             onClick={handleQuickSend}
-            disabled={quickSending || !quickTo.trim() || !!isFreePlan}
-            title={isFreePlan ? 'Upgrade to Pro to send emails' : undefined}
+            disabled={quickSending || !quickTo.trim()}
             className={primaryBtn}
-            style={{ background: isFreePlan ? undefined : '#059669', opacity: isFreePlan ? 0.5 : undefined, cursor: isFreePlan ? 'not-allowed' : undefined }}
+            style={{ background: '#059669' }}
           >
             {quickSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Send Email</>}
           </button>
@@ -1646,6 +1654,182 @@ function MoreTab({ form, formUrl, onClone }: { form: any; formUrl: string; onClo
   );
 }
 
+// -- Guided Project Report Tab ---
+function GuidedProjectReportTab({ form }: { form: any }) {
+  const { theme } = useTheme();
+  const isDark = theme !== 'light';
+  const card       = isDark ? 'bg-zinc-900/50 border-zinc-800/50' : 'bg-white border-[rgba(0,0,0,0.07)]';
+  const cardHeader = isDark ? 'border-zinc-800' : 'border-[rgba(0,0,0,0.07)]';
+  const divider    = isDark ? 'divide-zinc-800/50' : 'divide-[rgba(0,0,0,0.05)]';
+  const textPrim   = isDark ? 'text-white' : 'text-[#111]';
+  const textMut    = isDark ? 'text-zinc-500' : 'text-[#888]';
+  const tableHead  = isDark ? 'bg-zinc-950 text-zinc-400 border-zinc-800' : 'bg-[#f5f6f7] text-[#888] border-[rgba(0,0,0,0.06)]';
+  const tableRow   = isDark ? 'hover:bg-zinc-800/20' : 'hover:bg-[#f5f6f7]';
+
+  const cfg     = form.config || {};
+  const modules = cfg.modules || [];
+  const totalReqs = modules.reduce((a: number, m: any) =>
+    a + (m.lessons || []).reduce((b: number, l: any) => b + (l.requirements?.length || 0), 0), 0);
+
+  const [attempts,    setAttempts]    = useState<any[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [reviewing,   setReviewing]   = useState<any | null>(null);
+  const [revScore,    setRevScore]    = useState('');
+  const [revFeedback, setRevFeedback] = useState('');
+  const [revSaving,   setRevSaving]   = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/guided-project-progress?formId=${form.id}`, {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setAttempts(json.attempts || []);
+      }
+      setLoading(false);
+    };
+    load();
+  }, [form.id]);
+
+  const submitReview = async () => {
+    if (!reviewing) return;
+    setRevSaving(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    await fetch('/api/guided-project-progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ action: 'review', attemptId: reviewing.id, score: Number(revScore), feedback: revFeedback }),
+    });
+    setAttempts(prev => prev.map(a => a.id === reviewing.id ? { ...a, review: { score: Number(revScore), feedback: revFeedback } } : a));
+    setReviewing(null);
+    setRevScore('');
+    setRevFeedback('');
+    setRevSaving(false);
+  };
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-zinc-500" /></div>;
+
+  const completed = attempts.filter(a => !!a.completed_at).length;
+  const inProgress = attempts.filter(a => !a.completed_at).length;
+
+  return (
+    <div className="space-y-6">
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: 'Total Students', value: attempts.length, color: '#8b5cf6' },
+          { label: 'In Progress',    value: inProgress,       color: '#f59e0b' },
+          { label: 'Completed',      value: completed,        color: '#10b981' },
+        ].map(s => (
+          <div key={s.label} className={`border rounded-2xl p-5 ${card}`}>
+            <p className={`text-xs font-medium uppercase tracking-wide mb-3 ${textMut}`}>{s.label}</p>
+            <p className="text-3xl font-bold" style={{ color: s.color }}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Attempts table */}
+      <div className={`rounded-3xl border overflow-hidden ${card}`}>
+        <div className={`px-6 py-4 border-b ${cardHeader}`}>
+          <h3 className={`text-base font-semibold ${textPrim}`}>Student Progress</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className={`border-b ${tableHead}`}>
+              <tr>
+                <th className="px-6 py-3 font-medium">Student</th>
+                <th className="px-6 py-3 font-medium">Email</th>
+                <th className="px-6 py-3 font-medium">Requirements Done</th>
+                <th className="px-6 py-3 font-medium">Status</th>
+                <th className="px-6 py-3 font-medium">Score</th>
+                <th className="px-6 py-3 font-medium">Last Active</th>
+                <th className="px-6 py-3 font-medium">Action</th>
+              </tr>
+            </thead>
+            <tbody className={`divide-y ${divider}`}>
+              {attempts.map(a => {
+                const doneReqs = a.progress
+                  ? Object.values(a.progress as Record<string, any>).filter((v: any) => v.completed).length
+                  : 0;
+                const pct = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 0;
+                const isCompleted = !!a.completed_at;
+                return (
+                  <tr key={a.id} className={`transition-colors ${tableRow}`}>
+                    <td className={`px-6 py-3 font-medium ${textPrim}`}>{a.student_name || '--'}</td>
+                    <td className={`px-6 py-3 ${textMut}`}>{a.student_email}</td>
+                    <td className="px-6 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className={`h-1.5 w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: isCompleted ? '#10b981' : '#6366f1' }} />
+                        </div>
+                        <span className={`text-xs ${textMut}`}>{doneReqs}/{totalReqs}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-3">
+                      {isCompleted
+                        ? <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700'}`}><CheckCircle2 className="w-3 h-3" /> Completed</span>
+                        : <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-700'}`}><span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> In Progress</span>}
+                    </td>
+                    <td className={`px-6 py-3 ${textMut}`}>
+                      {a.review?.score !== undefined ? <span className="font-semibold" style={{ color: '#6366f1' }}>{a.review.score}/100</span> : '--'}
+                    </td>
+                    <td className={`px-6 py-3 text-xs ${textMut}`}>
+                      {a.updated_at ? new Date(a.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--'}
+                    </td>
+                    <td className="px-6 py-3">
+                      <button onClick={() => { setReviewing(a); setRevScore(a.review?.score ?? ''); setRevFeedback(a.review?.feedback ?? ''); }}
+                        className={`text-xs font-medium px-3 py-1.5 rounded-xl transition-all hover:opacity-80 ${isDark ? 'bg-indigo-500/15 text-indigo-300' : 'bg-indigo-50 text-indigo-700'}`}>
+                        {a.review ? 'Edit Review' : 'Review'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {attempts.length === 0 && (
+                <tr><td colSpan={7} className={`px-6 py-12 text-center ${textMut}`}>No students have started this project yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Review modal */}
+      {reviewing && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-2xl p-6 w-full max-w-md space-y-4 ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-[rgba(0,0,0,0.08)]'}`}>
+            <div className="flex items-center justify-between">
+              <h3 className={`text-base font-semibold ${textPrim}`}>Review: {reviewing.student_name || reviewing.student_email}</h3>
+              <button onClick={() => setReviewing(null)} className={textMut}><X className="w-4 h-4" /></button>
+            </div>
+            <div>
+              <label className={`block text-xs font-semibold mb-1.5 ${textMut}`}>Score (0 - 100)</label>
+              <input type="number" min={0} max={100} value={revScore} onChange={e => setRevScore(e.target.value)}
+                className={`w-full px-3 py-2 rounded-xl border text-sm outline-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-[#f8f8f5] border-[rgba(0,0,0,0.1)] text-[#111]'}`} />
+            </div>
+            <div>
+              <label className={`block text-xs font-semibold mb-1.5 ${textMut}`}>Feedback</label>
+              <textarea value={revFeedback} onChange={e => setRevFeedback(e.target.value)} rows={4}
+                placeholder="Write your feedback for the student…"
+                className={`w-full px-3 py-2 rounded-xl border text-sm outline-none resize-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-[#f8f8f5] border-[rgba(0,0,0,0.1)] text-[#111]'}`} />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setReviewing(null)} className={`flex-1 py-2.5 rounded-xl text-sm border ${isDark ? 'border-zinc-700 text-zinc-400' : 'border-[rgba(0,0,0,0.1)] text-[#888]'}`}>Cancel</button>
+              <button onClick={submitReview} disabled={revSaving}
+                className="flex-2 flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-80"
+                style={{ background: '#6366f1' }}>
+                {revSaving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Submit Review'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // -- Main Page ---
 export default function FormDetailPage() {
   const { id } = useParams();
@@ -1656,9 +1840,9 @@ export default function FormDetailPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [isFreePlan, setIsFreePlan] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
   const [courseProgress, setCourseProgress] = useState<any[]>([]);
+  const [cohortStudents, setCohortStudents] = useState<any[]>([]);
   const initialTab = (searchParams.get('tab') as TabId) || 'settings';
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
 
@@ -1678,15 +1862,15 @@ export default function FormDetailPage() {
       if (responseData) setResponses(responseData);
       setTotalCount(count ?? 0);
 
-      // Fetch plan + live email limit from plan_config (DB-driven, not hardcoded)
-      const { data: profile } = await supabase.from('profiles').select('plan').eq('id', user.id).single();
-      const plan = profile?.plan || 'free';
-      const { data: planCfg } = await supabase.from('plan_config').select('emails').eq('plan', plan).single();
-      // emails === 0 means blocked; -1 or any positive means allowed
-      const emailsBlocked = planCfg ? planCfg.emails === 0 : plan === 'free';
-      setIsFreePlan(emailsBlocked);
+      // For courses: fetch cohort students + in-progress students
+      if (formData?.config?.isCourse && Array.isArray(formData?.cohort_ids) && formData.cohort_ids.length > 0) {
+        const { data: cohortStudentData } = await supabase
+          .from('students')
+          .select('id, full_name, email')
+          .in('cohort_id', formData.cohort_ids);
+        if (cohortStudentData) setCohortStudents(cohortStudentData);
+      }
 
-      // For courses: fetch in-progress students via authenticated API
       if (formData?.config?.isCourse) {
         const progressRes = await fetch(`/api/course-progress?formId=${encodeURIComponent(id as string)}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
@@ -1813,9 +1997,15 @@ export default function FormDetailPage() {
 
           {/* Right actions */}
           <div className="ml-auto flex items-center gap-2 flex-shrink-0">
-            <button onClick={() => setActiveTab('settings')} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-70" style={{ background: btnBg, border: `1px solid ${btnBord}`, color: textMut }}>
-              <Edit2 className="w-3.5 h-3.5" /> Edit
-            </button>
+            {type === 'guided_project' ? (
+              <Link href={`/create/guided-project?id=${form.id}`} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-70" style={{ background: btnBg, border: `1px solid ${btnBord}`, color: textMut }}>
+                <Edit2 className="w-3.5 h-3.5" /> Edit
+              </Link>
+            ) : (
+              <button onClick={() => setActiveTab('settings')} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-70" style={{ background: btnBg, border: `1px solid ${btnBord}`, color: textMut }}>
+                <Edit2 className="w-3.5 h-3.5" /> Edit
+              </button>
+            )}
             <a href={formUrl} target="_blank" rel="noreferrer" className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-70" style={{ background: btnBg, border: `1px solid ${btnBord}`, color: textMut }}>
               <ExternalLink className="w-3.5 h-3.5" /> View
             </a>
@@ -1828,7 +2018,7 @@ export default function FormDetailPage() {
 
         {/* -- Tab bar -- */}
         <div className="px-2 sm:px-6 flex items-center gap-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-          {TABS.filter(tab => !tab.courseOnly || type === 'course').map(tab => {
+          {TABS.filter(tab => (!tab.courseOnly || type === 'course') && !(tab.id === 'settings' && type === 'guided_project')).map(tab => {
             const isActive = activeTab === tab.id;
             return (
               <button
@@ -1838,7 +2028,7 @@ export default function FormDetailPage() {
                 style={{ color: isActive ? textPrim : textMut }}
               >
                 <tab.Icon className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="hidden sm:inline">{tab.id === 'responses' && (type === 'course' || type === 'guided_project') ? 'Report' : tab.label}</span>
                 {tab.id === 'responses' && totalCount > 0 && (
                   <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold transition-colors" style={{ background: isActive ? (isLight ? lime : 'rgba(255,255,255,0.15)') : (isLight ? '#e8eaed' : '#27272a'), color: isActive ? (isLight ? green : 'white') : textMut }}>
                     {totalCount}
@@ -1867,11 +2057,11 @@ export default function FormDetailPage() {
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.18, ease: 'easeOut' }}
         >
-          {activeTab === 'settings' ? (
+          {activeTab === 'settings' && type !== 'guided_project' ? (
             <FormEditor formId={id as string} />
           ) : (
             <div className="px-4 sm:px-6 py-6 sm:py-8 max-w-6xl w-full">
-              {activeTab === 'responses' && (
+              {activeTab === 'responses' && type !== 'guided_project' && (
                 <ResponsesTab
                   form={form}
                   responses={responses}
@@ -1881,13 +2071,17 @@ export default function FormDetailPage() {
                   onExport={handleExport}
                   onPageChange={fetchPage}
                   courseProgress={courseProgress}
+                  cohortStudents={cohortStudents}
                 />
+              )}
+              {activeTab === 'responses' && type === 'guided_project' && (
+                <GuidedProjectReportTab form={form} />
               )}
               {activeTab === 'leaderboard' && (
                 <LeaderboardTab form={form} />
               )}
               {activeTab === 'email' && (
-                <EmailTab form={form} formUrl={formUrl} isFreePlan={isFreePlan} />
+                <EmailTab form={form} formUrl={formUrl} />
               )}
               {activeTab === 'more' && (
                 <MoreTab form={form} formUrl={formUrl} onClone={handleClone} />

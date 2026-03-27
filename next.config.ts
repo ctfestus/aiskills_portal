@@ -16,7 +16,7 @@ const CSP_BASE = [
   "img-src * data: blob:",
   `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://*.supabase.co'} https://*.supabase.co https://api.resend.com`,
   "media-src 'self' blob:",
-  "frame-src 'self' https://www.youtube.com https://player.vimeo.com https://player.mediadelivery.net https://video.bunnycdn.com",
+  "frame-src 'self' https://www.youtube.com https://player.vimeo.com https://iframe.mediadelivery.net https://player.mediadelivery.net https://video.bunnycdn.com",
   "base-uri 'self'",
   "form-action 'self'",
 ].join('; ');

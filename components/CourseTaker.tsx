@@ -1697,8 +1697,8 @@ export function CourseTaker({
     if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
     const vimeo = url.match(/vimeo\.com\/(\d+)/);
     if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
-    // Bunny.net -- already an embed URL or video page URL
-    if (url.includes('player.mediadelivery.net/embed/') || url.includes('video.bunnycdn.com/')) return url;
+    // Bunny.net embed URL
+    if (url.includes('iframe.mediadelivery.net/embed/') || url.includes('player.mediadelivery.net/embed/') || url.includes('video.bunnycdn.com/')) return url;
     return null;
   };
 

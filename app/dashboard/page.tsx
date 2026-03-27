@@ -10,7 +10,7 @@ import {
   LogOut, ChevronDown, ShieldCheck, BookOpen, MapPin, Sun, Moon, Zap,
   ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
   Users, Megaphone, FolderOpen, Trophy, Menu, CheckCircle2, XCircle,
-  UserPlus, Search, UserMinus, Download, TrendingUp,
+  UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
 } from 'lucide-react';
 import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS } from '@/components/CertificateTemplate';
 import Link from 'next/link';
@@ -292,7 +292,8 @@ function ShareButton({ form, shareMenuOpen, setShareMenuOpen }: { form: any; sha
 }
 
 // --- Form type helpers ---
-function getFormType(form: any): 'course' | 'event' | 'form' {
+function getFormType(form: any): 'course' | 'event' | 'form' | 'guided_project' {
+  if (form.content_type === 'guided_project' || form.config?.isGuidedProject) return 'guided_project';
   if (form.content_type === 'course' || form.config?.isCourse) return 'course';
   if (form.content_type === 'event'  || form.config?.eventDetails?.isEvent) return 'event';
   return 'form';
@@ -300,9 +301,10 @@ function getFormType(form: any): 'course' | 'event' | 'form' {
 
 function getTypeMeta(C: typeof LIGHT_C) {
   return {
-    course: { label: 'Course', Icon: BookOpen,     badgeBg: '#006128',       badgeText: '#ADEE66'        },
-    event:  { label: 'Event',  Icon: CalendarDays, badgeBg: '#ADEE66',       badgeText: '#006128'        },
-    form:   { label: 'Form',   Icon: AlignLeft,    badgeBg: C.formBadgeBg,   badgeText: C.formBadgeText  },
+    course:         { label: 'Course',         Icon: BookOpen,     badgeBg: '#006128',    badgeText: '#ADEE66'       },
+    event:          { label: 'Event',          Icon: CalendarDays, badgeBg: '#ADEE66',    badgeText: '#006128'       },
+    form:           { label: 'Form',           Icon: AlignLeft,    badgeBg: C.formBadgeBg, badgeText: C.formBadgeText },
+    guided_project: { label: 'Guided Project', Icon: Briefcase,    badgeBg: '#312e81',    badgeText: '#c7d2fe'       },
   };
 }
 
@@ -858,8 +860,9 @@ const NAV_ITEMS = [
   { id: 'events',        label: 'Events',         Icon: CalendarDays,  adminOnly: false },
   { id: 'community',     label: 'Community',      Icon: Users,         adminOnly: false },
   { id: 'announcements', label: 'Announcements',  Icon: Megaphone,     adminOnly: false },
-  { id: 'projects',      label: 'Projects',       Icon: FolderOpen,    adminOnly: false },
-  { id: 'schedule',      label: 'Schedule',       Icon: CalendarDays,  adminOnly: false },
+  { id: 'projects',         label: 'Projects',         Icon: FolderOpen,  adminOnly: false },
+  { id: 'guided_projects',  label: 'Guided Projects',  Icon: Briefcase,   adminOnly: false },
+  { id: 'schedule',         label: 'Schedule',         Icon: CalendarDays, adminOnly: false },
   { id: 'reports',       label: 'Reports',        Icon: BarChart3,     adminOnly: false },
   { id: 'certificates',  label: 'Certificates',   Icon: Award,         adminOnly: false },
   { id: 'integrations',  label: 'Integrations',   Icon: Zap,           adminOnly: false },
@@ -1641,6 +1644,82 @@ function ReportsSection({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
 }
 
 // --- Generic list section ---
+// -- Guided Projects manage section ---
+const GP_IND_COLORS: Record<string, string> = {
+  fintech: '#6366f1', marketing: '#f59e0b', hr: '#10b981', finance: '#3b82f6',
+  edtech: '#8b5cf6', healthcare: '#ef4444', ecommerce: '#f97316', consulting: '#14b8a6',
+};
+
+function GuidedProjectsManageSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] }) {
+  const gpForms = forms.filter(f => f.content_type === 'guided_project' || f.config?.isGuidedProject);
+
+  if (gpForms.length === 0) {
+    return (
+      <div className="text-center py-24 rounded-3xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+        <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: '#6366f120' }}>
+          <Briefcase className="w-6 h-6" style={{ color: '#6366f1' }} />
+        </div>
+        <p className="font-semibold text-base mb-1" style={{ color: C.text }}>No guided projects yet</p>
+        <p className="text-sm mb-6" style={{ color: C.faint }}>Create your first AI-generated industry project.</p>
+        <Link href="/create/guided-project"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold"
+          style={{ background: C.cta, color: C.ctaText }}>
+          <Plus className="w-4 h-4" /> New Guided Project
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-base font-semibold" style={{ color: C.text }}>{gpForms.length} Guided Project{gpForms.length !== 1 ? 's' : ''}</p>
+        <Link href="/create/guided-project"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity"
+          style={{ background: C.cta, color: C.ctaText }}>
+          <Plus className="w-4 h-4" /> New
+        </Link>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {gpForms.map(form => {
+          const cfg   = form.config || {};
+          const color = GP_IND_COLORS[cfg.industry] || '#6366f1';
+          const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
+          return (
+            <div key={form.id} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+              {cfg.coverImage
+                ? <img src={cfg.coverImage} alt="" className="w-full h-28 object-cover" />
+                : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${color}18` }}>
+                    <Briefcase className="w-8 h-8" style={{ color }} />
+                  </div>}
+              <div className="p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: `${color}18`, color }}>{cfg.industry || 'Project'}</span>
+                  <span className="text-[10px]" style={{ color: C.faint }}>{cfg.difficulty}</span>
+                </div>
+                <p className="font-semibold text-sm" style={{ color: C.text }}>{form.title}</p>
+                <p className="text-xs" style={{ color: C.faint }}>{cfg.company} · {totalLessons} lesson{totalLessons !== 1 ? 's' : ''}</p>
+                <div className="flex gap-2 pt-1">
+                  <Link href={`/dashboard/${form.id}`}
+                    className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl border transition-all hover:opacity-70"
+                    style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                    View Report
+                  </Link>
+                  <Link href={`/create/guided-project?id=${form.id}`}
+                    className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl transition-all hover:opacity-80"
+                    style={{ background: `${color}18`, color }}>
+                    Edit
+                  </Link>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function GenericListSection({ table, label, createHref, createLabel, Icon, C, renderRow }: {
   table: string; label: string; createHref: string; createLabel: string;
   Icon: React.ElementType; C: typeof LIGHT_C;
@@ -3205,6 +3284,8 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
     </div>
   )}/>;
 
+  if (section === 'guided_projects') return <GuidedProjectsManageSection C={C} forms={forms} />;
+
   if (section === 'community') return <GenericListSection table="communities" label="Communities" createHref="/create/community" createLabel="New Community" Icon={Users} C={C} renderRow={item => (
     <div className="min-w-0">
       <p className="font-semibold text-sm truncate" style={{ color: C.text }}>{item.name}</p>
@@ -3360,8 +3441,18 @@ export default function DashboardPage() {
           if (storageError) console.error('[delete] storage cleanup failed:', storageError.message, paths);
         }
       }
-      await supabase.from('responses').delete().eq('form_id', formToDelete);
-      await supabase.from('forms').delete().eq('id', formToDelete);
+      // Route deletion through the API (service role) so RLS does not block it
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/forms?id=${formToDelete}`, {
+        method: 'DELETE',
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        console.error('[delete] failed:', json.error);
+        alert(json.error || 'Failed to delete. Please try again.');
+        return;
+      }
       setForms(forms.filter(f => f.id !== formToDelete));
     } finally { setIsDeleting(false); setFormToDelete(null); }
   };

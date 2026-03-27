@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, CheckCircle2, ArrowRight, MapPin, Building2, ExternalLink, Calendar, Download, Copy, Check, Star, BookOpen, FileText, Zap, Clock } from 'lucide-react';
 import { AnimatedField, ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import { CourseTaker } from '@/components/CourseTaker';
+import dynamic from 'next/dynamic';
+const GuidedProjectTaker = dynamic(() => import('@/components/GuidedProjectTaker'), { ssr: false });
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -286,6 +288,13 @@ export default function PublicFormPage() {
   const [certificateId, setCertificateId] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [attendeeCount, setAttendeeCount] = useState<number | null>(null);
+  // Guided project flow
+  const [projectStarted,      setProjectStarted]      = useState(false);
+  const [projectStudentName,  setProjectStudentName]  = useState('');
+  const [projectStudentEmail, setProjectStudentEmail] = useState('');
+  const [projectProgress,     setProjectProgress]     = useState<Record<string,any>>({});
+  const [projectInitModId,    setProjectInitModId]    = useState('');
+  const [projectInitLesId,    setProjectInitLesId]    = useState('');
   // Course sign-up flow
   const [signUpOpen, setSignUpOpen] = useState(false);
   const [courseStarted, setCourseStarted] = useState(false);
@@ -357,6 +366,10 @@ export default function PublicFormPage() {
           if (name && email) {
             setPrefilledName(name);
             setPrefilledEmail(email);
+            // Auto-start immediately (same batch) when coming from student dashboard
+            if (new URLSearchParams(window.location.search).get('go') === '1') {
+              setCourseStarted(true);
+            }
           }
         }
       }
@@ -603,6 +616,213 @@ export default function PublicFormPage() {
   const selectOptionBg = resolvedMode === 'light' ? 'bg-white text-zinc-900' : 'bg-zinc-900 text-white';
   const selectPlaceholderColor = resolvedMode === 'light' ? 'text-zinc-400' : 'text-zinc-500';
 
+  // -- Guided Project ---
+  if (config.isGuidedProject) {
+    const modules     = config.modules || [];
+    const totalLessons = modules.reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
+    const totalReqs   = modules.reduce((a: number, m: any) =>
+      a + m.lessons.reduce((b: number, l: any) => b + (l.requirements?.length || 0), 0), 0);
+
+    const IND_COLORS: Record<string, string> = {
+      fintech: '#6366f1', marketing: '#f59e0b', hr: '#10b981', finance: '#3b82f6',
+      edtech: '#8b5cf6', healthcare: '#ef4444', ecommerce: '#f97316', consulting: '#14b8a6',
+    };
+    const indColor = IND_COLORS[config.industry] || '#6366f1';
+
+    const handleStartProject = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: student } = await supabase.from('students').select('full_name, email').eq('id', user.id).single();
+      const name  = student?.full_name || user.user_metadata?.full_name || '';
+      const email = student?.email || user.email || '';
+      // Restore any saved progress
+      try {
+        const r = await fetch(`/api/guided-project-progress?formId=${form.id}&email=${encodeURIComponent(email)}`);
+        const { attempt } = await r.json();
+        if (attempt) {
+          setProjectProgress(attempt.progress || {});
+          setProjectInitModId(attempt.current_module_id || '');
+          setProjectInitLesId(attempt.current_lesson_id || '');
+        }
+      } catch {}
+      setProjectStudentName(name);
+      setProjectStudentEmail(email);
+      setProjectStarted(true);
+    };
+
+    if (projectStarted) {
+      return (
+        <GuidedProjectTaker
+          formId={form.id}
+          formSlug={form.slug}
+          config={config}
+          studentName={projectStudentName}
+          studentEmail={projectStudentEmail}
+          initialProgress={projectProgress}
+          initialModuleId={projectInitModId}
+          initialLessonId={projectInitLesId}
+          isDark={resolvedMode !== 'light'}
+          accentColor={indColor}
+        />
+      );
+    }
+
+    return (
+      <div style={{ minHeight: '100vh', background: resolvedMode === 'light' ? '#EEEAE3' : '#0f0f0f', color: resolvedMode === 'light' ? '#111' : '#f0f0f0', fontFamily: 'sans-serif' }}>
+        {/* Nav */}
+        <nav style={{ position: 'sticky', top: 0, zIndex: 30, background: resolvedMode === 'light' ? 'rgba(238,234,227,0.92)' : 'rgba(15,15,15,0.92)', borderBottom: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}`, backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 56 }}>
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" style={{ height: 32, width: 'auto' }} />
+          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, padding: '4px 12px', borderRadius: 999, background: `${indColor}22`, color: indColor, fontWeight: 700, textTransform: 'capitalize' }}>{config.industry}</span>
+            <span style={{ fontSize: 12, padding: '4px 12px', borderRadius: 999, background: resolvedMode === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.08)', color: resolvedMode === 'light' ? '#555' : '#aaa', fontWeight: 600, textTransform: 'capitalize' }}>{config.difficulty}</span>
+          </div>
+        </nav>
+
+        <main style={{ maxWidth: 860, margin: '0 auto', padding: '40px 24px 80px' }}>
+          {/* Hero */}
+          <div style={{ background: resolvedMode === 'light' ? 'white' : '#1a1a1a', borderRadius: 28, overflow: 'hidden', boxShadow: resolvedMode === 'light' ? '0 1px 4px rgba(0,0,0,0.08)' : '0 1px 4px rgba(0,0,0,0.4)', marginBottom: 24 }}>
+            {config.coverImage && (
+              <div style={{ padding: '14px 14px 0' }}>
+                <div style={{ overflow: 'hidden', borderRadius: 18, height: 'clamp(160px,38vw,260px)', background: '#0a0a0a', position: 'relative' }}>
+                  <img src={config.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.9 }} />
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.5) 0%,transparent 60%)' }} />
+                </div>
+              </div>
+            )}
+            <div style={{ padding: '28px 32px 32px' }}>
+              {/* Company avatar + name */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+                <div style={{ width: 52, height: 52, borderRadius: 14, background: `${indColor}18`, border: `2px solid ${indColor}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 900, color: indColor, flexShrink: 0 }}>
+                  {config.company?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: indColor, marginBottom: 2 }}>{config.company}</p>
+                  <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 999, background: `${indColor}18`, color: indColor, fontWeight: 600 }}>{config.role}</span>
+                </div>
+              </div>
+
+              <h1 style={{ fontSize: 'clamp(20px,4vw,28px)', fontWeight: 800, marginBottom: 10, lineHeight: 1.25 }}>{config.title || form.title}</h1>
+              {config.tagline && <p style={{ fontSize: 16, color: resolvedMode === 'light' ? '#555' : '#aaa', marginBottom: 20, lineHeight: 1.5 }}>{config.tagline}</p>}
+
+              {/* Stats */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+                {[
+                  { label: 'Modules',      value: modules.length },
+                  { label: 'Lessons',      value: totalLessons },
+                  { label: 'Requirements', value: totalReqs },
+                  config.duration && { label: 'Duration', value: config.duration },
+                ].filter(Boolean).map((s: any) => (
+                  <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: resolvedMode === 'light' ? '#555' : '#aaa' }}>
+                    <span style={{ fontWeight: 700, color: resolvedMode === 'light' ? '#111' : '#f0f0f0' }}>{s.value}</span> {s.label}
+                  </div>
+                ))}
+              </div>
+
+              {/* Tools */}
+              {config.tools?.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 24 }}>
+                  {config.tools.map((t: string) => (
+                    <span key={t} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 8, background: resolvedMode === 'light' ? '#f0f0ec' : '#262626', color: resolvedMode === 'light' ? '#555' : '#aaa', fontWeight: 600 }}>{t}</span>
+                  ))}
+                </div>
+              )}
+
+              {/* CTA + Dataset download */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                <button onClick={handleStartProject} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 28px', borderRadius: 16, background: indColor, color: 'white', fontSize: 15, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+                  Start Virtual Experience
+                </button>
+                {(config as any).dataset && (
+                  <button
+                    onClick={() => {
+                      const d = (config as any).dataset;
+                      const blob = new Blob([d.csvContent], { type: 'text/csv' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a'); a.href = url; a.download = d.filename; a.click(); URL.revokeObjectURL(url);
+                    }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 20px', borderRadius: 16, background: 'transparent', color: resolvedMode === 'light' ? '#555' : '#aaa', fontSize: 14, fontWeight: 600, border: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.12)'}`, cursor: 'pointer' }}>
+                     Download Dataset
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* "You're hired" brief -- onboarding email from manager */}
+          {config.background && (
+            <div style={{ background: resolvedMode === 'light' ? 'white' : '#1a1a1a', borderRadius: 20, overflow: 'hidden', marginBottom: 24, border: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.08)'}` }}>
+              {/* Email header */}
+              <div style={{ padding: '16px 24px', borderBottom: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)'}`, background: resolvedMode === 'light' ? '#f8f8f5' : '#222' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 999, background: `${indColor}22`, border: `1.5px solid ${indColor}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: indColor, flexShrink: 0 }}>
+                    {(config as any).managerName?.split(' ').map((w: string) => w[0]).join('').slice(0,2).toUpperCase() || 'M'}
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: resolvedMode === 'light' ? '#111' : '#f0f0f0', marginBottom: 1 }}>
+                      {(config as any).managerName || 'Your Manager'} <span style={{ fontWeight: 400, fontSize: 12, color: resolvedMode === 'light' ? '#888' : '#666' }}>-- {(config as any).managerTitle || 'Manager'}, {config.company}</span>
+                    </p>
+                    <p style={{ fontSize: 11, color: resolvedMode === 'light' ? '#aaa' : '#555' }}>To: You (New {config.role})</p>
+                  </div>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, padding: '3px 10px', borderRadius: 999, background: `${indColor}18`, color: indColor, fontWeight: 700 }}>Your Brief</span>
+                </div>
+              </div>
+              <div style={{ padding: '24px 28px', fontSize: 14, lineHeight: 1.85, color: resolvedMode === 'light' ? '#444' : '#aaa' }} dangerouslySetInnerHTML={{ __html: sanitizeRichText(config.background) || '' }} />
+            </div>
+          )}
+
+          {/* Learning outcomes */}
+          {config.learnOutcomes?.length > 0 && (
+            <div style={{ background: resolvedMode === 'light' ? 'white' : '#1a1a1a', borderRadius: 20, padding: '24px 28px', marginBottom: 24, border: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.08)'}` }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>What you will learn</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 10 }}>
+                {config.learnOutcomes.map((o: string, i: number) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13, color: resolvedMode === 'light' ? '#444' : '#bbb' }}>
+                    <CheckCircle2 style={{ width: 16, height: 16, flexShrink: 0, marginTop: 2, color: indColor }} />
+                    {o}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Module outline */}
+          {modules.length > 0 && (
+            <div style={{ background: resolvedMode === 'light' ? 'white' : '#1a1a1a', borderRadius: 20, padding: '24px 28px', border: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.08)'}` }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Project Outline</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {modules.map((mod: any, mi: number) => (
+                  <div key={mod.id} style={{ borderRadius: 14, border: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.06)'}`, overflow: 'hidden' }}>
+                    <div style={{ padding: '12px 16px', background: resolvedMode === 'light' ? '#f8f8f5' : '#242424', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: indColor, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Module {mi + 1}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: resolvedMode === 'light' ? '#111' : '#f0f0f0' }}>{mod.title}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 11, color: resolvedMode === 'light' ? '#888' : '#666' }}>{mod.lessons?.length || 0} lesson{mod.lessons?.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    {(mod.lessons || []).map((les: any, li: number) => (
+                      <div key={les.id} style={{ padding: '10px 16px 10px 32px', display: 'flex', alignItems: 'center', gap: 8, borderTop: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)'}` }}>
+                        <span style={{ fontSize: 11, color: resolvedMode === 'light' ? '#bbb' : '#555', fontWeight: 600 }}>{li + 1}</span>
+                        <span style={{ fontSize: 13, color: resolvedMode === 'light' ? '#444' : '#bbb' }}>{les.title}</span>
+                        {les.requirements?.length > 0 && <span style={{ marginLeft: 'auto', fontSize: 11, color: resolvedMode === 'light' ? '#bbb' : '#555' }}>{les.requirements.length} req.</span>}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </main>
+
+
+        <footer style={{ textAlign: 'center', paddingBottom: 48, paddingTop: 16 }}>
+          <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+            <span style={{ fontSize: 12, color: resolvedMode === 'light' ? '#aaa' : '#555' }}>Powered by <strong style={{ color: resolvedMode === 'light' ? '#555' : '#aaa' }}>AI Skills Africa</strong></span>
+          </Link>
+        </footer>
+      </div>
+    );
+  }
+
   if (config.isCourse) {
     const questions = config.questions || [];
     const lessonCount = questions.filter((q: any) => q.lesson?.title || q.lesson?.body).length;
@@ -644,7 +864,7 @@ export default function PublicFormPage() {
         </nav>
 
         {/* Course Overview */}
-        {!success && (
+        {!success && !courseStarted && (
         <main style={{ position: 'relative', zIndex: 10, maxWidth: 860, margin: '0 auto', padding: '40px 24px 60px' }}>
 
           {/* Hero card */}
