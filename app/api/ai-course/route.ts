@@ -53,7 +53,7 @@ const CLICKBAIT_PATTERNS = [
   'secret',
   'secrets',
   'must watch',
-  'won't believe',
+  "won't believe",
   'you wont believe',
   'guaranteed',
   'click here',
