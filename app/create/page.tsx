@@ -550,7 +550,7 @@ function FormPreview({ config, isSubmitting, onSubmit, isSuccess, onReset, isSha
         </div>
         <h2 className={`text-3xl font-medium ${textColor}`}>Successfully Submitted!</h2>
         <p className={mutedTextColor}>Your response has been recorded.</p>
-        {!isSharedView && <button onClick={onReset} className="text-brand-accent hover:text-brand-accent text-sm transition-colors"><- Back to Editor</button>}
+        {!isSharedView && <button onClick={onReset} className="text-brand-accent hover:text-brand-accent text-sm transition-colors">Back to Editor</button>}
         {isSharedView && <button onClick={() => window.location.href = '/create'} className="text-brand-accent hover:text-brand-accent text-sm transition-colors">Create your own AI form</button>}
       </motion.div>
     );

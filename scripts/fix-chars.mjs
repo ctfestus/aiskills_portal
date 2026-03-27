@@ -33,7 +33,7 @@ const REPLACEMENTS = [
   [/\u2514/g,  '+'],   // └
   [/\u250c/g,  '+'],   // ┌
   [/\u2192/g,  ''],   // →  right arrow - removed
-  [/\u2190/g,  ''],   // ←  left arrow - removed
+  [/\u2190/g,  ''],   // <- left arrow - removed (literal <- breaks JSX)
   [/\u2191/g,  ''],   // ↑
   [/\u2193/g,  ''],   // ↓
   [/\u2013/g,  '-'],   // –  en dash
