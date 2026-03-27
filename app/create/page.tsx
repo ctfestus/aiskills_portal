@@ -551,7 +551,7 @@ function FormPreview({ config, isSubmitting, onSubmit, isSuccess, onReset, isSha
         <h2 className={`text-3xl font-medium ${textColor}`}>Successfully Submitted!</h2>
         <p className={mutedTextColor}>Your response has been recorded.</p>
         {!isSharedView && <button onClick={onReset} className="text-brand-accent hover:text-brand-accent text-sm transition-colors"><- Back to Editor</button>}
-        {isSharedView && <button onClick={() => window.location.href = '/create'} className="text-brand-accent hover:text-brand-accent text-sm transition-colors">Create your own AI form &rarr;</button>}
+        {isSharedView && <button onClick={() => window.location.href = '/create'} className="text-brand-accent hover:text-brand-accent text-sm transition-colors">Create your own AI form</button>}
       </motion.div>
     );
   }
@@ -1575,7 +1575,7 @@ const [isSaving, setIsSaving] = useState(false);
                       <p className="text-xs mt-0.5 leading-snug" style={{ color: C.faint }}>{t.description}</p>
                     </div>
                     <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>
-                      Use &rarr;
+                      Use
                     </span>
                   </motion.button>
                 );
@@ -2764,7 +2764,7 @@ const [isSaving, setIsSaving] = useState(false);
                 <div className="flex items-center justify-between">
                   <div>
                     <p className={labelCls} style={{ ...labelStyle, marginBottom: 0 }}>Enable points system</p>
-                    <p className="text-[10px] mt-0.5" style={{ color: C.faint }}>Gamify your course with XP, streaks &amp; rewards</p>
+                    <p className="text-[10px] mt-0.5" style={{ color: C.faint }}>Gamify your course with XP, streaks & rewards</p>
                   </div>
                   <SwitchToggle
                     checked={formConfig.pointsSystem?.enabled ?? false}

@@ -1,0 +1,7 @@
+{
+  "editor.unicodeHighlight.nonBasicASCII": true,
+  "editor.unicodeHighlight.invisibleCharacters": true,
+  "editor.unicodeHighlight.ambiguousCharacters": true,
+  "files.encoding": "utf8",
+  "files.eol": "\n"
+}

@@ -1604,7 +1604,7 @@ function ReportsSection({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
       {/* Section header */}
       <div>
         <h2 className="text-xl font-bold tracking-tight leading-none" style={{ color: C.text }}>
-          Reports &amp; Analytics
+          Reports & Analytics
         </h2>
         <p className="text-xs mt-1.5" style={{ color: C.faint }}>
           {TABS.find(t => t.id === tab)?.desc}
@@ -2061,7 +2061,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
             ))}
             {!selected.scenario && !selected.brief && !selected.tasks && !selected.requirements && (
               <div className="text-center py-16 rounded-2xl" style={{ background: C.card, border: `1px solid ${C.green}50`, boxShadow: C.cardShadow }}>
-                <p className="text-sm" style={{ color: C.faint }}>No details added yet. <Link href={`/create/assignment?edit=${selected.id}`} style={{ color: C.green }}>Edit assignment &rarr;</Link></p>
+                <p className="text-sm" style={{ color: C.faint }}>No details added yet. <Link href={`/create/assignment?edit=${selected.id}`} style={{ color: C.green }}>Edit assignment</Link></p>
               </div>
             )}
           </div>
@@ -2862,7 +2862,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                       <button onClick={() => setView('unassigned')}
                         className="text-xs font-semibold mt-1 underline underline-offset-2"
                         style={{ color: C.green }}>
-                        Add from unassigned &rarr;
+                        Add from unassigned
                       </button>
                     </div>
                   ) : cohortStudents

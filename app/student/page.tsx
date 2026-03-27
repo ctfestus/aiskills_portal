@@ -1161,7 +1161,7 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
       <div className="p-4">
         <h3 className="text-sm font-semibold leading-snug mb-1 line-clamp-2" style={{ color: C.text }}>{item.title}</h3>
         {item.scenario && <p className="text-xs line-clamp-2 mb-3" style={{ color: C.muted }}>{item.scenario.replace(/<[^>]*>/g, ' ').trim()}</p>}
-        <span className="text-xs font-semibold" style={{ color: C.green }}>View &amp; Submit &rarr;</span>
+        <span className="text-xs font-semibold" style={{ color: C.green }}>View & Submit</span>
       </div>
     </motion.button>
   );
@@ -1632,7 +1632,7 @@ function ProjectsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
         {(item.scenario || item.brief) && (
           <p className="text-xs line-clamp-2 mb-3" style={{ color: C.muted }}>{item.scenario || item.brief}</p>
         )}
-        <span className="text-xs font-semibold" style={{ color: '#2563eb' }}>View Details &rarr;</span>
+        <span className="text-xs font-semibold" style={{ color: '#2563eb' }}>View Details</span>
       </div>
     </motion.button>
   );

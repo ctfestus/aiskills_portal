@@ -914,7 +914,7 @@ export function CourseTaker({
                 className="text-xs font-semibold transition-opacity hover:opacity-75"
                 style={{ color: accent }}
               >
-                Create your own course &rarr;
+                Create your own course
               </button>
             )}
             <p className={`text-xs ${mutedColor}`}>Results recorded</p>
@@ -1186,7 +1186,7 @@ export function CourseTaker({
                       rel="noreferrer"
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: 14, fontWeight: 700, fontSize: 14, color: 'white', background: accent, textDecoration: 'none' }}
                     >
-                      View &amp; Download Certificate <ExternalLink className="w-4 h-4" />
+                      View & Download Certificate <ExternalLink className="w-4 h-4" />
                     </a>
                     <button
                       onClick={() => { setExistingCertId(null); setPhase('course'); }}
@@ -2174,7 +2174,7 @@ export function CourseTaker({
                     onClick={handleSkip}
                     className={`w-full py-2.5 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
                   >
-                    Skip &rarr;
+                    Skip
                   </button>
                 </>
               )
@@ -2197,7 +2197,7 @@ export function CourseTaker({
                   onClick={handleSkip}
                   className={`w-full py-2.5 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
                 >
-                  Skip &rarr;
+                  Skip
                 </button>
               </>
             )}

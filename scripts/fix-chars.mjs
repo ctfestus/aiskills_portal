@@ -32,10 +32,10 @@ const REPLACEMENTS = [
   [/\u251c/g,  '+'],   // ├
   [/\u2514/g,  '+'],   // └
   [/\u250c/g,  '+'],   // ┌
-  [/\u2192/g,  '->'],  // →  right arrow
-  [/\u2190/g,  '<-'],  // ←  left arrow
-  [/\u2191/g,  '^'],   // ↑
-  [/\u2193/g,  'v'],   // ↓
+  [/\u2192/g,  ''],   // →  right arrow - removed
+  [/\u2190/g,  ''],   // ←  left arrow - removed
+  [/\u2191/g,  ''],   // ↑
+  [/\u2193/g,  ''],   // ↓
   [/\u2013/g,  '-'],   // –  en dash
   [/\u2014/g,  '--'],  // —  em dash
   [/\u2019/g,  "'"],   // '  right single quote (smart apostrophe)
