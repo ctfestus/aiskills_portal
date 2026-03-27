@@ -1203,7 +1203,7 @@ export default function PublicFormPage() {
                                 <div style={{ paddingTop: 10, borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
                                   <a href={`/u/${creatorProfile.username}`} target="_blank" rel="noopener noreferrer"
                                     style={{ fontSize: 12, fontWeight: 600, color: accentColor, textDecoration: 'none' }}>
-                                    View full profile ->
+                                    View full profile
                                   </a>
                                 </div>
                               )}
@@ -1356,7 +1356,7 @@ export default function PublicFormPage() {
                                     <div style={{ paddingTop: 10, borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
                                       <a href={`/u/${creatorProfile.username}`} target="_blank" rel="noopener noreferrer"
                                         style={{ fontSize: 12, fontWeight: 600, color: accentColor, textDecoration: 'none' }}>
-                                        View full profile ->
+                                        View full profile
                                       </a>
                                     </div>
                                   )}
