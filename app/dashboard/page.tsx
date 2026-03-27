@@ -21,7 +21,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { sanitizeRichText } from '@/lib/sanitize';
 
-// --- Design tokens ------------------------------------------------------------
+// --- Design tokens ---
 const LIGHT_C = {
   page:        'white',
   nav:         'rgba(255,255,255,0.95)',
@@ -84,7 +84,7 @@ const DARK_C = {
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
-// --- Social share SVGs --------------------------------------------------------
+// --- Social share SVGs ---
 const SHARE_PLATFORMS = [
   { id: 'twitter',  label: 'X',         icon: <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>, href: (u:string,t:string,d:string) => `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${t}\n${d}`)}&url=${encodeURIComponent(u)}` },
   { id: 'linkedin', label: 'LinkedIn',   icon: <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>, href: (u:string) => `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(u)}` },
@@ -92,7 +92,7 @@ const SHARE_PLATFORMS = [
   { id: 'whatsapp', label: 'WhatsApp',   icon: <svg viewBox="0 0 24 24" fill="#25D366" className="w-4 h-4"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>, href: (u:string,t:string,d:string) => `https://wa.me/?text=${encodeURIComponent(`${t}\n${d}\n\n${u}`)}` },
 ];
 
-// --- ProfileMenu ---------------------------------------------------------------
+// --- ProfileMenu ---
 function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; onSignOut: () => void }) {
   const C = useC();
   const [open, setOpen] = useState(false);
@@ -183,7 +183,7 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
   );
 }
 
-// --- ShareMenu (portal) -------------------------------------------------------
+// --- ShareMenu (portal) ---
 function ShareMenu({ form, triggerRect, onClose }: { form: any; triggerRect: DOMRect; onClose: () => void }) {
   const C = useC();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -291,7 +291,7 @@ function ShareButton({ form, shareMenuOpen, setShareMenuOpen }: { form: any; sha
   );
 }
 
-// --- Form type helpers --------------------------------------------------------
+// --- Form type helpers ---
 function getFormType(form: any): 'course' | 'event' | 'form' {
   if (form.content_type === 'course' || form.config?.isCourse) return 'course';
   if (form.content_type === 'event'  || form.config?.eventDetails?.isEvent) return 'event';
@@ -306,7 +306,7 @@ function getTypeMeta(C: typeof LIGHT_C) {
   };
 }
 
-// --- Card illustrations -------------------------------------------------------
+// --- Card illustrations ---
 function EventIllustration() {
   return (
     <svg viewBox="0 0 240 148" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', width: '100%' }}>
@@ -314,7 +314,7 @@ function EventIllustration() {
       <rect x="57" y="17" width="110" height="90" rx="10" fill="rgba(0,97,40,0.10)"/>
       {/* Calendar card body */}
       <rect x="55" y="15" width="110" height="90" rx="10" fill="white"/>
-      {/* Green header — rounded top corners only */}
+      {/* Green header -- rounded top corners only */}
       <path d="M65,15 H155 Q165,15 165,25 V50 H55 V25 Q55,15 65,15 Z" fill="#006128"/>
       {/* Calendar ring hooks */}
       <rect x="80" y="10" width="6" height="11" rx="3" fill="#ADEE66"/>
@@ -340,7 +340,7 @@ function EventIllustration() {
       <rect x="76" y="88" width="60" height="4" rx="2" fill="#d4eddd"/>
       <rect x="76" y="88" width="26" height="4" rx="2" fill="#9ad4b0"/>
 
-      {/* Ticket — bottom-right, tilted */}
+      {/* Ticket -- bottom-right, tilted */}
       <g transform="rotate(-13, 182, 108)">
         {/* Ticket body */}
         <rect x="154" y="93" width="56" height="28" rx="6" fill="#ADEE66"/>
@@ -356,7 +356,7 @@ function EventIllustration() {
         <rect x="200" y="99" width="3"  height="16" rx="1" fill="#006128" opacity="0.3"/>
       </g>
 
-      {/* Location pin — left floating */}
+      {/* Location pin -- left floating */}
       <path d="M28,36 C28,29 38,29 38,36 C38,43 33,51 33,51 C33,51 28,43 28,36 Z" fill="#006128" opacity="0.85"/>
       <circle cx="33" cy="36" r="3.5" fill="white"/>
 
@@ -391,7 +391,7 @@ function CourseIllustration() {
       {/* Laptop body */}
       <rect x="44" y="28" width="152" height="90" rx="8" fill="#fef3c7"/>
       <rect x="44" y="28" width="152" height="90" rx="8" stroke="#d97706" strokeWidth="1.5" opacity="0.3"/>
-      {/* Screen content – code lines */}
+      {/* Screen content - code lines */}
       <rect x="58" y="42" width="55" height="5" rx="2.5" fill="#f59e0b" opacity="0.7"/>
       <rect x="58" y="52" width="40" height="4" rx="2" fill="#d97706" opacity="0.5"/>
       <rect x="64" y="61" width="48" height="4" rx="2" fill="#f59e0b" opacity="0.45"/>
@@ -506,7 +506,7 @@ function StorefrontIllustration() {
   );
 }
 
-// --- CreateSection ------------------------------------------------------------
+// --- CreateSection ---
 const CREATE_CARDS = [
   {
     type: 'event',
@@ -618,7 +618,7 @@ function CreateSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// --- FormCard -----------------------------------------------------------------
+// --- FormCard ---
 function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelete }: {
   form: any; index: number; shareMenuOpen: string | null; setShareMenuOpen: (id: string | null) => void; setFormToDelete: (id: string) => void;
 }) {
@@ -702,7 +702,7 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
   );
 }
 
-// --- EventCard (timeline) -----------------------------------------------------
+// --- EventCard (timeline) ---
 const MEETING_LOGOS: Record<string, string> = {
   meet:  'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Meet.png',
   zoom:  'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Zoom.png',
@@ -755,11 +755,11 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
         whileHover={{ opacity: 1 }}
         transition={{ delay: index * 0.07, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       >
-        {/* Card with padding — padding IS the whitespace around the rounded thumbnail */}
+        {/* Card with padding -- padding IS the whitespace around the rounded thumbnail */}
         <div className="rounded-2xl p-4 flex gap-4 group"
           style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
 
-          {/* Rounded square cover image — 180×180 */}
+          {/* Rounded square cover image -- 180×180 */}
           <div className="relative w-[180px] h-[180px] rounded-2xl overflow-hidden flex-shrink-0 group/img"
             style={{ background: C.thumbBg }}>
             {showImage
@@ -851,7 +851,7 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
   );
 }
 
-// --- Sidebar navigation -------------------------------------------------------
+// --- Sidebar navigation ---
 const NAV_ITEMS = [
   { id: 'courses',       label: 'Courses',       Icon: BookOpen,      adminOnly: false },
   { id: 'assignments',   label: 'Assignments',    Icon: ClipboardList, adminOnly: false },
@@ -870,7 +870,7 @@ type SectionId = typeof NAV_ITEMS[number]['id'];
 
 const COMING_SOON: SectionId[] = [];
 
-// --- Coming Soon placeholder --------------------------------------------------
+// --- Coming Soon placeholder ---
 function ComingSoon({ id, C }: { id: SectionId; C: typeof LIGHT_C }) {
   const item = NAV_ITEMS.find(n => n.id === id)!;
   return (
@@ -886,7 +886,7 @@ function ComingSoon({ id, C }: { id: SectionId; C: typeof LIGHT_C }) {
   );
 }
 
-// --- Reports section ----------------------------------------------------------
+// --- Reports section ---
 type ReportTab = 'progress' | 'submissions' | 'logins';
 
 function reportExportCSV(headers: string[], rows: (string | number | null | undefined)[][], filename: string) {
@@ -917,7 +917,7 @@ function relTime(dateStr: string | null | undefined): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
-// -- Shared UI primitives ----------------------------------------------------
+// -- Shared UI primitives ---
 function StudentAvatar2({ name, email, size = 36, C }: { name?: string; email?: string; size?: number; C: typeof LIGHT_C }) {
   const label = ((name || email || '?').trim().slice(0, 2)).toUpperCase();
   const hue = ((name || email || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) * 47) % 360;
@@ -1068,7 +1068,7 @@ function RTableHeader({ cols, C }: { cols: { label: string; className?: string }
   );
 }
 
-// -- Tab 1 – Course Progress -------------------------------------------------
+// -- Tab 1 - Course Progress ---
 function CourseProgressTab({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
   const [rows, setRows]         = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
@@ -1117,7 +1117,7 @@ function CourseProgressTab({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
     const totalQ   = form?.config?.questions?.length ?? 0;
     const pct      = r.completed ? (r.score ?? 0) : totalQ > 0 ? Math.round((r.current_question_index / totalQ) * 100) : 0;
     return { ...r, studentName: (r.student_name?.trim() || stu?.full_name || r.student_email || '').trim(),
-      courseTitle: form?.title ?? '—', cohortName: cohortId ? (cohortMap[cohortId] ?? '—') : '—', cohortId, pct };
+      courseTitle: form?.title ?? '--', cohortName: cohortId ? (cohortMap[cohortId] ?? '--') : '--', cohortId, pct };
   });
 
   const q = search.toLowerCase();
@@ -1207,7 +1207,7 @@ function CourseProgressTab({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
                   <div className="flex items-center gap-3 mb-2 md:mb-0">
                     <StudentAvatar2 name={r.studentName} email={r.student_email} size={36} C={C}/>
                     <div className="min-w-0">
-                      <p className="text-[13px] font-semibold truncate leading-tight" style={{ color: C.text }}>{r.studentName || '—'}</p>
+                      <p className="text-[13px] font-semibold truncate leading-tight" style={{ color: C.text }}>{r.studentName || '--'}</p>
                       <p className="text-[11px] truncate mt-0.5" style={{ color: C.faint }}>{r.student_email}</p>
                     </div>
                   </div>
@@ -1250,7 +1250,7 @@ function CourseProgressTab({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
   );
 }
 
-// -- Tab 2 – Assignment Submissions -----------------------------------------
+// -- Tab 2 - Assignment Submissions ---
 function AssignmentSubmissionsTab({ C }: { C: typeof LIGHT_C }) {
   const [rows, setRows]               = useState<any[]>([]);
   const [cohorts, setCohorts]         = useState<any[]>([]);
@@ -1286,11 +1286,11 @@ function AssignmentSubmissionsTab({ C }: { C: typeof LIGHT_C }) {
   const cohortMap = Object.fromEntries((cohorts ?? []).map(c => [c.id, c.name]));
   const enriched  = rows.map(r => ({
     ...r,
-    studentName:     r.student?.full_name || r.student?.email || '—',
-    studentEmail:    r.student?.email     || '—',
-    cohortName:      r.student?.cohort_id ? (cohortMap[r.student.cohort_id] ?? '—') : '—',
+    studentName:     r.student?.full_name || r.student?.email || '--',
+    studentEmail:    r.student?.email     || '--',
+    cohortName:      r.student?.cohort_id ? (cohortMap[r.student.cohort_id] ?? '--') : '--',
     cohortId:        r.student?.cohort_id ?? null,
-    assignmentTitle: r.assignment?.title  ?? '—',
+    assignmentTitle: r.assignment?.title  ?? '--',
   }));
 
   const q2 = search.toLowerCase();
@@ -1323,7 +1323,7 @@ function AssignmentSubmissionsTab({ C }: { C: typeof LIGHT_C }) {
   function doExport() {
     reportExportCSV(['Student','Email','Cohort','Assignment','Status','Submitted At','Score'],
       visible.map(r => [r.studentName, r.studentEmail, r.cohortName, r.assignmentTitle, r.status,
-        r.submitted_at ? new Date(r.submitted_at).toLocaleString() : '—', r.score ?? '—']),
+        r.submitted_at ? new Date(r.submitted_at).toLocaleString() : '--', r.score ?? '--']),
       'assignment_submissions.csv');
   }
 
@@ -1353,7 +1353,7 @@ function AssignmentSubmissionsTab({ C }: { C: typeof LIGHT_C }) {
         <RKpi label="Total Submissions" value={enriched.length.toLocaleString()} sub="across all assignments" C={C}/>
         <RKpi label="Graded" value={graded.toLocaleString()} sub={`${enriched.length ? Math.round((graded/enriched.length)*100) : 0}% graded`} accent={C.green} C={C}/>
         <RKpi label="Awaiting Review" value={submitted.toLocaleString()} sub="submitted, not graded" C={C}/>
-        <RKpi label="Avg Score" value={avgScore != null ? `${avgScore}` : '—'} sub={avgScore != null ? 'pts across graded' : 'no graded work yet'} C={C}/>
+        <RKpi label="Avg Score" value={avgScore != null ? `${avgScore}` : '--'} sub={avgScore != null ? 'pts across graded' : 'no graded work yet'} C={C}/>
       </div>
 
       <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
@@ -1417,7 +1417,7 @@ function AssignmentSubmissionsTab({ C }: { C: typeof LIGHT_C }) {
                               {new Date(r.submitted_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
                             </p>
                           </div>
-                        : <span className="text-[11px] italic" style={{ color: C.faint }}>—</span>
+                        : <span className="text-[11px] italic" style={{ color: C.faint }}>--</span>
                       }
                     </div>
                     <div className="text-right">
@@ -1426,7 +1426,7 @@ function AssignmentSubmissionsTab({ C }: { C: typeof LIGHT_C }) {
                             <span className="text-xl font-black tabular-nums" style={{ color: scoreColor }}>{r.score}</span>
                             <span className="text-[10px] font-bold" style={{ color: scoreColor, opacity: 0.6 }}>pt</span>
                           </div>
-                        : <span className="text-sm font-medium" style={{ color: C.faint }}>—</span>
+                        : <span className="text-sm font-medium" style={{ color: C.faint }}>--</span>
                       }
                     </div>
                   </div>
@@ -1440,7 +1440,7 @@ function AssignmentSubmissionsTab({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// -- Tab 3 – Student Logins -------------------------------------------------
+// -- Tab 3 - Student Logins ---
 function StudentLoginsTab({ C }: { C: typeof LIGHT_C }) {
   const [students, setStudents] = useState<any[]>([]);
   const [cohorts, setCohorts]   = useState<any[]>([]);
@@ -1458,7 +1458,7 @@ function StudentLoginsTab({ C }: { C: typeof LIGHT_C }) {
   }, []);
 
   const cohortMap = Object.fromEntries((cohorts ?? []).map(c => [c.id, c.name]));
-  const enriched  = students.map(s => ({ ...s, cohortName: s.cohort_id ? (cohortMap[s.cohort_id] ?? '—') : '—' }));
+  const enriched  = students.map(s => ({ ...s, cohortName: s.cohort_id ? (cohortMap[s.cohort_id] ?? '--') : '--' }));
 
   const q3 = search.toLowerCase();
   const visible = enriched.filter(s => {
@@ -1589,7 +1589,7 @@ function StudentLoginsTab({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// -- ReportsSection shell ---------------------------------------------------
+// -- ReportsSection shell ---
 function ReportsSection({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
   const [tab, setTab] = useState<ReportTab>('progress');
 
@@ -1640,7 +1640,7 @@ function ReportsSection({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
   );
 }
 
-// --- Generic list section -----------------------------------------------------
+// --- Generic list section ---
 function GenericListSection({ table, label, createHref, createLabel, Icon, C, renderRow }: {
   table: string; label: string; createHref: string; createLabel: string;
   Icon: React.ElementType; C: typeof LIGHT_C;
@@ -1802,7 +1802,7 @@ function SchedulesManageSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// --- Assignments manage section -----------------------------------------------
+// --- Assignments manage section ---
 function exportCSV(rows: any[], title: string) {
   const headers = ['Name', 'Email', 'Status', 'Score', 'Result', 'Submitted At'];
   const csvRows = rows.map(row => {
@@ -1903,7 +1903,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     <div className="space-y-3">{[0,1,2].map(i => <div key={i} className="h-20 rounded-2xl animate-pulse" style={{ background: C.card }}/>)}</div>
   );
 
-  // -- Grading view -------------------------------------------------------------
+  // -- Grading view ---
   if (viewingSub) {
     const isPassed = viewingSub.score != null && viewingSub.score >= 85;
     const isFailed = viewingSub.score != null && viewingSub.score < 85;
@@ -1995,7 +1995,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     );
   }
 
-  // -- Assignment detail with tabs -----------------------------------------------
+  // -- Assignment detail with tabs ---
   if (selected) {
     const subMap    = Object.fromEntries(submissions.map(s => [s.student_id, s]));
     const rows      = assignedStudents.map(st => ({ ...st, sub: subMap[st.id] ?? null }));
@@ -2140,11 +2140,11 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                         {statusCfg.label}
                       </span>
                       <span className="text-sm font-bold text-center" style={{ color: sc != null ? (isPassed ? '#10b981' : '#ef4444') : C.faint }}>
-                        {sc != null ? sc : '—'}
+                        {sc != null ? sc : '--'}
                       </span>
                       <span className="text-xs font-bold text-center px-2 py-1 rounded-full mx-auto"
                         style={sc != null ? { background: isPassed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: isPassed ? '#10b981' : '#ef4444' } : { color: C.faint }}>
-                        {sc != null ? (isPassed ? 'Passed' : 'Failed') : '—'}
+                        {sc != null ? (isPassed ? 'Passed' : 'Failed') : '--'}
                       </span>
                       <div className="flex justify-end">
                         {sub ? (
@@ -2154,7 +2154,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                             {sub.status === 'graded' ? 'Regrade' : 'Grade'}
                           </button>
                         ) : (
-                          <span className="text-xs" style={{ color: C.faint }}>—</span>
+                          <span className="text-xs" style={{ color: C.faint }}>--</span>
                         )}
                       </div>
                     </div>
@@ -2168,7 +2168,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     );
   }
 
-  // -- Assignment list -----------------------------------------------------------
+  // -- Assignment list ---
   if (!assignments.length) return (
     <div className="text-center py-24 rounded-3xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
       <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: C.lime }}>
@@ -2236,7 +2236,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// --- Empty state for non-form sections ----------------------------------------
+// --- Empty state for non-form sections ---
 function SectionEmptyState({ Icon, label, createHref, createLabel, C }: {
   Icon: React.ElementType; label: string; createHref: string; createLabel: string; C: typeof LIGHT_C;
 }) {
@@ -2255,7 +2255,7 @@ function SectionEmptyState({ Icon, label, createHref, createLabel, C }: {
   );
 }
 
-// --- Certificates section -----------------------------------------------------
+// --- Certificates section ---
 const CERT_W = 1860;
 const CERT_H = 1200;
 
@@ -2367,7 +2367,7 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
     <div className="space-y-5 max-w-2xl">
       <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
         <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Certificate Default Design</h2>
-        <p className="text-xs" style={{ color: C.muted }}>Set once — all your courses inherit this design automatically.</p>
+        <p className="text-xs" style={{ color: C.muted }}>Set once -- all your courses inherit this design automatically.</p>
         <div>
           <label className={labelCls} style={{ color: C.muted }}>Institution Name</label>
           <input value={settings.institutionName} onChange={e => set('institutionName', e.target.value)} placeholder="Your institution name" className={inputCls} style={inputStyle}/>
@@ -2494,7 +2494,7 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// --- Integrations section -----------------------------------------------------
+// --- Integrations section ---
 function IntegrationsSection({ C }: { C: typeof LIGHT_C }) {
   const [integrations, setIntegrations] = useState<Record<string, { connected: boolean; email?: string }>>({});
   const [msg, setMsg]       = useState<{ ok: boolean; text: string } | null>(null);
@@ -2606,7 +2606,7 @@ function IntegrationsSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// --- Cohorts section ----------------------------------------------------------
+// --- Cohorts section ---
 function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   const isLight = C.text === '#111';
   const [cohorts, setCohorts]           = useState<any[]>([]);
@@ -2872,7 +2872,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                           <div className="group flex items-center gap-3 px-5 py-3 transition-colors hover:bg-black/[0.02]">
                             <Avatar name={s.full_name} email={s.email}/>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || '—'}</p>
+                              <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || '--'}</p>
                               <p className="text-xs truncate" style={{ color: C.faint }}>{s.email}</p>
                             </div>
                             <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
@@ -2973,7 +2973,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                         className="w-4 h-4 rounded cursor-pointer accent-green-600"/>
                       <Avatar name={s.full_name} email={s.email}/>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || '—'}</p>
+                        <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || '--'}</p>
                         <p className="text-xs truncate" style={{ color: C.faint }}>{s.email}</p>
                       </div>
                     </div>
@@ -2988,7 +2988,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// --- Leaderboard section (admin/instructor) -----------------------------------
+// --- Leaderboard section (admin/instructor) ---
 const HERO_LB = 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)';
 
 function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
@@ -3184,7 +3184,7 @@ function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// --- Section content router ---------------------------------------------------
+// --- Section content router ---
 function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFormToDelete, C }: {
   section: SectionId; forms: any[]; shareMenuOpen: string | null;
   setShareMenuOpen: (id: string | null) => void; setFormToDelete: (id: string) => void; C: typeof LIGHT_C;
@@ -3268,10 +3268,10 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
   );
 }
 
-// --- Cache --------------------------------------------------------------------
+// --- Cache ---
 const _cache: { forms: any[] | null; profile: any | null; user: any | null } = { forms: null, profile: null, user: null };
 
-// --- Dashboard ----------------------------------------------------------------
+// --- Dashboard ---
 export default function DashboardPage() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
@@ -3372,7 +3372,7 @@ export default function DashboardPage() {
     window.location.href = '/';
   };
 
-  // -- Loading skeleton --------------------------------------------------------
+  // -- Loading skeleton ---
   if (loading) {
     return (
       <div className="min-h-screen animate-pulse" style={{ background: C.page }}>
@@ -3404,7 +3404,7 @@ export default function DashboardPage() {
     );
   }
 
-  // -- Main render -------------------------------------------------------------
+  // -- Main render ---
   const activeItem = NAV_ITEMS.find(n => n.id === activeSection)!;
   const courseCount = forms.filter(f => getFormType(f) === 'course').length;
   const eventCount  = forms.filter(f => getFormType(f) === 'event').length;

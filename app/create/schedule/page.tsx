@@ -8,9 +8,9 @@ import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X } f
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RichTextEditor } from '@/components/RichTextEditor';
-import { sanitizeRichText } from '@/lib/sanitize';
+import { sanitizeRichText, sanitizePlainText } from '@/lib/sanitize';
 
-// --- Design tokens ------------------------------------------------------------
+// --- Design tokens ---
 const LIGHT_C = {
   page: '#EEEAE3', card: 'white', cardBorder: 'rgba(0,0,0,0.07)',
   cardShadow: '0 1px 4px rgba(0,0,0,0.06)', green: '#006128', lime: '#ADEE66',
@@ -29,7 +29,7 @@ const DARK_C = {
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
-// --- Types --------------------------------------------------------------------
+// --- Types ---
 interface Topic {
   id: string;
   name: string;
@@ -47,7 +47,7 @@ interface Course {
   title: string;
 }
 
-// --- Shared styles ------------------------------------------------------------
+// --- Shared styles ---
 function inputStyle(C: typeof LIGHT_C) {
   return {
     width: '100%', padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`,
@@ -62,7 +62,7 @@ function labelStyle(C: typeof LIGHT_C) {
   return { display: 'block', fontSize: 13, fontWeight: 600, color: C.muted, marginBottom: 6 } as React.CSSProperties;
 }
 
-// --- Page ---------------------------------------------------------------------
+// --- Page ---
 export default function CreateSchedulePage() {
   const C = useC();
   const router = useRouter();
@@ -139,7 +139,7 @@ export default function CreateSchedulePage() {
     init();
   }, [router]);
 
-  // -- Topics helpers ---------------------------------------------------------
+  // -- Topics helpers ---
   function addTopic() {
     setTopics(prev => [...prev, { id: crypto.randomUUID(), name: '', description: '' }]);
   }
@@ -150,7 +150,7 @@ export default function CreateSchedulePage() {
     setTopics(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
   }
 
-  // -- Resources helpers ------------------------------------------------------
+  // -- Resources helpers ---
   function addResource() {
     setResources(prev => [...prev, { id: crypto.randomUUID(), name: '', url: '' }]);
   }
@@ -161,7 +161,7 @@ export default function CreateSchedulePage() {
     setResources(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
   }
 
-  // -- Save -------------------------------------------------------------------
+  // -- Save ---
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -242,7 +242,7 @@ export default function CreateSchedulePage() {
     }
   }
 
-  // -- Render -----------------------------------------------------------------
+  // -- Render ---
   return (
     <div style={{ minHeight: '100vh', background: C.page }}>
       {/* Sticky header */}
@@ -283,15 +283,15 @@ export default function CreateSchedulePage() {
             </div>
           )}
 
-          {/* -- Section 1: Details ------------------------------------------- */}
+          {/* -- Section 1: Details --- */}
           <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>Details</h2>
 
             <div style={{ marginBottom: 16 }}>
               <label style={labelStyle(C)}>Title <span style={{ color: C.errorText }}>*</span></label>
               <input
-                type="text" value={title} onChange={e => setTitle(e.target.value)}
-                placeholder="e.g. Data Science Bootcamp — Week 1 Schedule"
+                type="text" value={title} onChange={e => setTitle(sanitizePlainText(e.target.value))}
+                placeholder="e.g. Data Science Bootcamp -- Week 1 Schedule"
                 style={inputStyle(C)} required maxLength={255}
               />
             </div>
@@ -302,7 +302,7 @@ export default function CreateSchedulePage() {
                 value={courseId} onChange={e => setCourseId(e.target.value)}
                 style={{ ...inputStyle(C), appearance: 'auto' }}
               >
-                <option value="">— None —</option>
+                <option value="">-- None --</option>
                 {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
               </select>
             </div>
@@ -391,7 +391,7 @@ export default function CreateSchedulePage() {
             </div>
           </section>
 
-          {/* -- Section 2: Topics -------------------------------------------- */}
+          {/* -- Section 2: Topics --- */}
           <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
@@ -427,7 +427,7 @@ export default function CreateSchedulePage() {
                     </span>
                     <input
                       type="text" placeholder="Topic name" value={topic.name}
-                      onChange={e => updateTopic(topic.id, 'name', e.target.value)}
+                      onChange={e => updateTopic(topic.id, 'name', sanitizePlainText(e.target.value))}
                       style={{ ...inputStyle(C), flex: 1 }} maxLength={200}
                     />
                     <button
@@ -444,7 +444,7 @@ export default function CreateSchedulePage() {
                   <textarea
                     placeholder="Topic description (optional)…"
                     value={topic.description}
-                    onChange={e => updateTopic(topic.id, 'description', e.target.value)}
+                    onChange={e => updateTopic(topic.id, 'description', sanitizePlainText(e.target.value))}
                     style={{ ...textareaStyle(C), minHeight: 64 }}
                   />
                 </div>
@@ -452,7 +452,7 @@ export default function CreateSchedulePage() {
             </div>
           </section>
 
-          {/* -- Section 3: Resources ----------------------------------------- */}
+          {/* -- Section 3: Resources --- */}
           <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0 }}>Resources</h2>
@@ -482,7 +482,7 @@ export default function CreateSchedulePage() {
                 }}>
                   <input
                     type="text" placeholder="Resource name" value={resource.name}
-                    onChange={e => updateResource(resource.id, 'name', e.target.value)}
+                    onChange={e => updateResource(resource.id, 'name', sanitizePlainText(e.target.value))}
                     style={{ ...inputStyle(C), width: '100%' }} maxLength={200}
                   />
                   <input
@@ -505,7 +505,7 @@ export default function CreateSchedulePage() {
             </div>
           </section>
 
-          {/* -- Cohorts ----------------------------------------------------- */}
+          {/* -- Cohorts --- */}
           {cohorts.length > 0 && (
             <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginTop: 20 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16, marginTop: 0 }}>Assign to Cohorts</h2>

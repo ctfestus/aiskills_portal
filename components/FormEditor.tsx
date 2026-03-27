@@ -24,7 +24,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// --- Types --------------------------------------------------------------------
+// --- Types ---
 type FieldType = 'text' | 'email' | 'textarea' | 'number' | 'select' | 'phone' | 'company' | 'social' | 'description';
 
 interface FormField {
@@ -135,7 +135,7 @@ interface FormConfig {
   pointsSystem?: PointsSystem;
 }
 
-// --- Constants ----------------------------------------------------------------
+// --- Constants ---
 const buttonThemes: Record<ThemeColor, string> = {
   forest:  'bg-[#006128] hover:bg-[#004d1e] text-white',
   lime:    'bg-[#ADEE66] hover:bg-[#9ad94d] text-black',
@@ -160,7 +160,7 @@ const SOCIAL_PLATFORMS = [
   { id: 'tiktok',    name: 'TikTok',      placeholder: 'tiktok.com/@username'     },
   { id: 'youtube',   name: 'YouTube',     placeholder: 'youtube.com/@channel'     },
   { id: 'github',    name: 'GitHub',      placeholder: 'github.com/username'      },
-  { id: 'website',   name: 'Website',     placeholder: 'https://yourwebsite.com'  },
+  { id: 'website',   name: 'Website',     placeholder: 'https://yourwebsite.com' },
 ];
 
 const SOCIAL_SVGS: Record<string, React.ReactNode> = {
@@ -236,7 +236,7 @@ const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   description: 'Description Block',
 };
 
-// --- Helpers ------------------------------------------------------------------
+// --- Helpers ---
 const formatDateParts = (dateString?: string) => {
   if (!dateString) return null;
   try {
@@ -312,7 +312,7 @@ const mergeEventFields = (existingFields: FormField[] = [], generatedFields: any
   return Array.from(byName.values());
 };
 
-// --- Design tokens (light / dark) ---------------------------------------------
+// --- Design tokens (light / dark) ---
 const FE_LIGHT = {
   page: '#ffffff', card: '#ffffff', cardBorder: 'rgba(0,0,0,0.07)', cardShadow: '0 1px 3px rgba(0,0,0,0.04)',
   input: '#f5f6f7', inputBorder: '#e2e4e8',
@@ -337,7 +337,7 @@ const FE_DARK = {
 };
 function useFEC() { const { theme } = useTheme(); return theme === 'dark' ? FE_DARK : FE_LIGHT; }
 
-// --- UI primitives ------------------------------------------------------------
+// --- UI primitives ---
 const inputCls = "w-full rounded-lg px-3 py-2 text-sm outline-none transition-colors placeholder:text-zinc-400";
 const labelCls = "block text-[13.5px] mb-1.5";
 
@@ -390,7 +390,7 @@ function EditorSection({ title, children, defaultOpen = true }: { title: string;
   );
 }
 
-// --- Sortable Field Card ------------------------------------------------------
+// --- Sortable Field Card ---
 interface FieldCardProps {
   f: FormField;
   isExpanded: boolean;
@@ -493,7 +493,7 @@ function SortableFieldCard({ f, isExpanded, toggleExpand, onRemove, onUpdate, in
   );
 }
 
-// --- FormEditor Component -----------------------------------------------------
+// --- FormEditor Component ---
 interface FormEditorProps {
   formId: string;
   onSaved?: (id: string) => void;
@@ -875,8 +875,8 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
     setIsSaving(true);
     try {
       const slugValue = customSlug.trim() || undefined;
-      const isCourse = formConfig?.isCourse === true || formConfig?.isCourse === 'true';
-      const isEvent  = formConfig?.eventDetails?.isEvent === true || formConfig?.eventDetails?.isEvent === 'true';
+      const isCourse = Boolean(formConfig?.isCourse);
+      const isEvent  = Boolean(formConfig?.eventDetails?.isEvent);
       const content_type = isCourse ? 'course' : isEvent ? 'event' : null;
       if (!content_type) {
         showToast('Cannot save: content must be a course or event.');
@@ -1075,7 +1075,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
 
   return (
     <div className="flex" style={{ minHeight: 'calc(100vh - 96px)', background: FE.page, color: FE.text }}>
-      {/* Drag overlay — blocks iframe from capturing mouse events during resize */}
+      {/* Drag overlay -- blocks iframe from capturing mouse events during resize */}
       {resizing && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }}
@@ -1176,51 +1176,51 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                     <select value={formConfig.eventDetails.timezone || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, timezone: e.target.value } })} className={inputCls} style={inputStyle}>
                       <option value="">Select timezone…</option>
                       <optgroup label="Africa">
-                        <option value="GMT+0 (Accra)">GMT+0 — Accra</option>
-                        <option value="GMT+1 (Lagos)">GMT+1 — Lagos</option>
-                        <option value="GMT+2 (Cairo)">GMT+2 — Cairo</option>
-                        <option value="GMT+2 (Johannesburg)">GMT+2 — Johannesburg</option>
-                        <option value="GMT+3 (Nairobi)">GMT+3 — Nairobi</option>
+                        <option value="GMT+0 (Accra)">GMT+0 -- Accra</option>
+                        <option value="GMT+1 (Lagos)">GMT+1 -- Lagos</option>
+                        <option value="GMT+2 (Cairo)">GMT+2 -- Cairo</option>
+                        <option value="GMT+2 (Johannesburg)">GMT+2 -- Johannesburg</option>
+                        <option value="GMT+3 (Nairobi)">GMT+3 -- Nairobi</option>
                       </optgroup>
                       <optgroup label="Americas">
-                        <option value="GMT-5 (EST)">GMT-5 — Eastern (EST)</option>
-                        <option value="GMT-4 (EDT)">GMT-4 — Eastern Daylight (EDT)</option>
-                        <option value="GMT-6 (CST)">GMT-6 — Central (CST)</option>
-                        <option value="GMT-5 (CDT)">GMT-5 — Central Daylight (CDT)</option>
-                        <option value="GMT-7 (MST)">GMT-7 — Mountain (MST)</option>
-                        <option value="GMT-8 (PST)">GMT-8 — Pacific (PST)</option>
-                        <option value="GMT-7 (PDT)">GMT-7 — Pacific Daylight (PDT)</option>
-                        <option value="GMT-9 (AKST)">GMT-9 — Alaska (AKST)</option>
-                        <option value="GMT-10 (HST)">GMT-10 — Hawaii (HST)</option>
-                        <option value="GMT-3 (BRT)">GMT-3 — Brasília (BRT)</option>
-                        <option value="GMT-5 (COT)">GMT-5 — Colombia (COT)</option>
-                        <option value="GMT-4 (AMT)">GMT-4 — Amazon (AMT)</option>
-                        <option value="GMT-3 (ART)">GMT-3 — Argentina (ART)</option>
+                        <option value="GMT-5 (EST)">GMT-5 -- Eastern (EST)</option>
+                        <option value="GMT-4 (EDT)">GMT-4 -- Eastern Daylight (EDT)</option>
+                        <option value="GMT-6 (CST)">GMT-6 -- Central (CST)</option>
+                        <option value="GMT-5 (CDT)">GMT-5 -- Central Daylight (CDT)</option>
+                        <option value="GMT-7 (MST)">GMT-7 -- Mountain (MST)</option>
+                        <option value="GMT-8 (PST)">GMT-8 -- Pacific (PST)</option>
+                        <option value="GMT-7 (PDT)">GMT-7 -- Pacific Daylight (PDT)</option>
+                        <option value="GMT-9 (AKST)">GMT-9 -- Alaska (AKST)</option>
+                        <option value="GMT-10 (HST)">GMT-10 -- Hawaii (HST)</option>
+                        <option value="GMT-3 (BRT)">GMT-3 -- Brasilia (BRT)</option>
+                        <option value="GMT-5 (COT)">GMT-5 -- Colombia (COT)</option>
+                        <option value="GMT-4 (AMT)">GMT-4 -- Amazon (AMT)</option>
+                        <option value="GMT-3 (ART)">GMT-3 -- Argentina (ART)</option>
                       </optgroup>
                       <optgroup label="Europe">
-                        <option value="GMT+0 (GMT)">GMT+0 — London (GMT)</option>
-                        <option value="GMT+1 (BST)">GMT+1 — London Daylight (BST)</option>
-                        <option value="GMT+1 (CET)">GMT+1 — Central Europe (CET)</option>
-                        <option value="GMT+2 (CEST)">GMT+2 — Central Europe Summer (CEST)</option>
-                        <option value="GMT+2 (EET)">GMT+2 — Eastern Europe (EET)</option>
-                        <option value="GMT+3 (MSK)">GMT+3 — Moscow (MSK)</option>
+                        <option value="GMT+0 (GMT)">GMT+0 -- London (GMT)</option>
+                        <option value="GMT+1 (BST)">GMT+1 -- London Daylight (BST)</option>
+                        <option value="GMT+1 (CET)">GMT+1 -- Central Europe (CET)</option>
+                        <option value="GMT+2 (CEST)">GMT+2 -- Central Europe Summer (CEST)</option>
+                        <option value="GMT+2 (EET)">GMT+2 -- Eastern Europe (EET)</option>
+                        <option value="GMT+3 (MSK)">GMT+3 -- Moscow (MSK)</option>
                       </optgroup>
                       <optgroup label="Asia">
-                        <option value="GMT+3 (AST)">GMT+3 — Arabia (AST)</option>
-                        <option value="GMT+4 (GST)">GMT+4 — Gulf (GST)</option>
-                        <option value="GMT+5 (PKT)">GMT+5 — Pakistan (PKT)</option>
-                        <option value="GMT+5:30 (IST)">GMT+5:30 — India (IST)</option>
-                        <option value="GMT+6 (BST)">GMT+6 — Bangladesh (BST)</option>
-                        <option value="GMT+7 (WIB)">GMT+7 — Jakarta (WIB)</option>
-                        <option value="GMT+8 (CST)">GMT+8 — China/Singapore (CST)</option>
-                        <option value="GMT+8 (PHT)">GMT+8 — Philippines (PHT)</option>
-                        <option value="GMT+9 (JST)">GMT+9 — Japan/Korea (JST)</option>
-                        <option value="GMT+5:30 (IST)">GMT+5:30 — Sri Lanka</option>
+                        <option value="GMT+3 (AST)">GMT+3 -- Arabia (AST)</option>
+                        <option value="GMT+4 (GST)">GMT+4 -- Gulf (GST)</option>
+                        <option value="GMT+5 (PKT)">GMT+5 -- Pakistan (PKT)</option>
+                        <option value="GMT+5:30 (IST)">GMT+5:30 -- India (IST)</option>
+                        <option value="GMT+6 (BST)">GMT+6 -- Bangladesh (BST)</option>
+                        <option value="GMT+7 (WIB)">GMT+7 -- Jakarta (WIB)</option>
+                        <option value="GMT+8 (CST)">GMT+8 -- China/Singapore (CST)</option>
+                        <option value="GMT+8 (PHT)">GMT+8 -- Philippines (PHT)</option>
+                        <option value="GMT+9 (JST)">GMT+9 -- Japan/Korea (JST)</option>
+                        <option value="GMT+5:30 (IST)">GMT+5:30 -- Sri Lanka</option>
                       </optgroup>
                       <optgroup label="Pacific">
-                        <option value="GMT+10 (AEST)">GMT+10 — Sydney (AEST)</option>
-                        <option value="GMT+11 (AEDT)">GMT+11 — Sydney Daylight (AEDT)</option>
-                        <option value="GMT+12 (NZST)">GMT+12 — New Zealand (NZST)</option>
+                        <option value="GMT+10 (AEST)">GMT+10 -- Sydney (AEST)</option>
+                        <option value="GMT+11 (AEDT)">GMT+11 -- Sydney Daylight (AEDT)</option>
+                        <option value="GMT+12 (NZST)">GMT+12 -- New Zealand (NZST)</option>
                       </optgroup>
                     </select>
                   </div>
@@ -1230,7 +1230,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                   </div>
                 </div>
 
-                {/* Location / Meeting link — conditional on event type */}
+                {/* Location / Meeting link -- conditional on event type */}
                 <div className="mt-2">
                   {(formConfig.eventDetails.eventType ?? 'in-person') === 'virtual' ? (
                     <>
@@ -1791,7 +1791,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                     <p className="text-[10px] leading-relaxed" style={{ color: FE.faint }}>
                       {(formConfig.lessonTiming ?? 'after') === 'before'
                         ? 'Lesson opens automatically before each question. Students read first, then answer.'
-                        : 'Lesson is offered after answering — "Why?" if wrong, "Review Lesson" if right.'}
+                        : 'Lesson is offered after answering -- "Why?" if wrong, "Review Lesson" if right.'}
                     </p>
                   </div>
 
@@ -2674,7 +2674,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
           </div>
         </div>
 
-        {/* Save button — pinned to bottom of left panel */}
+        {/* Save button -- pinned to bottom of left panel */}
         <div className="px-5 py-3" style={{ borderTop: `1px solid ${FE.divider}` }}>
           <button
             type="button"
@@ -2707,11 +2707,11 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
         </div>
       </div>
 
-      {/* Right Preview Panel — live iframe of the actual public page */}
+      {/* Right Preview Panel -- live iframe of the actual public page */}
       <div className="hidden md:flex flex-1 flex-col" style={{ borderLeft: `1px solid ${FE.divider}`, minWidth: 0 }}>
         {/* Toolbar */}
         <div className="flex items-center justify-between px-3 py-2 flex-shrink-0 gap-3" style={{ borderBottom: `1px solid ${FE.divider}`, background: FE.card }}>
-          {/* Left — viewport toggle */}
+          {/* Left -- viewport toggle */}
           <div className="flex items-center gap-1 p-0.5 rounded-lg" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
             {([
               { key: false, Icon: Monitor, label: 'Desktop' },
@@ -2735,7 +2735,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
             ))}
           </div>
 
-          {/* Right — actions */}
+          {/* Right -- actions */}
           <div className="flex items-center gap-1.5">
             {saved && (
               <span className="text-xs font-medium" style={{ color: accentColor }}>✓ Updated</span>
@@ -2761,7 +2761,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
             </a>
           </div>
         </div>
-        {/* Iframe — desktop or mobile view */}
+        {/* Iframe -- desktop or mobile view */}
         {mobileView ? (
           <div className="flex-1 flex items-start justify-center overflow-auto py-8" style={{ background: FE.page, minHeight: 0 }}>
             <div style={{
@@ -2969,7 +2969,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
         )}
       </AnimatePresence>
 
-      {/* -- Generate Questions modal --------------------------------------- */}
+      {/* -- Generate Questions modal --- */}
       <AnimatePresence>
         {aiPromptModalOpen && (
           <motion.div

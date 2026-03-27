@@ -10,7 +10,7 @@ import {
 import Link from 'next/link';
 import { useTheme } from '@/components/ThemeProvider';
 
-/* ─── Theme tokens ─────────────────────────────────────────── */
+/* --- Theme tokens --- */
 const LIGHT = {
   page:        '#F9F9F9',
   blob:        '#ADEE66',
@@ -79,7 +79,7 @@ const DARK = {
   footerBold:  '#aaa',
 };
 
-/* ─── Brand SVG social icons ────────────────────────────────── */
+/* --- Brand SVG social icons --- */
 const SocialSVGs: Record<string, { svg: (dark: boolean) => React.ReactNode; label: string }> = {
   twitter: {
     label: 'X / Twitter',
@@ -147,7 +147,7 @@ function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-/* ─── Page ──────────────────────────────────────────────────── */
+/* --- Page --- */
 export default function PublicProfile({ params }: { params: Promise<{ username: string }> }) {
   const { theme, toggle: toggleDark } = useTheme();
   const dark = theme === 'dark';
@@ -213,7 +213,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
     <div className="min-h-screen relative" style={{ background: t.page, transition: 'background 0.3s' }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'); *{font-family:'Inter',sans-serif;}`}</style>
 
-      {/* Decorative blob — wrapper clips overflow without affecting position:fixed children */}
+      {/* Decorative blob -- wrapper clips overflow without affecting position:fixed children */}
       <div className="absolute top-0 right-0 pointer-events-none" style={{ width: 220, height: 220, overflow: 'hidden', zIndex: 0 }}>
         <div style={{ position: 'absolute', top: -80, right: -80, width: 280, height: 280, borderRadius: '50%', background: t.blob, transition: 'background 0.3s' }}/>
       </div>
@@ -259,7 +259,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
 
       <main className="relative z-10 max-w-4xl mx-auto px-5 md:px-8 pb-20 pt-4 space-y-6">
 
-        {/* ── Profile hero card ─────────────────────────────── */}
+        {/* -- Profile hero card --- */}
         {(() => {
           const isCompany = profile.account_type === 'company';
           const rawWebsite = (profile.social_links as Record<string, string>)?.website ?? '';
@@ -293,7 +293,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
               className="rounded-3xl overflow-hidden"
               style={{ background: t.card, transition: 'background 0.3s' }}
             >
-              {/* Cover — inset */}
+              {/* Cover -- inset */}
               <div className="p-3 pb-0">
                 <div className="relative overflow-hidden rounded-2xl group" style={{ height: 'clamp(160px, 40vw, 240px)', background: t.coverBg, transition: 'background 0.3s' }}>
                   {profile.cover_url && (
@@ -305,9 +305,9 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
               </div>
 
               {isCompany ? (
-                /* ── Company Layout ─────────────────────────────── */
+                /* -- Company Layout --- */
                 <div className="relative px-5 sm:px-7 pb-7">
-                  {/* Logo — overlaps cover bottom */}
+                  {/* Logo -- overlaps cover bottom */}
                   <div className="relative z-10 -mt-10 mb-3">
                     <div className="w-[90px] h-[90px] rounded-2xl overflow-hidden flex items-center justify-center text-2xl font-bold"
                       style={{ border: `3px solid ${t.avatarBorder}`, background: t.avatarBg, color: t.avatarText }}>
@@ -316,7 +316,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
                         : <Building2 style={{ width: 32, height: 32, color: t.avatarText }}/>}
                     </div>
                   </div>
-                  {/* Name + handle — always below the logo */}
+                  {/* Name + handle -- always below the logo */}
                   <div className="mb-4">
                     <div className="flex items-center gap-2 flex-wrap">
                       {profile.name && <h1 className="text-xl sm:text-2xl font-bold leading-tight" style={{ color: t.name }}>{profile.name}</h1>}
@@ -379,7 +379,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
                   {statPills}
                 </div>
               ) : (
-                /* ── Creator Layout ─────────────────────────────── */
+                /* -- Creator Layout --- */
                 <div className="relative px-4 sm:px-6 pb-6">
                   {/* Avatar + name row */}
                   <div className="flex items-end gap-4 -mt-12 mb-4">
@@ -445,7 +445,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
           );
         })()}
 
-        {/* ── Courses ───────────────────────────────────────── */}
+        {/* -- Courses --- */}
         {courses.length > 0 && (
           <motion.section initial={{ opacity:0,y:14 }} animate={{ opacity:1,y:0 }} transition={{ delay:0.12,duration:0.45,ease:[0.22,1,0.36,1] }} className="space-y-4">
             <SectionHeader label="Courses" count={courses.length} t={t}/>
@@ -458,7 +458,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
           </motion.section>
         )}
 
-        {/* ── Upcoming Events ───────────────────────────────── */}
+        {/* -- Upcoming Events --- */}
         {upcomingEvents.length > 0 && (
           <motion.section initial={{ opacity:0,y:14 }} animate={{ opacity:1,y:0 }} transition={{ delay:0.18,duration:0.45,ease:[0.22,1,0.36,1] }} className="space-y-4">
             <SectionHeader label="Upcoming Events" count={upcomingEvents.length} t={t}/>
@@ -473,7 +473,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
           </motion.section>
         )}
 
-        {/* ── Past Events ───────────────────────────────────── */}
+        {/* -- Past Events --- */}
         {pastEvents.length > 0 && (
           <motion.section initial={{ opacity:0,y:14 }} animate={{ opacity:1,y:0 }} transition={{ delay:0.22,duration:0.45,ease:[0.22,1,0.36,1] }} className="space-y-4">
             <SectionHeader label="Past Events" t={t}/>
@@ -509,7 +509,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
   );
 }
 
-/* ─── Sub-components ─────────────────────────────────────────── */
+/* --- Sub-components --- */
 function SectionHeader({ label, count, t }: { label: string; count?: number; t: typeof LIGHT }) {
   return (
     <div className="flex items-center gap-2">
@@ -547,7 +547,7 @@ function CourseCard({ index, href, cover, title, cta, config, creatorName, creat
       onMouseEnter={e=>{ e.currentTarget.style.transform='translateY(-3px)'; }}
       onMouseLeave={e=>{ e.currentTarget.style.transform='translateY(0)'; }}
     >
-      {/* Cover — padded rounded square */}
+      {/* Cover -- padded rounded square */}
       <div style={{ padding: 12, background: t.card, flexShrink: 0 }}>
         <div className="relative transition-transform duration-700 group-hover:scale-[1.03]"
           style={{ borderRadius: 14, overflow: 'hidden', aspectRatio: '16/9', background: dark ? '#0f1f14' : '#1a2a1e' }}>
@@ -641,8 +641,8 @@ function EventCard({ index, isLast, href, cover, title, description, status, loc
     : meetingLink.includes('teams.microsoft') || meetingLink.includes('teams.live') ? 'teams'
     : meetingLink ? 'link' : null;
   const platformMeta: Record<string, { label: string; icon: React.ReactNode }> = {
-    meet:  { label: 'Google Meet',     icon: <img src="https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Meet.png"  alt="Meet"  style={{ width: 14, height: 14, objectFit: 'contain' }}/> },
-    zoom:  { label: 'Zoom',            icon: <img src="https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Zoom.png"  alt="Zoom"  style={{ width: 14, height: 14, objectFit: 'contain' }}/> },
+    meet:  { label: 'Google Meet',     icon: <img src="https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Meet.png" alt="Meet" style={{ width: 14, height: 14, objectFit: 'contain' }}/> },
+    zoom:  { label: 'Zoom',            icon: <img src="https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Zoom.png" alt="Zoom" style={{ width: 14, height: 14, objectFit: 'contain' }}/> },
     teams: { label: 'Microsoft Teams', icon: <img src="https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Teams.png" alt="Teams" style={{ width: 14, height: 14, objectFit: 'contain' }}/> },
     link:  { label: 'Online',          icon: <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg> },
   };
@@ -665,7 +665,7 @@ function EventCard({ index, isLast, href, cover, title, description, status, loc
         onMouseEnter={e=>{ e.currentTarget.style.transform='translateY(-3px)'; }}
         onMouseLeave={e=>{ e.currentTarget.style.transform='translateY(0)'; }}
       >
-        {/* Cover — full-width banner on mobile, padded square on sm+ */}
+        {/* Cover -- full-width banner on mobile, padded square on sm+ */}
         <div className="flex-shrink-0 sm:flex sm:items-center sm:justify-center"
           style={{ background: t.card }}>
           {/* Mobile: full-width 16:9 banner */}
@@ -723,7 +723,7 @@ function EventCard({ index, isLast, href, cover, title, description, status, loc
             </div>
           )}
 
-          {/* 2. Location — plain with icon, no pill */}
+          {/* 2. Location -- plain with icon, no pill */}
           {location && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <MapPin size={12} style={{ color: t.statsMuted, flexShrink: 0 }}/>
@@ -734,7 +734,7 @@ function EventCard({ index, isLast, href, cover, title, description, status, loc
           {/* 3. Event name */}
           <h3 style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.3, color: t.name, margin: 0, transition: 'color 0.3s' }}>{title}</h3>
 
-          {/* 3b. Description — desktop only, max 3 lines */}
+          {/* 3b. Description -- desktop only, max 3 lines */}
           {description && (
             <p className="hidden sm:block" style={{ fontSize: 13, color: t.bio, lineHeight: 1.6, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } as React.CSSProperties}>{description}</p>
           )}

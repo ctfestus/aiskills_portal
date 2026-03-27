@@ -1,7 +1,7 @@
 ﻿const BANNER = 'https://zcbsjhuhnqhobqtlkkgv.supabase.co/storage/v1/object/public/media-assets/FestMan.jpg';
 const APP_URL = process.env.APP_URL || 'https://festforms.com';
 
-// -- Shared shell --------------------------------------------------------------
+// -- Shared shell ---
 function shell(content: string, bannerUrl?: string) {
   const resolvedBanner = bannerUrl || BANNER;
   return `<!DOCTYPE html>
@@ -55,7 +55,7 @@ function detailBlock(label: string, value: string) {
   return `<p style="margin:4px 0;"><b>${label}:</b> ${value}</p>`;
 }
 
-// -- helpers for meeting platform ----------------------------------------------
+// -- helpers for meeting platform ---
 function platformName(url?: string): string {
   if (!url) return 'Meeting Link';
   const u = url.toLowerCase();
@@ -73,7 +73,7 @@ function platformColor(url?: string): string {
   return '#1f1bc3';
 }
 
-// -- 1. Event Registration Confirmation ----------------------------------------
+// -- 1. Event Registration Confirmation ---
 export function confirmationEmail(data: {
   name?: string;
   eventTitle: string;
@@ -94,7 +94,7 @@ export function confirmationEmail(data: {
     <div style="margin:16px 0;padding:16px;background:#f0f7ff;border-radius:10px;border:1px solid #c5deff;text-align:center;">
       <p style="margin:0 0 10px;font-weight:600;color:#333;">${platformName(meetingLink)}</p>
       <a href="${meetingLink}" style="display:inline-block;padding:10px 24px;background:${platformColor(meetingLink)};color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">Join Meeting -></a>
-      <p style="margin:8px 0 0;font-size:12px;color:#888;">Keep this link — you'll need it to attend.</p>
+      <p style="margin:8px 0 0;font-size:12px;color:#888;">Keep this link -- you'll need it to attend.</p>
     </div>` : '';
 
   const content = `
@@ -119,7 +119,7 @@ export function confirmationEmail(data: {
   return shell(content, bannerUrl);
 }
 
-// -- 2. Event Reminder ---------------------------------------------------------
+// -- 2. Event Reminder ---
 export function reminderEmail(data: {
   name?: string;
   eventTitle: string;
@@ -143,7 +143,7 @@ export function reminderEmail(data: {
 
   const content = `
     <p><b>Hi ${name || 'there'},</b></p>
-    <p>This is a friendly reminder that <b>${eventTitle}</b> is starting in <b>${timeLabel}</b>${isOneHour ? ' — get ready!' : '.'}</p>
+    <p>This is a friendly reminder that <b>${eventTitle}</b> is starting in <b>${timeLabel}</b>${isOneHour ? ' -- get ready!' : '.'}</p>
 
     <p style="font-size:18px;font-weight:bold;margin-top:16px;">Event Reminder</p>
     <p><b>${eventTitle}</b></p>
@@ -163,7 +163,7 @@ export function reminderEmail(data: {
   return shell(content, bannerUrl);
 }
 
-// -- 3. Course Result -------------------------------------------------------------
+// -- 3. Course Result ---
 export function courseResultEmail(data: {
   name?: string;
   courseTitle: string;
@@ -180,7 +180,7 @@ export function courseResultEmail(data: {
 
   const content = `
     <p><b>Hi ${name || 'there'},</b></p>
-    <p>${passed ? 'Congratulations! You passed the course. Well done! 🎉' : 'Thanks for completing the course. Keep practicing — you can retake it to improve your score.'}</p>
+    <p>${passed ? 'Congratulations! You passed the course. Well done! 🎉' : 'Thanks for completing the course. Keep practicing -- you can retake it to improve your score.'}</p>
 
     <p style="font-size:18px;font-weight:bold;margin-top:16px;">Your Course Result</p>
     <p><b>${courseTitle}</b></p>
@@ -202,7 +202,7 @@ export function courseResultEmail(data: {
   return shell(content);
 }
 
-// -- 4. Course OTP Verification -----------------------------------------------
+// -- 4. Course OTP Verification ---
 export function otpEmail(data: { code: string; courseName?: string }) {
   const { code, courseName } = data;
 
@@ -226,7 +226,7 @@ export function otpEmail(data: { code: string; courseName?: string }) {
   return shell(content);
 }
 
-// -- 5. Blast / Announcement ---------------------------------------------------
+// -- 5. Blast / Announcement ---
 export function blastEmail(data: {
   subject: string;
   body: string;

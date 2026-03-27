@@ -10,6 +10,7 @@ import {
   Award, Upload, Trash2, CheckCircle2, XCircle, ChevronDown,
 } from 'lucide-react';
 import { ImageCropModal } from '@/components/ImageCropModal';
+import { sanitizePlainText } from '@/lib/sanitize';
 
 const INDUSTRIES = [
   'Accounting & Finance', 'Advertising & Marketing', 'Aerospace & Defence',
@@ -63,7 +64,7 @@ const SOCIAL_FIELDS = [
   { key: 'website',   label: 'Website',      icon: Globe,     placeholder: 'https://yoursite.com' },
 ];
 
-// --- Pexels Picker ------------------------------------------------------------
+// --- Pexels Picker ---
 function PexelsPicker({ onSelect, onClose }: { onSelect: (url: string) => void; onClose: () => void }) {
   const C = useC();
   const [query, setQuery]   = useState('');
@@ -157,7 +158,7 @@ function PexelsPicker({ onSelect, onClose }: { onSelect: (url: string) => void; 
   );
 }
 
-// --- Cover Editor -------------------------------------------------------------
+// --- Cover Editor ---
 function CoverEditor({ coverUrl, coverPosition, onUrlChange, onPositionChange, onFileChange, onBrowse }: {
   coverUrl: string; coverPosition: { x: number; y: number };
   onUrlChange: (url: string) => void; onPositionChange: (pos: { x: number; y: number }) => void;
@@ -239,7 +240,7 @@ function CoverEditor({ coverUrl, coverPosition, onUrlChange, onPositionChange, o
   );
 }
 
-// --- Settings Page ------------------------------------------------------------
+// --- Settings Page ---
 export default function SettingsPage() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
@@ -472,7 +473,7 @@ export default function SettingsPage() {
           <div className="space-y-3">
             <div>
               <label className="text-xs font-medium mb-1.5 block" style={{ color: C.muted }}>Full Name</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Your full name"
+              <input value={name} onChange={e => setName(sanitizePlainText(e.target.value))} placeholder="Your full name"
                 className="w-full rounded-xl px-4 py-2.5 text-sm border focus:outline-none transition-colors"
                 style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
             </div>
@@ -483,7 +484,7 @@ export default function SettingsPage() {
               </div>
               <textarea
                 value={bio}
-                onChange={e => setBio(e.target.value.slice(0, 300))}
+                onChange={e => setBio(sanitizePlainText(e.target.value).slice(0, 300))}
                 maxLength={300}
                 rows={3}
                 placeholder="A short bio about yourself…"
@@ -494,13 +495,13 @@ export default function SettingsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium mb-1.5 block" style={{ color: C.muted }}>Country</label>
-                <input value={country} onChange={e => setCountry(e.target.value)} placeholder="e.g. Ghana"
+                <input value={country} onChange={e => setCountry(sanitizePlainText(e.target.value))} placeholder="e.g. Ghana"
                   className="w-full rounded-xl px-4 py-2.5 text-sm border focus:outline-none transition-colors"
                   style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
               </div>
               <div>
                 <label className="text-xs font-medium mb-1.5 block" style={{ color: C.muted }}>City</label>
-                <input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g. Accra"
+                <input value={city} onChange={e => setCity(sanitizePlainText(e.target.value))} placeholder="e.g. Accra"
                   className="w-full rounded-xl px-4 py-2.5 text-sm border focus:outline-none transition-colors"
                   style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
               </div>
@@ -519,7 +520,7 @@ export default function SettingsPage() {
                 </div>
                 <input
                   value={socialLinks[key] ?? ''}
-                  onChange={e => setSocialLinks(prev => ({ ...prev, [key]: e.target.value }))}
+                  onChange={e => setSocialLinks(prev => ({ ...prev, [key]: sanitizePlainText(e.target.value) }))}
                   placeholder={placeholder}
                   className="flex-1 rounded-xl px-4 py-2.5 text-sm border focus:outline-none transition-colors"
                   style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}

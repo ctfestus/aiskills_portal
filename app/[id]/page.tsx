@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { getFontById } from '@/lib/fonts';
 
-// ─── Social platform data (mirrors page.tsx) ─────────────────────────────────
+// --- Social platform data (mirrors page.tsx) ---
 const SOCIAL_PLATFORMS = [
   { id: 'linkedin',  name: 'LinkedIn',    placeholder: 'linkedin.com/in/username' },
   { id: 'twitter',   name: 'X (Twitter)', placeholder: 'x.com/username'           },
@@ -20,7 +20,7 @@ const SOCIAL_PLATFORMS = [
   { id: 'tiktok',    name: 'TikTok',      placeholder: 'tiktok.com/@username'     },
   { id: 'youtube',   name: 'YouTube',     placeholder: 'youtube.com/@channel'     },
   { id: 'github',    name: 'GitHub',      placeholder: 'github.com/username'      },
-  { id: 'website',   name: 'Website',     placeholder: 'https://yourwebsite.com'  },
+  { id: 'website',   name: 'Website',     placeholder: 'https://yourwebsite.com' },
 ];
 
 const SOCIAL_SVGS: Record<string, React.ReactNode> = {
@@ -84,7 +84,7 @@ const buttonThemes: Record<ThemeColor, string> = {
   amber:   'bg-amber-500 hover:bg-amber-600 text-white',
 };
 
-/* ─── Theme tokens (mirrors profile page) ────────────────────────────────── */
+/* --- Theme tokens (mirrors profile page) --- */
 const LIGHT_P = {
   page:         '#ffffff',
   blob:         '#ADEE66',
@@ -374,7 +374,7 @@ export default function PublicFormPage() {
         if (url.protocol === 'https:' || url.protocol === 'http:') {
           setTimeout(() => { window.location.href = url.toString(); }, 1800);
         }
-      } catch { /* invalid URL — skip redirect */ }
+      } catch { /* invalid URL -- skip redirect */ }
       return;
     }
     if (ps?.type === 'events' && ps.relatedEventIds?.length) {
@@ -411,7 +411,7 @@ export default function PublicFormPage() {
 
     if (form.config?.eventDetails?.isEvent) {
       // Server-side atomic duplicate check + insert.
-      // Uniqueness is enforced by PRIMARY KEY (form_id, email) on event_registrations —
+      // Uniqueness is enforced by PRIMARY KEY (form_id, email) on event_registrations --
       // no client-side preflight needed or used.
       const regRes = await fetch('/api/event-register', {
         method: 'POST',
@@ -454,7 +454,7 @@ export default function PublicFormPage() {
             : `${window.location.origin}/api/og/${form.id}`)
         : undefined;
 
-      // ── Auto-issue certificate + send one combined email ──
+      // -- Auto-issue certificate + send one combined email --
       const recipientEmail = data.email;
       const validEmail = recipientEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail);
 
@@ -650,7 +650,7 @@ export default function PublicFormPage() {
           {/* Hero card */}
           <div style={{ background: t.card, borderRadius: 28, overflow: 'hidden', boxShadow: t.cardShadow, transition: 'background 0.3s' }}>
 
-            {/* Cover image — padded rounded rectangle */}
+            {/* Cover image -- padded rounded rectangle */}
             {config.coverImage && (
               <div style={{ padding: '14px 14px 0' }}>
                 <div className="group" style={{ overflow: 'hidden', borderRadius: 18, height: 'clamp(160px, 38vw, 260px)', background: '#0a0a0a', position: 'relative' }}>
@@ -718,7 +718,7 @@ export default function PublicFormPage() {
             </div>
           </div>
 
-          {/* What students will learn — creator-authored outcomes */}
+          {/* What students will learn -- creator-authored outcomes */}
           {(config.learnOutcomes || []).length > 0 && (
             <div style={{ marginTop: 24, background: t.card, borderRadius: 20, overflow: 'hidden', boxShadow: t.cardShadow, transition: 'background 0.3s' }}>
               {/* Header with accent left border */}
@@ -743,7 +743,7 @@ export default function PublicFormPage() {
             </div>
           )}
 
-          {/* Course outline — lesson titles */}
+          {/* Course outline -- lesson titles */}
           {lessonCount > 0 && (
             <div style={{ marginTop: 16, background: t.card, borderRadius: 20, overflow: 'hidden', boxShadow: t.cardShadow, transition: 'background 0.3s' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 24px 18px' }}>
@@ -840,7 +840,7 @@ export default function PublicFormPage() {
           </div>
         )}
 
-        {/* CourseTaker — renders via portal once started */}
+        {/* CourseTaker -- renders via portal once started */}
         {courseStarted && (
           <CourseTaker
             config={config}
@@ -875,7 +875,7 @@ export default function PublicFormPage() {
   return (
     <div className="ff-pub" style={{ minHeight: '100vh', background: t.page, position: 'relative', transition: 'background 0.3s' }}>
       <style>{`${googleFontImport} .ff-pub{font-family:${fontFace};}`}</style>
-      {/* Decorative blob — wrapper clips overflow without affecting position:fixed children */}
+      {/* Decorative blob -- wrapper clips overflow without affecting position:fixed children */}
       <div style={{ position: 'absolute', top: 0, right: 0, width: 200, height: 200, overflow: 'hidden', zIndex: 0, pointerEvents: 'none' }}>
         <div style={{ position: 'absolute', top: -70, right: -70, width: 260, height: 260, borderRadius: '50%', background: t.blob, transition: 'background 0.3s' }}/>
       </div>
@@ -1108,7 +1108,7 @@ export default function PublicFormPage() {
             animate={{ opacity: 1, y: 0 }}
             style={{ transition: 'opacity 0.3s' }}
           >
-            {/* Non-event form header — single column */}
+            {/* Non-event form header -- single column */}
             {!config.eventDetails?.isEvent && (() => {
               const fBtnBg = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
               const fBtnBorder = dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
@@ -1203,7 +1203,7 @@ export default function PublicFormPage() {
                                 <div style={{ paddingTop: 10, borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
                                   <a href={`/u/${creatorProfile.username}`} target="_blank" rel="noopener noreferrer"
                                     style={{ fontSize: 12, fontWeight: 600, color: accentColor, textDecoration: 'none' }}>
-                                    View full profile →
+                                    View full profile ->
                                   </a>
                                 </div>
                               )}
@@ -1214,7 +1214,7 @@ export default function PublicFormPage() {
                     );
                   })()}
 
-                  {/* Social sharing — always last */}
+                  {/* Social sharing -- always last */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
                     <span style={{ fontSize: 12, fontWeight: 500, color: t.muted, marginRight: 4 }}>Share</span>
                     <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(pageUrl)}`} target="_blank" rel="noopener noreferrer" style={fShareBtn} title="Share on LinkedIn">
@@ -1254,8 +1254,8 @@ export default function PublicFormPage() {
                     </div>
                   )}
 
-                  {/* ── Two-column layout ────────────────────────── */}
-                  {/* Cover image — mobile only (always first) */}
+                  {/* -- Two-column layout --- */}
+                  {/* Cover image -- mobile only (always first) */}
                   {config.coverImage && (
                     <div className="block sm:hidden" style={{ borderRadius: 18, overflow: 'hidden', background: '#1a1a1a', aspectRatio: '4/3', marginBottom: 16 }}>
                       <img src={config.coverImage} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
@@ -1264,7 +1264,7 @@ export default function PublicFormPage() {
 
                   <div className="flex flex-col sm:flex-row gap-8 sm:gap-10 sm:items-start" style={{ marginBottom: 32 }}>
 
-                    {/* Left — cover image (desktop only) + creator */}
+                    {/* Left -- cover image (desktop only) + creator */}
                     <div className="flex-shrink-0 w-full sm:w-[300px] order-2 sm:order-1" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {config.coverImage && (
                         <div className="hidden sm:block" style={{ borderRadius: 18, overflow: 'hidden', background: '#1a1a1a', aspectRatio: '4/3' }}>
@@ -1273,7 +1273,7 @@ export default function PublicFormPage() {
                         </div>
                       )}
 
-                      {/* Hosted by — with hover popup */}
+                      {/* Hosted by -- with hover popup */}
                       {creatorProfile && (() => {
                         const socials = Object.entries((creatorProfile.social_links ?? {}) as Record<string, string>).filter(([, v]) => !!v);
                         const iconColor = dark ? '#c0c0c0' : '#555';
@@ -1356,7 +1356,7 @@ export default function PublicFormPage() {
                                     <div style={{ paddingTop: 10, borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
                                       <a href={`/u/${creatorProfile.username}`} target="_blank" rel="noopener noreferrer"
                                         style={{ fontSize: 12, fontWeight: 600, color: accentColor, textDecoration: 'none' }}>
-                                        View full profile →
+                                        View full profile ->
                                       </a>
                                     </div>
                                   )}
@@ -1407,7 +1407,7 @@ export default function PublicFormPage() {
                       })()}
                     </div>
 
-                    {/* Right — all event info + about (shown first on mobile) */}
+                    {/* Right -- all event info + about (shown first on mobile) */}
                     <div className="order-1 sm:order-2" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
 
                       {/* Private badge */}
@@ -1428,7 +1428,7 @@ export default function PublicFormPage() {
                               {formatDateParts(ev.date)?.monthShort || 'DATE'}
                             </div>
                             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: t.title }}>
-                              {formatDateParts(ev.date)?.day || '—'}
+                              {formatDateParts(ev.date)?.day || '--'}
                             </div>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 48 }}>
@@ -1514,7 +1514,7 @@ export default function PublicFormPage() {
                     </div>
                   </div>
 
-                  {/* Social sharing — always last */}
+                  {/* Social sharing -- always last */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 8, marginBottom: 32 }}>
                     <span style={{ fontSize: 12, fontWeight: 500, color: t.muted, marginRight: 4 }}>Share</span>
                     <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(pageUrl)}`} target="_blank" rel="noopener noreferrer" style={shareBtnStyle} title="Share on LinkedIn">

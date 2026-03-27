@@ -10,6 +10,14 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   }
 });
 
+/** Strip HTML tags and null bytes from plain-text input fields. */
+export function sanitizePlainText(value: string): string {
+  return value
+    .replace(/<[^>]*>/g, '')   // strip any HTML tags
+    .replace(/\0/g, '')        // remove null bytes
+    .trim();
+}
+
 export function sanitizeRichText(html: string): string {
   return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 's', 'ul', 'ol', 'li',

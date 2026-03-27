@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Singleton — reused across warm serverless invocations, avoids re-allocating
+// Singleton -- reused across warm serverless invocations, avoids re-allocating
 // the client object on every request.
 const _admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,7 +8,7 @@ const _admin = createClient(
   { auth: { persistSession: false } }
 );
 
-/** Service-role client. Use only for writes or auth verification — not for reads
+/** Service-role client. Use only for writes or auth verification -- not for reads
  *  that RLS can already scope. */
 export function adminClient() { return _admin; }
 
@@ -20,7 +20,7 @@ export const PLAN_LIMITS = {
 
 export type PlanId = keyof typeof PLAN_LIMITS;
 
-/** Read the creator's plan using their own JWT — RLS-scoped, no service role needed. */
+/** Read the creator's plan using their own JWT -- RLS-scoped, no service role needed. */
 export async function getCreatorPlan(userJwt: string): Promise<PlanId> {
   const client = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -51,7 +51,7 @@ export interface PlanLimits {
 /**
  * Read the creator's live limits from plan_config (DB-driven).
  * Falls back to hardcoded PLAN_LIMITS if plan_config is not set up yet.
- * Two indexed PK lookups — always fresh, no module-level cache.
+ * Two indexed PK lookups -- always fresh, no module-level cache.
  */
 export async function getCreatorLimits(userJwt: string): Promise<PlanLimits> {
   const client = createClient(
@@ -73,7 +73,7 @@ export async function getCreatorLimits(userJwt: string): Promise<PlanLimits> {
     .single();
 
   if (!config) {
-    // plan_config table not populated yet — fall back to hardcoded defaults
+    // plan_config table not populated yet -- fall back to hardcoded defaults
     return PLAN_LIMITS[plan as PlanId] ?? PLAN_LIMITS.free;
   }
 

@@ -6,14 +6,14 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Zap, Sparkles, ArrowRight, Check, LayoutDashboard, ChevronDown, User, Settings, LogOut } from 'lucide-react';
 
-// --- Brand palette -------------------------------------------------------------
-// Base:    #0703c2  (deep brand blue)
-// Mid:     #0d08f7  (vivid brand blue)
-// Accent:  #00a4ef  (sky blue)
-// Warm:    #ff9933  (orange highlight)
-// ------------------------------------------------------------------------------
+// --- Brand palette ---
+// Base: #0703c2 (deep brand blue)
+// Mid: #0d08f7 (vivid brand blue)
+// Accent: #00a4ef (sky blue)
+// Warm: #ff9933 (orange highlight)
+// ---
 
-// --- SVG Illustrations --------------------------------------------------------
+// --- SVG Illustrations ---
 const IllustrationAI = () => (
   <svg viewBox="0 0 280 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
     <ellipse cx="140" cy="100" rx="100" ry="68" fill="#0d08f7" fillOpacity="0.18"/>
@@ -127,7 +127,7 @@ const IllustrationProfile = () => (
   </svg>
 );
 
-// --- FadeIn on scroll ---------------------------------------------------------
+// --- FadeIn on scroll ---
 function FadeIn({ children, delay = 0, className = '' }: { children: React.ReactNode; delay?: number; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: '-60px' });
@@ -141,18 +141,18 @@ function FadeIn({ children, delay = 0, className = '' }: { children: React.React
   );
 }
 
-// --- Data ----------------------------------------------------------------------
+// --- Data ---
 const FEATURES = [
-  { title: 'AI & Data Skills Courses', description: 'Learn practical AI and data skills through structured, hands-on courses built for the African workplace — from beginner to advanced.',                    illustration: <IllustrationAI />,      accent: 'rgba(255,255,255,0.9)', badge: 'Courses',  border: 'rgba(255,255,255,0.18)' },
+  { title: 'AI & Data Skills Courses', description: 'Learn practical AI and data skills through structured, hands-on courses built for the African workplace -- from beginner to advanced.',                    illustration: <IllustrationAI />,      accent: 'rgba(255,255,255,0.9)', badge: 'Courses',  border: 'rgba(255,255,255,0.18)' },
   { title: 'Graded Assessments',       description: 'Test your knowledge with quizzes, assignments, and projects. Earn certificates that prove your skills to employers.',                                   illustration: <IllustrationCourse />,  accent: '#ff9933',               badge: 'Assess',   border: 'rgba(255,153,51,0.3)' },
-  { title: 'Live Events & Workshops',  description: 'Join live training sessions, webinars, and community workshops — all designed to give you real-world, job-ready experience.',                           illustration: <IllustrationEvents />,  accent: '#00a4ef',               badge: 'Events',   border: 'rgba(0,164,239,0.3)' },
+  { title: 'Live Events & Workshops',  description: 'Join live training sessions, webinars, and community workshops -- all designed to give you real-world, job-ready experience.',                           illustration: <IllustrationEvents />,  accent: '#00a4ef',               badge: 'Events',   border: 'rgba(0,164,239,0.3)' },
   { title: 'Your Learning Profile',    description: 'Track your progress, showcase completed courses, and share your achievements with a public profile built for career growth.',                           illustration: <IllustrationProfile />, accent: 'rgba(255,255,255,0.9)', badge: 'Profile',  border: 'rgba(255,255,255,0.18)' },
 ];
 
 const STEPS = [
   { n: '01', title: 'Enrol in a course',     body: 'Browse AI and data courses built for African professionals. Pick what matches your career goals and start learning immediately.',  color: '#fff',    bg: 'rgba(255,255,255,0.12)' },
   { n: '02', title: 'Learn & practise',      body: 'Work through lessons, hands-on exercises, and real datasets. Apply skills directly to problems you face at work.',                color: '#00a4ef', bg: 'rgba(0,164,239,0.15)' },
-  { n: '03', title: 'Earn & grow',           body: 'Pass assessments, earn verified certificates, and share them with employers — proof that your skills are real and job-ready.',    color: '#ff9933', bg: 'rgba(255,153,51,0.15)' },
+  { n: '03', title: 'Earn & grow',           body: 'Pass assessments, earn verified certificates, and share them with employers -- proof that your skills are real and job-ready.',    color: '#ff9933', bg: 'rgba(255,153,51,0.15)' },
 ];
 
 const HIGHLIGHTS = [
@@ -166,7 +166,7 @@ const HIGHLIGHTS = [
   'Light & dark mode on dashboard',
 ];
 
-// --- Floating orb -------------------------------------------------------------
+// --- Floating orb ---
 function Orb({ x, y, size, color, delay }: { x: string; y: string; size: number; color: string; delay: number }) {
   return (
     <motion.div className="absolute rounded-full pointer-events-none"
@@ -177,7 +177,7 @@ function Orb({ x, y, size, color, delay }: { x: string; y: string; size: number;
   );
 }
 
-// --- Nav profile menu (landing page) ------------------------------------------
+// --- Nav profile menu (landing page) ---
 function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -281,7 +281,7 @@ function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
   );
 }
 
-// --- Page ----------------------------------------------------------------------
+// --- Page ---
 export default function LandingPage() {
   const [user, setUser]       = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -341,7 +341,7 @@ export default function LandingPage() {
         <Orb x="65%"  y="-5%" size={420} color="#00a4ef" delay={2.5} />
         <Orb x="20%"  y="58%" size={380} color="#0d08f7" delay={4} />
 
-        {/* Subtle grid — white lines on blue */}
+        {/* Subtle grid -- white lines on blue */}
         <div className="absolute inset-0 pointer-events-none" style={{
           backgroundImage: 'linear-gradient(rgba(255,255,255,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.06) 1px,transparent 1px)',
           backgroundSize: '60px 60px',
@@ -377,7 +377,7 @@ export default function LandingPage() {
             className="text-lg md:text-xl text-white/60 max-w-2xl mx-auto leading-relaxed"
           >
             Describe what you need. AI Skills Africa generates polished forms, graded courses,
-            and stunning event pages — instantly, with AI.
+            and stunning event pages -- instantly, with AI.
           </motion.p>
 
           {/* CTA */}
@@ -389,7 +389,7 @@ export default function LandingPage() {
               className="group flex items-center gap-2 px-7 py-3.5 rounded-2xl text-base font-semibold bg-white text-[#0703c2] hover:bg-white/90 transition-all hover:scale-105 shadow-xl shadow-black/20"
             >
               <Sparkles className="w-4 h-4 text-[#0703c2]" />
-              Build your first form — free
+              Build your first form -- free
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
             </Link>
           </motion.div>
@@ -484,7 +484,7 @@ export default function LandingPage() {
         <FadeIn className="text-center mb-16 space-y-3">
           <p className="text-xs font-semibold uppercase tracking-widest text-white/50">Everything you need</p>
           <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-white">One platform.<br />Endless possibilities.</h2>
-          <p className="text-white/55 text-lg max-w-xl mx-auto">From simple contact forms to complex courses and event registration — AI Skills Africa handles it all.</p>
+          <p className="text-white/55 text-lg max-w-xl mx-auto">From simple contact forms to complex courses and event registration -- AI Skills Africa handles it all.</p>
         </FadeIn>
 
         <div className="grid md:grid-cols-2 gap-5">

@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
           : `${baseUrl}/api/og/${form.id}`)
       : undefined;
 
-    // Parse event date — prefer ISO, fallback to human string
+    // Parse event date -- prefer ISO, fallback to human string
     const rawDate = event.dateISO || event.date;
     if (!rawDate) continue;
     const eventDate = new Date(rawDate);
@@ -43,8 +43,8 @@ export async function GET(req: NextRequest) {
     const diffMs = eventDate.getTime() - now.getTime();
     const diffHrs = diffMs / (1000 * 60 * 60);
 
-    // 24hr window: 23.75–24.25hr before event
-    // 1hr window:  0.75–1.25hr before event
+    // 24hr window: 23.75-24.25hr before event
+    // 1hr window: 0.75-1.25hr before event
     const is24hr = diffHrs >= 23.75 && diffHrs <= 24.25;
     const is1hr  = diffHrs >= 0.75  && diffHrs <= 1.25;
     if (!is24hr && !is1hr) continue;

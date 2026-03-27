@@ -6,7 +6,7 @@ const adminSupabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Returns public display data for a certificate — never exposes student_email.
+// Returns public display data for a certificate -- never exposes student_email.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -22,7 +22,7 @@ export async function GET(
   if (error || !cert) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   if (cert.revoked)   return NextResponse.json({ revoked: true }, { status: 200 });
 
-  // Use form_id only server-side for lookups — never include it in the response.
+  // Use form_id only server-side for lookups -- never include it in the response.
   const formId = cert.form_id;
   const { data: form } = await adminSupabase.from('forms').select('title, config, user_id').eq('id', formId).single();
 

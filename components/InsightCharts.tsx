@@ -1,7 +1,7 @@
 'use client';
 
 // All recharts imports are isolated here so next/dynamic can split them into
-// a separate lazy chunk — keeps the main /dashboard/[id] page chunk small.
+// a separate lazy chunk -- keeps the main /dashboard/[id] page chunk small.
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,

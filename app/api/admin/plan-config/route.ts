@@ -31,7 +31,7 @@ async function verifyAdmin(req: NextRequest): Promise<boolean> {
   return profile?.role === 'admin';
 }
 
-// GET /api/admin/plan-config — returns all plan limits
+// GET /api/admin/plan-config -- returns all plan limits
 export async function GET(req: NextRequest) {
   if (!(await verifyAdmin(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(data ?? []);
 }
 
-// PATCH /api/admin/plan-config — update one plan's limits
+// PATCH /api/admin/plan-config -- update one plan's limits
 // Body: { plan: 'free'|'pro'|'business', forms?: number, events?: number, ... }
 export async function PATCH(req: NextRequest) {
   if (!(await verifyAdmin(req))) {

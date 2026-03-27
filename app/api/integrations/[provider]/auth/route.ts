@@ -41,7 +41,7 @@ export async function POST(
   if (!cfg) return NextResponse.json({ error: 'Unknown provider' }, { status: 400 });
   if (!cfg.clientId) return NextResponse.json({ error: `${provider} client ID not configured` }, { status: 503 });
 
-  // Read token from Authorization header — never from a URL parameter.
+  // Read token from Authorization header -- never from a URL parameter.
   const auth = req.headers.get('authorization');
   if (!auth?.startsWith('Bearer ')) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const token = auth.slice(7);
@@ -64,6 +64,6 @@ export async function POST(
   url.searchParams.set('state', state);
   for (const [k, v] of Object.entries(cfg.extras ?? {})) url.searchParams.set(k, v);
 
-  // Return the OAuth URL as JSON — client navigates, keeping the bearer token out of URLs.
+  // Return the OAuth URL as JSON -- client navigates, keeping the bearer token out of URLs.
   return NextResponse.json({ url: url.toString() });
 }

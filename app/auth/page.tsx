@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 
-// -- Google logo ---------------------------------------------------------------
+// -- Google logo ---
 function GoogleLogo() {
   return (
     <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0">
@@ -17,7 +17,7 @@ function GoogleLogo() {
   );
 }
 
-// -- Kente strip ---------------------------------------------------------------
+// -- Kente strip ---
 function KenteStrip({ height = 10 }: { height?: number }) {
   const seq = ['#ADEE66', '#006128', '#F4F1EB', '#008F34', '#ADEE66', '#003d18', '#F4F1EB', '#008F34'];
   return (
@@ -29,7 +29,7 @@ function KenteStrip({ height = 10 }: { height?: number }) {
   );
 }
 
-// -- Adinkra dot background ----------------------------------------------------
+// -- Adinkra dot background ---
 function AdinkraPattern() {
   return (
     <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
@@ -47,7 +47,7 @@ function AdinkraPattern() {
   );
 }
 
-// -- Brand illustration --------------------------------------------------------
+// -- Brand illustration ---
 function Illustration() {
   return (
     <svg viewBox="0 0 360 300" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-xs mx-auto">
@@ -84,7 +84,7 @@ function Illustration() {
       <g transform="rotate(5 250 110)">
         {/* Card body */}
         <rect x="192" y="42" width="140" height="130" rx="14" fill="#F4F1EB" />
-        {/* Course cover — darker green gradient feel */}
+        {/* Course cover -- darker green gradient feel */}
         <rect x="192" y="42" width="140" height="56" rx="14" fill="#006128" />
         <rect x="192" y="82" width="140" height="16" fill="#006128" />
         {/* Play button circle */}
@@ -125,7 +125,7 @@ function Illustration() {
         <circle cx="150" cy="14" r="3" fill="#ADEE66" />
         <rect x="155" y="11" width="14" height="5" rx="2.5" fill="#ADEE66" fillOpacity="0.6" />
 
-        {/* Row 1 — gold */}
+        {/* Row 1 -- gold */}
         <rect x="10" y="34" width="164" height="16" rx="6" fill="#ADEE66" fillOpacity="0.18" />
         <rect x="16" y="39" width="6" height="6" rx="1.5" fill="#F59E0B" />
         <circle cx="34" cy="42" r="6" fill="#ADEE66" fillOpacity="0.6" />
@@ -133,7 +133,7 @@ function Illustration() {
         <rect x="148" y="38" width="24" height="8" rx="4" fill="#ADEE66" />
         <rect x="152" y="40" width="16" height="4" rx="2" fill="#006128" fillOpacity="0.6" />
 
-        {/* Row 2 — silver */}
+        {/* Row 2 -- silver */}
         <rect x="10" y="55" width="164" height="14" rx="6" fill="#006128" fillOpacity="0.04" />
         <rect x="16" y="59" width="6" height="6" rx="1.5" fill="#94A3B8" />
         <circle cx="34" cy="62" r="6" fill="#008F34" fillOpacity="0.4" />
@@ -141,7 +141,7 @@ function Illustration() {
         <rect x="148" y="58" width="24" height="8" rx="4" fill="#008F34" fillOpacity="0.15" />
         <rect x="152" y="60" width="16" height="4" rx="2" fill="#008F34" fillOpacity="0.5" />
 
-        {/* Row 3 — bronze */}
+        {/* Row 3 -- bronze */}
         <rect x="10" y="74" width="164" height="14" rx="6" fill="#006128" fillOpacity="0.03" />
         <rect x="16" y="78" width="6" height="6" rx="1.5" fill="#B45309" fillOpacity="0.7" />
         <circle cx="34" cy="81" r="6" fill="#ADEE66" fillOpacity="0.3" />
@@ -167,7 +167,7 @@ function Illustration() {
   );
 }
 
-// -----------------------------------------------------------------------------
+// ---
 
 export default function AuthPage() {
   const [email, setEmail]             = useState('');
@@ -223,7 +223,7 @@ export default function AuthPage() {
 
       <main className="min-h-screen bg-[#F4F1EB] flex flex-col lg:flex-row">
 
-        {/* -- Left: brand panel ------------------------------------------- */}
+        {/* -- Left: brand panel --- */}
         <div className="relative lg:w-[58%] bg-[#006128] flex flex-col overflow-hidden">
 
 
@@ -259,14 +259,14 @@ export default function AuthPage() {
                 Where your ideas<br />come alive.
               </h1>
               <p className="text-[#F4F1EB] text-sm leading-relaxed opacity-60 max-w-sm">
-                Forms, courses, events and storefronts — all in one place, built for the African creator economy.
+                Forms, courses, events and storefronts -- all in one place, built for the African creator economy.
               </p>
             </div>
           </div>
 
         </div>
 
-        {/* -- Right: form panel ------------------------------------------- */}
+        {/* -- Right: form panel --- */}
         <div className="flex-1 flex items-center justify-center px-6 py-12 lg:px-14">
           <motion.div
             initial={{ opacity: 0, y: 24 }}

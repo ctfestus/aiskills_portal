@@ -28,12 +28,12 @@ export async function generateMetadata({
     .trim()
     .slice(0, 200);
 
-  // LinkedIn requires at least 100 characters — pad with a generic suffix if short
+  // LinkedIn requires at least 100 characters -- pad with a generic suffix if short
   const plainDescription = stripped.length >= 100
     ? stripped
     : (stripped
-        ? `${stripped} — Powered by AI Skills Africa.`
-        : `${data.title} — Powered by AI Skills Africa.`
+        ? `${stripped} -- Powered by AI Skills Africa.`
+        : `${data.title} -- Powered by AI Skills Africa.`
       ).slice(0, 200);
 
   const rawUrl =
@@ -46,15 +46,15 @@ export async function generateMetadata({
   let ogImage: string | undefined;
   if (coverImage) {
     if (coverImage.startsWith('https://images.pexels.com')) {
-      // Pexels originals can be 3–8 MB — use their built-in resizer so
+      // Pexels originals can be 3-8 MB -- use their built-in resizer so
       // WhatsApp / Telegram crawlers don't time out fetching a huge file.
       const base = coverImage.split('?')[0];
       ogImage = `${base}?auto=compress&cs=tinysrgb&w=1200&h=630&fit=crop`;
     } else if (coverImage.startsWith('http')) {
-      // Supabase storage or other public URL — use directly.
+      // Supabase storage or other public URL -- use directly.
       ogImage = coverImage;
     } else {
-      // Base64 data URL — proxy through /api/og/ to convert to a real image response.
+      // Base64 data URL -- proxy through /api/og/ to convert to a real image response.
       ogImage = `${appUrl}/api/og/${data.id}`;
     }
   }

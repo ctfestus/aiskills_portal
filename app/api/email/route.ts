@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
 import { confirmationEmail, reminderEmail, courseResultEmail, blastEmail } from '@/lib/email-templates';
 
-// In-memory rate limiter for test email sends — max 5 per creator per hour.
+// In-memory rate limiter for test email sends -- max 5 per creator per hour.
 // Uses a hash of the JWT as key so full tokens are never stored.
 const testEmailRateLimit = new Map<string, { count: number; resetAt: number }>();
 function allowTestEmailSend(jwt: string): boolean {
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // -- Per-type authorization ---------------------------------------------
+    // -- Per-type authorization ---
     let blastCreatorId = '';
 
     if (type === 'blast') {
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
       const isCron = cronSecret && cronHeader === cronSecret;
 
       if (!isCron) {
-        // Creator path — fully handled here, returns early
+        // Creator path -- fully handled here, returns early
         const creatorId = await getCreatorId(req);
         if (!creatorId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
         const reminderHtml = reminderEmail(data);
 
         if (typeof to === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim())) {
-          // Test mode: creator provided a single email — send once
+          // Test mode: creator provided a single email -- send once
           await resend.emails.send({ from: FROM, to: to.trim(), subject: reminderSubject, html: reminderHtml });
           return NextResponse.json({ success: true, test: true });
         }
@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
       if (alreadySent) return NextResponse.json({ success: true, duplicate: true });
     }
 
-    // For course-result, derive all content from the DB — never trust client values
+    // For course-result, derive all content from the DB -- never trust client values
     let courseResultData: Record<string, any> | null = null;
     if (type === 'course-result') {
       const supabase = getAdminSupabase();
@@ -246,7 +246,7 @@ export async function POST(req: NextRequest) {
 
       case 'course-result': {
         const d = courseResultData!;
-        subject = `Your result: ${d.percentage}% ${d.passed ? '✓ Passed' : '— ' + d.courseTitle}`;
+        subject = `Your result: ${d.percentage}% ${d.passed ? '✓ Passed' : '-- ' + d.courseTitle}`;
         html = courseResultEmail(d as Parameters<typeof courseResultEmail>[0]);
         break;
       }
@@ -289,7 +289,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, test: true });
       }
 
-      // -- Daily blast quota -------------------------------------------------
+      // -- Daily blast quota ---
       const BLAST_DAILY_LIMIT = 10;
       const today = new Date().toISOString().split('T')[0];
       const supabase = getAdminSupabase();
@@ -309,7 +309,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Load recipients from DB — never trust the client-supplied to list
+      // Load recipients from DB -- never trust the client-supplied to list
       const { data: responses, error } = await supabase
         .from('responses')
         .select('data')

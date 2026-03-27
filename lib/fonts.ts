@@ -29,7 +29,7 @@ export function getFontById(id: string): FontOption {
   return FONTS.find(f => f.id === id) ?? FONTS[0];
 }
 
-/** Inject a Google Font <link> into document.head — no-op if already loaded or no googleFamily. */
+/** Inject a Google Font <link> into document.head -- no-op if already loaded or no googleFamily. */
 export function loadGoogleFont(font: FontOption): void {
   if (typeof document === 'undefined') return; // SSR guard
   if (!font.googleFamily) return;

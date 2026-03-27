@@ -1,6 +1,6 @@
 import type {NextConfig} from 'next';
 
-// Content-Security-Policy — tightens what browsers will load/execute.
+// Content-Security-Policy -- tightens what browsers will load/execute.
 // - script-src 'self': no inline scripts, no external script hosts
 // - style-src 'self' 'unsafe-inline': inline styles needed by Tailwind/CSS-in-JS
 // - img-src *: forms and events load cover images from arbitrary URLs
@@ -21,7 +21,7 @@ const CSP_BASE = [
   "form-action 'self'",
 ].join('; ');
 
-// App routes are never embedded — lock them down.
+// App routes are never embedded -- lock them down.
 const CSP_APP = CSP_BASE + "; frame-ancestors 'none'";
 
 const commonHeaders = [
@@ -33,13 +33,13 @@ const commonHeaders = [
     : []),
 ];
 
-// Public pages (form/event embeds) — no frame-ancestors so they can be iframed
+// Public pages (form/event embeds) -- no frame-ancestors so they can be iframed
 const publicHeaders = [
   ...commonHeaders,
   { key: 'Content-Security-Policy', value: CSP_BASE },
 ];
 
-// App/auth routes — never embeddable
+// App/auth routes -- never embeddable
 const appHeaders = [
   ...commonHeaders,
   { key: 'Content-Security-Policy', value: CSP_APP },
@@ -54,7 +54,7 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
-      // Public routes — embeddable, no frame-ancestors restriction
+      // Public routes -- embeddable, no frame-ancestors restriction
       { source: '/(.*)', headers: publicHeaders },
       // App routes override with stricter CSP + clickjack protection
       { source: '/dashboard/:path*', headers: appHeaders },

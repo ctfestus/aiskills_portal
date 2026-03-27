@@ -30,7 +30,7 @@ export default function CertificatePageClient({ certId, studentName, courseName,
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Responsive scale — recalculate on resize
+  // Responsive scale -- recalculate on resize
   const [scale, setScale] = useState(0.38);
   useEffect(() => {
     const calc = () => {
@@ -80,7 +80,7 @@ export default function CertificatePageClient({ certId, studentName, courseName,
   return (
     <div className="min-h-screen bg-gray-50 pb-28 sm:pb-10">
 
-      {/* ── Header ── */}
+      {/* -- Header -- */}
       <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
         <div className="max-w-4xl mx-auto">
           {/* Title row */}
@@ -97,7 +97,7 @@ export default function CertificatePageClient({ certId, studentName, courseName,
             </button>
           </div>
 
-          {/* Share row — visible on all screens */}
+          {/* Share row -- visible on all screens */}
           <div className="flex items-center gap-3 mt-3">
             <span className="text-xs text-gray-400 font-medium">Share:</span>
             <a href={linkedInUrl} target="_blank" rel="noopener noreferrer" title="Add to LinkedIn"
@@ -112,7 +112,7 @@ export default function CertificatePageClient({ certId, studentName, courseName,
         </div>
       </div>
 
-      {/* ── Certificate preview ── */}
+      {/* -- Certificate preview -- */}
       <div className="flex flex-col items-center py-6 sm:py-10 px-4">
         {/* Verified badge */}
         <div className="mb-4 text-center">
@@ -121,7 +121,7 @@ export default function CertificatePageClient({ certId, studentName, courseName,
           </span>
         </div>
 
-        {/* Scaled certificate — fills screen width on mobile */}
+        {/* Scaled certificate -- fills screen width on mobile */}
         <div style={{
           width: `${previewW}px`,
           height: `${previewH}px`,
@@ -155,7 +155,7 @@ export default function CertificatePageClient({ certId, studentName, courseName,
         </div>
       </div>
 
-      {/* ── Mobile sticky bottom bar ── */}
+      {/* -- Mobile sticky bottom bar -- */}
       <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-3 safe-area-bottom">
         <button
           onClick={handleDownload}
@@ -169,7 +169,7 @@ export default function CertificatePageClient({ certId, studentName, courseName,
         </button>
       </div>
 
-      {/* ── Hidden full-size for PDF capture ── */}
+      {/* -- Hidden full-size for PDF capture -- */}
       <div aria-hidden style={{ position: "fixed", top: 0, left: "-10000px", zIndex: -1 }}>
         <CertificateTemplate
           ref={certRef}

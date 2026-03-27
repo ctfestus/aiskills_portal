@@ -4,7 +4,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 
 const APP_URL = process.env.APP_URL || 'https://festforms.com';
 
-// ── State token burn register ─────────────────────────────────────────────────
+// -- State token burn register ---
 // Prevents replay of a state token within its 5-minute validity window.
 // In-memory: sufficient for single-instance deployments. For multi-instance /
 // serverless, replace with a Redis SETNX or a `oauth_used_states` DB table.
@@ -12,7 +12,7 @@ const _usedStates  = new Set<string>();
 const _stateExpiry = new Map<string, number>();
 
 function burnState(state: string): boolean {
-  if (_usedStates.has(state)) return false; // already exchanged — reject replay
+  if (_usedStates.has(state)) return false; // already exchanged -- reject replay
   _usedStates.add(state);
   _stateExpiry.set(state, Date.now() + 10 * 60 * 1000); // keep entry for 10 min then prune
   // Prune expired entries to prevent unbounded memory growth.
@@ -79,7 +79,7 @@ export async function GET(
 
   if (oauthError || !code || !state || !cfg) return fail(provider);
 
-  // Verify the HMAC signature on state — reject any forged/tampered state.
+  // Verify the HMAC signature on state -- reject any forged/tampered state.
   let userId: string;
   try {
     const dot = state.lastIndexOf('.');
@@ -93,7 +93,7 @@ export async function GET(
     const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString());
     if (!parsed.userId) return fail('invalid_state');
 
-    // Enforce state TTL — reject if missing, non-finite, in the future beyond
+    // Enforce state TTL -- reject if missing, non-finite, in the future beyond
     // clock skew (5s), or older than 5 minutes.
     const ts = parsed.ts;
     const now = Date.now();
@@ -104,7 +104,7 @@ export async function GET(
       now - ts > 5 * 60 * 1000
     ) return fail('invalid_state');
 
-    // Burn the state token immediately — reject any replay within the window.
+    // Burn the state token immediately -- reject any replay within the window.
     if (!burnState(state)) return fail('state_already_used');
 
     userId = parsed.userId;

@@ -1,7 +1,7 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Service role — needed to call register_event_attendee (no public RLS policies)
+// Service role -- needed to call register_event_attendee (no public RLS policies)
 function adminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'formId, responseId and data are required' }, { status: 400 });
   }
 
-  // Field-level validation — prevent unbounded strings from being stored as JSONB.
+  // Field-level validation -- prevent unbounded strings from being stored as JSONB.
   const FIELD_LIMITS: Record<string, number> = { email: 254, name: 200, phone: 30, company: 200 };
   for (const [field, maxLen] of Object.entries(FIELD_LIMITS)) {
     if (typeof data[field] === 'string' && (data[field] as string).length > maxLen) {
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   const supabase = adminClient();
 
-  // Confirm the form exists and is actually an event — business logic stays
+  // Confirm the form exists and is actually an event -- business logic stays
   // in application code; the RPC handles only the atomic write.
   const { data: form } = await supabase
     .from('forms')
@@ -63,9 +63,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Not an event form' }, { status: 400 });
   }
 
-  // -- Single atomic transaction via Postgres RPC ----------------------------
+  // -- Single atomic transaction via Postgres RPC ---
   // register_event_attendee inserts into event_registrations and responses in
-  // one transaction. If either insert fails the whole thing rolls back —
+  // one transaction. If either insert fails the whole thing rolls back --
   // no compensation pattern, no ghost registrations possible.
   const { data: result, error: rpcError } = await supabase.rpc('register_event_attendee', {
     p_form_id:     formId,

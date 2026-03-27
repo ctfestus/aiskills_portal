@@ -19,7 +19,7 @@ const ALLOWED_SUFFIXES = ['.supabase.co', '.supabase.in'];
 function isAllowedImageUrl(raw: string): boolean {
   let parsed: URL;
   try { parsed = new URL(raw); } catch { return false; }
-  // Only HTTPS — never proxy plain-HTTP or other protocols.
+  // Only HTTPS -- never proxy plain-HTTP or other protocols.
   if (parsed.protocol !== 'https:') return false;
   const { hostname } = parsed;
   if (ALLOWED_HOSTS.has(hostname)) return true;
@@ -37,7 +37,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const coverImage: string | undefined = data?.config?.coverImage;
   if (!coverImage) return new NextResponse(null, { status: 404 });
 
-  // Base64 data URL — no network fetch, no SSRF risk.
+  // Base64 data URL -- no network fetch, no SSRF risk.
   const base64Match = coverImage.match(/^data:([a-zA-Z0-9+\-./]+);base64,(.+)$/);
   if (base64Match) {
     const buffer = Buffer.from(base64Match[2], 'base64');
@@ -46,7 +46,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     });
   }
 
-  // External URL — only proxy if the hostname is on the allowlist.
+  // External URL -- only proxy if the hostname is on the allowlist.
   if (isAllowedImageUrl(coverImage)) {
     const res = await fetch(coverImage);
     if (!res.ok) return new NextResponse(null, { status: 404 });

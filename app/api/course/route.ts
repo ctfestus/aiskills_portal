@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
   const { action } = body;
 
-  // -- Get all certificates for the logged-in student ------------------------
+  // -- Get all certificates for the logged-in student ---
   if (action === 'get-my-certificates') {
     const sessionEmail = await getSessionEmail(req);
     if (!sessionEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // -- Get current progress + cert + attempt count ----------------------------
+  // -- Get current progress + cert + attempt count ---
   if (action === 'get-progress') {
     const { form_id } = body;
     const sessionEmail = await getSessionEmail(req);
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // -- Save in-progress attempt (create if needed) ----------------------------
+  // -- Save in-progress attempt (create if needed) ---
   if (action === 'save-progress') {
     const sessionEmail = await getSessionEmail(req);
     if (!sessionEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // -- Mark active attempt as completed --------------------------------------
+  // -- Mark active attempt as completed ---
   if (action === 'complete-attempt') {
     const sessionEmail = await getSessionEmail(req);
     if (!sessionEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // -- Delete active in-progress attempt (fresh restart) ---------------------
+  // -- Delete active in-progress attempt (fresh restart) ---
   if (action === 'clear-progress') {
     const sessionEmail = await getSessionEmail(req);
     if (!sessionEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // -- Issue certificate -----------------------------------------------------
+  // -- Issue certificate ---
   if (action === 'issue-certificate') {
     const sessionEmail = await getSessionEmail(req);
     if (!sessionEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

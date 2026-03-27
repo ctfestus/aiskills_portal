@@ -6,7 +6,7 @@ import type { Area } from 'react-easy-crop';
 
 interface Props {
   src: string;
-  aspect?: number;       // width/height — default 1 (square)
+  aspect?: number;       // width/height -- default 1 (square)
   shape?: 'rect' | 'round';
   title?: string;
   onConfirm: (blob: Blob) => void;

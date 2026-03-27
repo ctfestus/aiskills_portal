@@ -86,7 +86,7 @@ export default function AdminDashboard() {
 
       const tok = session.access_token;
 
-      // Verify admin role via API (uses service role — bypasses RLS)
+      // Verify admin role via API (uses service role -- bypasses RLS)
       const res = await fetch('/api/admin', {
         headers: { Authorization: `Bearer ${tok}` },
       });

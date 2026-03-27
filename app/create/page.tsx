@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { AnimatedField, ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import dynamic from 'next/dynamic';
-// CourseTaker is only shown in preview mode — load it lazily to keep initial bundle small
+// CourseTaker is only shown in preview mode -- load it lazily to keep initial bundle small
 const CourseTaker = dynamic(() => import('@/components/CourseTaker').then(m => ({ default: m.CourseTaker })), { ssr: false });
 import GeneratingOverlay from '@/components/GeneratingOverlay';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -31,7 +31,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// --- Types --------------------------------------------------------------------
+// --- Types ---
 type FieldType = 'text' | 'email' | 'textarea' | 'number' | 'select' | 'phone' | 'company' | 'social' | 'description';
 
 interface FormField {
@@ -55,7 +55,7 @@ interface CourseQuestion {
   options: string[];          // MC: option text; arrange: items in correct order; fill_blank: []; image: ['0','1','2',...]
   correctAnswer: string;      // MC: option text; fill_blank: pipe-separated; arrange: options.join('|||'); image: index string
   explanation?: string;
-  optionImages?: string[];    // image type only — one base64 per option, same length as options
+  optionImages?: string[];    // image type only -- one base64 per option, same length as options
   hint?: string;
   codeSnippet?: string;
   codeLanguage?: string;
@@ -142,7 +142,7 @@ interface FormConfig {
   pointsSystem?: PointsSystem;
 }
 
-// --- Constants ----------------------------------------------------------------
+// --- Constants ---
 const buttonThemes: Record<ThemeColor, string> = {
   forest:  'bg-[#006128] hover:bg-[#004d1e] text-white',
   lime:    'bg-[#ADEE66] hover:bg-[#9ad94d] text-black',
@@ -167,7 +167,7 @@ const SOCIAL_PLATFORMS = [
   { id: 'tiktok',    name: 'TikTok',      placeholder: 'tiktok.com/@username'     },
   { id: 'youtube',   name: 'YouTube',     placeholder: 'youtube.com/@channel'     },
   { id: 'github',    name: 'GitHub',      placeholder: 'github.com/username'      },
-  { id: 'website',   name: 'Website',     placeholder: 'https://yourwebsite.com'  },
+  { id: 'website',   name: 'Website',     placeholder: 'https://yourwebsite.com' },
 ];
 
 const SOCIAL_SVGS: Record<string, React.ReactNode> = {
@@ -308,7 +308,7 @@ const TEMPLATES: { key: string; label: string; description: string; icon: React.
     color: '#10b981',
     config: {
       title: 'Customer Feedback Survey',
-      description: 'We value your opinion. Help us improve by sharing your experience — it only takes 2 minutes.',
+      description: 'We value your opinion. Help us improve by sharing your experience -- it only takes 2 minutes.',
       coverImage: '',
       theme: 'emerald',
       mode: 'dark',
@@ -349,7 +349,7 @@ const TEMPLATES: { key: string; label: string; description: string; icon: React.
   },
 ];
 
-// --- Helpers ------------------------------------------------------------------
+// --- Helpers ---
 const formatDateParts = (dateString?: string) => {
   if (!dateString) return null;
   try {
@@ -425,7 +425,7 @@ const mergeEventFields = (existingFields: FormField[] = [], generatedFields: any
   return Array.from(byName.values());
 };
 
-// --- Design tokens ------------------------------------------------------------
+// --- Design tokens ---
 const LIGHT_C = {
   page: '#ffffff', nav: 'rgba(255,255,255,0.97)', navBorder: 'rgba(0,0,0,0.06)',
   card: '#ffffff', cardBorder: 'rgba(0,0,0,0.07)', cardShadow: '0 1px 3px rgba(0,0,0,0.04)',
@@ -446,7 +446,7 @@ const DARK_C = {
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
-// --- UI primitives ------------------------------------------------------------
+// --- UI primitives ---
 const inputCls = "w-full rounded-lg px-3 py-2 text-sm outline-none transition-colors placeholder:text-[#bbb]";
 const labelCls = "block text-xs mb-1.5";
 
@@ -499,7 +499,7 @@ function EditorSection({ title, children, defaultOpen = false }: { title: string
   );
 }
 
-// --- FormPreview --------------------------------------------------------------
+// --- FormPreview ---
 function FormPreview({ config, isSubmitting, onSubmit, isSuccess, onReset, isSharedView }: {
   config: FormConfig;
   isSubmitting: boolean;
@@ -550,7 +550,7 @@ function FormPreview({ config, isSubmitting, onSubmit, isSuccess, onReset, isSha
         </div>
         <h2 className={`text-3xl font-medium ${textColor}`}>Successfully Submitted!</h2>
         <p className={mutedTextColor}>Your response has been recorded.</p>
-        {!isSharedView && <button onClick={onReset} className="text-brand-accent hover:text-brand-accent text-sm transition-colors">← Back to Editor</button>}
+        {!isSharedView && <button onClick={onReset} className="text-brand-accent hover:text-brand-accent text-sm transition-colors"><- Back to Editor</button>}
         {isSharedView && <button onClick={() => window.location.href = '/create'} className="text-brand-accent hover:text-brand-accent text-sm transition-colors">Create your own AI form &rarr;</button>}
       </motion.div>
     );
@@ -646,7 +646,7 @@ function FormPreview({ config, isSubmitting, onSubmit, isSuccess, onReset, isSha
                       {formatDateParts(config.eventDetails.date)?.monthShort || 'DAT'}
                     </div>
                     <div className={`flex-1 flex items-center justify-center text-base font-bold ${textColor}`}>
-                      {formatDateParts(config.eventDetails.date)?.day || '—'}
+                      {formatDateParts(config.eventDetails.date)?.day || '--'}
                     </div>
                   </div>
                   <div>
@@ -727,7 +727,7 @@ function FormPreview({ config, isSubmitting, onSubmit, isSuccess, onReset, isSha
   );
 }
 
-// --- Sortable Field Card ------------------------------------------------------
+// --- Sortable Field Card ---
 interface FieldCardProps {
   f: FormField;
   isExpanded: boolean;
@@ -833,7 +833,7 @@ function SortableFieldCard({ f, isExpanded, toggleExpand, onRemove, onUpdate, in
   );
 }
 
-// --- Main Page ----------------------------------------------------------------
+// --- Main Page ---
 export default function Page() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
@@ -904,7 +904,7 @@ const [isSaving, setIsSaving] = useState(false);
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { router.replace('/auth'); return; }
 
-      // Role guard — only instructors and admins can access create pages
+      // Role guard -- only instructors and admins can access create pages
       const { data: studentProfile } = await supabase
         .from('students')
         .select('role')
@@ -1011,7 +1011,7 @@ const [isSaving, setIsSaving] = useState(false);
       const slugValue = customSlug.trim() || shortSlug();
 
       if (!formId) {
-        // Create via API — server enforces plan limits via DB trigger
+        // Create via API -- server enforces plan limits via DB trigger
         const { data: { session } } = await supabase.auth.getSession();
         const res = await fetch('/api/forms', {
           method: 'POST',
@@ -1451,7 +1451,7 @@ const [isSaving, setIsSaving] = useState(false);
     e.target.value = '';
 
     // Upload to Supabase Storage instead of storing as base64 in config.
-    // Base64 can be 100–500 KB per image and bloats every DB row that includes config.
+    // Base64 can be 100-500 KB per image and bloats every DB row that includes config.
     const ext = file.name.split('.').pop() ?? 'jpg';
     const path = `covers/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
@@ -1667,7 +1667,7 @@ const [isSaving, setIsSaving] = useState(false);
                 <RichTextEditor value={formConfig.description} onChange={html => updateConfig({ description: html })} />
               </div>
 
-              {/* Learning outcomes — course only */}
+              {/* Learning outcomes -- course only */}
               {formConfig.isCourse && (
                 <div>
                   <label className={labelCls} style={labelStyle}>What students will learn</label>
@@ -1780,51 +1780,51 @@ const [isSaving, setIsSaving] = useState(false);
                     <select value={formConfig.eventDetails.timezone || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, timezone: e.target.value } })} className={inputCls} style={inputStyle}>
                       <option value="">Select timezone…</option>
                       <optgroup label="Africa">
-                        <option value="GMT+0 (Accra)">GMT+0 — Accra</option>
-                        <option value="GMT+1 (Lagos)">GMT+1 — Lagos</option>
-                        <option value="GMT+2 (Cairo)">GMT+2 — Cairo</option>
-                        <option value="GMT+2 (Johannesburg)">GMT+2 — Johannesburg</option>
-                        <option value="GMT+3 (Nairobi)">GMT+3 — Nairobi</option>
+                        <option value="GMT+0 (Accra)">GMT+0 -- Accra</option>
+                        <option value="GMT+1 (Lagos)">GMT+1 -- Lagos</option>
+                        <option value="GMT+2 (Cairo)">GMT+2 -- Cairo</option>
+                        <option value="GMT+2 (Johannesburg)">GMT+2 -- Johannesburg</option>
+                        <option value="GMT+3 (Nairobi)">GMT+3 -- Nairobi</option>
                       </optgroup>
                       <optgroup label="Americas">
-                        <option value="GMT-5 (EST)">GMT-5 — Eastern (EST)</option>
-                        <option value="GMT-4 (EDT)">GMT-4 — Eastern Daylight (EDT)</option>
-                        <option value="GMT-6 (CST)">GMT-6 — Central (CST)</option>
-                        <option value="GMT-5 (CDT)">GMT-5 — Central Daylight (CDT)</option>
-                        <option value="GMT-7 (MST)">GMT-7 — Mountain (MST)</option>
-                        <option value="GMT-8 (PST)">GMT-8 — Pacific (PST)</option>
-                        <option value="GMT-7 (PDT)">GMT-7 — Pacific Daylight (PDT)</option>
-                        <option value="GMT-9 (AKST)">GMT-9 — Alaska (AKST)</option>
-                        <option value="GMT-10 (HST)">GMT-10 — Hawaii (HST)</option>
-                        <option value="GMT-3 (BRT)">GMT-3 — Brasília (BRT)</option>
-                        <option value="GMT-5 (COT)">GMT-5 — Colombia (COT)</option>
-                        <option value="GMT-4 (AMT)">GMT-4 — Amazon (AMT)</option>
-                        <option value="GMT-3 (ART)">GMT-3 — Argentina (ART)</option>
+                        <option value="GMT-5 (EST)">GMT-5 -- Eastern (EST)</option>
+                        <option value="GMT-4 (EDT)">GMT-4 -- Eastern Daylight (EDT)</option>
+                        <option value="GMT-6 (CST)">GMT-6 -- Central (CST)</option>
+                        <option value="GMT-5 (CDT)">GMT-5 -- Central Daylight (CDT)</option>
+                        <option value="GMT-7 (MST)">GMT-7 -- Mountain (MST)</option>
+                        <option value="GMT-8 (PST)">GMT-8 -- Pacific (PST)</option>
+                        <option value="GMT-7 (PDT)">GMT-7 -- Pacific Daylight (PDT)</option>
+                        <option value="GMT-9 (AKST)">GMT-9 -- Alaska (AKST)</option>
+                        <option value="GMT-10 (HST)">GMT-10 -- Hawaii (HST)</option>
+                        <option value="GMT-3 (BRT)">GMT-3 -- Brasilia (BRT)</option>
+                        <option value="GMT-5 (COT)">GMT-5 -- Colombia (COT)</option>
+                        <option value="GMT-4 (AMT)">GMT-4 -- Amazon (AMT)</option>
+                        <option value="GMT-3 (ART)">GMT-3 -- Argentina (ART)</option>
                       </optgroup>
                       <optgroup label="Europe">
-                        <option value="GMT+0 (GMT)">GMT+0 — London (GMT)</option>
-                        <option value="GMT+1 (BST)">GMT+1 — London Daylight (BST)</option>
-                        <option value="GMT+1 (CET)">GMT+1 — Central Europe (CET)</option>
-                        <option value="GMT+2 (CEST)">GMT+2 — Central Europe Summer (CEST)</option>
-                        <option value="GMT+2 (EET)">GMT+2 — Eastern Europe (EET)</option>
-                        <option value="GMT+3 (MSK)">GMT+3 — Moscow (MSK)</option>
+                        <option value="GMT+0 (GMT)">GMT+0 -- London (GMT)</option>
+                        <option value="GMT+1 (BST)">GMT+1 -- London Daylight (BST)</option>
+                        <option value="GMT+1 (CET)">GMT+1 -- Central Europe (CET)</option>
+                        <option value="GMT+2 (CEST)">GMT+2 -- Central Europe Summer (CEST)</option>
+                        <option value="GMT+2 (EET)">GMT+2 -- Eastern Europe (EET)</option>
+                        <option value="GMT+3 (MSK)">GMT+3 -- Moscow (MSK)</option>
                       </optgroup>
                       <optgroup label="Asia">
-                        <option value="GMT+3 (AST)">GMT+3 — Arabia (AST)</option>
-                        <option value="GMT+4 (GST)">GMT+4 — Gulf (GST)</option>
-                        <option value="GMT+5 (PKT)">GMT+5 — Pakistan (PKT)</option>
-                        <option value="GMT+5:30 (IST)">GMT+5:30 — India (IST)</option>
-                        <option value="GMT+6 (BST)">GMT+6 — Bangladesh (BST)</option>
-                        <option value="GMT+7 (WIB)">GMT+7 — Jakarta (WIB)</option>
-                        <option value="GMT+8 (CST)">GMT+8 — China/Singapore (CST)</option>
-                        <option value="GMT+8 (PHT)">GMT+8 — Philippines (PHT)</option>
-                        <option value="GMT+9 (JST)">GMT+9 — Japan/Korea (JST)</option>
-                        <option value="GMT+5:30 (IST)">GMT+5:30 — Sri Lanka</option>
+                        <option value="GMT+3 (AST)">GMT+3 -- Arabia (AST)</option>
+                        <option value="GMT+4 (GST)">GMT+4 -- Gulf (GST)</option>
+                        <option value="GMT+5 (PKT)">GMT+5 -- Pakistan (PKT)</option>
+                        <option value="GMT+5:30 (IST)">GMT+5:30 -- India (IST)</option>
+                        <option value="GMT+6 (BST)">GMT+6 -- Bangladesh (BST)</option>
+                        <option value="GMT+7 (WIB)">GMT+7 -- Jakarta (WIB)</option>
+                        <option value="GMT+8 (CST)">GMT+8 -- China/Singapore (CST)</option>
+                        <option value="GMT+8 (PHT)">GMT+8 -- Philippines (PHT)</option>
+                        <option value="GMT+9 (JST)">GMT+9 -- Japan/Korea (JST)</option>
+                        <option value="GMT+5:30 (IST)">GMT+5:30 -- Sri Lanka</option>
                       </optgroup>
                       <optgroup label="Pacific">
-                        <option value="GMT+10 (AEST)">GMT+10 — Sydney (AEST)</option>
-                        <option value="GMT+11 (AEDT)">GMT+11 — Sydney Daylight (AEDT)</option>
-                        <option value="GMT+12 (NZST)">GMT+12 — New Zealand (NZST)</option>
+                        <option value="GMT+10 (AEST)">GMT+10 -- Sydney (AEST)</option>
+                        <option value="GMT+11 (AEDT)">GMT+11 -- Sydney Daylight (AEDT)</option>
+                        <option value="GMT+12 (NZST)">GMT+12 -- New Zealand (NZST)</option>
                       </optgroup>
                     </select>
                   </div>
@@ -1834,7 +1834,7 @@ const [isSaving, setIsSaving] = useState(false);
                   </div>
                 </div>
 
-                {/* Location / Meeting link — full width below grid */}
+                {/* Location / Meeting link -- full width below grid */}
                 <div className="mt-2">
                   {(formConfig.eventDetails.eventType ?? 'in-person') === 'virtual' ? (
                     <>
@@ -1863,7 +1863,7 @@ const [isSaving, setIsSaving] = useState(false);
                           {meetingError && <p className="text-[11px] mt-1.5 text-red-500">{meetingError}</p>}
                           {formConfig.eventDetails.meetingLink && (
                             <p className="text-[11px] mt-1.5 flex items-center gap-1" style={{ color: '#10b981' }}>
-                              <CheckCircle2 className="w-3 h-3"/> Link created — edit below if needed
+                              <CheckCircle2 className="w-3 h-3"/> Link created -- edit below if needed
                             </p>
                           )}
                         </div>
@@ -1938,7 +1938,7 @@ const [isSaving, setIsSaving] = useState(false);
                   })}
                   <p className="text-[11px] pt-1" style={{ color: C.faint }}>
                     {selectedCohortIds.length === 0
-                      ? 'No cohort selected — course will be public.'
+                      ? 'No cohort selected -- course will be public.'
                       : `Visible to ${selectedCohortIds.length} cohort${selectedCohortIds.length > 1 ? 's' : ''}.`}
                   </p>
                 </div>
@@ -2194,7 +2194,7 @@ const [isSaving, setIsSaving] = useState(false);
                     <p className="text-[10px] leading-relaxed" style={{ color: C.faint }}>
                       {(formConfig.lessonTiming ?? 'after') === 'before'
                         ? 'Lesson opens automatically before each question. Students read first, then answer.'
-                        : 'Lesson is offered after answering — "Why?" if wrong, "Review Lesson" if right.'}
+                        : 'Lesson is offered after answering -- "Why?" if wrong, "Review Lesson" if right.'}
                     </p>
                   </div>
 
@@ -2387,7 +2387,7 @@ const [isSaving, setIsSaving] = useState(false);
                           </div>
                         )}
 
-                        {/* Image options — each option is an image */}
+                        {/* Image options -- each option is an image */}
                         {qType === 'image' && (
                           <div className="space-y-2">
                             <label className={labelCls} style={labelStyle}>Image Options <span style={{ color: C.faint }}>(● = correct)</span></label>
@@ -2491,7 +2491,7 @@ const [isSaving, setIsSaving] = useState(false);
                           </div>
                         )}
 
-                        {/* Fill in the blank — correct answer */}
+                        {/* Fill in the blank -- correct answer */}
                         {qType === 'fill_blank' && (
                           <div>
                             <label className={labelCls} style={labelStyle}>Correct answer</label>
@@ -2502,7 +2502,7 @@ const [isSaving, setIsSaving] = useState(false);
                           </div>
                         )}
 
-                        {/* Arrange — ordered items */}
+                        {/* Arrange -- ordered items */}
                         {qType === 'arrange' && (
                           <div className="space-y-1.5">
                             <label className={labelCls} style={labelStyle}>Items <span style={{ color: C.faint }}>(top = first in correct order)</span></label>
@@ -2659,7 +2659,7 @@ const [isSaving, setIsSaving] = useState(false);
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {/* Field cards — drag to reorder */}
+                  {/* Field cards -- drag to reorder */}
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                     <SortableContext items={formConfig.fields.map(f => f.id)} strategy={verticalListSortingStrategy}>
                       <div className="space-y-2">
@@ -2741,7 +2741,7 @@ const [isSaving, setIsSaving] = useState(false);
                       </div>
                     )}
 
-                    {/* Required toggle — not shown for description blocks */}
+                    {/* Required toggle -- not shown for description blocks */}
                     {newFieldType !== 'description' && (
                       <div className="flex items-center justify-between py-1">
                         <span className="text-xs" style={{ color: C.muted }}>Mark as required?</span>
@@ -3098,7 +3098,7 @@ const [isSaving, setIsSaving] = useState(false);
             </form>
           </div>
 
-          {/* Share bar — appears after publishing */}
+          {/* Share bar -- appears after publishing */}
           <AnimatePresence>
             {savedFormId && (
               <motion.div
@@ -3179,7 +3179,7 @@ const [isSaving, setIsSaving] = useState(false);
           </AnimatePresence>
           <div className={savedFormId ? '' : 'px-8 py-12'}>
             {savedFormId ? (
-              /* Live iframe after publish — always accurate */
+              /* Live iframe after publish -- always accurate */
               <iframe
                 key={previewKey}
                 src={`/${customSlug || savedFormId}`}
@@ -3187,7 +3187,7 @@ const [isSaving, setIsSaving] = useState(false);
                 style={{ display: 'block', width: '100%', height: 'calc(100vh - 120px)', border: 'none' }}
               />
             ) : formConfig.eventDetails?.isEvent ? (
-              /* Event placeholder — full preview available in the editor after publishing */
+              /* Event placeholder -- full preview available in the editor after publishing */
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '64px 32px', textAlign: 'center', opacity: 0.5 }}>
                 <CalendarDays style={{ width: 36, height: 36, color: C.muted }} />
                 <p style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: 0 }}>Event preview</p>

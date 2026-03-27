@@ -2,7 +2,7 @@
 
 import React from "react";
 
-// All colors use explicit hex / rgba — no Tailwind (html2canvas cannot parse oklch)
+// All colors use explicit hex / rgba -- no Tailwind (html2canvas cannot parse oklch)
 const C = {
   bg:         "#0b07d5",
   bgDark:     "#0700a0",

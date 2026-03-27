@@ -5,13 +5,13 @@ import { adminClient } from '@/lib/subscription';
 export const dynamic = 'force-dynamic';
 
 function shortSlug() {
-  // Use cryptographically secure random bytes — Math.random() is predictable.
+  // Use cryptographically secure random bytes -- Math.random() is predictable.
   // 5 bytes -> base64url gives 7 URL-safe chars from a ~1 trillion space.
   return randomBytes(5).toString('base64url').slice(0, 7).toLowerCase();
 }
 
 export async function POST(req: NextRequest) {
-  // -- Auth --------------------------------------------------------------------
+  // -- Auth ---
   const authHeader = req.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // -- Parse body ---------------------------------------------------------------
+  // -- Parse body ---
   let body: any;
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
@@ -32,9 +32,9 @@ export async function POST(req: NextRequest) {
   const { title, description, config, slug: preferredSlug, cohort_ids } = body;
   if (!config) return NextResponse.json({ error: 'config is required' }, { status: 400 });
 
-  // Detect content type from config — platform only supports 'course' and 'event'
-  const isCourse = config?.isCourse === true || config?.isCourse === 'true';
-  const isEvent  = config?.eventDetails?.isEvent === true || config?.eventDetails?.isEvent === 'true';
+  // Detect content type from config -- platform only supports 'course' and 'event'
+  const isCourse = Boolean(config?.isCourse);
+  const isEvent  = Boolean(config?.eventDetails?.isEvent);
   if (!isCourse && !isEvent) {
     return NextResponse.json({ error: 'config must set isCourse or eventDetails.isEvent' }, { status: 400 });
   }

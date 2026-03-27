@@ -5,9 +5,9 @@ export const dynamic = 'force-dynamic';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// -- Rate limiting -------------------------------------------------------------
+// -- Rate limiting ---
 // Limits per admin per hour: 5 deletes, 20 suspend/unsuspend.
-// In-memory — resets on deploy. Sufficient to slow down a compromised session.
+// In-memory -- resets on deploy. Sufficient to slow down a compromised session.
 const adminRateLimit = new Map<string, { count: number; resetAt: number }>();
 function checkAdminRateLimit(adminId: string, action: string): boolean {
   const key = `${adminId}:${action}`;
@@ -23,7 +23,7 @@ function checkAdminRateLimit(adminId: string, action: string): boolean {
   return true;
 }
 
-// -- Audit logging -------------------------------------------------------------
+// -- Audit logging ---
 async function auditLog(
   supabase: ReturnType<typeof serviceClient>,
   adminId: string,
@@ -33,7 +33,7 @@ async function auditLog(
   const entry = { admin_id: adminId, action, target_id: targetId, created_at: new Date().toISOString() };
   // Always write to server logs (captured by hosting provider).
   console.log('[ADMIN AUDIT]', JSON.stringify(entry));
-  // Best-effort DB write — table may not exist in all environments.
+  // Best-effort DB write -- table may not exist in all environments.
   try { await supabase.from('admin_audit_log').insert(entry); } catch { /* no-op */ }
 }
 
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
   const supabase = serviceClient();
   const { action, creator_id } = body;
 
-  // -- Suspend creator ------------------------------------------------------
+  // -- Suspend creator ---
   if (action === 'suspend') {
     if (!checkAdminRateLimit(adminId, 'suspend')) {
       return NextResponse.json({ error: 'Rate limit exceeded. Max 20 suspensions per hour.' }, { status: 429 });
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // -- Unsuspend creator ----------------------------------------------------
+  // -- Unsuspend creator ---
   if (action === 'unsuspend') {
     if (!checkAdminRateLimit(adminId, 'unsuspend')) {
       return NextResponse.json({ error: 'Rate limit exceeded. Max 20 unsuspensions per hour.' }, { status: 429 });
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // -- Delete creator -------------------------------------------------------
+  // -- Delete creator ---
   if (action === 'delete') {
     if (!checkAdminRateLimit(adminId, 'delete')) {
       return NextResponse.json({ error: 'Rate limit exceeded. Max 5 deletions per hour.' }, { status: 429 });
@@ -171,7 +171,7 @@ export async function GET(req: NextRequest) {
   const supabase = serviceClient();
   const action = req.nextUrl.searchParams.get('action');
 
-  // -- Creator list ----------------------------------------------------------
+  // -- Creator list ---
   if (action === 'creators') {
     const { data, error } = await supabase
       .from('creator_stats')
@@ -181,7 +181,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(data ?? []);
   }
 
-  // -- Stats -----------------------------------------------------------------
+  // -- Stats ---
   const [creatorsRes, formsRes, responsesRes, certsRes] = await Promise.all([
     supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'creator'),
     supabase.from('forms').select('id', { count: 'exact', head: true }),

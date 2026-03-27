@@ -19,7 +19,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { RichTextEditor } from '@/components/RichTextEditor';
 
-// â"€â"€â"€ Design tokens â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Design tokens ---
 const LIGHT_C = {
   page:        '#F7F8F9',
   nav:         'rgba(255,255,255,0.95)',
@@ -68,13 +68,13 @@ const DARK_C = {
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
-// â"€â"€â"€ Skeleton â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Skeleton ---
 function Sk({ w = '100%', h = 16, r = 8 }: { w?: string | number; h?: number; r?: number }) {
   const C = useC();
   return <div style={{ width: w, height: h, borderRadius: r, background: C.skeleton, flexShrink: 0 }} className="animate-pulse"/>;
 }
 
-// â"€â"€â"€ ProfileMenu â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- ProfileMenu ---
 function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; onSignOut: () => void }) {
   const C = useC();
   const [open, setOpen] = useState(false);
@@ -157,7 +157,7 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
   );
 }
 
-// â"€â"€â"€ Nav items â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Nav items ---
 const NAV_ITEMS = [
   { id: 'courses',       label: 'My Courses',    Icon: BookOpen      },
   { id: 'events',        label: 'Events',         Icon: CalendarDays  },
@@ -171,7 +171,7 @@ const NAV_ITEMS = [
 ] as const;
 type SectionId = typeof NAV_ITEMS[number]['id'];
 
-// â"€â"€â"€ Empty state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Empty state ---
 function EmptyState({ icon: Icon, title, body, action }: { icon: any; title: string; body: string; action?: React.ReactNode }) {
   const C = useC();
   return (
@@ -186,7 +186,7 @@ function EmptyState({ icon: Icon, title, body, action }: { icon: any; title: str
   );
 }
 
-// â"€â"€â"€ Status badge â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Status badge ---
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; bg: string; color: string }> = {
     in_progress:  { label: 'In Progress',  bg: '#fff7ed', color: '#ea580c' },
@@ -212,7 +212,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// â"€â"€â"€ Progress bar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Progress bar ---
 function ProgressBar({ value, max = 100, color }: { value: number; max?: number; color?: string }) {
   const C = useC();
   const pct = Math.min(100, Math.max(0, (value / max) * 100));
@@ -223,7 +223,7 @@ function ProgressBar({ value, max = 100, color }: { value: number; max?: number;
   );
 }
 
-// â"€â"€â"€ Course card â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Course card ---
 function CourseCard({ course, C }: { course: any; C: typeof LIGHT_C }) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -322,7 +322,7 @@ function CourseCard({ course, C }: { course: any; C: typeof LIGHT_C }) {
   );
 }
 
-// â"€â"€â"€ Courses section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Courses section ---
 function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -368,12 +368,12 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
       const certMap: Record<string, string> = {};
       for (const c of (certsRes?.certs ?? [])) certMap[c.form_id] = c.id;
 
-      // Classify cohort items — course if content_type='course' OR config.isCourse is set
+      // Classify cohort items -- course if content_type='course' OR config.isCourse is set
       const isCourseRow = (f: any) =>
-        f.content_type === 'course' || f.config?.isCourse === true || f.config?.isCourse === 'true';
+        f.content_type === 'course' || Boolean(f.config?.isCourse);
       const cohortCourses = (cohortForms ?? []).filter(isCourseRow);
 
-      // Deduplicate: one row per course — prefer active (in-progress) over completed; highest score among completed
+      // Deduplicate: one row per course -- prefer active (in-progress) over completed; highest score among completed
       const progressMap: Record<string, any> = {};
       for (const a of attempts ?? []) {
         const ex = progressMap[a.form_id];
@@ -423,7 +423,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
   );
 }
 
-// â"€â"€â"€ Events section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Events section ---
 function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   const [regs, setRegs] = useState<any[]>([]);
   const [cohortEvents, setCohortEvents] = useState<any[]>([]);
@@ -569,7 +569,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
       body="No events have been assigned to the cohort yet." />
   );
 
-  // -- Realistic provider logos -----------------------------------------------
+  // -- Realistic provider logos ---
   const LOGOS: Record<string, string> = {
     meet:  'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Meet.png',
     zoom:  'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Zoom.png',
@@ -601,7 +601,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
       >
         <div className="rounded-2xl p-4 flex gap-4"
           style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-          {/* Cover image — 165×165 rounded square, card padding = whitespace */}
+          {/* Cover image -- 165×165 rounded square, card padding = whitespace */}
           <div className="w-[165px] h-[165px] rounded-2xl overflow-hidden flex-shrink-0"
             style={{ background: C.thumbBg }}>
             {showImage
@@ -691,7 +691,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
           <div className="w-3 h-3 rounded-full border-2"
             style={{ borderColor: isPast ? '#ccc' : C.green, background: isPast ? '#e0e0e0' : C.lime }}/>
         </div>
-        {/* Dashed line — absolutely positioned so bottom:0 covers the paddingBottom gap */}
+        {/* Dashed line -- absolutely positioned so bottom:0 covers the paddingBottom gap */}
         {!isLast && (
           <div style={{
             position: 'absolute',
@@ -737,7 +737,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
     </div>
   );
 }
-// â"€â"€â"€ Assignments section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Assignments section ---
 function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; userId: string; C: typeof LIGHT_C; onBack: () => void }) {
   type ReadyFile = { name: string; url: string; status: 'uploading' | 'done' | 'error'; error?: string };
   const [submission, setSubmission] = useState<any>(null);
@@ -1196,7 +1196,7 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
   );
 }
 
-// â"€â"€â"€ Community section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Community section ---
 function CommunitySection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   const [communities, setCommunities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1262,8 +1262,8 @@ function CommunitySection({ userId, C }: { userId: string; C: typeof LIGHT_C }) 
   );
 }
 
-// â"€â"€â"€ Announcements section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-// â"€â"€ Announcement post card (LinkedIn-style) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Announcements section ---
+// -- Announcement post card (LinkedIn-style) ---
 function AnnouncementPost({ ann, userId, myReactions, C }: {
   ann: any; userId: string; myReactions: Record<string, Set<string>>; C: typeof LIGHT_C;
 }) {
@@ -1451,7 +1451,7 @@ function AnnouncementsSection({ C }: { C: typeof LIGHT_C }) {
         .order('published_at', { ascending: false })
         .limit(50);
 
-      // Fetch reactions separately — table may not exist yet, so swallow errors
+      // Fetch reactions separately -- table may not exist yet, so swallow errors
       const { data: reactions } = await supabase
         .from('announcement_reactions')
         .select('announcement_id, type')
@@ -1496,7 +1496,7 @@ function AnnouncementsSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
-// â"€â"€â"€ Projects section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Projects section ---
 function ProjectDetail({ project, C, onBack }: { project: any; C: typeof LIGHT_C; onBack: () => void }) {
   const [resources, setResources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1667,7 +1667,7 @@ function ProjectsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   );
 }
 
-// --- Schedule section ---------------------------------------------------------
+// --- Schedule section ---
 function ScheduleDetail({ schedule, C, onBack }: { schedule: any; C: typeof LIGHT_C; onBack: () => void }) {
   const [topics, setTopics] = useState<any[]>([]);
   const [resources, setResources] = useState<any[]>([]);
@@ -1736,7 +1736,7 @@ function ScheduleDetail({ schedule, C, onBack }: { schedule: any; C: typeof LIGH
             <div className="space-y-3"><Sk h={14} w="30%"/><Sk h={56} r={16}/><Sk h={56} r={16}/><Sk h={14} w="25%"/><Sk h={48} r={14}/></div>
           ) : (
             <div className="space-y-8">
-              {/* Topics — vertical stepper */}
+              {/* Topics -- vertical stepper */}
               {topics.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: C.faint }}>
@@ -1964,7 +1964,7 @@ function ScheduleSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   );
 }
 
-// --- Leaderboard section ------------------------------------------------------
+// --- Leaderboard section ---
 function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
   const [cohort, setCohort]     = useState<any>(null);
   const [rankings, setRankings] = useState<any[]>([]);
@@ -2069,7 +2069,7 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
             </div>
             <div className="w-px h-8" style={{ background: 'rgba(255,255,255,0.15)' }}/>
             <div className="text-right">
-              <p className="text-base font-black tabular-nums leading-tight" style={{ color: '#ffffff' }}>{myRank ? `#${myRank}` : '—'}</p>
+              <p className="text-base font-black tabular-nums leading-tight" style={{ color: '#ffffff' }}>{myRank ? `#${myRank}` : '--'}</p>
               <p className="text-[10px]" style={{ color: 'rgba(197,210,255,0.7)' }}>Rank</p>
             </div>
             <div className="w-px h-8" style={{ background: 'rgba(255,255,255,0.15)' }}/>
@@ -2162,7 +2162,7 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
   );
 }
 
-// â"€â"€â"€ Certificates section â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Certificates section ---
 function CertificatesSection({ userEmail, userName, C }: { userEmail: string; userName: string; C: typeof LIGHT_C }) {
   const [certs, setCerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2250,7 +2250,7 @@ function CertificatesSection({ userEmail, userName, C }: { userEmail: string; us
   );
 }
 
-// â"€â"€â"€ Main dashboard â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+// --- Main dashboard ---
 export default function StudentDashboard() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
@@ -2294,7 +2294,7 @@ export default function StudentDashboard() {
       setUser(authUser);
       setProfile(profileData);
 
-      // Track last login time (fire-and-forget — non-critical)
+      // Track last login time (fire-and-forget -- non-critical)
       supabase.from('students').update({ last_login_at: new Date().toISOString() }).eq('id', authUser.id)
         .then(({ error }) => { if (error) console.error('[last_login_at] update failed:', error.message); });
 
@@ -2319,7 +2319,7 @@ export default function StudentDashboard() {
 
   return (
     <div className="min-h-screen" style={{ background: C.page }}>
-      {/* â"€â"€ Top nav â"€â"€ */}
+      {/* -- Top nav -- */}
       <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3 border-b backdrop-blur-md"
         style={{ background: C.nav, borderColor: C.navBorder }}>
         <div className="flex items-center gap-3">
@@ -2351,7 +2351,7 @@ export default function StudentDashboard() {
         </div>
       </header>
 
-      {/* â"€â"€ Mobile sidebar overlay â"€â"€ */}
+      {/* -- Mobile sidebar overlay -- */}
       <AnimatePresence>
         {sidebarOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -2362,7 +2362,7 @@ export default function StudentDashboard() {
       </AnimatePresence>
 
       <div className="flex h-[calc(100vh-57px)]">
-        {/* â"€â"€ Sidebar â"€â"€ */}
+        {/* -- Sidebar -- */}
         <AnimatePresence>
           {(sidebarOpen || true) && (
             <motion.aside
@@ -2371,7 +2371,7 @@ export default function StudentDashboard() {
               transition={{ duration: 0.2, ease: 'easeInOut' }}
               className={`fixed lg:static inset-y-0 left-0 z-40 lg:z-auto flex flex-col border-r overflow-hidden transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
               style={{ background: C.nav, borderColor: C.navBorder, top: 57 }}>
-              {/* Collapse toggle — desktop only */}
+              {/* Collapse toggle -- desktop only */}
               <div className="px-2 pt-2 pb-1 hidden lg:flex" style={{ justifyContent: navCollapsed ? 'center' : 'flex-end' }}>
                 <button
                   onClick={() => setNavCollapsed(o => !o)}
@@ -2425,7 +2425,7 @@ export default function StudentDashboard() {
           )}
         </AnimatePresence>
 
-        {/* â"€â"€ Main content â"€â"€ */}
+        {/* -- Main content -- */}
         <main className="flex-1 min-w-0 overflow-y-auto px-5 md:px-8 py-7">
           <motion.div key={activeSection} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
             {/* Section header */}

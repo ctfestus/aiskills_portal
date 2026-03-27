@@ -17,7 +17,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import FormEditor from '@/components/FormEditor';
 import { useTheme } from '@/components/ThemeProvider';
 
-// ── Lazy charts ───────────────────────────────────────────────────────────────
+// -- Lazy charts ---
 const ResponsesOverTimeChart = dynamic(
   () => import('@/components/InsightCharts').then(m => ({ default: m.ResponsesOverTimeChart })),
   { ssr: false, loading: () => <div className="w-full h-full flex items-center justify-center"><Loader2 className="w-5 h-5 text-zinc-600 animate-spin" /></div> }
@@ -47,7 +47,7 @@ const TYPE_META = {
   form:  { label: 'Form',  Icon: AlignLeft,   color: '#10b981', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// -- Helpers ---
 function useCopy(timeout = 2000) {
   const [copied, setCopied] = useState(false);
   const copy = useCallback(async (text: string) => {
@@ -58,7 +58,7 @@ function useCopy(timeout = 2000) {
   return { copied, copy };
 }
 
-// ── Responses Tab ─────────────────────────────────────────────────────────────
+// -- Responses Tab ---
 function ResponsesTab({
   form, responses, totalCount, page, pageLoading,
   onExport, onPageChange, courseProgress,
@@ -133,7 +133,7 @@ function ResponsesTab({
       const normalizedKey = key.toLowerCase();
       const label = String(field?.label || '').toLowerCase();
       return normalizedKey === 'email' || normalizedKey.includes('email') || label === 'email' || label.includes('email');
-    }) || '—';
+    }) || '--';
 
   const formatFieldLabel = (key: string) =>
     key
@@ -151,7 +151,7 @@ function ResponsesTab({
     const passmark = form.config?.passmark ?? 50;
     const passed = responses.filter((r: any) => (r.data?.percentage ?? 0) >= passmark).length;
     const passRate = attempts ? Math.round((passed / attempts) * 100) : 0;
-    const avgScore = attempts ? (scores.reduce((a: number, b: number) => a + b, 0) / attempts).toFixed(1) : '—';
+    const avgScore = attempts ? (scores.reduce((a: number, b: number) => a + b, 0) / attempts).toFixed(1) : '--';
     const topScore = attempts ? Math.max(...scores.map((s: number, i: number) => Math.round((s / (totals[i] || 1)) * 100))) : 0;
 
     const questionStats = questions.map((q: any) => {
@@ -184,10 +184,10 @@ function ResponsesTab({
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: 'Started',    value: totalEnrolled || '—',                                Icon: Users,      color: '#8b5cf6' },
-            { label: 'Avg Score',  value: attempts ? `${avgScore} / ${questions.length}` : '—', Icon: BarChart2,   color: '#00a4ef' },
-            { label: 'Pass Rate',  value: attempts ? `${passRate}%` : '—',                    Icon: TrendingUp,  color: '#10b981' },
-            { label: 'Top Score',  value: attempts ? `${topScore}%` : '—',                    Icon: Trophy,      color: '#f59e0b' },
+            { label: 'Started',    value: totalEnrolled || '--',                                Icon: Users,      color: '#8b5cf6' },
+            { label: 'Avg Score',  value: attempts ? `${avgScore} / ${questions.length}` : '--', Icon: BarChart2,   color: '#00a4ef' },
+            { label: 'Pass Rate',  value: attempts ? `${passRate}%` : '--',                    Icon: TrendingUp,  color: '#10b981' },
+            { label: 'Top Score',  value: attempts ? `${topScore}%` : '--',                    Icon: Trophy,      color: '#f59e0b' },
           ].map(({ label, value, Icon, color }) => (
             <div key={label} className={`border rounded-2xl p-5 ${card}`}>
               <div className="flex items-center gap-2 mb-3">
@@ -257,9 +257,9 @@ function ResponsesTab({
                     return (
                       <tr key={r.id} className={`transition-colors ${tableRow}`}>
                         <td className={`px-6 py-3 font-medium ${textPrim}`}>{r.data?.name || <span className={`italic ${textMut}`}>Anonymous</span>}</td>
-                        <td className={`px-6 py-3 ${textMut}`}>{r.data?.email || '—'}</td>
+                        <td className={`px-6 py-3 ${textMut}`}>{r.data?.email || '--'}</td>
                         <td className="px-6 py-3">
-                          <span className={`font-semibold ${textPrim}`}>{r.data?.score ?? '—'}</span>
+                          <span className={`font-semibold ${textPrim}`}>{r.data?.score ?? '--'}</span>
                           <span className={textMut}> / {r.data?.total ?? questions.length}</span>
                           <span className={`ml-2 text-xs ${textMut}`}>({pct}%)</span>
                         </td>
@@ -314,7 +314,7 @@ function ResponsesTab({
                     return (
                       <tr key={`ip_${p.student_email}`} className={`transition-colors ${tableRow}`}>
                         <td className={`px-6 py-3 font-medium ${textPrim}`}>{p.student_name || <span className={`italic ${textMut}`}>Unknown</span>}</td>
-                        <td className={`px-6 py-3 ${textMut}`}>{p.student_email || '—'}</td>
+                        <td className={`px-6 py-3 ${textMut}`}>{p.student_email || '--'}</td>
                         <td className="px-6 py-3">
                           <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-700'}`}>
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
@@ -330,7 +330,7 @@ function ResponsesTab({
                           </div>
                         </td>
                         <td className={`px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>
-                          {p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                          {p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--'}
                         </td>
                       </tr>
                     );
@@ -342,7 +342,7 @@ function ResponsesTab({
                     return (
                       <tr key={`cp_${r.id}`} className={`transition-colors ${tableRow}`}>
                         <td className={`px-6 py-3 font-medium ${textPrim}`}>{r.data?.name || <span className={`italic ${textMut}`}>Anonymous</span>}</td>
-                        <td className={`px-6 py-3 ${textMut}`}>{r.data?.email || '—'}</td>
+                        <td className={`px-6 py-3 ${textMut}`}>{r.data?.email || '--'}</td>
                         <td className="px-6 py-3">
                           <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${pass ? (isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700') : (isDark ? 'bg-rose-500/15 text-rose-300' : 'bg-rose-50 text-rose-700')}`}>
                             {pass ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
@@ -418,7 +418,7 @@ function ResponsesTab({
                     </div>
                     <div className={`rounded-2xl px-4 py-3 ${isDark ? 'bg-white/5' : 'bg-white/85 shadow-sm'}`}>
                       <p className={`text-[11px] font-medium uppercase tracking-[0.18em] ${textMut}`}>Remaining</p>
-                      <p className={`mt-2 text-xl font-semibold ${textPrim}`}>{spotsLeft !== null ? spotsLeft : '—'}</p>
+                      <p className={`mt-2 text-xl font-semibold ${textPrim}`}>{spotsLeft !== null ? spotsLeft : '--'}</p>
                     </div>
                   </div>
                 </div>
@@ -571,7 +571,7 @@ function ResponsesTab({
                       </div>
                       <div className="min-w-0 pr-8">
                         <h3 className={`truncate text-xl font-bold leading-tight ${textPrim}`}>{pName}</h3>
-                        <p className={`mt-0.5 truncate text-sm ${textMut}`}>{pEmail === '—' ? 'No email provided' : pEmail}</p>
+                        <p className={`mt-0.5 truncate text-sm ${textMut}`}>{pEmail === '--' ? 'No email provided' : pEmail}</p>
                         <span
                           className="mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
                           style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}
@@ -653,7 +653,7 @@ function ResponsesTab({
         <div className={`border rounded-2xl p-5 col-span-2 md:col-span-1 ${card}`}>
           <div className="flex items-center gap-2 mb-3"><TrendingUp className="w-4 h-4 text-amber-500" /><span className={`text-xs uppercase tracking-wide font-medium ${textMut}`}>Latest</span></div>
           <p className={`text-sm font-medium ${textPrim}`}>
-            {responses[0] ? new Date(responses[0].created_at).toLocaleDateString() : '—'}
+            {responses[0] ? new Date(responses[0].created_at).toLocaleDateString() : '--'}
           </p>
         </div>
       </div>
@@ -684,7 +684,7 @@ function ResponsesTab({
               {responses.map((r: any) => (
                 <tr key={r.id} className={`transition-colors ${tableRow}`}>
                   <td className={`px-6 py-4 whitespace-nowrap text-xs ${textMut}`}>{new Date(r.created_at).toLocaleString()}</td>
-                  {fields.map((f: any) => <td key={f.id} className={`px-6 py-4 max-w-[200px] truncate ${textSub}`}>{r.data?.[f.name] || '—'}</td>)}
+                  {fields.map((f: any) => <td key={f.id} className={`px-6 py-4 max-w-[200px] truncate ${textSub}`}>{r.data?.[f.name] || '--'}</td>)}
                 </tr>
               ))}
               {responses.length === 0 && (
@@ -706,7 +706,7 @@ function Pagination({ totalCount, page, pageLoading, onPageChange, isDark = true
   const borderStyle = isDark ? 'border-zinc-800' : 'border-[rgba(0,0,0,0.07)]';
   return (
     <div className={`flex items-center justify-between px-6 py-4 border-t ${borderStyle}`}>
-      <span className={`text-xs ${textStyle}`}>{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} of {totalCount}</span>
+      <span className={`text-xs ${textStyle}`}>{page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, totalCount)} of {totalCount}</span>
       <div className="flex items-center gap-2">
         <button onClick={() => onPageChange(page - 1)} disabled={page === 0 || pageLoading} className={`px-3 py-1.5 rounded-lg text-xs disabled:opacity-30 transition-colors ${btnStyle}`}>Previous</button>
         <button onClick={() => onPageChange(page + 1)} disabled={(page + 1) * PAGE_SIZE >= totalCount || pageLoading} className={`px-3 py-1.5 rounded-lg text-xs disabled:opacity-30 transition-colors ${btnStyle}`}>Next</button>
@@ -748,7 +748,7 @@ function WhatsAppIcon({ className }: { className?: string }) {
   );
 }
 
-// ── Email Tab ─────────────────────────────────────────────────────────────────
+// -- Email Tab ---
 function EmailTab({ form, formUrl, isFreePlan }: { form: any; formUrl: string; isFreePlan?: boolean }) {
   const cfg = form.config ?? {};
   const isEvent = cfg.eventDetails?.isEvent === true;
@@ -973,7 +973,7 @@ function EmailTab({ form, formUrl, isFreePlan }: { form: any; formUrl: string; i
     ...(!isEvent && !isCourse ? [{ value: 'confirmation', label: 'Confirmation' }] : []),
   ] as { value: typeof quickType; label: string }[];
 
-  // ── Shared style tokens ──
+  // -- Shared style tokens --
   const card = isDark
     ? 'bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden'
     : 'bg-white border border-[rgba(0,0,0,0.07)] rounded-2xl overflow-hidden shadow-sm';
@@ -1011,7 +1011,7 @@ function EmailTab({ form, formUrl, isFreePlan }: { form: any; formUrl: string; i
   return (
     <div className="max-w-2xl mx-auto space-y-4 py-2">
 
-      {/* ── Blast Email ── */}
+      {/* -- Blast Email -- */}
       <div className={card}>
         <div className={cardHeader}>
           <div className={sectionIconBg}>
@@ -1135,7 +1135,7 @@ function EmailTab({ form, formUrl, isFreePlan }: { form: any; formUrl: string; i
         </div>
       </div>
 
-      {/* ── Event Reminder (bulk) ── */}
+      {/* -- Event Reminder (bulk) -- */}
       {isEvent && (
         <div className={card}>
           <div className={cardHeader}>
@@ -1192,7 +1192,7 @@ function EmailTab({ form, formUrl, isFreePlan }: { form: any; formUrl: string; i
         </div>
       )}
 
-      {/* ── Send Now (Quick Send) ── */}
+      {/* -- Send Now (Quick Send) -- */}
       <div className={card}>
         <div className={cardHeader}>
           <div className={sectionIconBg}>
@@ -1200,7 +1200,7 @@ function EmailTab({ form, formUrl, isFreePlan }: { form: any; formUrl: string; i
           </div>
           <div>
             <p className={cardTitle}>Send to Individual</p>
-            <p className={cardSub}>Send an email instantly to a single address — useful for testing or follow-ups</p>
+            <p className={cardSub}>Send an email instantly to a single address -- useful for testing or follow-ups</p>
           </div>
         </div>
         <div className="p-6 space-y-4">
@@ -1270,7 +1270,7 @@ function EmailTab({ form, formUrl, isFreePlan }: { form: any; formUrl: string; i
   );
 }
 
-// ── Leaderboard Tab ───────────────────────────────────────────────────────────
+// -- Leaderboard Tab ---
 function LeaderboardTab({ form }: { form: any }) {
   const { theme } = useTheme();
   const isDark = theme !== 'light';
@@ -1335,12 +1335,12 @@ function LeaderboardTab({ form }: { form: any }) {
   return (
     <div className="space-y-4">
 
-      {/* ── Stats bar ── */}
+      {/* -- Stats bar -- */}
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: 'Completions', value: rows.length, color: '#6366f1' },
           { label: 'Avg Score', value: `${avgPct}%`, color: '#10b981' },
-          { label: 'Pass Rate', value: rows.length ? `${Math.round((passCount / rows.length) * 100)}%` : '—', color: '#f59e0b' },
+          { label: 'Pass Rate', value: rows.length ? `${Math.round((passCount / rows.length) * 100)}%` : '--', color: '#f59e0b' },
         ].map(({ label, value, color }) => (
           <div key={label} className={`rounded-2xl border px-5 py-4 ${bg} ${bdr}`}>
             <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color }}>{label}</p>
@@ -1349,7 +1349,7 @@ function LeaderboardTab({ form }: { form: any }) {
         ))}
       </div>
 
-      {/* ── Table ── */}
+      {/* -- Table -- */}
       <div className={`rounded-2xl border overflow-hidden ${bg} ${bdr}`}>
 
         {/* Header */}
@@ -1424,7 +1424,7 @@ function LeaderboardTab({ form }: { form: any }) {
                     ⭐ {pts.toLocaleString()}
                   </span>
                 ) : (
-                  <span className={`text-xs ${muted}`}>—</span>
+                  <span className={`text-xs ${muted}`}>--</span>
                 )}
               </div>
             </div>
@@ -1436,7 +1436,7 @@ function LeaderboardTab({ form }: { form: any }) {
 }
 
 
-// ── More Tab ──────────────────────────────────────────────────────────────────
+// -- More Tab ---
 function MoreTab({ form, formUrl, onClone }: { form: any; formUrl: string; onClone: () => Promise<void> }) {
   const { copied: linkCopied, copy: copyLink } = useCopy();
   const { copied: embedCopied, copy: copyEmbed } = useCopy();
@@ -1615,7 +1615,7 @@ function MoreTab({ form, formUrl, onClone }: { form: any; formUrl: string; onClo
         <div className="flex items-start gap-5">
           <img src={qrUrl} alt="QR Code" className="w-32 h-32 rounded-xl flex-shrink-0" style={{ border: `1px solid ${inputBord}` }} />
           <div className="space-y-2 pt-1">
-            <p className="text-sm leading-relaxed" style={{ color: textMut }}>Print or display at your event — attendees scan to open instantly.</p>
+            <p className="text-sm leading-relaxed" style={{ color: textMut }}>Print or display at your event -- attendees scan to open instantly.</p>
             <a href={qrUrl} download={`qr-${form.slug || form.id}.png`} className="inline-flex items-center gap-1.5 text-sm transition-colors hover:opacity-70" style={{ color: textMut }}>
               <Download className="w-4 h-4" /> Download QR
             </a>
@@ -1646,7 +1646,7 @@ function MoreTab({ form, formUrl, onClone }: { form: any; formUrl: string; onClo
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
+// -- Main Page ---
 export default function FormDetailPage() {
   const { id } = useParams();
   const searchParams = useSearchParams();
@@ -1790,7 +1790,7 @@ export default function FormDetailPage() {
       {/* Decorative blob */}
       {isLight && <div className="fixed top-0 right-0 pointer-events-none" style={{ width:180, height:180, borderRadius:'50%', background:lime, transform:'translate(35%,-25%)', opacity:0.45, zIndex:0 }} />}
 
-      {/* ── Top header ── */}
+      {/* -- Top header -- */}
       <header className="sticky top-0 z-20 backdrop-blur-md" style={{ borderBottom: `1px solid ${navBord}`, background: navBg }}>
         <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-2 sm:gap-4">
           <Link href="/dashboard" className="transition-colors flex-shrink-0 hover:opacity-60" style={{ color: textMut }}>
@@ -1826,7 +1826,7 @@ export default function FormDetailPage() {
           </div>
         </div>
 
-        {/* ── Tab bar ── */}
+        {/* -- Tab bar -- */}
         <div className="px-2 sm:px-6 flex items-center gap-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
           {TABS.filter(tab => !tab.courseOnly || type === 'course').map(tab => {
             const isActive = activeTab === tab.id;
@@ -1858,7 +1858,7 @@ export default function FormDetailPage() {
         </div>
       </header>
 
-      {/* ── Tab content ── */}
+      {/* -- Tab content -- */}
       <AnimatePresence mode="wait">
         <motion.div
           key={activeTab}

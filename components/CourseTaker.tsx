@@ -205,7 +205,7 @@ export function CourseTaker({
   const [phase, setPhase] = useState<'info' | 'course' | 'complete'>(
     collectStudentInfo || !!initialStudentName ? 'info' : 'course'
   );
-  const [reviewMode, setReviewMode] = useState(false); // true when student has already earned a cert — no XP/saves
+  const [reviewMode, setReviewMode] = useState(false); // true when student has already earned a cert -- no XP/saves
   const [studentName, setStudentName] = useState(initialStudentName);
   const [studentEmail, setStudentEmail] = useState(initialStudentEmail);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -318,7 +318,7 @@ export function CourseTaker({
     if (!currentQuestion) return;
     const prevAnswer = answers[currentQuestion.id];
     if (prevAnswer) {
-      // Question already answered — restore locked state, no re-answering allowed
+      // Question already answered -- restore locked state, no re-answering allowed
       const qType = currentQuestion.type ?? 'multiple_choice';
       const wasCorrect = isAnswerCorrect(currentQuestion, prevAnswer);
       setIsChecking(true);
@@ -387,7 +387,7 @@ export function CourseTaker({
     // Clear any existing interval before starting a new one (prevents double-ticking)
     if (timerRef.current) clearInterval(timerRef.current);
 
-    // Only set the initial countdown once — if timeLeft already has a value
+    // Only set the initial countdown once -- if timeLeft already has a value
     // it means the effect re-ran (StrictMode double-invoke etc.) and we must
     // not reset the clock.
     setTimeLeft(prev => (prev === null ? courseTimerMins * 60 : prev));
@@ -412,7 +412,7 @@ export function CourseTaker({
     if (phase !== 'course') return;
 
     const obscure = () => {
-      if (lessonOpenRef.current) return; // student is viewing lesson — not cheating
+      if (lessonOpenRef.current) return; // student is viewing lesson -- not cheating
       setIsObscured(true);
       setViolations(v => v + 1);
     };
@@ -461,7 +461,7 @@ export function CourseTaker({
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   // -- Shared: run attempt/cert/progress checks after email is verified --
-  // All queries go through /api/course (service role) — anon client has no access to these tables.
+  // All queries go through /api/course (service role) -- anon client has no access to these tables.
   const runCourseChecks = useCallback(async (_email: string) => {
     setCheckingAttempts(true);
 
@@ -488,7 +488,7 @@ export function CourseTaker({
       }
 
       if (d.cert?.id) {
-        // Already certified — enter review mode: no saves, no XP, no new attempt
+        // Already certified -- enter review mode: no saves, no XP, no new attempt
         setReviewMode(true);
         setCheckingAttempts(false);
         setPhase('course');
@@ -496,7 +496,7 @@ export function CourseTaker({
       }
 
       if (d.progress && d.progress.current_question_index > 0) {
-        // In-progress — auto-resume from where they left off
+        // In-progress -- auto-resume from where they left off
         setCurrentQuestionIndex(d.progress.current_question_index);
         setAnswers(d.progress.answers ?? {});
         setScore(d.progress.score ?? 0);
@@ -514,7 +514,7 @@ export function CourseTaker({
     setPhase('course');
   }, [maxAttempts, formId]);
 
-  // -- Start course — get Supabase session token then run checks --
+  // -- Start course -- get Supabase session token then run checks --
   const handleStartCourse = useCallback(async () => {
     if (!studentName.trim() || !studentEmail.trim()) return;
 
@@ -553,7 +553,7 @@ export function CourseTaker({
     newHintsUsed: Set<string>,
   ) => {
     if (!formId || !studentEmail.trim()) return;
-    if (reviewMode) return; // review mode — never write new attempts
+    if (reviewMode) return; // review mode -- never write new attempts
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (sessionTokenRef.current) headers['Authorization'] = `Bearer ${sessionTokenRef.current}`;
     fetch('/api/course', {
@@ -577,7 +577,7 @@ export function CourseTaker({
   // Mark active attempt as completed via API
   const clearProgress = useCallback((finalScore: number) => {
     if (!formId || !studentEmail.trim()) return;
-    if (reviewMode) return; // review mode — keep original completed attempt intact
+    if (reviewMode) return; // review mode -- keep original completed attempt intact
     const scorePct = totalQuestions > 0 ? Math.round((finalScore / totalQuestions) * 100) : 0;
     const passed   = scorePct >= passmark;
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -883,7 +883,7 @@ export function CourseTaker({
                           <div className="flex-1 min-w-0">
                             <p className={`text-sm font-semibold ${mutedColor}`}>{nextMilestone.label}</p>
                             <p className="text-xs mt-0.5" style={{ color: accent }}>
-                              {nextMilestone.points - totalPoints} XP to unlock — retake to beat your score
+                              {nextMilestone.points - totalPoints} XP to unlock -- retake to beat your score
                             </p>
                           </div>
                           <span className={`text-xs font-bold flex-shrink-0 ${mutedColor}`}>{nextMilestone.points} XP</span>
@@ -1176,7 +1176,7 @@ export function CourseTaker({
                     </div>
                     <div>
                       <p className={`text-base font-bold ${textColor}`}>Course completed!</p>
-                      <p className={`text-xs mt-0.5 ${mutedColor}`}>Hi {studentName} — your certificate is ready.</p>
+                      <p className={`text-xs mt-0.5 ${mutedColor}`}>Hi {studentName} -- your certificate is ready.</p>
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1520,10 +1520,10 @@ export function CourseTaker({
     if (deltaX < 0) {
       // Swipe left -> next
       if (isChecking) {
-        // Feedback already shown — advance
+        // Feedback already shown -- advance
         handleNext();
       } else if (!isChecking && isAnswered() && showAnswers === 'none') {
-        // Direct mode — submit and advance
+        // Direct mode -- submit and advance
         handleNextDirect();
       }
     } else {
@@ -1540,7 +1540,7 @@ export function CourseTaker({
 
   const handleCheck = () => {
     if (!isAnswered()) return;
-    if (answers[currentQuestion.id]) return; // already answered — no re-awarding
+    if (answers[currentQuestion.id]) return; // already answered -- no re-awarding
     const userAnswer = getCurrentAnswer();
     let correct = false;
     if (questionType === 'fill_blank') {
@@ -1594,7 +1594,7 @@ export function CourseTaker({
       setIsCorrect(null);
     } else {
       if (reviewMode) {
-        // Review complete — just reset to start without saving anything
+        // Review complete -- just reset to start without saving anything
         setCurrentQuestionIndex(0);
         setAnswers({});
         setSelectedOption(null);
@@ -1697,7 +1697,7 @@ export function CourseTaker({
     if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
     const vimeo = url.match(/vimeo\.com\/(\d+)/);
     if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
-    // Bunny.net — already an embed URL or video page URL
+    // Bunny.net -- already an embed URL or video page URL
     if (url.includes('player.mediadelivery.net/embed/') || url.includes('video.bunnycdn.com/')) return url;
     return null;
   };
@@ -1741,7 +1741,7 @@ export function CourseTaker({
         )}
       </AnimatePresence>
 
-      {/* -- Quiz UI — full screen overlay (or inline in editor) -- */}
+      {/* -- Quiz UI -- full screen overlay (or inline in editor) -- */}
       <div
         className={`${inlineMode ? 'relative flex flex-col rounded-xl overflow-hidden min-h-[500px]' : 'fixed inset-0 z-[200] overflow-y-auto flex flex-col'} ${isDark ? 'bg-black' : 'bg-zinc-50'}`}
         style={{ ...noSelect, color: isDark ? '#ffffff' : '#18181b', ...fontStyle }}
@@ -1749,7 +1749,7 @@ export function CourseTaker({
         onCut={blockCopy}
         onContextMenu={blockMenu}
       >
-        {/* Progress + Timer — pinned at top */}
+        {/* Progress + Timer -- pinned at top */}
         <div className={`flex-shrink-0 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 ${isDark ? 'border-b border-zinc-800/60' : 'border-b border-zinc-200'}`}>
           <div className={`${questionType === 'image' || questionType === 'code' ? 'max-w-3xl' : 'max-w-2xl'} mx-auto`}>
             <div className="flex justify-between items-center mb-2">
@@ -1816,7 +1816,7 @@ export function CourseTaker({
                   let dotColor = isDark ? '#3f3f46' : '#d4d4d8'; // unanswered gray
                   if (isCurrentDot) dotColor = accent;
                   else if (isAnsweredDot) dotColor = '#10b981'; // green
-                  else if (isSkippedDot) dotColor = '#ef4444'; // red — always, regardless of mode
+                  else if (isSkippedDot) dotColor = '#ef4444'; // red -- always, regardless of mode
                   return (
                     <button
                       key={q.id}
@@ -1842,7 +1842,7 @@ export function CourseTaker({
           </div>
         </div>
 
-        {/* Question content — no card, directly on page */}
+        {/* Question content -- no card, directly on page */}
         <div
           className={`flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 w-full mx-auto ${questionType === 'image' || questionType === 'code' ? 'max-w-3xl' : 'max-w-2xl'} ${isDark ? 'course-scroll' : 'course-scroll course-scroll-light'}`}
           onTouchStart={handleTouchStart}
@@ -1937,7 +1937,7 @@ export function CourseTaker({
               {/* -- Arrange in order -- */}
               {questionType === 'arrange' && (
                 <div>
-                  <p className={`text-xs mb-3 ${mutedColor}`}>Drag to reorder — put items in the correct sequence.</p>
+                  <p className={`text-xs mb-3 ${mutedColor}`}>Drag to reorder -- put items in the correct sequence.</p>
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                     <SortableContext items={arrangeOrder} strategy={verticalListSortingStrategy}>
                       <div className="space-y-2">

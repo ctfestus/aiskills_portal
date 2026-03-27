@@ -8,9 +8,9 @@ import { ArrowLeft, Loader2, Save, Upload, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RichTextEditor } from '@/components/RichTextEditor';
-import { sanitizeRichText } from '@/lib/sanitize';
+import { sanitizeRichText, sanitizePlainText } from '@/lib/sanitize';
 
-// --- Design tokens ------------------------------------------------------------
+// --- Design tokens ---
 const LIGHT_C = {
   page: '#EEEAE3', card: 'white', cardBorder: 'rgba(0,0,0,0.07)',
   cardShadow: '0 1px 4px rgba(0,0,0,0.06)', green: '#006128', lime: '#ADEE66',
@@ -45,13 +45,13 @@ function labelStyle(C: typeof LIGHT_C) {
   return { display: 'block', fontSize: 13, fontWeight: 600, color: C.muted, marginBottom: 6 } as React.CSSProperties;
 }
 
-// -- Format a date for datetime-local input ---------------------------------
+// -- Format a date for datetime-local input ---
 function toDatetimeLocalValue(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// --- Page ---------------------------------------------------------------------
+// --- Page ---
 export default function CreateAnnouncementPage() {
   const C = useC();
   const router = useRouter();
@@ -184,14 +184,14 @@ export default function CreateAnnouncementPage() {
             </div>
           )}
 
-          {/* -- Content card ------------------------------------------------- */}
+          {/* -- Content card --- */}
           <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>Content</h2>
 
             <div style={{ marginBottom: 16 }}>
               <label style={labelStyle(C)}>Title <span style={{ color: C.errorText }}>*</span></label>
               <input
-                type="text" value={title} onChange={e => setTitle(e.target.value)}
+                type="text" value={title} onChange={e => setTitle(sanitizePlainText(e.target.value))}
                 placeholder="e.g. Important update for all students"
                 style={inputStyle(C)} required maxLength={255}
               />
@@ -256,13 +256,13 @@ export default function CreateAnnouncementPage() {
                     />
                   </div>
                 ) : (
-                  <p style={{ marginTop: 6, fontSize: 12, color: C.errorText }}>Could not parse YouTube URL — paste a standard YouTube link.</p>
+                  <p style={{ marginTop: 6, fontSize: 12, color: C.errorText }}>Could not parse YouTube URL -- paste a standard YouTube link.</p>
                 );
               })()}
             </div>
           </section>
 
-          {/* -- Settings card ------------------------------------------------ */}
+          {/* -- Settings card --- */}
           <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>Settings</h2>
 
@@ -310,7 +310,7 @@ export default function CreateAnnouncementPage() {
             </div>
           </section>
 
-          {/* -- Cohorts ----------------------------------------------------- */}
+          {/* -- Cohorts --- */}
           {cohorts.length > 0 && (
             <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginTop: 20 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16, marginTop: 0 }}>Assign to Cohorts</h2>

@@ -8,9 +8,9 @@ import { ArrowLeft, Loader2, Save, Upload, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RichTextEditor } from '@/components/RichTextEditor';
-import { sanitizeRichText } from '@/lib/sanitize';
+import { sanitizeRichText, sanitizePlainText } from '@/lib/sanitize';
 
-// --- Design tokens ------------------------------------------------------------
+// --- Design tokens ---
 const LIGHT_C = {
   page: '#EEEAE3', card: 'white', cardBorder: 'rgba(0,0,0,0.07)',
   cardShadow: '0 1px 4px rgba(0,0,0,0.06)', green: '#006128', lime: '#ADEE66',
@@ -43,7 +43,7 @@ function labelStyle(C: typeof LIGHT_C) {
   return { display: 'block', fontSize: 13, fontWeight: 600, color: C.muted, marginBottom: 6 } as React.CSSProperties;
 }
 
-// --- Page ---------------------------------------------------------------------
+// --- Page ---
 export default function CreateCommunityPage() {
   const C = useC();
   const router = useRouter();
@@ -161,15 +161,15 @@ export default function CreateCommunityPage() {
             </div>
           )}
 
-          {/* -- Details card ------------------------------------------------ */}
+          {/* -- Details card --- */}
           <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>Details</h2>
 
             <div style={{ marginBottom: 16 }}>
               <label style={labelStyle(C)}>Community Name <span style={{ color: C.errorText }}>*</span></label>
               <input
-                type="text" value={name} onChange={e => setName(e.target.value)}
-                placeholder="e.g. AI Skills Africa — Cohort 5"
+                type="text" value={name} onChange={e => setName(sanitizePlainText(e.target.value))}
+                placeholder="e.g. AI Skills Africa -- Cohort 5"
                 style={inputStyle(C)} required maxLength={255}
               />
             </div>
@@ -241,7 +241,7 @@ export default function CreateCommunityPage() {
             </div>
           </section>
 
-          {/* -- Cohorts ----------------------------------------------------- */}
+          {/* -- Cohorts --- */}
           {cohorts.length > 0 && (
             <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginTop: 20 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16, marginTop: 0 }}>Assign to Cohorts</h2>
