@@ -81,10 +81,10 @@ export async function GET(req: NextRequest) {
 
   const cohortMap = new Map((cohorts ?? []).map(c => [c.id, c.name]));
 
-  // 4. Fetch attempts for all relevant forms
+  // 4. Fetch attempts + cohort_assignments for all relevant forms
   const formIds = filteredForms.map(f => f.id);
 
-  const [{ data: courseAttempts }, { data: gpAttempts }] = await Promise.all([
+  const [{ data: courseAttempts }, { data: gpAttempts }, { data: cohortAssignments }] = await Promise.all([
     supabase
       .from('course_attempts')
       .select('student_email, form_id, completed_at, updated_at, score, passed, current_question_index')
@@ -93,7 +93,18 @@ export async function GET(req: NextRequest) {
       .from('guided_project_attempts')
       .select('student_email, form_id, completed_at, updated_at, progress')
       .in('form_id', formIds),
+    supabase
+      .from('cohort_assignments')
+      .select('form_id, cohort_id, assigned_at')
+      .in('form_id', formIds)
+      .in('cohort_id', activeCohortIds),
   ]);
+
+  // Build assignment map: "formId|cohortId" -> assigned_at
+  const assignmentMap = new Map<string, string>();
+  for (const ca of cohortAssignments ?? []) {
+    assignmentMap.set(`${ca.form_id}|${ca.cohort_id}`, ca.assigned_at);
+  }
 
   // Build attempt lookups keyed by "email|formId"
   const courseAttemptMap = new Map<string, any>();
@@ -154,6 +165,19 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      // Deadline calculation
+      const assignedAt   = assignmentMap.get(`${form.id}|${student.cohort_id}`);
+      const deadlineDays = form.config?.deadline_days;
+      let deadline: string | null = null;
+      let daysUntilDeadline: number | null = null;
+      let isAtRisk = false;
+      if (assignedAt && deadlineDays) {
+        const dl = new Date(new Date(assignedAt).getTime() + Number(deadlineDays) * 86400000);
+        deadline = dl.toISOString();
+        daysUntilDeadline = Math.ceil((dl.getTime() - Date.now()) / 86400000);
+        isAtRisk = status !== 'completed' && daysUntilDeadline <= 3;
+      }
+
       rows.push({
         studentEmail:      student.email,
         studentName:       student.full_name ?? '',
@@ -168,6 +192,9 @@ export async function GET(req: NextRequest) {
         daysSinceActivity: daysSince(lastActive),
         score:             attempt?.score ?? null,
         passed:            attempt?.passed ?? null,
+        deadline,
+        daysUntilDeadline,
+        isAtRisk,
       });
     }
   }

@@ -21,7 +21,7 @@ function allowTestEmailSend(jwt: string): boolean {
 }
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <notifications@festforms.com>';
+const FROM = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
 
 const getAdminSupabase = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;

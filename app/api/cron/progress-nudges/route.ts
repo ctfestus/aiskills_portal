@@ -13,14 +13,17 @@ import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
 export const dynamic = 'force-dynamic';
 
 const resend  = new Resend(process.env.RESEND_API_KEY);
-const FROM    = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <notifications@festforms.com>';
+const FROM    = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
 const APP_URL = process.env.APP_URL || 'https://festforms.com';
-const INACTIVITY_DAYS   = 7;
-const RESEND_AFTER_DAYS = 14;
+const INACTIVITY_DAYS   = Number(process.env.NUDGE_INACTIVITY_DAYS ?? 7);
+const RESEND_AFTER_DAYS = Number(process.env.NUDGE_RESEND_AFTER_DAYS ?? 14);
 
 export async function POST(req: NextRequest) {
   const { valid } = await verifyQStashRequest(req);
-  if (!valid) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!valid) {
+    console.error('[cron/progress-nudges] Unauthorized -- check QSTASH_CURRENT_SIGNING_KEY and QSTASH_NEXT_SIGNING_KEY in Vercel env vars');
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   if (!process.env.RESEND_API_KEY) {
     return NextResponse.json({ error: 'Email service not configured' }, { status: 503 });

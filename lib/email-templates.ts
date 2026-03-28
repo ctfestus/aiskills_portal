@@ -388,6 +388,42 @@ export function weeklyDigestEmail(data: {
 }
 
 // -- 8. Blast / Announcement ---
+export function deadlineReminderEmail(data: {
+  name: string;
+  contentTitle: string;
+  contentType: string;
+  formUrl: string;
+  daysLeft: number;
+}) {
+  const { name, contentTitle, contentType, formUrl, daysLeft } = data;
+  const typeLabel = contentType === 'course' ? 'course' : 'virtual experience';
+  const urgency = daysLeft <= 0 ? 'Your deadline has passed'
+    : daysLeft === 1 ? 'You have 1 day left'
+    : `You have ${daysLeft} days left`;
+  const urgencyColor = daysLeft <= 0 ? '#ef4444' : daysLeft <= 1 ? '#dc2626' : '#f59e0b';
+
+  const content = `
+    <h2 style="color:#111;font-size:22px;margin-bottom:8px;">⏰ ${urgency}</h2>
+    <p>Hi ${name},</p>
+    <p>This is a reminder that your deadline for the following ${typeLabel} is approaching:</p>
+    <div style="background:#f9fafb;border-left:4px solid ${urgencyColor};border-radius:4px;padding:16px;margin:16px 0;">
+      <p style="font-weight:700;font-size:16px;margin:0;">${contentTitle}</p>
+      <p style="color:#ef4444;font-weight:600;margin:6px 0 0;">${urgency}</p>
+    </div>
+    <p>Don't let your progress go to waste -- every skill you build today is an investment in your future career. Log in now and keep going.</p>
+    <p style="background:#f0fdf4;border-radius:8px;padding:12px;font-size:14px;color:#166534;">
+      💡 <b>Quick tip:</b> Even 15 minutes of focused learning counts. You can do this!
+    </p>
+    ${cta('Complete Now', formUrl)}
+    <p>If you need any help or have questions, our team is always here for you -- just reply to this email.</p>
+    <br>
+    <p><b>Best regards,</b></p>
+    <p>AI Skills Africa - Learning Experience Team</p>
+  `;
+
+  return shell(content);
+}
+
 export function blastEmail(data: {
   subject: string;
   body: string;

@@ -225,7 +225,7 @@ function ProgressBar({ value, max = 100, color }: { value: number; max?: number;
 }
 
 // --- Course card ---
-function CourseCard({ course, C, onDetails }: { course: any; C: typeof LIGHT_C; onDetails: () => void }) {
+function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?: Date | null; C: typeof LIGHT_C; onDetails: () => void }) {
   const questions = course.form?.config?.questions ?? [];
   const totalQ = questions.length;
   const currentIdx = course.current_question_index ?? 0;
@@ -240,6 +240,18 @@ function CourseCard({ course, C, onDetails }: { course: any; C: typeof LIGHT_C; 
   const courseUrl = `/${course.form?.slug || course.form_id}?go=1`;
   const actionHref = completed && passed && certId ? `/certificate/${certId}` : courseUrl;
   const actionLabel = completed ? (passed && certId ? 'View Certificate' : 'Retake') : currentIdx > 0 ? 'Continue' : 'Start';
+
+  const daysLeft = deadline && !completed
+    ? Math.ceil((deadline.getTime() - Date.now()) / 86400000)
+    : null;
+  const deadlineLabel = daysLeft === null ? null
+    : daysLeft < 0  ? 'Overdue'
+    : daysLeft === 0 ? 'Due today'
+    : `${daysLeft}d left`;
+  const deadlineColor = daysLeft === null ? null
+    : daysLeft < 0  ? '#ef4444'
+    : daysLeft <= 3 ? '#f59e0b'
+    : '#6b7280';
 
   return (
     <motion.div
@@ -272,6 +284,12 @@ function CourseCard({ course, C, onDetails }: { course: any; C: typeof LIGHT_C; 
           style={{ color: C.text }} onClick={onDetails}>
           {course.form?.title ?? 'Untitled Course'}
         </h3>
+        {deadlineLabel && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2"
+            style={{ background: `${deadlineColor}18`, color: deadlineColor }}>
+            ⏰ {deadlineLabel}
+          </span>
+        )}
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs" style={{ color: C.faint }}>
             {completed ? 'Completed' : currentIdx > 0 ? `${progress}% done` : `${totalQ} questions`}
@@ -492,8 +510,9 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
 
 // --- Courses section ---
 function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
-  const [courses, setCourses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [courses,   setCourses]   = useState<any[]>([]);
+  const [deadlines, setDeadlines] = useState<Record<string, Date | null>>({});
+  const [loading,   setLoading]   = useState(true);
   const [detailCourse, setDetailCourse] = useState<any>(null);
 
   useEffect(() => {
@@ -565,6 +584,27 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
 
       const allForms = [...cohortCourses, ...extraForms];
       setCourses(allForms.map(f => ({ ...progressMap[f.id], form: f, form_id: f.id, cert_id: certMap[f.id] ?? null })));
+
+      // Fetch cohort_assignments to compute deadlines
+      if (student?.cohort_id && cohortCourses.length) {
+        const cohortFormIds = cohortCourses.map((f: any) => f.id);
+        const { data: assignments } = await supabase
+          .from('cohort_assignments')
+          .select('form_id, assigned_at')
+          .eq('cohort_id', student.cohort_id)
+          .in('form_id', cohortFormIds);
+
+        const dlMap: Record<string, Date | null> = {};
+        for (const form of cohortCourses as any[]) {
+          const asgn = (assignments ?? []).find((a: any) => a.form_id === form.id);
+          const deadlineDays = form.config?.deadline_days;
+          dlMap[form.id] = asgn && deadlineDays
+            ? new Date(new Date(asgn.assigned_at).getTime() + Number(deadlineDays) * 86400000)
+            : null;
+        }
+        setDeadlines(dlMap);
+      }
+
       setLoading(false);
     };
     load();
@@ -587,7 +627,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {courses.map(c => (
-          <CourseCard key={c.form_id} course={c} C={C} onDetails={() => setDetailCourse(c)}/>
+          <CourseCard key={c.form_id} course={c} deadline={deadlines[c.form_id]} C={C} onDetails={() => setDetailCourse(c)}/>
         ))}
       </div>
       <AnimatePresence>
@@ -1747,8 +1787,8 @@ const IND_COLORS: Record<string, string> = {
 };
 
 // --- Virtual Experience Card ---
-function VirtualExperienceCard({ form, attempt, C, onDetails }: {
-  form: any; attempt: any; C: typeof LIGHT_C; onDetails: () => void;
+function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
+  form: any; attempt: any; deadline?: Date | null; C: typeof LIGHT_C; onDetails: () => void;
 }) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -1766,6 +1806,19 @@ function VirtualExperienceCard({ form, attempt, C, onDetails }: {
   const actionHref  = `/${slug}`;
   const totalModules = (cfg.modules || []).length;
   const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
+
+  // Deadline display
+  const daysLeft = deadline && !isCompleted
+    ? Math.ceil((deadline.getTime() - Date.now()) / 86400000)
+    : null;
+  const deadlineLabel = daysLeft === null ? null
+    : daysLeft < 0  ? 'Overdue'
+    : daysLeft === 0 ? 'Due today'
+    : `${daysLeft}d left`;
+  const deadlineColor = daysLeft === null ? null
+    : daysLeft < 0  ? '#ef4444'
+    : daysLeft <= 3 ? '#f59e0b'
+    : '#6b7280';
 
   return (
     <motion.div
@@ -1803,7 +1856,13 @@ function VirtualExperienceCard({ form, attempt, C, onDetails }: {
           {form.title}
         </h3>
         {cfg.company && (
-          <p className="text-xs mb-3" style={{ color: C.faint }}>{cfg.company} · {cfg.role}</p>
+          <p className="text-xs mb-2" style={{ color: C.faint }}>{cfg.company} · {cfg.role}</p>
+        )}
+        {deadlineLabel && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2"
+            style={{ background: `${deadlineColor}18`, color: deadlineColor }}>
+            ⏰ {deadlineLabel}
+          </span>
         )}
 
         {/* Progress */}
@@ -2066,10 +2125,11 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
 }
 
 function VirtualExperiencesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
-  const [items,    setItems]    = useState<any[]>([]);
-  const [attempts, setAttempts] = useState<Record<string, any>>({});
-  const [loading,  setLoading]  = useState(true);
-  const [detail,   setDetail]   = useState<any | null>(null);
+  const [items,       setItems]       = useState<any[]>([]);
+  const [attempts,    setAttempts]    = useState<Record<string, any>>({});
+  const [deadlines,   setDeadlines]   = useState<Record<string, Date | null>>({});
+  const [loading,     setLoading]     = useState(true);
+  const [detail,      setDetail]      = useState<any | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -2087,14 +2147,35 @@ function VirtualExperiencesSection({ userEmail, C }: { userEmail: string; C: typ
 
       if (forms?.length) {
         const ids = forms.map((f: any) => f.id);
-        const { data: attRows } = await supabase
-          .from('guided_project_attempts')
-          .select('*')
-          .eq('student_email', userEmail.toLowerCase())
-          .in('form_id', ids);
-        const map: Record<string, any> = {};
-        for (const a of attRows ?? []) map[a.form_id] = a;
-        setAttempts(map);
+        const [{ data: attRows }, { data: assignments }] = await Promise.all([
+          supabase
+            .from('guided_project_attempts')
+            .select('*')
+            .eq('student_email', userEmail.toLowerCase())
+            .in('form_id', ids),
+          supabase
+            .from('cohort_assignments')
+            .select('form_id, assigned_at')
+            .eq('cohort_id', profile.cohort_id)
+            .in('form_id', ids),
+        ]);
+        const attMap: Record<string, any> = {};
+        for (const a of attRows ?? []) attMap[a.form_id] = a;
+        setAttempts(attMap);
+
+        // Compute per-form deadlines
+        const dlMap: Record<string, Date | null> = {};
+        const assignmentByForm = new Map((assignments ?? []).map((a: any) => [a.form_id, a.assigned_at]));
+        for (const form of forms) {
+          const deadlineDays = form.config?.deadline_days;
+          const assignedAt   = assignmentByForm.get(form.id);
+          if (deadlineDays && assignedAt) {
+            dlMap[form.id] = new Date(new Date(assignedAt).getTime() + deadlineDays * 86400000);
+          } else {
+            dlMap[form.id] = null;
+          }
+        }
+        setDeadlines(dlMap);
       }
       setLoading(false);
     };
@@ -2123,6 +2204,7 @@ function VirtualExperiencesSection({ userEmail, C }: { userEmail: string; C: typ
             key={form.id}
             form={form}
             attempt={attempts[form.id]}
+            deadline={deadlines[form.id]}
             C={C}
             onDetails={() => setDetail(form)}
           />

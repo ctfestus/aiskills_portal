@@ -699,7 +699,7 @@ export default function PublicFormPage() {
       <div style={{ minHeight: '100vh', background: gp.bg, color: gp.title, fontFamily: 'var(--font-sans), Inter, sans-serif' }}>
 
         {/* -- Sticky nav -- */}
-        <nav style={{ position: 'sticky', top: 0, zIndex: 30, backdropFilter: 'blur(14px)', background: isLight ? 'rgba(245,245,243,0.88)' : 'rgba(13,13,13,0.88)', borderBottom: `1px solid ${gp.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: 56 }}>
+        <nav style={{ position: 'sticky', top: 0, zIndex: 30, backdropFilter: 'blur(14px)', background: isLight ? 'rgba(245,245,243,0.88)' : 'rgba(13,13,13,0.88)', borderBottom: `1px solid ${gp.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 56 }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
             <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" style={{ height: 28, width: 'auto' }} />
           </Link>
@@ -718,7 +718,7 @@ export default function PublicFormPage() {
           {/* Gradient overlay */}
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.3) 55%, transparent 100%)' }} />
           {/* Content */}
-          <div style={{ position: 'relative', zIndex: 2, maxWidth: 1140, margin: '0 auto', width: '100%', padding: '48px 28px 44px' }}>
+          <div style={{ position: 'relative', zIndex: 2, maxWidth: 1140, margin: '0 auto', width: '100%', padding: '32px 16px 36px' }}>
             {/* Company row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.75)' }}>{config.company}</span>
@@ -736,10 +736,11 @@ export default function PublicFormPage() {
         </div>
 
         {/* -- Main layout -- */}
-        <div style={{ maxWidth: 1140, margin: '0 auto', padding: '32px 28px 96px', display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24, alignItems: 'start' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px]"
+          style={{ maxWidth: 1140, margin: '0 auto', padding: '24px 16px 80px', gap: 20, alignItems: 'start' }}>
 
           {/* Left column */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div className="order-2 lg:order-1" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
             {/* Manager brief */}
             {config.background && (
@@ -797,7 +798,7 @@ export default function PublicFormPage() {
                     </div>
                     {/* Lessons */}
                     {(mod.lessons || []).map((les: any, li: number) => (
-                      <div key={les.id} style={{ padding: '10px 24px 10px 52px', display: 'flex', alignItems: 'center', gap: 8, borderTop: `1px solid ${gp.divider}` }}>
+                      <div key={les.id} style={{ padding: '10px 16px 10px 32px', display: 'flex', alignItems: 'center', gap: 8, borderTop: `1px solid ${gp.divider}` }}>
                         <BookOpen style={{ width: 12, height: 12, color: gp.muted, flexShrink: 0 }} />
                         <span style={{ fontSize: 14, color: gp.body, flex: 1, lineHeight: 1.4 }}>{les.title}</span>
                         {les.requirements?.length > 0 && (
@@ -812,7 +813,7 @@ export default function PublicFormPage() {
           </div>
 
           {/* Right sidebar */}
-          <div style={{ position: 'sticky', top: 72, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="order-1 lg:order-2 lg:sticky" style={{ top: 72, display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* Enrollment card */}
             <div style={{ background: gp.card, borderRadius: 14, overflow: 'hidden', border: `1px solid ${gp.border}` }}>

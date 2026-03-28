@@ -466,10 +466,15 @@ export default function VirtualExperienceTaker({
 
   // -- Main layout ---
   return (
-    <div className="flex h-screen overflow-hidden font-sans" style={{ background: bg, color: text }}>
+    <div className="relative flex h-screen overflow-hidden font-sans" style={{ background: bg, color: text }}>
 
-      {/* -- Sidebar -- */}
-      <aside className="flex-shrink-0 flex flex-col overflow-y-auto border-r transition-all duration-300"
+      {/* Mobile backdrop -- tap to close sidebar */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-30 sm:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* -- Sidebar -- absolute overlay on mobile, in-flow on sm+ */}
+      <aside className="absolute inset-y-0 left-0 z-40 sm:relative sm:inset-auto flex-shrink-0 flex flex-col border-r transition-all duration-300"
         style={{
           width: sidebarOpen ? 280 : 0, minWidth: sidebarOpen ? 280 : 0,
           background: surface, borderColor: border,
@@ -645,7 +650,7 @@ export default function VirtualExperienceTaker({
                 }}>
 
                 {/* Lesson header inside card */}
-                <div className="px-8 pt-8 pb-5"
+                <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-5"
                   style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
                   <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>{currentMod?.title}</p>
                   <h1 className="text-xl font-bold leading-snug" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{currentLes.title}</h1>
@@ -654,7 +659,7 @@ export default function VirtualExperienceTaker({
                 {/* Lesson body */}
                 {/* Video -- above body, padded + rounded */}
                 {embedUrl && (
-                  <div className="px-8 pt-7 pb-2">
+                  <div className="px-4 sm:px-8 pt-5 sm:pt-7 pb-2">
                     <div className="rounded-lg overflow-hidden" style={{ aspectRatio: '16/9', background: '#000' }}>
                       <iframe src={embedUrl} className="w-full h-full border-0"
                         allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
@@ -665,7 +670,7 @@ export default function VirtualExperienceTaker({
 
                 {/* Lesson body */}
                 {currentLes.body && (
-                  <div className="px-8 pt-6 pb-6">
+                  <div className="px-4 sm:px-8 pt-5 sm:pt-6 pb-6">
                     <div
                       className={`prose prose-sm max-w-none [font-size:14.5px] ${isDark
                         ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
@@ -680,7 +685,7 @@ export default function VirtualExperienceTaker({
                 {currentLes.requirements.length > 0 && (
                   <>
                     {/* Divider + label */}
-                    <div className="flex items-center justify-between px-8 py-4"
+                    <div className="flex items-center justify-between px-4 sm:px-8 py-4"
                       style={{ borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
                       <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? '#666' : '#999' }}>Questions</span>
                       <span className="text-[10px] font-medium px-2 py-0.5 rounded-full"
@@ -702,7 +707,7 @@ export default function VirtualExperienceTaker({
 
                       if (isMcq) {
                         return (
-                          <div key={req.id} style={rowStyle} className="px-8 py-5 space-y-3">
+                          <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-3">
                             {/* Question header */}
                             <div className="flex items-start gap-2">
                               <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
@@ -788,7 +793,7 @@ export default function VirtualExperienceTaker({
                         const linkUrl  = progress[req.id]?.linkUrl || '';
                         const uploading = uploadingReq === req.id;
                         return (
-                          <div key={req.id} style={rowStyle} className="px-8 py-5 space-y-3">
+                          <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-3">
                             <div className="flex items-start gap-2">
                               <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
                                 style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>Upload</span>
@@ -853,7 +858,7 @@ export default function VirtualExperienceTaker({
                           : submitted && !req.expectedAnswer; // no expected answer = accept any
                         const wrongAnswer = submitted && req.expectedAnswer && !isCorrect;
                         return (
-                          <div key={req.id} style={rowStyle} className="px-8 py-5 space-y-2.5">
+                          <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-2.5">
                             <div className="flex items-start gap-2">
                               <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
                                 style={{ background: 'rgba(139,92,246,0.12)', color: '#8b5cf6' }}>Short Answer</span>
@@ -939,7 +944,7 @@ export default function VirtualExperienceTaker({
                       // Pure task: just a checkbox, no textarea
                       if (req.type === 'task') {
                         return (
-                          <div key={req.id} style={rowStyle} className="px-8 py-4">
+                          <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-4">
                             <button onClick={() => !reviewMode && toggleReq(req.id)}
                               className="flex items-start gap-3 w-full text-left"
                               disabled={reviewMode}>
@@ -959,7 +964,7 @@ export default function VirtualExperienceTaker({
                       }
 
                       return (
-                        <div key={req.id} style={rowStyle} className="px-8 py-5 space-y-2.5">
+                        <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-2.5">
                           <div className="flex items-start gap-3">
                             <button onClick={() => toggleReq(req.id)} className="flex-shrink-0 mt-0.5">
                               {done
@@ -975,7 +980,7 @@ export default function VirtualExperienceTaker({
                               <p className="text-[12.5px] leading-snug" style={{ color: isDark ? '#888' : '#555' }}>{req.description}</p>
                             </div>
                           </div>
-                          <div className="pl-7">
+                          <div className="pl-0 sm:pl-7">
                             <textarea value={noteVal} onChange={e => setNote(req.id, e.target.value)}
                               placeholder="Add your notes or work summary…" rows={2}
                               className="w-full text-[14.5px] rounded-lg p-3 outline-none resize-none"
@@ -1046,15 +1051,15 @@ export default function VirtualExperienceTaker({
               })()}
 
               {/* Navigation */}
-              <div className="flex items-center justify-between pt-2 pb-16">
+              <div className="flex items-center justify-between pt-2 pb-16 gap-2">
                 <button onClick={goPrev} disabled={!hasPrev}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-medium border transition-all hover:opacity-70 disabled:opacity-30"
+                  className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-medium border transition-all hover:opacity-70 disabled:opacity-30 flex-shrink-0"
                   style={{ border: `1px solid ${border}`, color: muted, background: surface }}>
-                  <ChevronLeft className="w-4 h-4" /> Previous
+                  <ChevronLeft className="w-4 h-4" /> <span className="hidden xs:inline">Previous</span>
                 </button>
 
-                <div className="flex items-center gap-2">
-                  {flat.slice(Math.max(0, flatIdx - 2), flatIdx + 3).map((f, i) => {
+                <div className="hidden sm:flex items-center gap-2">
+                  {flat.slice(Math.max(0, flatIdx - 2), flatIdx + 3).map((f) => {
                     const isCurr = f.lesson.id === currentLesId;
                     const pct    = lessonProgress(f.lesson, progress);
                     return (
@@ -1070,22 +1075,22 @@ export default function VirtualExperienceTaker({
                 {hasNext ? (
                   <button onClick={goNext} disabled={!reviewMode && !allCurrentDone}
                     title={!reviewMode && !allCurrentDone ? 'Complete all tasks to continue' : ''}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
                     style={{ background: reviewMode || allCurrentDone ? accentColor : border, color: reviewMode || allCurrentDone ? (isDark ? '#111' : '#fff') : muted }}>
-                    Next <ChevronRight className="w-4 h-4" />
+                    <span className="hidden xs:inline">Next</span> <ChevronRight className="w-4 h-4" />
                   </button>
                 ) : reviewMode ? (
                   <button onClick={() => setReviewMode(false)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all hover:opacity-80"
+                    className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all hover:opacity-80 flex-shrink-0"
                     style={{ background: `${accentColor}18`, color: accentColor }}>
-                    <Trophy className="w-4 h-4" /> Back to Summary
+                    <Trophy className="w-4 h-4" /> <span className="hidden xs:inline">Summary</span>
                   </button>
                 ) : (
                   <button onClick={handleComplete} disabled={saving || !overallPct === 100 as any}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all hover:opacity-80"
+                    className="flex items-center gap-1.5 px-3 sm:px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all hover:opacity-80 flex-shrink-0"
                     style={{ background: overallPct === 100 ? accentColor : border, color: overallPct === 100 ? (isDark ? '#111' : '#fff') : muted }}>
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}
-                    Complete Project
+                    <span className="hidden xs:inline">Complete</span>
                   </button>
                 )}
               </div>

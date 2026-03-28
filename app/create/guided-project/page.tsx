@@ -118,6 +118,7 @@ function VirtualExperienceCreatePageInner() {
   const [title,       setTitle]       = useState('');
   const [cohorts,     setCohorts]     = useState<any[]>([]);
   const [selectedCohorts, setSelectedCohorts] = useState<string[]>([]);
+  const [deadlineDays, setDeadlineDays] = useState<string>('');
   const [coverImage,  setCoverImage]  = useState('');
   const [uploadingCover, setUploadingCover] = useState(false);
   const [saving,      setSaving]      = useState(false);
@@ -147,6 +148,7 @@ function VirtualExperienceCreatePageInner() {
           setTitle(form.title || '');
           setCoverImage(form.config?.coverImage || '');
           setSelectedCohorts(form.cohort_ids || []);
+          setDeadlineDays(form.config?.deadline_days ? String(form.config.deadline_days) : '');
           setIndustry(form.config?.industry || 'fintech');
           setDifficulty(form.config?.difficulty || 'intermediate');
           setConfig(form.config as ProjectConfig);
@@ -427,6 +429,7 @@ function VirtualExperienceCreatePageInner() {
           config,
           coverImage,
           cohort_ids: selectedCohorts,
+          deadline_days: deadlineDays ? Number(deadlineDays) : null,
         }),
       });
 
@@ -1236,6 +1239,24 @@ function VirtualExperienceCreatePageInner() {
                     </div>
                   </div>
                 )}
+
+                {/* Deadline card */}
+                <div style={card} className="p-5 space-y-3">
+                  <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Deadline</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      style={{ ...inp, width: 80, textAlign: 'center' }}
+                      type="number"
+                      min={1}
+                      max={365}
+                      placeholder="--"
+                      value={deadlineDays}
+                      onChange={e => setDeadlineDays(e.target.value.replace(/\D/g, ''))}
+                    />
+                    <span className="text-[13px]" style={{ color: C.muted }}>days from assignment</span>
+                  </div>
+                  <p className="text-[11px]" style={{ color: C.faint }}>Students have this many days from when their cohort is assigned to complete the experience. Leave blank for no deadline.</p>
+                </div>
 
                 {/* Dataset card */}
                 {(config as any).dataset && (

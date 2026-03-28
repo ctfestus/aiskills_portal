@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, description, config, slug: preferredSlug, cohort_ids } = body;
+  const { title, description, config, slug: preferredSlug, cohort_ids, deadline_days } = body;
   if (!config) return NextResponse.json({ error: 'config is required' }, { status: 400 });
 
   // Detect content type from config -- platform only supports 'course' and 'event'
@@ -47,13 +47,25 @@ export async function POST(req: NextRequest) {
   while (attempt < 3) {
     if (attempt > 0) slug = shortSlug();
 
+    const finalConfig = deadline_days
+      ? { ...config, deadline_days: Number(deadline_days) }
+      : config;
+
     const { data, error } = await adminClient()
       .from('forms')
-      .insert({ user_id: user.id, title, description, config, slug, content_type, cohort_ids: cohort_ids ?? [] })
+      .insert({ user_id: user.id, title, description, config: finalConfig, slug, content_type, cohort_ids: cohort_ids ?? [] })
       .select('id, slug, content_type')
       .single();
 
     if (!error) {
+      // Upsert cohort_assignments (preserves original assigned_at on re-save)
+      if (cohort_ids?.length) {
+        const rows = (cohort_ids as string[]).map(cohortId => ({ form_id: data.id, cohort_id: cohortId }));
+        adminClient()
+          .from('cohort_assignments')
+          .upsert(rows, { onConflict: 'form_id,cohort_id', ignoreDuplicates: true })
+          .then(() => {}).catch(() => {});
+      }
       // Fire-and-forget assignment notifications to cohort students
       if (cohort_ids?.length) {
         sendAssignmentNotifications({

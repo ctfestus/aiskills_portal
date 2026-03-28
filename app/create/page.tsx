@@ -1034,6 +1034,7 @@ const [isSaving, setIsSaving] = useState(false);
             config: formConfig,
             slug: slugValue,
             cohort_ids: selectedCohortIds,
+            deadline_days: formConfig.deadline_days ?? null,
           }),
         });
         const data = await res.json();
@@ -1055,17 +1056,25 @@ const [isSaving, setIsSaving] = useState(false);
         // Notify students in newly added cohorts only
         const oldCohortIds: string[] = Array.isArray(existingForm?.cohort_ids) ? existingForm.cohort_ids : [];
         const addedCohortIds = selectedCohortIds.filter((id: string) => !oldCohortIds.includes(id));
+        const { data: { session: editSession } } = await supabase.auth.getSession();
         if (addedCohortIds.length) {
-          const { data: { session } } = await supabase.auth.getSession();
           fetch('/api/notify-assignment', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${editSession?.access_token}` },
             body: JSON.stringify({
               cohortIds: addedCohortIds,
               title: formConfig.title,
               slug: slugValue,
               contentType: existingForm?.content_type ?? (formConfig.isCourse ? 'course' : 'event'),
             }),
+          }).catch(() => {});
+        }
+        // Upsert cohort_assignments for all selected cohorts (preserves original assigned_at)
+        if (selectedCohortIds.length) {
+          fetch('/api/cohort-assignments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${editSession?.access_token}` },
+            body: JSON.stringify({ formId, cohortIds: selectedCohortIds }),
           }).catch(() => {});
         }
       }
@@ -2009,6 +2018,21 @@ const [isSaving, setIsSaving] = useState(false);
                       ? 'No cohort selected -- course will be public.'
                       : `Visible to ${selectedCohortIds.length} cohort${selectedCohortIds.length > 1 ? 's' : ''}.`}
                   </p>
+                  {selectedCohortIds.length > 0 && (
+                    <div className="pt-2 border-t" style={{ borderColor: C.inputBorder }}>
+                      <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Deadline (days from assignment)</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number" min={1} max={365} placeholder="--"
+                          value={formConfig.deadline_days ?? ''}
+                          onChange={e => updateConfig({ deadline_days: e.target.value ? Number(e.target.value) : null })}
+                          className="w-20 bg-transparent px-2 py-1.5 text-sm outline-none rounded-lg text-center"
+                          style={{ border: `1px solid ${C.inputBorder}`, color: C.text, background: C.input }}
+                        />
+                        <span className="text-xs" style={{ color: C.faint }}>days · leave blank for no deadline</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </EditorSection>
             )}
