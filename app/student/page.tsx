@@ -1746,19 +1746,337 @@ const IND_COLORS: Record<string, string> = {
   edtech: '#8b5cf6', healthcare: '#ef4444', ecommerce: '#f97316', consulting: '#14b8a6',
 };
 
+// --- Guided Project Card ---
+function GuidedProjectCard({ form, attempt, C, onDetails }: {
+  form: any; attempt: any; C: typeof LIGHT_C; onDetails: () => void;
+}) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const cfg = form.config || {};
+  const color = IND_COLORS[cfg.industry] || '#6366f1';
+  const slug  = form.slug || form.id;
+  const totalReqs = (cfg.modules || []).reduce((a: number, m: any) =>
+    a + (m.lessons || []).reduce((b: number, l: any) => b + (l.requirements?.length || 0), 0), 0);
+  const doneReqs = attempt?.progress
+    ? Object.values(attempt.progress as Record<string, any>).filter((v: any) => v.completed).length : 0;
+  const pct = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 0;
+  const isCompleted = !!attempt?.completed_at;
+  const isStarted   = !!attempt && !isCompleted;
+  const actionLabel = isCompleted ? 'Review' : isStarted ? 'Continue' : 'Start';
+  const actionHref  = `/${slug}`;
+  const totalModules = (cfg.modules || []).length;
+  const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl overflow-hidden flex flex-col"
+      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      {/* Cover */}
+      <div className="relative h-36 overflow-hidden cursor-pointer group flex-shrink-0"
+        style={{ background: `${color}14` }} onClick={onDetails}>
+        {cfg.coverImage
+          ? <img src={cfg.coverImage} alt={form.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
+          : <div className="w-full h-full flex items-center justify-center">
+              <Briefcase className="w-10 h-10 opacity-25" style={{ color }}/>
+            </div>}
+        {/* Industry badge */}
+        <div className="absolute top-2 left-2">
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+            style={{ background: `${color}dd`, color: 'white', backdropFilter: 'blur(4px)' }}>
+            {cfg.industry}
+          </span>
+        </div>
+        {/* Status badge */}
+        {isCompleted && (
+          <div className="absolute top-2 right-2">
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+              style={{ background: '#f0fdf4', color: '#16a34a' }}>Completed</span>
+          </div>
+        )}
+      </div>
+
+      {/* Body */}
+      <div className="p-4 flex flex-col flex-1">
+        <h3 className="text-sm font-semibold leading-snug mb-1 line-clamp-2 cursor-pointer hover:opacity-70 transition-opacity"
+          style={{ color: C.text }} onClick={onDetails}>
+          {form.title}
+        </h3>
+        {cfg.company && (
+          <p className="text-xs mb-3" style={{ color: C.faint }}>{cfg.company} · {cfg.role}</p>
+        )}
+
+        {/* Progress */}
+        <div className="mb-4">
+          <div className="flex justify-between text-xs mb-1.5" style={{ color: C.faint }}>
+            <span>{isCompleted ? 'Completed' : isStarted ? 'In progress' : 'Not started'}</span>
+            <span>{pct}%</span>
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)' }}>
+            <div className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${pct}%`, background: isCompleted ? '#10b981' : color }}/>
+          </div>
+        </div>
+
+        {/* Instructor score */}
+        {attempt?.review && (
+          <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-xl mb-3"
+            style={{ background: `${color}12`, color }}>
+            <Star className="w-3 h-3 flex-shrink-0"/> Instructor score: <strong>{attempt.review.score}/100</strong>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="mt-auto flex items-center gap-2">
+          <button onClick={onDetails}
+            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70"
+            style={{ background: C.pill, color: C.muted }}>
+            <FileText className="w-3 h-3"/> Details
+          </button>
+          <a href={actionHref}
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-opacity hover:opacity-80"
+            style={{
+              background: isCompleted ? C.pill : color,
+              color: isCompleted ? C.muted : 'white',
+              textDecoration: 'none',
+            }}>
+            <Play className="w-3 h-3"/> {actionLabel}
+          </a>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// --- Guided Project Detail Pane ---
+function GuidedProjectDetailPane({ form, attempt, C, onClose }: {
+  form: any; attempt: any; C: typeof LIGHT_C; onClose: () => void;
+}) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const cfg = form.config || {};
+  const color = IND_COLORS[cfg.industry] || '#6366f1';
+  const slug  = form.slug || form.id;
+  const [imgErr, setImgErr] = useState(false);
+
+  const modules = cfg.modules || [];
+  const totalReqs = modules.reduce((a: number, m: any) =>
+    a + (m.lessons || []).reduce((b: number, l: any) => b + (l.requirements?.length || 0), 0), 0);
+  const totalLessons = modules.reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
+  const doneReqs = attempt?.progress
+    ? Object.values(attempt.progress as Record<string, any>).filter((v: any) => v.completed).length : 0;
+  const pct = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 0;
+  const isCompleted = !!attempt?.completed_at;
+  const isStarted   = !!attempt && !isCompleted;
+  const actionLabel = isCompleted ? 'Review Project' : isStarted ? 'Continue Project' : 'Start Project';
+
+  return (
+    <>
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 z-40"
+        style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)' }}
+        onClick={onClose}
+      />
+      {/* Drawer */}
+      <motion.div
+        initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+        className="fixed right-0 top-0 bottom-0 z-50 flex flex-col"
+        style={{ width: 'min(600px, 100vw)', background: C.card, boxShadow: '-4px 0 40px rgba(0,0,0,0.18)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 flex-shrink-0"
+          style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+              style={{ background: `${color}18`, color }}>
+              {cfg.industry}
+            </span>
+            {cfg.difficulty && (
+              <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: C.faint }}>
+                {cfg.difficulty}
+              </span>
+            )}
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg transition-opacity hover:opacity-70" style={{ color: C.muted }}>
+            <X className="w-4 h-4"/>
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Cover */}
+          {cfg.coverImage && !imgErr ? (
+            <div style={{ height: 180, overflow: 'hidden', flexShrink: 0 }}>
+              <img src={cfg.coverImage} alt={form.title} onError={() => setImgErr(true)} className="w-full h-full object-cover"/>
+            </div>
+          ) : (
+            <div className="h-32 flex items-center justify-center" style={{ background: `${color}14` }}>
+              <Briefcase className="w-12 h-12 opacity-20" style={{ color }}/>
+            </div>
+          )}
+
+          <div className="p-5 space-y-5">
+            {/* Title + company */}
+            <div>
+              <h2 className="text-base font-bold leading-snug mb-1" style={{ color: C.text }}>{form.title}</h2>
+              {cfg.company && (
+                <p className="text-sm" style={{ color: C.text }}>{cfg.company} · {cfg.role}</p>
+              )}
+              {cfg.tagline && (
+                <p className="text-sm mt-1" style={{ color: C.text }}>{cfg.tagline}</p>
+              )}
+            </div>
+
+            {/* Progress (if started) */}
+            {isStarted && (
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs" style={{ color: C.muted }}>
+                  <span>Progress</span>
+                  <span>{doneReqs} / {totalReqs} tasks · {pct}%</span>
+                </div>
+                <ProgressBar value={pct} color={color}/>
+              </div>
+            )}
+            {isCompleted && (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0"/>
+                <span className="text-sm font-semibold text-emerald-700">Project completed</span>
+                {attempt?.review?.score !== undefined && (
+                  <span className="ml-auto text-sm font-bold text-emerald-700">{attempt.review.score}/100</span>
+                )}
+              </div>
+            )}
+
+            {/* Stats row */}
+            <div className="flex items-center gap-0 rounded-xl overflow-hidden"
+              style={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'}` }}>
+              {[
+                modules.length > 0 && { icon: <BarChart3 className="w-3.5 h-3.5" style={{ color }}/>, value: modules.length, label: 'Modules' },
+                totalLessons > 0 && { icon: <BookOpen className="w-3.5 h-3.5" style={{ color }}/>, value: totalLessons, label: 'Lessons' },
+                totalReqs > 0 && { icon: <ClipboardList className="w-3.5 h-3.5" style={{ color }}/>, value: totalReqs, label: 'Tasks' },
+                cfg.duration && { icon: <Clock className="w-3.5 h-3.5" style={{ color }}/>, value: cfg.duration, label: 'Duration' },
+              ].filter(Boolean).map((s: any, i, arr) => (
+                <div key={i} className="flex-1 flex flex-col items-center justify-center py-3 px-2 text-center"
+                  style={{ borderRight: i < arr.length - 1 ? `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'}` : 'none' }}>
+                  <div className="flex items-center gap-1 mb-0.5">{s.icon}<span className="text-sm font-bold" style={{ color: C.text }}>{s.value}</span></div>
+                  <div className="text-[10px] uppercase tracking-wide" style={{ color: C.muted }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+            {/* Tools row */}
+            {(cfg.tools || []).length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Zap className="w-3.5 h-3.5 flex-shrink-0" style={{ color }}/>
+                {(cfg.tools as string[]).map((t: string) => (
+                  <span key={t} className="text-xs px-2.5 py-1 rounded-lg font-medium"
+                    style={{ background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)', color: C.text }}>
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Background / description */}
+            {(cfg.background || cfg.description) && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>About this project</p>
+                <div className="text-sm leading-relaxed rich-preview" style={{ color: C.text }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(cfg.background || cfg.description) }}/>
+              </div>
+            )}
+
+            {/* Learning outcomes */}
+            {(cfg.learnOutcomes || []).length > 0 && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: C.faint }}>What you will learn</p>
+                <div className="space-y-2">
+                  {(cfg.learnOutcomes as string[]).map((o: string, i: number) => (
+                    <div key={i} className="flex items-start gap-2.5">
+                      <div className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5"
+                        style={{ background: `${color}1a` }}>
+                        <CheckCircle className="w-3 h-3" style={{ color }}/>
+                      </div>
+                      <span className="text-sm leading-snug" style={{ color: C.text }}>{o}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Module outline */}
+            {modules.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: C.faint }}>Project outline</p>
+                <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+                  {modules.map((m: any, mi: number) => (
+                    <div key={m.id} style={{ borderBottom: mi < modules.length - 1 ? `1px solid ${C.cardBorder}` : 'none' }}>
+                      <div className="flex items-center gap-3 px-4 py-3">
+                        <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ background: `${color}18` }}>
+                          <span className="text-[10px] font-bold" style={{ color }}>{mi + 1}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium leading-snug" style={{ color: C.text }}>{m.title}</span>
+                          {(m.lessons || []).length > 0 && (
+                            <span className="text-xs ml-2" style={{ color: C.muted }}>{m.lessons.length} lesson{m.lessons.length !== 1 ? 's' : ''}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Instructor feedback */}
+            {attempt?.review?.feedback && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>Instructor Feedback</p>
+                <div className="text-sm leading-relaxed px-4 py-3 rounded-xl" style={{ background: `${color}0e`, color: C.text, border: `1px solid ${color}22` }}>
+                  {attempt.review.feedback}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer CTA */}
+        <div className="p-4 flex-shrink-0 space-y-2" style={{ borderTop: `1px solid ${C.cardBorder}` }}>
+          {isCompleted && (
+            <a href={`/${slug}`}
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-70"
+              style={{ background: C.pill, color: C.muted, textDecoration: 'none' }}>
+              <Play className="w-4 h-4"/> Review project
+            </a>
+          )}
+          <a href={`/${slug}`}
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+            style={{ background: isCompleted ? C.green : color, color: 'white', textDecoration: 'none' }}>
+            {isCompleted ? <RefreshCw className="w-4 h-4"/> : isStarted ? <Play className="w-4 h-4"/> : <Zap className="w-4 h-4"/>}
+            {actionLabel}
+          </a>
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
 function GuidedProjectsSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
   const [items,    setItems]    = useState<any[]>([]);
   const [attempts, setAttempts] = useState<Record<string, any>>({});
   const [loading,  setLoading]  = useState(true);
+  const [detail,   setDetail]   = useState<any | null>(null);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      // Get student profile to find cohort
       const { data: profile } = await supabase.from('students').select('cohort_id').eq('email', userEmail).maybeSingle();
       if (!profile?.cohort_id) { setLoading(false); return; }
 
-      // Get guided projects assigned to this cohort
       const { data: forms } = await supabase
         .from('forms')
         .select('*')
@@ -1767,7 +2085,6 @@ function GuidedProjectsSection({ userEmail, C }: { userEmail: string; C: typeof 
 
       setItems(forms ?? []);
 
-      // Get attempts for this student
       if (forms?.length) {
         const ids = forms.map((f: any) => f.id);
         const { data: attRows } = await supabase
@@ -1784,64 +2101,43 @@ function GuidedProjectsSection({ userEmail, C }: { userEmail: string; C: typeof 
     load();
   }, [userEmail]);
 
-  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.faint }}/></div>;
-  if (!items.length) return <EmptyState icon={Briefcase} title="No Guided Projects" body="Guided projects assigned to your cohort will appear here." />;
+  if (loading) return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      {[0,1,2].map(i => (
+        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <Sk h={144} r={0}/><div className="p-4 space-y-3"><Sk h={16}/><Sk h={12} w="60%"/><Sk h={6}/></div>
+        </div>
+      ))}
+    </div>
+  );
+
+  if (!items.length) return (
+    <EmptyState icon={Briefcase} title="No Guided Projects" body="Guided projects assigned to your cohort will appear here." />
+  );
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {items.map((form: any) => {
-          const cfg     = form.config || {};
-          const attempt = attempts[form.id];
-          const totalReqs = (cfg.modules || []).reduce((a: number, m: any) =>
-            a + (m.lessons || []).reduce((b: number, l: any) => b + (l.requirements?.length || 0), 0), 0);
-          const doneReqs  = attempt?.progress
-            ? Object.values(attempt.progress as Record<string, any>).filter((v: any) => v.completed).length
-            : 0;
-          const pct = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 0;
-          const isCompleted = !!attempt?.completed_at;
-          const isStarted   = !!attempt && !isCompleted;
-          const color = IND_COLORS[cfg.industry] || '#6366f1';
-          const slug  = form.slug || form.id;
-
-          return (
-            <a key={form.id} href={`/${slug}`}
-              className="block rounded-2xl overflow-hidden transition-all hover:shadow-lg"
-              style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, textDecoration: 'none' }}>
-              {cfg.coverImage
-                ? <img src={cfg.coverImage} alt="" className="w-full h-32 object-cover" />
-                : <div className="w-full h-32 flex items-center justify-center" style={{ background: `${color}18` }}>
-                    <Briefcase className="w-10 h-10" style={{ color }} />
-                  </div>}
-              <div className="p-4 space-y-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: `${color}18`, color }}>{cfg.industry}</span>
-                  <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: C.faint }}>{cfg.difficulty}</span>
-                </div>
-                <p className="font-semibold text-sm leading-snug" style={{ color: C.text }}>{form.title}</p>
-                {cfg.company && <p className="text-xs" style={{ color: C.faint }}>{cfg.company} · {cfg.role}</p>}
-
-                {/* Progress bar */}
-                <div>
-                  <div className="flex justify-between text-xs mb-1" style={{ color: C.faint }}>
-                    <span>{isCompleted ? 'Completed' : isStarted ? 'In Progress' : 'Not Started'}</span>
-                    <span>{pct}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: C.cardBorder }}>
-                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: isCompleted ? '#10b981' : color }} />
-                  </div>
-                </div>
-
-                {attempt?.review && (
-                  <div className="text-xs rounded-xl px-3 py-2" style={{ background: `${color}12`, color }}>
-                    Instructor score: <strong>{attempt.review.score}/100</strong>
-                  </div>
-                )}
-              </div>
-            </a>
-          );
-        })}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {items.map((form: any) => (
+          <GuidedProjectCard
+            key={form.id}
+            form={form}
+            attempt={attempts[form.id]}
+            C={C}
+            onDetails={() => setDetail(form)}
+          />
+        ))}
       </div>
+      <AnimatePresence>
+        {detail && (
+          <GuidedProjectDetailPane
+            form={detail}
+            attempt={attempts[detail.id]}
+            C={C}
+            onClose={() => setDetail(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

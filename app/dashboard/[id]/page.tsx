@@ -1670,6 +1670,9 @@ function GuidedProjectReportTab({ form }: { form: any }) {
   const modules = cfg.modules || [];
   const totalReqs = modules.reduce((a: number, m: any) =>
     a + (m.lessons || []).reduce((b: number, l: any) => b + (l.requirements?.length || 0), 0), 0);
+  const needsReview = modules.some((m: any) =>
+    (m.lessons || []).some((l: any) =>
+      (l.requirements || []).some((r: any) => r.type === 'text' || r.type === 'upload')));
 
   const [attempts,    setAttempts]    = useState<any[]>([]);
   const [loading,     setLoading]     = useState(true);
@@ -1744,9 +1747,9 @@ function GuidedProjectReportTab({ form }: { form: any }) {
                 <th className="px-6 py-3 font-medium">Email</th>
                 <th className="px-6 py-3 font-medium">Requirements Done</th>
                 <th className="px-6 py-3 font-medium">Status</th>
-                <th className="px-6 py-3 font-medium">Score</th>
+                {needsReview && <th className="px-6 py-3 font-medium">Score</th>}
                 <th className="px-6 py-3 font-medium">Last Active</th>
-                <th className="px-6 py-3 font-medium">Action</th>
+                {needsReview && <th className="px-6 py-3 font-medium">Action</th>}
               </tr>
             </thead>
             <tbody className={`divide-y ${divider}`}>
@@ -1773,23 +1776,27 @@ function GuidedProjectReportTab({ form }: { form: any }) {
                         ? <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700'}`}><CheckCircle2 className="w-3 h-3" /> Completed</span>
                         : <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-700'}`}><span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> In Progress</span>}
                     </td>
-                    <td className={`px-6 py-3 ${textMut}`}>
-                      {a.review?.score !== undefined ? <span className="font-semibold" style={{ color: '#6366f1' }}>{a.review.score}/100</span> : '--'}
-                    </td>
+                    {needsReview && (
+                      <td className={`px-6 py-3 ${textMut}`}>
+                        {a.review?.score !== undefined ? <span className="font-semibold" style={{ color: '#6366f1' }}>{a.review.score}/100</span> : '--'}
+                      </td>
+                    )}
                     <td className={`px-6 py-3 text-xs ${textMut}`}>
                       {a.updated_at ? new Date(a.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--'}
                     </td>
-                    <td className="px-6 py-3">
-                      <button onClick={() => { setReviewing(a); setRevScore(a.review?.score ?? ''); setRevFeedback(a.review?.feedback ?? ''); }}
-                        className={`text-xs font-medium px-3 py-1.5 rounded-xl transition-all hover:opacity-80 ${isDark ? 'bg-indigo-500/15 text-indigo-300' : 'bg-indigo-50 text-indigo-700'}`}>
-                        {a.review ? 'Edit Review' : 'Review'}
-                      </button>
-                    </td>
+                    {needsReview && (
+                      <td className="px-6 py-3">
+                        <button onClick={() => { setReviewing(a); setRevScore(a.review?.score ?? ''); setRevFeedback(a.review?.feedback ?? ''); }}
+                          className={`text-xs font-medium px-3 py-1.5 rounded-xl transition-all hover:opacity-80 ${isDark ? 'bg-indigo-500/15 text-indigo-300' : 'bg-indigo-50 text-indigo-700'}`}>
+                          {a.review ? 'Edit Review' : 'Review'}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
               {attempts.length === 0 && (
-                <tr><td colSpan={7} className={`px-6 py-12 text-center ${textMut}`}>No students have started this project yet.</td></tr>
+                <tr><td colSpan={needsReview ? 7 : 5} className={`px-6 py-12 text-center ${textMut}`}>No students have started this project yet.</td></tr>
               )}
             </tbody>
           </table>

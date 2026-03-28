@@ -3,15 +3,20 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle2, Circle, ChevronRight, ChevronLeft, ChevronDown,
-  Menu, X, Loader2, Trophy, BookOpen, Lock, Download, Award,
+  Menu, X, Loader2, Trophy, BookOpen, Lock, Download, Award, Star, Clock,
+  Link as LinkIcon, Upload as UploadIcon, FileText,
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { sanitizeRichText } from '@/lib/sanitize';
 
 // -- Types ---
 interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload';
+  options?: string[];
+  correctAnswer?: string;
 }
 interface Lesson {
   id: string;
@@ -50,7 +55,7 @@ interface ProjectConfig {
   dataset?: Dataset;
 }
 
-type Progress = Record<string, { completed: boolean; notes?: string }>;
+type Progress = Record<string, { completed: boolean; notes?: string; selectedAnswer?: string; fileUrl?: string; linkUrl?: string }>;
 
 interface Props {
   formId: string;
@@ -74,10 +79,14 @@ const REQ_META: Record<string, { label: string; color: string; bg: string }> = {
 
 function getVideoEmbedUrl(url: string): string | null {
   if (!url) return null;
-  const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/))([a-zA-Z0-9_-]{11})/);
-  if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}?rel=0`;
-  if (url.includes('iframe.mediadelivery.net/embed/')) return url;
-  if (url.includes('video.bunnycdn.com')) return url;
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}?rel=0`;
+  const vimeo = url.match(/vimeo\.com\/(\d+)/);
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
+  // Bunny.net -- all known URL patterns
+  if (url.includes('iframe.mediadelivery.net/embed/') ||
+      url.includes('player.mediadelivery.net/embed/') ||
+      url.includes('video.bunnycdn.com/')) return url;
   return null;
 }
 
@@ -102,6 +111,18 @@ function CompanyAvatar({ name, color, size = 40 }: { name: string; color: string
     }}>
       {initials}
     </div>
+  );
+}
+
+function DifficultyDots({ difficulty, color }: { difficulty: string; color: string }) {
+  const level = difficulty === 'advanced' ? 3 : difficulty === 'intermediate' ? 2 : 1;
+  return (
+    <span className="flex items-center gap-0.5">
+      {[1, 2, 3].map(i => (
+        <span key={i} className="w-1.5 h-1.5 rounded-full inline-block"
+          style={{ background: i <= level ? color : 'currentColor', opacity: i <= level ? 1 : 0.2 }} />
+      ))}
+    </span>
   );
 }
 
@@ -135,6 +156,7 @@ export default function GuidedProjectTaker({
   const [review,       setReview]       = useState<any>(null);
   const [certId,       setCertId]       = useState<string | null>(null);
   const [certLoading,  setCertLoading]  = useState(false);
+  const [uploadingReq, setUploadingReq] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const currentMod = modules.find(m => m.id === currentModId);
@@ -204,6 +226,34 @@ export default function GuidedProjectTaker({
     setNoteValues(prev => ({ ...prev, [reqId]: notes }));
     setProgress(prev => {
       const next = { ...prev, [reqId]: { ...prev[reqId], notes } };
+      saveProgress(next, currentModId, currentLesId);
+      return next;
+    });
+  };
+
+  const handleFileUpload = async (reqId: string, file: File) => {
+    setUploadingReq(reqId);
+    try {
+      const ext  = file.name.split('.').pop();
+      const path = `submissions/${formId}/${studentEmail}/${reqId}-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
+      setProgress(prev => {
+        const next = { ...prev, [reqId]: { ...prev[reqId], fileUrl: publicUrl, completed: true } };
+        saveProgress(next, currentModId, currentLesId);
+        return next;
+      });
+    } catch (e: any) {
+      alert('Upload failed: ' + e.message);
+    } finally {
+      setUploadingReq(null);
+    }
+  };
+
+  const setUploadLink = (reqId: string, linkUrl: string) => {
+    setProgress(prev => {
+      const next = { ...prev, [reqId]: { ...prev[reqId], linkUrl, completed: !!linkUrl.trim() } };
       saveProgress(next, currentModId, currentLesId);
       return next;
     });
@@ -394,62 +444,86 @@ export default function GuidedProjectTaker({
           </div>
         )}
 
-        {/* Module list */}
-        <nav className="flex-1 py-2">
-          {modules.map((mod, mi) => {
-            const modLessons = mod.lessons;
-            const modDone = modLessons.every(l => lessonProgress(l, progress) === 100);
-            const modPct  = modLessons.length
-              ? Math.round(modLessons.reduce((a, l) => a + lessonProgress(l, progress), 0) / modLessons.length)
-              : 0;
-            const expanded = expandedMods.has(mod.id);
+        {/* Forage-style vertical timeline */}
+        <nav className="flex-1 py-3 overflow-y-auto">
+          <div className="px-4">
+            {flat.map(({ moduleId, lesson }, idx) => {
+              const lesPct   = lessonProgress(lesson, progress);
+              const isCurr   = lesson.id === currentLesId;
+              const locked   = !isUnlocked(idx);
+              const isIntro  = idx === 0;
+              const isLast   = idx === flat.length - 1;
+              const taskNum  = idx;
+              const reqCount = lesson.requirements?.length || 0;
+              const estTime  = reqCount <= 2 ? '15-30 mins' : reqCount <= 4 ? '30-60 mins' : '45-90 mins';
+              const lessonDiff = isIntro ? null : idx === 1 ? 'beginner' : config.difficulty;
+              const circleColor = locked ? muted : isCurr || lesPct === 100 ? accentColor : muted;
 
-            return (
-              <div key={mod.id}>
-                <button
-                  onClick={() => setExpandedMods(prev => { const n = new Set(prev); n.has(mod.id) ? n.delete(mod.id) : n.add(mod.id); return n; })}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:opacity-80">
-                  {modDone
-                    ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
-                    : <div className="w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center"
-                        style={{ borderColor: modPct > 0 ? accentColor : muted }}>
-                        {modPct > 0 && <div className="w-1.5 h-1.5 rounded-full" style={{ background: accentColor }} />}
-                      </div>}
-                  <span className="text-xs font-semibold flex-1 truncate" style={{ color: text }}>
-                    {mi + 1}. {mod.title}
-                  </span>
-                  {expanded
-                    ? <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" style={{ color: muted }} />
-                    : <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" style={{ color: muted }} />}
+              return (
+                <button key={lesson.id}
+                  onClick={() => !locked && navigate(moduleId, lesson.id, idx)}
+                  disabled={locked}
+                  className="w-full flex items-start gap-3 text-left transition-all disabled:cursor-not-allowed"
+                  style={{ opacity: locked ? 0.5 : 1 }}>
+
+                  {/* Left column: circle + dashed connector */}
+                  <div className="flex flex-col items-center flex-shrink-0">
+                    {/* Circle */}
+                    {isIntro ? (
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{
+                          background: accentColor,
+                          border: `2px solid ${accentColor}`,
+                        }}>
+                        <Star className="w-4 h-4" style={{ color: 'white' }} fill="white" />
+                      </div>
+                    ) : (
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{
+                          background: lesPct === 100 ? accentColor : surface,
+                          border: `2px solid ${circleColor}`,
+                        }}>
+                        {locked
+                          ? <Lock className="w-3.5 h-3.5" style={{ color: muted }} />
+                          : lesPct === 100
+                            ? <span className="text-xs font-bold" style={{ color: 'white' }}>✓</span>
+                            : <span className="text-xs font-bold" style={{ color: circleColor }}>{taskNum}</span>
+                        }
+                      </div>
+                    )}
+                    {/* Dashed connector (between circles, not inside them) */}
+                    {!isLast && (
+                      <div style={{
+                        width: 0,
+                        minHeight: 28,
+                        flex: 1,
+                        borderLeft: `2px dashed ${border}`,
+                        marginTop: 4,
+                        marginBottom: 4,
+                      }} />
+                    )}
+                  </div>
+
+                  {/* Text */}
+                  <div className="flex-1 min-w-0 pt-1.5" style={{ paddingBottom: isLast ? 8 : 20 }}>
+                    <p className="text-sm font-semibold leading-snug truncate"
+                      style={{ color: isCurr ? accentColor : text }}>
+                      {lesson.title}
+                    </p>
+                    {lessonDiff && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <DifficultyDots difficulty={lessonDiff} color={isCurr ? accentColor : muted} />
+                        <span className="text-[11px] capitalize" style={{ color: muted }}>{lessonDiff}</span>
+                        <span className="text-[11px]" style={{ color: muted }}>·</span>
+                        <Clock className="w-3 h-3 flex-shrink-0" style={{ color: muted }} />
+                        <span className="text-[11px]" style={{ color: muted }}>{estTime}</span>
+                      </div>
+                    )}
+                  </div>
                 </button>
-
-                {expanded && mod.lessons.map((les, li) => {
-                  const globalIdx = flat.findIndex(f => f.lesson.id === les.id);
-                  const lesPct    = lessonProgress(les, progress);
-                  const isCurr    = les.id === currentLesId;
-                  const locked    = !isUnlocked(globalIdx);
-                  return (
-                    <button key={les.id}
-                      onClick={() => navigate(mod.id, les.id, globalIdx)}
-                      disabled={locked}
-                      className="w-full flex items-center gap-2 pl-10 pr-4 py-2 text-left transition-all disabled:cursor-not-allowed"
-                      style={{ background: isCurr ? `${accentColor}18` : 'transparent', opacity: locked ? 0.4 : 1 }}>
-                      {locked
-                        ? <Lock className="w-3.5 h-3.5 flex-shrink-0" style={{ color: muted }} />
-                        : lesPct === 100
-                          ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentColor }} />
-                          : lesPct > 0
-                            ? <div className="w-3.5 h-3.5 rounded-full border-2 flex-shrink-0" style={{ borderColor: accentColor }} />
-                            : <Circle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: muted }} />}
-                      <span className="text-xs truncate" style={{ color: isCurr ? accentColor : muted, fontWeight: isCurr ? 600 : 400 }}>
-                        {li + 1}. {les.title}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </nav>
       </aside>
 
@@ -482,87 +556,292 @@ export default function GuidedProjectTaker({
           </div>
         </div>
 
-        {/* Lesson content */}
-        <div className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-8 py-8 space-y-8">
+        {/* Lesson content -- subtle grey background, single white card */}
+        <div className="flex-1 overflow-y-auto" style={{ background: isDark ? '#141414' : '#F2F2F0' }}>
+          <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 space-y-4">
           {currentLes ? (
             <>
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>{currentMod?.title}</p>
-                <h1 className="text-2xl font-bold" style={{ color: text }}>{currentLes.title}</h1>
-              </div>
+              {/* Single unified card -- title + body + video + questions */}
+              <div className="rounded-xl overflow-hidden"
+                style={{
+                  background: isDark ? '#1e1e1e' : '#ffffff',
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.10)'}`,
+                }}>
 
-              {/* Lesson body */}
-              {currentLes.body && (
-                <div className="prose prose-sm max-w-none"
-                  style={{ color: muted, lineHeight: 1.8 }}
-                  dangerouslySetInnerHTML={{ __html: currentLes.body }}
-                />
-              )}
-
-              {/* Video */}
-              {embedUrl && (
-                <div className="rounded-2xl overflow-hidden aspect-video" style={{ background: '#000' }}>
-                  <iframe src={embedUrl} className="w-full h-full" allow="autoplay; fullscreen" allowFullScreen />
+                {/* Lesson header inside card */}
+                <div className="px-8 pt-8 pb-5"
+                  style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>{currentMod?.title}</p>
+                  <h1 className="text-xl font-bold leading-snug" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{currentLes.title}</h1>
                 </div>
-              )}
 
-              {/* Requirements */}
-              {currentLes.requirements.length > 0 && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-base font-semibold" style={{ color: text }}>Your Tasks</h2>
-                    <span className="text-xs" style={{ color: muted }}>
-                      {currentLes.requirements.filter(r => progress[r.id]?.completed).length}/{currentLes.requirements.length} done
-                    </span>
+                {/* Lesson body */}
+                {/* Video -- above body, padded + rounded */}
+                {embedUrl && (
+                  <div className="px-8 pt-7 pb-2">
+                    <div className="rounded-lg overflow-hidden" style={{ aspectRatio: '16/9', background: '#000' }}>
+                      <iframe src={embedUrl} className="w-full h-full border-0"
+                        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
+                        allowFullScreen />
+                    </div>
                   </div>
+                )}
 
-                  {currentLes.requirements.map(req => {
-                    const done    = !!progress[req.id]?.completed;
-                    const meta    = REQ_META[req.type] || REQ_META.task;
-                    const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
-                    return (
-                      <div key={req.id} className="rounded-2xl p-5 space-y-3 transition-all"
-                        style={{
-                          background: done ? `${accentColor}0d` : surface,
-                          border: `1.5px solid ${done ? accentColor + '50' : border}`,
-                        }}>
-                        <div className="flex items-start gap-3">
-                          <button onClick={() => toggleReq(req.id)} className="flex-shrink-0 mt-0.5">
-                            {done
-                              ? <CheckCircle2 className="w-5 h-5" style={{ color: accentColor }} />
-                              : <Circle className="w-5 h-5" style={{ color: muted }} />}
-                          </button>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-                                style={{ background: meta.bg, color: meta.color }}>
-                                {meta.label}
-                              </span>
-                              <span className="text-sm font-semibold" style={{ color: done ? accentColor : text }}>
-                                {req.label}
-                              </span>
+                {/* Lesson body */}
+                {currentLes.body && (
+                  <div className="px-8 pt-6 pb-6">
+                    <div
+                      className={`prose prose-sm max-w-none ${isDark
+                        ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
+                        : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
+                      }`}
+                      dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentLes.body) }}
+                    />
+                  </div>
+                )}
+
+                {/* Questions section */}
+                {currentLes.requirements.length > 0 && (
+                  <>
+                    {/* Divider + label */}
+                    <div className="flex items-center justify-between px-8 py-4"
+                      style={{ borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
+                      <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? '#666' : '#999' }}>Questions</span>
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                        style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: isDark ? '#777' : '#777' }}>
+                        {currentLes.requirements.filter(r => progress[r.id]?.completed).length} / {currentLes.requirements.length} done
+                      </span>
+                    </div>
+
+                    {currentLes.requirements.map((req, qi) => {
+                      const done           = !!progress[req.id]?.completed;
+                      const selectedAnswer = progress[req.id]?.selectedAnswer;
+                      const isMcq          = req.type === 'mcq' && req.options?.length;
+
+                      const rowStyle: React.CSSProperties = {
+                        borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+                        background: done ? (isDark ? `${accentColor}08` : `${accentColor}05`) : 'transparent',
+                        transition: 'background 0.2s',
+                      };
+
+                      if (isMcq) {
+                        return (
+                          <div key={req.id} style={rowStyle} className="px-8 py-5 space-y-3">
+                            {/* Question header */}
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
+                                style={{ background: `${accentColor}15`, color: accentColor }}>Q{qi + 1}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold leading-snug" style={{ color: isDark ? '#f0f0f0' : '#111' }}>
+                                  {req.label}
+                                </p>
+                                {req.description && (
+                                  <p className="text-xs mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>
+                                )}
+                              </div>
+                              {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
                             </div>
-                            <p className="text-sm" style={{ color: muted, lineHeight: 1.7 }}>{req.description}</p>
+
+                            {/* Options */}
+                            <div className="space-y-1.5">
+                              {(req.options || []).map((opt, oi) => {
+                                const letter      = String.fromCharCode(65 + oi);
+                                const isSelected  = selectedAnswer === opt;
+                                const isCorrect   = opt === req.correctAnswer;
+                                const showCorrect = done && isCorrect;
+                                const showWrong   = isSelected && !done && !isCorrect;
+
+                                return (
+                                  <button key={oi}
+                                    onClick={() => {
+                                      if (done) return;
+                                      const correct = opt === req.correctAnswer;
+                                      setProgress(prev => {
+                                        const next = { ...prev, [req.id]: { ...prev[req.id], selectedAnswer: opt, completed: correct } };
+                                        if (correct) saveProgress(next, currentModId, currentLesId);
+                                        return next;
+                                      });
+                                    }}
+                                    disabled={done}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left text-sm transition-all disabled:cursor-default"
+                                    style={{
+                                      background: showCorrect
+                                        ? `${accentColor}12`
+                                        : showWrong
+                                          ? 'rgba(239,68,68,0.07)'
+                                          : isSelected
+                                            ? `${accentColor}08`
+                                            : isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
+                                      border: `1.5px solid ${showCorrect
+                                        ? accentColor
+                                        : showWrong
+                                          ? '#ef4444'
+                                          : isSelected
+                                            ? `${accentColor}50`
+                                            : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                      color: showCorrect ? accentColor : showWrong ? '#ef4444' : isDark ? '#e0e0e0' : '#222',
+                                    }}>
+                                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                                      style={{
+                                        background: showCorrect ? accentColor : showWrong ? '#ef4444' : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)',
+                                        color: (showCorrect || showWrong) ? 'white' : isDark ? '#aaa' : '#555',
+                                      }}>
+                                      {letter}
+                                    </span>
+                                    <span className="flex-1 text-sm">{opt}</span>
+                                    {showCorrect && <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentColor }} />}
+                                    {showWrong && <span className="text-xs flex-shrink-0" style={{ color: '#ef4444' }}>Try again</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {done && (
+                              <div className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg w-fit"
+                                style={{ background: `${accentColor}10`, color: accentColor }}>
+                                <CheckCircle2 className="w-3 h-3"/> Correct -- well done!
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      // -- File Upload question ---
+                      if (req.type === 'upload') {
+                        const fileUrl  = progress[req.id]?.fileUrl || '';
+                        const linkUrl  = progress[req.id]?.linkUrl || '';
+                        const uploading = uploadingReq === req.id;
+                        return (
+                          <div key={req.id} style={rowStyle} className="px-8 py-5 space-y-3">
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
+                                style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>Upload</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
+                                {req.description && <p className="text-xs mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
+                              </div>
+                              {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
+                            </div>
+
+                            <label className="block cursor-pointer">
+                              <div className="rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1.5 py-5 px-4 transition-all hover:opacity-80"
+                                style={{
+                                  borderColor: fileUrl ? accentColor : isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
+                                  background: fileUrl ? `${accentColor}08` : isDark ? 'rgba(255,255,255,0.03)' : '#fafafa',
+                                }}>
+                                {uploading
+                                  ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: accentColor }} />
+                                  : fileUrl
+                                    ? <CheckCircle2 className="w-4 h-4" style={{ color: accentColor }} />
+                                    : <UploadIcon className="w-4 h-4" style={{ color: isDark ? '#666' : '#aaa' }} />}
+                                <p className="text-xs font-medium text-center" style={{ color: fileUrl ? accentColor : isDark ? '#666' : '#aaa' }}>
+                                  {fileUrl ? 'File uploaded -- click to replace' : 'Click to upload your file'}
+                                </p>
+                                {fileUrl && (
+                                  <a href={fileUrl} target="_blank" rel="noreferrer"
+                                    onClick={e => e.stopPropagation()}
+                                    className="text-[11px] underline" style={{ color: accentColor }}>
+                                    View uploaded file
+                                  </a>
+                                )}
+                              </div>
+                              <input type="file" className="hidden"
+                                onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(req.id, f); }} />
+                            </label>
+
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium" style={{ color: isDark ? '#888' : '#666' }}>Or share a link</p>
+                              <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
+                                style={{
+                                  background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
+                                  border: `1px solid ${linkUrl ? `${accentColor}60` : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                }}>
+                                <LinkIcon className="w-3 h-3 flex-shrink-0" style={{ color: isDark ? '#666' : '#aaa' }} />
+                                <input type="url" value={linkUrl} onChange={e => setUploadLink(req.id, e.target.value)}
+                                  placeholder="https://docs.google.com/… or GitHub link…"
+                                  className="flex-1 bg-transparent text-xs outline-none"
+                                  style={{ color: isDark ? '#f0f0f0' : '#111' }} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // -- Short Answer / Text question ---
+                      if (req.type === 'text') {
+                        const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
+                        return (
+                          <div key={req.id} style={rowStyle} className="px-8 py-5 space-y-2.5">
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
+                                style={{ background: 'rgba(139,92,246,0.12)', color: '#8b5cf6' }}>Short Answer</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
+                                {req.description && <p className="text-xs mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
+                              </div>
+                              {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
+                            </div>
+                            <textarea
+                              value={noteVal}
+                              onChange={e => {
+                                setNote(req.id, e.target.value);
+                                if (e.target.value.trim().length > 10 && !done) toggleReq(req.id);
+                              }}
+                              placeholder="Type your answer here…"
+                              rows={3}
+                              className="w-full text-sm rounded-lg p-3 outline-none resize-none"
+                              style={{
+                                background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
+                                color: isDark ? '#f0f0f0' : '#111',
+                                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                lineHeight: 1.6,
+                              }}
+                            />
+                          </div>
+                        );
+                      }
+
+                      // -- Default fallback (task / deliverable / reflection) -
+                      const meta    = REQ_META[req.type] || REQ_META.task;
+                      const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
+                      return (
+                        <div key={req.id} style={rowStyle} className="px-8 py-5 space-y-2.5">
+                          <div className="flex items-start gap-3">
+                            <button onClick={() => toggleReq(req.id)} className="flex-shrink-0 mt-0.5">
+                              {done
+                                ? <CheckCircle2 className="w-4 h-4" style={{ color: accentColor }} />
+                                : <Circle className="w-4 h-4" style={{ color: isDark ? '#555' : '#ccc' }} />}
+                            </button>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                                  style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
+                                <span className="text-sm font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</span>
+                              </div>
+                              <p className="text-xs leading-snug" style={{ color: isDark ? '#888' : '#555' }}>{req.description}</p>
+                            </div>
+                          </div>
+                          <div className="pl-7">
+                            <textarea value={noteVal} onChange={e => setNote(req.id, e.target.value)}
+                              placeholder="Add your notes or work summary…" rows={2}
+                              className="w-full text-sm rounded-lg p-3 outline-none resize-none"
+                              style={{
+                                background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
+                                color: isDark ? '#f0f0f0' : '#111',
+                                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                lineHeight: 1.6,
+                              }} />
                           </div>
                         </div>
-                        <div className="pl-8">
-                          <textarea
-                            value={noteVal}
-                            onChange={e => setNote(req.id, e.target.value)}
-                            placeholder="Add your notes or work summary here…"
-                            rows={2}
-                            className="w-full text-sm rounded-xl p-3 outline-none resize-none"
-                            style={{ background: subtle, color: text, border: `1px solid ${border}`, lineHeight: 1.6 }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      );
+                    })}
+                  </>
+                )}
+
+              </div>{/* end unified card */}
 
               {/* Navigation */}
-              <div className="flex items-center justify-between pt-4 pb-16">
+              <div className="flex items-center justify-between pt-2 pb-16">
                 <button onClick={goPrev} disabled={!hasPrev}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-medium border transition-all hover:opacity-70 disabled:opacity-30"
                   style={{ border: `1px solid ${border}`, color: muted, background: surface }}>
@@ -603,6 +882,7 @@ export default function GuidedProjectTaker({
           ) : (
             <p style={{ color: muted }}>Select a lesson from the sidebar.</p>
           )}
+          </div>
         </div>
       </main>
     </div>

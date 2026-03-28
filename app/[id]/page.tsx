@@ -259,6 +259,7 @@ export default function PublicFormPage() {
   const [form, setForm] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [systemDark, setSystemDark] = useState(false);
+  const [studentTheme, setStudentTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -266,6 +267,18 @@ export default function PublicFormPage() {
     const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  // Read student's saved theme preference (used for guided projects & course overview)
+  useEffect(() => {
+    const stored = localStorage.getItem('ff-theme') as 'light' | 'dark' | null;
+    setStudentTheme(stored === 'dark' ? 'dark' : 'light');
+    const handler = () => {
+      const v = localStorage.getItem('ff-theme') as 'light' | 'dark' | null;
+      setStudentTheme(v === 'dark' ? 'dark' : 'light');
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
   }, []);
 
   // Override the dashboard's data-theme so the creator's chosen mode wins
@@ -661,163 +674,205 @@ export default function PublicFormPage() {
           initialProgress={projectProgress}
           initialModuleId={projectInitModId}
           initialLessonId={projectInitLesId}
-          isDark={resolvedMode !== 'light'}
+          isDark={studentTheme === 'dark'}
           accentColor={indColor}
         />
       );
     }
 
+    const isLight = studentTheme === 'light';
+    const gp = {
+      bg:        isLight ? '#F5F5F3' : '#0d0d0d',
+      card:      isLight ? '#ffffff' : '#161616',
+      border:    isLight ? 'rgba(0,0,0,0.09)' : 'rgba(255,255,255,0.08)',
+      divider:   isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)',
+      title:     isLight ? '#0d0d0d' : '#f0f0f0',
+      body:      isLight ? '#333' : '#bbb',
+      muted:     isLight ? '#777' : '#666',
+      subtle:    isLight ? '#f8f8f6' : '#1c1c1c',
+    };
+    const companyInitials = config.company?.split(' ').map((w: string) => w[0]).join('').slice(0,2).toUpperCase() || '??';
+    const managerInitials = ((config as any).managerName || 'M').split(' ').map((w: string) => w[0]).join('').slice(0,2).toUpperCase();
+    const dataset = (config as any).dataset;
+
     return (
-      <div style={{ minHeight: '100vh', background: resolvedMode === 'light' ? '#EEEAE3' : '#0f0f0f', color: resolvedMode === 'light' ? '#111' : '#f0f0f0', fontFamily: 'sans-serif' }}>
-        {/* Nav */}
-        <nav style={{ position: 'sticky', top: 0, zIndex: 30, background: resolvedMode === 'light' ? 'rgba(238,234,227,0.92)' : 'rgba(15,15,15,0.92)', borderBottom: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}`, backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 56 }}>
+      <div style={{ minHeight: '100vh', background: gp.bg, color: gp.title, fontFamily: 'var(--font-sans), Inter, sans-serif' }}>
+
+        {/* -- Sticky nav -- */}
+        <nav style={{ position: 'sticky', top: 0, zIndex: 30, backdropFilter: 'blur(14px)', background: isLight ? 'rgba(245,245,243,0.88)' : 'rgba(13,13,13,0.88)', borderBottom: `1px solid ${gp.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', height: 56 }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" style={{ height: 32, width: 'auto' }} />
+            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" style={{ height: 28, width: 'auto' }} />
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, padding: '4px 12px', borderRadius: 999, background: `${indColor}22`, color: indColor, fontWeight: 700, textTransform: 'capitalize' }}>{config.industry}</span>
-            <span style={{ fontSize: 12, padding: '4px 12px', borderRadius: 999, background: resolvedMode === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.08)', color: resolvedMode === 'light' ? '#555' : '#aaa', fontWeight: 600, textTransform: 'capitalize' }}>{config.difficulty}</span>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: `${indColor}18`, color: indColor, fontWeight: 700, textTransform: 'capitalize', letterSpacing: '0.02em' }}>{config.industry}</span>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: gp.divider, color: gp.muted, fontWeight: 600, textTransform: 'capitalize' }}>{config.difficulty}</span>
           </div>
         </nav>
 
-        <main style={{ maxWidth: 860, margin: '0 auto', padding: '40px 24px 80px' }}>
-          {/* Hero */}
-          <div style={{ background: resolvedMode === 'light' ? 'white' : '#1a1a1a', borderRadius: 28, overflow: 'hidden', boxShadow: resolvedMode === 'light' ? '0 1px 4px rgba(0,0,0,0.08)' : '0 1px 4px rgba(0,0,0,0.4)', marginBottom: 24 }}>
-            {config.coverImage && (
-              <div style={{ padding: '14px 14px 0' }}>
-                <div style={{ overflow: 'hidden', borderRadius: 18, height: 'clamp(160px,38vw,260px)', background: '#0a0a0a', position: 'relative' }}>
-                  <img src={config.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.9 }} />
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.5) 0%,transparent 60%)' }} />
+        {/* -- Hero banner -- */}
+        <div style={{ position: 'relative', width: '100%', minHeight: 340, background: '#0a0a0a', overflow: 'hidden', display: 'flex', alignItems: 'flex-end' }}>
+          {config.coverImage
+            ? <img src={config.coverImage} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.55 }} />
+            : <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${indColor}55 0%, #0a0a0a 70%)` }} />
+          }
+          {/* Gradient overlay */}
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.3) 55%, transparent 100%)' }} />
+          {/* Content */}
+          <div style={{ position: 'relative', zIndex: 2, maxWidth: 1140, margin: '0 auto', width: '100%', padding: '48px 28px 44px' }}>
+            {/* Company row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.75)' }}>{config.company}</span>
+              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, background: `${indColor}30`, color: indColor, fontWeight: 700, border: `1px solid ${indColor}40` }}>{config.role}</span>
+            </div>
+            {/* Title */}
+            <h1 style={{ fontSize: 'clamp(22px,4.5vw,36px)', fontWeight: 800, color: '#ffffff', lineHeight: 1.2, marginBottom: 10, letterSpacing: '-0.02em' }}>
+              {config.title || form.title}
+            </h1>
+            {/* Tagline */}
+            {config.tagline && (
+              <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.65)', lineHeight: 1.55, maxWidth: 620, margin: 0 }}>{config.tagline}</p>
+            )}
+          </div>
+        </div>
+
+        {/* -- Main layout -- */}
+        <div style={{ maxWidth: 1140, margin: '0 auto', padding: '32px 28px 96px', display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24, alignItems: 'start' }}>
+
+          {/* Left column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* Manager brief */}
+            {config.background && (
+              <div style={{ background: gp.card, borderRadius: 14, overflow: 'hidden', border: `1px solid ${gp.border}` }}>
+                {/* Email header */}
+                <div style={{ padding: '14px 20px', background: gp.subtle, borderBottom: `1px solid ${gp.divider}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 14.5, fontWeight: 700, color: gp.title, margin: 0, lineHeight: 1.3 }}>
+                      {(config as any).managerName || 'Your Manager'}
+                      <span style={{ fontWeight: 400, fontSize: 13, color: gp.muted }}> · {(config as any).managerTitle || 'Manager'}, {config.company}</span>
+                    </p>
+                    <p style={{ fontSize: 12, color: gp.muted, margin: 0, marginTop: 1 }}>To: You (New {config.role})</p>
+                  </div>
+                  <span style={{ fontSize: 10, padding: '3px 9px', borderRadius: 6, background: `${indColor}15`, color: indColor, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', flexShrink: 0 }}>Your Brief</span>
+                </div>
+                <div style={{ padding: '20px 24px', fontSize: 14.5, lineHeight: 1.6, color: gp.body }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(config.background) || '' }} />
+              </div>
+            )}
+
+            {/* What you'll learn */}
+            {config.learnOutcomes?.length > 0 && (
+              <div style={{ background: gp.card, borderRadius: 14, padding: '22px 24px', border: `1px solid ${gp.border}` }}>
+                <h2 style={{ fontSize: 14, fontWeight: 700, color: gp.title, marginBottom: 16, letterSpacing: '-0.01em' }}>What you&apos;ll learn</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: '10px 20px' }}>
+                  {config.learnOutcomes.map((o: string, i: number) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+                      <div style={{ width: 18, height: 18, borderRadius: 5, background: `${indColor}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                        <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                          <path d="M1.5 5L3.8 7.5L8.5 2.5" stroke={indColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                      <span style={{ fontSize: 14, color: gp.body, lineHeight: 1.5 }}>{o}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
-            <div style={{ padding: '28px 32px 32px' }}>
-              {/* Company avatar + name */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
-                <div style={{ width: 52, height: 52, borderRadius: 14, background: `${indColor}18`, border: `2px solid ${indColor}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 900, color: indColor, flexShrink: 0 }}>
-                  {config.company?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+
+            {/* Project outline */}
+            {modules.length > 0 && (
+              <div style={{ background: gp.card, borderRadius: 14, overflow: 'hidden', border: `1px solid ${gp.border}` }}>
+                <div style={{ padding: '18px 24px 14px', borderBottom: `1px solid ${gp.divider}` }}>
+                  <h2 style={{ fontSize: 14, fontWeight: 700, color: gp.title, margin: 0, letterSpacing: '-0.01em' }}>Project Outline</h2>
                 </div>
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: indColor, marginBottom: 2 }}>{config.company}</p>
-                  <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 999, background: `${indColor}18`, color: indColor, fontWeight: 600 }}>{config.role}</span>
-                </div>
-              </div>
-
-              <h1 style={{ fontSize: 'clamp(20px,4vw,28px)', fontWeight: 800, marginBottom: 10, lineHeight: 1.25 }}>{config.title || form.title}</h1>
-              {config.tagline && <p style={{ fontSize: 16, color: resolvedMode === 'light' ? '#555' : '#aaa', marginBottom: 20, lineHeight: 1.5 }}>{config.tagline}</p>}
-
-              {/* Stats */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
-                {[
-                  { label: 'Modules',      value: modules.length },
-                  { label: 'Lessons',      value: totalLessons },
-                  { label: 'Requirements', value: totalReqs },
-                  config.duration && { label: 'Duration', value: config.duration },
-                ].filter(Boolean).map((s: any) => (
-                  <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: resolvedMode === 'light' ? '#555' : '#aaa' }}>
-                    <span style={{ fontWeight: 700, color: resolvedMode === 'light' ? '#111' : '#f0f0f0' }}>{s.value}</span> {s.label}
-                  </div>
-                ))}
-              </div>
-
-              {/* Tools */}
-              {config.tools?.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 24 }}>
-                  {config.tools.map((t: string) => (
-                    <span key={t} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 8, background: resolvedMode === 'light' ? '#f0f0ec' : '#262626', color: resolvedMode === 'light' ? '#555' : '#aaa', fontWeight: 600 }}>{t}</span>
-                  ))}
-                </div>
-              )}
-
-              {/* CTA + Dataset download */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                <button onClick={handleStartProject} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 28px', borderRadius: 16, background: indColor, color: 'white', fontSize: 15, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
-                  Start Virtual Experience
-                </button>
-                {(config as any).dataset && (
-                  <button
-                    onClick={() => {
-                      const d = (config as any).dataset;
-                      const blob = new Blob([d.csvContent], { type: 'text/csv' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a'); a.href = url; a.download = d.filename; a.click(); URL.revokeObjectURL(url);
-                    }}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 20px', borderRadius: 16, background: 'transparent', color: resolvedMode === 'light' ? '#555' : '#aaa', fontSize: 14, fontWeight: 600, border: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.12)'}`, cursor: 'pointer' }}>
-                     Download Dataset
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* "You're hired" brief -- onboarding email from manager */}
-          {config.background && (
-            <div style={{ background: resolvedMode === 'light' ? 'white' : '#1a1a1a', borderRadius: 20, overflow: 'hidden', marginBottom: 24, border: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.08)'}` }}>
-              {/* Email header */}
-              <div style={{ padding: '16px 24px', borderBottom: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)'}`, background: resolvedMode === 'light' ? '#f8f8f5' : '#222' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 999, background: `${indColor}22`, border: `1.5px solid ${indColor}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: indColor, flexShrink: 0 }}>
-                    {(config as any).managerName?.split(' ').map((w: string) => w[0]).join('').slice(0,2).toUpperCase() || 'M'}
-                  </div>
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: resolvedMode === 'light' ? '#111' : '#f0f0f0', marginBottom: 1 }}>
-                      {(config as any).managerName || 'Your Manager'} <span style={{ fontWeight: 400, fontSize: 12, color: resolvedMode === 'light' ? '#888' : '#666' }}>-- {(config as any).managerTitle || 'Manager'}, {config.company}</span>
-                    </p>
-                    <p style={{ fontSize: 11, color: resolvedMode === 'light' ? '#aaa' : '#555' }}>To: You (New {config.role})</p>
-                  </div>
-                  <span style={{ marginLeft: 'auto', fontSize: 11, padding: '3px 10px', borderRadius: 999, background: `${indColor}18`, color: indColor, fontWeight: 700 }}>Your Brief</span>
-                </div>
-              </div>
-              <div style={{ padding: '24px 28px', fontSize: 14, lineHeight: 1.85, color: resolvedMode === 'light' ? '#444' : '#aaa' }} dangerouslySetInnerHTML={{ __html: sanitizeRichText(config.background) || '' }} />
-            </div>
-          )}
-
-          {/* Learning outcomes */}
-          {config.learnOutcomes?.length > 0 && (
-            <div style={{ background: resolvedMode === 'light' ? 'white' : '#1a1a1a', borderRadius: 20, padding: '24px 28px', marginBottom: 24, border: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.08)'}` }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>What you will learn</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 10 }}>
-                {config.learnOutcomes.map((o: string, i: number) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13, color: resolvedMode === 'light' ? '#444' : '#bbb' }}>
-                    <CheckCircle2 style={{ width: 16, height: 16, flexShrink: 0, marginTop: 2, color: indColor }} />
-                    {o}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Module outline */}
-          {modules.length > 0 && (
-            <div style={{ background: resolvedMode === 'light' ? 'white' : '#1a1a1a', borderRadius: 20, padding: '24px 28px', border: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.08)'}` }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Project Outline</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {modules.map((mod: any, mi: number) => (
-                  <div key={mod.id} style={{ borderRadius: 14, border: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.06)'}`, overflow: 'hidden' }}>
-                    <div style={{ padding: '12px 16px', background: resolvedMode === 'light' ? '#f8f8f5' : '#242424', display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: indColor, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Module {mi + 1}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: resolvedMode === 'light' ? '#111' : '#f0f0f0' }}>{mod.title}</span>
-                      <span style={{ marginLeft: 'auto', fontSize: 11, color: resolvedMode === 'light' ? '#888' : '#666' }}>{mod.lessons?.length || 0} lesson{mod.lessons?.length !== 1 ? 's' : ''}</span>
+                  <div key={mod.id} style={{ borderBottom: mi < modules.length - 1 ? `1px solid ${gp.divider}` : 'none' }}>
+                    {/* Module header */}
+                    <div style={{ padding: '13px 24px', display: 'flex', alignItems: 'center', gap: 10, background: gp.subtle }}>
+                      <div style={{ width: 22, height: 22, borderRadius: 7, background: `${indColor}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: indColor }}>{mi + 1}</span>
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: gp.title, flex: 1 }}>{mod.title}</span>
+                      <span style={{ fontSize: 11, color: gp.muted, fontWeight: 500 }}>{mod.lessons?.length || 0} lesson{mod.lessons?.length !== 1 ? 's' : ''}</span>
                     </div>
+                    {/* Lessons */}
                     {(mod.lessons || []).map((les: any, li: number) => (
-                      <div key={les.id} style={{ padding: '10px 16px 10px 32px', display: 'flex', alignItems: 'center', gap: 8, borderTop: `1px solid ${resolvedMode === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)'}` }}>
-                        <span style={{ fontSize: 11, color: resolvedMode === 'light' ? '#bbb' : '#555', fontWeight: 600 }}>{li + 1}</span>
-                        <span style={{ fontSize: 13, color: resolvedMode === 'light' ? '#444' : '#bbb' }}>{les.title}</span>
-                        {les.requirements?.length > 0 && <span style={{ marginLeft: 'auto', fontSize: 11, color: resolvedMode === 'light' ? '#bbb' : '#555' }}>{les.requirements.length} req.</span>}
+                      <div key={les.id} style={{ padding: '10px 24px 10px 52px', display: 'flex', alignItems: 'center', gap: 8, borderTop: `1px solid ${gp.divider}` }}>
+                        <BookOpen style={{ width: 12, height: 12, color: gp.muted, flexShrink: 0 }} />
+                        <span style={{ fontSize: 14, color: gp.body, flex: 1, lineHeight: 1.4 }}>{les.title}</span>
+                        {les.requirements?.length > 0 && (
+                          <span style={{ fontSize: 11, color: gp.muted, fontWeight: 500, flexShrink: 0 }}>{les.requirements.length} tasks</span>
+                        )}
                       </div>
                     ))}
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* Right sidebar */}
+          <div style={{ position: 'sticky', top: 72, display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {/* Enrollment card */}
+            <div style={{ background: gp.card, borderRadius: 14, overflow: 'hidden', border: `1px solid ${gp.border}` }}>
+              {/* Cover thumbnail */}
+              {config.coverImage && (
+                <div style={{ height: 140, overflow: 'hidden', position: 'relative' }}>
+                  <img src={config.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.35) 0%, transparent 60%)' }} />
+                </div>
+              )}
+              <div style={{ padding: '20px 20px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {/* Tools */}
+                {config.tools?.length > 0 && (
+                  <div>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: gp.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Tools</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                      {config.tools.map((t: string) => (
+                        <span key={t} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, background: gp.subtle, color: gp.body, fontWeight: 600, border: `1px solid ${gp.divider}` }}>{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* CTA */}
+                <button onClick={handleStartProject}
+                  style={{ width: '100%', padding: '13px', borderRadius: 10, background: indColor, color: '#fff', fontSize: 14, fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, letterSpacing: '-0.01em' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.9'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}>
+                  Start Virtual Experience <ArrowRight style={{ width: 15, height: 15 }} />
+                </button>
+
+                {/* Dataset download */}
+                {dataset?.csvContent && (
+                  <button onClick={() => {
+                    const blob = new Blob([dataset.csvContent], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url; a.download = dataset.filename || 'dataset.csv'; a.click(); URL.revokeObjectURL(url);
+                  }}
+                  style={{ width: '100%', padding: '11px', borderRadius: 10, background: 'transparent', color: gp.body, fontSize: 13, fontWeight: 600, border: `1px solid ${gp.border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+                  <Download style={{ width: 14, height: 14 }} /> Download Dataset
+                  </button>
+                )}
+              </div>
             </div>
-          )}
-        </main>
 
+            {/* Difficulty badge */}
+            <div style={{ background: gp.card, borderRadius: 14, padding: '14px 18px', border: `1px solid ${gp.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: `${indColor}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Star style={{ width: 16, height: 16, color: indColor }} />
+              </div>
+              <div>
+                <p style={{ fontSize: 12, color: gp.muted, margin: 0, fontWeight: 500 }}>Difficulty</p>
+                <p style={{ fontSize: 13, color: gp.title, margin: 0, fontWeight: 700, textTransform: 'capitalize' }}>{config.difficulty}</p>
+              </div>
+            </div>
+          </div>
+        </div>
 
-        <footer style={{ textAlign: 'center', paddingBottom: 48, paddingTop: 16 }}>
-          <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-            <span style={{ fontSize: 12, color: resolvedMode === 'light' ? '#aaa' : '#555' }}>Powered by <strong style={{ color: resolvedMode === 'light' ? '#555' : '#aaa' }}>AI Skills Africa</strong></span>
-          </Link>
+        <footer style={{ textAlign: 'center', paddingBottom: 40, paddingTop: 8 }}>
+          <span style={{ fontSize: 12, color: gp.muted }}>Powered by <strong style={{ color: gp.body }}>AI Skills Africa</strong></span>
         </footer>
       </div>
     );

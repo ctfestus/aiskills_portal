@@ -3572,7 +3572,7 @@ const [isSaving, setIsSaving] = useState(false);
                           key={v.guid}
                           onClick={() => selectBunnyVideo(v.embedUrl)}
                           className="text-left rounded-xl overflow-hidden transition-all hover:scale-[1.02] hover:shadow-lg group"
-                          style={{ border: `1px solid ${C.cardBorder}`, background: C.inputBg }}
+                          style={{ border: `1px solid ${C.cardBorder}`, background: C.input }}
                         >
                           <div className="relative aspect-video bg-black overflow-hidden">
                             {v.thumbnail

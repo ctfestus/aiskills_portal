@@ -3223,7 +3223,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                   <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: '#FF6B35' }}>
                     <Video className="w-3.5 h-3.5 text-white"/>
                   </div>
-                  <span className="text-sm font-semibold" style={{ color: FE.label }}>Pick from Bunny Library</span>
+                  <span className="text-sm font-semibold" style={{ color: FE.text }}>Pick from Bunny Library</span>
                 </div>
                 <button onClick={() => setBunnyPickerOpen(false)} style={{ color: FE.faint }}>
                   <X className="w-4 h-4"/>
@@ -3231,7 +3231,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
               </div>
               <div className="px-5 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${FE.cardBorder}` }}>
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 flex-1 px-3 py-2 rounded-xl" style={{ background: FE.inputBg, border: `1px solid ${FE.inputBorder}` }}>
+                  <div className="flex items-center gap-2 flex-1 px-3 py-2 rounded-xl" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
                     <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: FE.faint }}/>
                     <input
                       type="text"
@@ -3240,7 +3240,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                       onKeyDown={e => e.key === 'Enter' && openBunnyPicker(bunnyPickerQId!, bunnySearch)}
                       placeholder="Search videos..."
                       className="flex-1 bg-transparent text-sm outline-none"
-                      style={{ color: FE.label }}
+                      style={{ color: FE.text }}
                     />
                   </div>
                   <button
@@ -3291,7 +3291,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                           key={v.guid}
                           onClick={() => selectBunnyVideo(v.embedUrl)}
                           className="text-left rounded-xl overflow-hidden transition-all hover:scale-[1.02] hover:shadow-lg group"
-                          style={{ border: `1px solid ${FE.cardBorder}`, background: FE.inputBg }}
+                          style={{ border: `1px solid ${FE.cardBorder}`, background: FE.input }}
                         >
                           <div className="relative aspect-video bg-black overflow-hidden">
                             {v.thumbnail
@@ -3316,7 +3316,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                             )}
                           </div>
                           <div className="px-2.5 py-2">
-                            <p className="text-xs font-medium line-clamp-2 leading-snug" style={{ color: FE.label }}>{v.title}</p>
+                            <p className="text-xs font-medium line-clamp-2 leading-snug" style={{ color: FE.text }}>{v.title}</p>
                           </div>
                         </button>
                       ))}

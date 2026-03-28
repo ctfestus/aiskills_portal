@@ -5,8 +5,10 @@ import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight,
-  Plus, Trash2, X, Check, RefreshCw, Upload, Pencil,
+  Plus, Trash2, X, Check, RefreshCw, Upload, Pencil, Star, Clock, Download,
+  Link as LinkIcon, FileText, Database, PenLine, Table,
 } from 'lucide-react';
+import { RichTextEditor } from '@/components/RichTextEditor';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -32,7 +34,9 @@ interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload';
+  options?: string[];
+  correctAnswer?: string;
 }
 interface Lesson {
   id: string;
@@ -61,14 +65,8 @@ interface ProjectConfig {
   coverImage: string;
   learnOutcomes: string[];
   modules: Module[];
-}
-interface Suggestion {
-  type: string;
-  description: string;
-  moduleId?: string;
-  lessonId?: string;
-  lesson?: Lesson;
-  requirement?: Requirement;
+  managerName?: string;
+  managerTitle?: string;
 }
 
 const INDUSTRIES = [
@@ -92,6 +90,7 @@ export default function GuidedProjectCreatePage() {
   const editId = searchParams.get('id');
 
   // Step 1 state
+  const [creationMode, setCreationMode] = useState<'ai' | 'data' | 'manual' | null>(null);
   const [industry,    setIndustry]    = useState('fintech');
   const [difficulty,  setDifficulty]  = useState<'beginner'|'intermediate'|'advanced'>('intermediate');
   const [roleHint,    setRoleHint]    = useState('');
@@ -99,6 +98,13 @@ export default function GuidedProjectCreatePage() {
   const [toolsInput,  setToolsInput]  = useState('');
   const [generating,  setGenerating]  = useState(false);
   const [genError,    setGenError]    = useState('');
+  // Dataset state (shared across all modes)
+  const [datasetCsv,      setDatasetCsv]      = useState('');
+  const [datasetFilename, setDatasetFilename]  = useState('');
+  const [datasetUrl,      setDatasetUrl]       = useState('');
+  const [datasetInputTab, setDatasetInputTab]  = useState<'upload'|'link'>('upload');
+  const [uploadingDataset, setUploadingDataset] = useState(false);
+  const datasetRef = useRef<HTMLInputElement>(null);
 
   // Step 2 state
   const [step,        setStep]        = useState<1|2>(1);
@@ -115,9 +121,7 @@ export default function GuidedProjectCreatePage() {
 
   // AI improve state
   const [improveInstruction, setImproveInstruction] = useState('');
-  const [improveModuleId, setImproveModuleId] = useState<string|null>(null);
   const [improving,   setImproving]   = useState(false);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [showImprove, setShowImprove] = useState(false);
 
   const coverRef = useRef<HTMLInputElement>(null);
@@ -203,7 +207,7 @@ export default function GuidedProjectCreatePage() {
   };
 
   const addReq = (moduleId: string, lessonId: string) => {
-    const req: Requirement = { id: `req-${uid()}`, label: 'New Task', description: '', type: 'task' };
+    const req: Requirement = { id: `req-${uid()}`, label: '', description: '', type: 'mcq', options: ['', '', '', ''], correctAnswer: '' };
     updateLesson(moduleId, lessonId, {
       requirements: [...(config?.modules.find(m=>m.id===moduleId)?.lessons.find(l=>l.id===lessonId)?.requirements ?? []), req],
     });
@@ -219,15 +223,30 @@ export default function GuidedProjectCreatePage() {
     setGenerating(true); setGenError('');
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      // If instructor provided CSV, use data-driven generation for accurate answers
+      const useDataMode = datasetCsv.trim().length > 0;
       const res = await fetch('/api/ai-guided-project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ action: 'generate', industry, difficulty, role: roleHint, focusTopic, tools: toolsInput }),
+        body: JSON.stringify(useDataMode
+          ? { action: 'generate-from-data', industry, difficulty, role: roleHint, focusTopic, tools: toolsInput, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }
+          : { action: 'generate', industry, difficulty, role: roleHint, focusTopic, tools: toolsInput }
+        ),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
+      // Merge instructor-provided URL into dataset (whether AI-generated or instructor-provided)
+      if (json.config) {
+        if (datasetUrl.trim()) {
+          json.config.dataset = { ...(json.config.dataset || {}), url: datasetUrl.trim() };
+        }
+        // If only a URL was given with no CSV, create a minimal dataset entry
+        if (!datasetCsv.trim() && datasetUrl.trim() && !json.config.dataset?.csvContent) {
+          json.config.dataset = { filename: '', description: '', csvContent: '', url: datasetUrl.trim() };
+        }
+      }
       setConfig(json.config);
-      setTitle(json.config.company ? `${json.config.company} -- ${industry.charAt(0).toUpperCase()+industry.slice(1)} Project` : 'Guided Project');
+      setTitle(json.config.company ? `${json.config.company} - ${industry.charAt(0).toUpperCase()+industry.slice(1)} Project` : 'Guided Project');
       setCoverImage(json.config.coverImage || '');
       setExpandedModules(new Set((json.config.modules || []).map((m: Module) => m.id)));
       setStep(2);
@@ -238,42 +257,117 @@ export default function GuidedProjectCreatePage() {
     }
   };
 
-  // -- AI Improve ---
-  const handleImprove = async () => {
-    if (!improveInstruction.trim() || !config) return;
-    setImproving(true); setSuggestions([]);
+  // -- Generate from uploaded dataset ---
+  const handleGenerateFromData = async () => {
+    if (!datasetCsv.trim()) { setGenError('Please paste or upload a dataset first.'); return; }
+    setGenerating(true); setGenError('');
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/ai-guided-project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ action: 'improve', instruction: improveInstruction, currentConfig: config, moduleId: improveModuleId }),
+        body: JSON.stringify({ action: 'generate-from-data', industry, difficulty, role: roleHint, focusTopic, tools: toolsInput, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed');
-      setSuggestions(json.suggestions || []);
+      if (!res.ok) throw new Error(json.error || 'Generation failed');
+      setConfig(json.config);
+      setTitle(json.config.company ? `${json.config.company} - ${industry.charAt(0).toUpperCase()+industry.slice(1)} Project` : 'Guided Project');
+      setCoverImage(json.config.coverImage || '');
+      setExpandedModules(new Set((json.config.modules || []).map((m: Module) => m.id)));
+      setStep(2);
     } catch (e: any) {
-      setSuggestions([{ type: 'general', description: `Error: ${e.message}` }]);
+      setGenError(e.message);
     } finally {
-      setImproving(false);
+      setGenerating(false);
     }
   };
 
-  const acceptSuggestion = (s: Suggestion) => {
-    if (!config) return;
-    if (s.type === 'add_lesson' && s.moduleId && s.lesson) {
-      updateModule(s.moduleId, {
-        lessons: [...(config.modules.find(m=>m.id===s.moduleId)?.lessons ?? []), s.lesson],
+  // -- Manual scaffold ---
+  const handleManual = () => {
+    const ind = INDUSTRIES.find(i => i.id === industry) || INDUSTRIES[0];
+    const dataset = datasetCsv.trim()
+      ? { filename: datasetFilename || 'dataset.csv', description: '', csvContent: datasetCsv, url: datasetUrl.trim() || undefined }
+      : datasetUrl.trim()
+        ? { filename: '', description: '', csvContent: '', url: datasetUrl.trim() }
+        : undefined;
+    const blankConfig: any = {
+      isGuidedProject: true,
+      industry,
+      difficulty,
+      role: roleHint || 'Data Analyst',
+      company: '',
+      duration: '4-6 hours',
+      tools: toolsInput ? toolsInput.split(',').map(t => t.trim()).filter(Boolean) : [],
+      tagline: '',
+      description: '',
+      background: '',
+      coverImage: '',
+      learnOutcomes: ['', '', ''],
+      modules: [{
+        id: `mod-${uid()}`,
+        title: 'Module 1',
+        description: '',
+        lessons: [{
+          id: `les-${uid()}`,
+          title: 'Lesson 1',
+          body: '<p>Describe what the student should do in this lesson.</p>',
+          requirements: [{
+            id: `req-${uid()}`,
+            label: '',
+            description: '',
+            type: 'mcq',
+            options: ['', '', '', ''],
+            correctAnswer: '',
+          }],
+        }],
+      }],
+      managerName: '',
+      managerTitle: '',
+      ...(dataset ? { dataset } : {}),
+    };
+    setConfig(blankConfig);
+    setTitle(`${ind.label} Guided Project`);
+    setExpandedModules(new Set([blankConfig.modules[0].id]));
+    setStep(2);
+  };
+
+  // -- Dataset file upload ---
+  const handleDatasetFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setDatasetFilename(file.name);
+    setUploadingDataset(true);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      setDatasetCsv(ev.target?.result as string || '');
+      setUploadingDataset(false);
+    };
+    reader.readAsText(file);
+  };
+
+  // -- AI Improve ---
+  const handleImprove = async () => {
+    if (!improveInstruction.trim() || !config) return;
+    setImproving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/ai-guided-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ action: 'improve', instruction: improveInstruction, currentConfig: config }),
       });
-    } else if (s.type === 'modify_lesson' && s.moduleId && s.lessonId && s.lesson) {
-      updateLesson(s.moduleId, s.lessonId, { title: s.lesson.title, body: s.lesson.body });
-    } else if (s.type === 'remove_lesson' && s.moduleId && s.lessonId) {
-      removeLesson(s.moduleId, s.lessonId);
-    } else if (s.type === 'add_requirement' && s.moduleId && s.lessonId && s.requirement) {
-      const l = config.modules.find(m=>m.id===s.moduleId)?.lessons.find(l=>l.id===s.lessonId);
-      if (l) updateLesson(s.moduleId, s.lessonId, { requirements: [...l.requirements, s.requirement] });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed');
+      if (json.config) {
+        setConfig(json.config as ProjectConfig);
+        setImproveInstruction('');
+        setShowImprove(false);
+      }
+    } catch (e: any) {
+      alert('AI error: ' + e.message);
+    } finally {
+      setImproving(false);
     }
-    setSuggestions(prev => prev.filter(sg => sg !== s));
   };
 
   // -- Cover image upload ---
@@ -294,6 +388,17 @@ export default function GuidedProjectCreatePage() {
     } finally {
       setUploadingCover(false);
     }
+  };
+
+  // -- Dataset download ---
+  const downloadDataset = () => {
+    const dataset = (config as any)?.dataset;
+    if (!dataset?.csvContent) return;
+    const blob = new Blob([dataset.csvContent], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = dataset.filename || 'dataset.csv'; a.click();
+    URL.revokeObjectURL(url);
   };
 
   // -- Save ---
@@ -380,100 +485,233 @@ export default function GuidedProjectCreatePage() {
         {step === 1 && (
           <div className="space-y-8">
             {/* Hero */}
-            <div className="text-center py-8">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-5"
-                style={{ background: `${C.cta}18`, color: C.cta }}>
-                <Sparkles className="w-3.5 h-3.5" /> AI-Powered Virtual Experience
-              </div>
+            <div className="text-center py-6">
               <h1 className="text-3xl sm:text-4xl font-black mb-3" style={{ color: C.text, lineHeight: 1.2 }}>
-                Create an Industry<br />Work Experience Program
+                Create a Guided Project
               </h1>
               <p className="text-base max-w-lg mx-auto" style={{ color: C.muted }}>
-                AI generates a complete, realistic project -- like Forage -- with company brief, modules, tasks, and a real dataset.
+                Choose how you want to build it.
               </p>
             </div>
 
-            {/* Industry grid */}
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: C.muted }}>Select Industry</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {INDUSTRIES.map(ind => (
-                  <button key={ind.id} onClick={() => setIndustry(ind.id)}
-                    className="relative flex flex-col items-start gap-3 p-5 rounded-2xl border-2 text-left transition-all hover:scale-[1.02]"
-                    style={{
-                      border: `2px solid ${industry === ind.id ? ind.color : C.cardBorder}`,
-                      background: industry === ind.id ? `${ind.color}12` : C.card,
-                      boxShadow: industry === ind.id ? `0 0 0 4px ${ind.color}20` : C.cardShadow,
-                    }}>
-                    {industry === ind.id && (
-                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center"
-                        style={{ background: ind.color }}>
-                        <Check className="w-3 h-3 text-white" />
-                      </div>
-                    )}
-                    <span className="text-3xl">{ind.emoji}</span>
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: industry === ind.id ? ind.color : C.text }}>{ind.label}</p>
+            {/* Creation mode cards */}
+            <div className="grid sm:grid-cols-2 gap-4">
+              {[
+                {
+                  id: 'ai' as const,
+                  icon: <Sparkles className="w-6 h-6"/>,
+                  color: C.cta,
+                  title: 'Generate with AI',
+                  desc: 'AI creates the company scenario, modules and questions. Optionally provide your own dataset for more accurate answers.',
+                  badge: 'Recommended',
+                },
+                {
+                  id: 'manual' as const,
+                  icon: <PenLine className="w-6 h-6"/>,
+                  color: '#f59e0b',
+                  title: 'Build Manually',
+                  desc: 'Start with a blank template and write every module, lesson and question yourself. Optionally attach a dataset for students.',
+                  badge: 'Full Control',
+                },
+              ].map(m => (
+                <button key={m.id} onClick={() => setCreationMode(m.id)}
+                  className="relative text-left p-6 rounded-2xl border-2 transition-all hover:scale-[1.02] space-y-3"
+                  style={{
+                    border: `2px solid ${creationMode === m.id ? m.color : C.cardBorder}`,
+                    background: creationMode === m.id ? `${m.color}0e` : C.card,
+                    boxShadow: creationMode === m.id ? `0 0 0 4px ${m.color}18` : C.cardShadow,
+                  }}>
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: `${m.color}18`, color: m.color }}>
+                    {m.icon}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-sm font-bold" style={{ color: creationMode === m.id ? m.color : C.text }}>{m.title}</p>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: `${m.color}18`, color: m.color }}>{m.badge}</span>
                     </div>
-                  </button>
-                ))}
-              </div>
+                    <p className="text-xs leading-relaxed" style={{ color: C.muted }}>{m.desc}</p>
+                  </div>
+                  {creationMode === m.id && (
+                    <div className="absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: m.color }}>
+                      <Check className="w-3 h-3 text-white"/>
+                    </div>
+                  )}
+                </button>
+              ))}
             </div>
 
-            {/* Difficulty + Role + Tools in a clean card */}
-            <div style={card} className="p-6 space-y-5">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.muted }}>Experience Level</p>
-                <div className="grid grid-cols-3 gap-3">
-                  {([
-                    { id: 'beginner',     label: 'Beginner',     desc: 'Foundational skills' },
-                    { id: 'intermediate', label: 'Intermediate', desc: 'Real-world application' },
-                    { id: 'advanced',     label: 'Advanced',     desc: 'Expert-level tasks' },
-                  ] as const).map(d => (
-                    <button key={d.id} onClick={() => setDifficulty(d.id)}
-                      className="py-4 px-4 rounded-2xl border-2 text-left transition-all"
-                      style={{
-                        border: `2px solid ${difficulty === d.id ? C.cta : C.cardBorder}`,
-                        background: difficulty === d.id ? `${C.cta}12` : 'transparent',
-                      }}>
-                      <p className="text-sm font-bold" style={{ color: difficulty === d.id ? C.cta : C.text }}>{d.label}</p>
-                      <p className="text-xs mt-0.5" style={{ color: C.faint }}>{d.desc}</p>
-                    </button>
-                  ))}
+            {/* Settings (shared across modes) */}
+            {creationMode && (
+              <div style={card} className="p-6 space-y-5">
+                {/* Industry */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.muted }}>Industry</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {INDUSTRIES.map(ind => (
+                      <button key={ind.id} onClick={() => setIndustry(ind.id)}
+                        className="relative flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-left transition-all"
+                        style={{
+                          border: `2px solid ${industry === ind.id ? ind.color : C.cardBorder}`,
+                          background: industry === ind.id ? `${ind.color}12` : 'transparent',
+                        }}>
+                        <span className="text-lg">{ind.emoji}</span>
+                        <p className="text-xs font-semibold" style={{ color: industry === ind.id ? ind.color : C.text }}>{ind.label}</p>
+                        {industry === ind.id && <Check className="w-3 h-3 ml-auto flex-shrink-0" style={{ color: ind.color }}/>}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid sm:grid-cols-3 gap-4 pt-2 border-t" style={{ borderColor: C.divider }}>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Role</label>
-                  <input style={inp} value={roleHint} onChange={e => setRoleHint(e.target.value)} placeholder="e.g. Data Analyst (optional)" />
+                {/* Difficulty */}
+                <div className="pt-2 border-t" style={{ borderColor: C.divider }}>
+                  <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.muted }}>Experience Level</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    {([
+                      { id: 'beginner',     label: 'Beginner',     desc: 'Foundational skills' },
+                      { id: 'intermediate', label: 'Intermediate', desc: 'Real-world application' },
+                      { id: 'advanced',     label: 'Advanced',     desc: 'Expert-level tasks' },
+                    ] as const).map(d => (
+                      <button key={d.id} onClick={() => setDifficulty(d.id)}
+                        className="py-3 px-4 rounded-xl border-2 text-left transition-all"
+                        style={{
+                          border: `2px solid ${difficulty === d.id ? C.cta : C.cardBorder}`,
+                          background: difficulty === d.id ? `${C.cta}12` : 'transparent',
+                        }}>
+                        <p className="text-sm font-bold" style={{ color: difficulty === d.id ? C.cta : C.text }}>{d.label}</p>
+                        <p className="text-xs mt-0.5" style={{ color: C.faint }}>{d.desc}</p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Focus Topic</label>
-                  <input style={inp} value={focusTopic} onChange={e => setFocusTopic(e.target.value)} placeholder="e.g. Fraud detection (optional)" />
+
+                {/* Role / Focus / Tools */}
+                <div className="grid sm:grid-cols-3 gap-4 pt-2 border-t" style={{ borderColor: C.divider }}>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Role</label>
+                    <input style={inp} value={roleHint} onChange={e => setRoleHint(e.target.value)} placeholder="e.g. Data Analyst" />
+                  </div>
+                  {creationMode !== 'manual' && (
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Focus Topic</label>
+                      <input style={inp} value={focusTopic} onChange={e => setFocusTopic(e.target.value)} placeholder="e.g. Fraud detection" />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Tools</label>
+                    <input style={inp} value={toolsInput} onChange={e => setToolsInput(e.target.value)} placeholder="e.g. Excel, Power BI" />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Tools Only</label>
-                  <input style={inp} value={toolsInput} onChange={e => setToolsInput(e.target.value)} placeholder="e.g. Excel, Power BI" />
+
+                {/* Dataset section -- available for both AI and Manual modes */}
+                <div className="pt-2 border-t space-y-3" style={{ borderColor: C.divider }}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-widest" style={{ color: C.muted }}>
+                        Dataset <span className="normal-case font-normal tracking-normal" style={{ color: C.faint }}>(optional)</span>
+                      </p>
+                      {creationMode === 'ai' && (
+                        <p className="text-[11px] mt-0.5" style={{ color: C.faint }}>
+                          If provided, AI uses your data to generate accurate questions. Otherwise AI creates its own dataset.
+                        </p>
+                      )}
+                    </div>
+                    {/* Tab switcher */}
+                    <div className="flex rounded-xl overflow-hidden border text-xs" style={{ border: `1px solid ${C.cardBorder}` }}>
+                      {(['upload', 'link'] as const).map(tab => (
+                        <button key={tab} onClick={() => setDatasetInputTab(tab)}
+                          className="px-3 py-1.5 font-medium capitalize transition-all"
+                          style={{
+                            background: datasetInputTab === tab ? C.cta : C.card,
+                            color: datasetInputTab === tab ? C.ctaText : C.muted,
+                          }}>
+                          {tab === 'upload' ? <span className="flex items-center gap-1"><Upload className="w-3 h-3"/> Upload / Paste</span> : <span className="flex items-center gap-1"><LinkIcon className="w-3 h-3"/> Link</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {datasetInputTab === 'upload' && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <input ref={datasetRef} type="file" accept=".csv,.tsv,.txt" className="hidden" onChange={handleDatasetFileUpload}/>
+                        <button onClick={() => datasetRef.current?.click()}
+                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border transition-all hover:opacity-70"
+                          style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
+                          {uploadingDataset ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Upload className="w-3.5 h-3.5"/>}
+                          {datasetFilename ? datasetFilename : 'Upload CSV file'}
+                        </button>
+                        {datasetFilename && (
+                          <button onClick={() => { setDatasetCsv(''); setDatasetFilename(''); }}
+                            className="text-xs hover:opacity-70 transition-opacity" style={{ color: C.faint }}>
+                            <X className="w-3.5 h-3.5"/>
+                          </button>
+                        )}
+                      </div>
+                      <textarea
+                        value={datasetCsv}
+                        onChange={e => setDatasetCsv(e.target.value)}
+                        rows={8}
+                        style={{ ...inp, fontFamily: 'monospace', fontSize: 12, resize: 'vertical', lineHeight: 1.5 } as React.CSSProperties}
+                        placeholder={"Paste CSV data here, or upload a file above…\n\ndate,region,amount,status\n2024-01-01,Lagos,45000,Completed\n2024-01-02,Abuja,32000,Pending"}
+                      />
+                      {datasetCsv.trim() && (
+                        <div className="flex items-center gap-2 text-xs" style={{ color: C.faint }}>
+                          <Table className="w-3.5 h-3.5"/>
+                          {datasetCsv.trim().split('\n').length} rows detected
+                          {creationMode === 'ai' && ' · AI will generate questions from these exact values'}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {datasetInputTab === 'link' && (
+                    <div className="space-y-2">
+                      <input
+                        value={datasetUrl}
+                        onChange={e => setDatasetUrl(e.target.value)}
+                        style={inp}
+                        placeholder="https://docs.google.com/spreadsheets/… or any public CSV/sheet URL"
+                      />
+                      <p className="text-[11px]" style={{ color: C.faint }}>
+                        The link will be shown to students as the dataset source.
+                        {creationMode === 'ai' && ' To let AI generate questions from your data, paste the CSV content in the Upload tab instead.'}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
+            )}
 
             {genError && <p className="text-sm text-red-400 text-center">{genError}</p>}
 
-            <button onClick={handleGenerate} disabled={generating}
-              className="w-full flex items-center justify-center gap-3 py-5 rounded-2xl font-bold text-base transition-all hover:opacity-90 hover:scale-[1.01]"
-              style={{ background: C.cta, color: C.ctaText, boxShadow: `0 8px 24px ${C.cta}40` }}>
-              {generating
-                ? <><Loader2 className="w-5 h-5 animate-spin" /> Generating your virtual experience program…</>
-                : <><Sparkles className="w-5 h-5" /> Generate Program with AI</>}
-            </button>
+            {/* CTA */}
+            {creationMode === 'ai' && (
+              <button onClick={handleGenerate} disabled={generating}
+                className="w-full flex items-center justify-center gap-3 py-5 rounded-2xl font-bold text-base transition-all hover:opacity-90 hover:scale-[1.01]"
+                style={{ background: C.cta, color: C.ctaText, boxShadow: `0 8px 24px ${C.cta}40` }}>
+                {generating
+                  ? <><Loader2 className="w-5 h-5 animate-spin"/> Generating…</>
+                  : datasetCsv.trim()
+                    ? <><Database className="w-5 h-5"/> Generate from My Dataset</>
+                    : <><Sparkles className="w-5 h-5"/> Generate with AI</>}
+              </button>
+            )}
+
+            {creationMode === 'manual' && (
+              <button onClick={handleManual}
+                className="w-full flex items-center justify-center gap-3 py-5 rounded-2xl font-bold text-base transition-all hover:opacity-90 hover:scale-[1.01]"
+                style={{ background: '#f59e0b', color: 'white', boxShadow: '0 8px 24px rgba(245,158,11,0.35)' }}>
+                <PenLine className="w-5 h-5"/> Start with Blank Template
+              </button>
+            )}
 
             {generating && (
               <div className="text-center space-y-2">
-                <p className="text-sm font-medium" style={{ color: C.muted }}>Creating company scenario, modules, lessons, tasks and dataset…</p>
-                <div className="flex items-center justify-center gap-1.5">
-                  {['Company brief', 'Modules', 'Lessons', 'Requirements', 'Dataset'].map((s, i) => (
+                <p className="text-sm font-medium" style={{ color: C.muted }}>
+                  {datasetCsv.trim() ? 'Analysing your data and generating questions…' : 'Creating company scenario, modules, lessons and dataset…'}
+                </p>
+                <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                  {['Company brief', 'Dataset', 'Modules', 'Lessons', 'Questions'].map((s, i) => (
                     <span key={s} className="text-[11px] px-2 py-1 rounded-full animate-pulse"
                       style={{ background: `${C.cta}18`, color: C.cta, animationDelay: `${i * 0.2}s` }}>{s}</span>
                   ))}
@@ -486,8 +724,8 @@ export default function GuidedProjectCreatePage() {
         {/* -- STEP 2: Review & Edit -- */}
         {step === 2 && config && (() => {
           const indInfo = INDUSTRIES.find(i => i.id === config.industry) || INDUSTRIES[0];
-          const managerName  = (config as any).managerName  || 'Your Manager';
-          const managerTitle = (config as any).managerTitle || 'Head of Analytics';
+          const managerName  = config.managerName  || 'Your Manager';
+          const managerTitle = config.managerTitle || 'Head of Analytics';
           const managerInitials = managerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
           const companyInitials = config.company?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || '??';
           const dataset = (config as any).dataset;
@@ -587,20 +825,56 @@ export default function GuidedProjectCreatePage() {
                   </div>
                 </div>
 
-                {/* Manager brief preview */}
+                {/* Manager brief -- editable */}
                 <div style={{ ...card, overflow: 'hidden' }}>
+                  {/* Header */}
                   <div className="flex items-center gap-3 px-5 py-3 border-b" style={{ borderColor: C.divider, background: C.pill }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 999, background: `${indInfo.color}22`, border: `1.5px solid ${indInfo.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: indInfo.color }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 999, background: `${indInfo.color}22`, border: `1.5px solid ${indInfo.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: indInfo.color, flexShrink: 0 }}>
                       {managerInitials}
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold" style={{ color: C.text }}>{managerName} <span className="font-normal" style={{ color: C.muted }}>· {managerTitle}</span></p>
                       <p className="text-[11px]" style={{ color: C.faint }}>To: New {config.role} · Your Brief</p>
                     </div>
-                    <span className="text-[11px] px-2 py-0.5 rounded-full font-bold" style={{ background: `${indInfo.color}18`, color: indInfo.color }}>Onboarding</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full font-bold flex-shrink-0" style={{ background: `${indInfo.color}18`, color: indInfo.color }}>Onboarding</span>
                   </div>
-                  <div className="px-5 py-4 text-xs leading-relaxed line-clamp-6" style={{ color: C.muted }}
-                    dangerouslySetInnerHTML={{ __html: config.background || '' }} />
+
+                  {/* Editable fields */}
+                  <div className="px-5 pt-4 pb-2 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.faint }}>Role</label>
+                      <input value={config.role || ''} onChange={e => setConfig(c => c ? { ...c, role: e.target.value } : c)}
+                        style={{ ...inp, fontSize: 13 }} placeholder="e.g. Data Analyst" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.faint }}>Manager Name</label>
+                      <input value={config.managerName || ''} onChange={e => setConfig(c => c ? { ...c, managerName: e.target.value } : c)}
+                        style={{ ...inp, fontSize: 13 }} placeholder="e.g. Amara Diallo" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.faint }}>Manager Title</label>
+                      <input value={config.managerTitle || ''} onChange={e => setConfig(c => c ? { ...c, managerTitle: e.target.value } : c)}
+                        style={{ ...inp, fontSize: 13 }} placeholder="e.g. Head of Analytics" />
+                    </div>
+                  </div>
+
+                  {/* Scenario / background */}
+                  <div className="px-5 pb-4">
+                    <label className="block text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.faint }}>Scenario / Background</label>
+                    <textarea
+                      value={(config.background || '').replace(/<\/p>\s*<p>/gi, '\n\n').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')}
+                      onChange={e => {
+                        const html = e.target.value
+                          .split(/\n\n+/)
+                          .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+                          .join('');
+                        setConfig(c => c ? { ...c, background: html } : c);
+                      }}
+                      rows={5}
+                      style={{ ...inp, fontSize: 13, resize: 'vertical', lineHeight: 1.6 } as React.CSSProperties}
+                      placeholder="Describe the company scenario and the problem the student needs to solve…"
+                    />
+                  </div>
                 </div>
 
                 {/* What you'll learn */}
@@ -630,95 +904,236 @@ export default function GuidedProjectCreatePage() {
                   </div>
                 )}
 
-                {/* Module outline -- Forage step-by-step style */}
-                <div style={card} className="p-5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-bold" style={{ color: C.text }}>Program Modules</p>
-                    <button onClick={addModule} className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border"
+                {/* Module outline -- Forage vertical timeline style */}
+                <div style={card} className="overflow-hidden">
+                  <div className="flex items-center justify-between px-5 pt-5 pb-2">
+                    <p className="text-sm font-bold" style={{ color: C.text }}>Program Outline</p>
+                    <button onClick={addModule}
+                      className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg border"
                       style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
-                      <Plus className="w-3 h-3" /> Add
+                      <Plus className="w-3 h-3" /> Add Module
                     </button>
                   </div>
-                  {(config.modules || []).map((mod, mi) => (
-                    <div key={mod.id} className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${C.cardBorder}` }}>
-                      {/* Module header */}
-                      <div className="flex items-center gap-3 px-4 py-3 cursor-pointer"
-                        onClick={() => toggleModule(mod.id)}
-                        style={{ background: expandedModules.has(mod.id) ? C.pill : 'transparent' }}>
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0"
-                          style={{ background: indInfo.color, color: 'white' }}>{mi + 1}</div>
-                        <input value={mod.title} onClick={e => e.stopPropagation()}
-                          onChange={e => { e.stopPropagation(); updateModule(mod.id, { title: e.target.value }); }}
-                          className="flex-1 bg-transparent font-semibold text-sm outline-none" style={{ color: C.text }} />
-                        <span className="text-xs flex-shrink-0" style={{ color: C.faint }}>{mod.lessons.length} lessons</span>
-                        {expandedModules.has(mod.id)
-                          ? <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" style={{ color: C.muted }} />
-                          : <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" style={{ color: C.muted }} />}
-                        <button onClick={e => { e.stopPropagation(); removeModule(mod.id); }}
-                          className="hover:text-red-400 flex-shrink-0" style={{ color: C.faint }}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
 
-                      {expandedModules.has(mod.id) && (
-                        <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: C.divider }}>
-                          <input value={mod.description} onChange={e => updateModule(mod.id, { description: e.target.value })}
-                            style={{ ...inp, marginTop: 12 }} placeholder="Module description…" />
+                  <div className="px-5 pb-5">
+                    {(() => {
+                      const allItems = (config.modules || []).flatMap((mod, mi) =>
+                        (mod.lessons || []).map((les, li) => ({ mod, mi, les, li }))
+                      );
+                      const totalItems = allItems.length;
+                      return allItems.map(({ mod, mi, les, li }, globalIdx) => {
+                        const isIntro  = globalIdx === 0;
+                        const isLast   = globalIdx === totalItems - 1;
+                        const reqCount = les.requirements?.length || 0;
+                        const estTime  = reqCount <= 2 ? '15-30 mins' : reqCount <= 4 ? '30-60 mins' : '45-90 mins';
+                        const lessonDiff = isIntro ? null : globalIdx === 1 ? 'Beginner' : config.difficulty.charAt(0).toUpperCase() + config.difficulty.slice(1);
+                        const expandKey = `${mod.id}-${les.id}`;
 
-                          {mod.lessons.map((les, li) => (
-                            <div key={les.id} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}`, background: C.card }}>
-                              <div className="flex items-center gap-2 px-3 py-2.5 border-b" style={{ borderColor: C.divider }}>
-                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-md" style={{ background: `${indInfo.color}18`, color: indInfo.color }}>L{li + 1}</span>
-                                <input value={les.title} onChange={e => updateLesson(mod.id, les.id, { title: e.target.value })}
-                                  className="flex-1 bg-transparent text-sm font-medium outline-none" style={{ color: C.text }} />
-                                <button onClick={() => removeLesson(mod.id, les.id)} className="hover:text-red-400" style={{ color: C.faint }}>
+                        return (
+                          <div key={les.id} className="flex items-start gap-3 group">
+                            {/* Left col: circle + dashed connector */}
+                            <div className="flex flex-col items-center flex-shrink-0">
+                              {isIntro ? (
+                                <div className="w-9 h-9 rounded-full flex items-center justify-center"
+                                  style={{ background: indInfo.color, border: `2px solid ${indInfo.color}` }}>
+                                  <Star className="w-4 h-4" style={{ color: 'white' }} fill="white" />
+                                </div>
+                              ) : (
+                                <div className="w-9 h-9 rounded-full flex items-center justify-center"
+                                  style={{ background: C.card, border: `2px solid ${C.cardBorder}` }}>
+                                  <span className="text-xs font-bold" style={{ color: C.muted }}>{globalIdx}</span>
+                                </div>
+                              )}
+                              {!isLast && (
+                                <div style={{
+                                  width: 0,
+                                  minHeight: 24,
+                                  flex: 1,
+                                  borderLeft: `2px dashed ${C.cardBorder}`,
+                                  marginTop: 4,
+                                  marginBottom: 4,
+                                }} />
+                              )}
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 min-w-0" style={{ paddingBottom: isLast ? 8 : 20, paddingTop: 2 }}>
+                              {li === 0 && (
+                                <input value={mod.title}
+                                  onChange={e => updateModule(mod.id, { title: e.target.value })}
+                                  className="bg-transparent text-[11px] font-bold uppercase tracking-widest outline-none block mb-0.5"
+                                  style={{ color: indInfo.color }}
+                                  placeholder="Module name…" />
+                              )}
+                              <div className="flex items-center gap-1">
+                                <input value={les.title}
+                                  onChange={e => updateLesson(mod.id, les.id, { title: e.target.value })}
+                                  className="flex-1 bg-transparent text-sm font-semibold outline-none min-w-0"
+                                  style={{ color: C.text }}
+                                  placeholder="Lesson title…" />
+                                <button onClick={() => removeLesson(mod.id, les.id)}
+                                  className="hover:text-red-400 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  style={{ color: C.faint }}>
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
-                              <div className="p-3 space-y-3">
-                                <textarea value={les.body} onChange={e => updateLesson(mod.id, les.id, { body: e.target.value })}
-                                  rows={3} style={{ ...inp, fontSize: 12, resize: 'vertical' as const, lineHeight: 1.6 }}
-                                  className="font-mono" placeholder="Lesson content (HTML)…" />
-                                <input style={{ ...inp, fontSize: 12 }} value={les.videoUrl || ''} placeholder="Video URL (optional)"
-                                  onChange={e => updateLesson(mod.id, les.id, { videoUrl: e.target.value })} />
-                                <div className="space-y-2">
-                                  <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: C.faint }}>Tasks</p>
-                                  {les.requirements.map(req => (
-                                    <div key={req.id} className="rounded-xl p-3 space-y-2" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
-                                      <div className="flex items-center gap-2">
-                                        <select value={req.type} onChange={e => updateReq(mod.id, les.id, req.id, { type: e.target.value as Requirement['type'] })}
-                                          style={{ padding: '3px 8px', borderRadius: 8, border: `1px solid ${C.cardBorder}`, background: C.input, color: REQ_COLORS[req.type], fontSize: 11, fontWeight: 700 }}>
-                                          <option value="task">Task</option>
-                                          <option value="deliverable">Deliverable</option>
-                                          <option value="reflection">Reflection</option>
-                                        </select>
-                                        <input value={req.label} onChange={e => updateReq(mod.id, les.id, req.id, { label: e.target.value })}
-                                          className="flex-1 bg-transparent text-xs font-semibold outline-none" style={{ color: C.text }} placeholder="Task title" />
-                                        <button onClick={() => removeReq(mod.id, les.id, req.id)} className="hover:text-red-400" style={{ color: C.faint }}>
-                                          <X className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
-                                      <textarea value={req.description} onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}
-                                        rows={2} placeholder="Task instructions…" style={{ ...inp, fontSize: 12, resize: 'vertical' as const }} />
-                                    </div>
-                                  ))}
-                                  <button onClick={() => addReq(mod.id, les.id)}
-                                    className="text-xs flex items-center gap-1 hover:opacity-70" style={{ color: C.cta }}>
-                                    <Plus className="w-3 h-3" /> Add task
-                                  </button>
+                              {lessonDiff && (
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="text-[11px]" style={{ color: C.faint }}>{lessonDiff}</span>
+                                  <span className="text-[11px]" style={{ color: C.faint }}>·</span>
+                                  <Clock className="w-3 h-3 flex-shrink-0" style={{ color: C.faint }} />
+                                  <span className="text-[11px]" style={{ color: C.faint }}>{estTime}</span>
                                 </div>
-                              </div>
+                              )}
+                              <button onClick={() => toggleModule(expandKey)}
+                                className="mt-1 text-[11px] hover:opacity-70 flex items-center gap-1"
+                                style={{ color: C.faint }}>
+                                {expandedModules.has(expandKey)
+                                  ? <><ChevronDown className="w-3 h-3" /> Hide editor</>
+                                  : <><ChevronRight className="w-3 h-3" /> Edit · {reqCount} task{reqCount !== 1 ? 's' : ''}</>}
+                              </button>
+                              {expandedModules.has(expandKey) && (
+                                <div className="mt-2 space-y-2 border-l-2 pl-3 ml-1" style={{ borderColor: `${indInfo.color}40` }}>
+                                  <RichTextEditor
+                                    value={les.body || ''}
+                                    onChange={html => updateLesson(mod.id, les.id, { body: html })}
+                                    placeholder="Write the lesson content here -- what should the student read, understand, or do?"
+                                  />
+                                  <input style={{ ...inp, fontSize: 12 }} value={les.videoUrl || ''} placeholder="Video URL (optional)"
+                                    onChange={e => updateLesson(mod.id, les.id, { videoUrl: e.target.value })} />
+                                  <div className="space-y-2">
+                                    <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: C.faint }}>Questions</p>
+                                    {les.requirements.map((req, qi) => {
+                                      const opts = req.options?.length === 4 ? req.options : ['', '', '', ''];
+                                      const TYPE_COLORS: Record<string, { bg: string; color: string; label: string }> = {
+                                        mcq:    { bg: `${indInfo.color}18`, color: indInfo.color,  label: 'MCQ' },
+                                        text:   { bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6', label: 'Short Answer' },
+                                        upload: { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b', label: 'File Upload' },
+                                      };
+                                      const tc = TYPE_COLORS[req.type] || TYPE_COLORS.mcq;
+                                      return (
+                                        <div key={req.id} className="rounded-xl p-3 space-y-2" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                                          {/* Header: type + number + delete */}
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                                              style={{ background: tc.bg, color: tc.color }}>Q{qi + 1}</span>
+                                            <select value={req.type}
+                                              onChange={e => updateReq(mod.id, les.id, req.id, {
+                                                type: e.target.value as Requirement['type'],
+                                                options: e.target.value === 'mcq' ? ['', '', '', ''] : undefined,
+                                                correctAnswer: e.target.value === 'mcq' ? '' : undefined,
+                                              })}
+                                              style={{ padding: '2px 6px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.input, color: tc.color, fontSize: 10, fontWeight: 700 }}>
+                                              <option value="mcq">Multiple Choice</option>
+                                              <option value="text">Short Answer</option>
+                                              <option value="upload">File Upload</option>
+                                            </select>
+                                            <input value={req.label}
+                                              onChange={e => updateReq(mod.id, les.id, req.id, { label: e.target.value })}
+                                              className="flex-1 bg-transparent text-xs font-semibold outline-none"
+                                              style={{ color: C.text }} placeholder="Question…" />
+                                            <button onClick={() => removeReq(mod.id, les.id, req.id)} className="hover:text-red-400 flex-shrink-0" style={{ color: C.faint }}>
+                                              <X className="w-3.5 h-3.5" />
+                                            </button>
+                                          </div>
+
+                                          {/* Hint / instructions */}
+                                          <input value={req.description}
+                                            onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}
+                                            style={{ ...inp, fontSize: 11 }}
+                                            placeholder={req.type === 'mcq' ? 'Hint: which column(s) to analyse…' : req.type === 'upload' ? 'Instructions for the student…' : 'Prompt or context…'} />
+
+                                          {/* MCQ options */}
+                                          {req.type === 'mcq' && (
+                                            <div className="space-y-1">
+                                              {opts.map((opt, oi) => {
+                                                const letter = String.fromCharCode(65 + oi);
+                                                const isCorrect = req.correctAnswer === opt && opt !== '';
+                                                return (
+                                                  <div key={oi} className="flex items-center gap-2">
+                                                    <button
+                                                      onClick={() => opt && updateReq(mod.id, les.id, req.id, { correctAnswer: opt })}
+                                                      title={opt ? `Mark "${letter}" as correct answer` : 'Fill in this option first'}
+                                                      className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all"
+                                                      style={{
+                                                        background: isCorrect ? indInfo.color : C.input,
+                                                        border: `1.5px solid ${isCorrect ? indInfo.color : C.cardBorder}`,
+                                                        color: isCorrect ? 'white' : C.muted,
+                                                      }}>
+                                                      {letter}
+                                                    </button>
+                                                    <input value={opt}
+                                                      onChange={e => {
+                                                        const newOpts = [...opts];
+                                                        newOpts[oi] = e.target.value;
+                                                        updateReq(mod.id, les.id, req.id, {
+                                                          options: newOpts,
+                                                          correctAnswer: req.correctAnswer === opt ? e.target.value : req.correctAnswer,
+                                                        });
+                                                      }}
+                                                      className="flex-1 bg-transparent text-xs outline-none"
+                                                      style={{
+                                                        ...inp, padding: '4px 8px', fontSize: 11,
+                                                        borderColor: isCorrect ? indInfo.color : C.cardBorder,
+                                                        color: isCorrect ? indInfo.color : C.text,
+                                                        fontWeight: isCorrect ? 600 : 400,
+                                                      }}
+                                                      placeholder={`Option ${letter}…`} />
+                                                  </div>
+                                                );
+                                              })}
+                                              {req.correctAnswer && (
+                                                <p className="text-[10px] pt-1" style={{ color: indInfo.color }}>
+                                                  ✓ Correct: {req.correctAnswer}
+                                                </p>
+                                              )}
+                                            </div>
+                                          )}
+
+                                          {/* Upload preview */}
+                                          {req.type === 'upload' && (
+                                            <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+                                              style={{ background: `${C.cta}0a`, color: C.muted }}>
+                                              <LinkIcon className="w-3 h-3 flex-shrink-0" />
+                                              Students will upload a file or paste a link
+                                            </div>
+                                          )}
+
+                                          {/* Short answer preview */}
+                                          {req.type === 'text' && (
+                                            <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+                                              style={{ background: 'rgba(139,92,246,0.06)', color: C.muted }}>
+                                              <FileText className="w-3 h-3 flex-shrink-0" />
+                                              Students will type a written response
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                    <button onClick={() => addReq(mod.id, les.id)}
+                                      className="text-xs flex items-center gap-1 hover:opacity-70" style={{ color: C.cta }}>
+                                      <Plus className="w-3 h-3" /> Add question
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          ))}
-                          <button onClick={() => addLesson(mod.id)}
-                            className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-xl border w-full justify-center"
-                            style={{ border: `1px dashed ${C.cardBorder}`, color: C.muted }}>
-                            <Plus className="w-3.5 h-3.5" /> Add Lesson
-                          </button>
-                        </div>
-                      )}
+                          </div>
+                        );
+                      });
+                    })()}
+
+                    {/* Add lesson buttons */}
+                    <div className="pl-12 pt-1 flex flex-wrap gap-2">
+                      {(config.modules || []).map(mod => (
+                        <button key={`add-${mod.id}`} onClick={() => addLesson(mod.id)}
+                          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl border"
+                          style={{ border: `1px dashed ${C.cardBorder}`, color: C.muted }}>
+                          <Plus className="w-3 h-3" /> Add to "{mod.title}"
+                        </button>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
               </div>
 
@@ -760,6 +1175,64 @@ export default function GuidedProjectCreatePage() {
                   </div>
                 )}
 
+                {/* Dataset */}
+                {(config as any).dataset && (
+                  <div style={card} className="p-5 space-y-3">
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ color: C.muted }}>Dataset</p>
+                    <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: `${indInfo.color}10`, border: `1px solid ${indInfo.color}30` }}>
+                      <FileText className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: indInfo.color }} />
+                      <div className="flex-1 min-w-0">
+                        {(config as any).dataset.filename && (
+                          <p className="text-xs font-bold truncate" style={{ color: C.text }}>{(config as any).dataset.filename}</p>
+                        )}
+                        {(config as any).dataset.description && (
+                          <p className="text-[11px] mt-0.5" style={{ color: C.muted }}>{(config as any).dataset.description}</p>
+                        )}
+                        {(config as any).dataset.csvContent && (
+                          <p className="text-[11px] mt-0.5" style={{ color: C.faint }}>
+                            {((config as any).dataset.csvContent.split('\n').length || 1) - 1} rows
+                          </p>
+                        )}
+                        {(config as any).dataset.url && (
+                          <a href={(config as any).dataset.url} target="_blank" rel="noreferrer"
+                            className="flex items-center gap-1 text-[11px] mt-0.5 hover:opacity-70 transition-opacity truncate"
+                            style={{ color: indInfo.color }}>
+                            <LinkIcon className="w-3 h-3 flex-shrink-0"/> {(config as any).dataset.url}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    {/* Dataset URL editor */}
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.faint }}>Dataset Link</label>
+                      <input
+                        value={(config as any).dataset?.url || ''}
+                        onChange={e => setConfig(c => c ? { ...c, dataset: { ...(c as any).dataset, url: e.target.value } } as any : c)}
+                        style={{ ...inp, fontSize: 12 }}
+                        placeholder="https://docs.google.com/spreadsheets/… (optional)"
+                      />
+                    </div>
+                    {/* CSV preview */}
+                    {(config as any).dataset.csvContent && (
+                      <>
+                        <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+                          <div className="overflow-x-auto">
+                            <pre className="text-[10px] p-3 whitespace-pre leading-relaxed"
+                              style={{ color: C.muted, background: C.input, maxHeight: 120, overflow: 'auto' }}>
+                              {(config as any).dataset.csvContent.split('\n').slice(0, 6).join('\n')}
+                            </pre>
+                          </div>
+                        </div>
+                        <button onClick={downloadDataset}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all hover:opacity-80"
+                          style={{ background: `${indInfo.color}18`, color: indInfo.color }}>
+                          <Download className="w-3.5 h-3.5" /> Download CSV
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {/* AI Suggestions */}
                 <div style={card} className="overflow-hidden">
                   <button onClick={() => setShowImprove(v => !v)}
@@ -772,45 +1245,19 @@ export default function GuidedProjectCreatePage() {
                   </button>
                   {showImprove && (
                     <div className="px-5 pb-5 space-y-3 border-t" style={{ borderColor: C.divider }}>
+                      <p className="text-[11px] pt-3" style={{ color: C.faint }}>
+                        Describe any change -- AI will apply it directly to the project.
+                      </p>
                       <textarea value={improveInstruction} onChange={e => setImproveInstruction(e.target.value)}
-                        placeholder='e.g. "Add a lesson on data cleaning" or "Make requirements more specific"'
-                        rows={3} style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.6, marginTop: 12 }} />
-                      <div className="flex gap-2">
-                        <select value={improveModuleId || ''} onChange={e => setImproveModuleId(e.target.value || null)}
-                          style={{ ...inp, flex: 1, fontSize: 12 }}>
-                          <option value="">All modules</option>
-                          {(config.modules || []).map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
-                        </select>
-                        <button onClick={handleImprove} disabled={improving || !improveInstruction.trim()}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold flex-shrink-0"
-                          style={{ background: C.cta, color: C.ctaText }}>
-                          {improving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                          Suggest
-                        </button>
-                      </div>
-                      {suggestions.length > 0 && (
-                        <div className="space-y-2 pt-1">
-                          {suggestions.map((s, i) => (
-                            <div key={i} className="rounded-xl p-3 space-y-1.5" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
-                              <div className="flex items-start gap-2">
-                                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0"
-                                  style={{ background: `${C.cta}22`, color: C.cta }}>{s.type.replace('_', ' ')}</span>
-                                <p className="text-xs flex-1" style={{ color: C.text }}>{s.description}</p>
-                                <div className="flex gap-1 flex-shrink-0">
-                                  {s.type !== 'general' && (
-                                    <button onClick={() => acceptSuggestion(s)} className="p-1 rounded-lg hover:bg-green-500/20 text-green-400">
-                                      <Check className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                  <button onClick={() => setSuggestions(prev => prev.filter((_, j) => j !== i))} className="p-1 rounded-lg hover:bg-red-500/20 text-red-400">
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                        placeholder='e.g. "Add a lesson on data cleaning to module 2" or "Replace question 3 in lesson 1 with a harder one"'
+                        rows={3} style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.6 }} />
+                      <button onClick={handleImprove} disabled={improving || !improveInstruction.trim()}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-all hover:opacity-80 disabled:opacity-40"
+                        style={{ background: C.cta, color: C.ctaText }}>
+                        {improving
+                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Applying changes…</>
+                          : <><Sparkles className="w-3.5 h-3.5" /> Apply to Project</>}
+                      </button>
                     </div>
                   )}
                 </div>

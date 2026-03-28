@@ -1650,7 +1650,7 @@ const GP_IND_COLORS: Record<string, string> = {
   edtech: '#8b5cf6', healthcare: '#ef4444', ecommerce: '#f97316', consulting: '#14b8a6',
 };
 
-function GuidedProjectsManageSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] }) {
+function GuidedProjectsManageSection({ C, forms, setFormToDelete }: { C: typeof LIGHT_C; forms: any[]; setFormToDelete: (id: string) => void }) {
   const gpForms = forms.filter(f => f.content_type === 'guided_project' || f.config?.isGuidedProject);
 
   if (gpForms.length === 0) {
@@ -1703,13 +1703,18 @@ function GuidedProjectsManageSection({ C, forms }: { C: typeof LIGHT_C; forms: a
                   <Link href={`/dashboard/${form.id}`}
                     className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl border transition-all hover:opacity-70"
                     style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
-                    View Report
+                    Report
                   </Link>
                   <Link href={`/create/guided-project?id=${form.id}`}
                     className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl transition-all hover:opacity-80"
                     style={{ background: `${color}18`, color }}>
                     Edit
                   </Link>
+                  <button onClick={() => setFormToDelete(form.id)}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
+                    style={{ background: C.deleteBg, color: C.deleteText }} title="Delete">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -3284,7 +3289,7 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
     </div>
   )}/>;
 
-  if (section === 'guided_projects') return <GuidedProjectsManageSection C={C} forms={forms} />;
+  if (section === 'guided_projects') return <GuidedProjectsManageSection C={C} forms={forms} setFormToDelete={setFormToDelete} />;
 
   if (section === 'community') return <GenericListSection table="communities" label="Communities" createHref="/create/community" createLabel="New Community" Icon={Users} C={C} renderRow={item => (
     <div className="min-w-0">
