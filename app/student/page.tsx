@@ -286,7 +286,7 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
         </h3>
         {deadlineLabel && (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2"
-            style={{ background: `${deadlineColor}18`, color: deadlineColor }}>
+            style={{ background: `${deadlineColor ?? '#6b7280'}18`, color: deadlineColor ?? '#6b7280' }}>
             ⏰ {deadlineLabel}
           </span>
         )}
@@ -1860,7 +1860,7 @@ function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
         )}
         {deadlineLabel && (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2"
-            style={{ background: `${deadlineColor}18`, color: deadlineColor }}>
+            style={{ background: `${deadlineColor ?? '#6b7280'}18`, color: deadlineColor ?? '#6b7280' }}>
             ⏰ {deadlineLabel}
           </span>
         )}
