@@ -28,21 +28,21 @@ create extension if not exists "uuid-ossp";
 
 create or replace function public.get_my_role()
 returns text language sql security definer stable set search_path = public as $$
-  select role from public.students where id = auth.uid()
+  select role from public.students where id = (select auth.uid())
 $$;
 
-create or replace function public.is_instructor_or_admin()
+create or replace function (select public.is_instructor_or_admin())
 returns boolean language sql security definer stable set search_path = public as $$
   select coalesce(
-    (select role in ('instructor','admin') from public.students where id = auth.uid()),
+    (select role in ('instructor','admin') from public.students where id = (select auth.uid())),
     false
   )
 $$;
 
-create or replace function public.is_admin()
+create or replace function (select public.is_admin())
 returns boolean language sql security definer stable set search_path = public as $$
   select coalesce(
-    (select role = 'admin' from public.students where id = auth.uid()),
+    (select role = 'admin' from public.students where id = (select auth.uid())),
     false
   )
 $$;
@@ -161,6 +161,7 @@ create table public.assignments (
 create index idx_assignments_created_by     on public.assignments(created_by);
 create index idx_assignments_related_course on public.assignments(related_course);
 create index idx_assignments_status         on public.assignments(status);
+create index idx_assignments_cohort_ids     on public.assignments using gin (cohort_ids);
 
 -- ── assignment_resources ──────────────────────────────────────
 create table public.assignment_resources (
@@ -217,6 +218,7 @@ create table public.projects (
 create index idx_projects_created_by     on public.projects(created_by);
 create index idx_projects_related_course on public.projects(related_course);
 create index idx_projects_status         on public.projects(status);
+create index idx_projects_cohort_ids     on public.projects using gin (cohort_ids);
 
 -- ── project_resources ─────────────────────────────────────────
 create table public.project_resources (
@@ -242,7 +244,8 @@ create table public.communities (
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
-create index idx_communities_created_by on public.communities(created_by);
+create index idx_communities_created_by  on public.communities(created_by);
+create index idx_communities_cohort_ids  on public.communities using gin (cohort_ids);
 
 -- ── announcements ─────────────────────────────────────────────
 create table public.announcements (
@@ -259,9 +262,10 @@ create table public.announcements (
   updated_at   timestamptz not null default now(),
   constraint announcements_expiry_valid check (expires_at is null or expires_at > published_at)
 );
-create index idx_announcements_author  on public.announcements(author_id);
-create index idx_announcements_pinned  on public.announcements(is_pinned);
-create index idx_announcements_expires on public.announcements(expires_at);
+create index idx_announcements_author      on public.announcements(author_id);
+create index idx_announcements_pinned      on public.announcements(is_pinned);
+create index idx_announcements_expires     on public.announcements(expires_at);
+create index idx_announcements_cohort_ids  on public.announcements using gin (cohort_ids);
 
 -- ── schedules ─────────────────────────────────────────────────
 create table public.schedules (
@@ -280,8 +284,9 @@ create table public.schedules (
   updated_at  timestamptz not null default now(),
   constraint schedules_dates_valid check (end_date is null or start_date is null or end_date >= start_date)
 );
-create index idx_schedules_course     on public.schedules(course_id);
-create index idx_schedules_created_by on public.schedules(created_by);
+create index idx_schedules_course      on public.schedules(course_id);
+create index idx_schedules_created_by  on public.schedules(created_by);
+create index idx_schedules_cohort_ids  on public.schedules using gin (cohort_ids);
 
 -- ── schedule_topics ───────────────────────────────────────────
 create table public.schedule_topics (
@@ -645,130 +650,130 @@ create trigger trg_project_submissions_updated_at
 -- ── students ──────────────────────────────────────────────────
 create policy "students: own select"
   on public.students for select
-  using (auth.uid() = id or public.is_admin());
+  using ((select auth.uid()) = id or (select public.is_admin()));
 
 -- Students update own profile; role and status cannot self-change
 create policy "students: own update"
   on public.students for update
-  using  (auth.uid() = id)
+  using  ((select auth.uid()) = id)
   with check (
-    auth.uid() = id
+    (select auth.uid()) = id
     and role   = public.get_my_role()
-    and status = (select status from public.students where id = auth.uid())
+    and status = (select status from public.students where id = (select auth.uid()))
   );
 
 create policy "students: admin insert"
   on public.students for insert
-  with check (public.is_admin());
+  with check ((select public.is_admin()));
 
 create policy "students: admin update"
   on public.students for update
-  using  (public.is_admin())
-  with check (public.is_admin());
+  using  ((select public.is_admin()))
+  with check ((select public.is_admin()));
 
 create policy "students: admin delete"
   on public.students for delete
-  using (public.is_admin());
+  using ((select public.is_admin()));
 
 -- ── cohorts ───────────────────────────────────────────────────
 create policy "cohorts: select"
   on public.cohorts for select
   using (
-    public.is_admin()
-    or created_by = auth.uid()
+    (select public.is_admin())
+    or created_by = (select auth.uid())
     or exists (
-      select 1 from public.cohort_members cm
-      where cm.cohort_id = cohorts.id and cm.student_id = auth.uid()
+      select 1 from public.students s
+      where s.id = (select auth.uid()) and s.cohort_id = cohorts.id
     )
   );
 
 create policy "cohorts: instructor insert"
   on public.cohorts for insert
-  with check (public.is_instructor_or_admin() and (created_by = auth.uid() or public.is_admin()));
+  with check ((select public.is_instructor_or_admin()) and (created_by = (select auth.uid()) or (select public.is_admin())));
 
 create policy "cohorts: instructor update"
   on public.cohorts for update
-  using  (created_by = auth.uid() or public.is_admin())
-  with check (created_by = auth.uid() or public.is_admin());
+  using  (created_by = (select auth.uid()) or (select public.is_admin()))
+  with check (created_by = (select auth.uid()) or (select public.is_admin()));
 
 create policy "cohorts: instructor delete"
   on public.cohorts for delete
-  using (created_by = auth.uid() or public.is_admin());
+  using (created_by = (select auth.uid()) or (select public.is_admin()));
 
 -- ── cohort_members ────────────────────────────────────────────
 create policy "cohort_members: select"
   on public.cohort_members for select
   using (
-    student_id = auth.uid()
-    or public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    student_id = (select auth.uid())
+    or (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   );
 
 create policy "cohort_members: instructor insert"
   on public.cohort_members for insert
   with check (
-    public.is_instructor_or_admin()
+    (select public.is_instructor_or_admin())
     and (
-      exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
-      or public.is_admin()
+      exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
+      or (select public.is_admin())
     )
   );
 
 create policy "cohort_members: instructor delete"
   on public.cohort_members for delete
   using (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   );
 
 -- ── courses ───────────────────────────────────────────────────
 create policy "courses: select"
   on public.courses for select
   using (
-    instructor_id = auth.uid() or public.is_admin()
+    instructor_id = (select auth.uid()) or (select public.is_admin())
     or exists (
       select 1 from public.cohort_courses cc
-      join public.cohort_members cm on cm.cohort_id = cc.cohort_id
-      where cc.course_id = courses.id and cm.student_id = auth.uid()
+      join public.students s on s.cohort_id = cc.cohort_id
+      where cc.course_id = courses.id and s.id = (select auth.uid())
     )
   );
 
 create policy "courses: instructor insert"
   on public.courses for insert
-  with check (public.is_instructor_or_admin() and (instructor_id = auth.uid() or public.is_admin()));
+  with check ((select public.is_instructor_or_admin()) and (instructor_id = (select auth.uid()) or (select public.is_admin())));
 
 create policy "courses: instructor update"
   on public.courses for update
-  using  (instructor_id = auth.uid() or public.is_admin())
-  with check (instructor_id = auth.uid() or public.is_admin());
+  using  (instructor_id = (select auth.uid()) or (select public.is_admin()))
+  with check (instructor_id = (select auth.uid()) or (select public.is_admin()));
 
 create policy "courses: instructor delete"
   on public.courses for delete
-  using (instructor_id = auth.uid() or public.is_admin());
+  using (instructor_id = (select auth.uid()) or (select public.is_admin()));
 
 -- ── assignments ───────────────────────────────────────────────
 create policy "assignments: select"
   on public.assignments for select
   using (
-    created_by = auth.uid() or public.is_admin()
+    created_by = (select auth.uid()) or (select public.is_admin())
     or exists (
       select 1 from public.students s
-      where s.id = auth.uid() and s.cohort_id = any(cohort_ids)
+      where s.id = (select auth.uid()) and s.cohort_id = any(cohort_ids)
     )
   );
 
 create policy "assignments: instructor insert"
   on public.assignments for insert
-  with check (public.is_instructor_or_admin() and (created_by = auth.uid() or public.is_admin()));
+  with check ((select public.is_instructor_or_admin()) and (created_by = (select auth.uid()) or (select public.is_admin())));
 
 create policy "assignments: instructor update"
   on public.assignments for update
-  using  (created_by = auth.uid() or public.is_admin())
-  with check (created_by = auth.uid() or public.is_admin());
+  using  (created_by = (select auth.uid()) or (select public.is_admin()))
+  with check (created_by = (select auth.uid()) or (select public.is_admin()));
 
 create policy "assignments: instructor delete"
   on public.assignments for delete
-  using (created_by = auth.uid() or public.is_admin());
+  using (created_by = (select auth.uid()) or (select public.is_admin()));
 
 -- ── assignment_resources ──────────────────────────────────────
 create policy "assignment_resources: select"
@@ -778,10 +783,10 @@ create policy "assignment_resources: select"
       select 1 from public.assignments a
       where a.id = assignment_id
         and (
-          a.created_by = auth.uid() or public.is_admin()
+          a.created_by = (select auth.uid()) or (select public.is_admin())
           or exists (
             select 1 from public.students s
-            where s.id = auth.uid() and s.cohort_id = any(a.cohort_ids)
+            where s.id = (select auth.uid()) and s.cohort_id = any(a.cohort_ids)
           )
         )
     )
@@ -790,60 +795,60 @@ create policy "assignment_resources: select"
 create policy "assignment_resources: instructor manage"
   on public.assignment_resources for all
   using (
-    exists (select 1 from public.assignments a where a.id = assignment_id and (a.created_by = auth.uid() or public.is_admin()))
+    exists (select 1 from public.assignments a where a.id = assignment_id and (a.created_by = (select auth.uid()) or (select public.is_admin())))
   )
   with check (
-    exists (select 1 from public.assignments a where a.id = assignment_id and (a.created_by = auth.uid() or public.is_admin()))
+    exists (select 1 from public.assignments a where a.id = assignment_id and (a.created_by = (select auth.uid()) or (select public.is_admin())))
   );
 
 -- ── events ────────────────────────────────────────────────────
 create policy "events: select"
   on public.events for select
   using (
-    instructor_id = auth.uid() or public.is_admin()
+    instructor_id = (select auth.uid()) or (select public.is_admin())
     or exists (
       select 1 from public.cohort_events ce
-      join public.cohort_members cm on cm.cohort_id = ce.cohort_id
-      where ce.event_id = events.id and cm.student_id = auth.uid()
+      join public.students s on s.cohort_id = ce.cohort_id
+      where ce.event_id = events.id and s.id = (select auth.uid())
     )
   );
 
 create policy "events: instructor insert"
   on public.events for insert
-  with check (public.is_instructor_or_admin() and (instructor_id = auth.uid() or public.is_admin()));
+  with check ((select public.is_instructor_or_admin()) and (instructor_id = (select auth.uid()) or (select public.is_admin())));
 
 create policy "events: instructor update"
   on public.events for update
-  using  (instructor_id = auth.uid() or public.is_admin())
-  with check (instructor_id = auth.uid() or public.is_admin());
+  using  (instructor_id = (select auth.uid()) or (select public.is_admin()))
+  with check (instructor_id = (select auth.uid()) or (select public.is_admin()));
 
 create policy "events: instructor delete"
   on public.events for delete
-  using (instructor_id = auth.uid() or public.is_admin());
+  using (instructor_id = (select auth.uid()) or (select public.is_admin()));
 
 -- ── projects ──────────────────────────────────────────────────
 create policy "projects: select"
   on public.projects for select
   using (
-    created_by = auth.uid() or public.is_admin()
+    created_by = (select auth.uid()) or (select public.is_admin())
     or exists (
       select 1 from public.students s
-      where s.id = auth.uid() and s.cohort_id = any(cohort_ids)
+      where s.id = (select auth.uid()) and s.cohort_id = any(cohort_ids)
     )
   );
 
 create policy "projects: instructor insert"
   on public.projects for insert
-  with check (public.is_instructor_or_admin() and (created_by = auth.uid() or public.is_admin()));
+  with check ((select public.is_instructor_or_admin()) and (created_by = (select auth.uid()) or (select public.is_admin())));
 
 create policy "projects: instructor update"
   on public.projects for update
-  using  (created_by = auth.uid() or public.is_admin())
-  with check (created_by = auth.uid() or public.is_admin());
+  using  (created_by = (select auth.uid()) or (select public.is_admin()))
+  with check (created_by = (select auth.uid()) or (select public.is_admin()));
 
 create policy "projects: instructor delete"
   on public.projects for delete
-  using (created_by = auth.uid() or public.is_admin());
+  using (created_by = (select auth.uid()) or (select public.is_admin()));
 
 -- ── project_resources ─────────────────────────────────────────
 create policy "project_resources: select"
@@ -853,10 +858,10 @@ create policy "project_resources: select"
       select 1 from public.projects p
       where p.id = project_id
         and (
-          p.created_by = auth.uid() or public.is_admin()
+          p.created_by = (select auth.uid()) or (select public.is_admin())
           or exists (
             select 1 from public.students s
-            where s.id = auth.uid() and s.cohort_id = any(p.cohort_ids)
+            where s.id = (select auth.uid()) and s.cohort_id = any(p.cohort_ids)
           )
         )
     )
@@ -865,95 +870,95 @@ create policy "project_resources: select"
 create policy "project_resources: instructor manage"
   on public.project_resources for all
   using (
-    exists (select 1 from public.projects p where p.id = project_id and (p.created_by = auth.uid() or public.is_admin()))
+    exists (select 1 from public.projects p where p.id = project_id and (p.created_by = (select auth.uid()) or (select public.is_admin())))
   )
   with check (
-    exists (select 1 from public.projects p where p.id = project_id and (p.created_by = auth.uid() or public.is_admin()))
+    exists (select 1 from public.projects p where p.id = project_id and (p.created_by = (select auth.uid()) or (select public.is_admin())))
   );
 
 -- ── communities ───────────────────────────────────────────────
 create policy "communities: select"
   on public.communities for select
   using (
-    created_by = auth.uid() or public.is_admin()
+    created_by = (select auth.uid()) or (select public.is_admin())
     or exists (
       select 1 from public.students s
-      where s.id = auth.uid() and s.cohort_id = any(cohort_ids)
+      where s.id = (select auth.uid()) and s.cohort_id = any(cohort_ids)
     )
   );
 
 create policy "communities: instructor insert"
   on public.communities for insert
-  with check (public.is_instructor_or_admin() and (created_by = auth.uid() or public.is_admin()));
+  with check ((select public.is_instructor_or_admin()) and (created_by = (select auth.uid()) or (select public.is_admin())));
 
 create policy "communities: instructor update"
   on public.communities for update
-  using  (created_by = auth.uid() or public.is_admin())
-  with check (created_by = auth.uid() or public.is_admin());
+  using  (created_by = (select auth.uid()) or (select public.is_admin()))
+  with check (created_by = (select auth.uid()) or (select public.is_admin()));
 
 create policy "communities: instructor delete"
   on public.communities for delete
-  using (created_by = auth.uid() or public.is_admin());
+  using (created_by = (select auth.uid()) or (select public.is_admin()));
 
 -- ── announcements ─────────────────────────────────────────────
 create policy "announcements: select"
   on public.announcements for select
   using (
-    author_id = auth.uid() or public.is_admin()
+    author_id = (select auth.uid()) or (select public.is_admin())
     or (
       (expires_at is null or expires_at > now())
       and exists (
         select 1 from public.students s
-        where s.id = auth.uid() and s.cohort_id = any(cohort_ids)
+        where s.id = (select auth.uid()) and s.cohort_id = any(cohort_ids)
       )
     )
   );
 
 create policy "announcements: instructor insert"
   on public.announcements for insert
-  with check (public.is_instructor_or_admin() and (author_id = auth.uid() or public.is_admin()));
+  with check ((select public.is_instructor_or_admin()) and (author_id = (select auth.uid()) or (select public.is_admin())));
 
 create policy "announcements: instructor update"
   on public.announcements for update
-  using  (author_id = auth.uid() or public.is_admin())
-  with check (author_id = auth.uid() or public.is_admin());
+  using  (author_id = (select auth.uid()) or (select public.is_admin()))
+  with check (author_id = (select auth.uid()) or (select public.is_admin()));
 
 create policy "announcements: instructor delete"
   on public.announcements for delete
-  using (author_id = auth.uid() or public.is_admin());
+  using (author_id = (select auth.uid()) or (select public.is_admin()));
 
 -- ── announcement_reads ────────────────────────────────────────
 create policy "announcement_reads: select"
   on public.announcement_reads for select
-  using (student_id = auth.uid() or public.is_instructor_or_admin());
+  using (student_id = (select auth.uid()) or (select public.is_instructor_or_admin()));
 
 create policy "announcement_reads: student mark read"
   on public.announcement_reads for insert
-  with check (student_id = auth.uid());
+  with check (student_id = (select auth.uid()));
 
 -- ── schedules ─────────────────────────────────────────────────
 create policy "schedules: select"
   on public.schedules for select
   using (
-    created_by = auth.uid() or public.is_admin()
+    created_by = (select auth.uid()) or (select public.is_admin())
     or exists (
       select 1 from public.students s
-      where s.id = auth.uid() and s.cohort_id = any(cohort_ids)
+      where s.id = (select auth.uid()) and s.cohort_id = any(cohort_ids)
     )
   );
 
 create policy "schedules: instructor insert"
   on public.schedules for insert
-  with check (public.is_instructor_or_admin() and (created_by = auth.uid() or public.is_admin()));
+  with check ((select public.is_instructor_or_admin()) and (created_by = (select auth.uid()) or (select public.is_admin())));
 
 create policy "schedules: instructor update"
   on public.schedules for update
-  using  (created_by = auth.uid() or public.is_admin())
-  with check (created_by = auth.uid() or public.is_admin());
+  using  (created_by = (select auth.uid()) or (select public.is_admin()))
+  with check (created_by = (select auth.uid()) or (select public.is_admin()));
 
 create policy "schedules: instructor delete"
   on public.schedules for delete
-  using (created_by = auth.uid() or public.is_admin());
+  using (created_by = (select auth.uid()) or (select public.is_admin()));
 
 -- ── schedule_topics ───────────────────────────────────────────
 create policy "schedule_topics: select"
@@ -963,11 +968,11 @@ create policy "schedule_topics: select"
       select 1 from public.schedules s
       where s.id = schedule_id
         and (
-          s.created_by = auth.uid() or public.is_admin()
+          s.created_by = (select auth.uid()) or (select public.is_admin())
           or exists (
             select 1 from public.cohort_courses cc
-            join public.cohort_members cm on cm.cohort_id = cc.cohort_id
-            where cc.course_id = s.course_id and cm.student_id = auth.uid()
+            join public.students st on st.cohort_id = cc.cohort_id
+            where cc.course_id = s.course_id and st.id = (select auth.uid())
           )
         )
     )
@@ -976,10 +981,10 @@ create policy "schedule_topics: select"
 create policy "schedule_topics: instructor manage"
   on public.schedule_topics for all
   using (
-    exists (select 1 from public.schedules s where s.id = schedule_id and (s.created_by = auth.uid() or public.is_admin()))
+    exists (select 1 from public.schedules s where s.id = schedule_id and (s.created_by = (select auth.uid()) or (select public.is_admin())))
   )
   with check (
-    exists (select 1 from public.schedules s where s.id = schedule_id and (s.created_by = auth.uid() or public.is_admin()))
+    exists (select 1 from public.schedules s where s.id = schedule_id and (s.created_by = (select auth.uid()) or (select public.is_admin())))
   );
 
 -- ── schedule_resources ────────────────────────────────────────
@@ -990,11 +995,11 @@ create policy "schedule_resources: select"
       select 1 from public.schedules s
       where s.id = schedule_id
         and (
-          s.created_by = auth.uid() or public.is_admin()
+          s.created_by = (select auth.uid()) or (select public.is_admin())
           or exists (
             select 1 from public.cohort_courses cc
-            join public.cohort_members cm on cm.cohort_id = cc.cohort_id
-            where cc.course_id = s.course_id and cm.student_id = auth.uid()
+            join public.students st on st.cohort_id = cc.cohort_id
+            where cc.course_id = s.course_id and st.id = (select auth.uid())
           )
         )
     )
@@ -1003,149 +1008,149 @@ create policy "schedule_resources: select"
 create policy "schedule_resources: instructor manage"
   on public.schedule_resources for all
   using (
-    exists (select 1 from public.schedules s where s.id = schedule_id and (s.created_by = auth.uid() or public.is_admin()))
+    exists (select 1 from public.schedules s where s.id = schedule_id and (s.created_by = (select auth.uid()) or (select public.is_admin())))
   )
   with check (
-    exists (select 1 from public.schedules s where s.id = schedule_id and (s.created_by = auth.uid() or public.is_admin()))
+    exists (select 1 from public.schedules s where s.id = schedule_id and (s.created_by = (select auth.uid()) or (select public.is_admin())))
   );
 
 -- ── cohort_courses ────────────────────────────────────────────
 create policy "cohort_courses: select"
   on public.cohort_courses for select
   using (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
-    or exists (select 1 from public.cohort_members cm where cm.cohort_id = cohort_courses.cohort_id and cm.student_id = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
+    or exists (select 1 from public.students s where s.id = (select auth.uid()) and s.cohort_id = cohort_courses.cohort_id)
   );
 
 create policy "cohort_courses: instructor manage"
   on public.cohort_courses for all
   using (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   )
   with check (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   );
 
 -- ── cohort_assignments ────────────────────────────────────────
 create policy "cohort_assignments: select"
   on public.cohort_assignments for select
   using (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
-    or exists (select 1 from public.cohort_members cm where cm.cohort_id = cohort_assignments.cohort_id and cm.student_id = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
+    or exists (select 1 from public.students s where s.id = (select auth.uid()) and s.cohort_id = cohort_assignments.cohort_id)
   );
 
 create policy "cohort_assignments: instructor manage"
   on public.cohort_assignments for all
   using (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   )
   with check (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   );
 
 -- ── cohort_events ─────────────────────────────────────────────
 create policy "cohort_events: select"
   on public.cohort_events for select
   using (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
-    or exists (select 1 from public.cohort_members cm where cm.cohort_id = cohort_events.cohort_id and cm.student_id = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
+    or exists (select 1 from public.students s where s.id = (select auth.uid()) and s.cohort_id = cohort_events.cohort_id)
   );
 
 create policy "cohort_events: instructor manage"
   on public.cohort_events for all
   using (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   )
   with check (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   );
 
 -- ── cohort_projects ───────────────────────────────────────────
 create policy "cohort_projects: select"
   on public.cohort_projects for select
   using (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
-    or exists (select 1 from public.cohort_members cm where cm.cohort_id = cohort_projects.cohort_id and cm.student_id = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
+    or exists (select 1 from public.students s where s.id = (select auth.uid()) and s.cohort_id = cohort_projects.cohort_id)
   );
 
 create policy "cohort_projects: instructor manage"
   on public.cohort_projects for all
   using (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   )
   with check (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   );
 
 -- ── cohort_communities ────────────────────────────────────────
 create policy "cohort_communities: select"
   on public.cohort_communities for select
   using (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
-    or exists (select 1 from public.cohort_members cm where cm.cohort_id = cohort_communities.cohort_id and cm.student_id = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
+    or exists (select 1 from public.students s where s.id = (select auth.uid()) and s.cohort_id = cohort_communities.cohort_id)
   );
 
 create policy "cohort_communities: instructor manage"
   on public.cohort_communities for all
   using (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   )
   with check (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   );
 
 -- ── cohort_announcements ──────────────────────────────────────
 create policy "cohort_announcements: select"
   on public.cohort_announcements for select
   using (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
-    or exists (select 1 from public.cohort_members cm where cm.cohort_id = cohort_announcements.cohort_id and cm.student_id = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
+    or exists (select 1 from public.students s where s.id = (select auth.uid()) and s.cohort_id = cohort_announcements.cohort_id)
   );
 
 create policy "cohort_announcements: instructor manage"
   on public.cohort_announcements for all
   using (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   )
   with check (
-    public.is_admin()
-    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.cohorts c where c.id = cohort_id and c.created_by = (select auth.uid()))
   );
 
 -- ── enrollments ───────────────────────────────────────────────
 create policy "enrollments: select"
   on public.enrollments for select
   using (
-    student_id = auth.uid()
-    or public.is_admin()
-    or exists (select 1 from public.courses c where c.id = course_id and c.instructor_id = auth.uid())
+    student_id = (select auth.uid())
+    or (select public.is_admin())
+    or exists (select 1 from public.courses c where c.id = course_id and c.instructor_id = (select auth.uid()))
   );
 
 -- Only instructors/admins enrol students; students cannot self-enrol
 create policy "enrollments: instructor insert"
   on public.enrollments for insert
   with check (
-    public.is_instructor_or_admin()
+    (select public.is_instructor_or_admin())
     and (
-      exists (select 1 from public.courses c where c.id = course_id and c.instructor_id = auth.uid())
-      or public.is_admin()
+      exists (select 1 from public.courses c where c.id = course_id and c.instructor_id = (select auth.uid()))
+      or (select public.is_admin())
     )
   );
 
@@ -1153,39 +1158,39 @@ create policy "enrollments: instructor insert"
 create policy "enrollments: instructor update"
   on public.enrollments for update
   using (
-    public.is_admin()
-    or exists (select 1 from public.courses c where c.id = course_id and c.instructor_id = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.courses c where c.id = course_id and c.instructor_id = (select auth.uid()))
   )
   with check (
-    public.is_admin()
-    or exists (select 1 from public.courses c where c.id = course_id and c.instructor_id = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.courses c where c.id = course_id and c.instructor_id = (select auth.uid()))
   );
 
 create policy "enrollments: instructor delete"
   on public.enrollments for delete
   using (
-    public.is_admin()
-    or exists (select 1 from public.courses c where c.id = course_id and c.instructor_id = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.courses c where c.id = course_id and c.instructor_id = (select auth.uid()))
   );
 
 -- ── assignment_submissions ────────────────────────────────────
 create policy "assignment_submissions: select"
   on public.assignment_submissions for select
   using (
-    student_id = auth.uid()
-    or public.is_admin()
-    or exists (select 1 from public.students where id = auth.uid() and role = 'instructor')
-    or exists (select 1 from public.assignments a where a.id = assignment_id and a.created_by = auth.uid())
+    student_id = (select auth.uid())
+    or (select public.is_admin())
+    or exists (select 1 from public.students where id = (select auth.uid()) and role = 'instructor')
+    or exists (select 1 from public.assignments a where a.id = assignment_id and a.created_by = (select auth.uid()))
   );
 
 -- Students submit to assignments in their cohort
 create policy "assignment_submissions: student insert"
   on public.assignment_submissions for insert
   with check (
-    student_id = auth.uid()
+    student_id = (select auth.uid())
     and exists (
       select 1 from public.assignments a
-      join public.students s on s.id = auth.uid()
+      join public.students s on s.id = (select auth.uid())
       where a.id = assignment_submissions.assignment_id and s.cohort_id = any(a.cohort_ids)
     )
   );
@@ -1193,21 +1198,28 @@ create policy "assignment_submissions: student insert"
 -- Students update own draft/submitted — cannot touch score or grade fields
 create policy "assignment_submissions: student update"
   on public.assignment_submissions for update
-  using  (student_id = auth.uid() and status in ('draft','submitted'))
-  with check (student_id = auth.uid() and status in ('draft','submitted'));
+  using  (student_id = (select auth.uid()) and status in ('draft','submitted'))
+  with check (
+    student_id = (select auth.uid())
+    and status in ('draft','submitted')
+    and score      is not distinct from (select score      from public.assignment_submissions s where s.id = assignment_submissions.id)
+    and feedback   is not distinct from (select feedback   from public.assignment_submissions s where s.id = assignment_submissions.id)
+    and graded_by  is not distinct from (select graded_by  from public.assignment_submissions s where s.id = assignment_submissions.id)
+    and graded_at  is not distinct from (select graded_at  from public.assignment_submissions s where s.id = assignment_submissions.id)
+  );
 
 -- Instructors grade submissions for their assignments
 create policy "assignment_submissions: instructor grade"
   on public.assignment_submissions for update
   using (
-    public.is_admin()
-    or exists (select 1 from public.students where id = auth.uid() and role = 'instructor')
-    or exists (select 1 from public.assignments a where a.id = assignment_id and a.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.students where id = (select auth.uid()) and role = 'instructor')
+    or exists (select 1 from public.assignments a where a.id = assignment_id and a.created_by = (select auth.uid()))
   )
   with check (
-    public.is_admin()
-    or exists (select 1 from public.students where id = auth.uid() and role = 'instructor')
-    or exists (select 1 from public.assignments a where a.id = assignment_id and a.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.students where id = (select auth.uid()) and role = 'instructor')
+    or exists (select 1 from public.assignments a where a.id = assignment_id and a.created_by = (select auth.uid()))
   );
 
 -- ── assignment_submission_files ───────────────────────────────
@@ -1218,10 +1230,10 @@ create policy "assignment_submission_files: select"
       select 1 from public.assignment_submissions s
       where s.id = submission_id
         and (
-          s.student_id = auth.uid()
-          or public.is_admin()
-          or exists (select 1 from public.students where id = auth.uid() and role = 'instructor')
-          or exists (select 1 from public.assignments a where a.id = s.assignment_id and a.created_by = auth.uid())
+          s.student_id = (select auth.uid())
+          or (select public.is_admin())
+          or exists (select 1 from public.students where id = (select auth.uid()) and role = 'instructor')
+          or exists (select 1 from public.assignments a where a.id = s.assignment_id and a.created_by = (select auth.uid()))
         )
     )
   );
@@ -1231,7 +1243,7 @@ create policy "assignment_submission_files: student upload"
   with check (
     exists (
       select 1 from public.assignment_submissions s
-      where s.id = submission_id and s.student_id = auth.uid() and s.status != 'graded'
+      where s.id = submission_id and s.student_id = (select auth.uid()) and s.status != 'graded'
     )
   );
 
@@ -1240,7 +1252,7 @@ create policy "assignment_submission_files: student delete own"
   using (
     exists (
       select 1 from public.assignment_submissions s
-      where s.id = submission_id and s.student_id = auth.uid() and s.status = 'draft'
+      where s.id = submission_id and s.student_id = (select auth.uid()) and s.status = 'draft'
     )
   );
 
@@ -1248,27 +1260,27 @@ create policy "assignment_submission_files: student delete own"
 create policy "project_submissions: select"
   on public.project_submissions for select
   using (
-    student_id = auth.uid()
-    or public.is_admin()
-    or exists (select 1 from public.projects p where p.id = project_id and p.created_by = auth.uid())
+    student_id = (select auth.uid())
+    or (select public.is_admin())
+    or exists (select 1 from public.projects p where p.id = project_id and p.created_by = (select auth.uid()))
   );
 
 create policy "project_submissions: student insert"
   on public.project_submissions for insert
   with check (
-    student_id = auth.uid()
+    student_id = (select auth.uid())
     and exists (
       select 1 from public.projects p
-      join public.students s on s.id = auth.uid()
+      join public.students s on s.id = (select auth.uid())
       where p.id = project_submissions.project_id and s.cohort_id = any(p.cohort_ids)
     )
   );
 
 create policy "project_submissions: student update"
   on public.project_submissions for update
-  using  (student_id = auth.uid() and status in ('draft','submitted'))
+  using  (student_id = (select auth.uid()) and status in ('draft','submitted'))
   with check (
-    student_id = auth.uid()
+    student_id = (select auth.uid())
     and score     is not distinct from (select score     from public.project_submissions s where s.id = project_submissions.id)
     and graded_by is not distinct from (select graded_by from public.project_submissions s where s.id = project_submissions.id)
     and graded_at is not distinct from (select graded_at from public.project_submissions s where s.id = project_submissions.id)
@@ -1277,12 +1289,12 @@ create policy "project_submissions: student update"
 create policy "project_submissions: instructor review"
   on public.project_submissions for update
   using (
-    public.is_admin()
-    or exists (select 1 from public.projects p where p.id = project_id and p.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.projects p where p.id = project_id and p.created_by = (select auth.uid()))
   )
   with check (
-    public.is_admin()
-    or exists (select 1 from public.projects p where p.id = project_id and p.created_by = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.projects p where p.id = project_id and p.created_by = (select auth.uid()))
   );
 
 -- ── project_submission_files ──────────────────────────────────
@@ -1293,9 +1305,9 @@ create policy "project_submission_files: select"
       select 1 from public.project_submissions s
       where s.id = submission_id
         and (
-          s.student_id = auth.uid()
-          or public.is_admin()
-          or exists (select 1 from public.projects p where p.id = s.project_id and p.created_by = auth.uid())
+          s.student_id = (select auth.uid())
+          or (select public.is_admin())
+          or exists (select 1 from public.projects p where p.id = s.project_id and p.created_by = (select auth.uid()))
         )
     )
   );
@@ -1305,7 +1317,7 @@ create policy "project_submission_files: student upload"
   with check (
     exists (
       select 1 from public.project_submissions s
-      where s.id = submission_id and s.student_id = auth.uid() and s.status != 'reviewed'
+      where s.id = submission_id and s.student_id = (select auth.uid()) and s.status != 'reviewed'
     )
   );
 
@@ -1314,7 +1326,7 @@ create policy "project_submission_files: student delete own"
   using (
     exists (
       select 1 from public.project_submissions s
-      where s.id = submission_id and s.student_id = auth.uid() and s.status = 'draft'
+      where s.id = submission_id and s.student_id = (select auth.uid()) and s.status = 'draft'
     )
   );
 
@@ -1322,21 +1334,21 @@ create policy "project_submission_files: student delete own"
 create policy "event_registrations: select"
   on public.event_registrations for select
   using (
-    student_id = auth.uid()
-    or public.is_admin()
-    or exists (select 1 from public.events e where e.id = event_id and e.instructor_id = auth.uid())
+    student_id = (select auth.uid())
+    or (select public.is_admin())
+    or exists (select 1 from public.events e where e.id = event_id and e.instructor_id = (select auth.uid()))
   );
 
 -- Students self-register for events in their cohort (with capacity check)
 create policy "event_registrations: student self-register"
   on public.event_registrations for insert
   with check (
-    student_id = auth.uid()
-    and registered_by = auth.uid()
+    student_id = (select auth.uid())
+    and registered_by = (select auth.uid())
     and exists (
       select 1 from public.cohort_events ce
-      join public.cohort_members cm on cm.cohort_id = ce.cohort_id
-      where ce.event_id = event_registrations.event_id and cm.student_id = auth.uid()
+      join public.students s on s.cohort_id = ce.cohort_id
+      where ce.event_id = event_registrations.event_id and s.id = (select auth.uid())
     )
     and exists (
       select 1 from public.events e
@@ -1354,51 +1366,51 @@ create policy "event_registrations: student self-register"
 create policy "event_registrations: instructor manage"
   on public.event_registrations for all
   using (
-    public.is_admin()
-    or exists (select 1 from public.events e where e.id = event_id and e.instructor_id = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.events e where e.id = event_id and e.instructor_id = (select auth.uid()))
   )
   with check (
-    public.is_admin()
-    or exists (select 1 from public.events e where e.id = event_id and e.instructor_id = auth.uid())
+    (select public.is_admin())
+    or exists (select 1 from public.events e where e.id = event_id and e.instructor_id = (select auth.uid()))
   );
 
 -- Students can only cancel their own registration
 create policy "event_registrations: student cancel"
   on public.event_registrations for update
-  using  (student_id = auth.uid() and status = 'registered')
-  with check (student_id = auth.uid() and status = 'cancelled');
+  using  (student_id = (select auth.uid()) and status = 'registered')
+  with check (student_id = (select auth.uid()) and status = 'cancelled');
 
 
 -- ── certificate_defaults ──────────────────────────────────────
 create policy "certificate_defaults: own select"
   on public.certificate_defaults for select
-  using (user_id = auth.uid());
+  using (user_id = (select auth.uid()));
 
 create policy "certificate_defaults: own upsert"
   on public.certificate_defaults for insert
-  with check (user_id = auth.uid());
+  with check (user_id = (select auth.uid()));
 
 create policy "certificate_defaults: own update"
   on public.certificate_defaults for update
-  using  (user_id = auth.uid())
-  with check (user_id = auth.uid());
+  using  (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
 
 -- ── meeting_integrations ──────────────────────────────────────
 create policy "meeting_integrations: own select"
   on public.meeting_integrations for select
-  using (user_id = auth.uid());
+  using (user_id = (select auth.uid()));
 
 create policy "meeting_integrations: own upsert"
   on public.meeting_integrations for insert
-  with check (user_id = auth.uid());
+  with check (user_id = (select auth.uid()));
 
 create policy "meeting_integrations: own update"
   on public.meeting_integrations for update
-  using (user_id = auth.uid());
+  using (user_id = (select auth.uid()));
 
 create policy "meeting_integrations: own delete"
   on public.meeting_integrations for delete
-  using (user_id = auth.uid());
+  using (user_id = (select auth.uid()));
 
 
 -- ── Storage: form-assets bucket ───────────────────────────────
@@ -1414,11 +1426,17 @@ create policy "Auth users upload form-assets"
   to authenticated
   with check ( bucket_id = 'form-assets' );
 
--- Allow authenticated users to update/overwrite their uploads
+-- Only file owner can update their uploads
 create policy "Auth users update form-assets"
   on storage.objects for update
   to authenticated
-  using ( bucket_id = 'form-assets' );
+  using ( bucket_id = 'form-assets' AND owner = (select auth.uid()) );
+
+-- Only file owner can delete their uploads
+create policy "Auth users delete form-assets"
+  on storage.objects for delete
+  to authenticated
+  using ( bucket_id = 'form-assets' AND owner = (select auth.uid()) );
 
 
 -- ── Storage: cert-assets bucket ────────────────────────────────
@@ -1435,17 +1453,17 @@ create policy "Instructors upload cert-assets"
   to authenticated
   with check ( bucket_id = 'cert-assets' );
 
--- Allow overwriting existing uploads
+-- Only file owner can overwrite their uploads
 create policy "Instructors update cert-assets"
   on storage.objects for update
   to authenticated
-  using ( bucket_id = 'cert-assets' );
+  using ( bucket_id = 'cert-assets' AND owner = (select auth.uid()) );
 
--- Allow deleting own uploads
+-- Only file owner can delete their uploads
 create policy "Instructors delete cert-assets"
   on storage.objects for delete
   to authenticated
-  using ( bucket_id = 'cert-assets' );
+  using ( bucket_id = 'cert-assets' AND owner = (select auth.uid()) );
 
 
 -- ── forms (courses, events, regular forms) ────────────────────
@@ -1471,17 +1489,17 @@ create index idx_forms_cohort       on public.forms(cohort_id);
 alter table public.forms enable row level security;
 
 create policy "forms: own select"
-  on public.forms for select using (user_id = auth.uid());
+  on public.forms for select using (user_id = (select auth.uid()));
 
 create policy "forms: own insert"
-  on public.forms for insert with check (user_id = auth.uid());
+  on public.forms for insert with check (user_id = (select auth.uid()));
 
 create policy "forms: own update"
   on public.forms for update
-  using (user_id = auth.uid()) with check (user_id = auth.uid());
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
 create policy "forms: own delete"
-  on public.forms for delete using (user_id = auth.uid());
+  on public.forms for delete using (user_id = (select auth.uid()));
 
 -- Students can see courses assigned to their cohort
 create policy "forms: cohort student select"
@@ -1490,7 +1508,7 @@ create policy "forms: cohort student select"
     content_type = 'course'
     and cohort_id is not null
     and cohort_id = (
-      select cohort_id from public.students where id = auth.uid()
+      select cohort_id from public.students where id = (select auth.uid())
     )
   );
 
@@ -1525,7 +1543,7 @@ create policy "course_progress: instructor read"
   using (
     exists (
       select 1 from public.forms f
-      where f.id = form_id and f.user_id = auth.uid()
+      where f.id = form_id and f.user_id = (select auth.uid())
     )
   );
 
@@ -1546,10 +1564,14 @@ create index idx_responses_form_id on public.responses(form_id);
 
 alter table public.responses enable row level security;
 
--- Anyone (anon or authenticated) can submit a form/course
-create policy "responses: public insert"
+-- Only authenticated users can submit a response
+create policy "responses: authenticated insert"
   on public.responses for insert
-  with check (true);
+  to authenticated
+  with check (
+    (select auth.uid()) is not null
+    and pg_column_size(data) <= 65536
+  );
 
 -- Only the form owner can read their submissions
 create policy "responses: owner select"
@@ -1557,7 +1579,7 @@ create policy "responses: owner select"
   using (
     exists (
       select 1 from public.forms f
-      where f.id = form_id and f.user_id = auth.uid()
+      where f.id = form_id and f.user_id = (select auth.uid())
     )
   );
 

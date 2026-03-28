@@ -5,16 +5,15 @@ import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Loader2, Users, FileText, BarChart2, Award,
-  ShieldOff, ShieldCheck, Trash2, Search, TrendingUp,
-  AlertTriangle, LogOut, ChevronDown, ChevronUp, Settings2, Check,
+  Search, TrendingUp, AlertTriangle, LogOut,
+  ChevronDown, ChevronUp, Settings2, Check,
   Sparkles, Mail, CalendarDays, BookOpen,
 } from 'lucide-react';
 
-interface Creator {
+interface Instructor {
   id: string;
   email: string;
   full_name: string | null;
-  suspended: boolean;
   created_at: string;
   form_count: number;
   course_count: number;
@@ -23,7 +22,7 @@ interface Creator {
 }
 
 interface Stats {
-  creators: number;
+  instructors: number;
   forms: number;
   responses: number;
   certificates: number;
@@ -68,17 +67,14 @@ export default function AdminDashboard() {
   const [authError, setAuthError]   = useState('');
   const [token, setToken]           = useState('');
   const [stats, setStats]           = useState<Stats | null>(null);
-  const [creators, setCreators]   = useState<Creator[]>([]);
+  const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [search, setSearch]         = useState('');
-  const [actionId, setActionId]     = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  // Plan config state
-  const [planConfig, setPlanConfig]         = useState<PlanRow[]>([]);
-  const [planEdits, setPlanEdits]           = useState<Record<string, Partial<PlanRow>>>({});
-  const [planSaving, setPlanSaving]         = useState<string | null>(null);
-  const [planSaved, setPlanSaved]           = useState<string | null>(null);
+  const [planConfig, setPlanConfig]   = useState<PlanRow[]>([]);
+  const [planEdits, setPlanEdits]     = useState<Record<string, Partial<PlanRow>>>({});
+  const [planSaving, setPlanSaving]   = useState<string | null>(null);
+  const [planSaved, setPlanSaved]     = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -86,7 +82,6 @@ export default function AdminDashboard() {
 
       const tok = session.access_token;
 
-      // Verify admin role via API (uses service role -- bypasses RLS)
       const res = await fetch('/api/admin', {
         headers: { Authorization: `Bearer ${tok}` },
       });
@@ -97,12 +92,11 @@ export default function AdminDashboard() {
         return;
       }
 
-      // Response already contains stats
       const data = await res.json();
       setStats(data);
       setToken(tok);
       await Promise.all([
-        fetchCreators(tok),
+        fetchInstructors(tok),
         fetch('/api/admin/plan-config', { headers: { Authorization: `Bearer ${tok}` } })
           .then(r => r.ok ? r.json() : [])
           .then((rows: PlanRow[]) => { setPlanConfig(rows); setPlanEdits({}); }),
@@ -111,26 +105,13 @@ export default function AdminDashboard() {
     });
   }, []);
 
-
-  const fetchCreators = useCallback(async (tok?: string) => {
-    const res = await fetch('/api/admin?action=creators', {
+  const fetchInstructors = useCallback(async (tok?: string) => {
+    const res = await fetch('/api/admin?action=instructors', {
       headers: { Authorization: `Bearer ${tok ?? token}` },
     });
     const json = await res.json();
-    if (res.ok) setCreators(json);
+    if (res.ok) setInstructors(json);
   }, [token]);
-
-  const callAdmin = useCallback(async (action: string, creator_id: string) => {
-    setActionId(creator_id);
-    await fetch('/api/admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action, creator_id }),
-    });
-    await fetchCreators();
-    setActionId(null);
-    setConfirmDelete(null);
-  }, [token, fetchCreators]);
 
   const savePlanConfig = async (plan: string) => {
     const edits = planEdits[plan];
@@ -147,7 +128,6 @@ export default function AdminDashboard() {
         alert(json.error || 'Failed to save');
         return;
       }
-      // Merge saved edits into planConfig
       setPlanConfig(prev => prev.map(row =>
         row.plan === plan ? { ...row, ...edits } : row
       ));
@@ -159,7 +139,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const filtered = creators.filter(m =>
+  const filtered = instructors.filter(m =>
     !search ||
     m.email?.toLowerCase().includes(search.toLowerCase()) ||
     m.full_name?.toLowerCase().includes(search.toLowerCase())
@@ -197,10 +177,8 @@ export default function AdminDashboard() {
     <div className="min-h-screen pb-16" style={{ background: C.page }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'); *{font-family:'Inter',sans-serif;}`}</style>
 
-      {/* Decorative blob */}
       <div className="fixed top-0 right-0 pointer-events-none" style={{ width:240,height:240,borderRadius:'50%',background:C.lime,transform:'translate(35%,-25%)',opacity:0.5,zIndex:0 }}/>
 
-      {/* Header */}
       <header className="sticky top-0 z-20 backdrop-blur-md border-b px-6 h-14 flex items-center justify-between"
         style={{ background: C.nav, borderColor: C.navBorder }}>
         <div className="flex items-center gap-2.5">
@@ -222,11 +200,11 @@ export default function AdminDashboard() {
         {stats && (
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {[
-              { label:'Creators',    value:stats.creators,          icon:Users,      color:'#006128' },
-              { label:'Forms',       value:stats.forms,             icon:FileText,   color:'#7c3aed' },
-              { label:'Responses',   value:stats.responses,         icon:BarChart2,  color:'#059669' },
-              { label:'Certificates',value:stats.certificates,      icon:Award,      color:'#d97706' },
-              { label:'This Month',  value:stats.responsesThisMonth,icon:TrendingUp, color:'#dc2626' },
+              { label:'Instructors',  value:stats.instructors,        icon:Users,      color:'#006128' },
+              { label:'Forms',        value:stats.forms,              icon:FileText,   color:'#7c3aed' },
+              { label:'Responses',    value:stats.responses,          icon:BarChart2,  color:'#059669' },
+              { label:'Certificates', value:stats.certificates,       icon:Award,      color:'#d97706' },
+              { label:'This Month',   value:stats.responsesThisMonth, icon:TrendingUp, color:'#dc2626' },
             ].map(s => (
               <div key={s.label} className="rounded-2xl p-4" style={{ background:C.card, border:`1px solid ${C.cardBorder}`, boxShadow:C.cardShadow }}>
                 <div className="flex items-center justify-between mb-2">
@@ -239,10 +217,10 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Creators */}
+        {/* Instructors */}
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color:C.faint }}>Creators ({filtered.length})</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color:C.faint }}>Instructors ({filtered.length})</h2>
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2" style={{ color:C.faint }}/>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..."
@@ -256,17 +234,14 @@ export default function AdminDashboard() {
               {filtered.map(m => (
                 <motion.div key={m.id} layout initial={{ opacity:0,y:4 }} animate={{ opacity:1,y:0 }} exit={{ opacity:0,y:-4 }}
                   className="rounded-2xl overflow-hidden"
-                  style={{ background:C.card, border:`1px solid ${m.suspended ? '#fecaca' : C.cardBorder}`, boxShadow:C.cardShadow }}>
+                  style={{ background:C.card, border:`1px solid ${C.cardBorder}`, boxShadow:C.cardShadow }}>
                   <div className="flex items-center gap-3 px-4 py-3.5 cursor-pointer" onClick={() => setExpandedId(expandedId === m.id ? null : m.id)}>
                     <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0"
-                      style={{ background: m.suspended ? '#fef2f2' : C.lime, color: m.suspended ? '#ef4444' : C.green }}>
+                      style={{ background: C.lime, color: C.green }}>
                       {(m.full_name || m.email || '?')[0].toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium truncate" style={{ color:C.text }}>{m.full_name || m.email?.split('@')[0] || 'Unnamed'}</p>
-                        {m.suspended && <span className="text-[10px] px-1.5 py-0.5 rounded-md font-medium flex-shrink-0" style={{ background:'#fef2f2', color:'#ef4444' }}>Suspended</span>}
-                      </div>
+                      <p className="text-sm font-medium truncate" style={{ color:C.text }}>{m.full_name || m.email?.split('@')[0] || 'Unnamed'}</p>
                       <p className="text-xs truncate" style={{ color:C.faint }}>{m.email}</p>
                     </div>
                     <div className="hidden sm:flex items-center gap-4 text-xs flex-shrink-0" style={{ color:C.faint }}>
@@ -288,27 +263,7 @@ export default function AdminDashboard() {
                               </div>
                             ))}
                           </div>
-                          <p className="text-[10px] mb-3" style={{ color:C.faint }}>Joined {new Date(m.created_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</p>
-                          {confirmDelete === m.id ? (
-                            <div className="flex items-center gap-2">
-                              <p className="text-red-500 text-xs flex-1">Delete permanently? This cannot be undone.</p>
-                              <button onClick={() => callAdmin('delete',m.id)} disabled={actionId===m.id} className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs rounded-lg transition-colors disabled:opacity-50">
-                                {actionId===m.id ? <Loader2 className="w-3 h-3 animate-spin"/> : 'Confirm'}
-                              </button>
-                              <button onClick={() => setConfirmDelete(null)} className="px-3 py-1.5 text-xs rounded-lg transition-colors" style={{ background:C.pill, color:C.muted }}>Cancel</button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => callAdmin(m.suspended?'unsuspend':'suspend',m.id)} disabled={actionId===m.id}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-                                style={{ background: m.suspended ? '#f0fdf4' : '#fffbeb', color: m.suspended ? '#16a34a' : '#d97706' }}>
-                                {actionId===m.id ? <Loader2 className="w-3 h-3 animate-spin"/> : m.suspended ? <><ShieldCheck className="w-3 h-3"/> Unsuspend</> : <><ShieldOff className="w-3 h-3"/> Suspend</>}
-                              </button>
-                              <button onClick={() => setConfirmDelete(m.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors" style={{ background:'#fef2f2', color:'#ef4444' }}>
-                                <Trash2 className="w-3 h-3"/> Delete
-                              </button>
-                            </div>
-                          )}
+                          <p className="text-[10px]" style={{ color:C.faint }}>Joined {new Date(m.created_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</p>
                         </div>
                       </motion.div>
                     )}
@@ -317,7 +272,7 @@ export default function AdminDashboard() {
               ))}
             </AnimatePresence>
             {filtered.length === 0 && (
-              <div className="text-center py-12 text-sm" style={{ color:C.faint }}>{search ? 'No creators match your search' : 'No creators yet'}</div>
+              <div className="text-center py-12 text-sm" style={{ color:C.faint }}>{search ? 'No instructors match your search' : 'No instructors yet'}</div>
             )}
           </div>
         </section>
@@ -347,75 +302,48 @@ export default function AdminDashboard() {
                   <div key={row.plan} className="rounded-2xl overflow-hidden flex flex-col"
                     style={{ background: C.card, border: `1px solid ${dirty ? meta.accent + '60' : C.cardBorder}`, boxShadow: C.cardShadow, transition: 'border-color 0.2s' }}>
 
-                    {/* Card header */}
                     <div className="px-5 pt-4 pb-3 flex items-center justify-between"
                       style={{ background: meta.heroBg, borderBottom: `1px solid ${C.divider}` }}>
                       <div>
                         <p className="text-[10px] uppercase tracking-widest font-semibold mb-0.5" style={{ color: meta.accent }}>Plan</p>
                         <h3 className="text-base font-bold" style={{ color: C.text }}>{meta.label}</h3>
                       </div>
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                        style={{ background: meta.mutedAccent }}>
-                        <span className="text-sm font-bold" style={{ color: meta.accent }}>
-                          {meta.label[0]}
-                        </span>
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: meta.mutedAccent }}>
+                        <span className="text-sm font-bold" style={{ color: meta.accent }}>{meta.label[0]}</span>
                       </div>
                     </div>
 
-                    {/* Feature rows */}
                     <div className="px-5 py-3 flex-1 space-y-1">
                       {FEATURE_DEFS.map((f, fi) => {
                         const val = merged[f.key];
                         const { Icon } = f;
-
                         return (
-                          <div key={f.key}
-                            className="flex items-center justify-between py-2"
+                          <div key={f.key} className="flex items-center justify-between py-2"
                             style={{ borderBottom: fi < FEATURE_DEFS.length - 1 ? `1px solid ${C.divider}` : undefined }}>
-
-                            {/* Label */}
                             <div className="flex items-center gap-2">
                               <Icon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: C.faint }}/>
                               <span className="text-xs font-medium" style={{ color: C.muted }}>{f.label}</span>
                             </div>
-
-                            {/* Control */}
                             {f.type === 'toggle' ? (
-                              // On / Off pill toggle
-                              <button
-                                onClick={() => update(f.key, val !== 0 ? 0 : -1)}
+                              <button onClick={() => update(f.key, val !== 0 ? 0 : -1)}
                                 className="relative flex-shrink-0 w-10 h-5 rounded-full transition-colors duration-200"
                                 style={{ background: val !== 0 ? meta.accent : '#d1d5db' }}>
                                 <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200"
                                   style={{ left: '2px', transform: val !== 0 ? 'translateX(20px)' : 'translateX(0)' }}/>
                               </button>
                             ) : (
-                              // Numeric: input or unlimited badge + toggle
                               <div className="flex items-center gap-1.5">
                                 {val === -1 ? (
-                                  <span className="text-xs font-semibold px-2 py-0.5 rounded-lg"
-                                    style={{ background: meta.mutedAccent, color: meta.accent }}>∞</span>
+                                  <span className="text-xs font-semibold px-2 py-0.5 rounded-lg" style={{ background: meta.mutedAccent, color: meta.accent }}>∞</span>
                                 ) : (
-                                  <input
-                                    type="number"
-                                    value={val}
-                                    min={0}
-                                    step={1}
-                                    onChange={e => {
-                                      const n = parseInt(e.target.value, 10);
-                                      if (!isNaN(n) && n >= 0) update(f.key, n);
-                                    }}
+                                  <input type="number" value={val} min={0} step={1}
+                                    onChange={e => { const n = parseInt(e.target.value, 10); if (!isNaN(n) && n >= 0) update(f.key, n); }}
                                     className="w-14 rounded-lg px-2 py-1 text-xs text-center border outline-none focus:ring-1 transition-colors"
-                                    style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}
-                                  />
+                                    style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
                                 )}
-                                <button
-                                  onClick={() => update(f.key, val === -1 ? f.defaultLimit : -1)}
+                                <button onClick={() => update(f.key, val === -1 ? f.defaultLimit : -1)}
                                   className="text-[10px] px-2 py-1 rounded-lg font-medium transition-colors"
-                                  style={{
-                                    background: val === -1 ? '#fef3c7' : C.pill,
-                                    color:      val === -1 ? '#d97706' : C.faint,
-                                  }}>
+                                  style={{ background: val === -1 ? '#fef3c7' : C.pill, color: val === -1 ? '#d97706' : C.faint }}>
                                   {val === -1 ? 'limit' : '∞'}
                                 </button>
                               </div>
@@ -425,25 +353,16 @@ export default function AdminDashboard() {
                       })}
                     </div>
 
-                    {/* Save */}
                     <div className="px-5 pb-4 pt-1">
-                      <button
-                        onClick={() => savePlanConfig(row.plan)}
-                        disabled={!dirty || planSaving === row.plan}
+                      <button onClick={() => savePlanConfig(row.plan)} disabled={!dirty || planSaving === row.plan}
                         className="w-full py-2 rounded-xl text-xs font-semibold transition-all duration-200"
                         style={{
-                          background: planSaved === row.plan ? '#f0fdf4'
-                            : dirty ? meta.accent
-                            : C.pill,
-                          color: planSaved === row.plan ? '#16a34a'
-                            : dirty ? 'white'
-                            : C.faint,
+                          background: planSaved === row.plan ? '#f0fdf4' : dirty ? meta.accent : C.pill,
+                          color: planSaved === row.plan ? '#16a34a' : dirty ? 'white' : C.faint,
                           cursor: !dirty ? 'default' : undefined,
                         }}>
-                        {planSaving === row.plan
-                          ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto"/>
-                          : planSaved === row.plan
-                          ? '✓ Saved'
+                        {planSaving === row.plan ? <Loader2 className="w-3.5 h-3.5 animate-spin mx-auto"/>
+                          : planSaved === row.plan ? <><Check className="w-3.5 h-3.5 inline mr-1"/>Saved</>
                           : dirty ? 'Save changes' : 'No changes'}
                       </button>
                     </div>

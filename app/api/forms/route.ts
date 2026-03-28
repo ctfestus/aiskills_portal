@@ -112,7 +112,7 @@ export async function DELETE(req: NextRequest) {
   const { data: form } = await supabase.from('forms').select('id, user_id, config').eq('id', formId).single();
   if (!form) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+  const { data: profile } = await supabase.from('students').select('role').eq('id', user.id).single();
   const isAdmin = profile?.role === 'admin';
   if (form.user_id !== user.id && !isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

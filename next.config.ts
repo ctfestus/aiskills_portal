@@ -1,28 +1,7 @@
 import type {NextConfig} from 'next';
 
-// Content-Security-Policy -- tightens what browsers will load/execute.
-// - script-src 'self': no inline scripts, no external script hosts
-// - style-src 'self' 'unsafe-inline': inline styles needed by Tailwind/CSS-in-JS
-// - img-src *: forms and events load cover images from arbitrary URLs
-// - connect-src: Supabase, Resend webhooks, and self
-// - frame-ancestors 'none': equivalent to X-Frame-Options: DENY (belt-and-braces)
-const CSP_BASE = [
-  "default-src 'self'",
-  process.env.NODE_ENV === 'development'
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-    : "script-src 'self' 'unsafe-inline'",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' https://fonts.gstatic.com",
-  "img-src * data: blob:",
-  `connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://*.supabase.co'} https://*.supabase.co https://api.resend.com`,
-  "media-src 'self' blob:",
-  "frame-src 'self' https://www.youtube.com https://player.vimeo.com https://iframe.mediadelivery.net https://player.mediadelivery.net https://video.bunnycdn.com",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join('; ');
-
-// App routes are never embedded -- lock them down.
-const CSP_APP = CSP_BASE + "; frame-ancestors 'none'";
+// CSP is set per-request in middleware.ts using a cryptographic nonce.
+// Only non-CSP security headers are defined here.
 
 const commonHeaders = [
   { key: 'X-Content-Type-Options',  value: 'nosniff' },
@@ -33,17 +12,15 @@ const commonHeaders = [
     : []),
 ];
 
-// Public pages (form/event embeds) -- no frame-ancestors so they can be iframed
+// Public pages -- embeddable
 const publicHeaders = [
   ...commonHeaders,
-  { key: 'Content-Security-Policy', value: CSP_BASE },
 ];
 
 // App/auth routes -- never embeddable
 const appHeaders = [
   ...commonHeaders,
-  { key: 'Content-Security-Policy', value: CSP_APP },
-  { key: 'X-Frame-Options',         value: 'DENY' },
+  { key: 'X-Frame-Options', value: 'DENY' },
 ];
 
 const nextConfig: NextConfig = {
