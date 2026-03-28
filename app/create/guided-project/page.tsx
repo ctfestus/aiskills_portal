@@ -11,6 +11,7 @@ import {
 import { RichTextEditor } from '@/components/RichTextEditor';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
 // -- Design tokens ---
 const LIGHT_C = {
@@ -83,7 +84,7 @@ const INDUSTRIES = [
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
 // -- Page ---
-export default function GuidedProjectCreatePage() {
+function GuidedProjectCreatePageInner() {
   const C = useC();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1285,5 +1286,13 @@ export default function GuidedProjectCreatePage() {
 
       </div>
     </div>
+  );
+}
+
+export default function GuidedProjectCreatePage() {
+  return (
+    <Suspense fallback={null}>
+      <GuidedProjectCreatePageInner />
+    </Suspense>
   );
 }
