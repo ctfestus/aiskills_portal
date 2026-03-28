@@ -411,7 +411,6 @@ export default function GuidedProjectTaker({
 
         {/* Company header */}
         <div className="px-4 py-4 border-b flex items-center gap-3 flex-shrink-0" style={{ borderColor: border }}>
-          <CompanyAvatar name={config.company} color={accentColor} size={36} />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-bold truncate" style={{ color: text }}>{config.company}</p>
             <p className="text-[11px] truncate" style={{ color: muted }}>{config.role}</p>

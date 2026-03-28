@@ -226,18 +226,36 @@ Each module: 2-3 lessons. Each lesson: exactly 3 MCQ questions.
 
 LESSON BODY RULES:
 - 2-3 sentences max (50-80 words). Plain <p> tags only.
-- Tell them exactly which columns/rows to look at and what to calculate.
+- Tell them exactly which columns/rows to look at and what to calculate or think about.
 - Example: "<p>Open ${pass1.dataset?.filename || 'the dataset'} and filter to rows where status = 'Completed'. Group by region and sum the amount column. Use this to answer the questions below.</p>"
 
-MCQ QUESTION RULES (CRITICAL):
-- EVERY question must be answerable ONLY by analysing the dataset above.
-- Before writing options, ACTUALLY CALCULATE the answer from the CSV data provided.
-- label: specific question referencing exact column names from the CSV.
-- description: one sentence -- which columns to filter/group/sum (e.g. "Filter by region='Lagos', sum the 'amount' column.").
-- options: exactly 4 plausible choices. Use real values from the CSV as options. Wrong options should be plausible (e.g. other regions' actual totals, not made-up numbers).
-- correctAnswer: must match one of the 4 options EXACTLY. This answer MUST be correct based on the CSV data above.
-- DO NOT guess. Calculate from the data.
+MCQ QUESTION TYPES -- each lesson MUST include a MIX of these 3 types (one of each per lesson):
 
+TYPE A -- DATA QUESTION (1 per lesson):
+- Answerable ONLY by calculating from the dataset above.
+- ACTUALLY CALCULATE the answer before writing options.
+- label: references exact column names (e.g. "Which region had the highest total sales in Q1?")
+- description: exact columns/filters to use (e.g. "Filter by quarter='Q1', group by region, sum the 'amount' column.")
+- options: 4 plausible values using real numbers from the CSV. Wrong options = other real values from the data.
+- correctAnswer: MUST be correct based on the CSV. Do not guess.
+
+TYPE B -- FORMULA / FUNCTION QUESTION (1 per lesson):
+- Tests knowledge of the right tool, formula, or function for a specific task in this lesson.
+- Tied to the tools being used: ${toolsList}
+- Examples by tool:
+  * Excel: "Which formula calculates the average transaction value if the range is B2:B80?" / "Which chart type best shows change over time?" / "What does SUMIF do differently from SUMIFS?"
+  * SQL: "Which clause filters aggregated results in SQL?" / "What is the correct JOIN to return only matching rows?" / "Which function returns the number of non-null values?"
+  * Python/pandas: "Which pandas method removes duplicate rows?" / "What does .groupby().agg() do?" / "Which function reads a CSV into a DataFrame?"
+  * Power BI/Tableau: "Which visual best compares proportions of a whole?" / "What is a calculated field used for?" / "Which filter type applies across all visuals on a page?"
+- correctAnswer: the technically correct answer, well-known in the field.
+
+TYPE C -- INTERPRETATION / JUDGEMENT QUESTION (1 per lesson):
+- Tests analytical thinking, not data lookup or tool knowledge.
+- Examples: "What does a 22% monthly churn rate suggest about customer retention?" / "Which chart would best communicate regional sales differences to a non-technical executive?" / "If two variables have a correlation of 0.85, what does this indicate?" / "An analyst notices the top 3 customers account for 70% of revenue. What risk does this represent?"
+- options: 4 plausible analyst-level interpretations.
+- correctAnswer: the most analytically sound answer.
+
+DISTRIBUTION RULE: Across ALL lessons in the project, roughly one-third of questions should be each type. Do NOT follow a fixed A-B-C order -- vary the type order per lesson and vary how many of each type appear per lesson (e.g. one lesson might have 2×A + 1×C, another 1×A + 2×B, another 1×A + 1×B + 1×C). The goal is a natural, unpredictable mix, not a pattern students can spot.
 IDs: "mod-1", "les-1-1", "req-1-1-1".
 Requirement type: always "mcq".
 `;
@@ -360,17 +378,35 @@ Each module: 2-3 lessons. Each lesson: exactly 3 MCQ questions.
 
 LESSON BODY RULES:
 - 2-3 sentences max (50-80 words). Plain <p> tags only.
-- Tell them exactly which columns/rows to look at and what to calculate.
+- Tell them exactly which columns/rows to look at and what to calculate or think about.
 
-MCQ QUESTION RULES (CRITICAL):
-- EVERY question must be answerable ONLY by analysing the dataset above.
-- Before writing options, ACTUALLY CALCULATE the answer from the CSV data provided.
-- label: specific question referencing exact column names from the CSV.
-- description: one sentence -- which columns to filter/group/sum.
-- options: exactly 4 plausible choices using real values from the CSV.
-- correctAnswer: must match one of the 4 options EXACTLY and be correct based on the data.
-- DO NOT guess. Calculate from the data.
+MCQ QUESTION TYPES -- each lesson MUST include a MIX of these 3 types (one of each per lesson):
 
+TYPE A -- DATA QUESTION (1 per lesson):
+- Answerable ONLY by calculating from the dataset above.
+- ACTUALLY CALCULATE the answer before writing options.
+- label: references exact column names from the CSV.
+- description: exact columns/filters to use.
+- options: 4 plausible values using real numbers from the CSV.
+- correctAnswer: MUST be correct based on the CSV. Do not guess.
+
+TYPE B -- FORMULA / FUNCTION QUESTION (1 per lesson):
+- Tests knowledge of the right tool, formula, or function for a task in this lesson.
+- Tied to the tools: ${toolsList}
+- Examples by tool:
+  * Excel: chart type selection, SUMIF vs SUMIFS, VLOOKUP vs INDEX-MATCH, pivot table use cases, conditional formatting rules
+  * SQL: GROUP BY vs HAVING, JOIN types, COUNT vs COUNT(DISTINCT), WHERE vs HAVING
+  * Python/pandas: .groupby(), .merge(), .fillna(), .drop_duplicates(), reading CSVs
+  * Power BI/Tableau: calculated fields, visual types for different insights, page-level vs visual-level filters
+- correctAnswer: the technically correct answer.
+
+TYPE C -- INTERPRETATION / JUDGEMENT QUESTION (1 per lesson):
+- Tests analytical thinking and business judgment, not data lookup.
+- Examples: "What does a 22% churn rate suggest?" / "Which chart communicates regional differences best to executives?" / "If correlation = 0.85, what does this mean?" / "Top 3 customers = 70% of revenue -- what risk does this present?"
+- options: 4 plausible analyst-level interpretations.
+- correctAnswer: the most analytically sound answer.
+
+QUESTION ORDER per lesson: TYPE A first, TYPE B second, TYPE C third.
 IDs: "mod-1", "les-1-1", "req-1-1-1".
 Requirement type: always "mcq".
 `;
