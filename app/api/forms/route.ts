@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
         adminClient()
           .from('cohort_assignments')
           .upsert(rows, { onConflict: 'form_id,cohort_id', ignoreDuplicates: true })
-          .then(() => {}).catch(() => {});
+          .then();
       }
       // Fire-and-forget assignment notifications to cohort students
       if (cohort_ids?.length) {
