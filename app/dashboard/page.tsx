@@ -11,6 +11,7 @@ import {
   ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
   Users, Megaphone, FolderOpen, Trophy, Menu, CheckCircle2, XCircle,
   UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
+  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send,
 } from 'lucide-react';
 import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS } from '@/components/CertificateTemplate';
 import Link from 'next/link';
@@ -292,8 +293,8 @@ function ShareButton({ form, shareMenuOpen, setShareMenuOpen }: { form: any; sha
 }
 
 // --- Form type helpers ---
-function getFormType(form: any): 'course' | 'event' | 'form' | 'guided_project' {
-  if (form.content_type === 'guided_project' || form.config?.isGuidedProject) return 'guided_project';
+function getFormType(form: any): 'course' | 'event' | 'form' | 'virtual_experience' {
+  if (form.content_type === 'virtual_experience' || form.content_type === 'guided_project' || form.config?.isVirtualExperience || form.config?.isGuidedProject) return 'virtual_experience';
   if (form.content_type === 'course' || form.config?.isCourse) return 'course';
   if (form.content_type === 'event'  || form.config?.eventDetails?.isEvent) return 'event';
   return 'form';
@@ -304,7 +305,7 @@ function getTypeMeta(C: typeof LIGHT_C) {
     course:         { label: 'Course',         Icon: BookOpen,     badgeBg: '#006128',    badgeText: '#ADEE66'       },
     event:          { label: 'Event',          Icon: CalendarDays, badgeBg: '#ADEE66',    badgeText: '#006128'       },
     form:           { label: 'Form',           Icon: AlignLeft,    badgeBg: C.formBadgeBg, badgeText: C.formBadgeText },
-    guided_project: { label: 'Guided Project', Icon: Briefcase,    badgeBg: '#312e81',    badgeText: '#c7d2fe'       },
+    virtual_experience: { label: 'Virtual Experience', Icon: Briefcase,    badgeBg: '#312e81',    badgeText: '#c7d2fe'       },
   };
 }
 
@@ -861,12 +862,13 @@ const NAV_ITEMS = [
   { id: 'community',     label: 'Community',      Icon: Users,         adminOnly: false },
   { id: 'announcements', label: 'Announcements',  Icon: Megaphone,     adminOnly: false },
   { id: 'projects',         label: 'Projects',         Icon: FolderOpen,  adminOnly: false },
-  { id: 'guided_projects',  label: 'Guided Projects',  Icon: Briefcase,   adminOnly: false },
+  { id: 'virtual_experiences',  label: 'Virtual Experiences',  Icon: Briefcase,   adminOnly: false },
   { id: 'schedule',         label: 'Schedule',         Icon: CalendarDays, adminOnly: false },
   { id: 'reports',       label: 'Reports',        Icon: BarChart3,     adminOnly: false },
   { id: 'certificates',  label: 'Certificates',   Icon: Award,         adminOnly: false },
   { id: 'integrations',  label: 'Integrations',   Icon: Zap,           adminOnly: false },
   { id: 'leaderboard',   label: 'Leaderboard',    Icon: Trophy,        adminOnly: false },
+  { id: 'tracking',      label: 'Tracking',       Icon: Activity,      adminOnly: false },
   { id: 'cohorts',       label: 'Cohorts',        Icon: GraduationCap, adminOnly: true  },
 ] as const;
 type SectionId = typeof NAV_ITEMS[number]['id'];
@@ -1644,14 +1646,14 @@ function ReportsSection({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
 }
 
 // --- Generic list section ---
-// -- Guided Projects manage section ---
+// -- Virtual Experiences manage section ---
 const GP_IND_COLORS: Record<string, string> = {
   fintech: '#6366f1', marketing: '#f59e0b', hr: '#10b981', finance: '#3b82f6',
   edtech: '#8b5cf6', healthcare: '#ef4444', ecommerce: '#f97316', consulting: '#14b8a6',
 };
 
-function GuidedProjectsManageSection({ C, forms, setFormToDelete }: { C: typeof LIGHT_C; forms: any[]; setFormToDelete: (id: string) => void }) {
-  const gpForms = forms.filter(f => f.content_type === 'guided_project' || f.config?.isGuidedProject);
+function VirtualExperiencesManageSection({ C, forms, setFormToDelete }: { C: typeof LIGHT_C; forms: any[]; setFormToDelete: (id: string) => void }) {
+  const gpForms = forms.filter(f => f.content_type === 'virtual_experience' || f.content_type === 'guided_project' || f.config?.isVirtualExperience || f.config?.isGuidedProject);
 
   if (gpForms.length === 0) {
     return (
@@ -1659,12 +1661,12 @@ function GuidedProjectsManageSection({ C, forms, setFormToDelete }: { C: typeof 
         <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: '#6366f120' }}>
           <Briefcase className="w-6 h-6" style={{ color: '#6366f1' }} />
         </div>
-        <p className="font-semibold text-base mb-1" style={{ color: C.text }}>No guided projects yet</p>
+        <p className="font-semibold text-base mb-1" style={{ color: C.text }}>No virtual experiences yet</p>
         <p className="text-sm mb-6" style={{ color: C.faint }}>Create your first AI-generated industry project.</p>
         <Link href="/create/guided-project"
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold"
           style={{ background: C.cta, color: C.ctaText }}>
-          <Plus className="w-4 h-4" /> New Guided Project
+          <Plus className="w-4 h-4" /> New Virtual Experience
         </Link>
       </div>
     );
@@ -1673,7 +1675,7 @@ function GuidedProjectsManageSection({ C, forms, setFormToDelete }: { C: typeof 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-base font-semibold" style={{ color: C.text }}>{gpForms.length} Guided Project{gpForms.length !== 1 ? 's' : ''}</p>
+        <p className="text-base font-semibold" style={{ color: C.text }}>{gpForms.length} Virtual Experience{gpForms.length !== 1 ? 's' : ''}</p>
         <Link href="/create/guided-project"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity"
           style={{ background: C.cta, color: C.ctaText }}>
@@ -3268,6 +3270,229 @@ function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
+// --- Student Tracking Section ---
+const STATUS_META = {
+  not_started: { label: 'Not Started', color: '#6b7280', bg: 'rgba(107,114,128,0.12)', Icon: MinusCircle },
+  in_progress:  { label: 'In Progress', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  Icon: Clock },
+  stalled:      { label: 'Stalled',     color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   Icon: AlertTriangle },
+  completed:    { label: 'Completed',   color: '#22c55e', bg: 'rgba(34,197,94,0.12)',   Icon: CheckCircle },
+} as const;
+
+function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
+  const [rows, setRows]           = useState<any[]>([]);
+  const [cohorts, setCohorts]     = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [cohortFilter, setCohortFilter]   = useState('all');
+  const [typeFilter, setTypeFilter]       = useState('all');
+  const [statusFilter, setStatusFilter]   = useState('all');
+  const [search, setSearch]               = useState('');
+  const [nudging, setNudging]             = useState<string | null>(null);
+  const [nudged, setNudged]               = useState<Set<string>>(new Set());
+
+  const load = async (cohortId = cohortFilter, contentType = typeFilter) => {
+    setLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const params = new URLSearchParams({ cohortId, contentType });
+    const res = await fetch(`/api/tracking?${params}`, {
+      headers: { Authorization: `Bearer ${session?.access_token}` },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      setRows(json.rows ?? []);
+      setCohorts(json.cohorts ?? []);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCohortChange = (id: string) => { setCohortFilter(id); load(id, typeFilter); };
+  const handleTypeChange   = (t: string)  => { setTypeFilter(t);   load(cohortFilter, t); };
+
+  const filtered = rows.filter(r => {
+    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!r.studentName.toLowerCase().includes(q) && !r.studentEmail.toLowerCase().includes(q) && !r.formTitle.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  const stats = {
+    total:       rows.length,
+    not_started: rows.filter(r => r.status === 'not_started').length,
+    stalled:     rows.filter(r => r.status === 'stalled').length,
+    in_progress: rows.filter(r => r.status === 'in_progress').length,
+    completed:   rows.filter(r => r.status === 'completed').length,
+  };
+
+  const sendNudge = async (row: any) => {
+    const nudgeKey = `${row.studentEmail}|${row.formId}`;
+    setNudging(nudgeKey);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetch('/api/nudge-student', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({
+          studentEmail: row.studentEmail,
+          studentName:  row.studentName,
+          formTitle:    row.formTitle,
+          formId:       row.formId,
+          contentType:  row.contentType,
+          status:       row.status,
+        }),
+      });
+      setNudged(prev => new Set([...prev, nudgeKey]));
+    } finally {
+      setNudging(null);
+    }
+  };
+
+  const sel = { fontSize: 13, padding: '7px 12px', borderRadius: 8, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.text, outline: 'none', cursor: 'pointer' } as React.CSSProperties;
+  const typeLabel = (t: string) => t === 'virtual_experience' ? 'Virtual Experience' : t === 'course' ? 'Course' : t;
+
+  return (
+    <div style={{ padding: '0 0 40px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0 }}>Student Tracking</h2>
+        <p style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>Monitor student progress across all your content. Flag stalled or inactive learners.</p>
+      </div>
+
+      {/* Stats cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 24 }}>
+        {([
+          { key: 'total',       label: 'Total',       value: stats.total,       color: C.text,    bg: C.card },
+          { key: 'not_started', label: 'Not Started', value: stats.not_started, color: '#6b7280', bg: C.card },
+          { key: 'in_progress', label: 'In Progress', value: stats.in_progress, color: '#f59e0b', bg: C.card },
+          { key: 'stalled',     label: 'Stalled',     value: stats.stalled,     color: '#ef4444', bg: C.card },
+          { key: 'completed',   label: 'Completed',   value: stats.completed,   color: '#22c55e', bg: C.card },
+        ] as const).map(s => (
+          <div key={s.key}
+            onClick={() => setStatusFilter(statusFilter === s.key ? 'all' : s.key)}
+            style={{ background: C.card, border: `1px solid ${statusFilter === s.key ? s.color : C.cardBorder}`, borderRadius: 12, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.15s' }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: s.color }}>{s.value}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20, alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: '1 1 200px' }}>
+          <Search style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: C.faint }} />
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search student or content…"
+            style={{ ...sel, paddingLeft: 30, width: '100%', boxSizing: 'border-box' as const }}
+          />
+        </div>
+        <select value={cohortFilter} onChange={e => handleCohortChange(e.target.value)} style={sel}>
+          <option value="all">All Cohorts</option>
+          {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select value={typeFilter} onChange={e => handleTypeChange(e.target.value)} style={sel}>
+          <option value="all">All Types</option>
+          <option value="course">Courses</option>
+          <option value="virtual_experience">Virtual Experiences</option>
+        </select>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={sel}>
+          <option value="all">All Statuses</option>
+          <option value="not_started">Not Started</option>
+          <option value="in_progress">In Progress</option>
+          <option value="stalled">Stalled (7+ days)</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
+
+      {/* Table */}
+      <div style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 16, overflow: 'hidden' }}>
+        {/* Table header */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px 110px 110px 90px', gap: 0, padding: '10px 20px', borderBottom: `1px solid ${C.divider}`, background: C.pill }}>
+          {['Student', 'Content', 'Type', 'Status', 'Last Active', ''].map((h, i) => (
+            <div key={i} style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
+          ))}
+        </div>
+
+        {loading ? (
+          <div style={{ padding: 48, textAlign: 'center' }}>
+            <Loader2 style={{ width: 24, height: 24, color: C.faint, margin: '0 auto' }} className="animate-spin" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: 48, textAlign: 'center', color: C.muted, fontSize: 14 }}>
+            {rows.length === 0 ? 'No students assigned to your content yet.' : 'No results match your filters.'}
+          </div>
+        ) : (
+          filtered.map((row, i) => {
+            const meta = STATUS_META[row.status as keyof typeof STATUS_META];
+            const nudgeKey = `${row.studentEmail}|${row.formId}`;
+            const isNudged = nudged.has(nudgeKey);
+            const canNudge = row.status === 'not_started' || row.status === 'stalled' || row.status === 'in_progress';
+            return (
+              <div key={nudgeKey}
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px 110px 110px 90px', gap: 0, padding: '12px 20px', borderBottom: i < filtered.length - 1 ? `1px solid ${C.divider}` : 'none', alignItems: 'center' }}>
+                {/* Student */}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.studentName || '--'}</div>
+                  <div style={{ fontSize: 11, color: C.faint, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.studentEmail}</div>
+                  <div style={{ fontSize: 10, color: C.faint, marginTop: 1 }}>{row.cohortName}</div>
+                </div>
+                {/* Content */}
+                <div style={{ fontSize: 13, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: 8 }}>{row.formTitle}</div>
+                {/* Type */}
+                <div>
+                  <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: C.pill, color: C.muted, whiteSpace: 'nowrap' }}>
+                    {typeLabel(row.contentType)}
+                  </span>
+                </div>
+                {/* Status */}
+                <div>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: meta.bg, color: meta.color, whiteSpace: 'nowrap' }}>
+                    <meta.Icon style={{ width: 11, height: 11 }} />
+                    {meta.label}
+                  </span>
+                </div>
+                {/* Last Active */}
+                <div style={{ fontSize: 12, color: C.faint }}>
+                  {row.lastActive
+                    ? row.daysSinceActivity === 0 ? 'Today'
+                      : row.daysSinceActivity === 1 ? 'Yesterday'
+                      : `${row.daysSinceActivity}d ago`
+                    : '--'}
+                </div>
+                {/* Nudge */}
+                <div>
+                  {canNudge && (
+                    <button
+                      onClick={() => sendNudge(row)}
+                      disabled={nudging === nudgeKey || isNudged}
+                      title={isNudged ? 'Nudge sent' : row.status === 'not_started' ? 'Encourage to start' : 'Encourage to continue'}
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, padding: '4px 8px', borderRadius: 6, border: `1px solid ${isNudged ? 'rgba(34,197,94,0.3)' : C.cardBorder}`, background: 'transparent', color: isNudged ? '#22c55e' : C.muted, cursor: nudging === nudgeKey || isNudged ? 'default' : 'pointer', transition: 'all 0.15s' }}>
+                      {nudging === nudgeKey
+                        ? <Loader2 style={{ width: 11, height: 11 }} className="animate-spin" />
+                        : isNudged
+                          ? <Check style={{ width: 11, height: 11 }} />
+                          : <Send style={{ width: 11, height: 11 }} />}
+                      {isNudged ? 'Sent' : 'Nudge'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {filtered.length > 0 && (
+        <div style={{ fontSize: 12, color: C.faint, marginTop: 12, textAlign: 'right' }}>
+          Showing {filtered.length} of {rows.length} records
+        </div>
+      )}
+    </div>
+  );
+}
+
 // --- Section content router ---
 function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFormToDelete, C }: {
   section: SectionId; forms: any[]; shareMenuOpen: string | null;
@@ -3278,6 +3503,7 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
   if (section === 'certificates') return <CertificatesSection C={C} />;
   if (section === 'integrations') return <IntegrationsSection C={C} />;
   if (section === 'cohorts')      return <CohortsSection C={C} />;
+  if (section === 'tracking')     return <StudentTrackingSection C={C} />;
   if (section === 'leaderboard')  return <LeaderboardSection C={C} />;
 
   if (section === 'assignments') return <AssignmentsManageSection C={C}/>;
@@ -3289,7 +3515,7 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
     </div>
   )}/>;
 
-  if (section === 'guided_projects') return <GuidedProjectsManageSection C={C} forms={forms} setFormToDelete={setFormToDelete} />;
+  if (section === 'virtual_experiences') return <VirtualExperiencesManageSection C={C} forms={forms} setFormToDelete={setFormToDelete} />;
 
   if (section === 'community') return <GenericListSection table="communities" label="Communities" createHref="/create/community" createLabel="New Community" Icon={Users} C={C} renderRow={item => (
     <div className="min-w-0">
@@ -3375,7 +3601,16 @@ export default function DashboardPage() {
   useEffect(() => {
     const apply = () => {
       const hash = window.location.hash.replace('#', '') as SectionId;
-      if (NAV_ITEMS.some(n => n.id === hash)) setActiveSection(hash);
+      if (NAV_ITEMS.some(n => n.id === hash)) {
+        setActiveSection(hash);
+        sessionStorage.setItem('dashboard-section', hash);
+      } else {
+        const saved = sessionStorage.getItem('dashboard-section') as SectionId | null;
+        if (saved && NAV_ITEMS.some(n => n.id === saved)) {
+          setActiveSection(saved);
+          window.location.hash = saved;
+        }
+      }
     };
     apply();
     window.addEventListener('hashchange', apply);
@@ -3384,6 +3619,7 @@ export default function DashboardPage() {
 
   function goSection(id: SectionId) {
     setActiveSection(id);
+    sessionStorage.setItem('dashboard-section', id);
     window.location.hash = id;
   }
 

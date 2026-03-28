@@ -226,7 +226,168 @@ export function otpEmail(data: { code: string; courseName?: string }) {
   return shell(content);
 }
 
-// -- 5. Blast / Announcement ---
+// -- 5. Student Nudge (not started / stalled) ---
+export function nudgeEmail(data: {
+  name: string;
+  contentTitle: string;
+  contentType: string;
+  status: 'not_started' | 'stalled';
+  formUrl: string;
+}) {
+  const { name, contentTitle, contentType, status, formUrl } = data;
+  const typeLabel = contentType === 'virtual_experience' ? 'virtual experience' : contentType;
+  const ctaLabel  = status === 'not_started' ? `Start ${typeLabel}` : 'Continue where you left off';
+
+  const intro = status === 'not_started'
+    ? `We noticed you haven't started <b>${contentTitle}</b> yet -- and we just wanted to reach out with a little encouragement.`
+    : `We noticed you haven't visited <b>${contentTitle}</b> in a while. We're checking in because we believe in you and don't want you to miss out.`;
+
+  const content = `
+    <p><b>Hi ${name},</b></p>
+    <p>${intro}</p>
+
+    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;">
+      <p style="margin:0 0 10px;font-weight:700;color:#15803d;font-size:15px;">Why upskilling matters 🚀</p>
+      <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;">
+        In today's fast-moving world, the skills you build today directly shape the opportunities you unlock tomorrow.
+        Every lesson you complete, every challenge you tackle puts you ahead -- and the learning you do here is
+        directly relevant to real roles in the industry.
+      </p>
+    </div>
+
+    ${status === 'stalled' ? `
+    <p style="color:#374151;">
+      <b>You've already taken the first step</b> -- which is the hardest part. Getting back on track is easier than you think.
+      Remember why you started, and know that each module you complete brings you closer to a real skill you can use.
+    </p>` : `
+    <p style="color:#374151;">
+      It only takes a few minutes to begin. Once you start, you'll find the content is practical, relevant, and designed
+      to give you real skills -- not just theory.
+    </p>`}
+
+    <div style="margin:20px 0;padding:20px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;">
+      <p style="margin:0 0 6px;font-weight:700;color:#92400e;font-size:14px;">Need support? We're here for you. 🤝</p>
+      <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;">
+        If anything felt unclear, you got stuck, or life simply got in the way -- please don't hesitate to reach out.
+        Our team is available to help you through any challenges. You are not on this journey alone.
+      </p>
+    </div>
+
+    ${cta(ctaLabel, formUrl)}
+
+    <br>
+    <p><b>Best regards,</b></p>
+    <p>AI Skills Africa - Learning Experience Team</p>
+  `;
+
+  return shell(content);
+}
+
+// -- 6. 80% Milestone ---
+export function milestoneEmail(data: {
+  name: string;
+  contentTitle: string;
+  contentType: string;
+  formUrl: string;
+}) {
+  const { name, contentTitle, contentType, formUrl } = data;
+  const typeLabel = contentType === 'virtual_experience' ? 'virtual experience' : contentType;
+
+  const content = `
+    <p><b>Hi ${name},</b></p>
+    <p>You're <b>80% of the way through</b> <b>${contentTitle}</b> -- that's incredible progress! 🎉</p>
+
+    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;text-align:center;">
+      <div style="font-size:40px;font-weight:900;color:#16a34a;">80%</div>
+      <div style="font-size:14px;color:#15803d;font-weight:600;margin-top:4px;">Almost there!</div>
+    </div>
+
+    <p style="color:#374151;">
+      You've put in the hard work and you are so close to the finish line. Don't stop now --
+      completing this ${typeLabel} will add a real, demonstrable skill to your profile.
+    </p>
+
+    <div style="margin:20px 0;padding:16px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;">
+      <p style="margin:0;font-weight:700;color:#92400e;font-size:14px;">💡 Did you know?</p>
+      <p style="margin:8px 0 0;color:#374151;font-size:14px;line-height:1.7;">
+        Students who reach 80% completion are <b>3× more likely to finish</b>. You're already in that group.
+        One final push and you'll have something to be genuinely proud of.
+      </p>
+    </div>
+
+    ${cta('Finish strong ', formUrl)}
+
+    <br>
+    <p><b>Best regards,</b></p>
+    <p>AI Skills Africa - Learning Experience Team</p>
+  `;
+
+  return shell(content);
+}
+
+// -- 7. Weekly Digest ---
+export function weeklyDigestEmail(data: {
+  name: string;
+  completed: { title: string; contentType: string; score?: number | null }[];
+  inProgress: { title: string; contentType: string }[];
+  dashboardUrl: string;
+}) {
+  const { name, completed, inProgress, dashboardUrl } = data;
+
+  const typeLabel = (t: string) => t === 'virtual_experience' ? 'Virtual Experience' : t === 'course' ? 'Course' : t;
+
+  const completedRows = completed.map(item => `
+    <tr>
+      <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;">
+        <span style="display:inline-block;width:20px;text-align:center;">✅</span>
+        <b style="color:#111;">${item.title}</b>
+        <span style="margin-left:8px;font-size:12px;color:#6b7280;">${typeLabel(item.contentType)}${item.score != null ? ` · Score: ${item.score}%` : ''}</span>
+      </td>
+    </tr>`).join('');
+
+  const inProgressRows = inProgress.map(item => `
+    <tr>
+      <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;">
+        <span style="display:inline-block;width:20px;text-align:center;">📚</span>
+        <b style="color:#111;">${item.title}</b>
+        <span style="margin-left:8px;font-size:12px;color:#6b7280;">${typeLabel(item.contentType)} · In progress</span>
+      </td>
+    </tr>`).join('');
+
+  const content = `
+    <p><b>Hi ${name},</b></p>
+    <p>Here's a look at your learning activity this week. Keep the momentum going! 🚀</p>
+
+    ${completed.length > 0 ? `
+    <p style="font-size:15px;font-weight:700;color:#111;margin-top:24px;">What you completed this week</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;">
+      ${completedRows}
+    </table>` : ''}
+
+    ${inProgress.length > 0 ? `
+    <p style="font-size:15px;font-weight:700;color:#111;margin-top:24px;">Still in progress -- you've got this!</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;">
+      ${inProgressRows}
+    </table>` : ''}
+
+    <div style="margin:24px 0;padding:16px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;">
+      <p style="margin:0;color:#15803d;font-size:14px;line-height:1.7;">
+        <b>Every week counts.</b> The skills you're building here open doors to real opportunities.
+        Consistency is the single most powerful habit you can build as a learner.
+      </p>
+    </div>
+
+    ${cta('Continue learning', dashboardUrl)}
+
+    <br>
+    <p><b>Best regards,</b></p>
+    <p>AI Skills Africa - Learning Experience Team</p>
+  `;
+
+  return shell(content);
+}
+
+// -- 8. Blast / Announcement ---
 export function blastEmail(data: {
   subject: string;
   body: string;
@@ -234,13 +395,14 @@ export function blastEmail(data: {
   formTitle: string;
   formUrl: string;
   bannerUrl?: string;
+  ctaLabel?: string;
 }) {
-  const { body, senderName, formTitle, formUrl, bannerUrl } = data;
+  const { body, senderName, formTitle, formUrl, bannerUrl, ctaLabel } = data;
 
   const content = `
     <p>${body.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>
 
-    ${cta('View Page', formUrl)}
+    ${cta(ctaLabel || 'View Page', formUrl)}
 
     <br>
     <p><b>Best regards,</b></p>

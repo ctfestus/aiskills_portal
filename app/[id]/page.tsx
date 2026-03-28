@@ -7,7 +7,7 @@ import { Loader2, CheckCircle2, ArrowRight, MapPin, Building2, ExternalLink, Cal
 import { AnimatedField, ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import { CourseTaker } from '@/components/CourseTaker';
 import dynamic from 'next/dynamic';
-const GuidedProjectTaker = dynamic(() => import('@/components/GuidedProjectTaker'), { ssr: false });
+const VirtualExperienceTaker = dynamic(() => import('@/components/VirtualExperienceTaker'), { ssr: false });
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -269,7 +269,7 @@ export default function PublicFormPage() {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  // Read student's saved theme preference (used for guided projects & course overview)
+  // Read student's saved theme preference (used for virtual experiences & course overview)
   useEffect(() => {
     const stored = localStorage.getItem('ff-theme') as 'light' | 'dark' | null;
     setStudentTheme(stored === 'dark' ? 'dark' : 'light');
@@ -301,7 +301,7 @@ export default function PublicFormPage() {
   const [certificateId, setCertificateId] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [attendeeCount, setAttendeeCount] = useState<number | null>(null);
-  // Guided project flow
+  // Virtual experience flow
   const [projectStarted,      setProjectStarted]      = useState(false);
   const [projectStudentName,  setProjectStudentName]  = useState('');
   const [projectStudentEmail, setProjectStudentEmail] = useState('');
@@ -629,8 +629,8 @@ export default function PublicFormPage() {
   const selectOptionBg = resolvedMode === 'light' ? 'bg-white text-zinc-900' : 'bg-zinc-900 text-white';
   const selectPlaceholderColor = resolvedMode === 'light' ? 'text-zinc-400' : 'text-zinc-500';
 
-  // -- Guided Project ---
-  if (config.isGuidedProject) {
+  // -- Virtual Experience ---
+  if (config.isVirtualExperience || config.isGuidedProject) {
     const modules     = config.modules || [];
     const totalLessons = modules.reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
     const totalReqs   = modules.reduce((a: number, m: any) =>
@@ -665,7 +665,7 @@ export default function PublicFormPage() {
 
     if (projectStarted) {
       return (
-        <GuidedProjectTaker
+        <VirtualExperienceTaker
           formId={form.id}
           formSlug={form.slug}
           config={config}

@@ -1,5 +1,12 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
+import { milestoneEmail } from '@/lib/email-templates';
+import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
+
+const resend  = new Resend(process.env.RESEND_API_KEY);
+const FROM    = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <notifications@festforms.com>';
+const APP_URL = process.env.APP_URL || 'https://festforms.com';
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -117,6 +124,39 @@ export async function POST(req: NextRequest) {
           ...payload,
         });
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      // -- 80% milestone check (fire-and-forget) --
+      if (process.env.RESEND_API_KEY && current_question_index != null) {
+        (async () => {
+          try {
+            const total = form.config?.questions?.length ?? 0;
+            if (total === 0) return;
+            const pct = Math.round((current_question_index / total) * 100);
+            if (pct < 80) return;
+
+            const alreadySent = await hasNudgeBeenSent(supabase, sessionEmail, form_id, 'milestone_80');
+            if (alreadySent) return;
+
+            const { data: formFull } = await supabase.from('forms').select('slug').eq('id', form_id).single();
+            const html = milestoneEmail({
+              name:         student_name || 'there',
+              contentTitle: form.config?.title || 'this course',
+              contentType:  'course',
+              formUrl:      `${APP_URL}/${formFull?.slug ?? form_id}`,
+            });
+
+            await resend.emails.send({
+              from: FROM,
+              to:   sessionEmail,
+              subject: `You're 80% done -- finish strong! 🎯`,
+              html,
+            });
+            await recordNudge(supabase, sessionEmail, form_id, 'milestone_80');
+          } catch (err) {
+            console.error('[course/save-progress] milestone check failed', err);
+          }
+        })();
       }
 
       return NextResponse.json({ ok: true });

@@ -43,9 +43,10 @@ const requirementSchema = {
     description:   { type: Type.STRING },   // Which column(s)/filter to use
     type:          { type: Type.STRING },   // 'mcq'
     options:       { type: Type.ARRAY, items: { type: Type.STRING } }, // exactly 4 options
-    correctAnswer: { type: Type.STRING },   // must match one option exactly
+    correctAnswer:  { type: Type.STRING },   // must match one option exactly
+    expectedAnswer: { type: Type.STRING },
   },
-  required: ['id', 'label', 'description', 'type', 'options', 'correctAnswer'],
+  required: ['id', 'label', 'description', 'type'],
 };
 
 const lessonSchema = {
@@ -63,10 +64,11 @@ const lessonSchema = {
 const moduleSchema = {
   type: Type.OBJECT,
   properties: {
-    id:          { type: Type.STRING },
-    title:       { type: Type.STRING },
-    description: { type: Type.STRING },
-    lessons:     { type: Type.ARRAY, items: lessonSchema },
+    id:            { type: Type.STRING },
+    title:         { type: Type.STRING },
+    description:   { type: Type.STRING },
+    solutionVideo: { type: Type.STRING },
+    lessons:       { type: Type.ARRAY, items: lessonSchema },
   },
   required: ['id', 'title', 'description', 'lessons'],
 };
@@ -80,12 +82,13 @@ export async function POST(req: NextRequest) {
 
     // -- Generate full project ---
     if (action === 'generate') {
-      const industry   = clamp(body.industry, 50) || 'fintech';
-      const difficulty = clamp(body.difficulty, 20) || 'intermediate';
-      const roleHint   = clamp(body.role, 100);
-      const focusTopic = clamp(body.focusTopic, 200);
-      const toolsRaw   = clamp(body.tools, 300);
-      const context    = INDUSTRY_CONTEXT[industry] || industry;
+      const industry      = clamp(body.industry, 50) || 'fintech';
+      const difficulty    = clamp(body.difficulty, 20) || 'intermediate';
+      const roleHint      = clamp(body.role, 100);
+      const focusTopic    = clamp(body.focusTopic, 200);
+      const toolsRaw      = clamp(body.tools, 300);
+      const customPrompt  = clamp(body.customPrompt, 1000);
+      const context       = INDUSTRY_CONTEXT[industry] || industry;
 
       // Use instructor-specified tools if provided, otherwise fall back to industry defaults
       const specifiedTools = toolsRaw
@@ -93,16 +96,17 @@ export async function POST(req: NextRequest) {
         : INDUSTRY_TOOLS[industry] || ['SQL', 'Python', 'Excel'];
       const toolsList = specifiedTools.join(', ');
 
-      const rolePhrase  = roleHint || 'Data Analyst';
-      const focusPhrase = focusTopic ? `\nFOCUS AREA: ${focusTopic}` : '';
-      const toolsEnforcement = toolsRaw
+      const rolePhrase         = roleHint || 'Data Analyst';
+      const focusPhrase        = focusTopic ? `\nFOCUS AREA: ${focusTopic}` : '';
+      const customPromptPhrase = customPrompt ? `\n\n== INSTRUCTOR CUSTOM INSTRUCTIONS (highest priority -- follow exactly) ==\n${customPrompt}` : '';
+      const toolsEnforcement   = toolsRaw
         ? `\nCRITICAL -- TOOLS CONSTRAINT: You MUST use ONLY these tools: ${toolsList}. Do NOT mention, reference, or suggest any other tool anywhere in the project -- not in lesson bodies, requirements, outcomes, or the tools list. Every task and deliverable must be completable using only: ${toolsList}.`
         : `\nTools to use: ${toolsList}`;
 
       const prompt = `
 You are designing a hands-on virtual work experience project (like Forage) for a ${difficulty}-level ${rolePhrase} in the ${industry} industry.
 
-INDUSTRY CONTEXT: ${context}${focusPhrase}${toolsEnforcement}
+INDUSTRY CONTEXT: ${context}${focusPhrase}${toolsEnforcement}${customPromptPhrase}
 
 == CONTENT RULES ==
 
@@ -278,7 +282,7 @@ Requirement type: always "mcq".
       const pass2 = JSON.parse(pass2Res.text!);
       return NextResponse.json({
         config: {
-          isGuidedProject: true,
+          isVirtualExperience: true,
           industry,
           difficulty,
           coverImage: '',
@@ -290,31 +294,33 @@ Requirement type: always "mcq".
 
     // -- Generate from instructor-provided dataset ---
     if (action === 'generate-from-data') {
-      const industry   = clamp(body.industry, 50) || 'fintech';
-      const difficulty = clamp(body.difficulty, 20) || 'intermediate';
-      const roleHint   = clamp(body.role, 100);
-      const focusTopic = clamp(body.focusTopic, 200);
-      const toolsRaw   = clamp(body.tools, 300);
-      const csvContent = String(body.csvContent || '').slice(0, 40000); // cap at ~40k chars
-      const filename   = clamp(body.filename, 100) || 'dataset.csv';
-      const context    = INDUSTRY_CONTEXT[industry] || industry;
+      const industry      = clamp(body.industry, 50) || 'fintech';
+      const difficulty    = clamp(body.difficulty, 20) || 'intermediate';
+      const roleHint      = clamp(body.role, 100);
+      const focusTopic    = clamp(body.focusTopic, 200);
+      const toolsRaw      = clamp(body.tools, 300);
+      const customPrompt  = clamp(body.customPrompt, 1000);
+      const csvContent    = String(body.csvContent || '').slice(0, 40000);
+      const filename      = clamp(body.filename, 100) || 'dataset.csv';
+      const context       = INDUSTRY_CONTEXT[industry] || industry;
 
       if (!csvContent.trim()) return NextResponse.json({ error: 'csvContent is required' }, { status: 400 });
 
       const specifiedTools = toolsRaw
         ? toolsRaw.split(',').map((t: string) => t.trim()).filter(Boolean)
         : INDUSTRY_TOOLS[industry] || ['SQL', 'Python', 'Excel'];
-      const toolsList = specifiedTools.join(', ');
-      const rolePhrase  = roleHint || 'Data Analyst';
-      const focusPhrase = focusTopic ? `\nFOCUS AREA: ${focusTopic}` : '';
-      const toolsEnforcement = toolsRaw
+      const toolsList          = specifiedTools.join(', ');
+      const rolePhrase         = roleHint || 'Data Analyst';
+      const focusPhrase        = focusTopic ? `\nFOCUS AREA: ${focusTopic}` : '';
+      const customPromptPhrase = customPrompt ? `\n\n== INSTRUCTOR CUSTOM INSTRUCTIONS (highest priority -- follow exactly) ==\n${customPrompt}` : '';
+      const toolsEnforcement   = toolsRaw
         ? `\nCRITICAL -- TOOLS CONSTRAINT: You MUST use ONLY these tools: ${toolsList}. Do NOT mention any other tool.`
         : `\nTools to use: ${toolsList}`;
 
       // Pass 1: company metadata only (no dataset generation -- use the provided one)
       const pass1Prompt = `
 You are generating a virtual work experience project for a ${difficulty}-level ${rolePhrase} in the ${industry} industry.
-INDUSTRY CONTEXT: ${context}${focusPhrase}${toolsEnforcement}
+INDUSTRY CONTEXT: ${context}${focusPhrase}${toolsEnforcement}${customPromptPhrase}
 
 The instructor has provided a real dataset (see below). Create a fictional but realistic African company whose business problem is reflected in this data.
 
@@ -429,7 +435,7 @@ Requirement type: always "mcq".
       const pass2 = JSON.parse(pass2Res.text!);
       return NextResponse.json({
         config: {
-          isGuidedProject: true,
+          isVirtualExperience: true,
           industry,
           difficulty,
           coverImage: '',
@@ -471,7 +477,7 @@ Requirement type: always "mcq".
       };
 
       const applyPrompt = `
-You are editing a guided work experience project. Apply the instructor's instruction to the project and return the COMPLETE updated project config.
+You are editing a virtual work experience project. Apply the instructor's instruction to the project and return the COMPLETE updated project config.
 
 CURRENT CONFIG:
 ${JSON.stringify(compact, null, 2)}

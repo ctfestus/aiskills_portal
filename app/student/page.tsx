@@ -165,7 +165,7 @@ const NAV_ITEMS = [
   { id: 'community',     label: 'Community',      Icon: Users         },
   { id: 'announcements', label: 'Announcements',  Icon: Megaphone     },
   { id: 'projects',         label: 'Projects',         Icon: FolderOpen  },
-  { id: 'guided_projects',  label: 'Guided Projects',  Icon: Briefcase   },
+  { id: 'virtual_experiences',  label: 'Virtual Experiences',  Icon: Briefcase   },
   { id: 'schedule',         label: 'Schedule',         Icon: Calendar    },
   { id: 'leaderboard',   label: 'Leaderboard',    Icon: Trophy        },
   { id: 'certificates',  label: 'Certificates',   Icon: Award         },
@@ -1740,14 +1740,14 @@ function ProjectDetail({ project, C, onBack }: { project: any; C: typeof LIGHT_C
   );
 }
 
-// -- Guided Projects Section ---
+// -- Virtual Experiences Section ---
 const IND_COLORS: Record<string, string> = {
   fintech: '#6366f1', marketing: '#f59e0b', hr: '#10b981', finance: '#3b82f6',
   edtech: '#8b5cf6', healthcare: '#ef4444', ecommerce: '#f97316', consulting: '#14b8a6',
 };
 
-// --- Guided Project Card ---
-function GuidedProjectCard({ form, attempt, C, onDetails }: {
+// --- Virtual Experience Card ---
+function VirtualExperienceCard({ form, attempt, C, onDetails }: {
   form: any; attempt: any; C: typeof LIGHT_C; onDetails: () => void;
 }) {
   const { theme } = useTheme();
@@ -1848,8 +1848,8 @@ function GuidedProjectCard({ form, attempt, C, onDetails }: {
   );
 }
 
-// --- Guided Project Detail Pane ---
-function GuidedProjectDetailPane({ form, attempt, C, onClose }: {
+// --- Virtual Experience Detail Pane ---
+function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
   form: any; attempt: any; C: typeof LIGHT_C; onClose: () => void;
 }) {
   const { theme } = useTheme();
@@ -2065,7 +2065,7 @@ function GuidedProjectDetailPane({ form, attempt, C, onClose }: {
   );
 }
 
-function GuidedProjectsSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
+function VirtualExperiencesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
   const [items,    setItems]    = useState<any[]>([]);
   const [attempts, setAttempts] = useState<Record<string, any>>({});
   const [loading,  setLoading]  = useState(true);
@@ -2080,7 +2080,7 @@ function GuidedProjectsSection({ userEmail, C }: { userEmail: string; C: typeof 
       const { data: forms } = await supabase
         .from('forms')
         .select('*')
-        .eq('content_type', 'guided_project')
+        .in('content_type', ['virtual_experience', 'guided_project'])
         .contains('cohort_ids', [profile.cohort_id]);
 
       setItems(forms ?? []);
@@ -2112,14 +2112,14 @@ function GuidedProjectsSection({ userEmail, C }: { userEmail: string; C: typeof 
   );
 
   if (!items.length) return (
-    <EmptyState icon={Briefcase} title="No Guided Projects" body="Guided projects assigned to your cohort will appear here." />
+    <EmptyState icon={Briefcase} title="No Virtual Experiences" body="Virtual experiences assigned to your cohort will appear here." />
   );
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {items.map((form: any) => (
-          <GuidedProjectCard
+          <VirtualExperienceCard
             key={form.id}
             form={form}
             attempt={attempts[form.id]}
@@ -2130,7 +2130,7 @@ function GuidedProjectsSection({ userEmail, C }: { userEmail: string; C: typeof 
       </div>
       <AnimatePresence>
         {detail && (
-          <GuidedProjectDetailPane
+          <VirtualExperienceDetailPane
             form={detail}
             attempt={attempts[detail.id]}
             C={C}
@@ -2843,7 +2843,17 @@ export default function StudentDashboard() {
   useEffect(() => {
     const apply = () => {
       const hash = window.location.hash.replace('#', '') as SectionId;
-      if (NAV_ITEMS.some(n => n.id === hash)) setActiveSection(hash);
+      if (NAV_ITEMS.some(n => n.id === hash)) {
+        setActiveSection(hash);
+        sessionStorage.setItem('student-section', hash);
+      } else {
+        // No hash -- restore last visited section from sessionStorage
+        const saved = sessionStorage.getItem('student-section') as SectionId | null;
+        if (saved && NAV_ITEMS.some(n => n.id === saved)) {
+          setActiveSection(saved);
+          window.location.hash = saved;
+        }
+      }
     };
     apply();
     window.addEventListener('hashchange', apply);
@@ -2852,6 +2862,7 @@ export default function StudentDashboard() {
 
   function goSection(id: SectionId) {
     setActiveSection(id);
+    sessionStorage.setItem('student-section', id);
     window.location.hash = id;
   }
 
@@ -3032,8 +3043,8 @@ export default function StudentDashboard() {
             {activeSection === 'projects' && user && (
               <ProjectsSection userId={user.id} C={C}/>
             )}
-            {activeSection === 'guided_projects' && user && (
-              <GuidedProjectsSection userEmail={user.email} C={C}/>
+            {activeSection === 'virtual_experiences' && user && (
+              <VirtualExperiencesSection userEmail={user.email} C={C}/>
             )}
             {activeSection === 'schedule' && user && (
               <ScheduleSection userId={user.id} C={C}/>

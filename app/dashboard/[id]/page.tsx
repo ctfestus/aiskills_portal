@@ -35,8 +35,8 @@ const TABS: { id: TabId; label: string; Icon: any; courseOnly?: boolean }[] = [
   { id: 'more',         label: 'More',         Icon: MoreHorizontal                 },
 ];
 
-function getFormType(config: any): 'course' | 'event' | 'form' | 'guided_project' {
-  if (config?.isGuidedProject) return 'guided_project';
+function getFormType(config: any): 'course' | 'event' | 'form' | 'virtual_experience' {
+  if (config?.isVirtualExperience || config?.isGuidedProject) return 'virtual_experience';
   if (config?.isCourse) return 'course';
   if (config?.eventDetails?.isEvent) return 'event';
   return 'form';
@@ -46,7 +46,7 @@ const TYPE_META = {
   course:          { label: 'Course',          Icon: HelpCircle,  color: '#f59e0b', badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
   event:           { label: 'Event',           Icon: CalendarDays, color: '#1f1bc3', badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20'   },
   form:            { label: 'Form',            Icon: AlignLeft,   color: '#10b981', badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  guided_project:  { label: 'Guided Project',  Icon: Award,       color: '#6366f1', badge: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' },
+  virtual_experience:  { label: 'Virtual Experience',  Icon: Award,       color: '#6366f1', badge: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' },
 };
 
 // -- Helpers ---
@@ -1654,8 +1654,8 @@ function MoreTab({ form, formUrl, onClone }: { form: any; formUrl: string; onClo
   );
 }
 
-// -- Guided Project Report Tab ---
-function GuidedProjectReportTab({ form }: { form: any }) {
+// -- Virtual Experience Report Tab ---
+function VirtualExperienceReportTab({ form }: { form: any }) {
   const { theme } = useTheme();
   const isDark = theme !== 'light';
   const card       = isDark ? 'bg-zinc-900/50 border-zinc-800/50' : 'bg-white border-[rgba(0,0,0,0.07)]';
@@ -1935,6 +1935,8 @@ export default function FormDetailPage() {
       description: form.description,
       config: { ...form.config, title: `${form.config?.title || form.title} (Copy)` },
       slug: uniqueSlug,
+      content_type: form.content_type,
+      cohort_ids: form.cohort_ids ?? [],
     }).select('id').single();
     if (!error && cloned?.id) {
       router.push(`/dashboard/${cloned.id}`);
@@ -2004,7 +2006,7 @@ export default function FormDetailPage() {
 
           {/* Right actions */}
           <div className="ml-auto flex items-center gap-2 flex-shrink-0">
-            {type === 'guided_project' ? (
+            {type === 'virtual_experience' ? (
               <Link href={`/create/guided-project?id=${form.id}`} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-70" style={{ background: btnBg, border: `1px solid ${btnBord}`, color: textMut }}>
                 <Edit2 className="w-3.5 h-3.5" /> Edit
               </Link>
@@ -2025,7 +2027,7 @@ export default function FormDetailPage() {
 
         {/* -- Tab bar -- */}
         <div className="px-2 sm:px-6 flex items-center gap-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-          {TABS.filter(tab => (!tab.courseOnly || type === 'course') && !(tab.id === 'settings' && type === 'guided_project')).map(tab => {
+          {TABS.filter(tab => (!tab.courseOnly || type === 'course') && !(tab.id === 'settings' && type === 'virtual_experience')).map(tab => {
             const isActive = activeTab === tab.id;
             return (
               <button
@@ -2035,7 +2037,7 @@ export default function FormDetailPage() {
                 style={{ color: isActive ? textPrim : textMut }}
               >
                 <tab.Icon className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="hidden sm:inline">{tab.id === 'responses' && (type === 'course' || type === 'guided_project') ? 'Report' : tab.label}</span>
+                <span className="hidden sm:inline">{tab.id === 'responses' && (type === 'course' || type === 'virtual_experience') ? 'Report' : tab.label}</span>
                 {tab.id === 'responses' && totalCount > 0 && (
                   <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold transition-colors" style={{ background: isActive ? (isLight ? lime : 'rgba(255,255,255,0.15)') : (isLight ? '#e8eaed' : '#27272a'), color: isActive ? (isLight ? green : 'white') : textMut }}>
                     {totalCount}
@@ -2064,11 +2066,11 @@ export default function FormDetailPage() {
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.18, ease: 'easeOut' }}
         >
-          {activeTab === 'settings' && type !== 'guided_project' ? (
+          {activeTab === 'settings' && type !== 'virtual_experience' ? (
             <FormEditor formId={id as string} />
           ) : (
             <div className="px-4 sm:px-6 py-6 sm:py-8 max-w-6xl w-full">
-              {activeTab === 'responses' && type !== 'guided_project' && (
+              {activeTab === 'responses' && type !== 'virtual_experience' && (
                 <ResponsesTab
                   form={form}
                   responses={responses}
@@ -2081,8 +2083,8 @@ export default function FormDetailPage() {
                   cohortStudents={cohortStudents}
                 />
               )}
-              {activeTab === 'responses' && type === 'guided_project' && (
-                <GuidedProjectReportTab form={form} />
+              {activeTab === 'responses' && type === 'virtual_experience' && (
+                <VirtualExperienceReportTab form={form} />
               )}
               {activeTab === 'leaderboard' && (
                 <LeaderboardTab form={form} />

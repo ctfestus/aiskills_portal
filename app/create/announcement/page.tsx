@@ -71,6 +71,7 @@ export default function CreateAnnouncementPage() {
   const [expiresAt, setExpiresAt]       = useState('');
   const [cohorts, setCohorts]           = useState<{ id: string; name: string }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
+  const originalCohortIds = useRef<string[]>([]);
   const toggleCohort = (id: string) =>
     setSelectedCohortIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
@@ -98,7 +99,10 @@ export default function CreateAnnouncementPage() {
           setIsPinned(data.is_pinned ?? false);
           if (data.published_at) setPublishedAt(toDatetimeLocalValue(new Date(data.published_at)));
           if (data.expires_at) setExpiresAt(toDatetimeLocalValue(new Date(data.expires_at)));
-          if (data.cohort_ids?.length) setSelectedCohortIds(data.cohort_ids);
+          if (data.cohort_ids?.length) {
+            setSelectedCohortIds(data.cohort_ids);
+            originalCohortIds.current = data.cohort_ids;
+          }
         }
       }
     };
@@ -127,15 +131,36 @@ export default function CreateAnnouncementPage() {
         published_at: publishedDate.toISOString(), expires_at: expiresDate ? expiresDate.toISOString() : null,
       };
 
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.replace('/auth'); return; }
+
+      let addedCohortIds: string[] = [];
       if (editId) {
         const { error: e } = await supabase.from('announcements').update(payload).eq('id', editId);
         if (e) throw e;
+        // Detect newly added cohorts
+        addedCohortIds = selectedCohortIds.filter(id => !originalCohortIds.current.includes(id));
       } else {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) { router.replace('/auth'); return; }
         const { error: e } = await supabase.from('announcements').insert({ ...payload, author_id: session.user.id });
         if (e) throw e;
+        // On create, all selected cohorts are new
+        addedCohortIds = selectedCohortIds;
       }
+
+      // Notify students in newly assigned cohorts
+      if (addedCohortIds.length) {
+        fetch('/api/notify-assignment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({
+            cohortIds: addedCohortIds,
+            title: trimmedTitle,
+            slug: 'student',
+            contentType: 'announcement',
+          }),
+        }).catch(() => {});
+      }
+
       router.push('/dashboard#announcements');
     } catch (err: any) {
       setError(err?.message || 'Something went wrong. Please try again.');

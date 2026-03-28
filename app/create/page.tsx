@@ -1048,8 +1048,26 @@ const [isSaving, setIsSaving] = useState(false);
         router.push(`/dashboard/${formId}?tab=settings`);
         return;
       } else {
+        // Fetch current cohort_ids before update to detect newly added cohorts
+        const { data: existingForm } = await supabase.from('forms').select('cohort_ids, slug, content_type').eq('id', formId!).single();
         const { error } = await supabase.from('forms').update({ title: formConfig.title, description: formConfig.description, config: formConfig, slug: slugValue, cohort_ids: selectedCohortIds }).eq('id', formId!);
         if (error) { if (error.code === '23505') { showToast('This URL slug is already taken. Try a different one.'); setIsSaving(false); return; } throw error; }
+        // Notify students in newly added cohorts only
+        const oldCohortIds: string[] = Array.isArray(existingForm?.cohort_ids) ? existingForm.cohort_ids : [];
+        const addedCohortIds = selectedCohortIds.filter((id: string) => !oldCohortIds.includes(id));
+        if (addedCohortIds.length) {
+          const { data: { session } } = await supabase.auth.getSession();
+          fetch('/api/notify-assignment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+            body: JSON.stringify({
+              cohortIds: addedCohortIds,
+              title: formConfig.title,
+              slug: slugValue,
+              contentType: existingForm?.content_type ?? (formConfig.isCourse ? 'course' : 'event'),
+            }),
+          }).catch(() => {});
+        }
       }
       const url = `${window.location.origin}/${slugValue}`;
       try {

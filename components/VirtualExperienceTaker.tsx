@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  CheckCircle2, Circle, ChevronRight, ChevronLeft, ChevronDown,
+  CheckCircle2, Circle, ChevronRight, ChevronLeft,
   Menu, X, Loader2, Trophy, BookOpen, Lock, Download, Award, Star, Clock,
-  Link as LinkIcon, Upload as UploadIcon, FileText,
+  Link as LinkIcon, Upload as UploadIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -17,6 +17,7 @@ interface Requirement {
   type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload';
   options?: string[];
   correctAnswer?: string;
+  expectedAnswer?: string;
 }
 interface Lesson {
   id: string;
@@ -30,6 +31,7 @@ interface Module {
   title: string;
   description: string;
   lessons: Lesson[];
+  solutionVideo?: string;
 }
 interface Dataset {
   filename: string;
@@ -37,7 +39,7 @@ interface Dataset {
   csvContent: string;
 }
 interface ProjectConfig {
-  isGuidedProject: true;
+  isVirtualExperience: true;
   industry: string;
   difficulty: string;
   role: string;
@@ -96,6 +98,11 @@ function lessonProgress(lesson: Lesson, progress: Progress): number {
   return Math.round((done / lesson.requirements.length) * 100);
 }
 
+function isAnswerCorrect(studentAnswer: string, expectedAnswer: string): boolean {
+  const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  return normalize(studentAnswer) === normalize(expectedAnswer);
+}
+
 function allLessons(modules: Module[]): { moduleId: string; lesson: Lesson }[] {
   return modules.flatMap(m => m.lessons.map(l => ({ moduleId: m.id, lesson: l })));
 }
@@ -127,7 +134,7 @@ function DifficultyDots({ difficulty, color }: { difficulty: string; color: stri
 }
 
 // -- Component ---
-export default function GuidedProjectTaker({
+export default function VirtualExperienceTaker({
   formId, formSlug, config, studentName, studentEmail,
   initialProgress = {}, initialModuleId, initialLessonId,
   isDark = true, accentColor = '#6366f1',
@@ -149,15 +156,16 @@ export default function GuidedProjectTaker({
   const [currentModId, setCurrentModId] = useState(startModule);
   const [currentLesId, setCurrentLesId] = useState(startLesson);
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
-  const [expandedMods, setExpandedMods] = useState<Set<string>>(new Set(modules.map(m => m.id)));
   const [noteValues,   setNoteValues]   = useState<Record<string, string>>({});
   const [saving,       setSaving]       = useState(false);
   const [completed,    setCompleted]    = useState(false);
+  const [reviewMode,   setReviewMode]   = useState(false);
   const [review,       setReview]       = useState<any>(null);
   const [certId,       setCertId]       = useState<string | null>(null);
   const [certLoading,  setCertLoading]  = useState(false);
   const [uploadingReq, setUploadingReq] = useState<string | null>(null);
-  const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const saveTimeout  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const mainScrollRef = useRef<HTMLDivElement>(null);
 
   const currentMod = modules.find(m => m.id === currentModId);
   const currentLes = currentMod?.lessons.find(l => l.id === currentLesId);
@@ -171,9 +179,9 @@ export default function GuidedProjectTaker({
   const hasPrev = flatIdx > 0;
   const hasNext = flatIdx < flat.length - 1;
 
-  // A lesson is unlocked only if all previous lessons are 100% complete
+  // A lesson is unlocked only if all previous lessons are 100% complete (always open in review mode)
   const isUnlocked = (idx: number) => {
-    if (idx === 0) return true;
+    if (reviewMode || idx === 0) return true;
     return lessonProgress(flat[idx - 1].lesson, progress) === 100;
   };
 
@@ -191,8 +199,9 @@ export default function GuidedProjectTaker({
       .catch(() => {});
   }, [formId, studentEmail]);
 
-  // Save progress (debounced 800ms)
+  // Save progress (debounced 800ms) -- skipped in review mode
   const saveProgress = useCallback((prog: Progress, modId: string, lesId: string, completedAt?: string) => {
+    if (reviewMode) return;
     clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(async () => {
       setSaving(true);
@@ -263,7 +272,7 @@ export default function GuidedProjectTaker({
     if (!isUnlocked(idx)) return;
     setCurrentModId(modId);
     setCurrentLesId(lesId);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const goNext = () => {
@@ -322,76 +331,134 @@ export default function GuidedProjectTaker({
   };
 
   // -- Completion screen ---
-  if (completed) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-8 font-sans"
-        style={{ background: bg, color: text }}>
-        <div className="max-w-lg w-full text-center space-y-6">
-          {/* Trophy */}
-          <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto"
-            style={{ background: `${accentColor}22` }}>
-            <Trophy className="w-10 h-10" style={{ color: accentColor }} />
-          </div>
+  if (completed && !reviewMode) {
+    const totalLessons  = modules.reduce((a, m) => a + m.lessons.length, 0);
+    const totalModules  = modules.length;
 
-          {/* Headline */}
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-widest mb-2" style={{ color: accentColor }}>
-              Virtual Experience Complete
-            </p>
-            <h1 className="text-3xl font-bold mb-2" style={{ color: text }}>
+    return (
+      <div className="min-h-screen flex flex-col font-sans" style={{ background: isDark ? '#0e0e0e' : '#F3F4F2', color: text }}>
+
+        {/* Hero banner */}
+        <div className="relative overflow-hidden flex-shrink-0" style={{ minHeight: 300 }}>
+          {/* Cover image or solid blue fallback */}
+          {config.coverImage ? (
+            <img src={config.coverImage} alt="cover"
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <div style={{ position: 'absolute', inset: 0, background: '#0e09dd' }} />
+          )}
+          {/* Dark overlay for readability */}
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.25) 100%)' }} />
+          <div className="relative z-10 flex flex-col items-center justify-end text-center px-6 pb-12 pt-16 space-y-3" style={{ minHeight: 300 }}>
+            {/* Badge */}
+            <div className="flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-widest"
+              style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', backdropFilter: 'blur(6px)' }}>
+              <Trophy className="w-3.5 h-3.5" /> Virtual Experience Complete
+            </div>
+            {/* Name */}
+            <h1 className="text-4xl sm:text-5xl font-black leading-tight" style={{ color: '#fff' }}>
               Well done, {studentName.split(' ')[0]}!
             </h1>
-            <p style={{ color: muted }}>
-              You've completed the <strong style={{ color: text }}>{config.role}</strong> experience at <strong style={{ color: text }}>{config.company}</strong>.
+            {/* Company + role */}
+            <p className="text-[15px] max-w-xl" style={{ color: 'rgba(255,255,255,0.75)' }}>
+              You completed the <span style={{ color: '#fff', fontWeight: 600 }}>{config.role}</span> experience at{' '}
+              <span style={{ color: '#fff', fontWeight: 700 }}>{config.company}</span>.
             </p>
           </div>
+        </div>
 
-          {/* What you accomplished */}
-          <div className="rounded-2xl p-5 text-left space-y-2" style={{ background: surface, border: `1px solid ${border}` }}>
-            <p className="text-sm font-semibold mb-3" style={{ color: text }}>Skills demonstrated</p>
-            {(config.learnOutcomes || []).map((o, i) => (
-              <div key={i} className="flex items-start gap-2 text-sm" style={{ color: muted }}>
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />
-                {o}
+        {/* Content */}
+        <div className="flex-1 w-full max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-4">
+
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Modules', value: totalModules },
+              { label: 'Lessons', value: totalLessons },
+              { label: 'Score', value: '100%' },
+            ].map(s => (
+              <div key={s.label} className="rounded-2xl p-4 text-center"
+                style={{ background: isDark ? '#1c1c1c' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'}` }}>
+                <p className="text-2xl font-black" style={{ color: accentColor }}>{s.value}</p>
+                <p className="text-[12px] mt-0.5" style={{ color: muted }}>{s.label}</p>
               </div>
             ))}
           </div>
 
-          {/* Instructor feedback */}
-          {review && (
-            <div className="rounded-2xl p-5 text-left space-y-2" style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}40` }}>
-              <p className="text-sm font-semibold" style={{ color: accentColor }}>Instructor Feedback</p>
-              {review.score !== undefined && (
-                <p className="text-2xl font-bold" style={{ color: text }}>
-                  {review.score}<span className="text-base font-normal" style={{ color: muted }}>/100</span>
-                </p>
-              )}
-              {review.feedback && <p className="text-sm" style={{ color: muted }}>{review.feedback}</p>}
+          {/* Skills demonstrated */}
+          {(config.learnOutcomes || []).length > 0 && (
+            <div className="rounded-2xl overflow-hidden"
+              style={{ background: isDark ? '#1c1c1c' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'}` }}>
+              <div className="px-5 py-4 border-b flex items-center gap-2"
+                style={{ borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}>
+                <Star className="w-4 h-4" style={{ color: accentColor }} fill={accentColor} />
+                <p className="text-[13px] font-bold" style={{ color: text }}>Skills Demonstrated</p>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {(config.learnOutcomes || []).map((o, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                      style={{ background: `${accentColor}18` }}>
+                      <CheckCircle2 className="w-3 h-3" style={{ color: accentColor }} />
+                    </div>
+                    <p className="text-[14px] leading-snug" style={{ color: isDark ? '#ccc' : '#333' }}>{o}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Certificate */}
-          <div className="space-y-3">
+          {/* Instructor feedback */}
+          {review && (
+            <div className="rounded-2xl overflow-hidden"
+              style={{ background: isDark ? '#1c1c1c' : '#fff', border: `1px solid ${accentColor}30` }}>
+              <div className="px-5 py-4 border-b flex items-center justify-between"
+                style={{ borderColor: `${accentColor}20`, background: `${accentColor}08` }}>
+                <div className="flex items-center gap-2">
+                  <Award className="w-4 h-4" style={{ color: accentColor }} />
+                  <p className="text-[13px] font-bold" style={{ color: accentColor }}>Instructor Feedback</p>
+                </div>
+                {review.score !== undefined && (
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-black" style={{ color: accentColor }}>{review.score}</span>
+                    <span className="text-[12px]" style={{ color: muted }}>/100</span>
+                  </div>
+                )}
+              </div>
+              {review.feedback && (
+                <p className="px-5 py-4 text-[14px] leading-relaxed" style={{ color: isDark ? '#ccc' : '#444' }}>{review.feedback}</p>
+              )}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="space-y-2 pt-2">
             {certId ? (
               <a href={`/certificate/${certId}`} target="_blank" rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm"
-                style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}>
-                <Award className="w-4 h-4" /> View Certificate
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90"
+                style={{ background: accentColor, color: isDark ? '#111' : '#fff', boxShadow: `0 8px 24px ${accentColor}35` }}>
+                <Award className="w-5 h-5" /> View Certificate
               </a>
             ) : (
               <button onClick={handleGetCertificate} disabled={certLoading}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm transition-all hover:opacity-90"
-                style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}>
-                {certLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Award className="w-4 h-4" />}
-                {certLoading ? 'Generating…' : 'Get Certificate'}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90 disabled:opacity-60"
+                style={{ background: accentColor, color: isDark ? '#111' : '#fff', boxShadow: `0 8px 24px ${accentColor}35` }}>
+                {certLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Award className="w-5 h-5" />}
+                {certLoading ? 'Generating Certificate…' : 'Get Certificate'}
               </button>
             )}
+            <button onClick={() => { setReviewMode(true); setCurrentModId(modules[0]?.id || ''); setCurrentLesId(modules[0]?.lessons[0]?.id || ''); }}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-[14px] border transition-all hover:opacity-70"
+              style={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'}`, color: muted, background: 'transparent' }}>
+              <BookOpen className="w-4 h-4" /> Review Experience
+            </button>
             <a href={`/${formSlug}`}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-medium text-sm border"
-              style={{ border: `1px solid ${border}`, color: muted }}>
-              <BookOpen className="w-4 h-4" /> Back to Overview
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-medium text-[13px] transition-all hover:opacity-70"
+              style={{ color: muted }}>
+              Back to Overview
             </a>
           </div>
+
         </div>
       </div>
     );
@@ -527,7 +594,7 @@ export default function GuidedProjectTaker({
       </aside>
 
       {/* -- Main content -- */}
-      <main className="flex-1 overflow-y-auto flex flex-col">
+      <main className="flex-1 overflow-hidden flex flex-col">
         {/* Top bar */}
         <div className="sticky top-0 z-10 flex items-center gap-3 px-4 sm:px-6 py-3 border-b flex-shrink-0"
           style={{ background: surface, borderColor: border }}>
@@ -555,8 +622,18 @@ export default function GuidedProjectTaker({
           </div>
         </div>
 
+        {/* Review mode banner */}
+        {reviewMode && (
+          <div className="flex items-center justify-between px-4 py-2 text-xs font-semibold flex-shrink-0"
+            style={{ background: `${accentColor}18`, color: accentColor, borderBottom: `1px solid ${accentColor}30` }}>
+            <span>Review Mode -- your progress is saved and won&apos;t be changed</span>
+            <button onClick={() => setReviewMode(false)}
+              className="underline opacity-70 hover:opacity-100">Exit Review</button>
+          </div>
+        )}
+
         {/* Lesson content -- subtle grey background, single white card */}
-        <div className="flex-1 overflow-y-auto" style={{ background: isDark ? '#141414' : '#F2F2F0' }}>
+        <div ref={mainScrollRef} className="flex-1 overflow-y-auto" style={{ background: isDark ? '#141414' : '#F2F2F0' }}>
           <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 space-y-4">
           {currentLes ? (
             <>
@@ -590,7 +667,7 @@ export default function GuidedProjectTaker({
                 {currentLes.body && (
                   <div className="px-8 pt-6 pb-6">
                     <div
-                      className={`prose prose-sm max-w-none ${isDark
+                      className={`prose prose-sm max-w-none [font-size:14.5px] ${isDark
                         ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
                         : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
                       }`}
@@ -631,11 +708,11 @@ export default function GuidedProjectTaker({
                               <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
                                 style={{ background: `${accentColor}15`, color: accentColor }}>Q{qi + 1}</span>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold leading-snug" style={{ color: isDark ? '#f0f0f0' : '#111' }}>
+                                <p className="text-[14.5px] font-semibold leading-snug" style={{ color: isDark ? '#f0f0f0' : '#111' }}>
                                   {req.label}
                                 </p>
                                 {req.description && (
-                                  <p className="text-xs mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>
+                                  <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>
                                 )}
                               </div>
                               {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
@@ -662,7 +739,7 @@ export default function GuidedProjectTaker({
                                       });
                                     }}
                                     disabled={done}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left text-sm transition-all disabled:cursor-default"
+                                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left text-[14.5px] transition-all disabled:cursor-default"
                                     style={{
                                       background: showCorrect
                                         ? `${accentColor}12`
@@ -687,18 +764,18 @@ export default function GuidedProjectTaker({
                                       }}>
                                       {letter}
                                     </span>
-                                    <span className="flex-1 text-sm">{opt}</span>
+                                    <span className="flex-1 text-[14.5px]">{opt}</span>
                                     {showCorrect && <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentColor }} />}
-                                    {showWrong && <span className="text-xs flex-shrink-0" style={{ color: '#ef4444' }}>Try again</span>}
+                                    {showWrong && <span className="text-[12.5px] flex-shrink-0" style={{ color: '#ef4444' }}>Try again</span>}
                                   </button>
                                 );
                               })}
                             </div>
 
                             {done && (
-                              <div className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg w-fit"
+                              <div className="flex items-center gap-1.5 text-[12.5px] font-semibold px-2.5 py-1.5 rounded-lg w-fit"
                                 style={{ background: `${accentColor}10`, color: accentColor }}>
-                                <CheckCircle2 className="w-3 h-3"/> Correct -- well done!
+                                <CheckCircle2 className="w-3 h-3"/> Correct. Well done!
                               </div>
                             )}
                           </div>
@@ -716,8 +793,8 @@ export default function GuidedProjectTaker({
                               <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
                                 style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>Upload</span>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
-                                {req.description && <p className="text-xs mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
+                                <p className="text-[14.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
+                                {req.description && <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
                               </div>
                               {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
                             </div>
@@ -733,8 +810,8 @@ export default function GuidedProjectTaker({
                                   : fileUrl
                                     ? <CheckCircle2 className="w-4 h-4" style={{ color: accentColor }} />
                                     : <UploadIcon className="w-4 h-4" style={{ color: isDark ? '#666' : '#aaa' }} />}
-                                <p className="text-xs font-medium text-center" style={{ color: fileUrl ? accentColor : isDark ? '#666' : '#aaa' }}>
-                                  {fileUrl ? 'File uploaded -- click to replace' : 'Click to upload your file'}
+                                <p className="text-[12.5px] font-medium text-center" style={{ color: fileUrl ? accentColor : isDark ? '#666' : '#aaa' }}>
+                                  {fileUrl ? 'File uploaded. Click to replace.' : 'Click to upload your file'}
                                 </p>
                                 {fileUrl && (
                                   <a href={fileUrl} target="_blank" rel="noreferrer"
@@ -749,7 +826,7 @@ export default function GuidedProjectTaker({
                             </label>
 
                             <div className="space-y-1">
-                              <p className="text-xs font-medium" style={{ color: isDark ? '#888' : '#666' }}>Or share a link</p>
+                              <p className="text-[12.5px] font-medium" style={{ color: isDark ? '#888' : '#666' }}>Or share a link</p>
                               <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
                                 style={{
                                   background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
@@ -758,7 +835,7 @@ export default function GuidedProjectTaker({
                                 <LinkIcon className="w-3 h-3 flex-shrink-0" style={{ color: isDark ? '#666' : '#aaa' }} />
                                 <input type="url" value={linkUrl} onChange={e => setUploadLink(req.id, e.target.value)}
                                   placeholder="https://docs.google.com/… or GitHub link…"
-                                  className="flex-1 bg-transparent text-xs outline-none"
+                                  className="flex-1 bg-transparent text-[12.5px] outline-none"
                                   style={{ color: isDark ? '#f0f0f0' : '#111' }} />
                               </div>
                             </div>
@@ -769,33 +846,88 @@ export default function GuidedProjectTaker({
                       // -- Short Answer / Text question ---
                       if (req.type === 'text') {
                         const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
+                        // submitted = student has clicked Submit (progress.notes set); done = correct + completed
+                        const submitted = !!progress[req.id]?.notes;
+                        const isCorrect = submitted && req.expectedAnswer
+                          ? isAnswerCorrect(progress[req.id]?.notes || '', req.expectedAnswer)
+                          : submitted && !req.expectedAnswer; // no expected answer = accept any
+                        const wrongAnswer = submitted && req.expectedAnswer && !isCorrect;
                         return (
                           <div key={req.id} style={rowStyle} className="px-8 py-5 space-y-2.5">
                             <div className="flex items-start gap-2">
                               <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
                                 style={{ background: 'rgba(139,92,246,0.12)', color: '#8b5cf6' }}>Short Answer</span>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
-                                {req.description && <p className="text-xs mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
+                                <p className="text-[14.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
+                                {req.description && <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
                               </div>
                               {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
                             </div>
                             <textarea
                               value={noteVal}
                               onChange={e => {
-                                setNote(req.id, e.target.value);
-                                if (e.target.value.trim().length > 10 && !done) toggleReq(req.id);
+                                setNoteValues(prev => ({ ...prev, [req.id]: e.target.value }));
+                                // if they edit after a wrong attempt, reset so Submit re-evaluates
+                                if (submitted && !done) {
+                                  setProgress(prev => {
+                                    const next = { ...prev, [req.id]: { ...prev[req.id], notes: '', completed: false } };
+                                    return next;
+                                  });
+                                }
                               }}
+                              disabled={done && !reviewMode}
                               placeholder="Type your answer here…"
                               rows={3}
-                              className="w-full text-sm rounded-lg p-3 outline-none resize-none"
+                              className="w-full text-[14.5px] rounded-lg p-3 outline-none resize-none"
                               style={{
                                 background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
                                 color: isDark ? '#f0f0f0' : '#111',
-                                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                border: `1px solid ${
+                                  wrongAnswer ? '#ef4444' :
+                                  done ? accentColor :
+                                  isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'
+                                }`,
                                 lineHeight: 1.6,
+                                opacity: done && !reviewMode ? 0.7 : 1,
                               }}
                             />
+                            {!done && (
+                              <button
+                                onClick={() => {
+                                  if (noteVal.trim().length === 0) return;
+                                  const correct = req.expectedAnswer
+                                    ? isAnswerCorrect(noteVal, req.expectedAnswer)
+                                    : true;
+                                  setProgress(prev => {
+                                    const next = {
+                                      ...prev,
+                                      [req.id]: { ...prev[req.id], notes: noteVal, completed: correct },
+                                    };
+                                    saveProgress(next, currentModId, currentLesId);
+                                    return next;
+                                  });
+                                }}
+                                disabled={noteVal.trim().length === 0}
+                                className="px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}
+                              >
+                                Submit Answer
+                              </button>
+                            )}
+                            {wrongAnswer && (
+                              <div className="rounded-lg p-3 flex items-start gap-2"
+                                style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                                <span className="text-[13px]" style={{ color: '#ef4444' }}>✕</span>
+                                <p className="text-[13px]" style={{ color: '#ef4444' }}>Incorrect. Try again.</p>
+                              </div>
+                            )}
+                            {done && (
+                              <div className="rounded-lg p-3 flex items-start gap-2"
+                                style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' }}>
+                                <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#10b981' }} />
+                                <p className="text-[13px] font-semibold" style={{ color: '#10b981' }}>Correct. Well done!</p>
+                              </div>
+                            )}
                           </div>
                         );
                       }
@@ -803,6 +935,29 @@ export default function GuidedProjectTaker({
                       // -- Default fallback (task / deliverable / reflection) -
                       const meta    = REQ_META[req.type] || REQ_META.task;
                       const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
+
+                      // Pure task: just a checkbox, no textarea
+                      if (req.type === 'task') {
+                        return (
+                          <div key={req.id} style={rowStyle} className="px-8 py-4">
+                            <button onClick={() => !reviewMode && toggleReq(req.id)}
+                              className="flex items-start gap-3 w-full text-left"
+                              disabled={reviewMode}>
+                              <div className="flex-shrink-0 mt-0.5">
+                                {done
+                                  ? <CheckCircle2 className="w-4 h-4" style={{ color: accentColor }} />
+                                  : <Circle className="w-4 h-4" style={{ color: isDark ? '#555' : '#ccc' }} />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[14.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</span>
+                                {req.description && <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
+                              </div>
+                              {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
+                            </button>
+                          </div>
+                        );
+                      }
+
                       return (
                         <div key={req.id} style={rowStyle} className="px-8 py-5 space-y-2.5">
                           <div className="flex items-start gap-3">
@@ -815,15 +970,15 @@ export default function GuidedProjectTaker({
                               <div className="flex items-center gap-2 flex-wrap mb-1">
                                 <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
                                   style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
-                                <span className="text-sm font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</span>
+                                <span className="text-[14.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</span>
                               </div>
-                              <p className="text-xs leading-snug" style={{ color: isDark ? '#888' : '#555' }}>{req.description}</p>
+                              <p className="text-[12.5px] leading-snug" style={{ color: isDark ? '#888' : '#555' }}>{req.description}</p>
                             </div>
                           </div>
                           <div className="pl-7">
                             <textarea value={noteVal} onChange={e => setNote(req.id, e.target.value)}
                               placeholder="Add your notes or work summary…" rows={2}
-                              className="w-full text-sm rounded-lg p-3 outline-none resize-none"
+                              className="w-full text-[14.5px] rounded-lg p-3 outline-none resize-none"
                               style={{
                                 background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
                                 color: isDark ? '#f0f0f0' : '#111',
@@ -838,6 +993,57 @@ export default function GuidedProjectTaker({
                 )}
 
               </div>{/* end unified card */}
+
+              {/* Module solution -- video or file link -- shown when all lessons in module are complete */}
+              {(() => {
+                const modLessons = currentMod?.lessons || [];
+                const modAllDone = modLessons.length > 0 && modLessons.every(l => lessonProgress(l, progress) === 100);
+                const solUrl = currentMod?.solutionVideo;
+                if (!solUrl || !modAllDone) return null;
+                const solEmbedUrl = getVideoEmbedUrl(solUrl);
+                const isFile = !solEmbedUrl;
+                return (
+                  <div className="rounded-xl overflow-hidden"
+                    style={{
+                      background: isDark ? '#1e1e1e' : '#ffffff',
+                      border: `1px solid ${accentColor}40`,
+                    }}>
+                    <div className="px-6 py-4 flex items-center gap-2"
+                      style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: accentColor }} />
+                      <p className="text-[13px] font-bold" style={{ color: accentColor }}>
+                        {isFile ? 'Module Solution File' : 'Module Solution Video'}
+                      </p>
+                      <p className="text-[12px] ml-auto" style={{ color: isDark ? '#666' : '#999' }}>Unlocked -- module complete</p>
+                    </div>
+                    {isFile ? (
+                      <div className="px-6 py-5 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                          style={{ background: `${accentColor}18` }}>
+                          <Download className="w-5 h-5" style={{ color: accentColor }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold truncate" style={{ color: isDark ? '#f0f0f0' : '#111' }}>
+                            {solUrl.split('/').pop()?.split('?')[0] || 'Solution File'}
+                          </p>
+                          <p className="text-[12px] truncate" style={{ color: isDark ? '#666' : '#999' }}>{solUrl}</p>
+                        </div>
+                        <a href={solUrl} target="_blank" rel="noreferrer"
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-semibold flex-shrink-0 transition-all hover:opacity-80"
+                          style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}>
+                          <LinkIcon className="w-3.5 h-3.5" /> Open
+                        </a>
+                      </div>
+                    ) : (
+                      <div style={{ aspectRatio: '16/9', background: '#000' }}>
+                        <iframe src={solEmbedUrl!} className="w-full h-full border-0"
+                          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
+                          allowFullScreen />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Navigation */}
               <div className="flex items-center justify-between pt-2 pb-16">
@@ -862,11 +1068,17 @@ export default function GuidedProjectTaker({
                 </div>
 
                 {hasNext ? (
-                  <button onClick={goNext} disabled={!allCurrentDone}
-                    title={!allCurrentDone ? 'Complete all tasks to continue' : ''}
+                  <button onClick={goNext} disabled={!reviewMode && !allCurrentDone}
+                    title={!reviewMode && !allCurrentDone ? 'Complete all tasks to continue' : ''}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ background: allCurrentDone ? accentColor : border, color: allCurrentDone ? (isDark ? '#111' : '#fff') : muted }}>
+                    style={{ background: reviewMode || allCurrentDone ? accentColor : border, color: reviewMode || allCurrentDone ? (isDark ? '#111' : '#fff') : muted }}>
                     Next <ChevronRight className="w-4 h-4" />
+                  </button>
+                ) : reviewMode ? (
+                  <button onClick={() => setReviewMode(false)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all hover:opacity-80"
+                    style={{ background: `${accentColor}18`, color: accentColor }}>
+                    <Trophy className="w-4 h-4" /> Back to Summary
                   </button>
                 ) : (
                   <button onClick={handleComplete} disabled={saving || !overallPct === 100 as any}

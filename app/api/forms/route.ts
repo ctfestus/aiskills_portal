@@ -1,6 +1,7 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { adminClient } from '@/lib/subscription';
+import { sendAssignmentNotifications } from '@/lib/send-assignment-notification';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +54,15 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (!error) {
+      // Fire-and-forget assignment notifications to cohort students
+      if (cohort_ids?.length) {
+        sendAssignmentNotifications({
+          cohortIds: cohort_ids,
+          title: title || '',
+          slug: data.slug,
+          contentType: content_type,
+        }).catch(() => {});
+      }
       return NextResponse.json({ id: data.id, slug: data.slug, content_type: data.content_type });
     }
 

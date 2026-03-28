@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/subscription';
+import { sendAssignmentNotifications } from '@/lib/send-assignment-notification';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,17 +24,25 @@ export async function POST(req: NextRequest) {
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
   if (!config)        return NextResponse.json({ error: 'Config is required' }, { status: 400 });
 
-  const finalConfig = { ...config, isGuidedProject: true, coverImage: coverImage || config.coverImage || '' };
+  const finalConfig = { ...config, isVirtualExperience: true, coverImage: coverImage || config.coverImage || '' };
 
   const payload: any = {
     title:        title.trim(),
     config:       finalConfig,
     cohort_ids:   Array.isArray(cohort_ids) ? cohort_ids : [],
-    content_type: 'guided_project',
+    content_type: 'virtual_experience',
     description:  config.tagline || '',
   };
 
   if (editId) {
+    // Fetch current cohort_ids before updating so we can detect newly added cohorts
+    const { data: existing } = await adminClient()
+      .from('forms')
+      .select('cohort_ids, slug')
+      .eq('id', editId)
+      .eq('user_id', user.id)
+      .single();
+
     const { error } = await adminClient()
       .from('forms')
       .update(payload)
@@ -44,6 +53,20 @@ export async function POST(req: NextRequest) {
       console.error('[guided-project-save] update error:', error);
       return NextResponse.json({ error: `${error.message} (code: ${error.code})` }, { status: 500 });
     }
+
+    // Notify students in cohorts that were newly added in this edit
+    const oldCohortIds: string[] = Array.isArray(existing?.cohort_ids) ? existing.cohort_ids : [];
+    const newCohortIds: string[] = payload.cohort_ids;
+    const addedCohortIds = newCohortIds.filter(id => !oldCohortIds.includes(id));
+    if (addedCohortIds.length && existing?.slug) {
+      sendAssignmentNotifications({
+        cohortIds: addedCohortIds,
+        title: title.trim(),
+        slug: existing.slug,
+        contentType: 'virtual_experience',
+      }).catch(() => {});
+    }
+
     return NextResponse.json({ id: editId });
   }
 
@@ -61,5 +84,16 @@ export async function POST(req: NextRequest) {
     console.error('[guided-project-save] insert error:', error);
     return NextResponse.json({ error: `${error.message} (code: ${error.code})` }, { status: 500 });
   }
+
+  // Fire-and-forget assignment notifications to cohort students
+  if (payload.cohort_ids.length) {
+    sendAssignmentNotifications({
+      cohortIds: payload.cohort_ids,
+      title: title.trim(),
+      slug: data.slug,
+      contentType: 'virtual_experience',
+    }).catch(() => {});
+  }
+
   return NextResponse.json({ id: data.id, slug: data.slug });
 }

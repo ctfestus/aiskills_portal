@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
+import { milestoneEmail } from '@/lib/email-templates';
+import { hasNudgeBeenSent, recordNudge, totalRequirements, completedRequirements } from '@/lib/nudge-helpers';
 
 export const dynamic = 'force-dynamic';
+
+const resend  = new Resend(process.env.RESEND_API_KEY);
+const FROM    = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <notifications@festforms.com>';
+const APP_URL = process.env.APP_URL || 'https://festforms.com';
 
 const adminClient = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -173,5 +180,48 @@ export async function POST(req: NextRequest) {
     );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // -- 80% milestone check (fire-and-forget) --
+  if (progress && !completedAt && process.env.RESEND_API_KEY) {
+    (async () => {
+      try {
+        const { data: form } = await supabase
+          .from('forms')
+          .select('config, title, slug, content_type')
+          .eq('id', formId)
+          .single();
+
+        if (!form) return;
+        const total = totalRequirements(form.config);
+        if (total === 0) return;
+
+        const done = completedRequirements(progress);
+        const pct  = Math.round((done / total) * 100);
+        if (pct < 80) return;
+
+        const alreadySent = await hasNudgeBeenSent(supabase, email, formId, 'milestone_80');
+        if (alreadySent) return;
+
+        const isVE = form.content_type === 'virtual_experience' || form.content_type === 'guided_project';
+        const html = milestoneEmail({
+          name:        studentName || 'there',
+          contentTitle: form.title,
+          contentType:  isVE ? 'virtual_experience' : form.content_type,
+          formUrl:     `${APP_URL}/${form.slug ?? formId}`,
+        });
+
+        await resend.emails.send({
+          from: FROM,
+          to:   email,
+          subject: `You're 80% done -- finish strong! 🎯`,
+          html,
+        });
+        await recordNudge(supabase, email, formId, 'milestone_80');
+      } catch (err) {
+        console.error('[guided-project-progress] milestone check failed', err);
+      }
+    })();
+  }
+
   return NextResponse.json({ success: true });
 }
