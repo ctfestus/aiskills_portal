@@ -140,6 +140,7 @@ interface FormConfig {
   maxAttempts?: number;
   postSubmission?: PostSubmission;
   pointsSystem?: PointsSystem;
+  deadline_days?: number | null;
 }
 
 // --- Constants ---
