@@ -33,7 +33,7 @@ function timeAgo(dateStr: string) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-export default function NotificationBell() {
+export default function NotificationBell({ color }: { color?: string } = {}) {
   const { theme } = useTheme();
   const isDark = theme !== 'light';
 
@@ -124,6 +124,7 @@ export default function NotificationBell() {
         ref={btnRef}
         onClick={open ? () => setOpen(false) : handleOpen}
         className={`relative p-2 rounded-xl transition-colors ${isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100'}`}
+        style={color ? { color } : undefined}
         title="Notifications"
       >
         <Bell className="w-5 h-5" />
