@@ -1176,7 +1176,7 @@ export function CourseTaker({
                     </div>
                     <div>
                       <p className={`text-base font-bold ${textColor}`}>Course completed!</p>
-                      <p className={`text-xs mt-0.5 ${mutedColor}`}>Hi {studentName} -- your certificate is ready.</p>
+                      <p className={`text-xs mt-0.5 ${mutedColor}`}>Hi {studentName}. Your certificate is ready.</p>
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1937,7 +1937,7 @@ export function CourseTaker({
               {/* -- Arrange in order -- */}
               {questionType === 'arrange' && (
                 <div>
-                  <p className={`text-xs mb-3 ${mutedColor}`}>Drag to reorder -- put items in the correct sequence.</p>
+                  <p className={`text-xs mb-3 ${mutedColor}`}>Drag to reorder. Put items in the correct sequence.</p>
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                     <SortableContext items={arrangeOrder} strategy={verticalListSortingStrategy}>
                       <div className="space-y-2">

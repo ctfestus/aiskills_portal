@@ -1,5 +1,7 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
+import { confirmationEmail } from '@/lib/email-templates';
 
 // Service role -- needed to call register_event_attendee (no public RLS policies)
 function adminClient() {
@@ -8,6 +10,9 @@ function adminClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 }
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+const FROM   = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
 
 export async function POST(req: NextRequest) {
   // Check size BEFORE parsing to prevent memory spike from large payloads.
@@ -80,6 +85,39 @@ export async function POST(req: NextRequest) {
 
   if (result?.error === 'already_registered') {
     return NextResponse.json({ error: 'already_registered' }, { status: 409 });
+  }
+
+  // -- Send confirmation email server-side (fire-and-forget) ---
+  // All email content is derived from the DB-verified form record and the
+  // validated registration data -- never from untrusted client input.
+  if (process.env.RESEND_API_KEY) {
+    const cfg = form.config as Record<string, any>;
+    const subject = `You're registered: ${cfg?.title || 'Event'}`;
+    const html = confirmationEmail({
+      name:          data.name || data.full_name || email,
+      eventTitle:    cfg?.title       || '',
+      eventDate:     cfg?.eventDetails?.date  || '',
+      eventTime:     cfg?.eventDetails?.time  || '',
+      eventTimezone: cfg?.eventDetails?.timezone || '',
+      eventLocation: cfg?.eventDetails?.location || '',
+      meetingLink:   cfg?.eventDetails?.meetingLink || '',
+      formId,
+    });
+
+    // Idempotency: skip if already sent for this response
+    const { data: alreadySent } = await supabase
+      .from('sent_emails')
+      .select('id')
+      .eq('response_id', responseId)
+      .eq('type', 'confirmation')
+      .maybeSingle();
+
+    if (!alreadySent) {
+      resend.emails
+        .send({ from: FROM, to: email, subject, html })
+        .then(() => supabase.from('sent_emails').insert({ response_id: responseId, type: 'confirmation' }))
+        .catch((err: unknown) => console.error('[event-register] confirmation email failed:', err));
+    }
   }
 
   return NextResponse.json({ success: true, responseId });

@@ -169,7 +169,7 @@ export default function CreateCommunityPage() {
               <label style={labelStyle(C)}>Community Name <span style={{ color: C.errorText }}>*</span></label>
               <input
                 type="text" value={name} onChange={e => setName(sanitizePlainText(e.target.value))}
-                placeholder="e.g. AI Skills Africa -- Cohort 5"
+                placeholder="e.g. AI Skills Africa: Cohort 5"
                 style={inputStyle(C)} required maxLength={255}
               />
             </div>

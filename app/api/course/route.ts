@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
             await resend.emails.send({
               from: FROM,
               to:   sessionEmail,
-              subject: `You're 80% done -- finish strong! 🎯`,
+              subject: `You are 80% done. Finish strong! 🎯`,
               html,
             });
             await recordNudge(supabase, sessionEmail, form_id, 'milestone_80');

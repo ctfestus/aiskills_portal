@@ -1,24 +1,8 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
-import { createHash } from 'crypto';
 import { confirmationEmail, reminderEmail, courseResultEmail, blastEmail } from '@/lib/email-templates';
 
-// In-memory rate limiter for test email sends -- max 5 per creator per hour.
-// Uses a hash of the JWT as key so full tokens are never stored.
-const testEmailRateLimit = new Map<string, { count: number; resetAt: number }>();
-function allowTestEmailSend(jwt: string): boolean {
-  const key = createHash('sha256').update(jwt).digest('hex').slice(0, 16);
-  const now = Date.now();
-  const entry = testEmailRateLimit.get(key);
-  if (!entry || now > entry.resetAt) {
-    testEmailRateLimit.set(key, { count: 1, resetAt: now + 60 * 60 * 1000 });
-    return true;
-  }
-  if (entry.count >= 5) return false;
-  entry.count++;
-  return true;
-}
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
@@ -29,15 +13,20 @@ const getAdminSupabase = () => {
   return createClient(url, key);
 };
 
-// Returns the authenticated creator's user ID from a Bearer token, or null.
-async function getCreatorId(req: NextRequest): Promise<string | null> {
+// Returns the authenticated user from a Bearer token, or null.
+async function getAuthUser(req: NextRequest) {
   const auth = req.headers.get('authorization');
   if (!auth?.startsWith('Bearer ')) return null;
   const token = auth.slice(7);
-  const supabase = getAdminSupabase();
-  const { data: { user }, error } = await supabase.auth.getUser(token);
+  const { data: { user }, error } = await getAdminSupabase().auth.getUser(token);
   if (error || !user) return null;
-  return user.id;
+  return user;
+}
+
+// Kept for blast/reminder paths that only need the user ID.
+async function getCreatorId(req: NextRequest): Promise<string | null> {
+  const user = await getAuthUser(req);
+  return user?.id ?? null;
 }
 
 // Returns true if creatorId owns the given formId.
@@ -108,9 +97,14 @@ export async function POST(req: NextRequest) {
       }
       blastCreatorId = creatorId;
     } else if (type === 'reminder') {
-      const cronSecret = process.env.CRON_SECRET;
-      const cronHeader = req.headers.get('x-cron-secret');
-      const isCron = cronSecret && cronHeader === cronSecret;
+      // Cron path: x-cron-secret only accepted in non-production and requires timestamp
+      const cronSecret     = process.env.CRON_SECRET;
+      const cronHeader     = req.headers.get('x-cron-secret');
+      const cronTs         = req.headers.get('x-cron-ts');
+      const isProduction   = process.env.VERCEL_ENV === 'production';
+      const tsNum          = Number(cronTs ?? '');
+      const tsValid        = !isNaN(tsNum) && Math.abs(Math.floor(Date.now() / 1000) - tsNum) <= 300;
+      const isCron = !isProduction && cronSecret && cronHeader === cronSecret && tsValid;
 
       if (!isCron) {
         // Creator path -- fully handled here, returns early
@@ -148,30 +142,40 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, count: emails.length });
       }
       // Cron path falls through to switch/send below
-    } else if (type === 'confirmation' || type === 'course-result') {
-      // Test mode: single email + no responseId -> creator-initiated test send
+    } else if (type === 'confirmation') {
+      // Confirmation emails are now sent server-side inside /api/event-register.
+      // Test mode only is still supported here (creator previewing template).
       if (typeof to === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim()) && !data?.responseId) {
-        const auth = req.headers.get('authorization') ?? '';
-        const jwt = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-        if (!jwt) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        if (!allowTestEmailSend(jwt)) {
-          return NextResponse.json(
-            { error: 'Test email rate limit reached. Maximum 5 test sends per hour.' },
-            { status: 429 }
-          );
-        }
-        const subject = type === 'confirmation'
-          ? `You're registered: ${data?.eventTitle || 'Event'}`
-          : `Your result: ${data?.courseTitle || 'Course'}`;
-        const html = type === 'confirmation' ? confirmationEmail(data) : courseResultEmail(data);
-        await resend.emails.send({ from: FROM, to: to.trim(), subject, html });
+        if (!await getCreatorId(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const html = confirmationEmail(data);
+        await resend.emails.send({ from: FROM, to: to.trim(), subject: `You're registered: ${data?.eventTitle || 'Event'}`, html });
         return NextResponse.json({ success: true, test: true });
       }
-      // Verify: response exists, belongs to this form, and stored email matches `to`
-      if (!data?.formId || !data?.responseId || !to) {
-        return NextResponse.json({ error: 'formId, responseId and to are required' }, { status: 400 });
+      // Production sends are handled in /api/event-register -- reject anything else.
+      return NextResponse.json({ error: 'Confirmation emails are sent server-side on registration' }, { status: 400 });
+
+    } else if (type === 'course-result') {
+      // Test mode: single email + no responseId -> creator-initiated test send
+      if (typeof to === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim()) && !data?.responseId) {
+        if (!await getCreatorId(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const html = courseResultEmail(data);
+        await resend.emails.send({ from: FROM, to: to.trim(), subject: `Your result: ${data?.courseTitle || 'Course'}`, html });
+        return NextResponse.json({ success: true, test: true });
       }
+
+      // Production path: caller must be authenticated and their email must match
+      // the address stored in the response row -- identity derived from JWT, not body.
+      const callerUser = await getAuthUser(req);
+      if (!callerUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+      if (!data?.formId || !data?.responseId) {
+        return NextResponse.json({ error: 'formId and responseId are required' }, { status: 400 });
+      }
+
       const supabase = getAdminSupabase();
+      const callerEmail = callerUser.email?.trim().toLowerCase() ?? '';
+      if (!callerEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
       const { data: response } = await supabase
         .from('responses')
         .select('data')
@@ -181,10 +185,10 @@ export async function POST(req: NextRequest) {
       if (!response) {
         return NextResponse.json({ error: 'Response not found' }, { status: 404 });
       }
+
       const storedEmail = String(response.data?.email ?? '').trim().toLowerCase();
-      const requestedEmail = String(typeof to === 'string' ? to : '').trim().toLowerCase();
-      if (!storedEmail || storedEmail !== requestedEmail) {
-        return NextResponse.json({ error: 'Email mismatch' }, { status: 403 });
+      if (!storedEmail || storedEmail !== callerEmail) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
       // Idempotency: don't resend if already sent for this response + type
@@ -192,7 +196,7 @@ export async function POST(req: NextRequest) {
         .from('sent_emails')
         .select('id')
         .eq('response_id', data.responseId)
-        .eq('type', type)
+        .eq('type', 'course-result')
         .maybeSingle();
       if (alreadySent) return NextResponse.json({ success: true, duplicate: true });
     }

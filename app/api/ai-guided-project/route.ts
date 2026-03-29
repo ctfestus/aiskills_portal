@@ -87,26 +87,35 @@ export async function POST(req: NextRequest) {
       const roleHint      = clamp(body.role, 100);
       const focusTopic    = clamp(body.focusTopic, 200);
       const toolsRaw      = clamp(body.tools, 300);
-      const customPrompt  = clamp(body.customPrompt, 1000);
+      const companyName   = clamp(body.companyName, 100);
+      const scenario      = clamp(body.scenario, 1000);
+      const customPrompt  = clamp(body.customPrompt, 500);
       const context       = INDUSTRY_CONTEXT[industry] || industry;
 
-      // Use instructor-specified tools if provided, otherwise fall back to industry defaults
       const specifiedTools = toolsRaw
         ? toolsRaw.split(',').map((t: string) => t.trim()).filter(Boolean)
         : INDUSTRY_TOOLS[industry] || ['SQL', 'Python', 'Excel'];
       const toolsList = specifiedTools.join(', ');
 
-      const rolePhrase         = roleHint || 'Data Analyst';
-      const focusPhrase        = focusTopic ? `\nFOCUS AREA: ${focusTopic}` : '';
-      const customPromptPhrase = customPrompt ? `\n\n== INSTRUCTOR CUSTOM INSTRUCTIONS (highest priority -- follow exactly) ==\n${customPrompt}` : '';
-      const toolsEnforcement   = toolsRaw
-        ? `\nCRITICAL -- TOOLS CONSTRAINT: You MUST use ONLY these tools: ${toolsList}. Do NOT mention, reference, or suggest any other tool anywhere in the project -- not in lesson bodies, requirements, outcomes, or the tools list. Every task and deliverable must be completable using only: ${toolsList}.`
+      const rolePhrase     = roleHint || 'Data Analyst';
+      const focusPhrase    = focusTopic ? `\nFOCUS AREA: ${focusTopic}` : '';
+      const toolsEnforcement = toolsRaw
+        ? `\nCRITICAL -- TOOLS CONSTRAINT: You MUST use ONLY these tools: ${toolsList}. Do NOT mention any other tool anywhere.`
         : `\nTools to use: ${toolsList}`;
+
+      // Build company block -- explicit fields take priority over free-text
+      const companyBlock = companyName || scenario
+        ? `\n\n== INSTRUCTOR-DEFINED COMPANY (USE EXACTLY AS SPECIFIED -- DO NOT INVENT A DIFFERENT COMPANY) ==
+${companyName ? `COMPANY NAME: ${companyName}` : ''}
+${scenario ? `SCENARIO: ${scenario}` : ''}
+These details are fixed. Build the entire project around this company and scenario.`
+        : '';
+      const extraInstructions = customPrompt ? `\n\nADDITIONAL INSTRUCTIONS: ${customPrompt}` : '';
 
       const prompt = `
 You are designing a hands-on virtual work experience project (like Forage) for a ${difficulty}-level ${rolePhrase} in the ${industry} industry.
 
-INDUSTRY CONTEXT: ${context}${focusPhrase}${toolsEnforcement}${customPromptPhrase}
+INDUSTRY CONTEXT: ${context}${focusPhrase}${toolsEnforcement}${companyBlock}${extraInstructions}
 
 == CONTENT RULES ==
 
@@ -154,15 +163,17 @@ Generate:
       // -- Pass 1: company + dataset ---
       const pass1Prompt = `
 You are generating a virtual work experience project for a ${difficulty}-level ${rolePhrase} in the ${industry} industry.
-${toolsEnforcement}
+${toolsEnforcement}${companyBlock}${extraInstructions}
 
-Create a fictional but realistic African company and a dataset the student will analyse.
+${companyName || scenario
+  ? `Build the company details using EXACTLY the name and scenario provided above. Do NOT invent a different company.`
+  : `Create a fictional but realistic African company and a dataset the student will analyse.`}
 
 COMPANY:
-- name: memorable fictional African company
-- role: job title (e.g. "Data Analyst")
+- name: ${companyName ? `MUST be "${companyName}"` : 'memorable fictional African company'}
+- role: job title (e.g. "${rolePhrase}")
 - tagline: one punchy sentence about the project
-- background: EXACTLY 2-3 sentences (HTML <p> only). State: who they joined and as what, the company's core business + a specific real-sounding problem with a number, and their mission/deliverable. No email format.
+- background: EXACTLY 2-3 sentences (HTML <p> only). ${scenario ? `Base this on the scenario provided above.` : `State: who they joined and as what, the company's core business + a specific real-sounding problem with a number, and their mission/deliverable.`} No email format.
 - description: 1 sentence (HTML <p>) summarising the project
 - managerName: e.g. "Amara Diallo", managerTitle: e.g. "Head of Analytics"
 - duration: e.g. "4-6 hours"
@@ -299,7 +310,9 @@ Requirement type: always "mcq".
       const roleHint      = clamp(body.role, 100);
       const focusTopic    = clamp(body.focusTopic, 200);
       const toolsRaw      = clamp(body.tools, 300);
-      const customPrompt  = clamp(body.customPrompt, 1000);
+      const companyName   = clamp(body.companyName, 100);
+      const scenario      = clamp(body.scenario, 1000);
+      const customPrompt  = clamp(body.customPrompt, 500);
       const csvContent    = String(body.csvContent || '').slice(0, 40000);
       const filename      = clamp(body.filename, 100) || 'dataset.csv';
       const context       = INDUSTRY_CONTEXT[industry] || industry;
@@ -309,20 +322,27 @@ Requirement type: always "mcq".
       const specifiedTools = toolsRaw
         ? toolsRaw.split(',').map((t: string) => t.trim()).filter(Boolean)
         : INDUSTRY_TOOLS[industry] || ['SQL', 'Python', 'Excel'];
-      const toolsList          = specifiedTools.join(', ');
-      const rolePhrase         = roleHint || 'Data Analyst';
-      const focusPhrase        = focusTopic ? `\nFOCUS AREA: ${focusTopic}` : '';
-      const customPromptPhrase = customPrompt ? `\n\n== INSTRUCTOR CUSTOM INSTRUCTIONS (highest priority -- follow exactly) ==\n${customPrompt}` : '';
-      const toolsEnforcement   = toolsRaw
+      const toolsList      = specifiedTools.join(', ');
+      const rolePhrase     = roleHint || 'Data Analyst';
+      const focusPhrase    = focusTopic ? `\nFOCUS AREA: ${focusTopic}` : '';
+      const toolsEnforcement = toolsRaw
         ? `\nCRITICAL -- TOOLS CONSTRAINT: You MUST use ONLY these tools: ${toolsList}. Do NOT mention any other tool.`
         : `\nTools to use: ${toolsList}`;
+
+      const companyBlock = companyName || scenario
+        ? `\n\n== INSTRUCTOR-DEFINED COMPANY (USE EXACTLY AS SPECIFIED -- DO NOT INVENT A DIFFERENT COMPANY) ==
+${companyName ? `COMPANY NAME: ${companyName}` : ''}
+${scenario ? `SCENARIO: ${scenario}` : ''}
+These details are fixed. Build the entire project around this company and scenario.`
+        : '';
+      const extraInstructions = customPrompt ? `\n\nADDITIONAL INSTRUCTIONS: ${customPrompt}` : '';
 
       // Pass 1: company metadata only (no dataset generation -- use the provided one)
       const pass1Prompt = `
 You are generating a virtual work experience project for a ${difficulty}-level ${rolePhrase} in the ${industry} industry.
-INDUSTRY CONTEXT: ${context}${focusPhrase}${toolsEnforcement}${customPromptPhrase}
+INDUSTRY CONTEXT: ${context}${focusPhrase}${toolsEnforcement}${companyBlock}${extraInstructions}
 
-The instructor has provided a real dataset (see below). Create a fictional but realistic African company whose business problem is reflected in this data.
+The instructor has provided a real dataset (see below). ${companyName || scenario ? `Use EXACTLY the company name and scenario defined above.` : `Create a fictional but realistic African company whose business problem is reflected in this data.`}
 
 DATASET PROVIDED:
 \`\`\`csv
@@ -331,10 +351,10 @@ ${csvContent.split('\n').slice(0, 5).join('\n')}
 \`\`\`
 
 COMPANY:
-- name: memorable fictional African company
+- name: ${companyName ? `MUST be "${companyName}"` : 'memorable fictional African company'}
 - role: job title (e.g. "${rolePhrase}")
 - tagline: one punchy sentence about the project
-- background: EXACTLY 2-3 sentences (HTML <p> only). State: who they joined and as what, the company's core business + a specific real-sounding problem with a number, and their mission/deliverable. No email format.
+- background: EXACTLY 2-3 sentences (HTML <p> only). ${scenario ? `Base this on the scenario provided above.` : `State: who they joined and as what, the company's core business + a specific real-sounding problem with a number, and their mission/deliverable.`} No email format.
 - description: 1 sentence (HTML <p>) summarising the project
 - managerName: e.g. "Amara Diallo", managerTitle: e.g. "Head of Analytics"
 - duration: e.g. "4-6 hours"

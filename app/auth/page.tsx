@@ -238,7 +238,7 @@ export default function AuthPage() {
 
             {/* Logo */}
             <div className="flex items-center gap-2.5">
-              <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" className="h-9 w-auto" />
+              <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-9 w-auto" />
               <span className="text-white font-bold text-xl tracking-tight">AI Skills Africa</span>
             </div>
 

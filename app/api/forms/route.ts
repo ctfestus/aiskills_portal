@@ -19,9 +19,16 @@ export async function POST(req: NextRequest) {
   }
   const jwt = authHeader.slice(7);
 
-  const { data: { user }, error: authError } = await adminClient().auth.getUser(jwt);
+  const supabase = adminClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // -- RBAC: only instructors and admins can create forms ---
+  const { data: student } = await supabase.from('students').select('role').eq('id', user.id).single();
+  if (!student || !['instructor', 'admin'].includes(student.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // -- Parse body ---
@@ -51,7 +58,7 @@ export async function POST(req: NextRequest) {
       ? { ...config, deadline_days: Number(deadline_days) }
       : config;
 
-    const { data, error } = await adminClient()
+    const { data, error } = await supabase
       .from('forms')
       .insert({ user_id: user.id, title, description, config: finalConfig, slug, content_type, cohort_ids: cohort_ids ?? [] })
       .select('id, slug, content_type')
@@ -61,7 +68,7 @@ export async function POST(req: NextRequest) {
       // Upsert cohort_assignments (preserves original assigned_at on re-save)
       if (cohort_ids?.length) {
         const rows = (cohort_ids as string[]).map(cohortId => ({ form_id: data.id, cohort_id: cohortId }));
-        adminClient()
+        supabase
           .from('cohort_assignments')
           .upsert(rows, { onConflict: 'form_id,cohort_id', ignoreDuplicates: true })
           .then();

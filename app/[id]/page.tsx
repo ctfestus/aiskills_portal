@@ -258,12 +258,16 @@ export default function PublicFormPage() {
   const { id } = useParams();
   const [form, setForm] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [systemDark, setSystemDark] = useState(false);
-  const [studentTheme, setStudentTheme] = useState<'light' | 'dark'>('light');
+  const [systemDark, setSystemDark] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+  const [studentTheme, setStudentTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') return 'light';
+    return localStorage.getItem('ff-theme') === 'dark' ? 'dark' : 'light';
+  });
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    setSystemDark(mq.matches);
     const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
@@ -271,8 +275,6 @@ export default function PublicFormPage() {
 
   // Read student's saved theme preference (used for virtual experiences & course overview)
   useEffect(() => {
-    const stored = localStorage.getItem('ff-theme') as 'light' | 'dark' | null;
-    setStudentTheme(stored === 'dark' ? 'dark' : 'light');
     const handler = () => {
       const v = localStorage.getItem('ff-theme') as 'light' | 'dark' | null;
       setStudentTheme(v === 'dark' ? 'dark' : 'light');
@@ -305,6 +307,7 @@ export default function PublicFormPage() {
   const [projectStarted,      setProjectStarted]      = useState(false);
   const [projectStudentName,  setProjectStudentName]  = useState('');
   const [projectStudentEmail, setProjectStudentEmail] = useState('');
+  const [projectSessionToken, setProjectSessionToken] = useState('');
   const [projectProgress,     setProjectProgress]     = useState<Record<string,any>>({});
   const [projectInitModId,    setProjectInitModId]    = useState('');
   const [projectInitLesId,    setProjectInitLesId]    = useState('');
@@ -485,40 +488,16 @@ export default function PublicFormPage() {
       const validEmail = recipientEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail);
 
       if (cfg.eventDetails?.isEvent) {
-        // Event registration confirmation
-        if (validEmail) {
-          fetch('/api/email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'confirmation',
-              to: recipientEmail,
-              data: {
-                formId: form.id,
-                responseId,
-                name: data.name || data.full_name,
-                eventTitle: cfg.title,
-                eventDate: cfg.eventDetails?.date,
-                eventTime: cfg.eventDetails?.time,
-                eventLocation: cfg.eventDetails?.eventType === 'virtual' ? undefined : cfg.eventDetails?.location,
-                eventTimezone: cfg.eventDetails?.timezone,
-                meetingLink: cfg.eventDetails?.eventType === 'virtual' ? cfg.eventDetails?.meetingLink : undefined,
-                eventType: cfg.eventDetails?.eventType,
-                customTitle: cfg.postSubmission?.noticeTitle,
-                customBody: cfg.postSubmission?.noticeBody,
-                bannerUrl: eventBannerUrl,
-                formUrl,
-              },
-            }),
-          }).catch(() => {});
-        }
+        // Confirmation email is now sent server-side inside /api/event-register.
+        // Nothing to do here.
       } else if (cfg.isCourse && data.score !== undefined) {
         // Issue certificate first (if passed), then send one email with cert link
         let certUrl: string | undefined;
 
+        const { data: { session: courseSession } } = await supabase.auth.getSession();
+
         if (data.passed === true && data.name) {
           try {
-            const { data: { session: courseSession } } = await supabase.auth.getSession();
             const certRes = await fetch('/api/course', {
               method: 'POST',
               headers: {
@@ -540,10 +519,13 @@ export default function PublicFormPage() {
           } catch { /* non-blocking */ }
         }
 
-        if (validEmail) {
+        if (validEmail && courseSession?.access_token) {
           fetch('/api/email', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${courseSession.access_token}`,
+            },
             body: JSON.stringify({
               type: 'course-result',
               to: recipientEmail,
@@ -645,12 +627,15 @@ export default function PublicFormPage() {
     const handleStartProject = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      const { data: { session } } = await supabase.auth.getSession();
       const { data: student } = await supabase.from('students').select('full_name, email').eq('id', user.id).single();
       const name  = student?.full_name || user.user_metadata?.full_name || '';
       const email = student?.email || user.email || '';
       // Restore any saved progress
       try {
-        const r = await fetch(`/api/guided-project-progress?formId=${form.id}&email=${encodeURIComponent(email)}`);
+        const r = await fetch(`/api/guided-project-progress?formId=${form.id}&email=${encodeURIComponent(email)}`, {
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+        });
         const { attempt } = await r.json();
         if (attempt) {
           setProjectProgress(attempt.progress || {});
@@ -660,6 +645,7 @@ export default function PublicFormPage() {
       } catch {}
       setProjectStudentName(name);
       setProjectStudentEmail(email);
+      setProjectSessionToken(session?.access_token ?? '');
       setProjectStarted(true);
     };
 
@@ -671,6 +657,7 @@ export default function PublicFormPage() {
           config={config}
           studentName={projectStudentName}
           studentEmail={projectStudentEmail}
+          sessionToken={projectSessionToken}
           initialProgress={projectProgress}
           initialModuleId={projectInitModId}
           initialLessonId={projectInitLesId}
@@ -699,13 +686,13 @@ export default function PublicFormPage() {
       <div style={{ minHeight: '100vh', background: gp.bg, color: gp.title, fontFamily: 'var(--font-sans), Inter, sans-serif' }}>
 
         {/* -- Sticky nav -- */}
-        <nav style={{ position: 'sticky', top: 0, zIndex: 30, backdropFilter: 'blur(14px)', background: isLight ? 'rgba(245,245,243,0.88)' : 'rgba(13,13,13,0.88)', borderBottom: `1px solid ${gp.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 56 }}>
+        <nav style={{ position: 'sticky', top: 0, zIndex: 30, backdropFilter: 'blur(14px)', background: isLight ? '#0e09dd' : 'rgba(13,13,13,0.88)', borderBottom: `1px solid ${isLight ? '#0b07b3' : gp.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 56 }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" style={{ height: 28, width: 'auto' }} />
+            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" style={{ height: 28, width: 'auto' }} />
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: `${indColor}18`, color: indColor, fontWeight: 700, textTransform: 'capitalize', letterSpacing: '0.02em' }}>{config.industry}</span>
-            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: gp.divider, color: gp.muted, fontWeight: 600, textTransform: 'capitalize' }}>{config.difficulty}</span>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: isLight ? 'rgba(255,255,255,0.15)' : `${indColor}18`, color: isLight ? '#fff' : indColor, fontWeight: 700, textTransform: 'capitalize', letterSpacing: '0.02em' }}>{config.industry}</span>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: isLight ? 'rgba(255,255,255,0.1)' : gp.divider, color: isLight ? 'rgba(255,255,255,0.8)' : gp.muted, fontWeight: 600, textTransform: 'capitalize' }}>{config.difficulty}</span>
           </div>
         </nav>
 
@@ -910,7 +897,7 @@ export default function PublicFormPage() {
         {/* Navbar */}
         <nav style={{ position: 'sticky', top: 0, zIndex: 30, background: t.nav, borderBottom: `1px solid ${t.navBorder}`, backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 56, transition: 'background 0.3s' }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" style={{ height: 32, width: 'auto' }} />
+            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" style={{ height: 32, width: 'auto' }} />
             <span style={{ fontSize: 14, fontWeight: 700, color: t.logoText, transition: 'color 0.3s' }}>AI Skills Africa</span>
           </Link>
           <button onClick={() => { navigator.clipboard?.writeText(pageUrl); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: t.navText, background: 'none', border: 'none', cursor: 'pointer' }}>
@@ -1158,7 +1145,7 @@ export default function PublicFormPage() {
       {/* Navbar */}
       <nav style={{ position: 'sticky', top: 0, zIndex: 30, background: t.nav, borderBottom: `1px solid ${t.navBorder}`, backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 56, transition: 'background 0.3s' }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-          <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" style={{ height: 32, width: 'auto' }} />
+          <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" style={{ height: 32, width: 'auto' }} />
         </Link>
         <button onClick={() => { navigator.clipboard?.writeText(pageUrl); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: t.navText, background: 'none', border: 'none', cursor: 'pointer' }}>
           {linkCopied ? <Check style={{ width: 16, height: 16, color: '#006128' }}/> : <Copy style={{ width: 16, height: 16 }}/>}

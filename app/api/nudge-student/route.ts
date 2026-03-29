@@ -19,7 +19,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: { user }, error: authError } = await adminClient().auth.getUser(authHeader.slice(7));
+  const supabase = adminClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -29,9 +30,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { studentEmail, studentName, formTitle, formId, contentType, status } = body;
+  const { studentEmail, studentName, formId, status } = body;
 
-  if (!studentEmail || !formTitle || !formId || !status) {
+  if (!studentEmail || !formId || !status) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
@@ -39,16 +40,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'status must be not_started or stalled' }, { status: 400 });
   }
 
+  // Verify the caller owns the form
+  const { data: form } = await supabase
+    .from('forms')
+    .select('user_id, title, slug, content_type')
+    .eq('id', formId)
+    .single();
+
+  if (!form) return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+
+  const { data: student } = await supabase.from('students').select('role').eq('id', user.id).single();
+  const isAdmin = student?.role === 'admin';
+
+  if (form.user_id !== user.id && !isAdmin) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  // All email content derived from the server-side form record -- nothing trusted from body
+  const formTitle   = form.title || '';
+  const contentType = form.content_type || 'course';
+  const formUrl     = `${APP_URL}/${form.slug || formId}`;
+
   const subject = status === 'not_started'
     ? `Your learning journey is waiting, ${studentName || 'there'}!`
-    : `Don't stop now -- you started something great, ${studentName || 'there'}!`;
+    : `Do not stop now. You started something great, ${studentName || 'there'}!`;
 
   const html = nudgeEmail({
     name: studentName || 'there',
     contentTitle: formTitle,
-    contentType: contentType ?? 'course',
+    contentType,
     status,
-    formUrl: `${APP_URL}/${formId}`,
+    formUrl,
   });
 
   try {

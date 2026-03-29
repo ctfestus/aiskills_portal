@@ -380,3 +380,10 @@ body {
 [data-theme="dark"] .rich-content h3      { color: #f4f4f5; }
 [data-theme="dark"] .rich-content a       { color: #ADEE66; }
 [data-theme="dark"] .rich-content blockquote { color: #a1a1aa; }
+
+/* Custom Student Dashboard CTA Hover */
+[data-theme="light"] .dashboard-cta:hover {
+  background-color: #ff9933 !important;
+  color: white !important;
+  opacity: 1 !important;
+}

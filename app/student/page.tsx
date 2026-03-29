@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   BookOpen, CalendarDays, ClipboardList, Users, Megaphone,
   FolderOpen, Calendar, Trophy, Award, ChevronDown, LogOut,
-  Settings, User, ShieldCheck, Sun, Moon, Menu, X,
+  Settings, User, Sun, Moon, Menu, X,
   CheckCircle, Clock, AlertCircle, Star, ExternalLink,
   GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
   Play, Lock, FileText, BarChart3, Bell, Plus, ArrowLeft, Upload, Video,
@@ -28,9 +28,9 @@ const LIGHT_C = {
   cardBorder:  'rgba(0,0,0,0.08)',
   cardShadow:  '0 1px 3px rgba(0,0,0,0.06)',
   hoverShadow: '0 8px 24px rgba(0,0,0,0.10)',
-  green:       '#006128',
-  lime:        '#ADEE66',
-  cta:         '#006128',
+  green:       '#0e09dd',
+  lime:        '#e0e0f5', // very light blue tint
+  cta:         '#0e09dd',
   ctaText:     'white',
   text:        '#111',
   muted:       '#555',
@@ -39,7 +39,7 @@ const LIGHT_C = {
   pill:        '#F4F4F4',
   input:       '#F7F7F7',
   skeleton:    '#EBEBEB',
-  thumbBg:     '#e8f5ee',
+  thumbBg:     '#e6e5fb', // slight blue bg
   overlayBtn:  'rgba(255,255,255,0.92)',
   signOutHover:'rgba(239,68,68,0.08)',
 };
@@ -51,10 +51,10 @@ const DARK_C = {
   cardBorder:  'rgba(255,255,255,0.07)',
   cardShadow:  '0 1px 4px rgba(0,0,0,0.40)',
   hoverShadow: '0 8px 24px rgba(0,0,0,0.50)',
-  green:       '#ADEE66',
-  lime:        '#ADEE66',
-  cta:         '#ADEE66',
-  ctaText:     '#111',
+  green:       '#3E93FF',
+  lime:        'rgba(62, 147, 255, 0.15)',
+  cta:         '#3E93FF',
+  ctaText:     'white',
   text:        '#f0f0f0',
   muted:       '#aaa',
   faint:       '#555',
@@ -62,7 +62,7 @@ const DARK_C = {
   pill:        '#242424',
   input:       '#1a1a1a',
   skeleton:    '#2a2a2a',
-  thumbBg:     '#1a2a1e',
+  thumbBg:     '#16152a',
   overlayBtn:  'rgba(0,0,0,0.65)',
   signOutHover:'rgba(239,68,68,0.10)',
 };
@@ -114,13 +114,6 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
                 : <p className="text-xs mt-0.5 truncate" style={{ color: C.faint }}>{user?.email}</p>}
             </div>
             <div className="py-1.5">
-              {profile?.role === 'admin' && (
-                <Link href="/admin" onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:opacity-70"
-                  style={{ color: C.green }}>
-                  <ShieldCheck className="w-4 h-4"/> Admin Console
-                </Link>
-              )}
               {(profile?.role === 'instructor' || profile?.role === 'admin') && (
                 <Link href="/dashboard" onClick={() => setOpen(false)}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:opacity-70"
@@ -128,11 +121,17 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
                   <BarChart3 className="w-4 h-4" style={{ color: C.faint }}/> Instructor dashboard
                 </Link>
               )}
-              {username && (
+              {username ? (
                 <Link href={`/u/${username}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:opacity-70"
                   style={{ color: C.muted }}>
                   <User className="w-4 h-4" style={{ color: C.faint }}/> View profile
+                </Link>
+              ) : (
+                <Link href="/settings" onClick={() => setOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:opacity-70"
+                  style={{ color: C.muted }}>
+                  <User className="w-4 h-4" style={{ color: C.faint }}/> My Profile
                 </Link>
               )}
               <Link href="/settings" onClick={() => setOpen(false)}
@@ -241,8 +240,10 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
   const actionHref = completed && passed && certId ? `/certificate/${certId}` : courseUrl;
   const actionLabel = completed ? (passed && certId ? 'View Certificate' : 'Retake') : currentIdx > 0 ? 'Continue' : 'Start';
 
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
   const daysLeft = deadline && !completed
-    ? Math.ceil((deadline.getTime() - Date.now()) / 86400000)
+    ? Math.ceil((deadline.getTime() - nowMs) / 86400000)
     : null;
   const deadlineLabel = daysLeft === null ? null
     : daysLeft < 0  ? 'Overdue'
@@ -321,7 +322,7 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
             )}
             {/* Primary action */}
             <a href={actionHref} target="_blank" rel="noreferrer"
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70 dashboard-cta"
               style={{
                 background: completed ? (passed && certId ? C.green : C.pill) : C.cta,
                 color: completed ? (passed && certId ? 'white' : C.muted) : C.ctaText,
@@ -497,7 +498,7 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
             </a>
           )}
           <a href={actionHref} target="_blank" rel="noreferrer"
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80 dashboard-cta"
             style={{ background: completed && passed && certId ? C.green : C.cta, color: C.ctaText }}>
             {completed && passed && certId ? <Award className="w-4 h-4"/> : <Play className="w-4 h-4"/>}
             {actionLabel}
@@ -618,8 +619,8 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
 
   if (!courses.length) return (
     <EmptyState icon={BookOpen} title="No courses yet"
-      body="You haven't started any courses. Browse available courses to get started."
-      action={<Link href="/" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold hover:opacity-80"
+      body="You have not started any courses. Browse available courses to get started."
+      action={<Link href="/" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold hover:opacity-80 dashboard-cta"
         style={{ background: C.cta, color: C.ctaText }}><BookOpen className="w-4 h-4"/> Browse courses</Link>}/>
   );
 
@@ -848,7 +849,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
               </span>
               {isRegistered && (
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
-                  style={{ background: 'rgba(0,97,40,0.08)', color: C.green }}>
+                  style={{ background: 'rgba(14,9,221,0.08)', color: C.green }}>
                   ✓ Registered
                 </span>
               )}
@@ -889,7 +890,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
             {/* Join button */}
             {isRegistered && item.meetingUrl && (
               <a href={item.meetingUrl} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg w-fit"
+                className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg w-fit dashboard-cta"
                 style={{ background: C.cta, color: C.ctaText, textDecoration: 'none' }}
                 onClick={e => e.stopPropagation()}>
                 <Video className="w-3 h-3"/> Join
@@ -1273,7 +1274,7 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
                 Save Draft
               </button>
               <button onClick={() => handleSubmit(false)} disabled={submitting || uploading || !hasContent}
-                className="px-5 py-2 rounded-xl text-sm font-semibold"
+                className="px-5 py-2 rounded-xl text-sm font-semibold dashboard-cta"
                 style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: (submitting || uploading || !hasContent) ? 'not-allowed' : 'pointer', opacity: (submitting || uploading || !hasContent) ? 0.6 : 1 }}>
                 {submitting ? 'Submitting...' : uploading ? 'Uploading...' : isSubmitted ? 'Resubmit' : 'Submit'}
               </button>
@@ -1336,7 +1337,7 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
   if (loading) return <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{[0,1,2,3].map(i => <div key={i}>{skCard}</div>)}</div>;
 
   if (!items.length) return (
-    <EmptyState icon={ClipboardList} title="No assignments" body="You don't have any assignments assigned yet."/>
+    <EmptyState icon={ClipboardList} title="No assignments" body="You do not have any assignments assigned yet."/>
   );
 
   const AssignmentCard = ({ item, i }: { item: any; i: number }) => (
@@ -1808,8 +1809,10 @@ function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
   const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
 
   // Deadline display
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
   const daysLeft = deadline && !isCompleted
-    ? Math.ceil((deadline.getTime() - Date.now()) / 86400000)
+    ? Math.ceil((deadline.getTime() - nowMs) / 86400000)
     : null;
   const deadlineLabel = daysLeft === null ? null
     : daysLeft < 0  ? 'Overdue'
@@ -2269,7 +2272,7 @@ function ProjectsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   );
 
   if (!items.length) return (
-    <EmptyState icon={FolderOpen} title="No projects" body="You don't have any projects assigned yet."/>
+    <EmptyState icon={FolderOpen} title="No projects" body="You do not have any projects assigned yet."/>
   );
 
   const ProjectCard = ({ item, i }: { item: any; i: number }) => (
@@ -2665,7 +2668,7 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
   }, [userEmail, refreshKey]);
 
   // Avatar colour derived from name
-  const myEntry = rankings.find(r => r.email === userEmail);
+  const myEntry = rankings.find(r => r.isMe);
   const myRank  = myEntry?.rank ?? null;
   const myXP    = myEntry?.xp ?? 0;
   const maxXP   = rankings[0]?.xp ?? 1;
@@ -2693,7 +2696,7 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
 
   if (!cohort) return (
     <EmptyState icon={Users} title="No cohort assigned"
-      body="You haven't been assigned to a cohort yet. Contact your instructor."/>
+      body="You have not been assigned to a cohort yet. Contact your instructor."/>
   );
 
   if (!rankings.length) return (
@@ -2773,11 +2776,11 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
 
         {/* Rows */}
         {rankings.map((r, idx) => {
-          const isMe  = r.email === userEmail;
+          const isMe  = r.isMe === true;
           const pct   = maxXP > 0 ? Math.max((r.xp / maxXP) * 100, r.xp > 0 ? 2 : 0) : 0;
           const barColor = r.rank === 1 ? '#f59e0b' : r.rank === 2 ? '#9ca3af' : r.rank === 3 ? '#cd7c2f' : (isDark ? '#4f6ef7' : '#6366f1');
           return (
-            <div key={r.email}
+            <div key={r.id ?? r.rank}
               style={{
                 borderBottom: idx < rankings.length - 1 ? `1px solid ${C.divider}` : 'none',
                 background: isMe
@@ -2867,14 +2870,14 @@ function CertificatesSection({ userEmail, userName, C }: { userEmail: string; us
   if (!certs.length) return (
     <EmptyState icon={Award} title="No certificates yet"
       body="Complete a course with a passing score to earn your certificate."
-      action={<Link href="/" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold hover:opacity-80"
+      action={<Link href="/" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold hover:opacity-80 dashboard-cta"
         style={{ background: C.cta, color: C.ctaText }}><BookOpen className="w-4 h-4"/> Browse courses</Link>}/>
   );
 
   return (
     <div className="space-y-4">
       <p className="text-sm" style={{ color: C.faint }}>
-        You've earned <span className="font-semibold" style={{ color: C.text }}>{certs.length}</span> certificate{certs.length !== 1 ? 's' : ''}.
+        You have earned <span className="font-semibold" style={{ color: C.text }}>{certs.length}</span> certificate{certs.length !== 1 ? 's' : ''}.
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {certs.map((cert, i) => (
@@ -2898,7 +2901,7 @@ function CertificatesSection({ userEmail, userName, C }: { userEmail: string; us
                 Issued {new Date(cert.issued_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
               <Link href={`/certificate/${cert.id}`}
-                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80 dashboard-cta"
                 style={{ background: C.cta, color: C.ctaText }}>
                 <Award className="w-4 h-4"/> View Certificate
               </Link>
@@ -2912,6 +2915,7 @@ function CertificatesSection({ userEmail, userName, C }: { userEmail: string; us
 
 // --- Main dashboard ---
 export default function StudentDashboard() {
+  const [mounted, setMounted] = useState(false);
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
   const router = useRouter();
@@ -2923,6 +2927,7 @@ export default function StudentDashboard() {
   const [navCollapsed, setNavCollapsed] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const apply = () => {
       const hash = window.location.hash.replace('#', '') as SectionId;
       if (NAV_ITEMS.some(n => n.id === hash)) {
@@ -2945,7 +2950,7 @@ export default function StudentDashboard() {
   function goSection(id: SectionId) {
     setActiveSection(id);
     sessionStorage.setItem('student-section', id);
-    window.location.hash = id;
+    history.replaceState(null, '', `#${id}`);
   }
 
   useEffect(() => {
@@ -2959,15 +2964,11 @@ export default function StudentDashboard() {
       ]);
 
       if (!authUser) { router.replace('/auth'); return; }
-      if (profileData?.role === 'admin') { router.replace('/admin'); return; }
       if (profileData && !profileData.onboarding_completed) { router.replace('/onboarding'); return; }
 
       setUser(authUser);
       setProfile(profileData);
 
-      // Track last login time (fire-and-forget -- non-critical)
-      supabase.from('students').update({ last_login_at: new Date().toISOString() }).eq('id', authUser.id)
-        .then(({ error }) => { if (error) console.error('[last_login_at] update failed:', error.message); });
 
       setLoading(false);
     };
@@ -2982,6 +2983,12 @@ export default function StudentDashboard() {
   const userName = profile?.name || profile?.full_name || user?.email?.split('@')[0] || 'Student';
   const activeItem = NAV_ITEMS.find(n => n.id === activeSection)!;
 
+  if (!mounted) return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#F7F8F9' }}>
+      <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#0e09dd' }}/>
+    </div>
+  );
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: C.page }}>
       <Loader2 className="w-8 h-8 animate-spin" style={{ color: C.green }}/>
@@ -2992,31 +2999,27 @@ export default function StudentDashboard() {
     <div className="min-h-screen" style={{ background: C.page }}>
       {/* -- Top nav -- */}
       <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3 border-b backdrop-blur-md"
-        style={{ background: C.nav, borderColor: C.navBorder }}>
+        style={{ background: theme === 'dark' ? C.nav : '#0f0bd6', borderColor: theme === 'dark' ? C.navBorder : '#0f0bd6' }}>
         <div className="flex items-center gap-3">
           {/* Mobile menu toggle */}
           <button onClick={() => setSidebarOpen(o => !o)}
             className="p-2 rounded-xl lg:hidden transition-all hover:opacity-70"
-            style={{ background: C.pill }}>
-            <Menu className="w-4 h-4" style={{ color: C.text }}/>
+            style={{ background: theme === 'dark' ? C.pill : 'rgba(255,255,255,0.15)' }}>
+            <Menu className="w-4 h-4" style={{ color: theme === 'dark' ? C.text : 'white' }}/>
           </button>
           {/* Logo / brand */}
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl flex items-center justify-center"
-              style={{ background: C.lime }}>
-              <GraduationCap className="w-4 h-4" style={{ color: C.green }}/>
-            </div>
-            <span className="text-sm font-bold hidden sm:inline" style={{ color: C.text }}>AI Skills Africa</span>
+          <Link href="/" className="flex items-center block">
+            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="Logo" className="h-8 w-auto" />
           </Link>
         </div>
         <div className="flex items-center gap-2">
-          <NotificationBell/>
+          <NotificationBell color={theme === 'dark' ? undefined : 'white'}/>
           <button onClick={toggleTheme}
             className="p-2 rounded-xl transition-all hover:opacity-70"
-            style={{ background: C.pill }}>
+            style={{ background: theme === 'dark' ? C.pill : 'rgba(255,255,255,0.15)' }}>
             {theme === 'dark'
               ? <Sun className="w-4 h-4" style={{ color: C.text }}/>
-              : <Moon className="w-4 h-4" style={{ color: C.text }}/>}
+              : <Moon className="w-4 h-4" style={{ color: 'white' }}/>}
           </button>
           {user && <ProfileMenu user={user} profile={profile} onSignOut={signOut}/>}
         </div>
@@ -3041,18 +3044,18 @@ export default function StudentDashboard() {
               animate={{ width: navCollapsed ? 56 : 220 }}
               transition={{ duration: 0.2, ease: 'easeInOut' }}
               className={`fixed lg:static inset-y-0 left-0 z-40 lg:z-auto flex flex-col border-r overflow-hidden transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
-              style={{ background: C.nav, borderColor: C.navBorder, top: 57 }}>
+              style={{ background: theme === 'dark' ? '#1E1F26' : '#0e09dd', borderColor: C.navBorder, top: 57, color: 'white' }}>
               {/* Collapse toggle -- desktop only */}
               <div className="px-2 pt-2 pb-1 hidden lg:flex" style={{ justifyContent: navCollapsed ? 'center' : 'flex-end' }}>
                 <button
                   onClick={() => setNavCollapsed(o => !o)}
                   className="p-1.5 rounded-lg transition-all"
                   style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.pill; }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = theme === 'dark' ? C.lime : '#ff9933'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                   {navCollapsed
-                    ? <ChevronRight className="w-4 h-4" style={{ color: C.faint }}/>
-                    : <ChevronLeft className="w-4 h-4" style={{ color: C.faint }}/>}
+                    ? <ChevronRight className="w-4 h-4" style={{ color: theme === 'dark' ? '#A2AFBC' : 'rgba(255,255,255,0.8)' }}/>
+                    : <ChevronLeft className="w-4 h-4" style={{ color: theme === 'dark' ? '#A2AFBC' : 'rgba(255,255,255,0.8)' }}/>}
                 </button>
               </div>
 
@@ -3068,12 +3071,12 @@ export default function StudentDashboard() {
                       style={{
                         padding: navCollapsed ? '10px 0' : '10px 12px',
                         justifyContent: navCollapsed ? 'center' : 'flex-start',
-                        background: isActive ? C.lime : 'transparent',
-                        color: isActive ? '#0f2d0f' : C.muted,
+                        background: isActive ? (theme === 'dark' ? C.green : '#ff9933') : 'transparent',
+                        color: isActive ? 'white' : (theme === 'dark' ? '#A2AFBC' : 'white'),
                       }}
-                      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = C.pill; }}
+                      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = theme === 'dark' ? C.lime : '#ff9933'; }}
                       onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                      <item.Icon className="w-4 h-4 flex-shrink-0" style={{ color: isActive ? '#0f2d0f' : C.faint }}/>
+                      <item.Icon className="w-4 h-4 flex-shrink-0" style={{ color: isActive ? 'white' : (theme === 'dark' ? '#A2AFBC' : 'white') }}/>
                       {!navCollapsed && <span className="truncate">{item.label}</span>}
                     </button>
                   );
@@ -3085,10 +3088,10 @@ export default function StudentDashboard() {
                 {!navCollapsed && (
                   <Link href="/settings"
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
-                    style={{ color: C.muted }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.pill; }}
+                    style={{ color: theme === 'dark' ? '#A2AFBC' : 'white' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = theme === 'dark' ? C.lime : '#ff9933'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                    <Settings className="w-4 h-4 flex-shrink-0" style={{ color: C.faint }}/> Settings
+                    <Settings className="w-4 h-4 flex-shrink-0" style={{ color: theme === 'dark' ? '#A2AFBC' : 'rgba(255,255,255,0.8)' }}/> Settings
                   </Link>
                 )}
               </div>

@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
 
     const subject = completed.length > 0
       ? `You completed ${completed.length} item${completed.length > 1 ? 's' : ''} this week 🎓`
-      : `Your weekly learning update -- keep going!`;
+      : `Your weekly learning update. Keep going!`;
 
     const html = weeklyDigestEmail({
       name,

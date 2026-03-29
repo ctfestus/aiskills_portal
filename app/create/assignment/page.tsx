@@ -359,7 +359,7 @@ export default function CreateAssignmentPage() {
 
             {resources.length === 0 && (
               <p style={{ textAlign: 'center', color: C.faint, fontSize: 14, padding: '24px 0' }}>
-                No resources yet. Click "Add Resource" to attach links or files.
+                No resources yet. Use the Add Resource button to attach links or files.
               </p>
             )}
 

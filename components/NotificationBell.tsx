@@ -46,15 +46,6 @@ export default function NotificationBell() {
 
   const unread = notifs.filter(n => !n.read).length;
 
-  // -- Load user + initial notifications --
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session?.user) return;
-      setUserId(session.user.id);
-      fetchNotifs(session.user.id);
-    });
-  }, []);
-
   const fetchNotifs = useCallback(async (uid: string) => {
     const { data } = await supabase
       .from('notifications')
@@ -64,6 +55,19 @@ export default function NotificationBell() {
       .limit(30);
     if (data) setNotifs(data as Notification[]);
   }, []);
+
+  // -- Resolve the authenticated user once on mount --
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) setUserId(session.user.id);
+    });
+  }, []);
+
+  // -- Fetch notifications whenever the userId becomes known --
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (userId) fetchNotifs(userId);
+  }, [userId, fetchNotifs]);
 
   // -- Realtime subscription --
   useEffect(() => {

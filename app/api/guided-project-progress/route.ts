@@ -54,7 +54,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ attempts: attempts ?? [] });
   }
 
-  // Student view -- return their own attempt
+  // Student view -- caller must be authenticated and their email must match
+  const user = await getUser(req);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (user.email?.toLowerCase() !== email.toLowerCase().trim()) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   const { data: attempt } = await supabase
     .from('guided_project_attempts')
     .select('*')
@@ -117,10 +123,14 @@ export async function POST(req: NextRequest) {
 
   // -- Issue certificate --
   if (body.action === 'issue-certificate') {
-    const { formId, studentEmail, studentName } = body;
-    if (!formId || !studentEmail) return NextResponse.json({ error: 'formId and studentEmail required' }, { status: 400 });
+    const { formId, studentName } = body;
+    if (!formId) return NextResponse.json({ error: 'formId required' }, { status: 400 });
 
-    const email = String(studentEmail).toLowerCase().trim();
+    const certUser = await getUser(req);
+    if (!certUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Derive email from token -- never trust the request body for identity
+    const email = certUser.email!.toLowerCase().trim();
 
     // Verify the attempt is completed
     const { data: attempt } = await supabase
@@ -156,13 +166,15 @@ export async function POST(req: NextRequest) {
   }
 
   // -- Student progress save --
-  const { formId, studentEmail, studentName, progress, currentModuleId, currentLessonId, completedAt } = body;
+  const { formId, studentName, progress, currentModuleId, currentLessonId, completedAt } = body;
 
-  if (!formId || !studentEmail) {
-    return NextResponse.json({ error: 'formId and studentEmail required' }, { status: 400 });
-  }
+  if (!formId) return NextResponse.json({ error: 'formId required' }, { status: 400 });
 
-  const email = String(studentEmail).toLowerCase().trim();
+  const progressUser = await getUser(req);
+  if (!progressUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Derive email from token -- never trust the request body for identity
+  const email = progressUser.email!.toLowerCase().trim();
 
   const { error } = await supabase
     .from('guided_project_attempts')
@@ -213,7 +225,7 @@ export async function POST(req: NextRequest) {
         await resend.emails.send({
           from: FROM,
           to:   email,
-          subject: `You're 80% done -- finish strong! 🎯`,
+          subject: `You are 80% done. Finish strong! 🎯`,
           html,
         });
         await recordNudge(supabase, email, formId, 'milestone_80');

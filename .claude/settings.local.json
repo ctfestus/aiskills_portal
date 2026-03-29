@@ -8,7 +8,9 @@
       "Bash(grep -n \"if \\(loading\\)\" app/dashboard/page.tsx app/[id]/page.tsx)",
       "Bash(\"c:\\\\Users\\\\DELL\\\\Documents\\\\Claude\\\\AI Skills:*)",
       "Bash(ls \"c:\\\\Users\\\\DELL\\\\Documents\\\\ALL Apps\\\\App_AI Skils\\\\AI Skills Africa App\\\\migrations\"\" && ls \"c:UsersDELLDocumentsALL AppsApp_AI SkilsAI Skills Africa Appappstudent\"\")",
-      "Bash(node scripts/fix-chars.mjs)"
+      "Bash(node scripts/fix-chars.mjs)",
+      "WebFetch(domain:festman.io)",
+      "WebFetch(domain:adplist.org)"
     ]
   }
 }

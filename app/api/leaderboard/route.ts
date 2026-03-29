@@ -30,6 +30,38 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = adminClient();
 
+    // Resolve caller's profile: role + cohort
+    const { data: profile } = await supabase
+      .from('students')
+      .select('role, cohort_id, email')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    const isInstructorOrAdmin = profile.role === 'instructor' || profile.role === 'admin';
+
+    if (isInstructorOrAdmin) {
+      // Instructor/admin must own at least one form assigned to this cohort
+      const { data: ownedForm } = await supabase
+        .from('forms')
+        .select('id')
+        .eq('user_id', user.id)
+        .contains('cohort_ids', [cohortId])
+        .limit(1)
+        .maybeSingle();
+
+      // Admins bypass ownership check
+      if (!ownedForm && profile.role !== 'admin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    } else {
+      // Students may only view their own cohort's leaderboard
+      if (profile.cohort_id !== cohortId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     // Get all students in this cohort
     const { data: students, error: sErr } = await supabase
       .from('students')
@@ -60,12 +92,18 @@ export async function GET(req: NextRequest) {
       completionCount[c.student_email] = (completionCount[c.student_email] ?? 0) + 1;
     }
 
+    const callerEmail = (profile.email ?? user.email ?? '').toLowerCase().trim();
+
     const ranked = students
       .map((s: any) => ({
-        email:       s.email,
+        id:          s.id,
         name:        s.full_name?.trim() || s.email,
         xp:          xpMap[s.email] ?? 0,
         completions: completionCount[s.email] ?? 0,
+        // Email only returned to instructors/admins; students get an isMe flag instead
+        ...(isInstructorOrAdmin
+          ? { email: s.email }
+          : { isMe: s.email.toLowerCase() === callerEmail }),
       }))
       .sort((a: any, b: any) => b.xp - a.xp || b.completions - a.completions)
       .map((s: any, i: number) => ({ ...s, rank: i + 1 }));

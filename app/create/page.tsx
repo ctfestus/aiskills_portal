@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -309,7 +309,7 @@ const TEMPLATES: { key: string; label: string; description: string; icon: React.
     color: '#10b981',
     config: {
       title: 'Customer Feedback Survey',
-      description: 'We value your opinion. Help us improve by sharing your experience -- it only takes 2 minutes.',
+      description: 'We value your opinion. Help us improve by sharing your experience. It only takes 2 minutes.',
       coverImage: '',
       theme: 'emerald',
       mode: 'dark',
@@ -985,7 +985,7 @@ const [isSaving, setIsSaving] = useState(false);
         .order('created_at', { ascending: false });
       if (data) setAvailableForms(data.filter(f => f.id !== savedFormId));
     })();
-  }, [formConfig?.postSubmission?.type]);
+  }, [formConfig?.postSubmission?.type, savedFormId]);
 
   // -- Create meeting via integration --
   const handleCreateMeeting = async (provider: string) => {
@@ -1062,12 +1062,7 @@ const [isSaving, setIsSaving] = useState(false);
           fetch('/api/notify-assignment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${editSession?.access_token}` },
-            body: JSON.stringify({
-              cohortIds: addedCohortIds,
-              title: formConfig.title,
-              slug: slugValue,
-              contentType: existingForm?.content_type ?? (formConfig.isCourse ? 'course' : 'event'),
-            }),
+            body: JSON.stringify({ formId }),
           }).catch(() => {});
         }
         // Upsert cohort_assignments for all selected cohorts (preserves original assigned_at)
@@ -1569,17 +1564,17 @@ const [isSaving, setIsSaving] = useState(false);
         {/* Decorative blob */}
         <div className="fixed top-0 right-0 pointer-events-none" style={{ width:260, height:260, borderRadius:'50%', background:C.lime, transform:'translate(35%,-25%)', opacity:0.5, zIndex:0 }} />
 
-        <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-4 sm:py-5 backdrop-blur-sm" style={{ borderBottom: `1px solid ${C.navBorder}`, background: C.nav }}>
+        <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-4 sm:py-5 backdrop-blur-sm" style={{ borderBottom: `1px solid ${theme === 'dark' ? C.navBorder : '#0b07b3'}`, background: theme === 'dark' ? C.nav : '#0e09dd' }}>
           <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" className="h-7 w-auto" />
-            <span className="text-sm font-semibold tracking-tight" style={{ color: C.text }}>AI Skills Africa</span>
+            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-7 w-auto" />
+            <span className="text-sm font-semibold tracking-tight" style={{ color: theme === 'dark' ? C.text : 'white' }}>AI Skills Africa</span>
           </Link>
           {user ? (
-            <Link href="/dashboard" className="flex items-center gap-2 text-sm transition-colors hover:opacity-60" style={{ color: C.muted }}>
+            <Link href="/dashboard" className="flex items-center gap-2 text-sm transition-colors hover:opacity-60" style={{ color: theme === 'dark' ? C.muted : 'rgba(255,255,255,0.8)' }}>
               <LayoutDashboard className="w-4 h-4" /> Dashboard
             </Link>
           ) : (
-            <Link href="/auth" className="text-sm transition-colors hover:opacity-60" style={{ color: C.muted }}>Sign in</Link>
+            <Link href="/auth" className="text-sm transition-colors hover:opacity-60" style={{ color: theme === 'dark' ? C.muted : 'rgba(255,255,255,0.8)' }}>Sign in</Link>
           )}
         </nav>
 
@@ -1688,25 +1683,25 @@ const [isSaving, setIsSaving] = useState(false);
       <div className="fixed top-0 right-0 pointer-events-none" style={{ width:200, height:200, borderRadius:'50%', background:C.lime, transform:'translate(35%,-25%)', opacity:0.45, zIndex:0 }} />
 
       {/* -- Editor header: Logo + Dashboard link + Save -- */}
-      <header className="sticky top-0 z-30 backdrop-blur-md" style={{ background: C.nav, borderBottom: `1px solid ${C.navBorder}` }}>
+      <header className="sticky top-0 z-30 backdrop-blur-md" style={{ background: theme === 'dark' ? C.nav : '#0e09dd', borderBottom: `1px solid ${theme === 'dark' ? C.navBorder : '#0b07b3'}` }}>
         <div className="flex items-center justify-between px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-70 transition-opacity">
-              <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" className="h-6 w-auto" />
-              <span className="text-sm font-semibold tracking-tight" style={{ color: C.text }}>AI Skills Africa</span>
+              <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-6 w-auto" />
+              <span className="text-sm font-semibold tracking-tight" style={{ color: theme === 'dark' ? C.text : 'white' }}>AI Skills Africa</span>
             </Link>
-            <div className="w-px h-4" style={{ background: C.divider }} />
-            <Link href="/dashboard" className="flex items-center gap-1.5 text-xs transition-colors hover:opacity-60" style={{ color: C.muted }}>
+            <div className="w-px h-4" style={{ background: theme === 'dark' ? C.divider : 'rgba(255,255,255,0.2)' }} />
+            <Link href="/dashboard" className="flex items-center gap-1.5 text-xs transition-colors hover:opacity-60" style={{ color: theme === 'dark' ? C.muted : 'rgba(255,255,255,0.8)' }}>
               <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
             </Link>
             {savedFormId && formConfig?.title && (
               <>
-                <span className="text-xs" style={{ color: C.faint }}>/</span>
-                <span className="text-xs truncate max-w-[180px]" style={{ color: C.muted }}>{formConfig.title}</span>
+                <span className="text-xs" style={{ color: theme === 'dark' ? C.faint : 'rgba(255,255,255,0.5)' }}>/</span>
+                <span className="text-xs truncate max-w-[180px]" style={{ color: theme === 'dark' ? C.muted : 'rgba(255,255,255,0.8)' }}>{formConfig.title}</span>
               </>
             )}
           </div>
-          <button onClick={toggleTheme} type="button" className="p-2 rounded-lg transition-colors ff-hover" title="Toggle theme" style={{ color: C.faint }}>
+          <button onClick={toggleTheme} type="button" className="p-2 rounded-lg transition-colors ff-hover" title="Toggle theme" style={{ color: theme === 'dark' ? C.faint : 'white' }}>
             {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
           <button type="button" onClick={handleShare} disabled={isSaving} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-60 hover:opacity-90" style={{ background: accentColor, color: C.ctaText }}>
@@ -2287,7 +2282,7 @@ const [isSaving, setIsSaving] = useState(false);
                     <p className="text-[10px] leading-relaxed" style={{ color: C.faint }}>
                       {(formConfig.lessonTiming ?? 'after') === 'before'
                         ? 'Lesson opens automatically before each question. Students read first, then answer.'
-                        : 'Lesson is offered after answering -- "Why?" if wrong, "Review Lesson" if right.'}
+                        : 'Lesson is offered after answering. "Why?" if wrong, "Review Lesson" if right.'}
                     </p>
                   </div>
 

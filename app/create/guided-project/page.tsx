@@ -98,6 +98,8 @@ function VirtualExperienceCreatePageInner() {
   const [creationMode, setCreationMode] = useState<'ai' | 'data' | 'manual' | null>(null);
   const [industry,    setIndustry]    = useState('fintech');
   const [difficulty,  setDifficulty]  = useState<'beginner'|'intermediate'|'advanced'>('intermediate');
+  const [companyName,  setCompanyName]  = useState('');
+  const [scenario,     setScenario]     = useState('');
   const [roleHint,     setRoleHint]     = useState('');
   const [focusTopic,   setFocusTopic]   = useState('');
   const [toolsInput,   setToolsInput]   = useState('');
@@ -237,8 +239,8 @@ function VirtualExperienceCreatePageInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify(useDataMode
-          ? { action: 'generate-from-data', industry, difficulty, role: roleHint, focusTopic, tools: toolsInput, customPrompt, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }
-          : { action: 'generate', industry, difficulty, role: roleHint, focusTopic, tools: toolsInput, customPrompt }
+          ? { action: 'generate-from-data', industry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }
+          : { action: 'generate', industry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt }
         ),
       });
       const json = await res.json();
@@ -274,7 +276,7 @@ function VirtualExperienceCreatePageInner() {
       const res = await fetch('/api/ai-guided-project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ action: 'generate-from-data', industry, difficulty, role: roleHint, focusTopic, tools: toolsInput, customPrompt, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }),
+        body: JSON.stringify({ action: 'generate-from-data', industry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
@@ -609,22 +611,44 @@ function VirtualExperienceCreatePageInner() {
                     </div>
                   </div>
 
-                  {/* Custom Instructions -- AI only */}
-                  {creationMode === 'ai' && (
-                    <div className="px-5 pb-5 pt-4 border-t" style={{ borderColor: C.divider }}>
-                      <label className="block text-[12px] font-bold uppercase tracking-widest mb-1" style={{ color: C.muted }}>
-                        Custom Instructions <span className="normal-case font-normal tracking-normal" style={{ color: C.faint }}>(optional)</span>
-                      </label>
-                      <p className="text-[12px] mb-2" style={{ color: C.faint }}>
-                        Tell the AI anything specific -- company name, scenario, learning goals, question style, tone, etc.
-                      </p>
-                      <textarea
-                        value={customPrompt}
-                        onChange={e => setCustomPrompt(e.target.value)}
-                        rows={4}
-                        style={{ ...inp, fontSize: 13, resize: 'vertical', lineHeight: 1.6 } as React.CSSProperties}
-                        placeholder={"e.g. The company is called NaraPay, a Lagos-based fintech. Focus on loan default prediction. Make questions harder than usual. Use a conversational tone in lesson bodies."}
-                      />
+                  {/* Company & Scenario -- AI + data modes */}
+                  {creationMode !== 'manual' && (
+                    <div className="px-5 pb-5 pt-4 border-t space-y-3" style={{ borderColor: C.divider }}>
+                      <div>
+                        <label className="block text-[12px] font-bold uppercase tracking-widest mb-1.5" style={{ color: C.muted }}>
+                          Company Name <span className="normal-case font-normal tracking-normal" style={{ color: C.faint }}>(optional)</span>
+                        </label>
+                        <input
+                          style={inp}
+                          value={companyName}
+                          onChange={e => setCompanyName(e.target.value)}
+                          placeholder="e.g. NaraPay"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[12px] font-bold uppercase tracking-widest mb-1.5" style={{ color: C.muted }}>
+                          Scenario <span className="normal-case font-normal tracking-normal" style={{ color: C.faint }}>(optional)</span>
+                        </label>
+                        <textarea
+                          value={scenario}
+                          onChange={e => setScenario(e.target.value)}
+                          rows={3}
+                          style={{ ...inp, fontSize: 13, resize: 'vertical', lineHeight: 1.6 } as React.CSSProperties}
+                          placeholder="Describe the company background and the problem the student needs to solve. e.g. NaraPay is a Lagos-based fintech processing 50,000 mobile transactions daily. They are losing 12% revenue to fraud and need a data analyst to identify patterns."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[12px] font-bold uppercase tracking-widest mb-1" style={{ color: C.muted }}>
+                          Additional Instructions <span className="normal-case font-normal tracking-normal" style={{ color: C.faint }}>(optional)</span>
+                        </label>
+                        <textarea
+                          value={customPrompt}
+                          onChange={e => setCustomPrompt(e.target.value)}
+                          rows={2}
+                          style={{ ...inp, fontSize: 13, resize: 'vertical', lineHeight: 1.6 } as React.CSSProperties}
+                          placeholder="e.g. Make questions harder than usual. Use a conversational tone in lesson bodies."
+                        />
+                      </div>
                     </div>
                   )}
 
@@ -838,7 +862,7 @@ function VirtualExperienceCreatePageInner() {
                     {/* Tools */}
                     {(config.tools || []).length > 0 && (
                       <div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Skills you'll use</p>
+                        <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Skills you will use</p>
                         <div className="flex flex-wrap gap-1.5">
                           {(config.tools || []).map(t => (
                             <span key={t} className="text-[12px] px-2.5 py-1 rounded-lg font-medium" style={{ background: C.pill, color: C.text }}>{t}</span>
@@ -1033,7 +1057,7 @@ function VirtualExperienceCreatePageInner() {
                                   <RichTextEditor
                                     value={les.body || ''}
                                     onChange={html => updateLesson(mod.id, les.id, { body: html })}
-                                    placeholder="Write the lesson content here -- what should the student read, understand, or do?"
+                                    placeholder="Write the lesson content here. What should the student read, understand, or do?"
                                   />
                                   <input style={{ ...inp, fontSize: 13 }} value={les.videoUrl || ''} placeholder="Video URL (optional)"
                                     onChange={e => updateLesson(mod.id, les.id, { videoUrl: e.target.value })} />
@@ -1186,7 +1210,7 @@ function VirtualExperienceCreatePageInner() {
                                   <button onClick={() => addLesson(mod.id)}
                                     className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-xl border"
                                     style={{ border: `1px dashed ${C.cardBorder}`, color: C.muted }}>
-                                    <Plus className="w-3 h-3" /> Add lesson to "{mod.title}"
+                                    <Plus className="w-3 h-3" /> Add lesson to {mod.title}
                                   </button>
                                 </div>
                               )}
@@ -1329,7 +1353,7 @@ function VirtualExperienceCreatePageInner() {
                   {showImprove && (
                     <div className="px-5 pb-5 space-y-3 border-t" style={{ borderColor: C.divider }}>
                       <p className="text-[12px] pt-3" style={{ color: C.faint }}>
-                        Describe any change -- AI will apply it directly to the project.
+                        Describe any change. AI will apply it directly to the project.
                       </p>
                       <textarea value={improveInstruction} onChange={e => setImproveInstruction(e.target.value)}
                         placeholder='e.g. "Add a lesson on data cleaning to module 2" or "Replace question 3 in lesson 1 with a harder one"'

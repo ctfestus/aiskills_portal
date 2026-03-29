@@ -14,8 +14,10 @@ export function middleware(req: NextRequest) {
 
   const csp = [
     "default-src 'self'",
-    // 'unsafe-inline' removed -- nonce covers Next.js hydration scripts
-    `script-src 'self' 'nonce-${nonce}'`,
+    // nonce-${nonce} is forwarded to the layout via x-nonce header.
+    // 'unsafe-inline' fallback for CSP2 browsers; ignored by CSP3 browsers when nonce is present.
+    // 'unsafe-eval' required by Next.js webpack runtime (dev + prod).
+    `script-src 'self' 'unsafe-inline' 'unsafe-eval' 'nonce-${nonce}'`,
     // style unsafe-inline kept: Tailwind + CSS-in-JS require it;
     // CSS injection without script execution is low severity
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",

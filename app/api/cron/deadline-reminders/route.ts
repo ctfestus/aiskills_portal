@@ -182,20 +182,30 @@ export async function POST(req: NextRequest) {
   }
 
   // -- 6. Send in batches of 100 (Resend limit) ---
+  // Track sent records as composite email|form_id keys so that a student with
+  // multiple deadlines cannot have a failed form marked as sent just because
+  // another of their emails happened to succeed in an earlier batch.
+  const sentKeySet = new Set<string>();
+  const batches = chunk(emailBatch, BATCH_SIZE);
   let sent = 0;
-  for (const batch of chunk(emailBatch, BATCH_SIZE)) {
+
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i];
+    const batchNudges = nudgeRecords.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
     try {
       await resend.batch.send(batch);
       sent += batch.length;
+      for (const n of batchNudges) {
+        sentKeySet.add(`${n.student_email}|${n.form_id}`);
+      }
     } catch (err) {
       console.error('[cron/deadline-reminders] batch send failed:', err);
     }
   }
 
   // -- 7. Bulk insert nudge records for successfully sent emails ---
-  if (nudgeRecords.length) {
-    const sentEmails = new Set(emailBatch.slice(0, sent).map(e => e.to as string));
-    const toInsert = nudgeRecords.filter(n => sentEmails.has(n.student_email));
+  if (sentKeySet.size) {
+    const toInsert = nudgeRecords.filter(n => sentKeySet.has(`${n.student_email}|${n.form_id}`));
     if (toInsert.length) {
       await supabase.from('sent_nudges').insert(toInsert);
     }

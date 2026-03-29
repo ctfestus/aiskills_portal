@@ -291,7 +291,7 @@ export default function CreateSchedulePage() {
               <label style={labelStyle(C)}>Title <span style={{ color: C.errorText }}>*</span></label>
               <input
                 type="text" value={title} onChange={e => setTitle(sanitizePlainText(e.target.value))}
-                placeholder="e.g. Data Science Bootcamp -- Week 1 Schedule"
+                placeholder="e.g. Data Science Bootcamp: Week 1 Schedule"
                 style={inputStyle(C)} required maxLength={255}
               />
             </div>
@@ -412,7 +412,7 @@ export default function CreateSchedulePage() {
 
             {topics.length === 0 && (
               <p style={{ textAlign: 'center', color: C.faint, fontSize: 14, padding: '24px 0' }}>
-                No topics yet. Click "Add Topic" to build your schedule outline.
+                No topics yet. Use the Add Topic button to build your schedule outline.
               </p>
             )}
 
@@ -470,7 +470,7 @@ export default function CreateSchedulePage() {
 
             {resources.length === 0 && (
               <p style={{ textAlign: 'center', color: C.faint, fontSize: 14, padding: '24px 0' }}>
-                No resources yet. Click "Add Resource" to attach links.
+                No resources yet. Use the Add Resource button to attach links.
               </p>
             )}
 

@@ -147,19 +147,6 @@ export default function CreateAnnouncementPage() {
         addedCohortIds = selectedCohortIds;
       }
 
-      // Notify students in newly assigned cohorts
-      if (addedCohortIds.length) {
-        fetch('/api/notify-assignment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({
-            cohortIds: addedCohortIds,
-            title: trimmedTitle,
-            slug: 'student',
-            contentType: 'announcement',
-          }),
-        }).catch(() => {});
-      }
 
       router.push('/dashboard#announcements');
     } catch (err: any) {
@@ -281,7 +268,7 @@ export default function CreateAnnouncementPage() {
                     />
                   </div>
                 ) : (
-                  <p style={{ marginTop: 6, fontSize: 12, color: C.errorText }}>Could not parse YouTube URL -- paste a standard YouTube link.</p>
+                  <p style={{ marginTop: 6, fontSize: 12, color: C.errorText }}>Could not parse YouTube URL. Paste a standard YouTube link.</p>
                 );
               })()}
             </div>

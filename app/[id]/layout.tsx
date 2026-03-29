@@ -32,8 +32,8 @@ export async function generateMetadata({
   const plainDescription = stripped.length >= 100
     ? stripped
     : (stripped
-        ? `${stripped} -- Powered by AI Skills Africa.`
-        : `${data.title} -- Powered by AI Skills Africa.`
+        ? `${stripped}. Powered by AI Skills Africa.`
+        : `${data.title}. Powered by AI Skills Africa.`
       ).slice(0, 200);
 
   const rawUrl =

@@ -94,7 +94,7 @@ export function confirmationEmail(data: {
     <div style="margin:16px 0;padding:16px;background:#f0f7ff;border-radius:10px;border:1px solid #c5deff;text-align:center;">
       <p style="margin:0 0 10px;font-weight:600;color:#333;">${platformName(meetingLink)}</p>
       <a href="${meetingLink}" style="display:inline-block;padding:10px 24px;background:${platformColor(meetingLink)};color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">Join Meeting -></a>
-      <p style="margin:8px 0 0;font-size:12px;color:#888;">Keep this link -- you'll need it to attend.</p>
+      <p style="margin:8px 0 0;font-size:12px;color:#888;">Keep this link. You will need it to attend.</p>
     </div>` : '';
 
   const content = `
@@ -143,7 +143,7 @@ export function reminderEmail(data: {
 
   const content = `
     <p><b>Hi ${name || 'there'},</b></p>
-    <p>This is a friendly reminder that <b>${eventTitle}</b> is starting in <b>${timeLabel}</b>${isOneHour ? ' -- get ready!' : '.'}</p>
+    <p>This is a friendly reminder that <b>${eventTitle}</b> is starting in <b>${timeLabel}</b>${isOneHour ? '. Get ready!' : '.'}</p>
 
     <p style="font-size:18px;font-weight:bold;margin-top:16px;">Event Reminder</p>
     <p><b>${eventTitle}</b></p>
@@ -180,7 +180,7 @@ export function courseResultEmail(data: {
 
   const content = `
     <p><b>Hi ${name || 'there'},</b></p>
-    <p>${passed ? 'Congratulations! You passed the course. Well done! 🎉' : 'Thanks for completing the course. Keep practicing -- you can retake it to improve your score.'}</p>
+    <p>${passed ? 'Congratulations! You passed the course. Well done! 🎉' : 'Thanks for completing the course. Keep practising. You can retake it to improve your score.'}</p>
 
     <p style="font-size:18px;font-weight:bold;margin-top:16px;">Your Course Result</p>
     <p><b>${courseTitle}</b></p>
@@ -217,7 +217,7 @@ export function otpEmail(data: { code: string; courseName?: string }) {
     </div>
 
     <p>Enter this code on the course page to continue. Do not share it with anyone.</p>
-    <p style="color:#a1a1aa;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
+    <p style="color:#a1a1aa;font-size:13px;">If you did not request this, you can safely ignore this email.</p>
     <br>
     <p><b>Best regards,</b></p>
     <p>The AI Skills Africa Team</p>
@@ -239,8 +239,8 @@ export function nudgeEmail(data: {
   const ctaLabel  = status === 'not_started' ? `Start ${typeLabel}` : 'Continue where you left off';
 
   const intro = status === 'not_started'
-    ? `We noticed you haven't started <b>${contentTitle}</b> yet -- and we just wanted to reach out with a little encouragement.`
-    : `We noticed you haven't visited <b>${contentTitle}</b> in a while. We're checking in because we believe in you and don't want you to miss out.`;
+    ? `We noticed you have not started <b>${contentTitle}</b> yet. We just wanted to reach out with a little encouragement.`
+    : `We noticed you have not visited <b>${contentTitle}</b> in a while. We are checking in because we believe in you and do not want you to miss out.`;
 
   const content = `
     <p><b>Hi ${name},</b></p>
@@ -261,14 +261,14 @@ export function nudgeEmail(data: {
       Remember why you started, and know that each module you complete brings you closer to a real skill you can use.
     </p>` : `
     <p style="color:#374151;">
-      It only takes a few minutes to begin. Once you start, you'll find the content is practical, relevant, and designed
-      to give you real skills -- not just theory.
+      It only takes a few minutes to begin. Once you start, you will find the content is practical, relevant, and designed
+      to give you real skills. Not just theory.
     </p>`}
 
     <div style="margin:20px 0;padding:20px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;">
-      <p style="margin:0 0 6px;font-weight:700;color:#92400e;font-size:14px;">Need support? We're here for you. 🤝</p>
+      <p style="margin:0 0 6px;font-weight:700;color:#92400e;font-size:14px;">Need support? We are here for you. 🤝</p>
       <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;">
-        If anything felt unclear, you got stuck, or life simply got in the way -- please don't hesitate to reach out.
+        If anything felt unclear, you got stuck, or life simply got in the way. Please do not hesitate to reach out.
         Our team is available to help you through any challenges. You are not on this journey alone.
       </p>
     </div>
@@ -295,7 +295,7 @@ export function milestoneEmail(data: {
 
   const content = `
     <p><b>Hi ${name},</b></p>
-    <p>You're <b>80% of the way through</b> <b>${contentTitle}</b> -- that's incredible progress! 🎉</p>
+    <p>You are <b>80% of the way through</b> <b>${contentTitle}</b>. That is incredible progress! 🎉</p>
 
     <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;text-align:center;">
       <div style="font-size:40px;font-weight:900;color:#16a34a;">80%</div>
@@ -303,15 +303,15 @@ export function milestoneEmail(data: {
     </div>
 
     <p style="color:#374151;">
-      You've put in the hard work and you are so close to the finish line. Don't stop now --
-      completing this ${typeLabel} will add a real, demonstrable skill to your profile.
+      You have put in the hard work and you are so close to the finish line. Do not stop now.
+      Completing this ${typeLabel} will add a real, demonstrable skill to your profile.
     </p>
 
     <div style="margin:20px 0;padding:16px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;">
       <p style="margin:0;font-weight:700;color:#92400e;font-size:14px;">💡 Did you know?</p>
       <p style="margin:8px 0 0;color:#374151;font-size:14px;line-height:1.7;">
-        Students who reach 80% completion are <b>3× more likely to finish</b>. You're already in that group.
-        One final push and you'll have something to be genuinely proud of.
+        Students who reach 80% completion are <b>3× more likely to finish</b>. You are already in that group.
+        One final push and you will have something to be genuinely proud of.
       </p>
     </div>
 
@@ -365,14 +365,14 @@ export function weeklyDigestEmail(data: {
     </table>` : ''}
 
     ${inProgress.length > 0 ? `
-    <p style="font-size:15px;font-weight:700;color:#111;margin-top:24px;">Still in progress -- you've got this!</p>
+    <p style="font-size:15px;font-weight:700;color:#111;margin-top:24px;">Still in progress. You have got this!</p>
     <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;">
       ${inProgressRows}
     </table>` : ''}
 
     <div style="margin:24px 0;padding:16px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;">
       <p style="margin:0;color:#15803d;font-size:14px;line-height:1.7;">
-        <b>Every week counts.</b> The skills you're building here open doors to real opportunities.
+        <b>Every week counts.</b> The skills you are building here open doors to real opportunities.
         Consistency is the single most powerful habit you can build as a learner.
       </p>
     </div>
@@ -410,12 +410,12 @@ export function deadlineReminderEmail(data: {
       <p style="font-weight:700;font-size:16px;margin:0;">${contentTitle}</p>
       <p style="color:#ef4444;font-weight:600;margin:6px 0 0;">${urgency}</p>
     </div>
-    <p>Don't let your progress go to waste -- every skill you build today is an investment in your future career. Log in now and keep going.</p>
+    <p>Do not let your progress go to waste. Every skill you build today is an investment in your future career. Log in now and keep going.</p>
     <p style="background:#f0fdf4;border-radius:8px;padding:12px;font-size:14px;color:#166534;">
       💡 <b>Quick tip:</b> Even 15 minutes of focused learning counts. You can do this!
     </p>
     ${cta('Complete Now', formUrl)}
-    <p>If you need any help or have questions, our team is always here for you -- just reply to this email.</p>
+    <p>If you need any help or have questions, our team is always here for you. Just reply to this email.</p>
     <br>
     <p><b>Best regards,</b></p>
     <p>AI Skills Africa - Learning Experience Team</p>

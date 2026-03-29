@@ -222,7 +222,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
       <nav className="sticky top-0 z-30 px-6 md:px-10 h-14 flex items-center justify-between backdrop-blur-md border-b"
         style={{ background: t.nav, borderColor: t.navBorder, transition: 'background 0.3s, border-color 0.3s' }}>
         <Link href="/" className="flex items-center gap-2.5">
-          <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" className="h-8 w-auto" />
+          <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-8 w-auto" />
         </Link>
 
         <div className="flex items-center gap-3">
@@ -499,7 +499,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
 
       <footer className="relative z-10 text-center pb-12 pt-4">
         <Link href="/" className="inline-flex items-center gap-2">
-          <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" className="h-6 w-auto" />
+          <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-6 w-auto" />
           <span className="text-xs" style={{ color: t.footerText }}>
             Powered by <strong style={{ color: t.footerBold }}>AI Skills Africa</strong>
           </span>

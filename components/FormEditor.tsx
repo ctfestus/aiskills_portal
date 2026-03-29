@@ -627,7 +627,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
         .order('created_at', { ascending: false });
       if (data) setAvailableForms(data.filter(f => f.id !== formId));
     })();
-  }, [formConfig?.postSubmission?.type]);
+  }, [formConfig?.postSubmission?.type, formId]);
 
   const updateConfig = (updates: Partial<FormConfig>) => {
     if (formConfig) setFormConfig({ ...formConfig, ...updates });
@@ -1840,7 +1840,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                     <p className="text-[10px] leading-relaxed" style={{ color: FE.faint }}>
                       {(formConfig.lessonTiming ?? 'after') === 'before'
                         ? 'Lesson opens automatically before each question. Students read first, then answer.'
-                        : 'Lesson is offered after answering -- "Why?" if wrong, "Review Lesson" if right.'}
+                        : 'Lesson is offered after answering. "Why?" if wrong, "Review Lesson" if right.'}
                     </p>
                   </div>
 

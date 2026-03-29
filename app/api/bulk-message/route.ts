@@ -43,6 +43,8 @@ export async function POST(req: NextRequest) {
   if (!subject?.trim())     return NextResponse.json({ error: 'Subject is required' }, { status: 400 });
   if (!messageBody?.trim()) return NextResponse.json({ error: 'Message body is required' }, { status: 400 });
   if (!segment)             return NextResponse.json({ error: 'Segment is required' }, { status: 400 });
+  if (subject.length > 200)     return NextResponse.json({ error: 'Subject must be 200 characters or fewer' }, { status: 400 });
+  if (messageBody.length > 5000) return NextResponse.json({ error: 'Message body must be 5 000 characters or fewer' }, { status: 400 });
 
   // 1. Fetch instructor's forms -- optionally scoped to a single form
   let formsQuery = supabase

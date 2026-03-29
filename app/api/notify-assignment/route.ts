@@ -20,20 +20,36 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { cohortIds, title, slug, contentType } = body;
-  if (!Array.isArray(cohortIds) || !cohortIds.length) {
-    return NextResponse.json({ ok: true, skipped: true });
-  }
-  if (!title || !contentType) {
-    return NextResponse.json({ error: 'title and contentType are required' }, { status: 400 });
+  const { formId } = body;
+  if (!formId) return NextResponse.json({ error: 'formId is required' }, { status: 400 });
+
+  const supabase = adminClient();
+
+  // Verify caller owns the form (or is admin)
+  const { data: form } = await supabase
+    .from('forms')
+    .select('user_id, title, slug, content_type, cohort_ids')
+    .eq('id', formId)
+    .single();
+
+  if (!form) return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+
+  const { data: student } = await supabase.from('students').select('role').eq('id', user.id).single();
+  const isAdmin = student?.role === 'admin';
+
+  if (form.user_id !== user.id && !isAdmin) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // Fire-and-forget -- respond immediately, send in background
+  const cohortIds: string[] = form.cohort_ids ?? [];
+  if (!cohortIds.length) return NextResponse.json({ ok: true, skipped: true });
+
+  // All notification data derived from the server-side form record -- nothing trusted from body
   sendAssignmentNotifications({
     cohortIds,
-    title,
-    slug: slug || '',
-    contentType,
+    title:       form.title || '',
+    slug:        form.slug  || '',
+    contentType: form.content_type,
   }).catch(() => {});
 
   return NextResponse.json({ ok: true });

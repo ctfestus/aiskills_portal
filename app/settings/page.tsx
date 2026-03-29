@@ -1,6 +1,7 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -244,6 +245,7 @@ function CoverEditor({ coverUrl, coverPosition, onUrlChange, onPositionChange, o
 export default function SettingsPage() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
+  const router = useRouter();
   const [user, setUser]       = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
@@ -400,9 +402,9 @@ export default function SettingsPage() {
       <nav className="sticky top-0 z-20 border-b px-6 md:px-10 h-14 flex items-center justify-between backdrop-blur-md"
         style={{ background: C.nav, borderColor: C.navBorder }}>
         <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="p-1.5 rounded-lg transition-colors ff-hover" style={{ color: C.muted }}>
+          <button onClick={() => router.back()} className="p-1.5 rounded-lg transition-colors ff-hover" style={{ color: C.muted }}>
             <ArrowLeft className="w-5 h-5"/>
-          </Link>
+          </button>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: '#1a1a1a' }}>
               <Star className="w-3.5 h-3.5 fill-current" style={{ color: C.lime }}/>

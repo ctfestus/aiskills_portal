@@ -55,7 +55,7 @@ const STEPS = [
 function Logo() {
   return (
     <div className="flex items-center gap-2">
-      <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" className="h-8 w-auto" />
+      <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-8 w-auto" />
       <span className="font-bold text-[#111] text-lg tracking-tight">AI Skills Africa</span>
     </div>
   );

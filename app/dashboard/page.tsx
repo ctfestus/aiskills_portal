@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Loader2, Plus, FileText, BarChart3, ExternalLink, Trash2, Edit2,
   Share2, Check, Copy, X, CalendarDays, AlignLeft, Settings, User,
-  LogOut, ChevronDown, ShieldCheck, BookOpen, MapPin, Sun, Moon, Zap,
+  LogOut, ChevronDown, BookOpen, MapPin, Sun, Moon, Zap,
   ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
   Users, Megaphone, FolderOpen, Trophy, Menu, CheckCircle2, XCircle,
   UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
@@ -148,13 +148,6 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
               }
             </div>
             <div className="py-1.5">
-              {profile?.role === 'admin' && (
-                <Link href="/admin" onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ff-hover"
-                  style={{ color: C.green }}>
-                  <ShieldCheck className="w-4 h-4"/> Admin Console
-                </Link>
-              )}
               {username && (
                 <Link href={`/u/${username}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ff-hover"
@@ -884,7 +877,7 @@ function ComingSoon({ id, C }: { id: SectionId; C: typeof LIGHT_C }) {
         <item.Icon className="w-7 h-7" style={{ color: C.faint }}/>
       </div>
       <h2 className="text-base font-semibold mb-1" style={{ color: C.text }}>{item.label}</h2>
-      <p className="text-sm max-w-xs" style={{ color: C.faint }}>This section is coming soon. We're building something great.</p>
+      <p className="text-sm max-w-xs" style={{ color: C.faint }}>This section is coming soon. We are building something great.</p>
       <span className="mt-4 text-[11px] font-semibold px-3 py-1.5 rounded-full"
         style={{ background: 'rgba(124,58,237,0.1)', color: '#7c3aed' }}>Coming Soon</span>
     </div>
@@ -1110,6 +1103,7 @@ function CourseProgressTab({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
       }
     };
     load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- courseIdsKey is the stable string form of courseIds; adding the array would trigger on every render
   }, [courseIdsKey]);
 
   const cohortMap  = Object.fromEntries((cohorts ?? []).map(c => [c.id, c.name]));
@@ -1474,12 +1468,14 @@ function StudentLoginsTab({ C }: { C: typeof LIGHT_C }) {
 
   const cohortOptions    = cohorts.map(c => ({ label: c.name, value: c.id }));
   const neverLoggedIn    = enriched.filter(s => !s.last_login_at).length;
-  const loggedInToday    = enriched.filter(s => s.last_login_at && (Date.now() - new Date(s.last_login_at).getTime()) < 86400000).length;
-  const loggedInWeek     = enriched.filter(s => s.last_login_at && (Date.now() - new Date(s.last_login_at).getTime()) < 604800000).length;
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs            = Date.now();
+  const loggedInToday    = enriched.filter(s => s.last_login_at && (nowMs - new Date(s.last_login_at).getTime()) < 86400000).length;
+  const loggedInWeek     = enriched.filter(s => s.last_login_at && (nowMs - new Date(s.last_login_at).getTime()) < 604800000).length;
 
   function activityLevel(s: any): { color: string; label: string; dot: string } {
     if (!s.last_login_at)                                                           return { color: '#9ca3af', dot: '#9ca3af', label: 'Never' };
-    const diff = Date.now() - new Date(s.last_login_at).getTime();
+    const diff = nowMs - new Date(s.last_login_at).getTime();
     if (diff < 86400000)   return { color: C.green, dot: C.green, label: 'Today' };
     if (diff < 604800000)  return { color: '#3b82f6', dot: '#3b82f6', label: 'This week' };
     if (diff < 2592000000) return { color: '#f59e0b', dot: '#f59e0b', label: 'This month' };
@@ -1816,13 +1812,13 @@ function SchedulesManageSection({ C }: { C: typeof LIGHT_C }) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadSchedules = useCallback(async () => {
-    setLoading(true);
     const { data } = await supabase.from('schedules').select('*').order('created_at', { ascending: false });
     setItems(data ?? []);
     setLoading(false);
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadSchedules();
   }, [loadSchedules]);
 
@@ -2416,6 +2412,7 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
     } else {
       const { data: { publicUrl } } = supabase.storage.from('cert-assets').getPublicUrl(path);
       const key = slot === 'background' ? 'backgroundImageUrl' : slot === 'logo' ? 'logoUrl' : 'signatureUrl';
+      // eslint-disable-next-line react-hooks/purity
       set(key, `${publicUrl}?v=${Date.now()}`);
     }
     setUploading(null);
@@ -2453,7 +2450,7 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
     <div className="space-y-5 max-w-2xl">
       <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
         <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Certificate Default Design</h2>
-        <p className="text-xs" style={{ color: C.muted }}>Set once -- all your courses inherit this design automatically.</p>
+        <p className="text-xs" style={{ color: C.muted }}>Set once. All your courses inherit this design automatically.</p>
         <div>
           <label className={labelCls} style={{ color: C.muted }}>Institution Name</label>
           <input value={settings.institutionName} onChange={e => set('institutionName', e.target.value)} placeholder="Your institution name" className={inputCls} style={inputStyle}/>
@@ -2717,7 +2714,6 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   };
 
   const load = async () => {
-    setLoading(true);
     const [{ data: c }, { data: s }] = await Promise.all([
       supabase.from('cohorts').select('*').order('created_at', { ascending: false }),
       supabase.from('students').select('id, full_name, email, cohort_id, role').eq('role', 'student').order('full_name'),
@@ -2728,6 +2724,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
     setLoading(false);
   };
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
 
   const createCohort = async () => {
@@ -3099,7 +3096,7 @@ function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
 
   // Load rankings when cohort changes or refresh triggered
   useEffect(() => {
-    if (!selected) return;
+    if (!selected?.id) return;
     (async () => {
       setLoadingRank(true);
       setRankings([]);
@@ -3236,7 +3233,7 @@ function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
           </div>
         ) : (
           rankings.map((r, idx) => (
-            <div key={r.email} className="flex items-center gap-3 px-5 py-3.5 transition-colors"
+            <div key={r.id ?? r.rank} className="flex items-center gap-3 px-5 py-3.5 transition-colors"
               style={{ borderBottom: idx < rankings.length - 1 ? `1px solid ${C.divider}` : 'none' }}
               onMouseEnter={e => { e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
@@ -3349,9 +3346,7 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
         body: JSON.stringify({
           studentEmail: row.studentEmail,
           studentName:  row.studentName,
-          formTitle:    row.formTitle,
           formId:       row.formId,
-          contentType:  row.contentType,
           status:       row.status,
         }),
       });
@@ -3921,22 +3916,22 @@ export default function DashboardPage() {
 
       {/* -- Navbar -- */}
       <nav className="sticky top-0 z-30 border-b h-14 flex items-center justify-between px-4 md:px-6 backdrop-blur-md flex-shrink-0"
-        style={{ background: C.nav, borderColor: C.navBorder }}>
+        style={{ background: theme === 'dark' ? C.nav : '#0e09dd', borderColor: theme === 'dark' ? C.navBorder : '#0b07b3' }}>
         <div className="flex items-center gap-3">
           {/* Mobile sidebar toggle */}
           <button onClick={() => setSidebarOpen(o => !o)}
-            className="md:hidden p-2 rounded-xl transition-colors" style={{ color: C.faint }}>
+            className="md:hidden p-2 rounded-xl transition-colors" style={{ color: theme === 'dark' ? C.faint : 'white' }}>
             <Menu className="w-5 h-5"/>
           </button>
           <Link href="/dashboard" className="flex items-center gap-2">
-            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png" alt="AI Skills Africa" className="h-8 w-auto" />
+            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-8 w-auto" />
           </Link>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={toggleTheme} className="p-2 rounded-xl transition-colors flex-shrink-0" style={{ color: C.faint }}>
+          <button onClick={toggleTheme} className="p-2 rounded-xl transition-colors flex-shrink-0" style={{ color: theme === 'dark' ? C.faint : 'white' }}>
             {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
-          <NotificationBell/>
+          <NotificationBell color={theme === 'dark' ? undefined : 'white'}/>
           <ProfileMenu user={user} profile={profile} onSignOut={handleSignOut}/>
         </div>
       </nav>

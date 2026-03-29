@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   CheckCircle2, Circle, ChevronRight, ChevronLeft,
   Menu, X, Loader2, Trophy, BookOpen, Lock, Download, Award, Star, Clock,
@@ -65,6 +65,7 @@ interface Props {
   config: ProjectConfig;
   studentName: string;
   studentEmail: string;
+  sessionToken: string;
   initialProgress?: Progress;
   initialModuleId?: string;
   initialLessonId?: string;
@@ -135,16 +136,25 @@ function DifficultyDots({ difficulty, color }: { difficulty: string; color: stri
 
 // -- Component ---
 export default function VirtualExperienceTaker({
-  formId, formSlug, config, studentName, studentEmail,
+  formId, formSlug, config, studentName, studentEmail, sessionToken,
   initialProgress = {}, initialModuleId, initialLessonId,
   isDark = true, accentColor = '#6366f1',
 }: Props) {
+  const authHeader = useMemo(
+    () => sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {} as Record<string, string>,
+    [sessionToken],
+  );
   const bg      = isDark ? '#0f0f0f' : '#f5f5f0';
   const surface = isDark ? '#1a1a1a' : '#ffffff';
   const border  = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
   const text     = isDark ? '#f0f0f0' : '#111';
   const muted    = isDark ? '#888' : '#666';
   const subtle   = isDark ? '#262626' : '#f0f0ec';
+
+  const navSurface = isDark ? surface : '#0e09dd';
+  const navText    = isDark ? text : '#ffffff';
+  const navMuted   = isDark ? muted : 'rgba(255,255,255,0.8)';
+  const navBorder  = isDark ? border : '#0b07b3';
 
   const modules = config.modules || [];
   const flat    = allLessons(modules);
@@ -190,14 +200,14 @@ export default function VirtualExperienceTaker({
 
   // Load existing review / completion state
   useEffect(() => {
-    fetch(`/api/guided-project-progress?formId=${formId}&email=${encodeURIComponent(studentEmail)}`)
+    fetch(`/api/guided-project-progress?formId=${formId}&email=${encodeURIComponent(studentEmail)}`, { headers: authHeader })
       .then(r => r.json())
       .then(({ attempt }) => {
         if (attempt?.review) setReview(attempt.review);
         if (attempt?.completed_at) setCompleted(true);
       })
       .catch(() => {});
-  }, [formId, studentEmail]);
+  }, [formId, studentEmail, authHeader]);
 
   // Save progress (debounced 800ms) -- skipped in review mode
   const saveProgress = useCallback((prog: Progress, modId: string, lesId: string, completedAt?: string) => {
@@ -208,7 +218,7 @@ export default function VirtualExperienceTaker({
       try {
         await fetch('/api/guided-project-progress', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeader },
           body: JSON.stringify({
             formId, studentEmail, studentName,
             progress: prog,
@@ -221,7 +231,7 @@ export default function VirtualExperienceTaker({
         setSaving(false);
       }
     }, 800);
-  }, [formId, studentEmail, studentName]);
+  }, [formId, studentEmail, studentName, authHeader, reviewMode]);
 
   const toggleReq = (reqId: string) => {
     setProgress(prev => {
@@ -294,7 +304,7 @@ export default function VirtualExperienceTaker({
     try {
       await fetch('/api/guided-project-progress', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader },
         body: JSON.stringify({
           formId, studentEmail, studentName,
           progress, currentModuleId: currentModId,
@@ -311,7 +321,7 @@ export default function VirtualExperienceTaker({
     try {
       const res = await fetch('/api/guided-project-progress', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeader },
         body: JSON.stringify({ action: 'issue-certificate', formId, studentEmail, studentName }),
       });
       const json = await res.json();
@@ -602,28 +612,28 @@ export default function VirtualExperienceTaker({
       <main className="flex-1 overflow-hidden flex flex-col">
         {/* Top bar */}
         <div className="sticky top-0 z-10 flex items-center gap-3 px-4 sm:px-6 py-3 border-b flex-shrink-0"
-          style={{ background: surface, borderColor: border }}>
+          style={{ background: navSurface, borderColor: navBorder }}>
           {!sidebarOpen && (
-            <button onClick={() => setSidebarOpen(true)} style={{ color: muted }} className="hover:opacity-60">
+            <button onClick={() => setSidebarOpen(true)} style={{ color: navMuted }} className="hover:opacity-60">
               <Menu className="w-5 h-5" />
             </button>
           )}
-          <div className="flex items-center gap-1.5 text-xs min-w-0" style={{ color: muted }}>
+          <div className="flex items-center gap-1.5 text-xs min-w-0" style={{ color: navMuted }}>
             <span className="truncate">{currentMod?.title}</span>
             <ChevronRight className="w-3 h-3 flex-shrink-0" />
-            <span className="truncate font-medium" style={{ color: text }}>{currentLes?.title}</span>
+            <span className="truncate font-medium" style={{ color: navText }}>{currentLes?.title}</span>
           </div>
           <div className="ml-auto flex items-center gap-3 flex-shrink-0">
-            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: muted }} />}
+            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: navMuted }} />}
             {/* Dataset download in top bar (mobile) */}
             {config.dataset && (
               <button onClick={downloadDataset} title={`Download ${config.dataset.filename}`}
                 className="sm:hidden flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg"
-                style={{ background: `${accentColor}18`, color: accentColor }}>
+                style={{ background: isDark ? `${accentColor}18` : 'rgba(255,255,255,0.15)', color: isDark ? accentColor : '#fff' }}>
                 <Download className="w-3.5 h-3.5" />
               </button>
             )}
-            <span className="text-xs" style={{ color: muted }}>{overallPct}% complete</span>
+            <span className="text-xs" style={{ color: navMuted }}>{overallPct}% complete</span>
           </div>
         </div>
 
@@ -631,7 +641,7 @@ export default function VirtualExperienceTaker({
         {reviewMode && (
           <div className="flex items-center justify-between px-4 py-2 text-xs font-semibold flex-shrink-0"
             style={{ background: `${accentColor}18`, color: accentColor, borderBottom: `1px solid ${accentColor}30` }}>
-            <span>Review Mode -- your progress is saved and won&apos;t be changed</span>
+            <span>Review Mode. Your progress is saved and will not be changed</span>
             <button onClick={() => setReviewMode(false)}
               className="underline opacity-70 hover:opacity-100">Exit Review</button>
           </div>

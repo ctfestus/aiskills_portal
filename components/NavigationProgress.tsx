@@ -13,8 +13,11 @@ export default function NavigationProgress() {
     if (pathname === prevPath.current) return;
     prevPath.current = pathname;
 
-    // Start progress
+    // Start progress -- these setStates initialize animation state in response to a
+    // navigation event and cannot be deferred; the synchronous call is intentional.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWidth(0);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVisible(true);
 
     let w = 0;

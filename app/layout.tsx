@@ -19,7 +19,9 @@ export const metadata: Metadata = {
   title: 'AI Skills Africa',
   description: 'AI Skills Africa -- empowering Africans with practical data and AI skills for work.',
   icons: {
-    icon: [{ url: 'https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png', type: 'image/png' }],
+    icon: '/icon.png',
+    shortcut: '/icon.png',
+    apple: '/icon.png',
   },
 };
 
