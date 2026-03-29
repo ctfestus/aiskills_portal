@@ -330,9 +330,11 @@ export function weeklyDigestEmail(data: {
   name: string;
   completed: { title: string; contentType: string; score?: number | null }[];
   inProgress: { title: string; contentType: string }[];
+  notStarted: { title: string; contentType: string }[];
+  missedDeadlines: { title: string; contentType: string; daysOverdue: number }[];
   dashboardUrl: string;
 }) {
-  const { name, completed, inProgress, dashboardUrl } = data;
+  const { name, completed, inProgress, notStarted, missedDeadlines, dashboardUrl } = data;
 
   const typeLabel = (t: string) => t === 'virtual_experience' ? 'Virtual Experience' : t === 'course' ? 'Course' : t;
 
@@ -354,21 +356,53 @@ export function weeklyDigestEmail(data: {
       </td>
     </tr>`).join('');
 
+  const notStartedRows = notStarted.map(item => `
+    <tr>
+      <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;">
+        <span style="display:inline-block;width:20px;text-align:center;">⏳</span>
+        <b style="color:#111;">${item.title}</b>
+        <span style="margin-left:8px;font-size:12px;color:#6b7280;">${typeLabel(item.contentType)} · Not started</span>
+      </td>
+    </tr>`).join('');
+
+  const missedRows = missedDeadlines.map(item => `
+    <tr>
+      <td style="padding:10px 0;border-bottom:1px solid #fee2e2;">
+        <span style="display:inline-block;width:20px;text-align:center;">⚠️</span>
+        <b style="color:#111;">${item.title}</b>
+        <span style="margin-left:8px;font-size:12px;color:#ef4444;">${typeLabel(item.contentType)} · ${item.daysOverdue === 0 ? 'Due today' : `${item.daysOverdue} day${item.daysOverdue > 1 ? 's' : ''} overdue`}</span>
+      </td>
+    </tr>`).join('');
+
   const content = `
     <p><b>Hi ${name},</b></p>
-    <p>Here's a look at your learning activity this week. Keep the momentum going! 🚀</p>
+    <p>Here's your weekly learning update. Stay consistent -- every lesson counts! 🚀</p>
 
     ${completed.length > 0 ? `
-    <p style="font-size:15px;font-weight:700;color:#111;margin-top:24px;">What you completed this week</p>
+    <p style="font-size:15px;font-weight:700;color:#111;margin-top:24px;">✅ Completed this week</p>
     <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;">
       ${completedRows}
     </table>` : ''}
 
     ${inProgress.length > 0 ? `
-    <p style="font-size:15px;font-weight:700;color:#111;margin-top:24px;">Still in progress. You have got this!</p>
+    <p style="font-size:15px;font-weight:700;color:#111;margin-top:24px;">📚 Still in progress</p>
     <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;">
       ${inProgressRows}
     </table>` : ''}
+
+    ${missedDeadlines.length > 0 ? `
+    <p style="font-size:15px;font-weight:700;color:#dc2626;margin-top:24px;">⚠️ Overdue -- action needed</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #fee2e2;background:#fff5f5;border-radius:8px;">
+      ${missedRows}
+    </table>
+    <p style="font-size:13px;color:#6b7280;margin-top:8px;">These items have passed their deadline. Reach out to your instructor if you need an extension.</p>` : ''}
+
+    ${notStarted.length > 0 ? `
+    <p style="font-size:15px;font-weight:700;color:#111;margin-top:24px;">⏳ Not started yet</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;">
+      ${notStartedRows}
+    </table>
+    <p style="font-size:13px;color:#6b7280;margin-top:8px;">You have been assigned these programs. Starting is the hardest part -- log in and take the first step.</p>` : ''}
 
     <div style="margin:24px 0;padding:16px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;">
       <p style="margin:0;color:#15803d;font-size:14px;line-height:1.7;">
@@ -377,7 +411,7 @@ export function weeklyDigestEmail(data: {
       </p>
     </div>
 
-    ${cta('Continue learning', dashboardUrl)}
+    ${cta('Go to my dashboard', dashboardUrl)}
 
     <br>
     <p><b>Best regards,</b></p>

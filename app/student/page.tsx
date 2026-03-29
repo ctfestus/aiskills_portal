@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   BookOpen, CalendarDays, ClipboardList, Users, Megaphone,
-  FolderOpen, Calendar, Trophy, Award, ChevronDown, LogOut,
+  Calendar, Trophy, Award, ChevronDown, LogOut,
   Settings, User, Sun, Moon, Menu, X,
   CheckCircle, Clock, AlertCircle, Star, ExternalLink,
   GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
@@ -163,7 +163,6 @@ const NAV_ITEMS = [
   { id: 'assignments',   label: 'Assignments',    Icon: ClipboardList },
   { id: 'community',     label: 'Community',      Icon: Users         },
   { id: 'announcements', label: 'Announcements',  Icon: Megaphone     },
-  { id: 'projects',         label: 'Projects',         Icon: FolderOpen  },
   { id: 'virtual_experiences',  label: 'Virtual Experiences',  Icon: Briefcase   },
   { id: 'schedule',         label: 'Schedule',         Icon: Calendar    },
   { id: 'leaderboard',   label: 'Leaderboard',    Icon: Trophy        },
@@ -1094,37 +1093,105 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
       )}
 
       {/* Assignment brief */}
-      <div className="rounded-2xl p-6 mb-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-        <div className="flex items-start justify-between gap-3 mb-4">
+      <div className="rounded-2xl mb-4 overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        {/* Cover image */}
+        {assignment.cover_image && (
+          <div className="px-4 pt-4">
+            <img
+              src={assignment.cover_image}
+              alt={assignment.title}
+              className="w-full object-cover rounded-xl"
+              style={{ maxHeight: 220 }}
+            />
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4">
           <div>
             {assignment._course_title && (
               <p className="text-xs font-semibold mb-1 flex items-center gap-1" style={{ color: C.green }}>
                 <BookOpen className="w-3 h-3"/> {assignment._course_title}
               </p>
             )}
-            <h2 className="text-base font-bold" style={{ color: C.text }}>{assignment.title}</h2>
+            <h2 className="text-[15px] font-bold" style={{ color: C.text }}>{assignment.title}</h2>
           </div>
           {submission && <StatusBadge status={submission.status}/>}
         </div>
-        {assignment.scenario && <div className="mb-4"><p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: C.faint }}>Scenario</p><div className={"rich-content"} dangerouslySetInnerHTML={{ __html: sanitizeRichText(assignment.scenario) }}/></div>}
-        {assignment.brief && <div className="mb-4"><p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: C.faint }}>Brief</p><div className={"rich-content"} dangerouslySetInnerHTML={{ __html: sanitizeRichText(assignment.brief) }}/></div>}
-        {assignment.tasks && <div className="mb-4"><p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: C.faint }}>Tasks</p><div className={"rich-content"} dangerouslySetInnerHTML={{ __html: sanitizeRichText(assignment.tasks) }}/></div>}
-        {assignment.requirements && <div className="mb-4"><p className="text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: C.faint }}>Requirements</p><div className={"rich-content"} dangerouslySetInnerHTML={{ __html: sanitizeRichText(assignment.requirements) }}/></div>}
-        {resources.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>Resources</p>
-            <div className="space-y-2">
-              {resources.map((r: any) => (
-                <a key={r.id} href={r.url} target="_blank" rel="noreferrer"
-                  className="flex items-center gap-3 p-3 rounded-xl no-underline transition-opacity hover:opacity-80"
-                  style={{ background: C.page, border: `1px solid ${C.divider}` }}>
-                  {r.resource_type === 'file' ? <FileText className="w-4 h-4 flex-shrink-0" style={{ color: C.faint }}/> : <ExternalLink className="w-4 h-4 flex-shrink-0" style={{ color: C.faint }}/>}
-                  <span className="text-sm flex-1 truncate" style={{ color: C.text }}>{r.name || r.url}</span>
-                  <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" style={{ color: C.faint }}/>
-                </a>
-              ))}
+
+        {assignment.scenario && (
+          <>
+            <div style={{ borderTop: `1px solid ${C.divider}` }}/>
+            <div className="px-6 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>Scenario</p>
+              <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(assignment.scenario) }}/>
             </div>
-          </div>
+          </>
+        )}
+
+        {assignment.brief && (
+          <>
+            <div style={{ borderTop: `1px solid ${C.divider}` }}/>
+            <div className="px-6 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>Brief</p>
+              <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(assignment.brief) }}/>
+            </div>
+          </>
+        )}
+
+        {assignment.tasks && (
+          <>
+            <div style={{ borderTop: `1px solid ${C.divider}` }}/>
+            <div className="px-6 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>Tasks</p>
+              <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(assignment.tasks) }}/>
+            </div>
+          </>
+        )}
+
+        {assignment.requirements && (
+          <>
+            <div style={{ borderTop: `1px solid ${C.divider}` }}/>
+            <div className="px-6 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>Requirements</p>
+              <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(assignment.requirements) }}/>
+            </div>
+          </>
+        )}
+
+        {resources.length > 0 && (
+          <>
+            <div style={{ borderTop: `1px solid ${C.divider}` }}/>
+            <div className="px-6 py-5">
+              <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: C.faint }}>Resources</p>
+              <div className="flex flex-col gap-2">
+                {resources.map((r: any) => (
+                  <a key={r.id} href={r.url} target="_blank" rel="noreferrer"
+                    className="group flex items-center gap-3 no-underline rounded-2xl px-4 py-3 transition-all"
+                    style={{ background: C.pill, border: `1px solid ${C.divider}` }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.page; (e.currentTarget as HTMLElement).style.borderColor = '#0e09dd33'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = C.pill; (e.currentTarget as HTMLElement).style.borderColor = C.divider; }}>
+                    <div className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center"
+                      style={{ background: r.resource_type === 'file' ? 'rgba(14,9,221,0.08)' : 'rgba(4,83,241,0.08)' }}>
+                      {r.resource_type === 'file'
+                        ? <FileText className="w-4 h-4" style={{ color: '#0e09dd' }}/>
+                        : <ExternalLink className="w-4 h-4" style={{ color: '#0453f1' }}/>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium truncate" style={{ color: C.text }}>{r.name || r.url}</p>
+                      {r.name && <p className="text-[11px] truncate mt-0.5" style={{ color: C.faint }}>{r.resource_type === 'file' ? 'File' : 'Link'}</p>}
+                    </div>
+                    <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: C.faint }}/>
+                  </a>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Bottom padding if no last section */}
+        {!assignment.scenario && !assignment.brief && !assignment.tasks && !assignment.requirements && resources.length === 0 && (
+          <div className="pb-4"/>
         )}
       </div>
 
@@ -1142,13 +1209,19 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
               </div>
             )}
             {savedFiles.length > 0 && (
-              <div className="mb-4 space-y-2">
+              <div className="mb-4 flex flex-col gap-2">
                 {savedFiles.map(f => (
                   <a key={f.id} href={f.file_url} target="_blank" rel="noreferrer"
-                    className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg"
-                    style={{ background: C.page, color: C.green, border: `1px solid ${C.divider}` }}>
-                    {f.file_name ? <FileText className="w-4 h-4 flex-shrink-0"/> : <ExternalLink className="w-4 h-4 flex-shrink-0"/>}
-                    <span className="truncate">{f.file_name || f.file_url}</span>
+                    className="group flex items-center gap-3 no-underline rounded-2xl px-4 py-3 transition-all"
+                    style={{ background: C.pill, border: `1px solid ${C.divider}` }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.page; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = C.pill; }}>
+                    <div className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center"
+                      style={{ background: f.file_name ? 'rgba(16,185,129,0.10)' : 'rgba(4,83,241,0.08)' }}>
+                      {f.file_name ? <FileText className="w-4 h-4" style={{ color: '#10b981' }}/> : <ExternalLink className="w-4 h-4" style={{ color: '#0453f1' }}/>}
+                    </div>
+                    <span className="text-[13px] font-medium flex-1 truncate" style={{ color: C.text }}>{f.file_name || f.file_url}</span>
+                    <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: C.faint }}/>
                   </a>
                 ))}
               </div>
@@ -1194,17 +1267,27 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
 
             {/* Saved attachments (editable) */}
             {savedFiles.length > 0 && (
-              <div className="mb-4 space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>Saved Attachments</p>
-                {savedFiles.map(f => (
-                  <div key={f.id} className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg" style={{ background: C.page, border: `1px solid ${C.divider}` }}>
-                    {f.file_name ? <FileText className="w-4 h-4 flex-shrink-0" style={{ color: C.faint }}/> : <ExternalLink className="w-4 h-4 flex-shrink-0" style={{ color: C.faint }}/>}
-                    <a href={f.file_url} target="_blank" rel="noreferrer" className="flex-1 truncate hover:underline" style={{ color: C.green }}>{f.file_name || f.file_url}</a>
-                    <button onClick={() => removeSavedFile(f.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint, padding: 2 }}>
-                      <X className="w-3.5 h-3.5"/>
-                    </button>
-                  </div>
-                ))}
+              <div className="mb-4">
+                <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Saved Attachments</p>
+                <div className="flex flex-col gap-2">
+                  {savedFiles.map(f => (
+                    <div key={f.id} className="flex items-center gap-3 rounded-2xl px-4 py-3"
+                      style={{ background: C.pill, border: `1px solid ${C.divider}` }}>
+                      <div className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center"
+                        style={{ background: f.file_name ? 'rgba(16,185,129,0.10)' : 'rgba(4,83,241,0.08)' }}>
+                        {f.file_name ? <FileText className="w-4 h-4" style={{ color: '#10b981' }}/> : <ExternalLink className="w-4 h-4" style={{ color: '#0453f1' }}/>}
+                      </div>
+                      <a href={f.file_url} target="_blank" rel="noreferrer"
+                        className="flex-1 truncate text-[13px] font-medium hover:underline"
+                        style={{ color: C.text }}>{f.file_name || f.file_url}</a>
+                      <button onClick={() => removeSavedFile(f.id)}
+                        className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center transition-colors"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint }}>
+                        <X className="w-3.5 h-3.5"/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -2107,14 +2190,7 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
         </div>
 
         {/* Footer CTA */}
-        <div className="p-4 flex-shrink-0 space-y-2" style={{ borderTop: `1px solid ${C.cardBorder}` }}>
-          {isCompleted && (
-            <a href={`/${slug}`}
-              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-70"
-              style={{ background: C.pill, color: C.muted, textDecoration: 'none' }}>
-              <Play className="w-4 h-4"/> Review project
-            </a>
-          )}
+        <div className="p-4 flex-shrink-0" style={{ borderTop: `1px solid ${C.cardBorder}` }}>
           <a href={`/${slug}`}
             className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
             style={{ background: isCompleted ? C.green : color, color: 'white', textDecoration: 'none' }}>
@@ -2223,109 +2299,6 @@ function VirtualExperiencesSection({ userEmail, C }: { userEmail: string; C: typ
           />
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-function ProjectsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<any>(null);
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const { data: student } = await supabase.from('students').select('cohort_id').eq('id', userId).single();
-      if (!student?.cohort_id) { setLoading(false); return; }
-      const { data } = await supabase
-        .from('projects')
-        .select('id, title, scenario, brief, tasks, requirements, cover_image, status, created_at, related_course')
-        .contains('cohort_ids', [student.cohort_id])
-        .eq('status', 'published')
-        .order('created_at', { ascending: false });
-
-      const courseIds = [...new Set((data ?? []).map((p: any) => p.related_course).filter(Boolean))];
-      let courseNameMap: Record<string, string> = {};
-      if (courseIds.length) {
-        const { data: courses } = await supabase.from('forms').select('id, title').in('id', courseIds);
-        courseNameMap = Object.fromEntries((courses ?? []).map((c: any) => [c.id, c.title]));
-      }
-      setItems((data ?? []).map((p: any) => ({
-        ...p,
-        _course_title: p.related_course ? (courseNameMap[p.related_course] ?? null) : null,
-      })));
-      setLoading(false);
-    };
-    load();
-  }, [userId]);
-
-  if (selected) return <ProjectDetail project={selected} C={C} onBack={() => setSelected(null)}/>;
-
-  if (loading) return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {[0,1,2].map(i => (
-        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-          <Sk h={140} r={0}/><div className="p-4 space-y-2"><Sk h={15} w="70%"/><Sk h={11} w="55%"/></div>
-        </div>
-      ))}
-    </div>
-  );
-
-  if (!items.length) return (
-    <EmptyState icon={FolderOpen} title="No projects" body="You do not have any projects assigned yet."/>
-  );
-
-  const ProjectCard = ({ item, i }: { item: any; i: number }) => (
-    <motion.button key={item.id} onClick={() => setSelected(item)}
-      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-      className="text-left rounded-2xl overflow-hidden group"
-      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, cursor: 'pointer' }}
-      onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
-      onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
-      <div className="relative h-36 overflow-hidden" style={{ background: '#eff6ff' }}>
-        {item.cover_image
-          ? <img src={item.cover_image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
-          : <div className="w-full h-full flex items-center justify-center text-4xl font-black" style={{ color: '#2563eb', opacity: 0.2 }}>{item.title?.[0]?.toUpperCase()}</div>}
-        <div className="absolute bottom-2 left-2">
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#2563eb' }}>Project</span>
-        </div>
-      </div>
-      <div className="p-4">
-        <h3 className="text-sm font-semibold leading-snug mb-1 line-clamp-2" style={{ color: C.text }}>{item.title}</h3>
-        {(item.scenario || item.brief) && (
-          <p className="text-xs line-clamp-2 mb-3" style={{ color: C.muted }}>{item.scenario || item.brief}</p>
-        )}
-        <span className="text-xs font-semibold" style={{ color: '#2563eb' }}>View Details</span>
-      </div>
-    </motion.button>
-  );
-
-  // Group by course
-  const grouped: Record<string, any[]> = {};
-  for (const item of items) {
-    const key = item._course_title ?? '__none__';
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(item);
-  }
-  const courseKeys = Object.keys(grouped).filter(k => k !== '__none__').sort();
-  if (grouped['__none__']) courseKeys.push('__none__');
-
-  return (
-    <div className="space-y-8">
-      {courseKeys.map(key => (
-        <div key={key}>
-          <div className="flex items-center gap-2 mb-4">
-            {key !== '__none__'
-              ? <><BookOpen className="w-3.5 h-3.5" style={{ color: C.green }}/><p className="text-xs font-bold uppercase tracking-widest" style={{ color: C.green }}>{key}</p></>
-              : <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>General</p>
-            }
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: C.pill, color: C.faint }}>{grouped[key].length}</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {grouped[key].map((item, i) => <ProjectCard key={item.id} item={item} i={i}/>)}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -2779,6 +2752,12 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
           const isMe  = r.isMe === true;
           const pct   = maxXP > 0 ? Math.max((r.xp / maxXP) * 100, r.xp > 0 ? 2 : 0) : 0;
           const barColor = r.rank === 1 ? '#f59e0b' : r.rank === 2 ? '#9ca3af' : r.rank === 3 ? '#cd7c2f' : (isDark ? '#4f6ef7' : '#6366f1');
+          const TOP_TITLES: Record<number, { emoji: string; title: string; color: string }> = {
+            1: { emoji: '🔥', title: 'Trailblazer', color: '#f59e0b' },
+            2: { emoji: '⚡', title: 'Innovator',   color: '#9ca3af' },
+            3: { emoji: '🌍', title: 'Pioneer',     color: '#cd7c2f' },
+          };
+          const topTitle = TOP_TITLES[r.rank];
           return (
             <div key={r.id ?? r.rank}
               style={{
@@ -2797,12 +2776,19 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
                 <div className="w-7 flex-shrink-0 flex items-center justify-center">
                   <span className="text-sm font-bold tabular-nums" style={{ color: C.faint }}>{r.rank}</span>
                 </div>
-                <span className="flex-1 text-sm truncate" style={{ color: C.text, fontWeight: isMe ? 700 : 500 }}>
-                  {r.name}
-                  {isMe && (
-                    <span className="ml-2 text-[11px] font-bold" style={{ color: '#f59e0b' }}>· You</span>
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <span className="text-sm truncate" style={{ color: C.text, fontWeight: isMe ? 700 : 500 }}>
+                    {r.name}
+                    {isMe && (
+                      <span className="ml-2 text-[11px] font-bold" style={{ color: '#f59e0b' }}>· You</span>
+                    )}
+                  </span>
+                  {topTitle && (
+                    <span className="text-[11px] font-semibold" style={{ color: topTitle.color }}>
+                      {topTitle.emoji} {topTitle.title}
+                    </span>
                   )}
-                </span>
+                </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <Zap className="w-3 h-3" style={{ color: '#f59e0b' }}/>
                   <span className="text-sm font-bold tabular-nums" style={{ color: r.rank === 1 ? '#f59e0b' : C.text }}>
@@ -3124,9 +3110,6 @@ export default function StudentDashboard() {
             )}
             {activeSection === 'announcements' && (
               <AnnouncementsSection C={C}/>
-            )}
-            {activeSection === 'projects' && user && (
-              <ProjectsSection userId={user.id} C={C}/>
             )}
             {activeSection === 'virtual_experiences' && user && (
               <VirtualExperiencesSection userEmail={user.email} C={C}/>

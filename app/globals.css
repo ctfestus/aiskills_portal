@@ -345,7 +345,7 @@ body {
 /* ─── Rich text rendered output ──────────────────────────────────────────────
    Matches the .rich-editor authoring styles exactly so WYSIWYG is preserved.
    Use <div class="rich-content"> for all dangerouslySetInnerHTML renders.     */
-.rich-content { font-size: 1rem; line-height: 1.4; font-family: var(--font-sans, Inter, sans-serif); }
+.rich-content { font-size: 0.9375rem; line-height: 1.4; font-family: var(--font-sans, Inter, sans-serif); }
 .rich-content p  { margin: 0 0 0.75rem; }
 .rich-content p:last-child { margin-bottom: 0; }
 .rich-content h2 { font-size: 1.75rem; font-weight: 700; margin: 1.25rem 0 0.4rem; letter-spacing: -0.02em; }

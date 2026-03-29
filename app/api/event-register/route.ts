@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   // in application code; the RPC handles only the atomic write.
   const { data: form } = await supabase
     .from('forms')
-    .select('id, config')
+    .select('id, slug, config')
     .eq('id', formId)
     .single();
 
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
       eventTimezone: cfg?.eventDetails?.timezone || '',
       eventLocation: cfg?.eventDetails?.location || '',
       meetingLink:   cfg?.eventDetails?.meetingLink || '',
-      formId,
+      formUrl: `${process.env.APP_URL || 'https://app.aiskillsafrica.com'}/${form.slug ?? formId}`,
     });
 
     // Idempotency: skip if already sent for this response

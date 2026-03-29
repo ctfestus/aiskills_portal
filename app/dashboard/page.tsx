@@ -9,7 +9,7 @@ import {
   Share2, Check, Copy, X, CalendarDays, AlignLeft, Settings, User,
   LogOut, ChevronDown, BookOpen, MapPin, Sun, Moon, Zap,
   ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
-  Users, Megaphone, FolderOpen, Trophy, Menu, CheckCircle2, XCircle,
+  Users, Megaphone, Trophy, Menu, CheckCircle2, XCircle,
   UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
   Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send,
 } from 'lucide-react';
@@ -854,7 +854,6 @@ const NAV_ITEMS = [
   { id: 'events',        label: 'Events',         Icon: CalendarDays,  adminOnly: false },
   { id: 'community',     label: 'Community',      Icon: Users,         adminOnly: false },
   { id: 'announcements', label: 'Announcements',  Icon: Megaphone,     adminOnly: false },
-  { id: 'projects',         label: 'Projects',         Icon: FolderOpen,  adminOnly: false },
   { id: 'virtual_experiences',  label: 'Virtual Experiences',  Icon: Briefcase,   adminOnly: false },
   { id: 'schedule',         label: 'Schedule',         Icon: CalendarDays, adminOnly: false },
   { id: 'reports',       label: 'Reports',        Icon: BarChart3,     adminOnly: false },
@@ -3669,13 +3668,6 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
   if (section === 'leaderboard')  return <LeaderboardSection C={C} />;
 
   if (section === 'assignments') return <AssignmentsManageSection C={C}/>;
-
-  if (section === 'projects') return <GenericListSection table="projects" label="Projects" createHref="/create/project" createLabel="New Project" Icon={FolderOpen} C={C} renderRow={item => (
-    <div className="min-w-0">
-      <p className="font-semibold text-sm truncate" style={{ color: C.text }}>{item.title}</p>
-      <p className="text-xs mt-0.5" style={{ color: C.faint }}>{item.status} · {new Date(item.created_at).toLocaleDateString()}</p>
-    </div>
-  )}/>;
 
   if (section === 'virtual_experiences') return <VirtualExperiencesManageSection C={C} forms={forms} setFormToDelete={setFormToDelete} />;
 
