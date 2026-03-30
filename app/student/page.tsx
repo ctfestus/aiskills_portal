@@ -10,7 +10,7 @@ import {
   CheckCircle, Clock, AlertCircle, Star, ExternalLink,
   GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
   Play, Lock, FileText, BarChart3, Bell, Plus, ArrowLeft, Upload, Video,
-  ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase, Search,
+  ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase, Search, LayoutDashboard,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -158,6 +158,7 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
 
 // --- Nav items ---
 const NAV_ITEMS = [
+  { id: 'overview',      label: 'Overview',       Icon: LayoutDashboard },
   { id: 'courses',       label: 'My Courses',    Icon: BookOpen      },
   { id: 'events',        label: 'Events',         Icon: CalendarDays  },
   { id: 'assignments',   label: 'Assignments',    Icon: ClipboardList },
@@ -514,13 +515,6 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimer = useRef<any>(null);
 
-  // Cohort
-  const [cohortId, setCohortId] = useState<string | null>(null);
-
-  // Learning gap detection
-  const [gaps,       setGaps]       = useState<any[]>([]);
-  const [gapsLoaded, setGapsLoaded] = useState(false);
-
   const isDark = C.text === '#f0f0f0';
 
   useEffect(() => {
@@ -626,29 +620,11 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
         setVeStatusMap(map);
       }
 
-      setCohortId(student?.cohort_id ?? null);
       setLoading(false);
     };
     load();
   }, [userEmail]);
 
-
-  // Learning gap detection (once after cohort is known)
-  useEffect(() => {
-    if (!cohortId || gapsLoaded) return;
-    const fetchGaps = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-      try {
-        const res = await fetch('/api/vector/gaps', {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (res.ok) setGaps((await res.json()).gaps ?? []);
-      } catch { /* ignore */ }
-      setGapsLoaded(true);
-    };
-    fetchGaps();
-  }, [cohortId, gapsLoaded]);
 
   // Debounced semantic search
   useEffect(() => {
@@ -713,45 +689,6 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
           }}
         />
       </div>
-
-      {/* Explore new areas (gap detection) */}
-      {searchResults === null && gaps.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 flex-shrink-0" style={{ color: C.green }} />
-            <p className="text-sm font-semibold" style={{ color: C.text }}>Explore new areas</p>
-            <span className="text-xs" style={{ color: C.muted }}>Topics you haven&apos;t tried yet</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {gaps.map((gap: any) => {
-              const isVE = gap.course.contentType === 'virtual_experience';
-              const href = isVE ? '/student?section=virtual_experiences' : `/${gap.course.slug}?go=1`;
-              return (
-                <a key={gap.course.formId} href={href}
-                  className="rounded-2xl overflow-hidden no-underline flex flex-col transition-all hover:opacity-90"
-                  style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-                  <div className="w-full h-28 flex items-center justify-center overflow-hidden flex-shrink-0 relative"
-                    style={{ background: `${C.green}10` }}>
-                    {gap.course.coverImage
-                      ? <img src={gap.course.coverImage} alt="" className="w-full h-full object-cover" />
-                      : <TrendingUp className="w-8 h-8" style={{ color: C.green, opacity: 0.35 }} />}
-                    <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
-                      style={{ background: `${C.green}22`, color: C.green, backdropFilter: 'blur(4px)' }}>
-                      {gap.topic}
-                    </span>
-                  </div>
-                  <div className="p-3.5 flex-1 flex flex-col gap-1.5">
-                    <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: C.text }}>{gap.course.title}</p>
-                    <div className="mt-auto pt-1">
-                      <span className="text-xs font-semibold" style={{ color: C.green }}>Start learning </span>
-                    </div>
-                  </div>
-                </a>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Search results */}
       {searchResults !== null && (
@@ -3142,6 +3079,564 @@ function CertificatesSection({ userEmail, userName, C }: { userEmail: string; us
   );
 }
 
+// --- Continue Learning card (own component to avoid hooks-in-map violation) ---
+function ContinueLearningCard({ form, attempt, isProject, deadline, C }: {
+  form: any; attempt: any; isProject: boolean; deadline: Date | null; C: typeof LIGHT_C;
+}) {
+  const [imgErr, setImgErr] = useState(false);
+  const now = Date.now();
+  const totalQ = isProject
+    ? (form.config?.modules ?? []).reduce((a: number, m: any) => a + (m.lessons ?? []).reduce((b: number, l: any) => b + (l.requirements ?? []).length, 0), 0)
+    : (form.config?.questions ?? []).length;
+  const done  = isProject
+    ? Object.values((attempt?.progress ?? {})).filter((v: any) => v?.completed).length
+    : (attempt?.current_question_index ?? 0);
+  const pct     = totalQ > 0 ? Math.round((done / totalQ) * 100) : 0;
+  const href    = `/${form.slug || form.id}?go=1`;
+  const daysLeft = deadline ? Math.ceil((deadline.getTime() - now) / 86400000) : null;
+  const dlColor  = daysLeft === null ? null : daysLeft < 0 ? '#ef4444' : daysLeft <= 3 ? '#f59e0b' : '#6b7280';
+  const dlLabel  = daysLeft === null ? null : daysLeft < 0 ? 'Overdue' : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`;
+
+  return (
+    <div className="rounded-2xl overflow-hidden"
+      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      <div className="h-28 overflow-hidden relative" style={{ background: C.thumbBg }}>
+        {form.config?.coverImage && !imgErr
+          ? <img src={form.config.coverImage} alt="" onError={() => setImgErr(true)} className="w-full h-full object-cover"/>
+          : <div className="w-full h-full flex items-center justify-center">
+              {isProject
+                ? <Briefcase className="w-8 h-8 opacity-25" style={{ color: C.green }}/>
+                : <BookOpen   className="w-8 h-8 opacity-25" style={{ color: C.green }}/>}
+            </div>
+        }
+        {isProject && (
+          <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide"
+            style={{ background: 'rgba(0,0,0,0.55)', color: 'white' }}>Project</span>
+        )}
+      </div>
+      <div className="p-4 space-y-3">
+        <p className="text-sm font-semibold line-clamp-2 leading-snug" style={{ color: C.text }}>{form.title}</p>
+        {dlLabel && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+            style={{ background: `${dlColor ?? '#6b7280'}18`, color: dlColor ?? '#6b7280' }}>
+            ⏰ {dlLabel}
+          </span>
+        )}
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-xs" style={{ color: C.faint }}>
+            <span>{pct}% complete</span><span>{done}/{totalQ}</span>
+          </div>
+          <ProgressBar value={pct} color={C.green}/>
+        </div>
+        <a href={href} target="_blank" rel="noreferrer"
+          className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80 dashboard-cta"
+          style={{ background: C.cta, color: C.ctaText }}>
+          <Play className="w-3.5 h-3.5"/> Continue
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// --- SVG Donut chart ---
+function DonutChart({ total, done, color, size = 88 }: { total: number; done: number; color: string; size?: number }) {
+  const C = useC();
+  const r   = (size - 14) / 2;
+  const cx  = size / 2;
+  const cy  = size / 2;
+  const circ = 2 * Math.PI * r;
+  const pct  = total > 0 ? Math.min(done / total, 1) : 0;
+  const dash = pct * circ;
+  return (
+    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={C.pill} strokeWidth={10}/>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={10}
+        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+        style={{ transition: 'stroke-dasharray 0.6s ease' }}/>
+    </svg>
+  );
+}
+
+// --- Overview section ---
+function OverviewSection({ user, userEmail, C, onNavigate }: {
+  user: any; userEmail: string; C: typeof LIGHT_C; onNavigate: (id: SectionId) => void;
+}) {
+  const [loading, setLoading]               = useState(true);
+  const [courses, setCourses]               = useState<any[]>([]);
+  const [courseAttempts, setCourseAttempts] = useState<Record<string, any>>({});
+  const [gpAttempts, setGpAttempts]         = useState<Record<string, any>>({});
+  const [deadlines, setDeadlines]           = useState<Record<string, Date | null>>({});
+  const [certs, setCerts]                   = useState<any[]>([]);
+  const [myRank, setMyRank]                 = useState<number | null>(null);
+  const [totalInCohort, setTotalInCohort]   = useState(0);
+  const [activityEvents, setActivityEvents] = useState<any[]>([]);
+  const [gaps, setGaps]                     = useState<any[]>([]);
+  const [assignmentStats, setAssignmentStats] = useState<{ total: number; submitted: number; graded: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? '';
+
+      const { data: student } = await supabase
+        .from('students').select('cohort_id').eq('id', user.id).single();
+      const cohort = student?.cohort_id ?? null;
+
+      const [formsRes, attemptsRes, gpAttRes, cohortAssignRes, certsData, lbData, actData, gapsData, asmRes] =
+        await Promise.all([
+          cohort
+            ? supabase.from('forms').select('id, title, slug, config, content_type').contains('cohort_ids', [cohort])
+            : Promise.resolve({ data: [] as any[] }),
+          supabase.from('course_attempts')
+            .select('form_id, score, current_question_index, completed_at, passed, updated_at')
+            .eq('student_email', userEmail).order('updated_at', { ascending: false }),
+          supabase.from('guided_project_attempts')
+            .select('form_id, completed_at, progress, updated_at')
+            .eq('student_email', userEmail),
+          cohort
+            ? supabase.from('cohort_assignments').select('form_id, assigned_at').eq('cohort_id', cohort)
+            : Promise.resolve({ data: [] as any[] }),
+          token
+            ? fetch('/api/course', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ action: 'get-my-certificates' }),
+              }).then(r => r.json()).catch(() => ({ certs: [] }))
+            : Promise.resolve({ certs: [] }),
+          cohort && token
+            ? fetch(`/api/leaderboard?cohort_id=${encodeURIComponent(cohort)}`, { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json()).catch(() => ({ rankings: [] }))
+            : Promise.resolve({ rankings: [] }),
+          cohort && token
+            ? fetch(`/api/activity/feed?cohort_id=${encodeURIComponent(cohort)}`, { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json()).catch(() => ({ events: [] }))
+            : Promise.resolve({ events: [] }),
+          token
+            ? fetch('/api/vector/gaps', { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json()).catch(() => ({ gaps: [] }))
+            : Promise.resolve({ gaps: [] }),
+          // Assignment submissions for this student
+          supabase.from('assignment_submissions')
+            .select('id, status')
+            .eq('student_id', user.id),
+        ]);
+
+      if (cancelled) return;
+
+      // Deduplicate course attempts (active beats completed; higher score among completed)
+      const caMap: Record<string, any> = {};
+      for (const a of attemptsRes.data ?? []) {
+        const ex = caMap[a.form_id];
+        if (!ex) { caMap[a.form_id] = a; continue; }
+        if (!a.completed_at && ex.completed_at) { caMap[a.form_id] = a; continue; }
+        if (a.completed_at && ex.completed_at && (a.score ?? 0) > (ex.score ?? 0)) caMap[a.form_id] = a;
+      }
+      const gpMap: Record<string, any> = {};
+      for (const a of gpAttRes.data ?? []) gpMap[a.form_id] = a;
+
+      // Deadline map
+      const assignedAtMap: Record<string, string> = {};
+      for (const ca of cohortAssignRes.data ?? []) assignedAtMap[ca.form_id] = ca.assigned_at;
+      const dlMap: Record<string, Date | null> = {};
+      for (const f of formsRes.data ?? []) {
+        const dl = f.config?.deadline_days;
+        const aa = assignedAtMap[f.id];
+        dlMap[f.id] = aa && dl ? new Date(new Date(aa).getTime() + Number(dl) * 86400000) : null;
+      }
+
+      const isProjForm = (f: any) =>
+        f.content_type === 'guided_project' || f.content_type === 'virtual_experience' ||
+        f.config?.isGuidedProject || f.config?.isVirtualExperience;
+      const isCrsForm  = (f: any) => f.content_type === 'course' || f.config?.isCourse;
+      const allLearning = (formsRes.data ?? []).filter((f: any) => isCrsForm(f) || isProjForm(f));
+
+      // Activity (last 30 min)
+      const ago30 = Date.now() - 30 * 60 * 1000;
+      const recentAct = ((actData as any)?.events ?? []).filter((e: any) => e.ts > ago30).slice(0, 6);
+
+      // Leaderboard rank
+      const rankings: any[] = (lbData as any)?.rankings ?? [];
+      const myEntry = rankings.find((r: any) => r.isMe);
+
+      setCourses(allLearning);
+      setCourseAttempts(caMap);
+      setGpAttempts(gpMap);
+      setDeadlines(dlMap);
+      setCerts((certsData as any)?.certs ?? []);
+      setMyRank(myEntry?.rank ?? null);
+      setTotalInCohort(rankings.length);
+      setActivityEvents(recentAct);
+      setGaps((gapsData as any)?.gaps ?? []);
+      const asmRows = (asmRes as any)?.data ?? [];
+      setAssignmentStats({
+        total:     asmRows.length,
+        submitted: asmRows.filter((a: any) => ['submitted', 'graded'].includes(a.status)).length,
+        graded:    asmRows.filter((a: any) => a.status === 'graded').length,
+      });
+      setLoading(false);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user.id, userEmail]);
+
+  const isProjForm = (f: any) =>
+    f.content_type === 'guided_project' || f.content_type === 'virtual_experience' ||
+    f.config?.isGuidedProject || f.config?.isVirtualExperience;
+
+  const now = Date.now();
+
+  // Shared helper -- true if the item has genuine remaining work
+  const isEffectivelyDone = (f: any, a: any, proj: boolean): boolean => {
+    if (!a) return false;
+    if (a.completed_at) return true;
+    if (proj) {
+      const totalReqs = (f.config?.modules ?? []).reduce(
+        (acc: number, m: any) => acc + (m.lessons ?? []).reduce((b: number, l: any) => b + (l.requirements ?? []).length, 0), 0
+      );
+      const doneReqs = Object.values(a.progress ?? {}).filter((v: any) => v?.completed).length;
+      return totalReqs > 0 && doneReqs >= totalReqs;
+    } else {
+      const totalQ = (f.config?.questions ?? []).length;
+      return totalQ > 0 && (a.current_question_index ?? 0) >= totalQ;
+    }
+  };
+
+  const inProgressCount = courses.filter(f => {
+    const proj = isProjForm(f);
+    const a    = proj ? gpAttempts[f.id] : courseAttempts[f.id];
+    return a && !isEffectivelyDone(f, a, proj);
+  }).length;
+
+  const completedCount = courses.filter(f => {
+    const proj = isProjForm(f);
+    const a    = proj ? gpAttempts[f.id] : courseAttempts[f.id];
+    return isEffectivelyDone(f, a, proj);
+  }).length;
+
+  // In-progress items sorted by last active -- most recent first
+  const continueLearning = [...courses]
+    .map(f => {
+      const proj = isProjForm(f);
+      const a    = proj ? gpAttempts[f.id] : courseAttempts[f.id];
+      return { form: f, attempt: a, isProject: proj, ts: a?.updated_at ? new Date(a.updated_at).getTime() : 0 };
+    })
+    .filter(({ attempt, form, isProject }) => !!attempt && !isEffectivelyDone(form, attempt, isProject))
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, 3);
+
+  // Deadlines in the next 14 days (excluding already-completed)
+  const upcomingDeadlines = Object.entries(deadlines)
+    .map(([formId, dl]) => {
+      if (!dl) return null;
+      const form = courses.find(f => f.id === formId);
+      if (!form) return null;
+      const proj = isProjForm(form);
+      const a    = proj ? gpAttempts[formId] : courseAttempts[formId];
+      if (isEffectivelyDone(form, a, proj)) return null;
+      const daysLeft = Math.ceil((dl.getTime() - now) / 86400000);
+      if (daysLeft > 14) return null;
+      return { form, deadline: dl, daysLeft };
+    })
+    .filter(Boolean)
+    .sort((a: any, b: any) => a.daysLeft - b.daysLeft) as Array<{ form: any; deadline: Date; daysLeft: number }>;
+
+  if (loading) return (
+    <div className="space-y-6">
+      <div><Sk h={28} w="38%" r={8}/><div className="mt-1.5"><Sk h={14} w="52%" r={6}/></div></div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[0,1,2,3].map(i => (
+          <div key={i} className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+            <Sk h={40} w={40} r={12}/><div className="mt-3"><Sk h={26} w="40%"/></div><div className="mt-1.5"><Sk h={12} w="58%"/></div>
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[0,1,2].map(i => <div key={i} className="rounded-2xl h-52" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}/>)}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-8">
+
+      {/* Greeting */}
+      <div>
+        <h1 className="text-2xl font-black" style={{ color: C.text }}>Welcome back 👋</h1>
+        <p className="text-sm mt-1" style={{ color: C.muted }}>
+          {inProgressCount > 0
+            ? `You have ${inProgressCount} item${inProgressCount !== 1 ? 's' : ''} in progress.`
+            : courses.length > 0 ? 'Ready to continue learning today?' : 'Your learning journey starts here.'}
+        </p>
+      </div>
+
+      {/* Pick up where you left off -- most recently accessed, not completed */}
+      {continueLearning[0] && (() => {
+        const { form, attempt, isProject } = continueLearning[0];
+        const dl       = deadlines[form.id] ?? null;
+        const daysLeft = dl ? Math.ceil((dl.getTime() - now) / 86400000) : null;
+        const dlColor  = daysLeft === null ? null : daysLeft < 0 ? '#ef4444' : daysLeft <= 3 ? '#f59e0b' : '#6b7280';
+        const dlLabel  = daysLeft === null ? null : daysLeft < 0 ? 'Overdue' : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`;
+        const totalQ   = isProject
+          ? (form.config?.modules ?? []).reduce((a: number, m: any) => a + (m.lessons ?? []).reduce((b: number, l: any) => b + (l.requirements ?? []).length, 0), 0)
+          : (form.config?.questions ?? []).length;
+        const done     = isProject
+          ? Object.values((attempt?.progress ?? {})).filter((v: any) => v?.completed).length
+          : (attempt?.current_question_index ?? 0);
+        const pct      = totalQ > 0 ? Math.round((done / totalQ) * 100) : 0;
+        const href     = `/${form.slug || form.id}?go=1`;
+
+        return (
+          <div className="rounded-2xl overflow-hidden"
+            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+            <div className="flex items-center gap-4 p-4">
+              {/* Cover image -- fixed small thumbnail */}
+              <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 relative"
+                style={{ background: C.thumbBg }}>
+                {form.config?.coverImage
+                  ? <img src={form.config.coverImage} alt="" className="w-full h-full object-cover"/>
+                  : <div className="w-full h-full flex items-center justify-center">
+                      {isProject
+                        ? <Briefcase className="w-6 h-6 opacity-30" style={{ color: C.green }}/>
+                        : <BookOpen  className="w-6 h-6 opacity-30" style={{ color: C.green }}/>}
+                    </div>
+                }
+              </div>
+              {/* Content */}
+              <div className="flex-1 min-w-0 space-y-2">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>Pick up where you left off</p>
+                  <p className="text-sm font-bold leading-snug truncate" style={{ color: C.text }}>{form.title}</p>
+                  {dlLabel && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mt-1"
+                      style={{ background: `${dlColor ?? '#6b7280'}18`, color: dlColor ?? '#6b7280' }}>
+                      ⏰ {dlLabel}
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px]" style={{ color: C.faint }}>
+                    <span>{pct}%</span><span>{done}/{totalQ}</span>
+                  </div>
+                  <ProgressBar value={pct} color={C.green}/>
+                </div>
+              </div>
+              {/* CTA */}
+              <a href={href} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold flex-shrink-0 transition-opacity hover:opacity-80 dashboard-cta"
+                style={{ background: C.cta, color: C.ctaText }}>
+                <Play className="w-3 h-3"/> Continue
+              </a>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Stats bar */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {([
+          { icon: TrendingUp,  color: '#3b82f6', bg: 'rgba(59,130,246,0.12)',  value: inProgressCount,                                    label: 'In Progress',                                    nav: 'courses'      },
+          { icon: CheckCircle, color: '#16a34a', bg: 'rgba(22,163,74,0.12)',   value: completedCount,                                     label: 'Completed',                                      nav: 'courses'      },
+          { icon: Award,       color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  value: certs.length,                                       label: 'Certificates',                                   nav: 'certificates' },
+          { icon: Trophy,      color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)',  value: myRank ? `#${myRank}` : '--',                       label: totalInCohort > 0 ? `Rank of ${totalInCohort}` : 'Rank', nav: 'leaderboard'  },
+        ] as const).map(({ icon: Icon, color, bg, value, label, nav }) => (
+          <button key={label} onClick={() => onNavigate(nav as SectionId)}
+            className="rounded-2xl p-5 flex items-center gap-4 text-left hover:opacity-90 transition-opacity w-full"
+            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: bg }}>
+              <Icon className="w-5 h-5" style={{ color }}/>
+            </div>
+            <div>
+              <div className="text-2xl font-black tabular-nums" style={{ color: C.text }}>{value}</div>
+              <div className="text-xs font-medium mt-0.5" style={{ color: C.muted }}>{label}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Recommended for you */}
+      {gaps.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 flex-shrink-0" style={{ color: C.green }}/>
+            <h2 className="text-base font-bold" style={{ color: C.text }}>Recommended for You</h2>
+            <span className="text-xs" style={{ color: C.muted }}>Topics you haven&apos;t explored yet</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {gaps.map((gap: any) => {
+              const isVE = gap.course.contentType === 'virtual_experience' || gap.course.contentType === 'guided_project';
+              const slug = gap.course.slug || gap.course.formId;
+              const href = isVE ? '/student#virtual_experiences' : (slug ? `/${slug}?go=1` : '/student');
+              // Only render cover images from safe http/https URLs
+              const rawCover = gap.course.coverImage;
+              const safeCover = (() => {
+                try { const u = new URL(rawCover ?? ''); return (u.protocol === 'https:' || u.protocol === 'http:') ? rawCover : null; } catch { return null; }
+              })();
+              return (
+                <a key={gap.course.formId} href={href}
+                  className="rounded-2xl overflow-hidden no-underline flex flex-col transition-all hover:opacity-90"
+                  style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                  <div className="w-full h-28 flex items-center justify-center overflow-hidden flex-shrink-0 relative"
+                    style={{ background: `${C.green}10` }}>
+                    {safeCover
+                      ? <img src={safeCover} alt="" className="w-full h-full object-cover"/>
+                      : <TrendingUp className="w-8 h-8" style={{ color: C.green, opacity: 0.3 }}/>}
+                    <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
+                      style={{ background: 'rgba(0,0,0,0.45)', color: 'white', backdropFilter: 'blur(4px)' }}>
+                      {String(gap.topic ?? '').slice(0, 24)}
+                    </span>
+                  </div>
+                  <div className="p-4 flex-1 flex flex-col gap-2">
+                    <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: C.text }}>{gap.course.title}</p>
+                    <div className="mt-auto">
+                      <span className="text-xs font-semibold" style={{ color: C.green }}>Start learning </span>
+                    </div>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Two-column: Deadlines | Activity + Achievements */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+
+        {/* Deadlines */}
+        <div className="lg:col-span-3 space-y-3">
+          <h2 className="text-base font-bold" style={{ color: C.text }}>Upcoming Deadlines</h2>
+          {upcomingDeadlines.length === 0 ? (
+            <div className="rounded-2xl p-8 flex flex-col items-center gap-2"
+              style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+              <CheckCircle className="w-8 h-8 opacity-30" style={{ color: '#16a34a' }}/>
+              <p className="text-sm font-semibold" style={{ color: C.text }}>All clear!</p>
+              <p className="text-xs" style={{ color: C.faint }}>No deadlines in the next 14 days.</p>
+            </div>
+          ) : (
+            <div className="rounded-2xl overflow-hidden"
+              style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+              {upcomingDeadlines.map(({ form, daysLeft }, idx) => {
+                const col = daysLeft < 0 ? '#ef4444' : daysLeft <= 3 ? '#f59e0b' : daysLeft <= 7 ? '#f97316' : '#16a34a';
+                const lbl = daysLeft < 0 ? 'Overdue' : daysLeft === 0 ? 'Due today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft} days`;
+                const proj = isProjForm(form);
+                return (
+                  <div key={form.id} className="flex items-center gap-4 px-5 py-4"
+                    style={{ borderBottom: idx < upcomingDeadlines.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: `${col}15` }}>
+                      {proj
+                        ? <Briefcase className="w-4 h-4" style={{ color: col }}/>
+                        : <BookOpen  className="w-4 h-4" style={{ color: col }}/>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{form.title}</p>
+                      <p className="text-xs mt-0.5" style={{ color: C.muted }}>{proj ? 'Project' : 'Course'}</p>
+                    </div>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0"
+                      style={{ background: `${col}15`, color: col }}>{lbl}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Right: Activity feed + Achievements */}
+        <div className="lg:col-span-2 space-y-6">
+
+          {/* Live Activity */}
+          <div className="space-y-3">
+            <h2 className="text-base font-bold" style={{ color: C.text }}>Live Activity</h2>
+            {activityEvents.length === 0 ? (
+              <div className="rounded-2xl p-5 text-center"
+                style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                <p className="text-xs" style={{ color: C.faint }}>No recent cohort activity in the last 30 minutes.</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl overflow-hidden"
+                style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                {activityEvents.map((e: any, idx: number) => (
+                  <div key={`${e.ts}:${String(e.name)}`} className="flex items-center gap-3 px-4 py-3"
+                    style={{ borderBottom: idx < activityEvents.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold"
+                      style={{ background: `${C.green}18`, color: C.green }}>
+                      {String(e.name ?? '?').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs leading-snug" style={{ color: C.text }}>
+                        <span className="font-semibold">{String(e.name ?? '').slice(0, 30)}</span>{' '}
+                        <span style={{ color: C.muted }}>completed</span>
+                      </p>
+                      <p className="text-[11px] truncate mt-0.5" style={{ color: C.faint }}>
+                        {String(e.title ?? '').slice(0, 40)}
+                      </p>
+                    </div>
+                    <Zap className="w-3 h-3 flex-shrink-0" style={{ color: C.green }}/>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Donut charts -- courses + assignments */}
+          <div className="space-y-3">
+            {/* Courses donut */}
+            {(() => {
+              const total     = courses.length;
+              const completed = completedCount;
+              const pct       = total > 0 ? Math.round((completed / total) * 100) : 0;
+              return (
+                <button onClick={() => onNavigate('courses')} className="rounded-2xl p-4 flex items-center gap-4 text-left hover:opacity-90 transition-opacity w-full"
+                  style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                  <div className="relative flex-shrink-0 flex items-center justify-center" style={{ width: 72, height: 72 }}>
+                    <DonutChart total={total} done={completed} color="#09c86c" size={72}/>
+                    <span className="absolute text-xs font-black" style={{ color: C.text }}>{pct}%</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-black" style={{ color: C.text }}>{completed}<span className="text-xs font-semibold" style={{ color: C.muted }}>/{total}</span></p>
+                    <p className="text-xs font-semibold" style={{ color: C.muted }}>Courses completed</p>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <div className="w-2 h-2 rounded-full" style={{ background: '#09c86c' }}/>
+                      <span className="text-[10px]" style={{ color: C.faint }}>Completed</span>
+                      <div className="w-2 h-2 rounded-full ml-2" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}/>
+                      <span className="text-[10px]" style={{ color: C.faint }}>Remaining</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })()}
+
+            {/* Assignments donut */}
+            {assignmentStats && (
+              <button onClick={() => onNavigate('assignments')} className="rounded-2xl p-4 flex items-center gap-4 text-left hover:opacity-90 transition-opacity w-full"
+                style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                <div className="relative flex-shrink-0 flex items-center justify-center" style={{ width: 72, height: 72 }}>
+                  <DonutChart total={assignmentStats.total} done={assignmentStats.submitted} color="#09c86c" size={72}/>
+                  <span className="absolute text-xs font-black" style={{ color: C.text }}>
+                    {assignmentStats.total > 0 ? Math.round((assignmentStats.submitted / assignmentStats.total) * 100) : 0}%
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-black" style={{ color: C.text }}>{assignmentStats.submitted}<span className="text-xs font-semibold" style={{ color: C.muted }}>/{assignmentStats.total}</span></p>
+                  <p className="text-xs font-semibold" style={{ color: C.muted }}>Assignments submitted</p>
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <div className="w-2 h-2 rounded-full" style={{ background: '#09c86c' }}/>
+                    <span className="text-[10px]" style={{ color: C.faint }}>Submitted</span>
+                    <div className="w-2 h-2 rounded-full ml-2" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}/>
+                    <span className="text-[10px]" style={{ color: C.faint }}>Pending</span>
+                  </div>
+                </div>
+              </button>
+            )}
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Main dashboard ---
 export default function StudentDashboard() {
   const [mounted, setMounted] = useState(false);
@@ -3151,7 +3646,7 @@ export default function StudentDashboard() {
   const [user, setUser]       = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeSection, setActiveSection] = useState<SectionId>('courses');
+  const [activeSection, setActiveSection] = useState<SectionId>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(false);
 
@@ -3170,12 +3665,11 @@ export default function StudentDashboard() {
         setActiveSection(hash);
         sessionStorage.setItem('student-section', hash);
       } else {
-        // No hash -- restore last visited section from sessionStorage
+        // No hash -- restore last visited section from sessionStorage, default to overview
         const saved = sessionStorage.getItem('student-section') as SectionId | null;
-        if (saved && NAV_ITEMS.some(n => n.id === saved)) {
-          setActiveSection(saved);
-          window.location.hash = saved;
-        }
+        const target = (saved && NAV_ITEMS.some(n => n.id === saved)) ? saved : 'overview';
+        setActiveSection(target);
+        window.location.hash = target;
       }
     };
     apply();
@@ -3373,14 +3867,17 @@ export default function StudentDashboard() {
         {/* -- Main content -- */}
         <main className="flex-1 min-w-0 overflow-y-auto px-5 md:px-8 py-7">
           <motion.div key={activeSection} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-            {/* Section header */}
-            <div className="flex items-center justify-between mb-6">
-              <div>
+            {/* Section header -- hidden on overview (has its own greeting) */}
+            {activeSection !== 'overview' && (
+              <div className="flex items-center justify-between mb-6">
                 <h1 className="text-xl font-bold tracking-tight" style={{ color: C.text }}>{activeItem.label}</h1>
               </div>
-            </div>
+            )}
 
             {/* Section content */}
+            {activeSection === 'overview' && user && (
+              <OverviewSection user={user} userEmail={user.email} C={C} onNavigate={goSection}/>
+            )}
             {activeSection === 'courses' && user && (
               <CoursesSection userEmail={user.email} C={C}/>
             )}
