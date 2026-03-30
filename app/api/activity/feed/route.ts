@@ -36,7 +36,8 @@ export async function GET(req: NextRequest) {
     const raw = await redis.zrange(activityKey(cohortId), '+inf', since, {
       byScore: true,
       rev:     true,
-      limit:   { offset: 0, count: 20 },
+      offset:  0,
+      count:   20,
     });
 
     const events = (raw as string[])
