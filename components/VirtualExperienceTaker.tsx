@@ -65,6 +65,7 @@ interface Props {
   config: ProjectConfig;
   studentName: string;
   studentEmail: string;
+  userId: string;
   sessionToken: string;
   initialProgress?: Progress;
   initialModuleId?: string;
@@ -77,7 +78,7 @@ interface Props {
 const REQ_META: Record<string, { label: string; color: string; bg: string }> = {
   task:        { label: 'Task',        color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
   deliverable: { label: 'Deliverable', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
-  reflection:  { label: 'Reflection',  color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
+  reflection:  { label: 'Reflection',  color: '#00b95c', bg: 'rgba(0,185,92,0.12)' },
 };
 
 function getVideoEmbedUrl(url: string): string | null {
@@ -136,9 +137,9 @@ function DifficultyDots({ difficulty, color }: { difficulty: string; color: stri
 
 // -- Component ---
 export default function VirtualExperienceTaker({
-  formId, formSlug, config, studentName, studentEmail, sessionToken,
+  formId, formSlug, config, studentName, studentEmail, userId, sessionToken,
   initialProgress = {}, initialModuleId, initialLessonId,
-  isDark = true, accentColor = '#6366f1',
+  isDark = true, accentColor = '#00b95c',
 }: Props) {
   const authHeader = useMemo(
     () => sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {} as Record<string, string>,
@@ -200,7 +201,7 @@ export default function VirtualExperienceTaker({
 
   // Load existing review / completion state
   useEffect(() => {
-    fetch(`/api/guided-project-progress?formId=${formId}&email=${encodeURIComponent(studentEmail)}`, { headers: authHeader })
+    fetch(`/api/guided-project-progress?formId=${formId}&studentId=${userId}`, { headers: authHeader })
       .then(r => r.json())
       .then(({ attempt }) => {
         if (attempt?.review) setReview(attempt.review);
@@ -282,8 +283,11 @@ export default function VirtualExperienceTaker({
     if (!isUnlocked(idx)) return;
     setCurrentModId(modId);
     setCurrentLesId(lesId);
-    mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentLesId]);
 
   const goNext = () => {
     if (!hasNext || !allCurrentDone) return;
@@ -871,7 +875,7 @@ export default function VirtualExperienceTaker({
                           <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-2.5">
                             <div className="flex items-start gap-2">
                               <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
-                                style={{ background: 'rgba(139,92,246,0.12)', color: '#8b5cf6' }}>Short Answer</span>
+                                style={{ background: 'rgba(0,185,92,0.12)', color: '#00b95c' }}>Short Answer</span>
                               <div className="flex-1 min-w-0">
                                 <p className="text-[14.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
                                 {req.description && <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}

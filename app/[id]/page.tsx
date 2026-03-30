@@ -308,6 +308,7 @@ export default function PublicFormPage() {
   const [projectStarted,      setProjectStarted]      = useState(false);
   const [projectStudentName,  setProjectStudentName]  = useState('');
   const [projectStudentEmail, setProjectStudentEmail] = useState('');
+  const [projectUserId,       setProjectUserId]       = useState('');
   const [projectSessionToken, setProjectSessionToken] = useState('');
   const [projectProgress,     setProjectProgress]     = useState<Record<string,any>>({});
   const [projectInitModId,    setProjectInitModId]    = useState('');
@@ -344,6 +345,12 @@ export default function PublicFormPage() {
 
   useEffect(() => {
     const fetchForm = async () => {
+      // Restore session first so the auth token is attached to the forms query.
+      // Running the query in parallel with getUser() meant it fired as anon,
+      // which blocked RLS on courses/VEs.
+      await supabase.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
+
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id as string);
 
       let query = supabase.from('forms').select('*');
@@ -353,10 +360,7 @@ export default function PublicFormPage() {
         query = query.eq('slug', id);
       }
 
-      const [{ data }, { data: { user } }] = await Promise.all([
-        query.single(),
-        supabase.auth.getUser(),
-      ]);
+      const { data } = await query.single();
       if (data) {
         setForm(data);
         if (data.config?.eventDetails?.isEvent) {
@@ -406,6 +410,13 @@ export default function PublicFormPage() {
     };
     fetchForm();
   }, [id]);
+
+  useEffect(() => {
+    if (!form) return;
+    const name = form.config?.title || form.title;
+    if (name) document.title = name;
+    return () => { document.title = 'AI Skills Africa'; };
+  }, [form]);
 
   useEffect(() => {
     if (!success || !form) return;
@@ -631,11 +642,7 @@ export default function PublicFormPage() {
     const totalReqs   = modules.reduce((a: number, m: any) =>
       a + m.lessons.reduce((b: number, l: any) => b + (l.requirements?.length || 0), 0), 0);
 
-    const IND_COLORS: Record<string, string> = {
-      fintech: '#6366f1', marketing: '#f59e0b', hr: '#10b981', finance: '#3b82f6',
-      edtech: '#8b5cf6', healthcare: '#ef4444', ecommerce: '#f97316', consulting: '#14b8a6',
-    };
-    const indColor = IND_COLORS[config.industry] || '#6366f1';
+    const indColor = '#00b95c';
 
     const handleStartProject = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -646,7 +653,7 @@ export default function PublicFormPage() {
       const email = student?.email || user.email || '';
       // Restore any saved progress
       try {
-        const r = await fetch(`/api/guided-project-progress?formId=${form.id}&email=${encodeURIComponent(email)}`, {
+        const r = await fetch(`/api/guided-project-progress?formId=${form.id}&studentId=${user.id}`, {
           headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
         });
         const { attempt } = await r.json();
@@ -658,6 +665,7 @@ export default function PublicFormPage() {
       } catch {}
       setProjectStudentName(name);
       setProjectStudentEmail(email);
+      setProjectUserId(user.id);
       setProjectSessionToken(session?.access_token ?? '');
       setProjectStarted(true);
     };
@@ -670,6 +678,7 @@ export default function PublicFormPage() {
           config={config}
           studentName={projectStudentName}
           studentEmail={projectStudentEmail}
+          userId={projectUserId}
           sessionToken={projectSessionToken}
           initialProgress={projectProgress}
           initialModuleId={projectInitModId}

@@ -1503,15 +1503,12 @@ create policy "forms: own update"
 create policy "forms: own delete"
   on public.forms for delete using (user_id = (select auth.uid()));
 
--- Students can see courses assigned to their cohort
+-- Students can see courses, virtual experiences, and guided projects assigned to their cohort
 create policy "forms: cohort student select"
   on public.forms for select
   using (
-    content_type = 'course'
-    and cohort_id is not null
-    and cohort_id = (
-      select cohort_id from public.students where id = (select auth.uid())
-    )
+    content_type in ('course', 'virtual_experience', 'guided_project')
+    and (select cohort_id from public.students where id = (select auth.uid())) = any(cohort_ids)
   );
 
 create trigger trg_forms_updated_at

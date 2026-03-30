@@ -543,7 +543,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
           : Promise.resolve({ data: [] }),
         supabase.from('course_attempts')
           .select('form_id, score, points, current_question_index, completed_at, passed, updated_at')
-          .eq('student_email', userEmail)
+          .eq('student_id', user.id)
           .order('started_at', { ascending: false }),
         token
           ? fetch('/api/course', {
@@ -611,7 +611,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
       const { data: veAttempts } = await supabase
         .from('guided_project_attempts')
         .select('form_id, completed_at')
-        .eq('student_email', userEmail);
+        .eq('student_id', user.id);
       if (veAttempts?.length) {
         const map: Record<string, { started: boolean; completed: boolean }> = {};
         for (const a of veAttempts) {
@@ -2390,7 +2390,7 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
   );
 }
 
-function VirtualExperiencesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
+function VirtualExperiencesSection({ userId, userEmail, C }: { userId: string; userEmail: string; C: typeof LIGHT_C }) {
   const [items,       setItems]       = useState<any[]>([]);
   const [attempts,    setAttempts]    = useState<Record<string, any>>({});
   const [deadlines,   setDeadlines]   = useState<Record<string, Date | null>>({});
@@ -2400,7 +2400,7 @@ function VirtualExperiencesSection({ userEmail, C }: { userEmail: string; C: typ
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const { data: profile } = await supabase.from('students').select('cohort_id').eq('email', userEmail).maybeSingle();
+      const { data: profile } = await supabase.from('students').select('cohort_id').eq('id', userId).maybeSingle();
       if (!profile?.cohort_id) { setLoading(false); return; }
 
       const { data: forms } = await supabase
@@ -2417,7 +2417,7 @@ function VirtualExperiencesSection({ userEmail, C }: { userEmail: string; C: typ
           supabase
             .from('guided_project_attempts')
             .select('*')
-            .eq('student_email', userEmail.toLowerCase())
+            .eq('student_id', userId)
             .in('form_id', ids),
           supabase
             .from('cohort_assignments')
@@ -2999,7 +2999,7 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
 }
 
 // --- Certificates section ---
-function CertificatesSection({ userEmail, userName, C }: { userEmail: string; userName: string; C: typeof LIGHT_C }) {
+function CertificatesSection({ userId, userEmail, userName, C }: { userId: string; userEmail: string; userName: string; C: typeof LIGHT_C }) {
   const [certs, setCerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -3009,7 +3009,7 @@ function CertificatesSection({ userEmail, userName, C }: { userEmail: string; us
       const { data: certsData } = await supabase
         .from('certificates')
         .select('id, form_id, student_name, issued_at')
-        .eq('student_email', userEmail)
+        .eq('student_id', userId)
         .eq('revoked', false)
         .order('issued_at', { ascending: false });
 
@@ -3198,10 +3198,10 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
             : Promise.resolve({ data: [] as any[] }),
           supabase.from('course_attempts')
             .select('form_id, score, current_question_index, completed_at, passed, updated_at')
-            .eq('student_email', userEmail).order('updated_at', { ascending: false }),
+            .eq('student_id', user.id).order('updated_at', { ascending: false }),
           supabase.from('guided_project_attempts')
             .select('form_id, completed_at, progress, updated_at')
-            .eq('student_email', userEmail),
+            .eq('student_id', user.id),
           cohort
             ? supabase.from('cohort_assignments').select('form_id, assigned_at').eq('cohort_id', cohort)
             : Promise.resolve({ data: [] as any[] }),
@@ -3901,7 +3901,7 @@ export default function StudentDashboard() {
               <AnnouncementsSection C={C}/>
             )}
             {activeSection === 'virtual_experiences' && user && (
-              <VirtualExperiencesSection userEmail={user.email} C={C}/>
+              <VirtualExperiencesSection userId={user.id} userEmail={user.email} C={C}/>
             )}
             {activeSection === 'schedule' && user && (
               <ScheduleSection userId={user.id} C={C}/>
@@ -3910,7 +3910,7 @@ export default function StudentDashboard() {
               <LeaderboardSection userEmail={user.email} C={C}/>
             )}
             {activeSection === 'certificates' && user && (
-              <CertificatesSection userEmail={user.email} userName={userName} C={C}/>
+              <CertificatesSection userId={user.id} userEmail={user.email} userName={userName} C={C}/>
             )}
           </motion.div>
         </main>
