@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       if (formStatus === 'published' && isCourse) {
         fetch(`${process.env.APP_URL || ''}/api/vector/index-course`, {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-reindex-secret': process.env.REINDEX_SECRET ?? '' },
           body:    JSON.stringify({ formId: data.id }),
         }).catch(() => {});
       }
@@ -105,6 +105,55 @@ export async function POST(req: NextRequest) {
     { error: 'Could not generate a unique URL. Try a custom slug.' },
     { status: 409 }
   );
+}
+
+export async function PATCH(req: NextRequest) {
+  // Status toggle -- instructor/admin only, must own the form
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const jwt = authHeader.slice(7);
+
+  const supabase = adminClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { data: profile } = await supabase.from('students').select('role').eq('id', user.id).single();
+  if (!profile || !['instructor', 'admin'].includes(profile.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  let formId: string, status: string;
+  try {
+    ({ formId, status } = await req.json());
+    if (!formId || !['draft', 'published'].includes(status)) throw new Error();
+  } catch {
+    return NextResponse.json({ error: 'formId and status required' }, { status: 400 });
+  }
+
+  // Verify ownership
+  const { data: form } = await supabase.from('forms').select('user_id').eq('id', formId).single();
+  if (!form) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (form.user_id !== user.id && profile.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const { error: updateError } = await supabase.from('forms').update({ status }).eq('id', formId);
+  if (updateError) return NextResponse.json({ error: 'Failed to update status' }, { status: 500 });
+
+  // Re-index when publishing (fire-and-forget)
+  if (status === 'published') {
+    fetch(`${process.env.APP_URL || ''}/api/vector/index-course`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'x-reindex-secret': process.env.REINDEX_SECRET ?? '' },
+      body:    JSON.stringify({ formId }),
+    }).catch(() => {});
+  }
+
+  return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: NextRequest) {

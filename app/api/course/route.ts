@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
 import { getRedis, leaderboardKey, studentNameKey } from '@/lib/redis';
+import { publishActivity } from '@/lib/activity';
 
 const resend  = new Resend(process.env.RESEND_API_KEY);
 const FROM    = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
@@ -154,6 +155,24 @@ export async function POST(req: NextRequest) {
           current_question_index: current_question_index ?? 0,
           updated_at:             new Date().toISOString(),
         }).eq('id', attempt.id);
+
+        // Publish cohort activity feed event (fire-and-forget)
+        if (passed) {
+          Promise.all([
+            supabase.from('students').select('cohort_id, full_name').eq('email', sessionEmail).single(),
+            supabase.from('forms').select('title').eq('id', form_id).single(),
+          ]).then(([{ data: stu }, { data: frm }]) => {
+            if (!stu?.cohort_id || !frm?.title) return;
+            const firstName = (stu.full_name || sessionEmail).split(' ')[0];
+            publishActivity(stu.cohort_id, {
+              name:        firstName,
+              action:      'completed',
+              title:       frm.title,
+              contentType: 'course',
+              ts:          Date.now(),
+            }).catch(() => {});
+          }).catch(() => {});
+        }
 
         // Sync XP to Redis leaderboard sorted set (fire-and-forget)
         if (points != null) {

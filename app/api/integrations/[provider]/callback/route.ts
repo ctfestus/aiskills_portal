@@ -1,26 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createHmac, timingSafeEqual } from 'crypto';
+import { encryptToken } from '@/lib/token-crypto';
+import { getRedis } from '@/lib/redis';
 
 const APP_URL = process.env.APP_URL || 'https://festforms.com';
 
-// -- State token burn register ---
-// Prevents replay of a state token within its 5-minute validity window.
-// In-memory: sufficient for single-instance deployments. For multi-instance /
-// serverless, replace with a Redis SETNX or a `oauth_used_states` DB table.
-const _usedStates  = new Set<string>();
-const _stateExpiry = new Map<string, number>();
-
-function burnState(state: string): boolean {
-  if (_usedStates.has(state)) return false; // already exchanged -- reject replay
-  _usedStates.add(state);
-  _stateExpiry.set(state, Date.now() + 10 * 60 * 1000); // keep entry for 10 min then prune
-  // Prune expired entries to prevent unbounded memory growth.
-  const now = Date.now();
-  for (const [s, exp] of _stateExpiry) {
-    if (now > exp) { _usedStates.delete(s); _stateExpiry.delete(s); }
+// -- State token burn register (Redis-backed, cross-instance safe) ---
+// Uses SET NX (atomic) so that replayed state tokens are rejected even
+// when requests land on different serverless instances.
+async function burnState(state: string): Promise<boolean> {
+  const redis = getRedis();
+  if (!redis) {
+    // Redis not configured -- fail closed: reject all OAuth callbacks
+    // to prevent replay attacks in multi-instance environments.
+    console.error('[oauth/burnState] Redis not configured -- rejecting state to fail closed');
+    return false;
   }
-  return true;
+  try {
+    // SET NX returns 'OK' on first set, null if key already exists (replay)
+    const result = await redis.set(`oauth:state:${state}`, '1', {
+      nx: true,
+      ex: 600, // 10-minute TTL matches state validity window
+    });
+    return result === 'OK';
+  } catch (err) {
+    // Redis error -- fail closed
+    console.error('[oauth/burnState] Redis error:', err);
+    return false;
+  }
 }
 
 const adminSupabase = createClient(
@@ -104,8 +112,9 @@ export async function GET(
       now - ts > 5 * 60 * 1000
     ) return fail('invalid_state');
 
-    // Burn the state token immediately -- reject any replay within the window.
-    if (!burnState(state)) return fail('state_already_used');
+    // Burn the state token atomically via Redis -- rejects replays across all instances.
+    const burned = await burnState(state);
+    if (!burned) return fail('state_already_used');
 
     userId = parsed.userId;
   } catch { return fail('invalid_state'); }
@@ -140,11 +149,11 @@ export async function GET(
     user_id: stateData.userId,
     provider,
     connected: true,
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token ?? null,
-    token_expiry: tokenExpiry,
-    email: accountEmail ?? null,
-    updated_at: new Date().toISOString(),
+    access_token:  encryptToken(tokens.access_token),
+    refresh_token: tokens.refresh_token ? encryptToken(tokens.refresh_token) : null,
+    token_expiry:  tokenExpiry,
+    email:         accountEmail ?? null,
+    updated_at:    new Date().toISOString(),
   }, { onConflict: 'user_id,provider' });
 
   if (upsertErr) return fail('save_failed');

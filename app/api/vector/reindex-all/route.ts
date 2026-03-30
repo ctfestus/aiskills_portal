@@ -19,9 +19,11 @@ function adminClient() {
 
 export async function POST(req: NextRequest) {
   const secret = process.env.REINDEX_SECRET;
-  const provided = req.headers.get('x-reindex-secret');
-  if (secret && provided !== secret) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!secret) {
+    return NextResponse.json({ error: 'Service not configured' }, { status: 503 });
+  }
+  if (req.headers.get('x-reindex-secret') !== secret) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const index = getVectorIndex();

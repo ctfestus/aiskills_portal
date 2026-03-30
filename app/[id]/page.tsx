@@ -911,7 +911,6 @@ export default function PublicFormPage() {
         <nav style={{ position: 'sticky', top: 0, zIndex: 30, background: t.nav, borderBottom: `1px solid ${t.navBorder}`, backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 56, transition: 'background 0.3s' }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
             <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" style={{ height: 32, width: 'auto' }} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: t.logoText, transition: 'color 0.3s' }}>AI Skills Africa</span>
           </Link>
           <button onClick={() => { navigator.clipboard?.writeText(pageUrl); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: t.navText, background: 'none', border: 'none', cursor: 'pointer' }}>
             {linkCopied ? <Check style={{ width: 16, height: 16, color: '#006128' }}/> : <Copy style={{ width: 16, height: 16 }}/>}

@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getVectorIndex, buildCourseEmbedText } from '@/lib/vector';
+import { getRedis } from '@/lib/redis';
 
 function adminClient() {
   return createClient(
@@ -18,6 +19,26 @@ function adminClient() {
 }
 
 export async function POST(req: NextRequest) {
+  // 1. Shared-secret gate -- internal callers only
+  const secret = process.env.REINDEX_SECRET;
+  if (!secret || req.headers.get('x-reindex-secret') !== secret) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  // 2. Rate limiting -- 10 requests per IP per minute (defence-in-depth)
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const redis = getRedis();
+  if (redis) {
+    try {
+      const rlKey = `rate:index-course:${ip}`;
+      const count = await redis.incr(rlKey);
+      if (count === 1) await redis.expire(rlKey, 60);
+      if (count > 10) {
+        return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+      }
+    } catch { /* non-fatal -- proceed if Redis unavailable */ }
+  }
+
   const index = getVectorIndex();
   if (!index) return NextResponse.json({ ok: true, skipped: 'vector not configured' });
 

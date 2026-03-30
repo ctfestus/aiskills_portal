@@ -1,6 +1,69 @@
 ﻿import { GoogleGenAI, Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { GEMINI_MODEL } from '@/lib/ai';
+import { createClient } from '@supabase/supabase-js';
+import { getRedis } from '@/lib/redis';
+
+const ALLOWED_ACTIONS = new Set([
+  'generate_questions',
+  'generate_distractors',
+  'generate_lesson',
+  'generate_hint',
+  'generate_explanation',
+  'generate_outcomes',
+  'generate_course_description',
+  'generate_event_setup',
+  'generate_broadcast_email',
+]);
+
+function adminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+}
+
+async function authenticate(req: NextRequest): Promise<
+  { user: any; profile: any } | NextResponse
+> {
+  const token = req.headers.get('authorization')?.replace('Bearer ', '');
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const supabase = adminClient();
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { data: profile } = await supabase
+    .from('students').select('role').eq('id', user.id).single();
+  if (!profile || !['instructor', 'admin'].includes(profile.role)) {
+    return NextResponse.json({ error: 'Forbidden: instructor or admin access required' }, { status: 403 });
+  }
+
+  return { user, profile };
+}
+
+async function checkRateLimit(userId: string): Promise<NextResponse | null> {
+  const redis = getRedis();
+  if (!redis) {
+    // Fail closed -- AI is a paid feature, don't allow through if limiter is down
+    return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
+  }
+  try {
+    const key   = `rate:ai-course:${userId}`;
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, 3600); // 1-hour window
+    if (count > 20) {
+      return NextResponse.json(
+        { error: 'AI generation limit reached. You can make up to 20 requests per hour.' },
+        { status: 429 },
+      );
+    }
+  } catch {
+    // Redis error -- fail closed
+    return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
+  }
+  return null;
+}
 
 const getAI = () => {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -176,8 +239,22 @@ async function findLessonVideo(query: string): Promise<string | null> {
 }
 
 export async function POST(req: NextRequest) {
+  // 1. Authentication + RBAC -- instructors and admins only
+  const authResult = await authenticate(req);
+  if (authResult instanceof NextResponse) return authResult;
+  const { user } = authResult;
+
+  // 2. Per-user rate limit -- 20 requests per hour
+  const rateLimitError = await checkRateLimit(user.id);
+  if (rateLimitError) return rateLimitError;
+
   const body = await req.json();
   const { action } = body;
+
+  // 3. Action allowlist -- reject unknown actions before touching any API
+  if (!ALLOWED_ACTIONS.has(action)) {
+    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+  }
 
   // Input length guards -- limit injection surface on user-controlled strings
   const clamp = (val: unknown, max: number): string => String(val ?? '').slice(0, max);
@@ -577,7 +654,7 @@ Requirements:
       return NextResponse.json(parse(res.text!));
     }
 
-    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+    return NextResponse.json({ error: 'Unknown action' }, { status: 400 }); // unreachable -- allowlist above
   } catch (err: any) {
     console.error('AI course error:', err);
     return NextResponse.json({ error: 'AI request failed. Please try again.' }, { status: 500 });

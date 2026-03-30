@@ -1061,13 +1061,16 @@ const [isSaving, setIsSaving] = useState(false);
         const { error } = await supabase.from('forms').update({ title: formConfig.title, description: formConfig.description, config: formConfig, slug: slugValue, cohort_ids: selectedCohortIds, status: saveStatus }).eq('id', formId!);
         if (!error) setFormStatus(saveStatus);
         if (error) { if (error.code === '23505') { showToast('This URL slug is already taken. Try a different one.'); setIsSaving(false); return; } throw error; }
-        // Re-index in vector DB so search/recommendations stay current
+        // Re-index via authenticated proxy -- secret stays server-side
         if (saveStatus === 'published') {
-          fetch('/api/vector/index-course', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ formId }),
-          }).catch(() => {});
+          supabase.auth.getSession().then(({ data: { session } }) => {
+            if (!session?.access_token) return;
+            fetch('/api/vector/trigger-index', {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+              body:    JSON.stringify({ formId }),
+            }).catch(() => {});
+          });
         }
         // Notify students in newly added cohorts only
         const oldCohortIds: string[] = Array.isArray(existingForm?.cohort_ids) ? existingForm.cohort_ids : [];

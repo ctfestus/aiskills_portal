@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { confirmationEmail } from '@/lib/email-templates';
+import { getRedis } from '@/lib/redis';
 
 // Service role -- needed to call register_event_attendee (no public RLS policies)
 function adminClient() {
@@ -51,6 +52,34 @@ export async function POST(req: NextRequest) {
   const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : '';
   if (!email) {
     return NextResponse.json({ error: 'Email is required for event registration' }, { status: 400 });
+  }
+
+  // -- Rate limiting (fail open if Redis unavailable) ---
+  // Tier 1: 10 registrations per IP per 15 minutes
+  // Tier 2: 3 registrations per email per hour
+  const redis = getRedis();
+  if (redis) {
+    try {
+      const ip     = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+      const ipKey  = `rate:event-register:ip:${ip}`;
+      const emlKey = `rate:event-register:email:${email}`;
+
+      const [ipCount, emlCount] = await Promise.all([
+        redis.incr(ipKey),
+        redis.incr(emlKey),
+      ]);
+
+      // Set TTL on first hit only
+      if (ipCount  === 1) await redis.expire(ipKey,  15 * 60);
+      if (emlCount === 1) await redis.expire(emlKey, 60 * 60);
+
+      if (ipCount > 10) {
+        return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+      }
+      if (emlCount > 3) {
+        return NextResponse.json({ error: 'Too many registration attempts for this email.' }, { status: 429 });
+      }
+    } catch { /* Redis error -- fail open, let request through */ }
   }
 
   const supabase = adminClient();

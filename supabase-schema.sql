@@ -31,7 +31,7 @@ returns text language sql security definer stable set search_path = public as $$
   select role from public.students where id = (select auth.uid())
 $$;
 
-create or replace function (select public.is_instructor_or_admin())
+create or replace function public.is_instructor_or_admin()
 returns boolean language sql security definer stable set search_path = public as $$
   select coalesce(
     (select role in ('instructor','admin') from public.students where id = (select auth.uid())),
@@ -39,7 +39,7 @@ returns boolean language sql security definer stable set search_path = public as
   )
 $$;
 
-create or replace function (select public.is_admin())
+create or replace function public.is_admin()
 returns boolean language sql security definer stable set search_path = public as $$
   select coalesce(
     (select role = 'admin' from public.students where id = (select auth.uid())),
@@ -1281,7 +1281,9 @@ create policy "project_submissions: student update"
   using  (student_id = (select auth.uid()) and status in ('draft','submitted'))
   with check (
     student_id = (select auth.uid())
+    and status    in ('draft', 'submitted')
     and score     is not distinct from (select score     from public.project_submissions s where s.id = project_submissions.id)
+    and feedback  is not distinct from (select feedback  from public.project_submissions s where s.id = project_submissions.id)
     and graded_by is not distinct from (select graded_by from public.project_submissions s where s.id = project_submissions.id)
     and graded_at is not distinct from (select graded_at from public.project_submissions s where s.id = project_submissions.id)
   );
@@ -1564,13 +1566,21 @@ create index idx_responses_form_id on public.responses(form_id);
 
 alter table public.responses enable row level security;
 
--- Only authenticated users can submit a response
-create policy "responses: authenticated insert"
+-- Only students enrolled in a cohort that has access to the form can submit a response.
+-- Prevents IDOR: unenrolled users cannot insert responses for arbitrary forms.
+create policy "responses: enrolled student insert"
   on public.responses for insert
   to authenticated
   with check (
-    (select auth.uid()) is not null
-    and pg_column_size(data) <= 65536
+    pg_column_size(data) <= 65536
+    and exists (
+      select 1
+      from public.forms f
+      join public.students s on s.cohort_id = any(f.cohort_ids)
+      where f.id = form_id
+        and s.id = (select auth.uid())
+        and f.status = 'published'
+    )
   );
 
 -- Only the form owner can read their submissions

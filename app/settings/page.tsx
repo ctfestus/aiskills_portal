@@ -41,7 +41,7 @@ import { useTheme } from '@/components/ThemeProvider';
 const PEXELS_KEY = process.env.NEXT_PUBLIC_PEXELS_API_KEY ?? '';
 
 const LIGHT_C = {
-  page: '#EEEAE3', nav: 'rgba(238,234,227,0.92)', navBorder: 'rgba(0,0,0,0.07)',
+  page: '#F4F5F7', nav: 'rgba(238,234,227,0.92)', navBorder: 'rgba(0,0,0,0.07)',
   card: 'white', cardBorder: 'rgba(0,0,0,0.07)', cardShadow: '0 1px 4px rgba(0,0,0,0.06)',
   green: '#006128', lime: '#ADEE66', cta: '#006128', ctaText: 'white',
   text: '#111', muted: '#555', faint: '#888',
@@ -399,26 +399,25 @@ export default function SettingsPage() {
       )}
 
       {/* Navbar */}
-      <nav className="sticky top-0 z-20 border-b px-6 md:px-10 h-14 flex items-center justify-between backdrop-blur-md"
-        style={{ background: C.nav, borderColor: C.navBorder }}>
+      <nav className="sticky top-0 z-20 border-b px-6 md:px-10 h-14 flex items-center justify-between"
+        style={{ background: '#06069d', borderColor: 'rgba(255,255,255,0.12)' }}>
         <div className="flex items-center gap-3">
-          <button onClick={() => router.back()} className="p-1.5 rounded-lg transition-colors ff-hover" style={{ color: C.muted }}>
+          <button onClick={() => router.back()} className="p-1.5 rounded-lg transition-opacity hover:opacity-70" style={{ color: 'rgba(255,255,255,0.8)' }}>
             <ArrowLeft className="w-5 h-5"/>
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: '#1a1a1a' }}>
-              <Star className="w-3.5 h-3.5 fill-current" style={{ color: C.lime }}/>
-            </div>
-            <h1 className="text-sm font-bold" style={{ color: C.text }}>Profile Settings</h1>
-          </div>
+          <img
+            src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg"
+            alt="AI Skills Africa"
+            className="h-7 w-auto"
+          />
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={toggleTheme} className="p-2 rounded-xl transition-colors ff-hover" title="Toggle theme" style={{ color: C.faint }}>
+          <button onClick={toggleTheme} className="p-2 rounded-xl transition-opacity hover:opacity-70" title="Toggle theme" style={{ color: 'rgba(255,255,255,0.8)' }}>
             {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
           <button onClick={handleSave} disabled={saving}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-60 hover:opacity-90"
-            style={{ background: saved ? '#16a34a' : C.cta, color: saved ? 'white' : C.ctaText }}>
+            style={{ background: saved ? '#16a34a' : 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.25)' }}>
             {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : saved ? <Check className="w-4 h-4"/> : null}
             {saving ? 'Saving…' : saved ? 'Saved!' : 'Save changes'}
           </button>

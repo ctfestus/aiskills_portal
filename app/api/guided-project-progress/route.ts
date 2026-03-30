@@ -39,8 +39,11 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Verify ownership
-    const { data: form } = await supabase.from('forms').select('user_id').eq('id', formId).single();
-    const isAdmin = user.email?.endsWith('@aiskillsafrica.com');
+    const [{ data: form }, { data: profile }] = await Promise.all([
+      supabase.from('forms').select('user_id').eq('id', formId).single(),
+      supabase.from('students').select('role').eq('id', user.id).single(),
+    ]);
+    const isAdmin = profile?.role === 'admin';
     if (!form || (form.user_id !== user.id && !isAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -94,13 +97,11 @@ export async function POST(req: NextRequest) {
 
     if (!attempt) return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
 
-    const { data: form } = await supabase
-      .from('forms')
-      .select('user_id')
-      .eq('id', attempt.form_id)
-      .single();
-
-    const isAdmin = user.email?.endsWith('@aiskillsafrica.com');
+    const [{ data: form }, { data: reviewProfile }] = await Promise.all([
+      supabase.from('forms').select('user_id').eq('id', attempt.form_id).single(),
+      supabase.from('students').select('role').eq('id', user.id).single(),
+    ]);
+    const isAdmin = reviewProfile?.role === 'admin';
     if (!form || (form.user_id !== user.id && !isAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

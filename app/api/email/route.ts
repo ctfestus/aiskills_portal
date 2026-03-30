@@ -160,7 +160,8 @@ export async function POST(req: NextRequest) {
       if (typeof to === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim()) && !data?.responseId) {
         if (!await getCreatorId(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         const html = courseResultEmail(data);
-        await resend.emails.send({ from: FROM, to: to.trim(), subject: `Your result: ${data?.courseTitle || 'Course'}`, html });
+        const testSubject = data?.passed ? `🎉 Congratulations! Your certificate for ${data?.courseTitle || 'Course'} is ready.` : `Your result: ${data?.courseTitle || 'Course'}`;
+        await resend.emails.send({ from: FROM, to: to.trim(), subject: testSubject, html });
         return NextResponse.json({ success: true, test: true });
       }
 
@@ -289,7 +290,7 @@ export async function POST(req: NextRequest) {
 
       case 'course-result': {
         const d = courseResultData!;
-        subject = `Your result: ${d.percentage}% ${d.passed ? '✓ Passed' : '-- ' + d.courseTitle}`;
+        subject = d.passed ? `🎉 Congratulations! Your certificate for ${d.courseTitle} is ready.` : `Your result: ${d.courseTitle}`;
         html = courseResultEmail(d as Parameters<typeof courseResultEmail>[0]);
         break;
       }

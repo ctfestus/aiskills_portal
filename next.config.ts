@@ -24,6 +24,11 @@ const appHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // Enables Next.js to read x-nonce from the request header and stamp it
+    // onto its inline scripts, allowing nonce-based CSP without unsafe-inline.
+    nonce: true,
+  },
   async redirects() {
     return [
       { source: '/favicon.ico', destination: 'https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png', permanent: false },

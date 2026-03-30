@@ -1,33 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const adminClient = () =>
-  createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+// User-scoped client -- RLS enforces ownership at the DB level.
+// The service role is NOT used here so we never bypass RLS.
+function userClient(jwt: string) {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { Authorization: `Bearer ${jwt}` } } },
+  );
+}
 
-async function getCreatorId(req: NextRequest): Promise<string | null> {
-  const auth = req.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return null;
-  const { data: { user }, error } = await adminClient().auth.getUser(auth.slice(7));
-  if (error || !user) return null;
-  return user.id;
+// Admin client used only for auth.getUser() -- never for data queries.
+function adminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
 }
 
 export async function GET(req: NextRequest) {
-  const creatorId = await getCreatorId(req);
-  if (!creatorId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = req.headers.get('authorization');
+  if (!auth?.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const jwt = auth.slice(7);
+
+  // Verify the token is valid
+  const { data: { user }, error: authError } = await adminClient().auth.getUser(jwt);
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   const { searchParams } = new URL(req.url);
   const formId  = searchParams.get('formId');
-  const formIds = searchParams.get('formIds'); // comma-separated list
+  const formIds = searchParams.get('formIds');
 
   const ids = formIds ? formIds.split(',').filter(Boolean) : formId ? [formId] : [];
   if (!ids.length) return NextResponse.json({ error: 'formId or formIds is required' }, { status: 400 });
 
-  const supabase = adminClient();
+  // Use the user-scoped client -- RLS on `forms` enforces user_id = auth.uid()
+  // so only forms this user owns will be returned. No manual ownership check needed.
+  const supabase = userClient(jwt);
 
-  // Verify all requested forms belong to this creator
-  const { data: ownedForms } = await supabase.from('forms').select('id')
-    .in('id', ids).eq('user_id', creatorId);
+  const { data: ownedForms } = await supabase
+    .from('forms')
+    .select('id')
+    .in('id', ids);
+
   const ownedIds = (ownedForms ?? []).map((f: any) => f.id);
   if (!ownedIds.length) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 

@@ -1516,18 +1516,18 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
   const handleStatusToggle = async (newStatus: 'draft' | 'published') => {
     if (newStatus === currentStatus || statusUpdating) return;
     setStatusUpdating(true);
-    const { error } = await supabase.from('forms').update({ status: newStatus }).eq('id', form.id);
-    if (!error) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/forms', {
+      method:  'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ formId: form.id, status: newStatus }),
+    });
+    if (res.ok) {
       setCurrentStatus(newStatus);
       onStatusChange?.(newStatus);
-      // Re-index when publishing so it appears in search/recommendations immediately
-      if (newStatus === 'published') {
-        fetch('/api/vector/index-course', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ formId: form.id }),
-        }).catch(() => {});
-      }
     }
     setStatusUpdating(false);
   };

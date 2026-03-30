@@ -202,9 +202,7 @@ export function courseResultEmail(data: {
     <p><b>Hi ${name || 'there'},</b></p>
 
     ${passed ? `
-      <p style="font-size:22px;font-weight:900;margin-bottom:4px;">🎉 Congratulations!</p>
-      <p style="font-size:16px;font-weight:700;margin-top:0;">Your certificate for <b>${courseTitle}</b> is ready.</p>
-      <p style="color:#555;">You have successfully completed the course. Your certificate is ready to view, download, and share.</p>
+      <p style="color:#555;">You have successfully completed <b>${courseTitle}</b>. Your certificate is ready to view, download, and share.</p>
       ${certUrl ? cta('🎓 View Your Certificate', certUrl) : cta('View Course', formUrl)}
     ` : `
       <p>Thanks for completing <b>${courseTitle}</b>. Keep practising -- you can retake it to improve your score.</p>

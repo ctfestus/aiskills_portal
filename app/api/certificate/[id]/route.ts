@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const adminSupabase = createClient(
+// Service role is appropriate here: this is a server-side public read-only
+// endpoint. It never exposes student_email, has no write operations, and
+// the output is deliberately minimal (display fields only).
+// The security boundary is enforced in application code -- only non-revoked
+// certs are served, and form_id is never included in the response.
+const anonSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 // Returns public display data for a certificate -- never exposes student_email.
@@ -13,7 +18,7 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const { data: cert, error } = await adminSupabase
+  const { data: cert, error } = await anonSupabase
     .from('certificates')
     .select('id, student_name, issued_at, revoked, form_id')
     .eq('id', id)
@@ -24,10 +29,10 @@ export async function GET(
 
   // Use form_id only server-side for lookups -- never include it in the response.
   const formId = cert.form_id;
-  const { data: form } = await adminSupabase.from('forms').select('title, config, user_id').eq('id', formId).single();
+  const { data: form } = await anonSupabase.from('forms').select('title, config, user_id').eq('id', formId).single();
 
   const { data: rawSettings } = form?.user_id
-    ? await adminSupabase.from('certificate_defaults').select('*').eq('user_id', form.user_id).maybeSingle()
+    ? await anonSupabase.from('certificate_defaults').select('*').eq('user_id', form.user_id).maybeSingle()
     : { data: null };
 
   const settings = rawSettings

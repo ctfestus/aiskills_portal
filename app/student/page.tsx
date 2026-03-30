@@ -21,7 +21,7 @@ import { RichTextEditor } from '@/components/RichTextEditor';
 
 // --- Design tokens ---
 const LIGHT_C = {
-  page:        '#F7F8F9',
+  page:        '#F4F5F7',
   nav:         'rgba(255,255,255,0.95)',
   navBorder:   'rgba(0,0,0,0.07)',
   card:        'white',
@@ -236,8 +236,8 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
   const [imgErr, setImgErr] = useState(false);
 
   const courseUrl = `/${course.form?.slug || course.form_id}?go=1`;
-  const actionHref = completed && passed && certId ? `/certificate/${certId}` : courseUrl;
-  const actionLabel = completed ? (passed && certId ? 'View Certificate' : 'Retake') : currentIdx > 0 ? 'Continue' : 'Start';
+  const actionHref = courseUrl;
+  const actionLabel = completed ? (passed ? 'Review' : 'Retake') : currentIdx > 0 ? 'Continue' : 'Start';
 
   // eslint-disable-next-line react-hooks/purity
   const nowMs = Date.now();
@@ -310,23 +310,14 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
           </button>
 
           <div className="flex items-center gap-2">
-            {/* Review -- only for passed+cert */}
-            {completed && passed && certId && (
-              <a href={courseUrl} target="_blank" rel="noreferrer"
-                className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-xl transition-opacity hover:opacity-70"
-                style={{ background: C.pill, color: C.muted }}>
-                <Play className="w-3 h-3"/>
-                Review
-              </a>
-            )}
             {/* Primary action */}
             <a href={actionHref} target="_blank" rel="noreferrer"
               className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70 dashboard-cta"
               style={{
-                background: completed ? (passed && certId ? C.green : C.pill) : C.cta,
-                color: completed ? (passed && certId ? 'white' : C.muted) : C.ctaText,
+                background: completed ? C.pill : C.cta,
+                color: completed ? C.muted : C.ctaText,
               }}>
-              {completed && passed && certId ? <Award className="w-3 h-3"/> : <Play className="w-3 h-3"/>}
+              <Play className="w-3 h-3"/>
               {actionLabel}
             </a>
           </div>
@@ -523,6 +514,13 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimer = useRef<any>(null);
 
+  // Cohort
+  const [cohortId, setCohortId] = useState<string | null>(null);
+
+  // Learning gap detection
+  const [gaps,       setGaps]       = useState<any[]>([]);
+  const [gapsLoaded, setGapsLoaded] = useState(false);
+
   const isDark = C.text === '#f0f0f0';
 
   useEffect(() => {
@@ -628,10 +626,29 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
         setVeStatusMap(map);
       }
 
+      setCohortId(student?.cohort_id ?? null);
       setLoading(false);
     };
     load();
   }, [userEmail]);
+
+
+  // Learning gap detection (once after cohort is known)
+  useEffect(() => {
+    if (!cohortId || gapsLoaded) return;
+    const fetchGaps = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      try {
+        const res = await fetch('/api/vector/gaps', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok) setGaps((await res.json()).gaps ?? []);
+      } catch { /* ignore */ }
+      setGapsLoaded(true);
+    };
+    fetchGaps();
+  }, [cohortId, gapsLoaded]);
 
   // Debounced semantic search
   useEffect(() => {
@@ -676,6 +693,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
   );
 
   return (
+    <>
     <div className="space-y-6">
       {/* Semantic search bar */}
       <div className="relative">
@@ -695,6 +713,45 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
           }}
         />
       </div>
+
+      {/* Explore new areas (gap detection) */}
+      {searchResults === null && gaps.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 flex-shrink-0" style={{ color: C.green }} />
+            <p className="text-sm font-semibold" style={{ color: C.text }}>Explore new areas</p>
+            <span className="text-xs" style={{ color: C.muted }}>Topics you haven&apos;t tried yet</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {gaps.map((gap: any) => {
+              const isVE = gap.course.contentType === 'virtual_experience';
+              const href = isVE ? '/student?section=virtual_experiences' : `/${gap.course.slug}?go=1`;
+              return (
+                <a key={gap.course.formId} href={href}
+                  className="rounded-2xl overflow-hidden no-underline flex flex-col transition-all hover:opacity-90"
+                  style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                  <div className="w-full h-28 flex items-center justify-center overflow-hidden flex-shrink-0 relative"
+                    style={{ background: `${C.green}10` }}>
+                    {gap.course.coverImage
+                      ? <img src={gap.course.coverImage} alt="" className="w-full h-full object-cover" />
+                      : <TrendingUp className="w-8 h-8" style={{ color: C.green, opacity: 0.35 }} />}
+                    <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
+                      style={{ background: `${C.green}22`, color: C.green, backdropFilter: 'blur(4px)' }}>
+                      {gap.topic}
+                    </span>
+                  </div>
+                  <div className="p-3.5 flex-1 flex flex-col gap-1.5">
+                    <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: C.text }}>{gap.course.title}</p>
+                    <div className="mt-auto pt-1">
+                      <span className="text-xs font-semibold" style={{ color: C.green }}>Start learning </span>
+                    </div>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Search results */}
       {searchResults !== null && (
@@ -766,6 +823,8 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
         )}
       </AnimatePresence>
     </div>
+
+    </>
   );
 }
 
@@ -3096,6 +3155,13 @@ export default function StudentDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(false);
 
+  // Live activity ticker (persists across all tabs)
+  const [activeTicker,       setActiveTicker]       = useState<{ name: string; title: string } | null>(null);
+  const [cohortIdForTicker,  setCohortIdForTicker]  = useState<string | null>(null);
+  const seenActivityGlobal = useRef<Set<string>>(new Set());
+  const tickerTimerGlobal  = useRef<any>(null);
+  const pageLoadTimeGlobal = useRef(Date.now());
+
   useEffect(() => {
     setMounted(true);
     const apply = () => {
@@ -3116,6 +3182,38 @@ export default function StudentDashboard() {
     window.addEventListener('hashchange', apply);
     return () => window.removeEventListener('hashchange', apply);
   }, []);
+
+  // Activity feed polling -- runs on all tabs
+  useEffect(() => {
+    if (!cohortIdForTicker) return;
+    const poll = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      try {
+        const res = await fetch(`/api/activity/feed?cohort_id=${cohortIdForTicker}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) return;
+        const { events } = await res.json();
+        const thirtyMinsAgo = Date.now() - 30 * 60 * 1000;
+        const freshEvents = (events as any[]).filter(e => e.ts > thirtyMinsAgo);
+        const newEvent = freshEvents.find(e => {
+          const key = `${e.ts}:${e.name}:${e.title}`;
+          if (seenActivityGlobal.current.has(key)) return false;
+          seenActivityGlobal.current.add(key);
+          return true;
+        });
+        if (newEvent) {
+          setActiveTicker({ name: newEvent.name, title: newEvent.title });
+          if (tickerTimerGlobal.current) clearTimeout(tickerTimerGlobal.current);
+          tickerTimerGlobal.current = setTimeout(() => setActiveTicker(null), 7000);
+        }
+      } catch { /* ignore */ }
+    };
+    poll();
+    const interval = setInterval(poll, 15000);
+    return () => { clearInterval(interval); clearTimeout(tickerTimerGlobal.current); };
+  }, [cohortIdForTicker]);
 
   function goSection(id: SectionId) {
     setActiveSection(id);
@@ -3139,6 +3237,9 @@ export default function StudentDashboard() {
       setUser(authUser);
       setProfile(profileData);
 
+      // Fetch cohort for global activity ticker (fire-and-forget)
+      supabase.from('students').select('cohort_id').eq('id', authUser.id).single()
+        .then(({ data: s }) => { if (s?.cohort_id) setCohortIdForTicker(s.cohort_id); });
 
       setLoading(false);
     };
@@ -3154,7 +3255,7 @@ export default function StudentDashboard() {
   const activeItem = NAV_ITEMS.find(n => n.id === activeSection)!;
 
   if (!mounted) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: '#F7F8F9' }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#F4F5F7' }}>
       <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#0e09dd' }}/>
     </div>
   );
@@ -3169,7 +3270,7 @@ export default function StudentDashboard() {
     <div className="min-h-screen" style={{ background: C.page }}>
       {/* -- Top nav -- */}
       <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3 border-b backdrop-blur-md"
-        style={{ background: theme === 'dark' ? C.nav : '#0f0bd6', borderColor: theme === 'dark' ? C.navBorder : '#0f0bd6' }}>
+        style={{ background: theme === 'dark' ? C.nav : '#06069d', borderColor: theme === 'dark' ? C.navBorder : '#06069d' }}>
         <div className="flex items-center gap-3">
           {/* Mobile menu toggle */}
           <button onClick={() => setSidebarOpen(o => !o)}
@@ -3214,7 +3315,7 @@ export default function StudentDashboard() {
               animate={{ width: navCollapsed ? 56 : 220 }}
               transition={{ duration: 0.2, ease: 'easeInOut' }}
               className={`fixed lg:static inset-y-0 left-0 z-40 lg:z-auto flex flex-col border-r overflow-hidden transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
-              style={{ background: theme === 'dark' ? '#1E1F26' : '#0e09dd', borderColor: C.navBorder, top: 57, color: 'white' }}>
+              style={{ background: theme === 'dark' ? '#1E1F26' : '#06069d', borderColor: C.navBorder, top: 57, color: 'white' }}>
               {/* Collapse toggle -- desktop only */}
               <div className="px-2 pt-2 pb-1 hidden lg:flex" style={{ justifyContent: navCollapsed ? 'center' : 'flex-end' }}>
                 <button
@@ -3310,6 +3411,31 @@ export default function StudentDashboard() {
           </motion.div>
         </main>
       </div>
+
+      {/* Global live activity ticker */}
+      <AnimatePresence>
+        {activeTicker && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.96 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+            className="fixed bottom-6 left-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl max-w-[260px]"
+            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}
+          >
+            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ background: `${C.green}18` }}>
+              <Zap className="w-3.5 h-3.5" style={{ color: C.green }} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold truncate" style={{ color: C.text }}>
+                {activeTicker.name} just completed
+              </p>
+              <p className="text-[11px] truncate" style={{ color: C.muted }}>{activeTicker.title}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

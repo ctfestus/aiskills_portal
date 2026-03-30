@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
     if (formStatus === 'published') {
       fetch(`${process.env.APP_URL || ''}/api/vector/index-course`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-reindex-secret': process.env.REINDEX_SECRET ?? '' },
         body:    JSON.stringify({ formId: editId }),
       }).catch(() => {});
     }
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
   if (formStatus === 'published') {
     fetch(`${process.env.APP_URL || ''}/api/vector/index-course`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-reindex-secret': process.env.REINDEX_SECRET ?? '' },
       body:    JSON.stringify({ formId: data.id }),
     }).catch(() => {});
   }

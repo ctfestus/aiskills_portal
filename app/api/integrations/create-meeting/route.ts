@@ -1,5 +1,6 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { encryptToken, decryptToken } from '@/lib/token-crypto';
 
 const adminSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -37,17 +38,28 @@ async function refreshTeams(refreshToken: string): Promise<string | null> {
 
 async function getValidToken(integration: any, provider: string): Promise<string | null> {
   const expired = integration.token_expiry && new Date(integration.token_expiry) < new Date(Date.now() + 60_000);
-  if (!expired) return integration.access_token;
+
+  // Decrypt stored access token
+  let accessToken: string;
+  try { accessToken = decryptToken(integration.access_token); }
+  catch { return null; }
+
+  if (!expired) return accessToken;
   if (!integration.refresh_token) return null;
 
+  // Decrypt stored refresh token
+  let refreshToken: string;
+  try { refreshToken = decryptToken(integration.refresh_token); }
+  catch { return null; }
+
   let newToken: string | null = null;
-  if (provider === 'google_meet') newToken = await refreshGoogle(integration.refresh_token);
-  else if (provider === 'zoom')   newToken = await refreshZoom(integration.refresh_token);
-  else if (provider === 'teams')  newToken = await refreshTeams(integration.refresh_token);
+  if (provider === 'google_meet') newToken = await refreshGoogle(refreshToken);
+  else if (provider === 'zoom')   newToken = await refreshZoom(refreshToken);
+  else if (provider === 'teams')  newToken = await refreshTeams(refreshToken);
 
   if (newToken) {
     await adminSupabase.from('user_integrations').update({
-      access_token: newToken,
+      access_token: encryptToken(newToken),
       token_expiry: new Date(Date.now() + 3_600_000).toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('user_id', integration.user_id).eq('provider', provider);
