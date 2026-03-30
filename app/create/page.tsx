@@ -3262,7 +3262,7 @@ const [isSaving, setIsSaving] = useState(false);
                     {/* Copy link */}
                     <button
                       type="button"
-                      onClick={handleShare}
+                      onClick={() => handleShare()}
                       disabled={isSaving}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-80"
                       style={{ background: accentColor, color: C.ctaText }}
