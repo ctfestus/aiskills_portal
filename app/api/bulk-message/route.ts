@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
   // 3. Fetch students
   const { data: students } = await supabase
     .from('students')
-    .select('email, full_name, cohort_id')
+    .select('id, email, full_name, cohort_id')
     .in('cohort_id', activeCohortIds);
 
   if (!students?.length) return NextResponse.json({ error: 'No students found' }, { status: 404 });
