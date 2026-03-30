@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   // Verify the caller owns the form
   const { data: form } = await supabase
     .from('forms')
-    .select('user_id, title, slug, content_type')
+    .select('user_id, title, slug, content_type, config')
     .eq('id', formId)
     .single();
 
@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
     contentType,
     status,
     formUrl,
+    coverImage: form.config?.coverImage || null,
   });
 
   try {
@@ -78,6 +79,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error('[nudge-student]', err);
-    return NextResponse.json({ error: err.message || 'Send failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to send nudge. Please try again.' }, { status: 500 });
   }
 }

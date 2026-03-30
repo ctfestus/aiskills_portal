@@ -10,7 +10,7 @@ import {
   CheckCircle, Clock, AlertCircle, Star, ExternalLink,
   GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
   Play, Lock, FileText, BarChart3, Bell, Plus, ArrowLeft, Upload, Video,
-  ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase,
+  ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase, Search,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -514,6 +514,16 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
   const [deadlines, setDeadlines] = useState<Record<string, Date | null>>({});
   const [loading,   setLoading]   = useState(true);
   const [detailCourse, setDetailCourse] = useState<any>(null);
+  // VE attempt status map: formId -> { started, completed }
+  const [veStatusMap, setVeStatusMap] = useState<Record<string, { started: boolean; completed: boolean }>>({});
+
+  // Semantic search
+  const [searchQuery,   setSearchQuery]   = useState('');
+  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimer = useRef<any>(null);
+
+  const isDark = C.text === '#f0f0f0';
 
   useEffect(() => {
     const load = async () => {
@@ -605,10 +615,52 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
         setDeadlines(dlMap);
       }
 
+      // Load guided_project_attempts for VE status in search results
+      const { data: veAttempts } = await supabase
+        .from('guided_project_attempts')
+        .select('form_id, completed_at')
+        .eq('student_email', userEmail);
+      if (veAttempts?.length) {
+        const map: Record<string, { started: boolean; completed: boolean }> = {};
+        for (const a of veAttempts) {
+          map[a.form_id] = { started: true, completed: Boolean(a.completed_at) };
+        }
+        setVeStatusMap(map);
+      }
+
       setLoading(false);
     };
     load();
   }, [userEmail]);
+
+  // Debounced semantic search
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!searchQuery.trim() || searchQuery.trim().length < 3) {
+      setSearchResults(null);
+      return;
+    }
+    searchTimer.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(`/api/vector/search?q=${encodeURIComponent(searchQuery.trim())}`, {
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+        });
+        if (res.ok) {
+          const { results } = await res.json();
+          setSearchResults(results ?? []);
+        } else {
+          setSearchResults([]);
+        }
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(searchTimer.current);
+  }, [searchQuery]);
 
   if (loading) return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -625,11 +677,89 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {courses.map(c => (
-          <CourseCard key={c.form_id} course={c} deadline={deadlines[c.form_id]} C={C} onDetails={() => setDetailCourse(c)}/>
-        ))}
+      {/* Semantic search bar */}
+      <div className="relative">
+        <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: C.muted }} />
+        {searchLoading && (
+          <Loader2 className="w-3.5 h-3.5 absolute right-3.5 top-1/2 -translate-y-1/2 animate-spin" style={{ color: C.muted }} />
+        )}
+        <input
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search courses by topic, skill, or keyword…"
+          className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm outline-none transition-all"
+          style={{
+            background:  isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+            border:      `1px solid ${C.cardBorder}`,
+            color:       C.text,
+          }}
+        />
       </div>
+
+      {/* Search results */}
+      {searchResults !== null && (
+        <div>
+          {searchResults.length === 0 ? (
+            <p className="text-sm text-center py-6" style={{ color: C.muted }}>
+              No courses found for &ldquo;{searchQuery}&rdquo;
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>
+                {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {searchResults.map((r: any) => {
+                  const matched = courses.find((c: any) => c.form_id === r.formId);
+                  if (matched) {
+                    return <CourseCard key={r.formId} course={matched} deadline={deadlines[r.formId]} C={C} onDetails={() => setDetailCourse(matched)} />;
+                  }
+                  // Not in courses list -- could be a VE or unstarted course
+                  const isVE      = r.contentType === 'guided_project' || r.contentType === 'virtual_experience';
+                  const veStatus  = isVE ? veStatusMap[r.formId] : null;
+                  const statusLabel = veStatus?.completed ? 'Completed' : veStatus?.started ? 'In Progress' : 'Not started';
+                  const typeLabel   = isVE ? 'Virtual Experience' : 'Course';
+                  const href        = isVE ? `/student?section=virtual_experiences` : `/${r.slug}?go=1`;
+                  return (
+                    <a key={r.formId} href={href}
+                      className="rounded-2xl overflow-hidden no-underline flex flex-col transition-all hover:opacity-90"
+                      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                      <div className="w-full h-36 flex items-center justify-center overflow-hidden flex-shrink-0"
+                        style={{ background: `${C.green}12` }}>
+                        {r.coverImage
+                          ? <img src={r.coverImage} alt="" className="w-full h-full object-cover" />
+                          : <BookOpen className="w-10 h-10" style={{ color: C.green, opacity: 0.5 }} />}
+                      </div>
+                      <div className="p-4 flex-1 flex flex-col gap-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.muted }}>{typeLabel}</p>
+                        <p className="text-sm font-bold leading-snug" style={{ color: C.text }}>{r.title}</p>
+                        <p className="text-xs" style={{ color: veStatus?.completed ? C.green : C.muted }}>{statusLabel}</p>
+                        <div className="mt-auto pt-2">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
+                            style={{ background: `${C.green}15`, color: C.green }}>
+                            <Play className="w-3 h-3" />
+                            {veStatus?.completed ? 'Review' : veStatus?.started ? 'Continue' : `Start ${typeLabel}`}
+                          </span>
+                        </div>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Regular courses grid -- hidden while searching */}
+      {searchResults === null && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {courses.map(c => (
+            <CourseCard key={c.form_id} course={c} deadline={deadlines[c.form_id]} C={C} onDetails={() => setDetailCourse(c)}/>
+          ))}
+        </div>
+      )}
+
       <AnimatePresence>
         {detailCourse && (
           <CourseDetailPane course={detailCourse} C={C} onClose={() => setDetailCourse(null)}/>
@@ -989,17 +1119,40 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
     load();
   }, [assignment.id, userId]);
 
+  const ALLOWED_TYPES = new Set([
+    'application/pdf',
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+    'text/csv', 'text/plain',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/zip',
+  ]);
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
     e.target.value = '';
     for (const file of files) {
+      if (!ALLOWED_TYPES.has(file.type)) {
+        setReadyFiles(prev => [...prev, { name: file.name, url: '', status: 'error', error: 'File type not allowed. Accepted: PDF, images, Word, Excel, PowerPoint, CSV, ZIP.' }]);
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        setReadyFiles(prev => [...prev, { name: file.name, url: '', status: 'error', error: 'File exceeds the 10 MB size limit.' }]);
+        continue;
+      }
       const key = `${Date.now()}-${file.name}`;
       const path = `submissions/${assignment.id}/${userId}/${key}`;
       setReadyFiles(prev => [...prev, { name: file.name, url: '', status: 'uploading' }]);
       const { error: upErr } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
       if (upErr) {
-        setReadyFiles(prev => prev.map(f => f.name === file.name && f.status === 'uploading' ? { ...f, status: 'error', error: upErr.message } : f));
+        console.error('[upload]', upErr.message);
+        setReadyFiles(prev => prev.map(f => f.name === file.name && f.status === 'uploading' ? { ...f, status: 'error', error: 'Upload failed. Please try again.' } : f));
       } else {
         const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
         setReadyFiles(prev => prev.map(f => f.name === file.name && f.status === 'uploading' ? { ...f, url: publicUrl, status: 'done' } : f));
@@ -1108,16 +1261,41 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
 
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4">
-          <div>
-            {assignment._course_title && (
-              <p className="text-xs font-semibold mb-1 flex items-center gap-1" style={{ color: C.green }}>
-                <BookOpen className="w-3 h-3"/> {assignment._course_title}
-              </p>
-            )}
-            <h2 className="text-[15px] font-bold" style={{ color: C.text }}>{assignment.title}</h2>
-          </div>
+          <h2 className="text-[15px] font-bold" style={{ color: C.text }}>{assignment.title}</h2>
           {submission && <StatusBadge status={submission.status}/>}
         </div>
+
+        {/* Related course card */}
+        {assignment._course_title && (
+          <>
+            <div style={{ borderTop: `1px solid ${C.divider}` }}/>
+            <div className="px-6 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: C.faint }}>Related Course</p>
+              <a
+                href={`/${assignment._course_slug || assignment.related_course}?go=1`}
+                className="flex items-center gap-3 no-underline transition-all hover:opacity-80"
+                style={{ background: '#fff', border: `1px solid ${C.divider}`, borderRadius: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}
+              >
+                {/* Cover image with padding */}
+                <div className="flex-shrink-0 p-2">
+                  <div className="w-16 h-16 rounded-lg overflow-hidden flex items-center justify-center" style={{ background: `${C.green}18` }}>
+                    {assignment._course_cover
+                      ? <img src={assignment._course_cover} alt={assignment._course_title} className="w-full h-full object-cover" />
+                      : <BookOpen className="w-6 h-6" style={{ color: C.green }}/>
+                    }
+                  </div>
+                </div>
+                {/* Text */}
+                <div className="flex-1 min-w-0 py-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: C.green }}>Course</p>
+                  <p className="text-[13px] font-semibold leading-snug truncate" style={{ color: C.text }}>{assignment._course_title}</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: C.faint }}>Review course material before submitting</p>
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 mr-4" style={{ color: C.faint }}/>
+              </a>
+            </div>
+          </>
+        )}
 
         {assignment.scenario && (
           <>
@@ -1390,19 +1568,25 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
           .eq('student_id', userId),
       ]);
 
-      // Resolve related course names from forms table
+      // Resolve related course data from forms table
       const courseIds = [...new Set((assignments ?? []).map((a: any) => a.related_course).filter(Boolean))];
-      let courseNameMap: Record<string, string> = {};
+      let courseMap: Record<string, { title: string; slug: string; coverImage?: string }> = {};
       if (courseIds.length) {
-        const { data: courses } = await supabase.from('forms').select('id, title').in('id', courseIds);
-        courseNameMap = Object.fromEntries((courses ?? []).map((c: any) => [c.id, c.title]));
+        const { data: courses } = await supabase.from('forms').select('id, title, slug, config').in('id', courseIds);
+        courseMap = Object.fromEntries((courses ?? []).map((c: any) => [c.id, {
+          title: c.title,
+          slug: c.slug,
+          coverImage: c.config?.coverImage || null,
+        }]));
       }
 
       const subMap = Object.fromEntries((subs ?? []).map(s => [s.assignment_id, s]));
       setItems((assignments ?? []).map((a: any) => ({
         ...a,
         _sub: subMap[a.id] ?? null,
-        _course_title: a.related_course ? (courseNameMap[a.related_course] ?? null) : null,
+        _course_title:  a.related_course ? (courseMap[a.related_course]?.title ?? null) : null,
+        _course_slug:   a.related_course ? (courseMap[a.related_course]?.slug ?? null) : null,
+        _course_cover:  a.related_course ? (courseMap[a.related_course]?.coverImage ?? null) : null,
       })));
       setLoading(false);
     };

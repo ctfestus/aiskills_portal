@@ -432,6 +432,7 @@ function VirtualExperienceCreatePageInner() {
           coverImage,
           cohort_ids: selectedCohorts,
           deadline_days: deadlineDays ? Number(deadlineDays) : null,
+          status,
         }),
       });
 

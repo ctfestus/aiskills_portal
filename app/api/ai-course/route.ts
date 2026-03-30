@@ -580,6 +580,6 @@ Requirements:
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   } catch (err: any) {
     console.error('AI course error:', err);
-    return NextResponse.json({ error: err?.message ?? 'AI request failed' }, { status: 500 });
+    return NextResponse.json({ error: 'AI request failed. Please try again.' }, { status: 500 });
   }
 }

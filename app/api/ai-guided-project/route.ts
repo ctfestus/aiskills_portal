@@ -545,6 +545,6 @@ RULES:
 
   } catch (err: any) {
     console.error('[ai-guided-project]', err);
-    return NextResponse.json({ error: err.message || 'AI generation failed' }, { status: 500 });
+    return NextResponse.json({ error: 'AI generation failed. Please try again.' }, { status: 500 });
   }
 }

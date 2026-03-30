@@ -671,6 +671,9 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
         <Link href={`/dashboard/${form.id}`} className="block">
           <h3 className="text-sm font-semibold truncate mb-1 hover:opacity-70 transition-opacity" style={{ color: C.text }}>{form.title}</h3>
         </Link>
+        {form.status === 'draft' && (
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold mb-1" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>DRAFT</span>
+        )}
         {type === 'event' && form.config?.eventDetails?.date && (
           <p className="text-xs mb-1 flex items-center gap-1" style={{ color: C.green }}>
             <CalendarDays className="w-3 h-3"/>
@@ -819,6 +822,9 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
 
             {/* Title */}
             <h3 className="text-sm font-bold leading-snug line-clamp-2" style={{ color: C.text }}>{form.title}</h3>
+            {form.status === 'draft' && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>DRAFT</span>
+            )}
 
             {/* Description */}
             {form.config?.description && (
@@ -1693,6 +1699,9 @@ function VirtualExperiencesManageSection({ C, forms, setFormToDelete }: { C: typ
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: `${color}18`, color }}>{cfg.industry || 'Project'}</span>
                   <span className="text-[10px]" style={{ color: C.faint }}>{cfg.difficulty}</span>
+                  {form.status === 'draft' && (
+                    <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>Draft</span>
+                  )}
                 </div>
                 <p className="font-semibold text-sm" style={{ color: C.text }}>{form.title}</p>
                 <p className="text-xs" style={{ color: C.faint }}>{cfg.company} · {totalLessons} lesson{totalLessons !== 1 ? 's' : ''}</p>

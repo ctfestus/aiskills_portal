@@ -2,6 +2,7 @@
 import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
 import { confirmationEmail, reminderEmail, courseResultEmail, blastEmail } from '@/lib/email-templates';
+import { getVectorIndex, buildCourseEmbedText } from '@/lib/vector';
 
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -218,17 +219,55 @@ export async function POST(req: NextRequest) {
       const formUrl = form?.slug ? `${appUrl}/${form.slug}` : `${appUrl}/${data.formId}`;
       const certUrl = cert?.id ? `${appUrl}/certificate/${cert.id}` : undefined;
 
+      const studentEmail = response?.data?.email ?? '';
+      const passed       = response?.data?.passed ?? false;
+
+      // Fetch recommendations for passing students
+      let recommendations: Array<{ title: string; slug: string; coverImage?: string | null }> = [];
+      if (passed && studentEmail) {
+        try {
+          const index = getVectorIndex();
+          if (index && form) {
+            const { data: student } = await supabase
+              .from('students').select('cohort_id').eq('email', studentEmail).maybeSingle();
+
+            const { data: attempts } = await supabase
+              .from('course_attempts').select('form_id').eq('student_email', studentEmail);
+
+            const seenIds = new Set((attempts ?? []).map((a: any) => a.form_id));
+            seenIds.add(data.formId);
+
+            const queryText = buildCourseEmbedText(form.config, form.config?.title || '');
+            const results   = await index.query({ data: queryText, topK: 10, includeMetadata: true });
+
+            const cohortId      = student?.cohort_id ?? null;
+            recommendations = results
+              .filter((r: any) => {
+                const m = r.metadata;
+                if (!m || m.status !== 'published') return false;
+                if (seenIds.has(m.formId)) return false;
+                if ((r.score ?? 0) < 0.6) return false;
+                if (cohortId) return (m.cohortIds ?? []).includes(cohortId);
+                return (m.cohortIds ?? []).some((c: string) => (form as any).cohort_ids?.includes(c));
+              })
+              .slice(0, 3)
+              .map((r: any) => ({ title: r.metadata.title, slug: r.metadata.slug, coverImage: r.metadata.coverImage ?? null }));
+          }
+        } catch { /* non-critical -- don't block the email */ }
+      }
+
       courseResultData = {
         name:        response?.data?.name,
         courseTitle: form?.config?.title || '',
         score:       response?.data?.score       ?? 0,
         total:       response?.data?.total       ?? 0,
         percentage:  response?.data?.percentage  ?? 0,
-        passed:      response?.data?.passed      ?? false,
+        passed,
         points:      response?.data?.points,
         passmark:    form?.config?.passmark       ?? 50,
         formUrl,
         certUrl,
+        recommendations,
       };
     }
 
@@ -404,6 +443,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error('[email]', err);
-    return NextResponse.json({ error: err.message || 'Send failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to send email. Please try again.' }, { status: 500 });
   }
 }

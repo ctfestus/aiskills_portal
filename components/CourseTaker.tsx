@@ -201,6 +201,7 @@ export function CourseTaker({
   certificateId = null,
   initialStudentName = '',
   initialStudentEmail = '',
+  relatedAssignment = null,
 }: any) {
   const [phase, setPhase] = useState<'info' | 'course' | 'complete'>(
     collectStudentInfo || !!initialStudentName ? 'info' : 'course'
@@ -724,6 +725,24 @@ export function CourseTaker({
       });
   }, [isSuccess, formId, studentEmail]);
 
+  // -- Smart course recommendations (fetch when student passes) --
+  const [recommendations, setRecommendations] = useState<any[]>([]);
+  useEffect(() => {
+    if (!isSuccess || !formId) return;
+    // Only fetch if the student passed
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.access_token) return;
+      fetch('/api/vector/recommend', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body:    JSON.stringify({ completedFormId: formId }),
+      })
+        .then(r => r.ok ? r.json() : { recommendations: [] })
+        .then(({ recommendations: recs }) => { if (recs?.length) setRecommendations(recs); })
+        .catch(() => {});
+    });
+  }, [isSuccess, formId]);
+
   // -- All questions answered but student never hit Submit (e.g. closed tab) --
   // Detect on mount/resume and auto-transition to the completion screen.
   useEffect(() => {
@@ -1112,6 +1131,77 @@ export function CourseTaker({
                 })}
               </div>
             )}
+          </motion.div>
+        )}
+
+        {/* -- Assignment Capstone -- */}
+        {relatedAssignment && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className={`rounded-2xl overflow-hidden border ${isDark ? 'bg-zinc-900/80 border-zinc-800/60' : 'bg-white border-zinc-100'}`}
+            style={{ boxShadow: isDark ? 'none' : '0 1px 4px rgba(0,0,0,0.06)' }}
+          >
+            <div className="h-1 w-full" style={{ background: accent }} />
+            <div className="px-5 py-5 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${accent}18` }}>
+                <BookOpen className="w-5 h-5" style={{ color: accent }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[10px] font-semibold uppercase tracking-widest mb-1 ${mutedColor}`}>Your Next Step</p>
+                <p className={`text-sm font-bold leading-snug mb-1 ${textColor}`}>{relatedAssignment.title}</p>
+                <p className={`text-xs leading-relaxed ${mutedColor}`}>
+                  Apply what you just learned. Complete the assignment to reinforce your skills.
+                </p>
+              </div>
+            </div>
+            <div className={`px-5 pb-4`}>
+              <a
+                href={`/student?section=assignments`}
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl font-semibold text-sm transition-all hover:opacity-90 active:scale-[0.98]"
+                style={{ background: accent, color: '#fff' }}
+              >
+                Start Assignment <ArrowRight className="w-4 h-4" />
+              </a>
+            </div>
+          </motion.div>
+        )}
+
+        {/* -- AI-powered course recommendations -- */}
+        {recommendations.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.45 }}
+          >
+            <p className={`text-[10px] font-semibold uppercase tracking-widest mb-3 ${mutedColor}`}>
+              What to take next
+            </p>
+            <div className="space-y-2">
+              {recommendations.map((rec: any, i: number) => (
+                <a
+                  key={rec.formId}
+                  href={`/${rec.slug}?go=1`}
+                  className={`flex items-center gap-3 rounded-xl p-3 no-underline transition-all hover:opacity-80 border ${
+                    isDark ? 'bg-zinc-900/60 border-zinc-800/60' : 'bg-white border-zinc-100'
+                  }`}
+                  style={{ boxShadow: isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.05)' }}
+                >
+                  <div className="w-10 h-10 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center"
+                    style={{ background: `${accent}15` }}>
+                    {rec.coverImage
+                      ? <img src={rec.coverImage} alt="" className="w-full h-full object-cover" />
+                      : <BookOpen className="w-4 h-4" style={{ color: accent }} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-semibold truncate ${textColor}`}>{rec.title}</p>
+                    <p className={`text-[10px] mt-0.5 ${mutedColor}`}>Recommended for you</p>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accent }} />
+                </a>
+              ))}
+            </div>
           </motion.div>
         )}
       </div>
@@ -2180,6 +2270,22 @@ export function CourseTaker({
               )
             ) : (
               <>
+                {/* Contextual assignment banner on last question */}
+                {relatedAssignment && currentQuestionIndex === totalQuestions - 1 && (
+                  <div
+                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl border`}
+                    style={{
+                      background: `${accent}12`,
+                      borderColor: `${accent}30`,
+                    }}
+                  >
+                    <BookOpen className="w-4 h-4 flex-shrink-0" style={{ color: accent }} />
+                    <p className="text-xs leading-relaxed flex-1" style={{ color: isDark ? '#a1a1aa' : '#52525b' }}>
+                      <span className="font-semibold" style={{ color: accent }}>Almost there!</span>{' '}
+                      Submit your results to unlock the <span className="font-semibold">"{relatedAssignment.title}"</span> assignment.
+                    </p>
+                  </div>
+                )}
                 <button
                   onClick={handleNextDirect}
                   disabled={!isAnswered() && questionType !== 'arrange'}

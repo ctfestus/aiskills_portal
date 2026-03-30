@@ -37,8 +37,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, description, config, slug: preferredSlug, cohort_ids, deadline_days } = body;
+  const { title, description, config, slug: preferredSlug, cohort_ids, deadline_days, status: bodyStatus } = body;
   if (!config) return NextResponse.json({ error: 'config is required' }, { status: 400 });
+
+  const formStatus = bodyStatus === 'draft' ? 'draft' : 'published';
 
   // Detect content type from config -- platform only supports 'course' and 'event'
   const isCourse = Boolean(config?.isCourse);
@@ -60,8 +62,8 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabase
       .from('forms')
-      .insert({ user_id: user.id, title, description, config: finalConfig, slug, content_type, cohort_ids: cohort_ids ?? [] })
-      .select('id, slug, content_type')
+      .insert({ user_id: user.id, title, description, config: finalConfig, slug, content_type, cohort_ids: cohort_ids ?? [], status: formStatus })
+      .select('id, slug, content_type, status')
       .single();
 
     if (!error) {
@@ -82,7 +84,15 @@ export async function POST(req: NextRequest) {
           contentType: content_type,
         }).catch(() => {});
       }
-      return NextResponse.json({ id: data.id, slug: data.slug, content_type: data.content_type });
+      // Index in vector DB for semantic search/recommendations (only published courses)
+      if (formStatus === 'published' && isCourse) {
+        fetch(`${process.env.APP_URL || ''}/api/vector/index-course`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ formId: data.id }),
+        }).catch(() => {});
+      }
+      return NextResponse.json({ id: data.id, slug: data.slug, content_type: data.content_type, status: data.status });
     }
 
     if (error.code === '23505') { attempt++; continue; }

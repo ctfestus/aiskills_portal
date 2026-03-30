@@ -299,6 +299,7 @@ export default function PublicFormPage() {
   const [success, setSuccess] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [relatedForms, setRelatedForms] = useState<any[]>([]);
+  const [relatedAssignment, setRelatedAssignment] = useState<{ id: string; title: string } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [certificateId, setCertificateId] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -370,6 +371,18 @@ export default function PublicFormPage() {
             .single();
           if (prof) setCreatorProfile(prof);
         }
+        // Fetch related assignment for this course (capstone feature)
+        if (data.config?.isCourse) {
+          supabase
+            .from('assignments')
+            .select('id, title')
+            .eq('related_course', data.id)
+            .eq('status', 'published')
+            .limit(1)
+            .single()
+            .then(({ data: asgn }) => { if (asgn) setRelatedAssignment(asgn); });
+        }
+
         // Pre-fill from logged-in student
         if (user && data.config?.isCourse) {
           const { data: student } = await supabase
@@ -1119,6 +1132,7 @@ export default function PublicFormPage() {
             postSubmission={config.postSubmission}
             relatedForms={relatedForms}
             certificateId={certificateId}
+            relatedAssignment={relatedAssignment}
           />
         )}
 

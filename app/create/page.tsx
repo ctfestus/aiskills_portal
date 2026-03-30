@@ -851,6 +851,8 @@ export default function Page() {
   const [copied, setCopied] = useState(false);
   const [user, setUser] = useState<any>(null);
 const [isSaving, setIsSaving] = useState(false);
+  const [savingAs, setSavingAs] = useState<'draft' | 'published' | null>(null);
+  const [formStatus, setFormStatus] = useState<'draft' | 'published'>('published');
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (message: string, type: 'error' | 'success' | 'info' = 'error') => {
@@ -954,7 +956,7 @@ const [isSaving, setIsSaving] = useState(false);
       setIsLoadingEdit(false);
     } else if (editId) {
       supabase.from('forms').select('*').eq('id', editId).single().then(({ data, error }) => {
-        if (data && !error) { setFormConfig(data.config); setSavedFormId(data.id); setCustomSlug(data.slug || ''); if (data.cohort_ids?.length) setSelectedCohortIds(data.cohort_ids); }
+        if (data && !error) { setFormConfig(data.config); setSavedFormId(data.id); setCustomSlug(data.slug || ''); if (data.cohort_ids?.length) setSelectedCohortIds(data.cohort_ids); if (data.status) setFormStatus(data.status); }
         setIsLoadingEdit(false);
       });
     } else {
@@ -1010,10 +1012,11 @@ const [isSaving, setIsSaving] = useState(false);
   };
 
   // -- Supabase save/share --
-  const handleShare = async () => {
+  const handleShare = async (saveStatus: 'draft' | 'published' = 'published') => {
     if (!formConfig) return;
     if (!user) { showToast('Please sign in to save and share your work.', 'info'); window.location.href = '/auth'; return; }
     setIsSaving(true);
+    setSavingAs(saveStatus);
     try {
       let formId = savedFormId;
       // Use custom slug if provided, otherwise auto-generate a 5-char alphanumeric slug
@@ -1036,24 +1039,36 @@ const [isSaving, setIsSaving] = useState(false);
             slug: slugValue,
             cohort_ids: selectedCohortIds,
             deadline_days: formConfig.deadline_days ?? null,
+            status: saveStatus,
           }),
         });
         const data = await res.json();
         if (!res.ok) {
           showToast(data.error ?? 'Failed to save form.');
           setIsSaving(false);
+          setSavingAs(null);
           return;
         }
         formId = data.id; setSavedFormId(formId);
+        setFormStatus(data.status ?? saveStatus);
         if (!customSlug.trim()) setCustomSlug(data.slug);
         // Always redirect to the detail page after the first save
         router.push(`/dashboard/${formId}?tab=settings`);
         return;
       } else {
         // Fetch current cohort_ids before update to detect newly added cohorts
-        const { data: existingForm } = await supabase.from('forms').select('cohort_ids, slug, content_type').eq('id', formId!).single();
-        const { error } = await supabase.from('forms').update({ title: formConfig.title, description: formConfig.description, config: formConfig, slug: slugValue, cohort_ids: selectedCohortIds }).eq('id', formId!);
+        const { data: existingForm } = await supabase.from('forms').select('cohort_ids, slug, content_type, status').eq('id', formId!).single();
+        const { error } = await supabase.from('forms').update({ title: formConfig.title, description: formConfig.description, config: formConfig, slug: slugValue, cohort_ids: selectedCohortIds, status: saveStatus }).eq('id', formId!);
+        if (!error) setFormStatus(saveStatus);
         if (error) { if (error.code === '23505') { showToast('This URL slug is already taken. Try a different one.'); setIsSaving(false); return; } throw error; }
+        // Re-index in vector DB so search/recommendations stay current
+        if (saveStatus === 'published') {
+          fetch('/api/vector/index-course', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ formId }),
+          }).catch(() => {});
+        }
         // Notify students in newly added cohorts only
         const oldCohortIds: string[] = Array.isArray(existingForm?.cohort_ids) ? existingForm.cohort_ids : [];
         const addedCohortIds = selectedCohortIds.filter((id: string) => !oldCohortIds.includes(id));
@@ -1086,7 +1101,7 @@ const [isSaving, setIsSaving] = useState(false);
     } catch (e: any) {
       console.error('Failed to save form', e);
       showToast('Failed to save. Please check your connection and try again.');
-    } finally { setIsSaving(false); }
+    } finally { setIsSaving(false); setSavingAs(null); }
   };
 
   // -- Template selection --
@@ -1704,10 +1719,32 @@ const [isSaving, setIsSaving] = useState(false);
           <button onClick={toggleTheme} type="button" className="p-2 rounded-lg transition-colors ff-hover" title="Toggle theme" style={{ color: theme === 'dark' ? C.faint : 'white' }}>
             {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
-          <button type="button" onClick={handleShare} disabled={isSaving} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-60 hover:opacity-90" style={{ background: accentColor, color: C.ctaText }}>
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : copied ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-            {copied ? 'Saved!' : savedFormId ? 'Save' : 'Publish'}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Draft status pill -- only shown when form is already saved as draft */}
+            {savedFormId && formStatus === 'draft' && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: C.pill, color: C.muted }}>Draft</span>
+            )}
+            <button
+              type="button"
+              onClick={() => handleShare('draft')}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-60 hover:opacity-80"
+              style={{ background: C.pill, color: C.text }}
+            >
+              {savingAs === 'draft' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Save Draft
+            </button>
+            <button
+              type="button"
+              onClick={() => handleShare('published')}
+              disabled={isSaving}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-60 hover:opacity-90"
+              style={{ background: accentColor, color: C.ctaText }}
+            >
+              {savingAs === 'published' ? <Loader2 className="w-4 h-4 animate-spin" /> : copied ? <Check className="w-4 h-4" /> : null}
+              {copied && savingAs !== 'published' ? 'Saved!' : savedFormId && formStatus === 'published' ? 'Save' : 'Publish'}
+            </button>
+          </div>
         </div>
       </header>
 

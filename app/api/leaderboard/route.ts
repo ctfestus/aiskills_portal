@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getRedis, leaderboardKey, studentNameKey } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = adminClient();
 
-    // Resolve caller's profile: role + cohort
+    // Resolve caller's profile
     const { data: profile } = await supabase
       .from('students')
       .select('role, cohort_id, email')
@@ -42,7 +43,6 @@ export async function GET(req: NextRequest) {
     const isInstructorOrAdmin = profile.role === 'instructor' || profile.role === 'admin';
 
     if (isInstructorOrAdmin) {
-      // Instructor/admin must own at least one form assigned to this cohort
       const { data: ownedForm } = await supabase
         .from('forms')
         .select('id')
@@ -51,30 +51,62 @@ export async function GET(req: NextRequest) {
         .limit(1)
         .maybeSingle();
 
-      // Admins bypass ownership check
       if (!ownedForm && profile.role !== 'admin') {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     } else {
-      // Students may only view their own cohort's leaderboard
       if (profile.cohort_id !== cohortId) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
 
-    // Get all students in this cohort
+    const redis  = getRedis();
+    const lbKey  = leaderboardKey(cohortId);
+    const nameKey = studentNameKey(cohortId);
+
+    // Try Redis first (only if configured)
+    if (redis) {
+      try {
+        const redisEntries = await redis.zrange(lbKey, 0, -1, { rev: true, withScores: true });
+
+        if (redisEntries && redisEntries.length > 0) {
+          const callerEmail = (profile.email ?? user.email ?? '').toLowerCase().trim();
+          const nameMap: Record<string, string> = (await redis.hgetall(nameKey)) ?? {};
+
+          const rankings = redisEntries.map((entry: any, i: number) => {
+            const email = entry.member ?? entry;
+            const xp    = entry.score ?? 0;
+            const name  = nameMap[email] || email;
+            return {
+              rank: i + 1,
+              name,
+              xp,
+              ...(isInstructorOrAdmin ? { email } : { isMe: email.toLowerCase() === callerEmail }),
+            };
+          });
+
+          return NextResponse.json({ rankings, source: 'redis' });
+        }
+      } catch (redisErr) {
+        console.error('[leaderboard] redis read failed, falling back to supabase', redisErr);
+      }
+    }
+
+    // --- Redis miss or not configured: fall back to Supabase ---
     const { data: students, error: sErr } = await supabase
       .from('students')
       .select('id, full_name, email')
       .eq('cohort_id', cohortId)
       .eq('role', 'student');
 
-    if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
+    if (sErr) {
+      console.error('[leaderboard] students fetch', sErr);
+      return NextResponse.json({ error: 'Failed to load leaderboard.' }, { status: 500 });
+    }
     if (!students?.length) return NextResponse.json({ rankings: [] });
 
     const emails = students.map((s: any) => s.email);
 
-    // Get XP + completions in parallel
     const [{ data: xpRows }, { data: completions }] = await Promise.all([
       supabase.from('student_xp').select('student_email, total_xp').in('student_email', emails),
       supabase.from('course_attempts')
@@ -97,19 +129,42 @@ export async function GET(req: NextRequest) {
     const ranked = students
       .map((s: any) => ({
         id:          s.id,
+        email:       s.email,
         name:        s.full_name?.trim() || s.email,
         xp:          xpMap[s.email] ?? 0,
         completions: completionCount[s.email] ?? 0,
-        // Email only returned to instructors/admins; students get an isMe flag instead
-        ...(isInstructorOrAdmin
-          ? { email: s.email }
-          : { isMe: s.email.toLowerCase() === callerEmail }),
       }))
       .sort((a: any, b: any) => b.xp - a.xp || b.completions - a.completions)
       .map((s: any, i: number) => ({ ...s, rank: i + 1 }));
 
-    return NextResponse.json({ rankings: ranked });
+    // Seed Redis if available (fire-and-forget)
+    if (redis && ranked.length) {
+      try {
+        const pipeline = redis.pipeline();
+        for (const s of ranked) {
+          pipeline.zadd(lbKey, { score: s.xp, member: s.email });
+        }
+        const nameEntries: Record<string, string> = {};
+        for (const s of ranked) nameEntries[s.email] = s.name;
+        pipeline.hset(nameKey, nameEntries);
+        pipeline.expire(lbKey,   600);
+        pipeline.expire(nameKey, 600);
+        pipeline.exec().catch((err: any) => console.error('[leaderboard] redis seed failed', err));
+      } catch (redisErr) {
+        console.error('[leaderboard] redis seed error', redisErr);
+      }
+    }
+
+    const response = ranked.map((s: any) => ({
+      rank: s.rank,
+      name: s.name,
+      xp:   s.xp,
+      ...(isInstructorOrAdmin ? { email: s.email } : { isMe: s.email.toLowerCase() === callerEmail }),
+    }));
+
+    return NextResponse.json({ rankings: response, source: 'supabase' });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error('[leaderboard]', err);
+    return NextResponse.json({ error: 'Failed to load leaderboard.' }, { status: 500 });
   }
 }

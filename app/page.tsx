@@ -337,7 +337,7 @@ export default function LandingPage() {
           <motion.h1
             initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.65, delay: 0.2, ease: [0.23, 1, 0.32, 1] }}
-            className="text-[28px] md:text-[60px] lg:text-[76px] leading-[1.0]"
+            className="text-[32px] md:text-[60px] lg:text-[76px] leading-[1.05] md:leading-[1.0]"
             style={{ letterSpacing: '-0.03em', fontFamily: 'var(--font-sans)', fontWeight: 900 }}
           >
             <span style={{ color: 'white' }}>Build the skills Africa</span><br />

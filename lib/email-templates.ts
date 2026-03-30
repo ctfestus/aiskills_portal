@@ -175,25 +175,44 @@ export function courseResultEmail(data: {
   passmark?: number;
   formUrl: string;
   certUrl?: string;
+  recommendations?: Array<{ title: string; slug: string; coverImage?: string | null }>;
 }) {
-  const { name, courseTitle, score, total, percentage, passed, points, passmark, formUrl, certUrl } = data;
+  const { name, courseTitle, score, total, percentage, passed, points, passmark, formUrl, certUrl, recommendations } = data;
+  const appUrl = process.env.APP_URL || 'https://app.aiskillsafrica.com';
+
+  const recsHtml = recommendations?.length ? `
+    <p style="font-size:16px;font-weight:bold;margin-top:32px;margin-bottom:4px;">What to take next</p>
+    <p style="color:#666;font-size:14px;margin-top:0;margin-bottom:20px;">Based on what you just completed, you might enjoy these:</p>
+    ${recommendations.slice(0, 3).map(r => `
+      <a href="${appUrl}/${r.slug}?go=1" style="display:block;text-decoration:none;margin-bottom:14px;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+        ${r.coverImage ? `
+          <img src="${r.coverImage}" width="100%" height="140" style="display:block;width:100%;height:140px;object-fit:cover;" />
+        ` : `
+          <table width="100%" cellpadding="0" cellspacing="0"><tr><td height="140" style="background:#f0fdf4;text-align:center;vertical-align:middle;font-size:40px;">📘</td></tr></table>
+        `}
+        <div style="padding:14px 16px 16px;">
+          <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#111;line-height:1.3;">${r.title}</p>
+          <p style="margin:0;font-size:12px;font-weight:600;color:#006128;">Start course </p>
+        </div>
+      </a>
+    `).join('')}
+  ` : '';
 
   const content = `
     <p><b>Hi ${name || 'there'},</b></p>
-    <p>${passed ? 'Congratulations! You passed the course. Well done! 🎉' : 'Thanks for completing the course. Keep practising. You can retake it to improve your score.'}</p>
 
-    <p style="font-size:18px;font-weight:bold;margin-top:16px;">Your Course Result</p>
-    <p><b>${courseTitle}</b></p>
+    ${passed ? `
+      <p style="font-size:22px;font-weight:900;margin-bottom:4px;">🎉 Congratulations!</p>
+      <p style="font-size:16px;font-weight:700;margin-top:0;">Your certificate for <b>${courseTitle}</b> is ready.</p>
+      <p style="color:#555;">You have successfully completed the course. Your certificate is ready to view, download, and share.</p>
+      ${certUrl ? cta('🎓 View Your Certificate', certUrl) : cta('View Course', formUrl)}
+    ` : `
+      <p>Thanks for completing <b>${courseTitle}</b>. Keep practising -- you can retake it to improve your score.</p>
+      ${cta('Retake Course', formUrl)}
+    `}
 
-    ${detailBlock('Score', `${score} / ${total}`)}
-    ${detailBlock('Percentage', `${percentage}%`)}
-    ${detailBlock('Result', passed ? '✓ Passed' : 'Failed')}
-    ${passmark ? detailBlock('Pass mark', `${passmark}%`) : ''}
-    ${points ? detailBlock('XP Earned', `⭐ ${points.toLocaleString()} XP`) : ''}
+    ${recsHtml}
 
-    ${certUrl ? cta('🎓 View Your Certificate', certUrl) : cta('View Course', formUrl)}
-
-    <p>${certUrl ? 'Your certificate is ready to view, download, and share.' : 'You can access your dashboard anytime to continue learning and track your progress.'}</p>
     <br>
     <p><b>Best regards,</b></p>
     <p>The AI Skills Africa Team</p>
@@ -233,8 +252,10 @@ export function nudgeEmail(data: {
   contentType: string;
   status: 'not_started' | 'stalled';
   formUrl: string;
+  coverImage?: string | null;
+  relatedAssignmentTitle?: string;
 }) {
-  const { name, contentTitle, contentType, status, formUrl } = data;
+  const { name, contentTitle, contentType, status, formUrl, coverImage, relatedAssignmentTitle } = data;
   const typeLabel = contentType === 'virtual_experience' ? 'virtual experience' : contentType;
   const ctaLabel  = status === 'not_started' ? `Start ${typeLabel}` : 'Continue where you left off';
 
@@ -274,6 +295,19 @@ export function nudgeEmail(data: {
     </div>
 
     ${cta(ctaLabel, formUrl)}
+
+    ${relatedAssignmentTitle ? `
+    <p style="margin:20px 0 10px;font-weight:700;color:#111827;font-size:14px;">📋 Related assignment waiting for you</p>
+    <a href="${formUrl}" style="display:block;text-decoration:none;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;margin-bottom:16px;">
+      ${coverImage ? `<img src="${coverImage}" alt="${contentTitle}" style="display:block;width:100%;height:160px;object-fit:cover;" />` : `<div style="width:100%;height:120px;background:linear-gradient(135deg,#1e3a5f,#0f766e);display:flex;align-items:center;justify-content:center;"><span style="color:white;font-size:28px;">📚</span></div>`}
+      <div style="padding:14px 16px;background:#ffffff;">
+        <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Continue Learning</p>
+        <p style="margin:0 0 8px;font-size:16px;font-weight:700;color:#111827;">${contentTitle}</p>
+        <p style="margin:0;font-size:13px;color:#374151;line-height:1.6;">
+          Complete this course to unlock the <b>"${relatedAssignmentTitle}"</b> assignment -- a hands-on task to apply what you have learned.
+        </p>
+      </div>
+    </a>` : ''}
 
     <br>
     <p><b>Best regards,</b></p>
@@ -455,6 +489,89 @@ export function deadlineReminderEmail(data: {
     <p>AI Skills Africa - Learning Experience Team</p>
   `;
 
+  return shell(content);
+}
+
+// -- 9. Onboarding Welcome ---
+export function welcomeEmail(data: { name: string; studentUrl: string }) {
+  const { name, studentUrl } = data;
+  const content = `
+    <p><b>Welcome to AI Skills Africa, ${name}! 🎉</b></p>
+    <p>We are thrilled to have you on board. You have just taken the first step toward building industry-relevant skills that will shape your career.</p>
+
+    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;">
+      <p style="margin:0 0 10px;font-weight:700;color:#15803d;font-size:15px;">Here is what to expect 🚀</p>
+      <ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2;">
+        <li>Practical courses built around real African industry scenarios</li>
+        <li>Hands-on assignments to apply what you learn</li>
+        <li>Certificates to showcase your skills</li>
+        <li>A leaderboard to track your progress against peers</li>
+      </ul>
+    </div>
+
+    <p style="color:#374151;">Your cohort and courses are already set up for you. Head to your dashboard and start your first course today.</p>
+
+    ${cta('Go to My Dashboard', studentUrl)}
+
+    <br>
+    <p><b>Welcome aboard,</b></p>
+    <p>AI Skills Africa Team</p>
+  `;
+  return shell(content);
+}
+
+// -- 10. Onboarding Day-3 Check-in ---
+export function day3CheckInEmail(data: { name: string; studentUrl: string; courseTitle?: string; courseUrl?: string }) {
+  const { name, studentUrl, courseTitle, courseUrl } = data;
+  const content = `
+    <p><b>Hi ${name},</b></p>
+    <p>It has been a few days since you joined AI Skills Africa. We just wanted to check in -- have you had a chance to explore your courses yet?</p>
+
+    ${courseTitle && courseUrl ? `
+    <div style="margin:20px 0;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;">
+      <div style="padding:16px;background:#ffffff;">
+        <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:0.05em;">Ready for you</p>
+        <p style="margin:0 0 8px;font-size:16px;font-weight:700;color:#111827;">${courseTitle}</p>
+        <p style="margin:0;font-size:13px;color:#6b7280;">Start this course and take your first step toward a new skill.</p>
+      </div>
+      <div style="padding:12px 16px;background:#f9fafb;">
+        <a href="${courseUrl}" style="background:#22c55e;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px;display:inline-block;">Start Course </a>
+      </div>
+    </div>` : `
+    <p style="color:#374151;">Log in now and pick a course to get started. Even 15 minutes a day adds up fast.</p>
+    ${cta('Browse My Courses', studentUrl)}`}
+
+    <br>
+    <p><b>Cheering you on,</b></p>
+    <p>AI Skills Africa Team</p>
+  `;
+  return shell(content);
+}
+
+// -- 11. Onboarding Day-7 Encouragement ---
+export function day7EncouragementEmail(data: { name: string; studentUrl: string; hasStarted: boolean; coursesCompleted: number }) {
+  const { name, studentUrl, hasStarted, coursesCompleted } = data;
+  const content = `
+    <p><b>Hi ${name},</b></p>
+    ${hasStarted && coursesCompleted > 0 ? `
+    <p>One week in and you have already completed <b>${coursesCompleted} course${coursesCompleted > 1 ? 's' : ''}</b>. That is outstanding progress! 🏆</p>
+    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;text-align:center;">
+      <div style="font-size:40px;font-weight:900;color:#16a34a;">${coursesCompleted}</div>
+      <div style="font-size:14px;color:#15803d;font-weight:600;margin-top:4px;">Course${coursesCompleted > 1 ? 's' : ''} completed in your first week</div>
+    </div>
+    <p style="color:#374151;">Keep the momentum going. Every course you complete builds your profile and brings you closer to your career goals.</p>
+    ` : hasStarted ? `
+    <p>You have started your learning journey -- that is great! The hardest part is always the beginning, and you have done it. 💪</p>
+    <p style="color:#374151;">Even if life got busy, come back and pick up where you left off. Your progress is saved.</p>
+    ` : `
+    <p>We noticed you have not started a course yet -- and that is completely okay. Life gets busy. But we want to make sure you do not miss out.</p>
+    <p style="color:#374151;">Your courses are waiting. It only takes a few minutes to begin, and the skills you build here are directly relevant to real jobs.</p>
+    `}
+    ${cta('Continue Learning', studentUrl)}
+    <br>
+    <p><b>Best,</b></p>
+    <p>AI Skills Africa Team</p>
+  `;
   return shell(content);
 }
 

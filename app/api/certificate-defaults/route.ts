@@ -56,8 +56,8 @@ export async function POST(req: NextRequest) {
   }, { onConflict: 'user_id' });
 
   if (error) {
-    console.error('[certificate-defaults]', error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('[certificate-defaults]', error);
+    return NextResponse.json({ error: 'Failed to save certificate settings.' }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

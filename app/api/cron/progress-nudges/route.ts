@@ -57,10 +57,22 @@ export async function POST(req: NextRequest) {
   ])];
 
   const { data: forms } = formIds.length
-    ? await supabase.from('forms').select('id, title, content_type, slug').in('id', formIds)
+    ? await supabase.from('forms').select('id, title, content_type, slug, config').in('id', formIds)
     : { data: [] };
 
   const formMap = new Map((forms ?? []).map((f: any) => [f.id, f]));
+
+  // Fetch related assignments for stalled courses (smart nudge)
+  const courseFormIds = (courseAttempts ?? []).map((a: any) => a.form_id);
+  const { data: relatedAssignments } = courseFormIds.length
+    ? await supabase
+        .from('assignments')
+        .select('id, title, related_course')
+        .in('related_course', courseFormIds)
+        .eq('status', 'published')
+    : { data: [] };
+  // Map: form_id -> assignment title
+  const assignmentMap = new Map((relatedAssignments ?? []).map((a: any) => [a.related_course, a.title]));
 
   // Merge all stalled attempts, deduplicate by student+form
   const seen = new Set<string>();
@@ -82,6 +94,7 @@ export async function POST(req: NextRequest) {
       contentType: isVE ? 'virtual_experience' : form.content_type,
       formTitle:   form.title,
       slug:        form.slug ?? a.form_id,
+      coverImage:  form.config?.coverImage || null,
     });
   }
 
@@ -93,13 +106,16 @@ export async function POST(req: NextRequest) {
     const alreadySent = await hasNudgeBeenSent(supabase, c.email, c.formId, 'inactivity', RESEND_AFTER_DAYS);
     if (alreadySent) { skipped++; continue; }
 
+    const relatedAssignmentTitle = assignmentMap.get(c.formId);
     const subject = `We miss you, ${c.name}! Come back and keep learning 👋`;
     const html = nudgeEmail({
-      name:         c.name,
-      contentTitle: c.formTitle,
-      contentType:  c.contentType,
-      status:       'stalled',
-      formUrl:      `${APP_URL}/${c.slug}`,
+      name:                  c.name,
+      contentTitle:          c.formTitle,
+      contentType:           c.contentType,
+      status:                'stalled',
+      formUrl:               `${APP_URL}/${c.slug}`,
+      coverImage:            c.coverImage,
+      relatedAssignmentTitle,
     });
 
     try {

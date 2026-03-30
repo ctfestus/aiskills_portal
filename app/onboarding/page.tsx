@@ -214,6 +214,21 @@ export default function OnboardingPage() {
         })
         .eq('id', userId);
       if (updateErr) throw updateErr;
+
+      // Trigger onboarding email sequence (fire-and-forget)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.email) {
+        fetch('/api/workflows/onboarding', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            email:  session.user.email,
+            name:   name.trim() || 'there',
+            userId,
+          }),
+        }).catch(() => {});
+      }
+
       const { data: finalStudent } = await supabase.from('students').select('role').eq('id', userId).single();
       router.replace(finalStudent?.role === 'student' ? '/student' : '/dashboard');
     } catch (e: any) {

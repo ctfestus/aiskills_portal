@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
           }
         } catch (err: any) {
           console.error('Gemini stream error:', err);
-          controller.enqueue(encoder.encode(JSON.stringify({ error: err?.message ?? 'Generation failed' })));
+          controller.enqueue(encoder.encode(JSON.stringify({ error: 'Generation failed. Please try again.' })));
         } finally {
           controller.close();
         }
@@ -130,6 +130,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Gemini error:', error);
-    return NextResponse.json({ error: error?.message ?? 'Generation failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Generation failed. Please try again.' }, { status: 500 });
   }
 }

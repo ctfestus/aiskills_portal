@@ -30,7 +30,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { editId, title, config, coverImage, cohort_ids, deadline_days } = body;
+  const { editId, title, config, coverImage, cohort_ids, deadline_days, status: bodyStatus } = body;
+  const formStatus = bodyStatus === 'draft' ? 'draft' : 'published';
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
   if (!config)        return NextResponse.json({ error: 'Config is required' }, { status: 400 });
 
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
     cohort_ids:   newCohortIds,
     content_type: 'virtual_experience',
     description:  config.tagline || '',
+    status:       formStatus,
   };
 
   if (editId) {
@@ -68,7 +70,7 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       console.error('[guided-project-save] update error:', error);
-      return NextResponse.json({ error: `${error.message} (code: ${error.code})` }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to save project.' }, { status: 500 });
     }
 
     // Upsert cohort_assignments for all current cohorts (preserves original assigned_at)
@@ -84,6 +86,15 @@ export async function POST(req: NextRequest) {
         title: title.trim(),
         slug: existing.slug,
         contentType: 'virtual_experience',
+      }).catch(() => {});
+    }
+
+    // Re-index in vector DB so search/recommendations stay current
+    if (formStatus === 'published') {
+      fetch(`${process.env.APP_URL || ''}/api/vector/index-course`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ formId: editId }),
       }).catch(() => {});
     }
 
@@ -115,6 +126,15 @@ export async function POST(req: NextRequest) {
       title: title.trim(),
       slug: data.slug,
       contentType: 'virtual_experience',
+    }).catch(() => {});
+  }
+
+  // Index in vector DB for semantic search/recommendations
+  if (formStatus === 'published') {
+    fetch(`${process.env.APP_URL || ''}/api/vector/index-course`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ formId: data.id }),
     }).catch(() => {});
   }
 

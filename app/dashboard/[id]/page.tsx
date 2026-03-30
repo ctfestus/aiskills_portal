@@ -1445,11 +1445,13 @@ function LeaderboardTab({ form }: { form: any }) {
 
 
 // -- More Tab ---
-function MoreTab({ form, formUrl, onClone }: { form: any; formUrl: string; onClone: () => Promise<void> }) {
+function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUrl: string; onClone: () => Promise<void>; onStatusChange?: (status: 'draft' | 'published') => void }) {
   const { copied: linkCopied, copy: copyLink } = useCopy();
   const { copied: embedCopied, copy: copyEmbed } = useCopy();
   const [cloning, setCloning] = useState(false);
   const [cloned, setCloned] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [currentStatus, setCurrentStatus] = useState<'draft' | 'published'>(form?.status ?? 'published');
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const textPrim  = isLight ? '#111'              : '#fff';
@@ -1511,6 +1513,25 @@ function MoreTab({ form, formUrl, onClone }: { form: any; formUrl: string; onClo
     },
   ];
 
+  const handleStatusToggle = async (newStatus: 'draft' | 'published') => {
+    if (newStatus === currentStatus || statusUpdating) return;
+    setStatusUpdating(true);
+    const { error } = await supabase.from('forms').update({ status: newStatus }).eq('id', form.id);
+    if (!error) {
+      setCurrentStatus(newStatus);
+      onStatusChange?.(newStatus);
+      // Re-index when publishing so it appears in search/recommendations immediately
+      if (newStatus === 'published') {
+        fetch('/api/vector/index-course', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ formId: form.id }),
+        }).catch(() => {});
+      }
+    }
+    setStatusUpdating(false);
+  };
+
   const handleClone = async () => {
     setCloning(true);
     await onClone();
@@ -1521,6 +1542,39 @@ function MoreTab({ form, formUrl, onClone }: { form: any; formUrl: string; onClo
 
   return (
     <div className="max-w-2xl mx-auto" style={{ color: textPrim }}>
+      {/* Publish status */}
+      <div className="py-6 flex items-center justify-between gap-4" style={{ borderBottom: `1px solid ${divider}` }}>
+        <div className="flex items-center gap-3">
+          {currentStatus === 'published'
+            ? <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+            : <AlignLeft className="w-5 h-5 text-amber-400 flex-shrink-0" />}
+          <div>
+            <p className="text-base font-semibold" style={{ color: textPrim }}>
+              {currentStatus === 'published' ? 'Published' : 'Draft'}
+            </p>
+            <p className="text-sm mt-0.5" style={{ color: textMut }}>
+              {currentStatus === 'published'
+                ? 'Visible to assigned students'
+                : 'Hidden from students -- publish when ready'}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => handleStatusToggle(currentStatus === 'published' ? 'draft' : 'published')}
+          disabled={statusUpdating}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all border disabled:opacity-60 flex-shrink-0"
+          style={currentStatus === 'published'
+            ? { borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24' }
+            : { borderColor: 'rgba(52,211,153,0.3)', color: '#34d399' }}
+        >
+          {statusUpdating
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : currentStatus === 'published'
+              ? 'Move to Draft'
+              : 'Publish'}
+        </button>
+      </div>
+
       {/* Clone */}
       <div className="py-6 flex items-center justify-between gap-4" style={{ borderBottom: `1px solid ${divider}` }}>
         <div className="flex items-center gap-3">
@@ -2098,7 +2152,12 @@ export default function FormDetailPage() {
                 <EmailTab form={form} formUrl={formUrl} />
               )}
               {activeTab === 'more' && (
-                <MoreTab form={form} formUrl={formUrl} onClone={handleClone} />
+                <MoreTab
+                  form={form}
+                  formUrl={formUrl}
+                  onClone={handleClone}
+                  onStatusChange={(status) => setForm((f: any) => ({ ...f, status }))}
+                />
               )}
             </div>
           )}
