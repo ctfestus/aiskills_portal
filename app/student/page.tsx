@@ -1610,7 +1610,7 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
       style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, cursor: 'pointer' }}
       onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
       onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
-      <div className="relative h-48 overflow-hidden" style={{ background: C.thumbBg }}>
+      <div className="relative h-40 overflow-hidden" style={{ background: C.thumbBg }}>
         {item.cover_image
           ? <img src={item.cover_image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
           : <div className="w-full h-full flex items-center justify-center text-4xl font-black" style={{ color: C.green, opacity: 0.25 }}>{item.title?.[0]?.toUpperCase()}</div>}
