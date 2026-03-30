@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
   // 3. Fetch cohort metadata + students in parallel
   const [{ data: cohorts }, { data: students }] = await Promise.all([
     supabase.from('cohorts').select('id, name').in('id', activeCohortIds),
-    supabase.from('students').select('email, full_name, cohort_id').in('cohort_id', activeCohortIds),
+    supabase.from('students').select('id, email, full_name, cohort_id').in('cohort_id', activeCohortIds),
   ]);
 
   if (!students?.length) return NextResponse.json({ rows: [], cohorts: cohorts ?? [] });
