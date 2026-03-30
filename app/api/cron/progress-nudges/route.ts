@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
 
   // Merge all stalled attempts, deduplicate by student+form
   const seen = new Set<string>();
-  const candidates: { email: string; name: string; formId: string; contentType: string; formTitle: string; slug: string }[] = [];
+  const candidates: { email: string; name: string; formId: string; contentType: string; formTitle: string; slug: string; coverImage?: string | null }[] = [];
 
   for (const a of [...(courseAttempts ?? []), ...(gpAttempts ?? [])]) {
     const key = `${a.student_email}|${a.form_id}`;
