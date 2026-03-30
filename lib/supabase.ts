@@ -10,7 +10,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const createSingletonClient = () =>
   createClient(supabaseUrl, supabaseKey, {
     auth: {
-      lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<unknown>) => fn(),
+      lock: <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> => fn(),
     },
   });
 
