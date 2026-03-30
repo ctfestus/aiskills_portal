@@ -8,7 +8,7 @@
  */
 export async function hasNudgeBeenSent(
   supabase: any,
-  studentEmail: string,
+  studentId: string,
   formId: string | null,
   nudgeType: string,
   withinDays?: number,
@@ -16,7 +16,7 @@ export async function hasNudgeBeenSent(
   let query = supabase
     .from('sent_nudges')
     .select('id')
-    .eq('student_email', studentEmail.toLowerCase().trim())
+    .eq('student_id', studentId)
     .eq('nudge_type', nudgeType);
 
   if (formId) query = query.eq('form_id', formId);
@@ -33,14 +33,14 @@ export async function hasNudgeBeenSent(
 /** Records that a nudge was sent. */
 export async function recordNudge(
   supabase: any,
-  studentEmail: string,
+  studentId: string,
   formId: string | null,
   nudgeType: string,
 ): Promise<void> {
   await supabase.from('sent_nudges').insert({
-    student_email: studentEmail.toLowerCase().trim(),
-    form_id:       formId ?? null,
-    nudge_type:    nudgeType,
+    student_id: studentId,
+    form_id:    formId ?? null,
+    nudge_type: nudgeType,
   });
 }
 

@@ -31,36 +31,47 @@ export async function POST(req: NextRequest) {
 
   const supabase = adminClient();
   const cutoff   = new Date(Date.now() - INACTIVITY_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const recent   = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(); // within last 24h = still active
 
-  // Fetch stalled course attempts: started but not completed, last activity between 7 and 60 days ago
+  // Fetch stalled attempts: started but not completed, last activity between 7 and 60 days ago
   const [{ data: courseAttempts }, { data: gpAttempts }] = await Promise.all([
     supabase
       .from('course_attempts')
-      .select('student_email, student_name, form_id, updated_at')
+      .select('student_id, form_id, updated_at')
       .is('completed_at', null)
       .lt('updated_at', cutoff)
-      .gt('updated_at', new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()), // not older than 60 days
+      .gt('updated_at', new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()),
 
     supabase
       .from('guided_project_attempts')
-      .select('student_email, student_name, form_id, updated_at')
+      .select('student_id, form_id, updated_at')
       .is('completed_at', null)
       .lt('updated_at', cutoff)
       .gt('updated_at', new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()),
   ]);
 
-  // Collect unique form IDs to fetch titles
+  // Collect unique form IDs and student IDs
   const formIds = [...new Set([
     ...(courseAttempts ?? []).map((a: any) => a.form_id),
     ...(gpAttempts ?? []).map((a: any) => a.form_id),
   ])];
+  const studentIds = [...new Set([
+    ...(courseAttempts ?? []).map((a: any) => a.student_id),
+    ...(gpAttempts ?? []).map((a: any) => a.student_id),
+  ])];
 
-  const { data: forms } = formIds.length
-    ? await supabase.from('forms').select('id, title, content_type, slug, config').in('id', formIds)
-    : { data: [] };
+  if (!studentIds.length) {
+    return NextResponse.json({ ok: true, sent: 0, skipped: 0 });
+  }
 
-  const formMap = new Map((forms ?? []).map((f: any) => [f.id, f]));
+  const [{ data: forms }, { data: studentRows }] = await Promise.all([
+    formIds.length
+      ? supabase.from('forms').select('id, title, content_type, slug, config').in('id', formIds)
+      : Promise.resolve({ data: [] }),
+    supabase.from('students').select('id, email, full_name').in('id', studentIds),
+  ]);
+
+  const formMap    = new Map((forms ?? []).map((f: any) => [f.id, f]));
+  const studentMap = new Map((studentRows ?? []).map((s: any) => [s.id, s]));
 
   // Fetch related assignments for stalled courses (smart nudge)
   const courseFormIds = (courseAttempts ?? []).map((a: any) => a.form_id);
@@ -71,25 +82,35 @@ export async function POST(req: NextRequest) {
         .in('related_course', courseFormIds)
         .eq('status', 'published')
     : { data: [] };
-  // Map: form_id -> assignment title
   const assignmentMap = new Map((relatedAssignments ?? []).map((a: any) => [a.related_course, a.title]));
 
   // Merge all stalled attempts, deduplicate by student+form
   const seen = new Set<string>();
-  const candidates: { email: string; name: string; formId: string; contentType: string; formTitle: string; slug: string; coverImage?: string | null }[] = [];
+  const candidates: {
+    studentId: string;
+    email: string;
+    name: string;
+    formId: string;
+    contentType: string;
+    formTitle: string;
+    slug: string;
+    coverImage?: string | null;
+  }[] = [];
 
   for (const a of [...(courseAttempts ?? []), ...(gpAttempts ?? [])]) {
-    const key = `${a.student_email}|${a.form_id}`;
+    const key = `${a.student_id}|${a.form_id}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const form = formMap.get(a.form_id);
-    if (!form) continue;
+    const form    = formMap.get(a.form_id);
+    const student = studentMap.get(a.student_id);
+    if (!form || !student?.email) continue;
 
     const isVE = form.content_type === 'virtual_experience' || form.content_type === 'guided_project';
     candidates.push({
-      email:       a.student_email,
-      name:        a.student_name || 'there',
+      studentId:   a.student_id,
+      email:       student.email,
+      name:        student.full_name || 'there',
       formId:      a.form_id,
       contentType: isVE ? 'virtual_experience' : form.content_type,
       formTitle:   form.title,
@@ -102,8 +123,7 @@ export async function POST(req: NextRequest) {
   let skipped = 0;
 
   for (const c of candidates) {
-    // Skip if already nudged within RESEND_AFTER_DAYS
-    const alreadySent = await hasNudgeBeenSent(supabase, c.email, c.formId, 'inactivity', RESEND_AFTER_DAYS);
+    const alreadySent = await hasNudgeBeenSent(supabase, c.studentId, c.formId, 'inactivity', RESEND_AFTER_DAYS);
     if (alreadySent) { skipped++; continue; }
 
     const relatedAssignmentTitle = assignmentMap.get(c.formId);
@@ -120,7 +140,7 @@ export async function POST(req: NextRequest) {
 
     try {
       await resend.emails.send({ from: FROM, to: c.email, subject, html });
-      await recordNudge(supabase, c.email, c.formId, 'inactivity');
+      await recordNudge(supabase, c.studentId, c.formId, 'inactivity');
       sent++;
     } catch (err) {
       console.error('[cron/progress-nudges] send failed for', c.email, err);

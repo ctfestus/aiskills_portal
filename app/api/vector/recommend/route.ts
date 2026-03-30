@@ -54,12 +54,11 @@ export async function POST(req: NextRequest) {
 
   if (!completedForm) return NextResponse.json({ recommendations: [] });
 
-  // 3. Get all course IDs the student has already started (by email)
-  const studentEmail = student?.email ?? user.email ?? '';
+  // 3. Get all course IDs the student has already started
   const { data: attempts } = await supabase
     .from('course_attempts')
     .select('form_id')
-    .eq('student_email', studentEmail);
+    .eq('student_id', user.id);
 
   const seenIds = new Set((attempts ?? []).map((a: any) => a.form_id));
   seenIds.add(completedFormId);

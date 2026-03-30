@@ -21,20 +21,20 @@ async function getUser(req: NextRequest) {
   return user;
 }
 
-// -- GET /api/guided-project-progress?formId=&email= ---
+// -- GET /api/guided-project-progress?formId= ---
 // Returns the attempt row for a student (used by the taker to restore state)
-// Also used by dashboard (creator): ?formId= without email returns all attempts
+// Also used by dashboard (creator): ?formId= without studentId returns all attempts
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const formId = searchParams.get('formId');
-  const email  = searchParams.get('email');
+  const formId    = searchParams.get('formId');
+  const studentId = searchParams.get('studentId'); // optional: if omitted, returns all (creator view)
 
   if (!formId) return NextResponse.json({ error: 'formId required' }, { status: 400 });
 
   const supabase = adminClient();
 
   // Creator/admin view -- return all attempts for a form
-  if (!email) {
+  if (!studentId) {
     const user = await getUser(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -57,10 +57,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ attempts: attempts ?? [] });
   }
 
-  // Student view -- caller must be authenticated and their email must match
+  // Student view -- caller must be authenticated and their id must match
   const user = await getUser(req);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (user.email?.toLowerCase() !== email.toLowerCase().trim()) {
+  if (user.id !== studentId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
     .from('guided_project_attempts')
     .select('*')
     .eq('form_id', formId)
-    .eq('student_email', email.toLowerCase().trim())
+    .eq('student_id', user.id)
     .maybeSingle();
 
   return NextResponse.json({ attempt: attempt ?? null });
@@ -130,15 +130,12 @@ export async function POST(req: NextRequest) {
     const certUser = await getUser(req);
     if (!certUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Derive email from token -- never trust the request body for identity
-    const email = certUser.email!.toLowerCase().trim();
-
     // Verify the attempt is completed
     const { data: attempt } = await supabase
       .from('guided_project_attempts')
       .select('id, completed_at')
       .eq('form_id', formId)
-      .eq('student_email', email)
+      .eq('student_id', certUser.id)
       .not('completed_at', 'is', null)
       .maybeSingle();
 
@@ -149,7 +146,7 @@ export async function POST(req: NextRequest) {
       .from('certificates')
       .select('id')
       .eq('form_id', formId)
-      .eq('student_email', email)
+      .eq('student_id', certUser.id)
       .eq('revoked', false)
       .maybeSingle();
 
@@ -158,7 +155,11 @@ export async function POST(req: NextRequest) {
     // Issue new certificate
     const { data: cert, error: certErr } = await supabase
       .from('certificates')
-      .insert({ form_id: formId, student_name: studentName || email, student_email: email })
+      .insert({
+        form_id:      formId,
+        student_name: studentName || certUser.email,
+        student_id:   certUser.id,
+      })
       .select('id')
       .single();
 
@@ -174,22 +175,18 @@ export async function POST(req: NextRequest) {
   const progressUser = await getUser(req);
   if (!progressUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Derive email from token -- never trust the request body for identity
-  const email = progressUser.email!.toLowerCase().trim();
-
   const { error } = await supabase
     .from('guided_project_attempts')
     .upsert(
       {
         form_id:           formId,
-        student_email:     email,
-        student_name:      studentName || null,
+        student_id:        progressUser.id,
         progress:          progress || {},
         current_module_id: currentModuleId || null,
         current_lesson_id: currentLessonId || null,
         completed_at:      completedAt || null,
       },
-      { onConflict: 'student_email,form_id' },
+      { onConflict: 'student_id,form_id' },
     );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -212,24 +209,32 @@ export async function POST(req: NextRequest) {
         const pct  = Math.round((done / total) * 100);
         if (pct < 80) return;
 
-        const alreadySent = await hasNudgeBeenSent(supabase, email, formId, 'milestone_80');
+        const alreadySent = await hasNudgeBeenSent(supabase, progressUser.id, formId, 'milestone_80');
         if (alreadySent) return;
+
+        const { data: studentProfile } = await supabase
+          .from('students')
+          .select('email, full_name')
+          .eq('id', progressUser.id)
+          .single();
+
+        if (!studentProfile?.email) return;
 
         const isVE = form.content_type === 'virtual_experience' || form.content_type === 'guided_project';
         const html = milestoneEmail({
-          name:        studentName || 'there',
+          name:         studentName || studentProfile.full_name || 'there',
           contentTitle: form.title,
           contentType:  isVE ? 'virtual_experience' : form.content_type,
-          formUrl:     `${APP_URL}/${form.slug ?? formId}`,
+          formUrl:      `${APP_URL}/${form.slug ?? formId}`,
         });
 
         await resend.emails.send({
           from: FROM,
-          to:   email,
+          to:   studentProfile.email,
           subject: `You are 80% done. Finish strong! 🎯`,
           html,
         });
-        await recordNudge(supabase, email, formId, 'milestone_80');
+        await recordNudge(supabase, progressUser.id, formId, 'milestone_80');
       } catch (err) {
         console.error('[guided-project-progress] milestone check failed', err);
       }

@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     supabase
       .from('course_attempts')
       .select('form_id')
-      .eq('student_email', user.email)
+      .eq('student_id', user.id)
       .not('completed_at', 'is', null)
       .eq('passed', true),
   ]);

@@ -87,7 +87,7 @@ export const { POST } = serve<{ email: string; name: string; userId: string }>(
       const { data: attempts } = await supabase
         .from('course_attempts')
         .select('form_id')
-        .eq('student_email', email)
+        .eq('student_id', userId)
         .eq('passed', true)
         .not('completed_at', 'is', null);
 

@@ -105,23 +105,23 @@ export async function GET(req: NextRequest) {
     }
     if (!students?.length) return NextResponse.json({ rankings: [] });
 
-    const emails = students.map((s: any) => s.email);
+    const studentIds = students.map((s: any) => s.id);
 
     const [{ data: xpRows }, { data: completions }] = await Promise.all([
-      supabase.from('student_xp').select('student_email, total_xp').in('student_email', emails),
+      supabase.from('student_xp').select('student_id, total_xp').in('student_id', studentIds),
       supabase.from('course_attempts')
-        .select('student_email')
-        .in('student_email', emails)
+        .select('student_id')
+        .in('student_id', studentIds)
         .eq('passed', true)
         .not('completed_at', 'is', null),
     ]);
 
     const xpMap: Record<string, number> = {};
-    for (const x of xpRows ?? []) xpMap[x.student_email] = x.total_xp;
+    for (const x of xpRows ?? []) xpMap[x.student_id] = x.total_xp;
 
     const completionCount: Record<string, number> = {};
     for (const c of completions ?? []) {
-      completionCount[c.student_email] = (completionCount[c.student_email] ?? 0) + 1;
+      completionCount[c.student_id] = (completionCount[c.student_id] ?? 0) + 1;
     }
 
     const callerEmail = (profile.email ?? user.email ?? '').toLowerCase().trim();
@@ -131,8 +131,8 @@ export async function GET(req: NextRequest) {
         id:          s.id,
         email:       s.email,
         name:        s.full_name?.trim() || s.email,
-        xp:          xpMap[s.email] ?? 0,
-        completions: completionCount[s.email] ?? 0,
+        xp:          xpMap[s.id] ?? 0,
+        completions: completionCount[s.id] ?? 0,
       }))
       .sort((a: any, b: any) => b.xp - a.xp || b.completions - a.completions)
       .map((s: any, i: number) => ({ ...s, rank: i + 1 }));

@@ -1610,13 +1610,10 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
       style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, cursor: 'pointer' }}
       onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
       onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
-      <div className="relative h-36 overflow-hidden" style={{ background: C.thumbBg }}>
+      <div className="relative h-48 overflow-hidden" style={{ background: C.thumbBg }}>
         {item.cover_image
           ? <img src={item.cover_image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
           : <div className="w-full h-full flex items-center justify-center text-4xl font-black" style={{ color: C.green, opacity: 0.25 }}>{item.title?.[0]?.toUpperCase()}</div>}
-        <div className="absolute bottom-2 left-2">
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: C.thumbBg, color: C.green }}>Assignment</span>
-        </div>
         {item._sub && (
           <div className="absolute top-2 right-2">
             {item._sub.status === 'graded'
@@ -1638,10 +1635,20 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
           </div>
         )}
       </div>
-      <div className="p-4">
-        <h3 className="text-sm font-semibold leading-snug mb-1 line-clamp-2" style={{ color: C.text }}>{item.title}</h3>
-        {item.scenario && <p className="text-xs line-clamp-2 mb-3" style={{ color: C.muted }}>{item.scenario.replace(/<[^>]*>/g, ' ').trim()}</p>}
-        <span className="text-xs font-semibold" style={{ color: C.green }}>View & Submit</span>
+      <div className="px-3 py-2.5">
+        <h3 className="text-sm font-semibold leading-snug mb-2" style={{ color: C.text }}>{item.title}</h3>
+        <div className="flex items-center justify-between">
+          {!item._sub
+            ? <span className="text-[11px] font-medium" style={{ color: C.muted }}>Not Submitted</span>
+            : item._sub.status === 'graded'
+            ? <span className="text-[11px] font-semibold" style={{ color: item._sub.score >= 85 ? '#10b981' : '#ef4444' }}>Graded · {item._sub.score}%</span>
+            : item._sub.status === 'submitted'
+            ? <span className="text-[11px] font-semibold" style={{ color: '#7c3aed' }}>Submitted</span>
+            : <span className="text-[11px] font-medium" style={{ color: C.muted }}>Not Submitted</span>}
+          <span className="inline-block text-xs font-semibold px-4 py-1.5 rounded-full" style={{ background: C.green, color: '#fff' }}>
+            {!item._sub || item._sub.status === 'draft' ? 'Start' : 'View'}
+          </span>
+        </div>
       </div>
     </motion.button>
   );
@@ -3809,7 +3816,7 @@ export default function StudentDashboard() {
               animate={{ width: navCollapsed ? 56 : 220 }}
               transition={{ duration: 0.2, ease: 'easeInOut' }}
               className={`fixed lg:static inset-y-0 left-0 z-40 lg:z-auto flex flex-col border-r overflow-hidden transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
-              style={{ background: theme === 'dark' ? '#1E1F26' : '#06069d', borderColor: C.navBorder, top: 57, color: 'white' }}>
+              style={{ background: theme === 'dark' ? '#1E1F26' : '#1f1bc3', borderColor: C.navBorder, top: 57, color: 'white' }}>
               {/* Collapse toggle -- desktop only */}
               <div className="px-2 pt-2 pb-1 hidden lg:flex" style={{ justifyContent: navCollapsed ? 'center' : 'flex-end' }}>
                 <button

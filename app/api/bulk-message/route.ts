@@ -81,17 +81,17 @@ export async function POST(req: NextRequest) {
   // 4. Fetch attempts
   const [{ data: courseAttempts }, { data: gpAttempts }] = await Promise.all([
     supabase.from('course_attempts')
-      .select('student_email, form_id, completed_at, updated_at')
+      .select('student_id, form_id, completed_at, updated_at')
       .in('form_id', formIds),
     supabase.from('guided_project_attempts')
-      .select('student_email, form_id, completed_at, updated_at')
+      .select('student_id, form_id, completed_at, updated_at')
       .in('form_id', formIds),
   ]);
 
   // Build attempt map
   const attemptMap = new Map<string, { completed: boolean; lastActive: string | null }>();
   for (const a of [...(courseAttempts ?? []), ...(gpAttempts ?? [])]) {
-    const key = `${a.student_email}|${a.form_id}`;
+    const key = `${a.student_id}|${a.form_id}`;
     const existing = attemptMap.get(key);
     const isNewer = !existing || (a.updated_at && (!existing.lastActive || a.updated_at > existing.lastActive));
     if (isNewer) {
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
     const formStudents = students.filter(s => formCohortIds.includes(s.cohort_id));
 
     for (const student of formStudents) {
-      const key     = `${student.email}|${form.id}`;
+      const key     = `${student.id}|${form.id}`;
       const attempt = attemptMap.get(key);
 
       let status: string;

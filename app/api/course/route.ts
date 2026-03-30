@@ -18,12 +18,13 @@ function adminClient() {
 
 export const dynamic = 'force-dynamic';
 
-async function getSessionEmail(req: NextRequest): Promise<string | null> {
+async function getSessionUser(req: NextRequest): Promise<{ id: string; email: string } | null> {
   const authHeader = req.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
   const { data: { user } } = await adminClient().auth.getUser(token);
-  return user?.email?.trim().toLowerCase() ?? null;
+  if (!user?.email) return null;
+  return { id: user.id, email: user.email.trim().toLowerCase() };
 }
 
 export async function POST(req: NextRequest) {
@@ -36,13 +37,13 @@ export async function POST(req: NextRequest) {
 
   // -- Get all certificates for the logged-in student ---
   if (action === 'get-my-certificates') {
-    const sessionEmail = await getSessionEmail(req);
-    if (!sessionEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     try {
       const { data: certs } = await adminClient()
         .from('certificates')
         .select('id, form_id')
-        .eq('student_email', sessionEmail)
+        .eq('student_id', sessionUser.id)
         .eq('revoked', false);
       return NextResponse.json({ certs: certs ?? [] });
     } catch (err: any) {
@@ -54,22 +55,22 @@ export async function POST(req: NextRequest) {
   // -- Get current progress + cert + attempt count ---
   if (action === 'get-progress') {
     const { form_id } = body;
-    const sessionEmail = await getSessionEmail(req);
-    if (!sessionEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (!form_id) return NextResponse.json({ error: 'form_id required' }, { status: 400 });
 
     try {
       const supabase = adminClient();
       const [{ data: cert }, { data: progress }, { count: attemptCount }] = await Promise.all([
         supabase.from('certificates').select('id')
-          .eq('form_id', form_id).eq('student_email', sessionEmail).eq('revoked', false)
+          .eq('form_id', form_id).eq('student_id', sessionUser.id).eq('revoked', false)
           .maybeSingle(),
         supabase.from('course_attempts').select('*')
-          .eq('form_id', form_id).eq('student_email', sessionEmail)
+          .eq('form_id', form_id).eq('student_id', sessionUser.id)
           .is('completed_at', null)
           .order('started_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('course_attempts').select('id', { count: 'exact', head: true })
-          .eq('form_id', form_id).eq('student_email', sessionEmail)
+          .eq('form_id', form_id).eq('student_id', sessionUser.id)
           .not('completed_at', 'is', null),
       ]);
       return NextResponse.json({ cert, progress, attemptCount: attemptCount ?? 0 });
@@ -81,9 +82,9 @@ export async function POST(req: NextRequest) {
 
   // -- Save in-progress attempt (create if needed) ---
   if (action === 'save-progress') {
-    const sessionEmail = await getSessionEmail(req);
-    if (!sessionEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const { form_id, student_name, current_question_index, answers, score, points, streak, hints_used } = body;
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { form_id, current_question_index, answers, score, points, streak, hints_used } = body;
     if (!form_id) return NextResponse.json({ error: 'form_id required' }, { status: 400 });
 
     try {
@@ -93,7 +94,6 @@ export async function POST(req: NextRequest) {
       if (!form?.config?.isCourse) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
 
       const payload = {
-        student_name:           student_name ?? null,
         current_question_index: current_question_index ?? 0,
         answers:                answers    ?? {},
         score:                  score      ?? 0,
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
       };
 
       const { data: existing } = await supabase.from('course_attempts').select('id')
-        .eq('form_id', form_id).eq('student_email', sessionEmail)
+        .eq('form_id', form_id).eq('student_id', sessionUser.id)
         .is('completed_at', null)
         .order('started_at', { ascending: false }).limit(1).maybeSingle();
 
@@ -113,11 +113,11 @@ export async function POST(req: NextRequest) {
         if (error) { console.error('[course/save-progress] update', error); return NextResponse.json({ error: 'Failed to save progress.' }, { status: 500 }); }
       } else {
         const { data: last } = await supabase.from('course_attempts').select('attempt_number')
-          .eq('form_id', form_id).eq('student_email', sessionEmail)
+          .eq('form_id', form_id).eq('student_id', sessionUser.id)
           .order('attempt_number', { ascending: false }).limit(1).maybeSingle();
 
         const { error } = await supabase.from('course_attempts').insert({
-          student_email:  sessionEmail,
+          student_id:     sessionUser.id,
           form_id,
           attempt_number: (last?.attempt_number ?? 0) + 1,
           ...payload,
@@ -134,15 +134,15 @@ export async function POST(req: NextRequest) {
 
   // -- Mark active attempt as completed ---
   if (action === 'complete-attempt') {
-    const sessionEmail = await getSessionEmail(req);
-    if (!sessionEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { form_id, score, passed, points, current_question_index } = body;
     if (!form_id) return NextResponse.json({ error: 'form_id required' }, { status: 400 });
 
     try {
       const supabase = adminClient();
       const { data: attempt } = await supabase.from('course_attempts').select('id')
-        .eq('form_id', form_id).eq('student_email', sessionEmail)
+        .eq('form_id', form_id).eq('student_id', sessionUser.id)
         .is('completed_at', null)
         .order('started_at', { ascending: false }).limit(1).maybeSingle();
 
@@ -159,11 +159,11 @@ export async function POST(req: NextRequest) {
         // Publish cohort activity feed event (fire-and-forget)
         if (passed) {
           Promise.all([
-            supabase.from('students').select('cohort_id, full_name').eq('email', sessionEmail).single(),
+            supabase.from('students').select('cohort_id, full_name').eq('id', sessionUser.id).single(),
             supabase.from('forms').select('title').eq('id', form_id).single(),
           ]).then(([{ data: stu }, { data: frm }]) => {
             if (!stu?.cohort_id || !frm?.title) return;
-            const firstName = (stu.full_name || sessionEmail).split(' ')[0];
+            const firstName = (stu.full_name || sessionUser.email).split(' ')[0];
             publishActivity(stu.cohort_id, {
               name:        firstName,
               action:      'completed',
@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
           supabase
             .from('students')
             .select('cohort_id, full_name')
-            .eq('email', sessionEmail)
+            .eq('id', sessionUser.id)
             .single()
             .then(({ data: student }) => {
               if (!student?.cohort_id) return;
@@ -189,15 +189,16 @@ export async function POST(req: NextRequest) {
               supabase
                 .from('student_xp')
                 .select('total_xp')
-                .eq('student_email', sessionEmail)
+                .eq('student_id', sessionUser.id)
                 .single()
                 .then(({ data: xpRow }) => {
                   const totalXp = xpRow?.total_xp ?? 0;
                   const redis = getRedis();
                   if (!redis) return;
+                  // Redis still keyed by email for display purposes
                   redis.pipeline()
-                    .zadd(lbKey,   { score: totalXp, member: sessionEmail })
-                    .hset(nameKey, { [sessionEmail]: student.full_name || sessionEmail })
+                    .zadd(lbKey,   { score: totalXp, member: sessionUser.email })
+                    .hset(nameKey, { [sessionUser.email]: student.full_name || sessionUser.email })
                     .expire(lbKey,   600)
                     .expire(nameKey, 600)
                     .exec()
@@ -215,14 +216,14 @@ export async function POST(req: NextRequest) {
 
   // -- Delete active in-progress attempt (fresh restart) ---
   if (action === 'clear-progress') {
-    const sessionEmail = await getSessionEmail(req);
-    if (!sessionEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { form_id } = body;
     if (!form_id) return NextResponse.json({ error: 'form_id required' }, { status: 400 });
     try {
       const supabase = adminClient();
       await supabase.from('course_attempts').delete()
-        .eq('form_id', form_id).eq('student_email', sessionEmail).is('completed_at', null);
+        .eq('form_id', form_id).eq('student_id', sessionUser.id).is('completed_at', null);
       return NextResponse.json({ ok: true });
     } catch (err: any) {
       console.error('[course/clear-progress]', err);
@@ -232,8 +233,8 @@ export async function POST(req: NextRequest) {
 
   // -- Issue certificate ---
   if (action === 'issue-certificate') {
-    const sessionEmail = await getSessionEmail(req);
-    if (!sessionEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { form_id, response_id, student_name } = body;
     if (!form_id || !response_id || !student_name)
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -249,16 +250,17 @@ export async function POST(req: NextRequest) {
       const submittedEmail = (response.data?.email ?? '').trim().toLowerCase();
       const claimedName    = student_name.trim().toLowerCase();
       if (submittedName !== claimedName) return NextResponse.json({ error: 'Name mismatch' }, { status: 403 });
-      if (submittedEmail && submittedEmail !== sessionEmail) return NextResponse.json({ error: 'Email mismatch' }, { status: 403 });
+      if (submittedEmail && submittedEmail !== sessionUser.email) return NextResponse.json({ error: 'Email mismatch' }, { status: 403 });
 
       const { data: existing } = await supabase.from('certificates').select('id')
-        .eq('form_id', form_id).eq('student_email', sessionEmail).eq('revoked', false).maybeSingle();
+        .eq('form_id', form_id).eq('student_id', sessionUser.id).eq('revoked', false).maybeSingle();
       if (existing?.id) return NextResponse.json({ certId: existing.id });
 
       const { data: cert, error } = await supabase.from('certificates').insert({
-        form_id, response_id,
+        form_id,
+        response_id,
         student_name:  response.data.name,
-        student_email: sessionEmail,
+        student_id:    sessionUser.id,
       }).select('id').single();
       if (error) { console.error('[course/issue-certificate]', error); return NextResponse.json({ error: 'Failed to issue certificate.' }, { status: 500 }); }
       return NextResponse.json({ certId: cert.id });

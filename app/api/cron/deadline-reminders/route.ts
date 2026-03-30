@@ -96,22 +96,22 @@ export async function POST(req: NextRequest) {
   ] = await Promise.all([
     supabase
       .from('students')
-      .select('email, full_name, cohort_id')
+      .select('id, email, full_name, cohort_id')
       .in('cohort_id', candidateCohortIds),
     supabase
       .from('course_attempts')
-      .select('student_email, form_id')
+      .select('student_id, form_id')
       .in('form_id', candidateFormIds)
       .not('completed_at', 'is', null),
     supabase
       .from('guided_project_attempts')
-      .select('student_email, form_id')
+      .select('student_id, form_id')
       .in('form_id', candidateFormIds)
       .not('completed_at', 'is', null),
     // Pre-fetch all deadline_reminder nudges sent in the last 24h for these forms
     supabase
       .from('sent_nudges')
-      .select('student_email, form_id')
+      .select('student_id, form_id')
       .eq('nudge_type', 'deadline_reminder')
       .in('form_id', candidateFormIds)
       .gte('sent_at', since1Day),
@@ -120,12 +120,12 @@ export async function POST(req: NextRequest) {
   // Build lookup sets for O(1) checks
   const completedSet = new Set<string>();
   for (const a of [...(courseAttempts ?? []), ...(gpAttempts ?? [])]) {
-    completedSet.add(`${a.student_email}|${a.form_id}`);
+    completedSet.add(`${a.student_id}|${a.form_id}`);
   }
 
   const nudgedSet = new Set<string>();
   for (const n of recentNudges ?? []) {
-    nudgedSet.add(`${n.student_email}|${n.form_id}`);
+    nudgedSet.add(`${n.student_id}|${n.form_id}`);
   }
 
   const studentsByCohort = new Map<string, typeof students>();
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
   // -- 5. Build email batch and nudge records ---
   type EmailPayload = Parameters<typeof resend.batch.send>[0][number];
   const emailBatch:  EmailPayload[] = [];
-  const nudgeRecords: { student_email: string; form_id: string; nudge_type: string }[] = [];
+  const nudgeRecords: { student_id: string; form_id: string; nudge_type: string }[] = [];
   let skipped = 0;
 
   for (const { formId, cohortId, daysLeft, form } of candidates) {
@@ -150,8 +150,8 @@ export async function POST(req: NextRequest) {
       const email = (student.email ?? '').trim().toLowerCase();
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
 
-      if (completedSet.has(`${email}|${formId}`)) { skipped++; continue; }
-      if (nudgedSet.has(`${email}|${formId}`))     { skipped++; continue; }
+      if (completedSet.has(`${student.id}|${formId}`)) { skipped++; continue; }
+      if (nudgedSet.has(`${student.id}|${formId}`))     { skipped++; continue; }
 
       const subject = daysLeft <= 0
         ? `⚠ Deadline passed: ${form.title}`
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
         }),
       });
 
-      nudgeRecords.push({ student_email: email, form_id: formId, nudge_type: 'deadline_reminder' });
+      nudgeRecords.push({ student_id: student.id, form_id: formId, nudge_type: 'deadline_reminder' });
     }
   }
 
@@ -196,7 +196,7 @@ export async function POST(req: NextRequest) {
       await resend.batch.send(batch);
       sent += batch.length;
       for (const n of batchNudges) {
-        sentKeySet.add(`${n.student_email}|${n.form_id}`);
+        sentKeySet.add(`${n.student_id}|${n.form_id}`);
       }
     } catch (err) {
       console.error('[cron/deadline-reminders] batch send failed:', err);
@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
 
   // -- 7. Bulk insert nudge records for successfully sent emails ---
   if (sentKeySet.size) {
-    const toInsert = nudgeRecords.filter(n => sentKeySet.has(`${n.student_email}|${n.form_id}`));
+    const toInsert = nudgeRecords.filter(n => sentKeySet.has(`${n.student_id}|${n.form_id}`));
     if (toInsert.length) {
       await supabase.from('sent_nudges').insert(toInsert);
     }

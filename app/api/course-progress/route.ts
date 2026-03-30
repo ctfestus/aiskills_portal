@@ -51,16 +51,17 @@ export async function GET(req: NextRequest) {
   const ownedIds = (ownedForms ?? []).map((f: any) => f.id);
   if (!ownedIds.length) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+  // Join students table to get up-to-date email and name
   const { data: attempts } = await supabase
     .from('course_attempts')
-    .select('form_id, student_email, student_name, current_question_index, score, points, passed, completed_at, attempt_number, updated_at')
+    .select('form_id, student_id, current_question_index, score, points, passed, completed_at, attempt_number, updated_at, students!inner(email, full_name)')
     .in('form_id', ownedIds)
-    .order('student_email').order('attempt_number', { ascending: false });
+    .order('student_id').order('attempt_number', { ascending: false });
 
   // Deduplicate: best attempt per student per course
   const map: Record<string, any> = {};
   for (const a of attempts ?? []) {
-    const key = `${a.student_email}::${a.form_id}`;
+    const key = `${a.student_id}::${a.form_id}`;
     const existing = map[key];
     if (!existing) { map[key] = a; continue; }
     if (!a.completed_at && existing.completed_at) { map[key] = a; continue; }
@@ -69,8 +70,9 @@ export async function GET(req: NextRequest) {
 
   const progress = Object.values(map).map(a => ({
     form_id:                a.form_id,
-    student_email:          a.student_email,
-    student_name:           a.student_name,
+    student_id:             a.student_id,
+    student_email:          (a.students as any)?.email ?? '',
+    student_name:           (a.students as any)?.full_name ?? '',
     current_question_index: a.current_question_index,
     score:                  a.score,
     points:                 a.points,

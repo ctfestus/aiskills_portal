@@ -87,11 +87,11 @@ export async function GET(req: NextRequest) {
   const [{ data: courseAttempts }, { data: gpAttempts }, { data: cohortAssignments }] = await Promise.all([
     supabase
       .from('course_attempts')
-      .select('student_email, form_id, completed_at, updated_at, score, passed, current_question_index')
+      .select('student_id, form_id, completed_at, updated_at, score, passed, current_question_index')
       .in('form_id', formIds),
     supabase
       .from('guided_project_attempts')
-      .select('student_email, form_id, completed_at, updated_at, progress')
+      .select('student_id, form_id, completed_at, updated_at, progress')
       .in('form_id', formIds),
     supabase
       .from('cohort_assignments')
@@ -106,10 +106,10 @@ export async function GET(req: NextRequest) {
     assignmentMap.set(`${ca.form_id}|${ca.cohort_id}`, ca.assigned_at);
   }
 
-  // Build attempt lookups keyed by "email|formId"
+  // Build attempt lookups keyed by "studentId|formId"
   const courseAttemptMap = new Map<string, any>();
   for (const a of courseAttempts ?? []) {
-    const key = `${a.student_email}|${a.form_id}`;
+    const key = `${a.student_id}|${a.form_id}`;
     const existing = courseAttemptMap.get(key);
     if (!existing || new Date(a.updated_at) > new Date(existing.updated_at)) {
       courseAttemptMap.set(key, a);
@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
   }
   const gpAttemptMap = new Map<string, any>();
   for (const a of gpAttempts ?? []) {
-    gpAttemptMap.set(`${a.student_email}|${a.form_id}`, a);
+    gpAttemptMap.set(`${a.student_id}|${a.form_id}`, a);
   }
 
   // 5. Build unified rows
@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
     const formStudents = students.filter(s => formCohortIds.includes(s.cohort_id));
 
     for (const student of formStudents) {
-      const key = `${student.email}|${form.id}`;
+      const key = `${student.id}|${form.id}`;
       const attempt = isVE ? gpAttemptMap.get(key) : courseAttemptMap.get(key);
 
       let status: 'not_started' | 'in_progress' | 'stalled' | 'completed';

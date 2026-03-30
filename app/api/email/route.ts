@@ -230,10 +230,11 @@ export async function POST(req: NextRequest) {
           const index = getVectorIndex();
           if (index && form) {
             const { data: student } = await supabase
-              .from('students').select('cohort_id').eq('email', studentEmail).maybeSingle();
+              .from('students').select('id, cohort_id').eq('email', studentEmail).maybeSingle();
 
-            const { data: attempts } = await supabase
-              .from('course_attempts').select('form_id').eq('student_email', studentEmail);
+            const { data: attempts } = student?.id
+              ? await supabase.from('course_attempts').select('form_id').eq('student_id', student.id)
+              : { data: [] };
 
             const seenIds = new Set((attempts ?? []).map((a: any) => a.form_id));
             seenIds.add(data.formId);

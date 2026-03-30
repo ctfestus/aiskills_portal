@@ -65,27 +65,27 @@ export async function POST(req: NextRequest) {
   const [{ data: courseAttempts }, { data: gpAttempts }] = await Promise.all([
     supabase
       .from('course_attempts')
-      .select('student_email, form_id, completed_at, score, updated_at')
+      .select('student_id, form_id, completed_at, score, updated_at')
       .in('form_id', formIds),
     supabase
       .from('guided_project_attempts')
-      .select('student_email, form_id, completed_at, updated_at')
+      .select('student_id, form_id, completed_at, updated_at')
       .in('form_id', formIds),
   ]);
 
-  // Map: `${email}|${formId}` attempt
+  // Map: `${studentId}|${formId}` -> attempt
   type AttemptData = { completedAt: string | null; score?: number | null; updatedAt: string };
   const attemptMap = new Map<string, AttemptData>();
 
   for (const a of courseAttempts ?? []) {
-    attemptMap.set(`${(a.student_email as string).toLowerCase()}|${a.form_id}`, {
+    attemptMap.set(`${a.student_id}|${a.form_id}`, {
       completedAt: a.completed_at,
       score: a.score,
       updatedAt: a.updated_at,
     });
   }
   for (const a of gpAttempts ?? []) {
-    const key = `${(a.student_email as string).toLowerCase()}|${a.form_id}`;
+    const key = `${a.student_id}|${a.form_id}`;
     if (!attemptMap.has(key)) {
       attemptMap.set(key, { completedAt: a.completed_at, updatedAt: a.updated_at });
     }
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
     const email = ((student.email as string) ?? '').trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
 
-    const alreadySent = await hasNudgeBeenSent(supabase, email, null, 'weekly_digest', 6);
+    const alreadySent = await hasNudgeBeenSent(supabase, student.id, null, 'weekly_digest', 6);
     if (alreadySent) { skipped++; continue; }
 
     const assignments = assignmentsByCohort.get(student.cohort_id) ?? [];
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
 
       const isVE = form.content_type === 'virtual_experience' || form.content_type === 'guided_project';
       const contentType = isVE ? 'virtual_experience' : form.content_type;
-      const attempt = attemptMap.get(`${email}|${assignment.form_id}`);
+      const attempt = attemptMap.get(`${student.id}|${assignment.form_id}`);
 
       // Deadline check
       let isOverdue = false;
@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
 
     try {
       await resend.emails.send({ from: FROM, to: email, subject, html });
-      await recordNudge(supabase, email, null, 'weekly_digest');
+      await recordNudge(supabase, student.id, null, 'weekly_digest');
       sent++;
     } catch (err) {
       console.error('[cron/weekly-digest] send failed for', email, err);
