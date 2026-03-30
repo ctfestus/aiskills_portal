@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Playfair_Display, JetBrains_Mono } from 'next/font/google';
+import { headers } from 'next/headers';
 import './globals.css';
 import ThemeProvider from '@/components/ThemeProvider';
 import NavigationProgress from '@/components/NavigationProgress';
@@ -25,10 +26,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+// Async server component so we can read the per-request nonce set by middleware.
+// Next.js uses the nonce on the <html> element to stamp its own inline bootstrap
+// scripts, satisfying the nonce-based CSP without needing unsafe-inline.
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const nonce = (await headers()).get('x-nonce') ?? '';
+
   return (
-    <html lang="en" className={`${inter.variable} ${playfair.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
-      <body suppressHydrationWarning>
+    <html lang="en" nonce={nonce} className={`${inter.variable} ${playfair.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+      <body nonce={nonce} suppressHydrationWarning>
         <NavigationProgress />
         <ThemeProvider>
           {children}
