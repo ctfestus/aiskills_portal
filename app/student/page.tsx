@@ -3738,6 +3738,10 @@ export default function StudentDashboard() {
       setUser(authUser);
       setProfile(profileData);
 
+      // Update last_login_at (fire-and-forget)
+      supabase.from('students').update({ last_login_at: new Date().toISOString() }).eq('id', authUser.id)
+        .then(({ error }) => { if (error) console.error('[last_login_at] update failed:', error.message); });
+
       // Fetch cohort for global activity ticker (fire-and-forget)
       supabase.from('students').select('cohort_id').eq('id', authUser.id).single()
         .then(({ data: s }) => { if (s?.cohort_id) setCohortIdForTicker(s.cohort_id); });
