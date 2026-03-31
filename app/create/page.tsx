@@ -59,6 +59,7 @@ interface CourseQuestion {
   hint?: string;
   codeSnippet?: string;
   codeLanguage?: string;
+  lessonOnly?: boolean;
   lesson?: {
     title?: string;
     body?: string;
@@ -2437,6 +2438,19 @@ const [isSaving, setIsSaving] = useState(false);
                               >{l}</button>
                             ))}
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuestion(q.id, {
+                              lessonOnly: !q.lessonOnly,
+                              // auto-open lesson panel when enabling lesson-only mode
+                              ...(!q.lessonOnly && !q.lesson ? { lesson: { title: '', body: '', imageUrl: '', videoUrl: '' } } : {}),
+                            })}
+                            title="Lesson only (no question)"
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all"
+                            style={q.lessonOnly ? { background: accentColor, color: C.ctaText } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.faint }}
+                          >
+                            <BookOpen className="w-3 h-3" /> Lesson only
+                          </button>
                           <button type="button" onClick={() => handleRemoveQuestion(q.id)} className="p-1 transition-colors hover:text-red-400" style={{ color: C.faint }}>
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -2444,6 +2458,7 @@ const [isSaving, setIsSaving] = useState(false);
                       </div>
 
                       <div className="p-3.5 space-y-3">
+                        {!q.lessonOnly && (<>
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
@@ -2685,6 +2700,7 @@ const [isSaving, setIsSaving] = useState(false);
                             placeholder="Explain why this answer is correct..."
                           />
                         </div>
+                        </>)}
 
                         {/* Lesson section */}
                         <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>

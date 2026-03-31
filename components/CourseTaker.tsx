@@ -45,6 +45,7 @@ interface CourseQuestion {
   hint?: string;
   codeSnippet?: string;
   codeLanguage?: string;
+  lessonOnly?: boolean;
   lesson?: {
     title?: string;
     body?: string;
@@ -275,7 +276,8 @@ export function CourseTaker({
   const questions = config.questions || [];
   const learningOutcomes: string[] = config.learnOutcomes || [];
   const currentQuestion = questions[currentQuestionIndex];
-  const totalQuestions = questions.length;
+  const totalQuestions = questions.filter((q: any) => !q.lessonOnly).length;
+  const totalSlides = questions.length;
   const showAnswers: ShowAnswers = config.showAnswers ?? 'per_question';
   const passmark = config.passmark ?? 50;
   const courseTimerMins: number = config.courseTimer ?? 0;
@@ -746,12 +748,12 @@ export function CourseTaker({
   // -- All questions answered but student never hit Submit (e.g. closed tab) --
   // Detect on mount/resume and auto-transition to the completion screen.
   useEffect(() => {
-    if (phase === 'course' && !reviewMode && totalQuestions > 0 && currentQuestionIndex >= totalQuestions) {
+    if (phase === 'course' && !reviewMode && totalSlides > 0 && currentQuestionIndex >= totalSlides) {
       clearProgress(score);
       setPhase('complete');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, currentQuestionIndex, totalQuestions, reviewMode]);
+  }, [phase, currentQuestionIndex, totalSlides, reviewMode]);
 
   // -- Success screen (shown after submission) --
   if (isSuccess) {
@@ -1298,14 +1300,14 @@ export function CourseTaker({
                     <div>
                       <p className={`text-base font-bold ${textColor}`}>Welcome back, {studentName.split(' ')[0]}!</p>
                       <p className={`text-xs mt-0.5 ${mutedColor}`}>
-                        You&apos;re on question {savedProgress.current_question_index + 1} of {totalQuestions}
+                        You&apos;re on question {savedProgress.current_question_index + 1} of {totalSlides}
                         {savedProgress.points > 0 && <> · <span style={{ color: accent }}>{savedProgress.points} XP earned</span></>}
                       </p>
                     </div>
                   </div>
                   {/* Progress bar */}
                   <div style={{ height: 6, borderRadius: 99, background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', borderRadius: 99, background: accent, width: `${Math.round((savedProgress.current_question_index / totalQuestions) * 100)}%`, transition: 'width 0.6s ease' }} />
+                    <div style={{ height: '100%', borderRadius: 99, background: accent, width: `${Math.round((savedProgress.current_question_index / totalSlides) * 100)}%`, transition: 'width 0.6s ease' }} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <button
@@ -1547,7 +1549,7 @@ export function CourseTaker({
           )}
 
           <p className={`text-xs ${mutedColor}`}>
-            You answered {Object.keys(answers).length} of {totalQuestions} question{totalQuestions !== 1 ? 's' : ''}.
+            You answered {Object.keys(answers).filter(id => !questions.find((q: any) => q.id === id)?.lessonOnly).length} of {totalQuestions} question{totalQuestions !== 1 ? 's' : ''}.
           </p>
           <button
             onClick={(e) => onSubmit(e, { name: studentName, email: studentEmail, score, total: totalQuestions, percentage, passed, answers, points: totalPoints, streak, studentToken: sessionTokenRef.current })}
@@ -1676,7 +1678,7 @@ export function CourseTaker({
   const handleNext = () => {
     setLessonOpen(false);
     setDirection(1);
-    if (currentQuestionIndex < totalQuestions - 1) {
+    if (currentQuestionIndex < totalSlides - 1) {
       setCurrentQuestionIndex(i => i + 1);
       setSelectedOption(null);
       setFillBlankAnswer('');
@@ -1710,8 +1712,8 @@ export function CourseTaker({
     setSkippedQuestions(prev => new Set(prev).add(currentQuestion.id));
     // Find next unanswered or skipped question (wrapping)
     let next = -1;
-    for (let i = 1; i <= totalQuestions; i++) {
-      const idx = (currentQuestionIndex + i) % totalQuestions;
+    for (let i = 1; i <= totalSlides; i++) {
+      const idx = (currentQuestionIndex + i) % totalSlides;
       const q = questions[idx];
       if (!answers[q.id]) { next = idx; break; }
     }
@@ -1751,7 +1753,7 @@ export function CourseTaker({
       setAnswers(newAnswers);
     }
     setDirection(1);
-    if (currentQuestionIndex < totalQuestions - 1) {
+    if (currentQuestionIndex < totalSlides - 1) {
       const nextIndex = currentQuestionIndex + 1;
       saveProgress(newAnswers, nextIndex, newScore, totalPoints, streak, hintsUsed);
       setCurrentQuestionIndex(nextIndex);
@@ -1763,7 +1765,7 @@ export function CourseTaker({
     }
   };
 
-  const progressPct = (currentQuestionIndex / totalQuestions) * 100;
+  const progressPct = (currentQuestionIndex / totalSlides) * 100;
   const timerWarning = timeLeft !== null && timeLeft <= 60;
 
   // -- Correct answer display for after-check feedback --
@@ -1791,6 +1793,127 @@ export function CourseTaker({
     if (url.includes('iframe.mediadelivery.net/embed/') || url.includes('player.mediadelivery.net/embed/') || url.includes('video.bunnycdn.com/')) return url;
     return null;
   };
+
+  // -- Lesson-only slide --
+  if (currentQuestion.lessonOnly) {
+    const lesson = currentQuestion.lesson || {};
+    const embedUrl = lesson.videoUrl ? getVideoEmbedUrl(lesson.videoUrl) : null;
+    const isLast = currentQuestionIndex >= totalSlides - 1;
+
+    const lessonSlide = (
+      <div
+        className={`${inlineMode ? 'relative flex flex-col rounded-xl overflow-hidden min-h-[500px]' : 'fixed inset-0 z-[200] overflow-y-auto flex flex-col'} ${isDark ? 'bg-black' : 'bg-zinc-50'}`}
+        style={{ color: isDark ? '#ffffff' : '#18181b', ...fontStyle }}
+      >
+        {/* Progress bar */}
+        <div className={`flex-shrink-0 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 ${isDark ? 'border-b border-zinc-800/60' : 'border-b border-zinc-200'}`}>
+          <div className="max-w-2xl mx-auto">
+            <div className="flex justify-between items-center mb-2">
+              <div className="flex items-center gap-2">
+                {currentQuestionIndex > 0 && (
+                  <button
+                    onClick={handleBack}
+                    className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                )}
+                <span className={`text-xs font-medium ${mutedColor}`}>
+                  Lesson {currentQuestionIndex + 1} <span className={mutedColor}>of {totalSlides}</span>
+                </span>
+              </div>
+            </div>
+            <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
+              <motion.div
+                className="h-full rounded-full"
+                style={{ background: accent }}
+                animate={{ width: `${progressPct}%` }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Lesson content */}
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 max-w-2xl w-full mx-auto">
+          <AnimatePresence mode="wait" custom={direction}>
+            <motion.div
+              key={currentQuestionIndex}
+              custom={direction}
+              variants={{
+                enter: (d: number) => ({ opacity: 0, x: d * 40 }),
+                center: { opacity: 1, x: 0 },
+                exit: (d: number) => ({ opacity: 0, x: d * -40 }),
+              }}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.2 }}
+              className="space-y-5"
+            >
+              <div className="flex items-center gap-2 mb-5">
+                <span
+                  className="inline-block text-[10px] font-bold tracking-widest uppercase px-2.5 py-1 rounded-full"
+                  style={{ background: `${accent}22`, color: accent }}
+                >
+                  <BookOpen className="w-3 h-3 inline mr-1" />Lesson
+                </span>
+              </div>
+
+              {lesson.title && (
+                <h2 className={`text-xl sm:text-2xl font-semibold leading-snug ${textColor}`}>
+                  {lesson.title}
+                </h2>
+              )}
+
+              {embedUrl && (
+                <div className="rounded-xl overflow-hidden shadow-md" style={{ aspectRatio: '16/9' }}>
+                  <iframe
+                    src={embedUrl}
+                    className="w-full h-full border-0"
+                    allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
+                    allowFullScreen
+                  />
+                </div>
+              )}
+
+              {lesson.imageUrl && (
+                <div className="rounded-xl overflow-hidden shadow-sm">
+                  <img src={lesson.imageUrl} alt="Lesson illustration" className="w-full object-cover" />
+                </div>
+              )}
+
+              {lesson.body && (
+                <div
+                  className={`prose prose-base sm:prose-lg max-w-none ${isDark
+                    ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.65] prose-headings:text-white prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-300 prose-blockquote:not-italic'
+                    : 'prose-p:text-zinc-700 prose-p:leading-[1.65] prose-headings:text-zinc-900 prose-strong:text-zinc-900 prose-li:text-zinc-700 prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-700 prose-blockquote:not-italic'
+                  }`}
+                  style={{ color: isDark ? '#d4d4d8' : '#3f3f46', ...fontStyle }}
+                  dangerouslySetInnerHTML={{ __html: lesson.body }}
+                />
+              )}
+
+              <div className="mt-6">
+                <button
+                  onClick={handleNext}
+                  className="w-full py-4 rounded-2xl font-semibold text-white text-base transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                  style={{ background: accent }}
+                >
+                  {isLast ? 'Finish Course' : 'Continue'}
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
+    );
+
+    if (inlineMode) return lessonSlide;
+    if (typeof document === 'undefined') return null;
+    return createPortal(lessonSlide, document.body);
+  }
 
   const quizUI = (
     <>
@@ -1855,7 +1978,7 @@ export function CourseTaker({
                   </button>
                 )}
                 <span className={`text-xs font-medium ${mutedColor}`}>
-                  Question {currentQuestionIndex + 1} <span className={mutedColor}>of {totalQuestions}</span>
+                  {currentQuestion?.lessonOnly ? 'Lesson' : 'Question'} {currentQuestionIndex + 1} <span className={mutedColor}>of {totalSlides}</span>
                 </span>
               </div>
               <div className="flex items-center gap-2 sm:gap-3">
@@ -1897,9 +2020,9 @@ export function CourseTaker({
               </div>
             )}
             {/* Feature 2: dot navigation */}
-            {totalQuestions > 1 && (
+            {totalSlides > 1 && (
               <div className="flex items-center gap-1 mt-2 flex-wrap">
-                {questions.slice(0, Math.min(totalQuestions, 15)).map((q: any, idx: number) => {
+                {questions.slice(0, Math.min(totalSlides, 15)).map((q: any, idx: number) => {
                   const isCurrentDot = idx === currentQuestionIndex;
                   const isAnsweredDot = !!answers[q.id];
                   const isSkippedDot = skippedQuestions.has(q.id);
@@ -1924,8 +2047,8 @@ export function CourseTaker({
                     />
                   );
                 })}
-                {totalQuestions > 15 && (
-                  <span className={`text-[10px] ${mutedColor}`}>+{totalQuestions - 15}</span>
+                {totalSlides > 15 && (
+                  <span className={`text-[10px] ${mutedColor}`}>+{totalSlides - 15}</span>
                 )}
               </div>
             )}

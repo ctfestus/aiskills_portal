@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
-import { Loader2, CheckCircle2, ArrowRight, MapPin, Building2, ExternalLink, Calendar, Download, Copy, Check, Star, BookOpen, FileText, Zap, Clock } from 'lucide-react';
+import { Loader2, CheckCircle2, ArrowRight, MapPin, Building2, ExternalLink, Calendar, Download, Copy, Check, BookOpen, FileText, Zap, Clock } from 'lucide-react';
 import { AnimatedField, ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import { CourseTaker } from '@/components/CourseTaker';
 import dynamic from 'next/dynamic';
@@ -1147,9 +1147,7 @@ export default function PublicFormPage() {
         {/* Footer */}
         <footer style={{ position: 'relative', zIndex: 10, textAlign: 'center', paddingBottom: 48, paddingTop: 16 }}>
           <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-            <div style={{ width: 24, height: 24, borderRadius: 8, background: '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Star style={{ width: 14, height: 14, color: '#ADEE66', fill: '#ADEE66' }}/>
-            </div>
+            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" style={{ height: 20, width: 'auto' }} />
             <span style={{ fontSize: 12, color: t.footerText }}>Powered by <strong style={{ color: t.footerBold }}>AI Skills Africa</strong></span>
           </Link>
         </footer>
@@ -1957,9 +1955,7 @@ export default function PublicFormPage() {
       {/* Footer */}
       <footer style={{ position: 'relative', zIndex: 10, textAlign: 'center', padding: '24px 0 48px' }}>
         <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-          <div style={{ width: 24, height: 24, borderRadius: 8, background: '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Star style={{ width: 14, height: 14, color: '#ADEE66', fill: '#ADEE66' }}/>
-          </div>
+          <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" style={{ height: 20, width: 'auto' }} />
           <span style={{ fontSize: 12, color: t.footerText }}>Powered by <strong style={{ color: t.footerBold }}>AI Skills Africa</strong></span>
         </Link>
       </footer>
