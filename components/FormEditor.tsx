@@ -52,6 +52,7 @@ interface CourseQuestion {
   hint?: string;
   codeSnippet?: string;
   codeLanguage?: string;
+  lessonOnly?: boolean;
   lesson?: {
     title?: string;
     body?: string;
@@ -1953,6 +1954,18 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                                 >{l}</button>
                               ))}
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateQuestion(q.id, {
+                                lessonOnly: !q.lessonOnly,
+                                ...(!q.lessonOnly && !q.lesson ? { lesson: { title: '', body: '', imageUrl: '', videoUrl: '' } } : {}),
+                              })}
+                              title="Lesson only (no question)"
+                              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all"
+                              style={q.lessonOnly ? { background: accentColor, color: 'white' } : { background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
+                            >
+                              <BookOpen className="w-3 h-3" /> Lesson only
+                            </button>
                             <button type="button" onClick={() => handleRemoveQuestion(q.id)} className="p-1 transition-colors hover:text-red-400" style={{ color: FE.faint }}>
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1960,6 +1973,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                         </div>
 
                         <div className="p-3.5 space-y-3">
+                          {!q.lessonOnly && (<>
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
@@ -2193,6 +2207,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                               placeholder="Explain why this answer is correct..."
                             />
                           </div>
+                          </>)}
 
                           {/* Lesson section */}
                           <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${FE.cardBorder}` }}>
