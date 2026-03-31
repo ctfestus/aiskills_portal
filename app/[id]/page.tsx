@@ -90,9 +90,9 @@ const buttonThemes: Record<ThemeColor, string> = {
 const LIGHT_P = {
   page:         '#ffffff',
   blob:         '#ADEE66',
-  nav:          'rgba(255,255,255,0.92)',
+  nav:          '#1f1bc3',
   navBorder:    'rgba(0,0,0,0.07)',
-  navText:      '#555',
+  navText:      '#ffffff',
   logoText:     '#111',
   card:         'white',
   cardBorder:   'rgba(0,0,0,0.07)',

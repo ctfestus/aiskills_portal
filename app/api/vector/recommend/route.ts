@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
   const cohortId       = student?.cohort_id ?? null;
   const fallbackCohorts: string[] = completedForm.cohort_ids ?? [];
 
-  const recs = results
+  const candidates = results
     .filter((r: any) => {
       const m = r.metadata;
       if (!m) return false;
@@ -89,6 +89,21 @@ export async function POST(req: NextRequest) {
       // Instructor fallback: show anything in the same cohorts as the completed course
       return fallbackCohorts.some(c => itemCohorts.includes(c));
     })
+    .slice(0, 12);
+
+  if (!candidates.length) return NextResponse.json({ recommendations: [] });
+
+  // Verify candidates still exist in the database (vector index may contain stale/deleted courses)
+  const candidateIds = candidates.map((r: any) => r.metadata.formId);
+  const { data: existingForms } = await supabase
+    .from('forms')
+    .select('id')
+    .in('id', candidateIds);
+
+  const existingIds = new Set((existingForms ?? []).map((f: any) => f.id));
+
+  const recs = candidates
+    .filter((r: any) => existingIds.has(r.metadata.formId))
     .slice(0, 3)
     .map((r: any) => ({
       formId:     r.metadata.formId,

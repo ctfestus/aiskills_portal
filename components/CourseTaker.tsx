@@ -1801,71 +1801,52 @@ export function CourseTaker({
     const isLast = currentQuestionIndex >= totalSlides - 1;
 
     const lessonSlide = (
-      <div
-        className={`${inlineMode ? 'relative flex flex-col rounded-xl overflow-hidden min-h-[500px]' : 'fixed inset-0 z-[200] overflow-y-auto flex flex-col'} ${isDark ? 'bg-black' : 'bg-zinc-50'}`}
-        style={{ color: isDark ? '#ffffff' : '#18181b', ...fontStyle }}
-      >
-        {/* Progress bar */}
-        <div className={`flex-shrink-0 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 ${isDark ? 'border-b border-zinc-800/60' : 'border-b border-zinc-200'}`}>
-          <div className="max-w-2xl mx-auto">
-            <div className="flex justify-between items-center mb-2">
-              <div className="flex items-center gap-2">
-                {currentQuestionIndex > 0 && (
-                  <button
-                    onClick={handleBack}
-                    className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                )}
-                <span className={`text-xs font-medium ${mutedColor}`}>
-                  Lesson {currentQuestionIndex + 1} <span className={mutedColor}>of {totalSlides}</span>
-                </span>
-              </div>
-            </div>
-            <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
-              <motion.div
-                className="h-full rounded-full"
-                style={{ background: accent }}
-                animate={{ width: `${progressPct}%` }}
-                transition={{ duration: 0.4, ease: 'easeOut' }}
-              />
-            </div>
+      <>
+        {/* Backdrop -- fully opaque to hide page content behind */}
+        <div className="fixed inset-0 z-[9990]" style={{ background: isDark ? '#000000' : '#1f1bc3' }} />
+
+        {/* Bottom sheet */}
+        <motion.div
+          key={currentQuestionIndex}
+          initial={{ y: '100%' }}
+          animate={{ y: 0 }}
+          exit={{ y: '100%' }}
+          transition={{ type: 'spring', damping: 32, stiffness: 320 }}
+          className="fixed bottom-0 left-0 right-0 z-[9991] rounded-t-3xl flex flex-col overflow-hidden"
+          style={{
+            background: isDark ? '#18181b' : '#ffffff',
+            color: isDark ? '#ffffff' : '#18181b',
+            maxHeight: '90vh',
+            ...fontStyle,
+          }}
+        >
+          {/* Drag handle */}
+          <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+            <div className={`w-10 h-1 rounded-full ${isDark ? 'bg-zinc-700' : 'bg-zinc-300'}`} />
           </div>
-        </div>
 
-        {/* Lesson content */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 max-w-2xl w-full mx-auto">
-          <AnimatePresence mode="wait" custom={direction}>
-            <motion.div
-              key={currentQuestionIndex}
-              custom={direction}
-              variants={{
-                enter: (d: number) => ({ opacity: 0, x: d * 40 }),
-                center: { opacity: 1, x: 0 },
-                exit: (d: number) => ({ opacity: 0, x: d * -40 }),
-              }}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ duration: 0.2 }}
-              className="space-y-5"
-            >
-              <div className="flex items-center gap-2 mb-5">
-                <span
-                  className="inline-block text-[10px] font-bold tracking-widest uppercase px-2.5 py-1 rounded-full"
-                  style={{ background: `${accent}22`, color: accent }}
-                >
-                  <BookOpen className="w-3 h-3 inline mr-1" />Lesson
-                </span>
-              </div>
+          {/* Header */}
+          <div className="flex items-start justify-between px-5 sm:px-8 pt-4 sm:pt-5 pb-3 sm:pb-4 flex-shrink-0">
+            <div>
+              <p className={`text-[11px] font-semibold tracking-widest uppercase mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Lesson</p>
+              <h3 className={`text-lg sm:text-xl font-bold leading-snug ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                {lesson.title || 'Theory'}
+              </h3>
+            </div>
+            {currentQuestionIndex > 0 && (
+              <button
+                onClick={handleBack}
+                className={`mt-1 p-2 rounded-lg transition-colors flex-shrink-0 ${isDark ? 'text-zinc-500 hover:text-white hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100'}`}
+                title="Previous"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            )}
+          </div>
 
-              {lesson.title && (
-                <h2 className={`text-xl sm:text-2xl font-semibold leading-snug ${textColor}`}>
-                  {lesson.title}
-                </h2>
-              )}
-
+          {/* Scrollable content */}
+          <div className="overflow-y-auto flex-1 overscroll-contain">
+            <div className="max-w-2xl mx-auto px-5 sm:px-8 pt-2 pb-5 sm:pt-3 sm:pb-7 space-y-5 sm:space-y-6">
               {embedUrl && (
                 <div className="rounded-xl overflow-hidden shadow-md" style={{ aspectRatio: '16/9' }}>
                   <iframe
@@ -1894,23 +1875,20 @@ export function CourseTaker({
                 />
               )}
 
-              <div className="mt-6">
-                <button
-                  onClick={handleNext}
-                  className="w-full py-4 rounded-2xl font-semibold text-white text-base transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-                  style={{ background: accent }}
-                >
-                  {isLast ? 'Finish Course' : 'Continue'}
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </div>
+              <button
+                onClick={handleNext}
+                className="w-full py-4 rounded-xl text-[15px] font-semibold text-white transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                style={{ background: accent }}
+              >
+                {isLast ? 'Finish Course' : 'Continue'}
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </>
     );
 
-    if (inlineMode) return lessonSlide;
     if (typeof document === 'undefined') return null;
     return createPortal(lessonSlide, document.body);
   }

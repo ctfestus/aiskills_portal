@@ -60,8 +60,8 @@ export async function GET(req: NextRequest) {
     includeMetadata: true,
   });
 
-  // Filter: published + in cohort, score > 0.4 (relevance threshold)
-  const filtered = results
+  // Filter: published + in cohort, score > 0.6 (relevance threshold)
+  const candidates = results
     .filter((r: any) => {
       const m = r.metadata;
       if (!m) return false;
@@ -70,6 +70,21 @@ export async function GET(req: NextRequest) {
       if ((r.score ?? 0) < 0.6) return false;
       return true;
     })
+    .slice(0, 20);
+
+  if (!candidates.length) return NextResponse.json({ results: [] });
+
+  // Verify candidates still exist in the database (vector index may contain stale/deleted courses)
+  const candidateIds = candidates.map((r: any) => r.metadata.formId);
+  const { data: existingForms } = await supabase
+    .from('forms')
+    .select('id')
+    .in('id', candidateIds);
+
+  const existingIds = new Set((existingForms ?? []).map((f: any) => f.id));
+
+  const filtered = candidates
+    .filter((r: any) => existingIds.has(r.metadata.formId))
     .slice(0, 8)
     .map((r: any) => ({
       formId:     r.metadata.formId,
