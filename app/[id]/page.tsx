@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
-import { Loader2, CheckCircle2, ArrowRight, MapPin, Building2, ExternalLink, Calendar, Download, Copy, Check, BookOpen, FileText, Zap, Clock } from 'lucide-react';
+import { Loader2, CheckCircle2, ArrowRight, MapPin, Building2, ExternalLink, Calendar, Download, Copy, Check, Star, BookOpen, FileText, Zap, Clock } from 'lucide-react';
 import { AnimatedField, ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import { CourseTaker } from '@/components/CourseTaker';
 import dynamic from 'next/dynamic';
