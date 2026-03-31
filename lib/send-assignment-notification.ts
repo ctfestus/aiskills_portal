@@ -4,7 +4,7 @@ import { blastEmail } from '@/lib/email-templates';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
-const APP_URL = process.env.APP_URL || 'https://festforms.com';
+const APP_URL = process.env.APP_URL || 'https://app.aiskillsafrica.com';
 
 const TYPE_LABELS: Record<string, string> = {
   course: 'course',
