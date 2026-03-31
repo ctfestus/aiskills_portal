@@ -1,5 +1,5 @@
-﻿const BANNER = 'https://zcbsjhuhnqhobqtlkkgv.supabase.co/storage/v1/object/public/media-assets/FestMan.jpg';
-const APP_URL = process.env.APP_URL || 'https://festforms.com';
+﻿const BANNER = 'https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Cover.jpg';
+const APP_URL = process.env.APP_URL || 'https://app.aiskillsafrica.com';
 
 // -- Shared shell ---
 function shell(content: string, bannerUrl?: string) {

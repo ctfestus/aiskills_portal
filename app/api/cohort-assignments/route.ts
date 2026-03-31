@@ -3,9 +3,11 @@
  * Upserts rows in cohort_assignments for the given form + cohort list.
  * Uses INSERT ... ON CONFLICT DO NOTHING so the original assigned_at is preserved
  * when cohorts are re-added after being removed.
+ * Sends assignment notification emails only to cohorts that are newly added.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/subscription';
+import { sendAssignmentNotifications } from '@/lib/send-assignment-notification';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,15 +34,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, inserted: 0 });
   }
 
-  // Verify the form belongs to this user
+  // Verify the form belongs to this user and get title/slug for notifications
   const { data: form } = await supabase
     .from('forms')
-    .select('id')
+    .select('id, title, slug, content_type')
     .eq('id', formId)
     .eq('user_id', user.id)
     .single();
 
   if (!form) return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+
+  // Fetch currently assigned cohorts so we can detect newly added ones
+  const { data: existing } = await supabase
+    .from('cohort_assignments')
+    .select('cohort_id')
+    .eq('form_id', formId);
+
+  const existingSet = new Set((existing ?? []).map((r: { cohort_id: string }) => r.cohort_id));
+  const newCohortIds = cohortIds.filter((id: string) => !existingSet.has(id));
 
   // Upsert -- ON CONFLICT DO NOTHING preserves the original assigned_at
   const rows = cohortIds.map((cohortId: string) => ({ form_id: formId, cohort_id: cohortId }));
@@ -51,6 +62,16 @@ export async function POST(req: NextRequest) {
   if (error) {
     console.error('[cohort-assignments] upsert error:', error);
     return NextResponse.json({ error: 'Failed to save cohort assignments.' }, { status: 500 });
+  }
+
+  // Send notifications to newly assigned cohorts (includes re-assignments after removal)
+  if (newCohortIds.length > 0 && form.slug) {
+    sendAssignmentNotifications({
+      cohortIds: newCohortIds,
+      title: form.title,
+      slug: form.slug,
+      contentType: form.content_type ?? 'course',
+    });
   }
 
   return NextResponse.json({ ok: true });
