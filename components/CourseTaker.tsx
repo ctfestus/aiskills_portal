@@ -1480,9 +1480,9 @@ export function CourseTaker({
     const percentage = Math.round((score / totalQuestions) * 100);
     const passed = percentage >= passmark;
     const skippedStillPending = questions.filter(
-      (q: any) => skippedQuestions.has(q.id) && !answers[q.id]
+      (q: any) => !q.lessonOnly && skippedQuestions.has(q.id) && !answers[q.id]
     );
-    const unansweredCount = questions.filter((q: any) => !answers[q.id]).length;
+    const unansweredCount = questions.filter((q: any) => !q.lessonOnly && !answers[q.id]).length;
 
     const handleGoBack = (idx: number) => {
       setCurrentQuestionIndex(idx);
