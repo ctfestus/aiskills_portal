@@ -56,7 +56,6 @@ function Logo() {
   return (
     <div className="flex items-center gap-2">
       <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-8 w-auto" />
-      <span className="font-bold text-[#111] text-lg tracking-tight">AI Skills Africa</span>
     </div>
   );
 }
@@ -81,10 +80,10 @@ function IndustrySelect({ value, onChange }: { value: string; onChange: (v: stri
   return (
     <div ref={ref} className="relative">
       <button type="button" onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-[#e2e4e8] bg-[#f5f6f7] text-sm text-left transition-all focus:outline-none focus:ring-2 focus:ring-[#006128]/10 focus:border-[#006128]/40"
+        className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-white/20 bg-white/10 text-sm text-left transition-all focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-white/50"
       >
-        <span className={value ? 'text-[#111]' : 'text-[#aaa]'}>{value || 'Select your industry'}</span>
-        <ChevronDown className={`w-4 h-4 text-[#888] transition-transform ${open ? 'rotate-180' : ''}`} />
+        <span style={{ color: value ? '#ffffff' : 'rgba(255,255,255,0.4)' }}>{value || 'Select your industry'}</span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} style={{ color: 'rgba(255,255,255,0.5)' }} />
       </button>
       <AnimatePresence>
         {open && (
@@ -242,8 +241,8 @@ export default function OnboardingPage() {
   // -- Loading ---
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-[#006128]" />
+      <div className="min-h-screen bg-[#1f1bc3] flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-white" />
       </div>
     );
   }
@@ -255,24 +254,24 @@ export default function OnboardingPage() {
     exit:   (d: number) => ({ x: d > 0 ? -40 : 40, opacity: 0 }),
   };
 
-  const inputCls = "w-full px-4 py-3 rounded-xl border border-[#e2e4e8] bg-[#f5f6f7] text-sm text-[#111] placeholder-[#aaa] outline-none focus:ring-2 focus:ring-[#006128]/10 focus:border-[#006128]/40 transition-all";
-  const labelCls = "block text-[11px] font-semibold text-[#888] uppercase tracking-wider mb-1.5";
+  const inputCls = "w-full px-4 py-3 rounded-xl border border-white/20 bg-white/10 text-sm outline-none focus:ring-2 focus:ring-white/20 focus:border-white/50 transition-all";
+  const labelCls = "block text-[11px] font-semibold uppercase tracking-wider mb-1.5";
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen bg-[#1f1bc3] flex flex-col">
 
       {/* -- Top bar --- */}
-      <div className="flex items-center justify-between px-6 py-5 border-b border-[rgba(0,0,0,0.06)]">
+      <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
         <Logo />
-        <span className="text-xs text-[#888] font-medium">
+        <span className="text-xs font-medium" style={{ color: '#ffffff' }}>
           Step {step + 1} of {STEPS.length}
         </span>
       </div>
 
       {/* -- Progress bar --- */}
-      <div className="h-0.5 bg-[#f0f0f0]">
+      <div className="h-0.5 bg-white/20">
         <motion.div
-          className="h-full bg-[#006128]"
+          className="h-full bg-white"
           animate={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
           transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
         />
@@ -298,15 +297,15 @@ export default function OnboardingPage() {
               <div className="flex items-center gap-1.5 mb-5">
                 {STEPS.map((_, i) => (
                   <div key={i} className={`rounded-full transition-all duration-300 ${
-                    i === step ? 'w-6 h-2 bg-[#006128]' :
-                    i < step   ? 'w-2 h-2 bg-[#ADEE66]' :
-                                 'w-2 h-2 bg-[#e2e4e8]'
+                    i === step ? 'w-6 h-2 bg-white' :
+                    i < step   ? 'w-2 h-2 bg-white/50' :
+                                 'w-2 h-2 bg-white/20'
                   }`} />
                 ))}
               </div>
 
-              <h1 className="text-2xl font-bold text-[#111] mb-1">{STEPS[step].title}</h1>
-              <p className="text-sm text-[#888]">{STEPS[step].subtitle}</p>
+              <h1 className="text-2xl font-bold mb-1" style={{ color: '#ffffff' }}>{STEPS[step].title}</h1>
+              <p className="text-sm" style={{ color: 'rgba(255,255,255,0.8)' }}>{STEPS[step].subtitle}</p>
             </motion.div>
           </AnimatePresence>
 
@@ -326,12 +325,13 @@ export default function OnboardingPage() {
               {/* -- Step 0: Identity --- */}
               {step === 0 && (
                 <div>
-                  <label className={labelCls}>Full name <span className="text-red-400 normal-case font-normal">required</span></label>
+                  <label className={labelCls} style={{ color: '#ffffff' }}>Full name <span className="normal-case font-normal" style={{ color: '#f87171' }}>required</span></label>
                   <input
                     value={name}
                     onChange={e => setName(sanitizePlainText(e.target.value))}
                     placeholder="Your full name"
                     className={inputCls}
+                    style={{ color: '#ffffff' }}
                   />
                 </div>
               )}
@@ -340,7 +340,7 @@ export default function OnboardingPage() {
               {step === 1 && (
                 <>
                   <div>
-                    <label className={labelCls}>Bio</label>
+                    <label className={labelCls} style={{ color: '#ffffff' }}>Bio</label>
                     <textarea
                       value={bio}
                       onChange={e => setBio(sanitizePlainText(e.target.value))}
@@ -348,29 +348,32 @@ export default function OnboardingPage() {
                       rows={3}
                       maxLength={300}
                       className={`${inputCls} resize-none`}
+                      style={{ color: '#ffffff' }}
                     />
-                    <p className="mt-1 text-[11px] text-[#aaa] text-right">{bio.length}/300</p>
+                    <p className="mt-1 text-[11px] text-right" style={{ color: 'rgba(255,255,255,0.5)' }}>{bio.length}/300</p>
                   </div>
 
                   <div>
-                    <label className={labelCls}>Country</label>
+                    <label className={labelCls} style={{ color: '#ffffff' }}>Country</label>
                     <input
                       value={country}
                       onChange={e => setCountry(sanitizePlainText(e.target.value))}
                       placeholder="e.g. Ghana"
                       className={inputCls}
+                      style={{ color: '#ffffff' }}
                     />
                   </div>
 
                   <div>
-                    <label className={labelCls}>City</label>
+                    <label className={labelCls} style={{ color: '#ffffff' }}>City</label>
                     <div className="relative">
-                      <MapPin className="w-4 h-4 text-[#aaa] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <MapPin className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.5)' }} />
                       <input
                         value={city}
                         onChange={e => setCity(sanitizePlainText(e.target.value))}
                         placeholder="e.g. Accra"
                         className={`${inputCls} pl-10`}
+                        style={{ color: '#ffffff' }}
                       />
                     </div>
                   </div>
@@ -407,10 +410,10 @@ export default function OnboardingPage() {
                     </div>
                   </button>
 
-                  <p className="mt-5 text-sm font-medium text-[#111]">
+                  <p className="mt-5 text-sm font-medium" style={{ color: '#ffffff' }}>
                     {avatarUrl ? 'Looking good!' : 'Upload a profile photo'}
                   </p>
-                  <p className="mt-1 text-xs text-[#aaa] text-center max-w-xs">
+                  <p className="mt-1 text-xs text-center max-w-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>
                     Click the circle to upload. JPG, PNG or GIF. You can change this anytime in settings.
                   </p>
 
@@ -418,7 +421,8 @@ export default function OnboardingPage() {
                     <button
                       type="button"
                       onClick={() => setAvatarUrl('')}
-                      className="mt-4 text-xs text-[#888] hover:text-red-500 transition-colors underline underline-offset-2"
+                      className="mt-4 text-xs transition-colors underline underline-offset-2"
+                      style={{ color: 'rgba(255,255,255,0.6)' }}
                     >
                       Remove photo
                     </button>
@@ -432,14 +436,15 @@ export default function OnboardingPage() {
                 <div className="space-y-3">
                   {SOCIAL_FIELDS.map(({ key, label, Icon, placeholder }) => (
                     <div key={key}>
-                      <label className={labelCls}>{label}</label>
+                      <label className={labelCls} style={{ color: '#ffffff' }}>{label}</label>
                       <div className="relative">
-                        <Icon className="w-4 h-4 text-[#aaa] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <Icon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.5)' }} />
                         <input
                           value={socialLinks[key] ?? ''}
                           onChange={e => setSocialLinks(prev => ({ ...prev, [key]: sanitizePlainText(e.target.value) }))}
                           placeholder={placeholder}
                           className={`${inputCls} pl-10`}
+                          style={{ color: '#ffffff' }}
                         />
                       </div>
                     </div>
@@ -466,7 +471,8 @@ export default function OnboardingPage() {
               type="button"
               onClick={() => go(-1)}
               disabled={step === 0}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm text-[#888] hover:text-[#111] hover:bg-[#f5f6f7] disabled:opacity-0 disabled:pointer-events-none transition-all"
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm hover:bg-white/10 disabled:opacity-0 disabled:pointer-events-none transition-all"
+              style={{ color: '#ffffff' }}
             >
               <ArrowLeft className="w-4 h-4" /> Back
             </button>
@@ -478,7 +484,8 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={() => isLastStep ? finish() : go(1)}
                   disabled={saving}
-                  className="px-4 py-2.5 rounded-xl text-sm text-[#888] hover:text-[#111] hover:bg-[#f5f6f7] transition-all"
+                  className="px-4 py-2.5 rounded-xl text-sm hover:bg-white/10 transition-all"
+                  style={{ color: '#ffffff' }}
                 >
                   Skip
                 </button>

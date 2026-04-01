@@ -14,8 +14,8 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 export function sanitizePlainText(value: string): string {
   return value
     .replace(/<[^>]*>/g, '')   // strip any HTML tags
-    .replace(/\0/g, '')        // remove null bytes
-    .trim();
+    .replace(/\0/g, '');       // remove null bytes
+  // Note: do NOT trim here -- trimming on every keystroke prevents users from typing spaces
 }
 
 export function sanitizeRichText(html: string): string {

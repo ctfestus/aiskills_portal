@@ -1679,7 +1679,11 @@ export function CourseTaker({
     setLessonOpen(false);
     setDirection(1);
     if (currentQuestionIndex < totalSlides - 1) {
-      setCurrentQuestionIndex(i => i + 1);
+      const nextIndex = currentQuestionIndex + 1;
+      if (currentQuestion?.lessonOnly) {
+        saveProgress(answers, nextIndex, score, totalPoints, streak, hintsUsed);
+      }
+      setCurrentQuestionIndex(nextIndex);
       setSelectedOption(null);
       setFillBlankAnswer('');
       setIsChecking(false);
@@ -2317,7 +2321,7 @@ export function CourseTaker({
                         className="flex-shrink-0 flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white text-sm transition-all active:scale-95"
                         style={{ background: isCorrect ? '#10b981' : '#f43f5e' }}
                       >
-                        {currentQuestionIndex < totalQuestions - 1 ? 'Next' : 'Finish'}
+                        {currentQuestionIndex < totalSlides - 1 ? 'Next' : 'Finish'}
                         <ChevronRight className="w-4 h-4" />
                       </button>
                     </div>
@@ -2327,7 +2331,7 @@ export function CourseTaker({
                       className="w-full py-4 rounded-2xl font-semibold text-white text-base transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                       style={{ background: accent }}
                     >
-                      {currentQuestionIndex < totalQuestions - 1 ? 'Next Question' : 'Finish Course'}
+                      {currentQuestionIndex < totalSlides - 1 ? 'Next Question' : 'Finish Course'}
                       <ChevronRight className="w-5 h-5" />
                     </button>
                   )}
@@ -2396,7 +2400,7 @@ export function CourseTaker({
                     color: (isAnswered() || questionType === 'arrange') ? 'white' : (isDark ? '#52525b' : '#a1a1aa'),
                   }}
                 >
-                  {currentQuestionIndex < totalQuestions - 1 ? 'Next Question' : 'Finish Course'}
+                  {currentQuestionIndex < totalSlides - 1 ? 'Next Question' : 'Finish Course'}
                   <ChevronRight className="w-5 h-5" />
                 </button>
                 {/* Feature 2: Skip button */}
