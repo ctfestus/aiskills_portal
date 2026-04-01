@@ -581,8 +581,8 @@ export function CourseTaker({
   const clearProgress = useCallback((finalScore: number) => {
     if (!formId || !studentEmail.trim()) return;
     if (reviewMode) return; // review mode -- keep original completed attempt intact
-    const scorePct = totalQuestions > 0 ? Math.round((finalScore / totalQuestions) * 100) : 0;
-    const passed   = scorePct >= passmark;
+    const scorePct = totalQuestions > 0 ? Math.round((finalScore / totalQuestions) * 100) : 100;
+    const passed   = totalQuestions === 0 ? true : scorePct >= passmark;
     supabase.auth.getSession().then(({ data: { session } }) => {
       fetch('/api/course', {
         method: 'POST',
@@ -757,8 +757,9 @@ export function CourseTaker({
 
   // -- Success screen (shown after submission) --
   if (isSuccess) {
-    const submittedPct = Math.round((score / totalQuestions) * 100);
-    const submittedPassed = submittedPct >= passmark;
+    const submittedPct = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 100;
+    const submittedPassed = totalQuestions === 0 ? true : submittedPct >= passmark;
+    const isLessonOnly = totalQuestions === 0;
     const scoreDisplay = Number.isInteger(score) ? String(score) : score.toFixed(1);
     const scoreMarker = Math.max(4, Math.min(96, submittedPct));
     const passMarker = Math.max(4, Math.min(96, passmark));
@@ -787,56 +788,75 @@ export function CourseTaker({
                     <p className={`text-xs font-semibold tracking-widest uppercase truncate ${mutedColor}`}>{config.title}</p>
                   )}
                   <div className="flex items-end gap-2 flex-wrap">
-                    <span className={`text-4xl sm:text-5xl font-black leading-none ${textColor}`}>{submittedPct}%</span>
-                    <span className={`text-sm sm:text-base pb-1 ${mutedColor}`}>{scoreDisplay} / {totalQuestions} correct</span>
+                    {isLessonOnly ? (
+                      <span className={`text-4xl sm:text-5xl font-black leading-none ${textColor}`}>100%</span>
+                    ) : (
+                      <>
+                        <span className={`text-4xl sm:text-5xl font-black leading-none ${textColor}`}>{submittedPct}%</span>
+                        <span className={`text-sm sm:text-base pb-1 ${mutedColor}`}>{scoreDisplay} / {totalQuestions} correct</span>
+                      </>
+                    )}
                   </div>
                   <span
                     className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider text-white"
                     style={{ background: resultColor }}
                   >
-                    {submittedPassed ? 'PASSED' : 'FAILED'}
+                    {isLessonOnly ? 'COMPLETED' : (submittedPassed ? 'PASSED' : 'FAILED')}
                   </span>
                 </div>
-                <div className={`rounded-xl px-5 py-4 sm:min-w-[170px] ${subtleBg}`}>
-                  <p className={`text-[11px] font-semibold tracking-widest uppercase ${mutedColor}`}>Pass Target</p>
-                  <p className="mt-1 text-2xl font-black text-rose-500">{passmark}%</p>
-                </div>
+                {!isLessonOnly && (
+                  <div className={`rounded-xl px-5 py-4 sm:min-w-[170px] ${subtleBg}`}>
+                    <p className={`text-[11px] font-semibold tracking-widest uppercase ${mutedColor}`}>Pass Target</p>
+                    <p className="mt-1 text-2xl font-black text-rose-500">{passmark}%</p>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-xl px-5 sm:px-6 py-5" style={{ background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)', border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
-                <div className="text-[11px] font-semibold mb-3" style={{ color: isDark ? '#a1a1aa' : '#71717a' }}>Score progress</div>
+                {isLessonOnly ? (
+                  <div className="flex items-center gap-3 py-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                    <p className="text-sm font-medium" style={{ color: isDark ? '#a1a1aa' : '#71717a' }}>
+                      You have completed all lessons in this course.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-[11px] font-semibold mb-3" style={{ color: isDark ? '#a1a1aa' : '#71717a' }}>Score progress</div>
 
-                <div className="relative pt-7 pb-8">
-                  <div className="h-4 rounded-full overflow-hidden" style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${submittedPct}%`,
-                        background: submittedPassed
-                          ? 'linear-gradient(90deg, #10b981, #34d399)'
-                          : 'linear-gradient(90deg, #f97316, #f43f5e)',
-                        transition: 'width 1s cubic-bezier(.4,0,.2,1)',
-                      }}
-                    />
-                  </div>
+                    <div className="relative pt-7 pb-8">
+                      <div className="h-4 rounded-full overflow-hidden" style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' }}>
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${submittedPct}%`,
+                            background: submittedPassed
+                              ? 'linear-gradient(90deg, #10b981, #34d399)'
+                              : 'linear-gradient(90deg, #f97316, #f43f5e)',
+                            transition: 'width 1s cubic-bezier(.4,0,.2,1)',
+                          }}
+                        />
+                      </div>
 
-                  <div
-                    className="absolute top-4 bottom-5 w-0"
-                    style={{ left: `${passMarker}%`, borderLeft: '2px dashed #ef4444' }}
-                  />
-                  <div
-                    className="absolute top-0 -translate-x-1/2 px-2 py-1 rounded-full text-[10px] font-bold whitespace-nowrap"
-                    style={{ left: `${scoreMarker}%`, background: resultColor, color: '#fff' }}
-                  >
-                    You: {submittedPct}%
-                  </div>
-                  <div
-                    className={`absolute bottom-0 -translate-x-1/2 px-2 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap ${isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-100 text-zinc-600'}`}
-                    style={{ left: `${passMarker}%` }}
-                  >
-                    Pass mark
-                  </div>
-                </div>
+                      <div
+                        className="absolute top-4 bottom-5 w-0"
+                        style={{ left: `${passMarker}%`, borderLeft: '2px dashed #ef4444' }}
+                      />
+                      <div
+                        className="absolute top-0 -translate-x-1/2 px-2 py-1 rounded-full text-[10px] font-bold whitespace-nowrap"
+                        style={{ left: `${scoreMarker}%`, background: resultColor, color: '#fff' }}
+                      >
+                        You: {submittedPct}%
+                      </div>
+                      <div
+                        className={`absolute bottom-0 -translate-x-1/2 px-2 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap ${isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-100 text-zinc-600'}`}
+                        style={{ left: `${passMarker}%` }}
+                      >
+                        Pass mark
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -1477,8 +1497,8 @@ export function CourseTaker({
 
   // -- Complete screen --
   if (phase === 'complete') {
-    const percentage = Math.round((score / totalQuestions) * 100);
-    const passed = percentage >= passmark;
+    const percentage = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 100;
+    const passed = totalQuestions === 0 ? true : percentage >= passmark;
     const skippedStillPending = questions.filter(
       (q: any) => !q.lessonOnly && skippedQuestions.has(q.id) && !answers[q.id]
     );
@@ -1548,16 +1568,18 @@ export function CourseTaker({
             </div>
           )}
 
-          <p className={`text-xs ${mutedColor}`}>
-            You answered {Object.keys(answers).filter(id => !questions.find((q: any) => q.id === id)?.lessonOnly).length} of {totalQuestions} question{totalQuestions !== 1 ? 's' : ''}.
-          </p>
+          {totalQuestions > 0 && (
+            <p className={`text-xs ${mutedColor}`}>
+              You answered {Object.keys(answers).filter(id => !questions.find((q: any) => q.id === id)?.lessonOnly).length} of {totalQuestions} question{totalQuestions !== 1 ? 's' : ''}.
+            </p>
+          )}
           <button
             onClick={(e) => onSubmit(e, { name: studentName, email: studentEmail, score, total: totalQuestions, percentage, passed, answers, points: totalPoints, streak, studentToken: sessionTokenRef.current })}
             disabled={isSubmitting}
             className="w-full py-3.5 rounded-xl font-semibold text-white transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
             style={{ background: accent }}
           >
-            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit & See Results'}
+            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : totalQuestions === 0 ? 'Complete Course' : 'Submit & See Results'}
           </button>
         </div>
       </motion.div>
