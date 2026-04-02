@@ -11,6 +11,7 @@ import {
   GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
   Play, Lock, FileText, BarChart3, Bell, Plus, ArrowLeft, Upload, Video,
   ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase, Search, LayoutDashboard,
+  Copy, Check,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -122,16 +123,16 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
                 </Link>
               )}
               {username ? (
-                <Link href={`/u/${username}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}
+                <Link href={`/s/${username}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:opacity-70"
                   style={{ color: C.muted }}>
-                  <User className="w-4 h-4" style={{ color: C.faint }}/> View profile
+                  <User className="w-4 h-4" style={{ color: C.faint }}/> View public profile
                 </Link>
               ) : (
                 <Link href="/settings" onClick={() => setOpen(false)}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:opacity-70"
                   style={{ color: C.muted }}>
-                  <User className="w-4 h-4" style={{ color: C.faint }}/> My Profile
+                  <User className="w-4 h-4" style={{ color: C.faint }}/> Set up profile
                 </Link>
               )}
               <Link href="/settings" onClick={() => setOpen(false)}
@@ -3164,9 +3165,72 @@ function DonutChart({ total, done, color, size = 88 }: { total: number; done: nu
   );
 }
 
+// --- Share Profile card ---
+function ShareProfileCard({ username, C }: { username?: string; C: typeof LIGHT_C }) {
+  const [copied, setCopied] = useState(false);
+  const profileUrl = username ? `${typeof window !== 'undefined' ? window.location.origin : ''}/s/${username}` : '';
+
+  const copy = () => {
+    if (!profileUrl) return;
+    navigator.clipboard?.writeText(profileUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (username) {
+    return (
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl px-5 py-4"
+        style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: C.lime }}>
+            <User className="w-4 h-4" style={{ color: C.green }}/>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold" style={{ color: C.text }}>Your public profile</p>
+            <p className="text-xs truncate mt-0.5" style={{ color: C.muted }}>/s/{username}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={copy}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+            style={{ background: C.lime, color: C.green }}>
+            {copied ? <Check className="w-3.5 h-3.5"/> : <Copy className="w-3.5 h-3.5"/>}
+            {copied ? 'Copied!' : 'Copy link'}
+          </button>
+          <a href={`/s/${username}`} target="_blank" rel="noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity hover:opacity-70"
+            style={{ background: C.pill, color: C.muted }}>
+            <ExternalLink className="w-3.5 h-3.5"/> View
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl px-5 py-4"
+      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: C.lime }}>
+          <User className="w-4 h-4" style={{ color: C.green }}/>
+        </div>
+        <div>
+          <p className="text-xs font-semibold" style={{ color: C.text }}>Share your profile</p>
+          <p className="text-xs mt-0.5" style={{ color: C.muted }}>Set a username to get a shareable public profile link.</p>
+        </div>
+      </div>
+      <Link href="/settings"
+        className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
+        style={{ background: C.lime, color: C.green }}>
+        Set username
+      </Link>
+    </div>
+  );
+}
+
 // --- Overview section ---
-function OverviewSection({ user, userEmail, C, onNavigate }: {
-  user: any; userEmail: string; C: typeof LIGHT_C; onNavigate: (id: SectionId) => void;
+function OverviewSection({ user, userEmail, username, C, onNavigate }: {
+  user: any; userEmail: string; username?: string; C: typeof LIGHT_C; onNavigate: (id: SectionId) => void;
 }) {
   const [loading, setLoading]               = useState(true);
   const [courses, setCourses]               = useState<any[]>([]);
@@ -3377,6 +3441,9 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
             : courses.length > 0 ? 'Ready to continue learning today?' : 'Your learning journey starts here.'}
         </p>
       </div>
+
+      {/* Share Profile card */}
+      <ShareProfileCard username={username} C={C}/>
 
       {/* Pick up where you left off -- most recently accessed, not completed */}
       {continueLearning[0] && (() => {
@@ -3727,16 +3794,17 @@ export default function StudentDashboard() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) { router.replace('/auth'); return; }
 
-      const [{ data: { user: authUser } }, { data: profileData }] = await Promise.all([
+      const [{ data: { user: authUser } }, { data: profileData }, { data: studentData }] = await Promise.all([
         supabase.auth.getUser(),
         supabase.from('profiles').select('*').eq('id', session.user.id).single(),
+        supabase.from('students').select('username').eq('id', session.user.id).single(),
       ]);
 
       if (!authUser) { router.replace('/auth'); return; }
       if (profileData && !profileData.onboarding_completed) { router.replace('/onboarding'); return; }
 
       setUser(authUser);
-      setProfile(profileData);
+      setProfile(profileData ? { ...profileData, username: studentData?.username ?? null } : profileData);
 
       // Update last_login_at (fire-and-forget)
       supabase.from('students').update({ last_login_at: new Date().toISOString() }).eq('id', authUser.id)
@@ -3887,7 +3955,7 @@ export default function StudentDashboard() {
 
             {/* Section content */}
             {activeSection === 'overview' && user && (
-              <OverviewSection user={user} userEmail={user.email} C={C} onNavigate={goSection}/>
+              <OverviewSection user={user} userEmail={user.email} username={profile?.username} C={C} onNavigate={goSection}/>
             )}
             {activeSection === 'courses' && user && (
               <CoursesSection userEmail={user.email} C={C}/>

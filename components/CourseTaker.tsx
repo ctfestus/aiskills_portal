@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -46,6 +46,9 @@ interface CourseQuestion {
   codeSnippet?: string;
   codeLanguage?: string;
   lessonOnly?: boolean;
+  isSection?: boolean;
+  sectionTitle?: string;
+  sectionDescription?: string;
   lesson?: {
     title?: string;
     body?: string;
@@ -276,8 +279,24 @@ export function CourseTaker({
   const questions = config.questions || [];
   const learningOutcomes: string[] = config.learnOutcomes || [];
   const currentQuestion = questions[currentQuestionIndex];
-  const totalQuestions = questions.filter((q: any) => !q.lessonOnly).length;
+  const totalQuestions = questions.filter((q: any) => !q.lessonOnly && !q.isSection).length;
   const totalSlides = questions.length;
+  // Current section: walk back from currentQuestionIndex to find the nearest section divider
+  const currentSection = useMemo(() => {
+    for (let i = currentQuestionIndex; i >= 0; i--) {
+      if ((questions[i] as any)?.isSection) return questions[i] as any;
+    }
+    return null;
+  }, [questions, currentQuestionIndex]);
+  // Count how many section dividers appear up to and including currentQuestionIndex
+  const currentSectionNumber = useMemo(() => {
+    let n = 0;
+    for (let i = 0; i <= currentQuestionIndex; i++) {
+      if ((questions[i] as any)?.isSection) n++;
+    }
+    return n;
+  }, [questions, currentQuestionIndex]);
+  const totalSections = useMemo(() => questions.filter((q: any) => q.isSection).length, [questions]);
   const showAnswers: ShowAnswers = config.showAnswers ?? 'per_question';
   const passmark = config.passmark ?? 50;
   const courseTimerMins: number = config.courseTimer ?? 0;
@@ -1500,9 +1519,9 @@ export function CourseTaker({
     const percentage = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 100;
     const passed = totalQuestions === 0 ? true : percentage >= passmark;
     const skippedStillPending = questions.filter(
-      (q: any) => !q.lessonOnly && skippedQuestions.has(q.id) && !answers[q.id]
+      (q: any) => !q.lessonOnly && !q.isSection && skippedQuestions.has(q.id) && !answers[q.id]
     );
-    const unansweredCount = questions.filter((q: any) => !q.lessonOnly && !answers[q.id]).length;
+    const unansweredCount = questions.filter((q: any) => !q.lessonOnly && !q.isSection && !answers[q.id]).length;
 
     const handleGoBack = (idx: number) => {
       setCurrentQuestionIndex(idx);
@@ -1820,6 +1839,143 @@ export function CourseTaker({
     return null;
   };
 
+  // -- Section divider slide --
+  if (currentQuestion.isSection) {
+    const isLast = currentQuestionIndex >= totalSlides - 1;
+    const coverImage = (config as any).coverImage as string | undefined;
+    // How many non-section, non-lessonOnly slides follow this section before the next section
+    const slidesInSection = (() => {
+      let count = 0;
+      for (let i = currentQuestionIndex + 1; i < questions.length; i++) {
+        const q = questions[i] as any;
+        if (q.isSection) break;
+        if (!q.lessonOnly) count++;
+      }
+      return count;
+    })();
+
+    return (
+      <div className="relative flex flex-col min-h-screen overflow-hidden" style={{ fontFamily: fontStyle.fontFamily }}>
+
+        {/* Full-bleed background -- cover image with overlay, or gradient fallback */}
+        {coverImage ? (
+          <>
+            <img src={coverImage} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ filter: 'brightness(0.35) saturate(1.2)' }} />
+            <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${accent}55 0%, transparent 60%, rgba(0,0,0,0.6) 100%)` }} />
+          </>
+        ) : (
+          <div className="absolute inset-0" style={{ background: isDark
+            ? `linear-gradient(135deg, #0a0a0f 0%, ${accent}22 50%, #0a0a0f 100%)`
+            : `linear-gradient(135deg, #0f0f1a 0%, ${accent}33 50%, #1a1a2e 100%)` }} />
+        )}
+
+        {/* Noise texture overlay for depth */}
+        <div className="absolute inset-0 opacity-[0.03]"
+          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")` }} />
+
+        {/* Glowing accent orb top-right */}
+        <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full blur-[120px] opacity-30 pointer-events-none" style={{ background: accent }} />
+        {/* Subtle orb bottom-left */}
+        <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full blur-[100px] opacity-20 pointer-events-none" style={{ background: accent }} />
+
+        {/* Content */}
+        <div className="relative z-10 flex flex-col min-h-screen items-center justify-center px-6 py-16">
+          <motion.div
+            key={`section-${currentQuestionIndex}`}
+            initial={{ opacity: 0, y: 32 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.45, ease: [0.23, 1, 0.32, 1] }}
+            className="w-full max-w-lg text-center"
+          >
+            {/* Section pill */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1, duration: 0.35 }}
+              className="flex items-center justify-center mb-6"
+            >
+              <span
+                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] font-bold tracking-[0.18em] uppercase border"
+                style={{ background: 'rgba(255,255,255,0.12)', borderColor: 'rgba(255,255,255,0.25)', color: '#ffffff' }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: accent }} />
+                Section {currentSectionNumber}{totalSections > 1 ? ` of ${totalSections}` : ''}
+              </span>
+            </motion.div>
+
+            {/* Title */}
+            <motion.h2
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.18, duration: 0.4 }}
+              className="text-4xl sm:text-5xl font-black leading-[1.1] tracking-tight mb-4"
+              style={{ color: '#ffffff' }}
+            >
+              {currentQuestion.sectionTitle || 'New Section'}
+            </motion.h2>
+
+            {/* Description */}
+            {currentQuestion.sectionDescription && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.28, duration: 0.4 }}
+                className="text-sm sm:text-base leading-relaxed mb-6"
+                style={{ color: 'rgba(255,255,255,0.7)' }}
+              >
+                {currentQuestion.sectionDescription}
+              </motion.p>
+            )}
+
+            {/* Meta row */}
+            {slidesInSection > 0 && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.35, duration: 0.35 }}
+                className="flex items-center justify-center gap-2 mb-8"
+              >
+                <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full" style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.15)' }}>
+                  <BookOpen className="w-3 h-3" /> {slidesInSection} question{slidesInSection !== 1 ? 's' : ''}
+                </span>
+              </motion.div>
+            )}
+
+            {/* CTA button */}
+            <motion.button
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.38, duration: 0.35 }}
+              onClick={handleNext}
+              className="inline-flex items-center gap-3 px-8 py-4 rounded-2xl font-bold text-base transition-all active:scale-[0.97] hover:brightness-110 shadow-2xl"
+              style={{ background: accent, color: '#ffffff', boxShadow: `0 8px 40px ${accent}55` }}
+            >
+              {isLast ? 'Finish Course' : 'Begin Section'}
+              <ChevronRight className="w-5 h-5" />
+            </motion.button>
+          </motion.div>
+        </div>
+
+        {/* Bottom progress strip */}
+        <div className="relative z-10 px-6 pb-8 flex items-center gap-2 justify-center">
+          {questions.map((q: any, i: number) => {
+            if (q.isSection) {
+              return (
+                <div key={q.id} className="h-1 rounded-full transition-all duration-300"
+                  style={{ width: i === currentQuestionIndex ? 24 : 8, background: i <= currentQuestionIndex ? accent : 'rgba(255,255,255,0.2)' }} />
+              );
+            }
+            return (
+              <div key={q.id} className="h-1 w-1.5 rounded-full"
+                style={{ background: answers[q.id] ? accent : 'rgba(255,255,255,0.15)' }} />
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   // -- Lesson-only slide --
   if (currentQuestion.lessonOnly) {
     const lesson = currentQuestion.lesson || {};
@@ -1982,7 +2138,11 @@ export function CourseTaker({
                   </button>
                 )}
                 <span className={`text-xs font-medium ${mutedColor}`}>
-                  {currentQuestion?.lessonOnly ? 'Lesson' : 'Question'} {currentQuestionIndex + 1} <span className={mutedColor}>of {totalSlides}</span>
+                  {currentSection?.sectionTitle
+                    ? <span className="truncate max-w-[140px] inline-block align-bottom">{currentSection.sectionTitle}</span>
+                    : (currentQuestion?.lessonOnly ? 'Lesson' : 'Question')
+                  }{' '}
+                  {currentQuestionIndex + 1} <span className={mutedColor}>of {totalSlides}</span>
                 </span>
               </div>
               <div className="flex items-center gap-2 sm:gap-3">
@@ -2030,10 +2190,24 @@ export function CourseTaker({
                   const isCurrentDot = idx === currentQuestionIndex;
                   const isAnsweredDot = !!answers[q.id];
                   const isSkippedDot = skippedQuestions.has(q.id);
+                  const isSectionDot = !!q.isSection;
                   let dotColor = isDark ? '#3f3f46' : '#d4d4d8'; // unanswered gray
                   if (isCurrentDot) dotColor = accent;
+                  else if (isSectionDot) dotColor = accent;
                   else if (isAnsweredDot) dotColor = '#10b981'; // green
-                  else if (isSkippedDot) dotColor = '#ef4444'; // red -- always, regardless of mode
+                  else if (isSkippedDot) dotColor = '#ef4444'; // red
+                  if (isSectionDot) {
+                    // Section dividers shown as a taller vertical bar
+                    return (
+                      <button
+                        key={q.id}
+                        onClick={() => { setDirection(idx > currentQuestionIndex ? 1 : -1); setCurrentQuestionIndex(idx); }}
+                        className="transition-all duration-150 hover:scale-110 rounded-sm flex-shrink-0"
+                        style={{ width: isCurrentDot ? 3 : 2, height: isCurrentDot ? 14 : 10, background: dotColor, opacity: isCurrentDot ? 1 : 0.5 }}
+                        title={q.sectionTitle || 'Section'}
+                      />
+                    );
+                  }
                   return (
                     <button
                       key={q.id}

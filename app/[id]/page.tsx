@@ -881,9 +881,6 @@ export default function PublicFormPage() {
           </div>
         </div>
 
-        <footer style={{ textAlign: 'center', paddingBottom: 40, paddingTop: 8 }}>
-          <span style={{ fontSize: 12, color: gp.muted }}>Powered by <strong style={{ color: gp.body }}>AI Skills Africa</strong></span>
-        </footer>
       </div>
     );
   }
@@ -911,11 +908,6 @@ export default function PublicFormPage() {
     return (
       <div className="ff-pub" style={{ minHeight: '100vh', background: t.page, position: 'relative', transition: 'background 0.3s' }}>
         <style>{`${googleFontImport} .ff-pub{font-family:${fontFace};}`}</style>
-        {/* Blob */}
-        <div style={{ position: 'absolute', top: 0, right: 0, width: 200, height: 200, overflow: 'hidden', zIndex: 0, pointerEvents: 'none' }}>
-          <div style={{ position: 'absolute', top: -70, right: -70, width: 260, height: 260, borderRadius: '50%', background: t.blob, transition: 'background 0.3s' }}/>
-        </div>
-
         {/* Navbar */}
         <nav style={{ position: 'sticky', top: 0, zIndex: 30, background: t.nav, borderBottom: `1px solid ${t.navBorder}`, backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 56, transition: 'background 0.3s' }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
@@ -1144,13 +1136,6 @@ export default function PublicFormPage() {
           />
         )}
 
-        {/* Footer */}
-        <footer style={{ position: 'relative', zIndex: 10, textAlign: 'center', paddingBottom: 48, paddingTop: 16 }}>
-          <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" style={{ height: 20, width: 'auto' }} />
-            <span style={{ fontSize: 12, color: t.footerText }}>Powered by <strong style={{ color: t.footerBold }}>AI Skills Africa</strong></span>
-          </Link>
-        </footer>
       </div>
     );
   }
@@ -1158,10 +1143,6 @@ export default function PublicFormPage() {
   return (
     <div className="ff-pub" style={{ minHeight: '100vh', background: t.page, position: 'relative', transition: 'background 0.3s' }}>
       <style>{`${googleFontImport} .ff-pub{font-family:${fontFace};}`}</style>
-      {/* Decorative blob -- wrapper clips overflow without affecting position:fixed children */}
-      <div style={{ position: 'absolute', top: 0, right: 0, width: 200, height: 200, overflow: 'hidden', zIndex: 0, pointerEvents: 'none' }}>
-        <div style={{ position: 'absolute', top: -70, right: -70, width: 260, height: 260, borderRadius: '50%', background: t.blob, transition: 'background 0.3s' }}/>
-      </div>
       {/* Navbar */}
       <nav style={{ position: 'sticky', top: 0, zIndex: 30, background: t.nav, borderBottom: `1px solid ${t.navBorder}`, backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 56, transition: 'background 0.3s' }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
@@ -1952,13 +1933,6 @@ export default function PublicFormPage() {
         </AnimatePresence>
       </main>
 
-      {/* Footer */}
-      <footer style={{ position: 'relative', zIndex: 10, textAlign: 'center', padding: '24px 0 48px' }}>
-        <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-          <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" style={{ height: 20, width: 'auto' }} />
-          <span style={{ fontSize: 12, color: t.footerText }}>Powered by <strong style={{ color: t.footerBold }}>AI Skills Africa</strong></span>
-        </Link>
-      </footer>
     </div>
   );
 }

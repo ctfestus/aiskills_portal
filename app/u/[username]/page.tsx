@@ -213,11 +213,6 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
     <div className="min-h-screen relative" style={{ background: t.page, transition: 'background 0.3s' }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'); *{font-family:'Inter',sans-serif;}`}</style>
 
-      {/* Decorative blob -- wrapper clips overflow without affecting position:fixed children */}
-      <div className="absolute top-0 right-0 pointer-events-none" style={{ width: 220, height: 220, overflow: 'hidden', zIndex: 0 }}>
-        <div style={{ position: 'absolute', top: -80, right: -80, width: 280, height: 280, borderRadius: '50%', background: t.blob, transition: 'background 0.3s' }}/>
-      </div>
-
       {/* Navbar */}
       <nav className="sticky top-0 z-30 px-6 md:px-10 h-14 flex items-center justify-between backdrop-blur-md border-b"
         style={{ background: t.nav, borderColor: t.navBorder, transition: 'background 0.3s, border-color 0.3s' }}>
@@ -497,14 +492,6 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
         )}
       </main>
 
-      <footer className="relative z-10 text-center pb-12 pt-4">
-        <Link href="/" className="inline-flex items-center gap-2">
-          <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-6 w-auto" />
-          <span className="text-xs" style={{ color: t.footerText }}>
-            Powered by <strong style={{ color: t.footerBold }}>AI Skills Africa</strong>
-          </span>
-        </Link>
-      </footer>
     </div>
   );
 }

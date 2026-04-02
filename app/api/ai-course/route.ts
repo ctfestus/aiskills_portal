@@ -327,9 +327,13 @@ export async function POST(req: NextRequest) {
     if (action === 'generate_lesson') {
       const question = clamp(body.question, 500);
       const correctAnswer = clamp(body.correctAnswer, 300);
+      const instruction = clamp(body.instruction ?? '', 500);
+      const promptText = instruction
+        ? `Write a mini, interactive lesson about: "${instruction}".`
+        : `Write a mini, interactive lesson that teaches the concept behind this quiz question: "${question}" (correct answer: "${correctAnswer}").`;
       const res = await ai.models.generateContent({
         model: GEMINI_MODEL,
-        contents: `Write a mini, interactive lesson that teaches the concept behind this quiz question: "${question}" (correct answer: "${correctAnswer}").
+        contents: `${promptText}
 
 The lesson must feel lightweight and easy to scan, not bulky.
 

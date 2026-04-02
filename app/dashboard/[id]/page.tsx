@@ -2039,9 +2039,6 @@ export default function FormDetailPage() {
 
   return (
     <main className="min-h-screen font-sans" style={{ background: bg, color: textPrim }}>
-      {/* Decorative blob */}
-      {isLight && <div className="fixed top-0 right-0 pointer-events-none" style={{ width:180, height:180, borderRadius:'50%', background:lime, transform:'translate(35%,-25%)', opacity:0.45, zIndex:0 }} />}
-
       {/* -- Top header -- */}
       <header className="sticky top-0 z-20 backdrop-blur-md" style={{ borderBottom: `1px solid ${navBord}`, background: navBg }}>
         <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-2 sm:gap-4">

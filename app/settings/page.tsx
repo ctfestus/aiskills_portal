@@ -8,7 +8,7 @@ import {
   Loader2, ArrowLeft, Camera, Check, AlertCircle,
   Twitter, Linkedin, Instagram, Globe, Github, Youtube,
   Search, X, ImageIcon, Move, ExternalLink, Star, Sun, Moon,
-  Award, Upload, Trash2, CheckCircle2, XCircle, ChevronDown,
+  Award, Upload, Trash2, CheckCircle2, XCircle, ChevronDown, Copy, Link2,
 } from 'lucide-react';
 import { ImageCropModal } from '@/components/ImageCropModal';
 import { sanitizePlainText } from '@/lib/sanitize';
@@ -241,6 +241,63 @@ function CoverEditor({ coverUrl, coverPosition, onUrlChange, onPositionChange, o
   );
 }
 
+// --- Types ---
+type EducationEntry = {
+  id: string;
+  school: string;
+  degree: string;
+  field: string;
+  start_year: string;
+  end_year: string;
+  current: boolean;
+};
+type WorkEntry = {
+  id: string;
+  company: string;
+  title: string;
+  start_year: string;
+  end_year: string;
+  current: boolean;
+};
+
+const YEARS = Array.from({ length: new Date().getFullYear() - 1969 }, (_, i) => String(new Date().getFullYear() - i));
+const DEGREES = ['High School', 'Diploma', 'Associate', "Bachelor's", "Master's", 'MBA', 'PhD', 'Certificate', 'Other'];
+
+function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+  const C = useC();
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium block" style={{ color: C.muted }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function EntryCard({ children, onDelete }: { children: React.ReactNode; onDelete: () => void }) {
+  const C = useC();
+  return (
+    <div className="rounded-xl p-4 space-y-3 relative" style={{ background: C.input, border: `1px solid ${C.cardBorder}` }}>
+      {children}
+      <button onClick={onDelete} className="absolute top-3 right-3 p-1 rounded-lg transition-colors hover:opacity-70"
+        style={{ color: '#ef4444' }}>
+        <Trash2 className="w-3.5 h-3.5"/>
+      </button>
+    </div>
+  );
+}
+
+function SelectField({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: string[]; placeholder: string }) {
+  const C = useC();
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)}
+      className="w-full rounded-xl px-3 py-2.5 text-sm border focus:outline-none appearance-none"
+      style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: value ? C.text : C.faint }}>
+      <option value="">{placeholder}</option>
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
 // --- Settings Page ---
 export default function SettingsPage() {
   const C = useC();
@@ -252,11 +309,16 @@ export default function SettingsPage() {
   const [saved, setSaved]     = useState(false);
   const [error, setError]     = useState('');
   const [name, setName]         = useState('');
+  const [username, setUsername] = useState('');
+  const [usernameMsg, setUsernameMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [bio, setBio]           = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [country, setCountry]     = useState('');
   const [city, setCity]           = useState('');
   const [socialLinks, setSocialLinks] = useState<Record<string, string>>({});
+  const [education, setEducation]         = useState<EducationEntry[]>([]);
+  const [workExperience, setWorkExperience] = useState<WorkEntry[]>([]);
   const avatarRef = useRef<HTMLInputElement>(null);
 
   const [accessToken, setAccessToken]   = useState<string | null>(null);
@@ -283,17 +345,20 @@ export default function SettingsPage() {
       setAccessToken(session.access_token);
       const [{ data: { user } }, { data: studentProfile }] = await Promise.all([
         supabase.auth.getUser(),
-        supabase.from('students').select('full_name, bio, avatar_url, country, city, social_links').eq('id', session.user.id).single(),
+        supabase.from('students').select('full_name, bio, avatar_url, country, city, social_links, username, education, work_experience').eq('id', session.user.id).single(),
       ]);
       if (!user) { window.location.href = '/auth'; return; }
       setUser(user);
       if (studentProfile) {
         setName(studentProfile.full_name ?? '');
+        setUsername(studentProfile.username ?? '');
         setBio(studentProfile.bio ?? '');
         setAvatarUrl(studentProfile.avatar_url ?? '');
         setCountry(studentProfile.country ?? '');
         setCity(studentProfile.city ?? '');
         setSocialLinks(studentProfile.social_links ?? {});
+        setEducation(studentProfile.education ?? []);
+        setWorkExperience(studentProfile.work_experience ?? []);
       }
 
       setLoading(false);
@@ -351,20 +416,27 @@ export default function SettingsPage() {
     if (!user) return;
     setError(''); setSaving(true);
     if (!name.trim()) { setError('Full name is required.'); setSaving(false); return; }
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30) || null;
     const [{ error: updateError }] = await Promise.all([
       supabase.from('students').update({
-        full_name:    name.trim() || null,
-        bio:          bio.trim() || null,
-        avatar_url:   avatarUrl || null,
-        country:      country.trim() || null,
-        city:         city.trim() || null,
-        social_links: socialLinks,
+        full_name:       name.trim() || null,
+        username:        cleanUsername,
+        bio:             bio.trim() || null,
+        avatar_url:      avatarUrl || null,
+        country:         country.trim() || null,
+        city:            city.trim() || null,
+        social_links:    socialLinks,
+        education:       education,
+        work_experience: workExperience,
       }).eq('id', user.id),
       supabase.auth.updateUser({ data: { full_name: name.trim() || null } }),
     ]);
     setSaving(false);
-    if (updateError) { setError(updateError.message.includes('unique') ? 'That username is already taken.' : updateError.message); }
-    else { setSaved(true); setTimeout(() => setSaved(false), 2500); }
+    if (updateError) { setError(updateError.message.includes('unique') ? 'That username is already taken. Please choose another.' : updateError.message); }
+    else {
+      if (cleanUsername) setUsername(cleanUsername);
+      setSaved(true); setTimeout(() => setSaved(false), 2500);
+    }
   };
 
 
@@ -437,6 +509,44 @@ export default function SettingsPage() {
           )}
         </AnimatePresence>
 
+        {/* Share Profile card -- shown when username is set */}
+        {username && (
+          <div className="rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3"
+            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: C.cta + '18' }}>
+                <Link2 className="w-4 h-4" style={{ color: C.cta }}/>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold" style={{ color: C.text }}>Your public profile</p>
+                <p className="text-xs truncate mt-0.5" style={{ color: C.muted }}>
+                  {typeof window !== 'undefined' ? window.location.origin : ''}/s/{username}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={() => {
+                  const url = `${window.location.origin}/s/${username}`;
+                  navigator.clipboard?.writeText(url);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all"
+                style={{ background: C.cta, color: C.ctaText }}>
+                {copied ? <Check className="w-3.5 h-3.5"/> : <Copy className="w-3.5 h-3.5"/>}
+                {copied ? 'Copied!' : 'Copy link'}
+              </button>
+              <a href={`/s/${username}`} target="_blank" rel="noreferrer"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-70"
+                style={{ background: C.pill, color: C.muted }}>
+                <ExternalLink className="w-3.5 h-3.5"/> View
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* Avatar */}
         <div className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: C.faint }}>Profile Photo</h2>
@@ -477,6 +587,24 @@ export default function SettingsPage() {
               <input value={name} onChange={e => setName(sanitizePlainText(e.target.value))} placeholder="Your full name"
                 className="w-full rounded-xl px-4 py-2.5 text-sm border focus:outline-none transition-colors"
                 style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1.5 block" style={{ color: C.muted }}>Username</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm select-none" style={{ color: C.faint }}>@</span>
+                <input
+                  value={username}
+                  onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30))}
+                  placeholder="yourname"
+                  maxLength={30}
+                  className="w-full rounded-xl pl-8 pr-4 py-2.5 text-sm border focus:outline-none transition-colors"
+                  style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+              </div>
+              <p className="text-xs mt-1.5" style={{ color: C.faint }}>
+                {username
+                  ? <>Your shareable profile: <span style={{ color: C.green }}>{typeof window !== 'undefined' ? window.location.origin : ''}/s/{username}</span></>
+                  : 'Set a username to get a shareable public profile. Letters, numbers, underscores only.'}
+              </p>
             </div>
             <div>
               <div className="flex items-center justify-between mb-1.5">
@@ -531,6 +659,115 @@ export default function SettingsPage() {
           </div>
         </div>
 
+
+        {/* Education */}
+        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Education</h2>
+            <button
+              onClick={() => setEducation(prev => [...prev, { id: crypto.randomUUID(), school: '', degree: '', field: '', start_year: '', end_year: '', current: false }])}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80"
+              style={{ background: C.lime, color: C.green }}>
+              + Add
+            </button>
+          </div>
+          {education.length === 0 && (
+            <p className="text-xs py-2" style={{ color: C.faint }}>No education added yet.</p>
+          )}
+          <div className="space-y-3">
+            {education.map((ed, i) => (
+              <EntryCard key={ed.id} onDelete={() => setEducation(prev => prev.filter((_, j) => j !== i))}>
+                <FieldRow label="School / University">
+                  <input value={ed.school} onChange={e => setEducation(prev => prev.map((x, j) => j === i ? { ...x, school: sanitizePlainText(e.target.value) } : x))}
+                    placeholder="e.g. University of Ghana"
+                    className="w-full rounded-xl px-3 py-2.5 text-sm border focus:outline-none"
+                    style={{ background: C.card, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+                </FieldRow>
+                <div className="grid grid-cols-2 gap-3">
+                  <FieldRow label="Degree">
+                    <SelectField value={ed.degree} onChange={v => setEducation(prev => prev.map((x, j) => j === i ? { ...x, degree: v } : x))} options={DEGREES} placeholder="Select degree"/>
+                  </FieldRow>
+                  <FieldRow label="Field of Study">
+                    <input value={ed.field} onChange={e => setEducation(prev => prev.map((x, j) => j === i ? { ...x, field: sanitizePlainText(e.target.value) } : x))}
+                      placeholder="e.g. Computer Science"
+                      className="w-full rounded-xl px-3 py-2.5 text-sm border focus:outline-none"
+                      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+                  </FieldRow>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <FieldRow label="Start Year">
+                    <SelectField value={ed.start_year} onChange={v => setEducation(prev => prev.map((x, j) => j === i ? { ...x, start_year: v } : x))} options={YEARS} placeholder="Year"/>
+                  </FieldRow>
+                  <FieldRow label="End Year">
+                    {ed.current
+                      ? <div className="flex items-center h-10 px-3 rounded-xl text-xs" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, color: C.faint }}>Present</div>
+                      : <SelectField value={ed.end_year} onChange={v => setEducation(prev => prev.map((x, j) => j === i ? { ...x, end_year: v } : x))} options={YEARS} placeholder="Year"/>
+                    }
+                  </FieldRow>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={ed.current}
+                    onChange={e => setEducation(prev => prev.map((x, j) => j === i ? { ...x, current: e.target.checked, end_year: e.target.checked ? '' : x.end_year } : x))}
+                    className="rounded"/>
+                  <span className="text-xs" style={{ color: C.muted }}>Currently studying here</span>
+                </label>
+              </EntryCard>
+            ))}
+          </div>
+        </div>
+
+        {/* Work Experience */}
+        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Work Experience</h2>
+            <button
+              onClick={() => setWorkExperience(prev => [...prev, { id: crypto.randomUUID(), company: '', title: '', start_year: '', end_year: '', current: false }])}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80"
+              style={{ background: C.lime, color: C.green }}>
+              + Add
+            </button>
+          </div>
+          {workExperience.length === 0 && (
+            <p className="text-xs py-2" style={{ color: C.faint }}>No work experience added yet.</p>
+          )}
+          <div className="space-y-3">
+            {workExperience.map((job, i) => (
+              <EntryCard key={job.id} onDelete={() => setWorkExperience(prev => prev.filter((_, j) => j !== i))}>
+                <div className="grid grid-cols-2 gap-3">
+                  <FieldRow label="Company">
+                    <input value={job.company} onChange={e => setWorkExperience(prev => prev.map((x, j) => j === i ? { ...x, company: sanitizePlainText(e.target.value) } : x))}
+                      placeholder="e.g. Google"
+                      className="w-full rounded-xl px-3 py-2.5 text-sm border focus:outline-none"
+                      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+                  </FieldRow>
+                  <FieldRow label="Job Title">
+                    <input value={job.title} onChange={e => setWorkExperience(prev => prev.map((x, j) => j === i ? { ...x, title: sanitizePlainText(e.target.value) } : x))}
+                      placeholder="e.g. Software Engineer"
+                      className="w-full rounded-xl px-3 py-2.5 text-sm border focus:outline-none"
+                      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+                  </FieldRow>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <FieldRow label="Start Year">
+                    <SelectField value={job.start_year} onChange={v => setWorkExperience(prev => prev.map((x, j) => j === i ? { ...x, start_year: v } : x))} options={YEARS} placeholder="Year"/>
+                  </FieldRow>
+                  <FieldRow label="End Year">
+                    {job.current
+                      ? <div className="flex items-center h-10 px-3 rounded-xl text-xs" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, color: C.faint }}>Present</div>
+                      : <SelectField value={job.end_year} onChange={v => setWorkExperience(prev => prev.map((x, j) => j === i ? { ...x, end_year: v } : x))} options={YEARS} placeholder="Year"/>
+                    }
+                  </FieldRow>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={job.current}
+                    onChange={e => setWorkExperience(prev => prev.map((x, j) => j === i ? { ...x, current: e.target.checked, end_year: e.target.checked ? '' : x.end_year } : x))}
+                    className="rounded"/>
+                  <span className="text-xs" style={{ color: C.muted }}>I currently work here</span>
+                </label>
+              </EntryCard>
+            ))}
+          </div>
+        </div>
 
         {/* Account */}
         <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
