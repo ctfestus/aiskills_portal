@@ -5,39 +5,45 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import {
-  Loader2, MapPin, Award, BookOpen, Trophy, Zap,
+  Loader2, MapPin, Award,
   Twitter, Linkedin, Instagram, Github, Youtube, Globe,
-  Copy, Check, ExternalLink, GraduationCap, Sun, Moon,
-  Calendar, Star, Briefcase, Share2, Link2,
+  Check, ExternalLink, GraduationCap, Sun, Moon,
+  Briefcase, Share2, Link2,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
 /* --- Tokens --- */
 const LIGHT = {
-  page:       '#F0F2F5',
-  nav:        'rgba(255,255,255,0.88)',
-  navBorder:  'rgba(0,0,0,0.06)',
-  card:       '#FFFFFF',
-  cardBorder: 'rgba(0,0,0,0.06)',
-  cardShadow: '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
-  text:       '#0f172a',
-  sub:        '#334155',
-  muted:      '#64748b',
-  faint:      '#94a3b8',
-  divider:    'rgba(0,0,0,0.06)',
-  pill:       '#F1F5F9',
-  accent:     '#1f1bc3',
-  accentSoft: 'rgba(31,27,195,0.06)',
-  green:      '#16a34a',
-  greenSoft:  'rgba(22,163,74,0.08)',
-  statDiv:    'rgba(0,0,0,0.07)',
-  avatarRing: '#FFFFFF',
+  page:        '#F0F2F5',
+  nav:         '#1f1bc3',
+  navBorder:   'transparent',
+  navText:     'rgba(255,255,255,0.70)',
+  navPill:     'rgba(255,255,255,0.15)',
+  navPillText: '#ffffff',
+  card:        '#FFFFFF',
+  cardBorder:  'rgba(0,0,0,0.06)',
+  cardShadow:  '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)',
+  text:        '#0f172a',
+  sub:         '#334155',
+  muted:       '#64748b',
+  faint:       '#94a3b8',
+  divider:     'rgba(0,0,0,0.06)',
+  pill:        '#F1F5F9',
+  accent:      '#1f1bc3',
+  accentSoft:  'rgba(31,27,195,0.06)',
+  green:       '#16a34a',
+  greenSoft:   'rgba(22,163,74,0.08)',
+  statDiv:     'rgba(0,0,0,0.07)',
+  avatarRing:  '#FFFFFF',
 };
 const DARK = {
-  page:       '#0a0a0a',
-  nav:        'rgba(12,12,12,0.92)',
-  navBorder:  'rgba(255,255,255,0.06)',
-  card:       '#141414',
+  page:        '#0a0a0a',
+  nav:         'rgba(12,12,12,0.92)',
+  navBorder:   'rgba(255,255,255,0.06)',
+  navText:     '#475569',
+  navPill:     '#1e1e1e',
+  navPillText: '#94a3b8',
+  card:        '#141414',
   cardBorder: 'rgba(255,255,255,0.07)',
   cardShadow: '0 1px 2px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.3)',
   text:       '#f8fafc',
@@ -70,8 +76,8 @@ function Card({ children, t, delay = 0 }: { children: React.ReactNode; t: typeof
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.38, delay, ease: [0.16, 1, 0.3, 1] }}
-      className="rounded-2xl overflow-hidden"
-      style={{ background: t.card, border: `1px solid ${t.cardBorder}`, boxShadow: t.cardShadow }}>
+      className="rounded-xl overflow-hidden"
+      style={{ background: t.card, border: `1px solid rgba(0,0,0,0.10)` }}>
       {children}
     </motion.div>
   );
@@ -89,8 +95,8 @@ function SectionHeader({ title, count, t }: { title: string; count?: number; t: 
 }
 
 /* --- Timeline item --- */
-function TimelineItem({ icon: Icon, title, sub, meta, isLast, t }:
-  { icon: any; title: string; sub: string; meta: string; isLast: boolean; t: typeof LIGHT }) {
+function TimelineItem({ icon: Icon, title, sub, meta, description, isLast, t }:
+  { icon: any; title: string; sub: string; meta: string; description?: string; isLast: boolean; t: typeof LIGHT }) {
   return (
     <div className="flex gap-4 px-6" style={!isLast ? { paddingBottom: 0 } : {}}>
       <div className="flex flex-col items-center pt-0.5 flex-shrink-0" style={{ width: 36 }}>
@@ -104,16 +110,20 @@ function TimelineItem({ icon: Icon, title, sub, meta, isLast, t }:
         <p className="text-sm font-semibold leading-snug" style={{ color: t.text }}>{title}</p>
         {sub  && <p className="text-xs mt-0.5 font-medium" style={{ color: t.muted }}>{sub}</p>}
         {meta && <p className="text-xs mt-1"               style={{ color: t.faint }}>{meta}</p>}
+        {description && (
+          <p className="text-xs mt-2 leading-relaxed" style={{ color: t.sub }}>{description}</p>
+        )}
       </div>
     </div>
   );
 }
 
 /* --- Certificate row --- */
-function CertRow({ cert, t, isDark }: { cert: any; t: typeof LIGHT; isDark: boolean }) {
+function CertRow({ cert, t, isDark, showMeta = false }: { cert: any; t: typeof LIGHT; isDark: boolean; showMeta?: boolean }) {
   const date = cert.issuedAt
-    ? new Date(cert.issuedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    ? new Date(cert.issuedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
     : '';
+  const shortId = cert.id ? String(cert.id).slice(0, 8).toUpperCase() : '';
   return (
     <Link href={`/certificate/${cert.id}`} target="_blank" rel="noreferrer"
       className="group flex items-center gap-4 px-6 py-4 transition-colors"
@@ -131,7 +141,21 @@ function CertRow({ cert, t, isDark }: { cert: any; t: typeof LIGHT; isDark: bool
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate" style={{ color: t.text }}>{cert.courseName}</p>
-        {date && <p className="text-xs mt-0.5" style={{ color: t.faint }}>{date}</p>}
+        {showMeta && (
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            {date && (
+              <span className="text-xs" style={{ color: t.faint }}>Issued {date}</span>
+            )}
+            {shortId && (
+              <span className="text-xs" style={{ color: t.faint }}>
+                Credential ID {shortId}
+              </span>
+            )}
+          </div>
+        )}
+        {!showMeta && date && (
+          <p className="text-xs mt-0.5" style={{ color: t.faint }}>{date}</p>
+        )}
       </div>
       <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
         style={{ color: t.accent }}/>
@@ -139,35 +163,6 @@ function CertRow({ cert, t, isDark }: { cert: any; t: typeof LIGHT; isDark: bool
   );
 }
 
-/* --- Course row --- */
-function CourseRow({ course, t }: { course: any; t: typeof LIGHT }) {
-  const date = course.completedAt
-    ? new Date(course.completedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-    : '';
-  return (
-    <div className="flex items-center gap-4 px-6 py-4" style={{ borderTop: `1px solid ${t.divider}` }}>
-      <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0"
-        style={{ background: course.coverImage ? undefined : t.pill }}>
-        {course.coverImage
-          ? <img src={course.coverImage} alt={course.courseName} className="w-full h-full object-cover"/>
-          : <div className="w-full h-full flex items-center justify-center">
-              <BookOpen className="w-4 h-4" style={{ color: t.faint }}/>
-            </div>}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate" style={{ color: t.text }}>{course.courseName}</p>
-        <div className="flex items-center gap-2 mt-0.5">
-          {date && <span className="text-xs" style={{ color: t.faint }}>{date}</span>}
-          {course.score != null && (
-            <span className="text-xs font-medium" style={{ color: t.muted }}>{course.score}%</span>
-          )}
-        </div>
-      </div>
-      <span className="text-xs font-semibold px-2.5 py-1 rounded-lg flex-shrink-0"
-        style={{ background: t.greenSoft, color: t.green }}>Passed</span>
-    </div>
-  );
-}
 
 /* --- Page --- */
 export default function StudentPublicProfile() {
@@ -209,13 +204,14 @@ export default function StudentPublicProfile() {
     </div>
   );
 
-  const { profile, stats, certificates, completedCourses } = data;
-  const initials      = (profile.fullName || username || '?').slice(0, 2).toUpperCase();
-  const socialEntries = Object.entries(profile.socialLinks ?? {}).filter(([, v]) => v);
-  const hasWork       = profile.workExperience?.length > 0;
-  const hasEdu        = profile.education?.length > 0;
-  const hasCerts      = certificates.length > 0;
-  const hasCourses    = completedCourses.length > 0;
+  const { profile, certificates, virtualExpCerts } = data;
+  const initials        = (profile.fullName || username || '?').slice(0, 2).toUpperCase();
+  const socialEntries   = Object.entries(profile.socialLinks ?? {}).filter(([, v]) => v);
+  const hasWork         = profile.workExperience?.length > 0;
+  const hasEdu          = profile.education?.length > 0;
+  const hasCerts        = (certificates ?? []).length > 0;
+  const hasVirtualExp   = (virtualExpCerts ?? []).length > 0;
+  const hasSkills       = (profile.skills ?? []).length > 0;
 
   return (
     <div className="min-h-screen" style={{ background: t.page }}>
@@ -230,17 +226,17 @@ export default function StudentPublicProfile() {
         <div className="max-w-2xl mx-auto px-5 h-13 flex items-center justify-between" style={{ height: 52 }}>
           <Link href="/">
             <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg"
-              alt="AI Skills Africa" style={{ height: 26, width: 'auto' }}/>
+              alt="AI Skills Africa" style={{ height: 26, width: 'auto', filter: isDark ? 'none' : 'brightness(0) invert(1)' }}/>
           </Link>
           <div className="flex items-center gap-1.5">
             <button onClick={toggleTheme}
               className="w-8 h-8 flex items-center justify-center rounded-lg transition-opacity hover:opacity-60"
-              style={{ color: t.faint }}>
+              style={{ color: (t as any).navText }}>
               {isDark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
             </button>
             <button onClick={copyLink}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-              style={{ background: t.pill, color: copied ? t.green : t.muted }}>
+              style={{ background: (t as any).navPill, color: copied ? (isDark ? t.green : '#ffffff') : (t as any).navPillText }}>
               {copied ? <Check className="w-3.5 h-3.5"/> : <Link2 className="w-3.5 h-3.5"/>}
               {copied ? 'Copied' : 'Copy link'}
             </button>
@@ -248,44 +244,48 @@ export default function StudentPublicProfile() {
         </div>
       </nav>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-5 pb-24 space-y-2.5 pt-0">
+      <div className="max-w-2xl mx-auto px-4 sm:px-5 pb-24 space-y-2.5 pt-6">
 
         {/* -- Hero -- */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          className="overflow-hidden"
-          style={{ background: t.card, border: `1px solid ${t.cardBorder}`,
-            boxShadow: t.cardShadow, borderRadius: '0 0 20px 20px' }}>
+          style={{ background: t.card, border: `1px solid rgba(0,0,0,0.10)`,
+            borderRadius: '12px', overflow: 'visible' }}>
 
-          {/* Cover -- layered mesh gradient */}
-          <div className="relative overflow-hidden" style={{ height: 160 }}>
-            <div className="absolute inset-0"
-              style={{ background: isDark
-                ? 'linear-gradient(135deg,#0f0c29 0%,#302b63 50%,#24243e 100%)'
-                : 'linear-gradient(135deg,#1f1bc3 0%,#312ecb 40%,#6366f1 75%,#8b5cf6 100%)' }}/>
-            {/* Noise texture rings */}
-            <div className="absolute" style={{ width: 360, height: 360, borderRadius: '50%',
-              background: 'radial-gradient(circle,rgba(255,255,255,0.07) 0%,transparent 70%)',
-              top: -120, right: -80 }}/>
-            <div className="absolute" style={{ width: 200, height: 200, borderRadius: '50%',
-              background: 'radial-gradient(circle,rgba(255,255,255,0.06) 0%,transparent 70%)',
-              bottom: -60, left: 40 }}/>
+          {/* Cover + avatar in one relative container so avatar is a child -- no stacking conflict */}
+          <div style={{ position: 'relative' }}>
+            {/* Cover image */}
+            <div style={{ height: 180, overflow: 'hidden', borderRadius: '12px 12px 0 0' }}>
+              <img
+                src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Cover.jpg"
+                alt="Cover"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+              <div style={{ position: 'absolute', inset: 0,
+                background: 'linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.22) 100%)' }}/>
+            </div>
+
+            {/* Avatar -- absolutely positioned so it hangs below the cover with no clipping */}
+            <div style={{ position: 'absolute', bottom: -40, left: 24, zIndex: 10 }}>
+              <div style={{ width: 88, height: 88, borderRadius: '50%', overflow: 'hidden',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 28, fontWeight: 800,
+                background: t.accentSoft, color: t.accent,
+                boxShadow: `0 0 0 4px ${t.card}, 0 2px 8px rgba(0,0,0,0.15)` }}>
+                {profile.avatarUrl
+                  ? <img src={profile.avatarUrl} alt={profile.fullName}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+                  : <span style={{ letterSpacing: '-1px' }}>{initials}</span>}
+              </div>
+            </div>
           </div>
 
-          {/* Content */}
-          <div className="px-6 pb-6">
-            {/* Avatar + share btn */}
-            <div className="flex items-end justify-between" style={{ marginTop: -40 }}>
-              <div className="w-20 h-20 rounded-full overflow-hidden flex items-center justify-center
-                text-xl font-bold flex-shrink-0"
-                style={{ background: t.accentSoft, color: t.accent,
-                  boxShadow: `0 0 0 3px ${t.card}, 0 0 0 5px ${t.cardBorder}` }}>
-                {profile.avatarUrl
-                  ? <img src={profile.avatarUrl} alt={profile.fullName} className="w-full h-full object-cover"/>
-                  : <span style={{ letterSpacing: '-0.5px' }}>{initials}</span>}
-              </div>
+          {/* Content -- top padding makes room for the hanging avatar */}
+          <div className="px-6 pb-6" style={{ paddingTop: 52 }}>
+            {/* Share button -- right-aligned */}
+            <div className="flex justify-end" style={{ marginTop: -36 }}>
               <button onClick={copyLink}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all mb-1"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all"
                 style={{
                   background: copied ? t.greenSoft : t.pill,
                   color: copied ? t.green : t.muted,
@@ -334,32 +334,26 @@ export default function StudentPublicProfile() {
               </div>
             )}
 
-            {/* Stats row */}
-            <div className="flex items-center gap-0 mt-5 rounded-xl overflow-hidden"
-              style={{ border: `1px solid ${t.cardBorder}` }}>
-              {[
-                { value: stats.coursesCompleted, label: 'Courses',      icon: BookOpen, color: t.accent    },
-                { value: stats.certificates,     label: 'Certificates', icon: Award,    color: '#f59e0b'   },
-                { value: stats.xp,               label: 'XP',           icon: Zap,      color: '#8b5cf6'   },
-                { value: stats.leaderboardRank ? `#${stats.leaderboardRank}` : '--',
-                  label: stats.cohortSize > 0 ? `of ${stats.cohortSize}` : 'Rank',
-                  icon: Trophy, color: '#ef4444' },
-              ].map(({ value, label, icon: Icon, color }, i) => (
-                <div key={label}
-                  className="flex-1 flex flex-col items-center justify-center py-4"
-                  style={{
-                    background: t.pill,
-                    borderLeft: i > 0 ? `1px solid ${t.statDiv}` : 'none',
-                  }}>
-                  <p className="text-[17px] font-extrabold leading-none tabular-nums"
-                    style={{ color: t.text }}>{value}</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <Icon className="w-3 h-3" style={{ color }}/>
-                    <p className="text-[10px] font-medium" style={{ color: t.faint }}>{label}</p>
-                  </div>
+            {/* Skills */}
+            {hasSkills && (
+              <div className="mt-5 pt-5" style={{ borderTop: `1px solid ${t.divider}` }}>
+                <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: t.faint }}>Skills</p>
+                <div className="flex flex-wrap gap-2">
+                  {(profile.skills as string[]).map((skill: string) => (
+                    <span key={skill}
+                      className="px-3.5 py-1.5 rounded-full text-[13px] font-medium"
+                      style={{
+                        background: t.pill,
+                        color: t.sub,
+                        border: `1px solid ${t.cardBorder}`,
+                        letterSpacing: '-0.01em',
+                      }}>
+                      {skill}
+                    </span>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         </motion.div>
 
@@ -374,6 +368,7 @@ export default function StudentPublicProfile() {
                   title={job.title || 'Role'}
                   sub={job.company}
                   meta={[job.start_year, job.current ? 'Present' : job.end_year].filter(Boolean).join(' - ')}
+                  description={job.description}
                   isLast={i === profile.workExperience.length - 1}
                   t={t}/>
               ))}
@@ -399,32 +394,32 @@ export default function StudentPublicProfile() {
           </Card>
         )}
 
-        {/* -- Certificates -- */}
+        {/* -- Courses -- */}
         {hasCerts && (
           <Card t={t} delay={0.16}>
-            <SectionHeader title="Licences & Certificates" count={certificates.length} t={t}/>
+            <SectionHeader title="Courses" count={certificates.length} t={t}/>
             <div className="pb-2">
               {certificates.map((cert: any) => (
-                <CertRow key={cert.id} cert={cert} t={t} isDark={isDark}/>
+                <CertRow key={cert.id} cert={cert} t={t} isDark={isDark} showMeta/>
               ))}
             </div>
           </Card>
         )}
 
-        {/* -- Courses -- */}
-        {hasCourses && (
+        {/* -- Virtual Experience -- */}
+        {hasVirtualExp && (
           <Card t={t} delay={0.20}>
-            <SectionHeader title="Courses Completed" count={completedCourses.length} t={t}/>
+            <SectionHeader title="Virtual Experience" count={virtualExpCerts.length} t={t}/>
             <div className="pb-2">
-              {completedCourses.map((course: any) => (
-                <CourseRow key={course.formId} course={course} t={t}/>
+              {virtualExpCerts.map((cert: any) => (
+                <CertRow key={cert.id} cert={cert} t={t} isDark={isDark} showMeta/>
               ))}
             </div>
           </Card>
         )}
 
         {/* -- Empty -- */}
-        {!hasWork && !hasEdu && !hasCerts && !hasCourses && (
+        {!hasWork && !hasEdu && !hasCerts && !hasVirtualExp && !hasSkills && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
             className="flex flex-col items-center justify-center py-24 gap-2 text-center rounded-2xl"
             style={{ background: t.card, border: `1px solid ${t.cardBorder}` }}>

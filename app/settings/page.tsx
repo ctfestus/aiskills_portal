@@ -258,10 +258,26 @@ type WorkEntry = {
   start_year: string;
   end_year: string;
   current: boolean;
+  description?: string;
 };
 
 const YEARS = Array.from({ length: new Date().getFullYear() - 1969 }, (_, i) => String(new Date().getFullYear() - i));
 const DEGREES = ['High School', 'Diploma', 'Associate', "Bachelor's", "Master's", 'MBA', 'PhD', 'Certificate', 'Other'];
+
+const SKILLS_LIST = [
+  'Python', 'SQL', 'Power BI', 'Tableau', 'Excel', 'R', 'SPSS',
+  'Machine Learning', 'Deep Learning', 'Natural Language Processing',
+  'Generative AI', 'ChatGPT', 'Prompt Engineering', 'LLMs',
+  'Data Analysis', 'Data Visualization', 'Data Engineering', 'Data Cleaning',
+  'Statistics', 'A/B Testing', 'Predictive Modeling', 'Time Series Analysis',
+  'Microsoft Azure', 'Google Cloud', 'AWS', 'Big Data', 'Spark', 'Hadoop',
+  'JavaScript', 'TypeScript', 'React', 'Node.js', 'HTML/CSS',
+  'Coding', 'Git', 'APIs', 'Web Scraping',
+  'Project Management', 'Agile', 'Scrum', 'Leadership',
+  'Communication', 'Problem Solving', 'Critical Thinking',
+  'Digital Marketing', 'SEO', 'Content Strategy', 'Social Media',
+  'Business Intelligence', 'Financial Modeling', 'Research',
+];
 
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   const C = useC();
@@ -319,6 +335,8 @@ export default function SettingsPage() {
   const [socialLinks, setSocialLinks] = useState<Record<string, string>>({});
   const [education, setEducation]         = useState<EducationEntry[]>([]);
   const [workExperience, setWorkExperience] = useState<WorkEntry[]>([]);
+  const [skills, setSkills]               = useState<string[]>([]);
+  const [skillInput, setSkillInput]       = useState('');
   const avatarRef = useRef<HTMLInputElement>(null);
 
   const [accessToken, setAccessToken]   = useState<string | null>(null);
@@ -345,7 +363,7 @@ export default function SettingsPage() {
       setAccessToken(session.access_token);
       const [{ data: { user } }, { data: studentProfile }] = await Promise.all([
         supabase.auth.getUser(),
-        supabase.from('students').select('full_name, bio, avatar_url, country, city, social_links, username, education, work_experience').eq('id', session.user.id).single(),
+        supabase.from('students').select('full_name, bio, avatar_url, country, city, social_links, username, education, work_experience, skills').eq('id', session.user.id).single(),
       ]);
       if (!user) { window.location.href = '/auth'; return; }
       setUser(user);
@@ -359,6 +377,7 @@ export default function SettingsPage() {
         setSocialLinks(studentProfile.social_links ?? {});
         setEducation(studentProfile.education ?? []);
         setWorkExperience(studentProfile.work_experience ?? []);
+        setSkills(studentProfile.skills ?? []);
       }
 
       setLoading(false);
@@ -428,6 +447,7 @@ export default function SettingsPage() {
         social_links:    socialLinks,
         education:       education,
         work_experience: workExperience,
+        skills:          skills,
       }).eq('id', user.id),
       supabase.auth.updateUser({ data: { full_name: name.trim() || null } }),
     ]);
@@ -764,10 +784,121 @@ export default function SettingsPage() {
                     className="rounded"/>
                   <span className="text-xs" style={{ color: C.muted }}>I currently work here</span>
                 </label>
+                <FieldRow label="Description">
+                  {(() => {
+                    const words = (job.description ?? '').trim().split(/\s+/).filter(Boolean).length;
+                    const over  = words > 120;
+                    return (
+                      <>
+                        <textarea
+                          value={job.description ?? ''}
+                          onChange={e => setWorkExperience(prev => prev.map((x, j) => j === i ? { ...x, description: sanitizePlainText(e.target.value) } : x))}
+                          rows={3}
+                          placeholder="Briefly describe your role and responsibilities…"
+                          className="w-full rounded-xl px-3 py-2.5 text-sm border focus:outline-none transition-colors resize-none"
+                          style={{ background: C.card, border: `1px solid ${over ? '#ef4444' : C.cardBorder}`, color: C.text }}
+                        />
+                        <p className="text-right text-[11px] mt-0.5" style={{ color: over ? '#ef4444' : C.faint }}>
+                          {words}/120 words
+                        </p>
+                      </>
+                    );
+                  })()}
+                </FieldRow>
               </EntryCard>
             ))}
           </div>
         </div>
+
+        {/* Skills */}
+        {(() => {
+          const query = skillInput.trim().toLowerCase();
+          const suggestions = SKILLS_LIST.filter(s =>
+            s.toLowerCase().includes(query) && !skills.includes(s)
+          ).slice(0, 8);
+          const canAddCustom = query.length > 1 && !skills.map(s => s.toLowerCase()).includes(query) && !SKILLS_LIST.map(s => s.toLowerCase()).includes(query);
+
+          const addSkill = (skill: string) => {
+            const trimmed = skill.trim();
+            if (!trimmed || skills.includes(trimmed) || skills.length >= 20) return;
+            setSkills(prev => [...prev, trimmed]);
+            setSkillInput('');
+          };
+
+          return (
+            <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+              <div>
+                <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Skills</h2>
+                <p className="text-xs mt-1" style={{ color: C.faint }}>We recommend adding your top 5 skills used in your role.</p>
+              </div>
+
+              {/* Selected pills */}
+              {skills.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {skills.map(skill => (
+                    <span key={skill} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+                      style={{ background: C.lime + '33', color: C.green, border: `1px solid ${C.lime}88` }}>
+                      {skill}
+                      <button onClick={() => setSkills(prev => prev.filter(s => s !== skill))}
+                        className="hover:opacity-60 transition-opacity leading-none">
+                        <X className="w-3 h-3"/>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Input + autocomplete */}
+              <div className="relative">
+                <input
+                  value={skillInput}
+                  onChange={e => setSkillInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); if (suggestions[0]) addSkill(suggestions[0]); else if (canAddCustom) addSkill(skillInput); }
+                  }}
+                  placeholder="Search or type a skill…"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm border focus:outline-none"
+                  style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}
+                />
+                {skillInput && (suggestions.length > 0 || canAddCustom) && (
+                  <div className="absolute z-20 left-0 right-0 mt-1 rounded-xl overflow-hidden"
+                    style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                    {suggestions.map(s => (
+                      <button key={s} onMouseDown={e => { e.preventDefault(); addSkill(s); }}
+                        className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:opacity-70"
+                        style={{ color: C.text }}>
+                        {s}
+                      </button>
+                    ))}
+                    {canAddCustom && (
+                      <button onMouseDown={e => { e.preventDefault(); addSkill(skillInput.trim()); }}
+                        className="w-full text-left px-4 py-2.5 text-sm border-t transition-colors hover:opacity-70"
+                        style={{ color: C.muted, borderColor: C.divider }}>
+                        Add &ldquo;{skillInput.trim()}&rdquo;
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Suggested pills (when input is empty) */}
+              {!skillInput && (
+                <div>
+                  <p className="text-[11px] mb-2" style={{ color: C.faint }}>Suggested</p>
+                  <div className="flex flex-wrap gap-2">
+                    {SKILLS_LIST.filter(s => !skills.includes(s)).slice(0, 12).map(s => (
+                      <button key={s} onClick={() => addSkill(s)}
+                        className="px-3 py-1.5 rounded-full text-xs font-medium transition-opacity hover:opacity-70"
+                        style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+                        + {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Account */}
         <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>

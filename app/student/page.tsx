@@ -3216,13 +3216,13 @@ function ShareProfileCard({ username, C }: { username?: string; C: typeof LIGHT_
         </div>
         <div>
           <p className="text-xs font-semibold" style={{ color: C.text }}>Share your profile</p>
-          <p className="text-xs mt-0.5" style={{ color: C.muted }}>Set a username to get a shareable public profile link.</p>
+          <p className="text-xs mt-0.5" style={{ color: C.muted }}>Complete your profile to get a shareable public link.</p>
         </div>
       </div>
       <Link href="/settings"
         className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
         style={{ background: C.lime, color: C.green }}>
-        Set username
+        Update your profile
       </Link>
     </div>
   );

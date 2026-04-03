@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Service-role client -- bypasses RLS. Used only server-side.
-// Returns only safe, non-sensitive fields in the response (no email, no status).
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -21,10 +19,10 @@ export async function GET(
 
   const supabase = adminClient();
 
-  // 1. Look up student by username (case-insensitive)
+  // 1. Look up student -- stable core columns only
   const { data: student, error } = await supabase
     .from('students')
-    .select('id, email, full_name, avatar_url, bio, country, city, social_links, role, cohort_id, created_at, username, education, work_experience')
+    .select('id, email, full_name, avatar_url, bio, country, city, social_links, role, cohort_id, created_at, username')
     .ilike('username', username)
     .eq('status', 'active')
     .maybeSingle();
@@ -33,7 +31,18 @@ export async function GET(
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 
-  // 2. Certificates (by student_id, non-revoked)
+  // 2. Optional JSONB columns (gracefully default if migrations not run yet)
+  const { data: extra } = await supabase
+    .from('students')
+    .select('education, work_experience, skills')
+    .eq('id', student.id)
+    .maybeSingle();
+
+  const education       = extra?.education       ?? [];
+  const work_experience = extra?.work_experience ?? [];
+  const skills          = extra?.skills          ?? [];
+
+  // 3. Certificates (by student_id, non-revoked)
   const { data: certsRaw } = await supabase
     .from('certificates')
     .select('id, form_id, student_name, issued_at')
@@ -41,63 +50,36 @@ export async function GET(
     .eq('revoked', false)
     .order('issued_at', { ascending: false });
 
-  // 3. Completed course attempts (passed)
-  const { data: attemptsRaw } = await supabase
-    .from('course_attempts')
-    .select('form_id, score, points, completed_at')
-    .eq('student_email', student.email)
-    .eq('passed', true)
-    .not('completed_at', 'is', null)
-    .order('completed_at', { ascending: false });
-
-  // Deduplicate -- keep the best attempt per course
-  const bestAttemptMap: Record<string, any> = {};
-  for (const a of attemptsRaw ?? []) {
-    const prev = bestAttemptMap[a.form_id];
-    if (!prev || a.score > prev.score) bestAttemptMap[a.form_id] = a;
-  }
-  const completedAttempts = Object.values(bestAttemptMap);
-
-  // 4. Fetch form titles for certs + completions
-  const allFormIds = [
-    ...new Set([
-      ...(certsRaw ?? []).map((c: any) => c.form_id),
-      ...completedAttempts.map((a: any) => a.form_id),
-    ]),
-  ];
-  const { data: formsRaw } = allFormIds.length
+  // 4. Fetch form metadata for certificates to get content_type
+  const certFormIds = [...new Set((certsRaw ?? []).map((c: any) => c.form_id))];
+  const { data: formsRaw } = certFormIds.length
     ? await supabase
         .from('forms')
-        .select('id, title, config')
-        .in('id', allFormIds)
+        .select('id, title, config, content_type')
+        .in('id', certFormIds)
     : { data: [] };
 
   const formMap: Record<string, any> = {};
   for (const f of formsRaw ?? []) formMap[f.id] = f;
 
-  const certificates = (certsRaw ?? []).map((c: any) => ({
+  const allCerts = (certsRaw ?? []).map((c: any) => ({
     id:          c.id,
     studentName: c.student_name,
     courseName:  formMap[c.form_id]?.config?.title || formMap[c.form_id]?.title || 'Course',
     coverImage:  formMap[c.form_id]?.config?.coverImage ?? null,
+    contentType: formMap[c.form_id]?.content_type ?? 'course',
     issuedAt:    c.issued_at,
   }));
 
-  const completedCourses = completedAttempts.map((a: any) => ({
-    formId:      a.form_id,
-    courseName:  formMap[a.form_id]?.config?.title || formMap[a.form_id]?.title || 'Course',
-    coverImage:  formMap[a.form_id]?.config?.coverImage ?? null,
-    score:       a.score,
-    completedAt: a.completed_at,
-  }));
+  const certificates    = allCerts.filter((c: any) => c.contentType !== 'virtual_experience');
+  const virtualExpCerts = allCerts.filter((c: any) => c.contentType === 'virtual_experience');
 
-  // 5. Leaderboard rank within cohort (by total XP)
+  // 5. Leaderboard rank within cohort
   let leaderboardRank: number | null = null;
   let cohortSize = 0;
   let myXp = 0;
 
   if (student.cohort_id) {
-    // Get all student emails in the same cohort
     const { data: cohortStudents } = await supabase
       .from('students')
       .select('email')
@@ -118,14 +100,11 @@ export async function GET(
       for (const x of xpRows ?? []) xpMap[x.student_email] = x.total_xp;
 
       myXp = xpMap[student.email] ?? 0;
-
-      // Rank = number of students with strictly more XP + 1
-      leaderboardRank =
-        emails.filter((e: string) => (xpMap[e] ?? 0) > myXp).length + 1;
+      leaderboardRank = emails.filter((e: string) => (xpMap[e] ?? 0) > myXp).length + 1;
     }
   }
 
-  // 6. Build response -- never include email, status, cohort_id
+  // 6. Build response -- never expose email, status, cohort_id
   return NextResponse.json({
     profile: {
       username:       student.username,
@@ -137,17 +116,11 @@ export async function GET(
       socialLinks:    student.social_links ?? {},
       role:           student.role,
       memberSince:    student.created_at,
-      education:      student.education ?? [],
-      workExperience: student.work_experience ?? [],
-    },
-    stats: {
-      coursesCompleted: completedCourses.length,
-      certificates:     certificates.length,
-      xp:               myXp,
-      leaderboardRank,
-      cohortSize,
+      education,
+      workExperience: work_experience,
+      skills,
     },
     certificates,
-    completedCourses,
+    virtualExpCerts,
   });
 }
