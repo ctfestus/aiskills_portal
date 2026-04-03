@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
+import { learningPathCertificateEmail } from '@/lib/email-templates';
 import { getRedis, leaderboardKey, studentNameKey } from '@/lib/redis';
 import { publishActivity } from '@/lib/activity';
 
@@ -263,6 +264,10 @@ export async function POST(req: NextRequest) {
         student_id:    sessionUser.id,
       }).select('id').single();
       if (error) { console.error('[course/issue-certificate]', error); return NextResponse.json({ error: 'Failed to issue certificate.' }, { status: 500 }); }
+
+      // Auto-trigger learning path progress + path cert if applicable
+      await updateLearningPathProgress(supabase, sessionUser.id, form_id);
+
       return NextResponse.json({ certId: cert.id });
     } catch (err: any) {
       console.error('[course/issue-certificate]', err);
@@ -270,5 +275,137 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // -- Mark VE complete (called from guided project completion) ---
+  if (action === 'mark-path-item-complete') {
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { form_id } = body;
+    if (!form_id) return NextResponse.json({ error: 'form_id required' }, { status: 400 });
+    try {
+      const supabase = adminClient();
+      await updateLearningPathProgress(supabase, sessionUser.id, form_id);
+      return NextResponse.json({ ok: true });
+    } catch (err: any) {
+      console.error('[course/mark-path-item-complete]', err);
+      return NextResponse.json({ error: 'Failed.' }, { status: 500 });
+    }
+  }
+
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+}
+
+// -- Shared helper: update learning_path_progress and auto-issue path cert ---
+async function updateLearningPathProgress(supabase: any, studentId: string, completedFormId: string) {
+  try {
+    // Get student's cohort
+    const { data: student } = await supabase.from('students').select('cohort_id').eq('id', studentId).single();
+    if (!student?.cohort_id) return;
+
+    // Find published paths that contain this form and include student's cohort
+    const { data: paths } = await supabase
+      .from('learning_paths')
+      .select('id, item_ids, title')
+      .eq('status', 'published')
+      .contains('item_ids', [completedFormId])
+      .contains('cohort_ids', [student.cohort_id]);
+
+    if (!paths?.length) return;
+
+    for (const path of paths) {
+      const { data: prog } = await supabase
+        .from('learning_path_progress')
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('learning_path_id', path.id)
+        .maybeSingle();
+
+      const existingCompleted: string[] = prog?.completed_item_ids ?? [];
+      if (existingCompleted.includes(completedFormId)) continue; // already counted
+
+      const updatedCompleted = [...existingCompleted, completedFormId];
+      const allDone = (path.item_ids ?? []).every((id: string) => updatedCompleted.includes(id));
+
+      const upsertData: any = {
+        student_id: studentId,
+        learning_path_id: path.id,
+        completed_item_ids: updatedCompleted,
+        updated_at: new Date().toISOString(),
+      };
+      if (allDone) upsertData.completed_at = new Date().toISOString();
+
+      const { data: upserted } = await supabase
+        .from('learning_path_progress')
+        .upsert(upsertData, { onConflict: 'student_id,learning_path_id' })
+        .select('id')
+        .single();
+
+      // Issue path certificate if all items done and no cert yet
+      if (allDone && !prog?.cert_id) {
+        // Get student info
+        const { data: studentRow } = await supabase.from('students').select('full_name, email').eq('id', studentId).single();
+        const studentName = studentRow?.full_name ?? 'Student';
+
+        const { data: pathCert } = await supabase.from('certificates').insert({
+          form_id: null,
+          learning_path_id: path.id,
+          student_name: studentName,
+          student_id: studentId,
+        }).select('id').single();
+
+        if (pathCert?.id && upserted?.id) {
+          await supabase.from('learning_path_progress')
+            .update({ cert_id: pathCert.id })
+            .eq('id', upserted.id);
+
+          // Send path certificate email
+          if (studentRow?.email) {
+            try {
+              // Fetch full path details + form metadata for email
+              const { data: fullPath } = await supabase
+                .from('learning_paths')
+                .select('title, description, item_ids')
+                .eq('id', path.id)
+                .single();
+
+              const itemIds: string[] = fullPath?.item_ids ?? [];
+              const { data: forms } = itemIds.length
+                ? await supabase.from('forms').select('id, title, config, content_type').in('id', itemIds)
+                : { data: [] };
+
+              const formMap: Record<string, any> = {};
+              for (const f of forms ?? []) formMap[f.id] = f;
+
+              const items = itemIds.map((id: string) => {
+                const f = formMap[id];
+                const isVE = f && (f.content_type === 'virtual_experience' || f.content_type === 'guided_project' || f.config?.isVirtualExperience || f.config?.isGuidedProject);
+                return {
+                  title: f?.title ?? 'Untitled',
+                  coverImage: f?.config?.coverImage ?? null,
+                  isVE,
+                  description: f?.config?.description ?? null,
+                };
+              });
+
+              const certUrl = `${APP_URL}/certificate/${pathCert.id}`;
+              await resend.emails.send({
+                from: FROM,
+                to: studentRow.email,
+                subject: `Your Learning Path Certificate is ready: ${fullPath?.title ?? path.title}`,
+                html: learningPathCertificateEmail({
+                  name: studentName,
+                  pathTitle: fullPath?.title ?? path.title,
+                  certUrl,
+                  items,
+                }),
+              });
+            } catch (emailErr) {
+              console.error('[updateLearningPathProgress] cert email failed', emailErr);
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[updateLearningPathProgress]', err);
+  }
 }

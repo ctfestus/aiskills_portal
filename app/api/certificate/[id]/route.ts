@@ -20,12 +20,55 @@ export async function GET(
 
   const { data: cert, error } = await anonSupabase
     .from('certificates')
-    .select('id, student_name, issued_at, revoked, form_id')
+    .select('id, student_name, issued_at, revoked, form_id, learning_path_id')
     .eq('id', id)
     .single();
 
   if (error || !cert) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   if (cert.revoked)   return NextResponse.json({ revoked: true }, { status: 200 });
+
+  // Path certificate -- no form_id, look up path title and instructor settings
+  if (!cert.form_id && cert.learning_path_id) {
+    const { data: path } = await anonSupabase
+      .from('learning_paths')
+      .select('title, instructor_id')
+      .eq('id', cert.learning_path_id)
+      .single();
+
+    const { data: rawSettings } = path?.instructor_id
+      ? await anonSupabase.from('certificate_defaults').select('*').eq('user_id', path.instructor_id).maybeSingle()
+      : { data: null };
+
+    const settings = rawSettings ? {
+      institutionName:    rawSettings.institution_name,
+      primaryColor:       rawSettings.primary_color,
+      accentColor:        rawSettings.accent_color,
+      backgroundImageUrl: rawSettings.background_image_url,
+      logoUrl:            rawSettings.logo_url,
+      signatureUrl:       rawSettings.signature_url,
+      signatoryName:      rawSettings.signatory_name,
+      signatoryTitle:     rawSettings.signatory_title,
+      certifyText:        rawSettings.certify_text,
+      completionText:     rawSettings.completion_text,
+      fontFamily:         rawSettings.font_family,
+      headingSize:        rawSettings.heading_size,
+      paddingTop:         rawSettings.padding_top,
+      paddingLeft:        rawSettings.padding_left,
+      lineSpacing:        rawSettings.line_spacing,
+      textPositions:      rawSettings.text_positions ?? undefined,
+    } : null;
+
+    return NextResponse.json({
+      certId:      cert.id,
+      studentName: cert.student_name,
+      courseName:  path?.title ?? 'Learning Path',
+      issueDate:   new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+      issuedAt:    cert.issued_at,
+      settings,
+      revoked:     false,
+      isPathCert:  true,
+    });
+  }
 
   // Use form_id only server-side for lookups -- never include it in the response.
   const formId = cert.form_id;

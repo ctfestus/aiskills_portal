@@ -501,6 +501,121 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
   );
 }
 
+// --- Learning Paths section (shown above courses) ---
+function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
+  const [paths, setPaths]         = useState<any[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [expanded, setExpanded]   = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { setLoading(false); return; }
+      const res = await fetch('/api/learning-paths', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'get-student-paths' }),
+      });
+      if (res.ok) { const { paths: p } = await res.json(); setPaths(p ?? []); }
+      setLoading(false);
+    })();
+  }, []);
+
+  if (loading) return (
+    <div className="space-y-3">
+      {[0,1].map(i => (
+        <div key={i} className="rounded-2xl h-24 animate-pulse" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}/>
+      ))}
+    </div>
+  );
+
+  if (!paths.length) return null;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Learning Paths</p>
+      {paths.map((path: any) => {
+        const totalItems     = (path.item_ids ?? []).length;
+        const completedIds: string[] = path.progress?.completed_item_ids ?? [];
+        const completedCount = completedIds.length;
+        const pct            = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
+        const allDone        = completedCount === totalItems && totalItems > 0;
+        const pathCertId     = path.progress?.cert_id ?? null;
+        const isExpanded     = expanded === path.id;
+
+        return (
+          <div key={path.id} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+            {/* Header row */}
+            <div className="flex items-center gap-4 p-4 cursor-pointer" onClick={() => setExpanded(isExpanded ? null : path.id)}>
+              {path.cover_image
+                ? <img src={path.cover_image} alt="" className="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
+                : <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${C.green}18` }}>
+                    <BookOpen className="w-6 h-6" style={{ color: C.green }}/>
+                  </div>}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="font-semibold text-sm truncate" style={{ color: C.text }}>{path.title}</p>
+                  {allDone && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#f0fdf4', color: '#16a34a' }}>Completed</span>}
+                </div>
+                <p className="text-xs mb-2" style={{ color: C.faint }}>{completedCount} of {totalItems} completed</p>
+                {/* Progress bar */}
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: C.cardBorder }}>
+                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: allDone ? '#16a34a' : C.green }}/>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {pathCertId && (
+                  <a href={`/certificate/${pathCertId}`} target="_blank" rel="noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-opacity hover:opacity-80"
+                    style={{ background: '#f0fdf4', color: '#16a34a' }}>
+                    <Award className="w-3 h-3"/> Certificate
+                  </a>
+                )}
+                {isExpanded ? <ChevronLeft className="w-4 h-4" style={{ color: C.faint }}/> : <ChevronRight className="w-4 h-4" style={{ color: C.faint }}/>}
+              </div>
+            </div>
+
+            {/* Expanded item list */}
+            {isExpanded && (
+              <div className="border-t" style={{ borderColor: C.cardBorder }}>
+                {path.description && (
+                  <p className="px-4 py-3 text-sm border-b" style={{ color: C.muted, borderColor: C.cardBorder }}>{path.description}</p>
+                )}
+                {(path.items ?? []).map((item: any, idx: number) => {
+                  const done = completedIds.includes(item.id);
+                  const isVE = item.content_type === 'virtual_experience' || item.content_type === 'guided_project' || item.config?.isVirtualExperience || item.config?.isGuidedProject;
+                  const href = isVE ? `/student?section=virtual_experiences` : `/${item.slug || item.id}?go=1`;
+                  return (
+                    <div key={item.id} className="flex items-center gap-3 px-4 py-3 border-t first:border-t-0" style={{ borderColor: C.cardBorder }}>
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{ background: done ? '#16a34a' : C.cardBorder }}>
+                        {done
+                          ? <CheckCircle className="w-3.5 h-3.5 text-white"/>
+                          : <span className="text-[10px] font-bold" style={{ color: C.faint }}>{idx + 1}</span>}
+                      </div>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                        style={{ background: isVE ? '#6366f120' : '#3b82f620', color: isVE ? '#6366f1' : '#3b82f6' }}>
+                        {isVE ? 'VE' : 'Course'}
+                      </span>
+                      <span className="text-sm flex-1 truncate" style={{ color: C.text }}>{item.title}</span>
+                      <a href={href} target="_blank" rel="noreferrer"
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80 flex-shrink-0"
+                        style={{ background: done ? C.pill : C.cta, color: done ? C.muted : C.ctaText }}>
+                        <Play className="w-3 h-3 inline mr-1"/>{done ? 'Review' : 'Start'}
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // --- Courses section ---
 function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
   const [courses,   setCourses]   = useState<any[]>([]);
@@ -3958,7 +4073,10 @@ export default function StudentDashboard() {
               <OverviewSection user={user} userEmail={user.email} username={profile?.username} C={C} onNavigate={goSection}/>
             )}
             {activeSection === 'courses' && user && (
-              <CoursesSection userEmail={user.email} C={C}/>
+              <div className="space-y-8">
+                <LearningPathsSection C={C}/>
+                <CoursesSection userEmail={user.email} C={C}/>
+              </div>
             )}
             {activeSection === 'events' && user && (
               <EventsSection userId={user.id} C={C}/>

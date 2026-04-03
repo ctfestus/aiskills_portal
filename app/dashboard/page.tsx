@@ -863,6 +863,7 @@ const NAV_ITEMS = [
   { id: 'virtual_experiences',  label: 'Virtual Experiences',  Icon: Briefcase,   adminOnly: false },
   { id: 'schedule',         label: 'Schedule',         Icon: CalendarDays, adminOnly: false },
   { id: 'reports',       label: 'Reports',        Icon: BarChart3,     adminOnly: false },
+  { id: 'learning_paths', label: 'Learning Paths',  Icon: BookOpen,      adminOnly: false },
   { id: 'certificates',  label: 'Certificates',   Icon: Award,         adminOnly: false },
   { id: 'integrations',  label: 'Integrations',   Icon: Zap,           adminOnly: false },
   { id: 'leaderboard',   label: 'Leaderboard',    Icon: Trophy,        adminOnly: false },
@@ -3830,6 +3831,373 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
+// --- Learning Paths Section ---
+function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] }) {
+  const [paths, setPaths]           = useState<any[]>([]);
+  const [cohorts, setCohorts]       = useState<any[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [editing, setEditing]       = useState<any | null>(null);
+  const [saving, setSaving]         = useState(false);
+  const [saveMsg, setSaveMsg]       = useState<{ ok: boolean; text: string } | null>(null);
+  const [deleting, setDeleting]     = useState<string | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [generatingDesc, setGeneratingDesc] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
+  const publishedForms = forms.filter(f => f.status === 'published');
+  const courseOptions  = publishedForms.filter(f => f.content_type === 'course' || f.config?.isCourse);
+  const veOptions      = publishedForms.filter(f => f.content_type === 'virtual_experience' || f.content_type === 'guided_project' || f.config?.isVirtualExperience || f.config?.isGuidedProject);
+  const allOptions     = [...courseOptions, ...veOptions];
+
+  const load = async () => {
+    setLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const [res, { data: coh }] = await Promise.all([
+      fetch('/api/learning-paths', { headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {} }),
+      supabase.from('cohorts').select('id, name').order('name'),
+    ]);
+    if (res.ok) { const { paths: p } = await res.json(); setPaths(p ?? []); }
+    setCohorts(coh ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const uploadCover = async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    setUploadingCover(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setUploadingCover(false); return; }
+    const ext  = file.name.split('.').pop() ?? 'png';
+    const path = `learning-paths/${user.id}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('cert-assets').upload(path, file, { upsert: true, contentType: file.type });
+    if (!error) {
+      const { data: { publicUrl } } = supabase.storage.from('cert-assets').getPublicUrl(path);
+      setEditing((p: any) => ({ ...p, cover_image: `${publicUrl}?v=${Date.now()}` }));
+    }
+    setUploadingCover(false);
+  };
+
+  const generateDescription = async () => {
+    if (!editing?.title?.trim()) { setSaveMsg({ ok: false, text: 'Add a title first so AI has context.' }); return; }
+    setGeneratingDesc(true);
+    setSaveMsg(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    const selectedTitles = (editing.item_ids ?? []).map((id: string) => allOptions.find((f: any) => f.id === id)?.title).filter(Boolean);
+    try {
+      const res = await fetch('/api/ai-course', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+        body: JSON.stringify({
+          action: 'generate_course_description',
+          title: editing.title,
+          description: editing.description ?? '',
+          style: 'professional',
+          length: 'medium',
+          prompt: selectedTitles.length ? `This learning path includes: ${selectedTitles.join(', ')}` : '',
+        }),
+      });
+      const json = await res.json();
+      if (json.description) setEditing((p: any) => ({ ...p, description: json.description }));
+      else setSaveMsg({ ok: false, text: 'AI could not generate a description. Try again.' });
+    } catch {
+      setSaveMsg({ ok: false, text: 'AI generation failed.' });
+    }
+    setGeneratingDesc(false);
+  };
+
+  const save = async () => {
+    if (!editing?.title?.trim()) { setSaveMsg({ ok: false, text: 'Title is required.' }); return; }
+    setSaving(true); setSaveMsg(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers = { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) };
+    const action = editing.id ? 'update' : 'create';
+    const res = await fetch('/api/learning-paths', { method: 'POST', headers, body: JSON.stringify({ action, ...editing }) });
+    const json = await res.json();
+    if (res.ok) {
+      setSaveMsg({ ok: true, text: 'Saved!' });
+      await load();
+      setTimeout(() => setEditing(null), 800);
+    } else {
+      setSaveMsg({ ok: false, text: json.error ?? 'Save failed.' });
+    }
+    setSaving(false);
+  };
+
+  const deletePath = async (id: string) => {
+    setDeleting(id);
+    const { data: { session } } = await supabase.auth.getSession();
+    await fetch('/api/learning-paths', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+      body: JSON.stringify({ action: 'delete', id }),
+    });
+    setDeleting(null);
+    await load();
+  };
+
+  const toggleItem = (id: string) => {
+    const current: string[] = editing?.item_ids ?? [];
+    setEditing((prev: any) => ({
+      ...prev,
+      item_ids: current.includes(id) ? current.filter((x: string) => x !== id) : [...current, id],
+    }));
+  };
+
+  const toggleCohort = (id: string) => {
+    const current: string[] = editing?.cohort_ids ?? [];
+    setEditing((prev: any) => ({
+      ...prev,
+      cohort_ids: current.includes(id) ? current.filter((x: string) => x !== id) : [...current, id],
+    }));
+  };
+
+  const moveItem = (idx: number, dir: -1 | 1) => {
+    const ids: string[] = [...(editing?.item_ids ?? [])];
+    const swap = idx + dir;
+    if (swap < 0 || swap >= ids.length) return;
+    [ids[idx], ids[swap]] = [ids[swap], ids[idx]];
+    setEditing((prev: any) => ({ ...prev, item_ids: ids }));
+  };
+
+  const inputCls = `w-full rounded-xl px-4 py-2.5 text-sm focus:outline-none transition-colors`;
+  const inputStyle = { background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text };
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.faint }}/></div>;
+
+  // -- Editor ---
+  if (editing !== null) {
+    const selectedIds: string[]    = editing.item_ids ?? [];
+    const selectedCohorts: string[] = editing.cohort_ids ?? [];
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center gap-3">
+          <button onClick={() => { setEditing(null); setSaveMsg(null); }} className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70" style={{ background: C.pill, color: C.muted }}>
+            <ArrowLeft className="w-4 h-4"/> Back
+          </button>
+          <h2 className="text-lg font-bold" style={{ color: C.text }}>{editing.id ? 'Edit Learning Path' : 'New Learning Path'}</h2>
+        </div>
+
+        {/* Basic info */}
+        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <div>
+            <label className="text-xs font-medium mb-1.5 block" style={{ color: C.muted }}>Title *</label>
+            <input value={editing.title ?? ''} onChange={e => setEditing((p: any) => ({ ...p, title: e.target.value }))} placeholder="e.g. AI Fundamentals Track" className={inputCls} style={inputStyle}/>
+          </div>
+
+          {/* Description + AI generate */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium" style={{ color: C.muted }}>Description</label>
+              <button onClick={generateDescription} disabled={generatingDesc}
+                className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-opacity hover:opacity-80 disabled:opacity-50"
+                style={{ background: '#6366f118', color: '#6366f1' }}>
+                {generatingDesc ? <Loader2 className="w-3 h-3 animate-spin"/> : <Zap className="w-3 h-3"/>}
+                {generatingDesc ? 'Generating…' : 'Generate with AI'}
+              </button>
+            </div>
+            <textarea value={editing.description ?? ''} onChange={e => setEditing((p: any) => ({ ...p, description: e.target.value }))} rows={4} placeholder="What will students achieve by completing this path?" className={inputCls} style={inputStyle}/>
+          </div>
+
+          {/* Cover image upload */}
+          <div>
+            <label className="text-xs font-medium mb-1.5 block" style={{ color: C.muted }}>Cover Image</label>
+            <input ref={coverInputRef} type="file" accept="image/*" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) uploadCover(f); e.target.value = ''; }}/>
+            <div className="flex items-center gap-3">
+              {editing.cover_image && (
+                <img src={editing.cover_image} alt="" className="w-20 h-14 rounded-lg object-cover flex-shrink-0" style={{ border: `1px solid ${C.cardBorder}` }}/>
+              )}
+              <button onClick={() => coverInputRef.current?.click()} disabled={uploadingCover}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.pill }}>
+                {uploadingCover ? <Loader2 className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4"/>}
+                {uploadingCover ? 'Uploading…' : editing.cover_image ? 'Change image' : 'Upload image'}
+              </button>
+              {editing.cover_image && (
+                <button onClick={() => setEditing((p: any) => ({ ...p, cover_image: '' }))}
+                  className="text-xs px-3 py-2 rounded-xl transition-opacity hover:opacity-70"
+                  style={{ color: '#ef4444', background: '#ef444412' }}>Remove</button>
+              )}
+            </div>
+          </div>
+
+          {/* Status */}
+          <div className="flex items-center gap-3">
+            <label className="text-xs font-medium" style={{ color: C.muted }}>Status</label>
+            <select value={editing.status ?? 'draft'} onChange={e => setEditing((p: any) => ({ ...p, status: e.target.value }))}
+              className="rounded-xl px-3 py-2 text-sm focus:outline-none" style={inputStyle}>
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Cohort assignment */}
+        <div className="rounded-2xl p-5 space-y-3" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Assign to Cohorts</h3>
+          {cohorts.length === 0
+            ? <p className="text-sm" style={{ color: C.muted }}>No cohorts found. Create a cohort first.</p>
+            : <div className="space-y-1.5">
+                {cohorts.map((c: any) => {
+                  const selected = selectedCohorts.includes(c.id);
+                  return (
+                    <div key={c.id} onClick={() => toggleCohort(c.id)}
+                      className="flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer transition-colors"
+                      style={{ background: selected ? `${C.green}12` : C.input, border: `1px solid ${selected ? C.green : C.cardBorder}` }}>
+                      <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center" style={{ background: selected ? C.green : C.cardBorder }}>
+                        {selected && <Check className="w-2.5 h-2.5 text-white"/>}
+                      </div>
+                      <span className="text-sm" style={{ color: C.text }}>{c.name}</span>
+                    </div>
+                  );
+                })}
+              </div>
+          }
+          {selectedCohorts.length > 0 && (
+            <p className="text-xs" style={{ color: C.faint }}>{selectedCohorts.length} cohort{selectedCohorts.length !== 1 ? 's' : ''} assigned</p>
+          )}
+        </div>
+
+        {/* Item selection */}
+        <div className="rounded-2xl p-5 space-y-3" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Add Courses & Virtual Experiences</h3>
+          {allOptions.length === 0
+            ? <p className="text-sm" style={{ color: C.muted }}>No published courses or virtual experiences found.</p>
+            : <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                {allOptions.map((f: any) => {
+                  const isVE = f.content_type === 'virtual_experience' || f.content_type === 'guided_project' || f.config?.isVirtualExperience || f.config?.isGuidedProject;
+                  const selected = selectedIds.includes(f.id);
+                  return (
+                    <div key={f.id} onClick={() => toggleItem(f.id)}
+                      className="flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer transition-colors"
+                      style={{ background: selected ? `${C.green}12` : C.input, border: `1px solid ${selected ? C.green : C.cardBorder}` }}>
+                      <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center" style={{ background: selected ? C.green : C.cardBorder }}>
+                        {selected && <Check className="w-2.5 h-2.5 text-white"/>}
+                      </div>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: isVE ? '#6366f120' : '#3b82f620', color: isVE ? '#6366f1' : '#3b82f6' }}>
+                        {isVE ? 'VE' : 'Course'}
+                      </span>
+                      <span className="text-sm flex-1 truncate" style={{ color: C.text }}>{f.title}</span>
+                    </div>
+                  );
+                })}
+              </div>
+          }
+        </div>
+
+        {/* Order selected items */}
+        {selectedIds.length > 0 && (
+          <div className="rounded-2xl p-5 space-y-3" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+            <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Order ({selectedIds.length} items)</h3>
+            <div className="space-y-1.5">
+              {selectedIds.map((id, idx) => {
+                const f = allOptions.find((x: any) => x.id === id);
+                const isVE = f && (f.content_type === 'virtual_experience' || f.content_type === 'guided_project' || f.config?.isVirtualExperience || f.config?.isGuidedProject);
+                return (
+                  <div key={id} className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: C.input, border: `1px solid ${C.cardBorder}` }}>
+                    <span className="text-xs font-bold w-5 text-center flex-shrink-0" style={{ color: C.faint }}>{idx + 1}</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: isVE ? '#6366f120' : '#3b82f620', color: isVE ? '#6366f1' : '#3b82f6' }}>
+                      {isVE ? 'VE' : 'Course'}
+                    </span>
+                    <span className="text-sm flex-1 truncate" style={{ color: C.text }}>{f?.title ?? id}</span>
+                    <button onClick={() => moveItem(idx, -1)} disabled={idx === 0} className="p-1 rounded opacity-50 hover:opacity-100 disabled:opacity-20"><ArrowLeft className="w-3 h-3 rotate-90" style={{ color: C.muted }}/></button>
+                    <button onClick={() => moveItem(idx, 1)} disabled={idx === selectedIds.length - 1} className="p-1 rounded opacity-50 hover:opacity-100 disabled:opacity-20"><ArrowRight className="w-3 h-3 rotate-90" style={{ color: C.muted }}/></button>
+                    <button onClick={() => toggleItem(id)} className="p-1 rounded opacity-50 hover:opacity-100"><X className="w-3 h-3" style={{ color: C.muted }}/></button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {saveMsg && (
+          <p className={`text-sm ${saveMsg.ok ? 'text-emerald-500' : 'text-red-500'}`}>{saveMsg.text}</p>
+        )}
+        <button onClick={save} disabled={saving} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-60" style={{ background: C.cta, color: C.ctaText }}>
+          {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4"/>}
+          {saving ? 'Saving…' : 'Save Learning Path'}
+        </button>
+      </div>
+    );
+  }
+
+  // -- List ---
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight" style={{ color: C.text }}>Learning Paths</h2>
+          <p className="text-xs mt-1" style={{ color: C.faint }}>Group courses and virtual experiences into structured learning journeys.</p>
+        </div>
+        <button onClick={() => setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft' })}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity"
+          style={{ background: C.cta, color: C.ctaText }}>
+          <Plus className="w-4 h-4"/> New Path
+        </button>
+      </div>
+
+      {paths.length === 0 ? (
+        <div className="text-center py-24 rounded-3xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: `${C.green}18` }}>
+            <BookOpen className="w-6 h-6" style={{ color: C.green }}/>
+          </div>
+          <p className="font-semibold text-base mb-1" style={{ color: C.text }}>No learning paths yet</p>
+          <p className="text-sm mb-6" style={{ color: C.faint }}>Create your first learning path to group courses into a structured journey.</p>
+          <button onClick={() => setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft' })}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold"
+            style={{ background: C.cta, color: C.ctaText }}>
+            <Plus className="w-4 h-4"/> New Learning Path
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {paths.map((path: any) => {
+            const assignedCohortNames = (path.cohort_ids ?? []).map((id: string) => cohorts.find((c: any) => c.id === id)?.name).filter(Boolean);
+            return (
+              <div key={path.id} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                {path.cover_image
+                  ? <img src={path.cover_image} alt="" className="w-full h-28 object-cover"/>
+                  : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${C.green}12` }}>
+                      <BookOpen className="w-8 h-8 opacity-30" style={{ color: C.green }}/>
+                    </div>}
+                <div className="p-4 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
+                      style={{ background: path.status === 'published' ? `${C.green}18` : `${C.faint}18`, color: path.status === 'published' ? C.green : C.faint }}>
+                      {path.status}
+                    </span>
+                    <span className="text-[10px]" style={{ color: C.faint }}>{(path.item_ids ?? []).length} items</span>
+                  </div>
+                  <p className="font-semibold text-sm" style={{ color: C.text }}>{path.title}</p>
+                  {path.description && <p className="text-xs line-clamp-2" style={{ color: C.muted }}>{path.description}</p>}
+                  {assignedCohortNames.length > 0 && (
+                    <p className="text-[10px]" style={{ color: C.faint }}>
+                      {assignedCohortNames.join(', ')}
+                    </p>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => setEditing(path)}
+                      className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl transition-all hover:opacity-80"
+                      style={{ background: `${C.green}18`, color: C.green }}>
+                      Edit
+                    </button>
+                    <button onClick={() => deletePath(path.id)} disabled={deleting === path.id}
+                      className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl transition-all hover:opacity-80 disabled:opacity-50"
+                      style={{ background: '#ef444418', color: '#ef4444' }}>
+                      {deleting === path.id ? 'Deleting…' : 'Delete'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // --- Section content router ---
 function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFormToDelete, C }: {
   section: SectionId; forms: any[]; shareMenuOpen: string | null;
@@ -3837,6 +4205,7 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
 }) {
   if (COMING_SOON.includes(section)) return <ComingSoon id={section} C={C} />;
   if (section === 'reports')      return <ReportsSection forms={forms} C={C} />;
+  if (section === 'learning_paths') return <LearningPathsSection C={C} forms={forms} />;
   if (section === 'certificates') return <CertificatesSection C={C} />;
   if (section === 'integrations') return <IntegrationsSection C={C} />;
   if (section === 'cohorts')      return <CohortsSection C={C} />;

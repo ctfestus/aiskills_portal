@@ -596,3 +596,158 @@ export function blastEmail(data: {
 
   return shell(content, bannerUrl);
 }
+
+// -- 12. Learning Path Assignment ---
+export function learningPathAssignedEmail(data: {
+  name: string;
+  pathTitle: string;
+  pathDescription?: string;
+  dashboardUrl: string;
+  items: Array<{ title: string; coverImage?: string | null; isVE?: boolean; description?: string }>;
+}) {
+  const { name, pathTitle, pathDescription, dashboardUrl, items } = data;
+
+  const visibleItems = items.slice(0, 6);
+
+  const itemsHtml = visibleItems.map((item, idx) => {
+    const isLast = idx === visibleItems.length - 1;
+    const circleColor = item.isVE ? '#6366f1' : '#22c55e';
+    const badgeColor  = item.isVE ? '#6366f1' : '#3b82f6';
+    const badgeLabel  = item.isVE ? 'Virtual Experience' : 'Course';
+    const emoji       = item.isVE ? '💼' : '📘';
+
+    const circle = `
+      <table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
+        <tr>
+          <td width="28" height="28" bgcolor="${circleColor}" style="border-radius:14px;color:#ffffff;font-size:12px;font-weight:800;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;line-height:28px;">${idx + 1}</td>
+        </tr>
+      </table>`;
+
+    const connector = isLast ? '' : `
+      <table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
+        <tr>
+          <td width="2" height="16" style="border-left:2px dashed #d1d5db;font-size:0;line-height:0;">&nbsp;</td>
+        </tr>
+      </table>`;
+
+    const imageCell = item.coverImage
+      ? `<td width="80" style="padding:0;vertical-align:top;"><img src="${item.coverImage}" width="80" height="64" style="display:block;width:80px;height:64px;object-fit:cover;" /></td>`
+      : `<td width="80" bgcolor="#1e3a5f" style="padding:0;vertical-align:middle;text-align:center;height:64px;"><span style="font-size:22px;">${emoji}</span></td>`;
+
+    return `
+    <tr>
+      <td width="40" style="vertical-align:top;text-align:center;padding:0 0 0 0;">
+        ${circle}${connector}
+      </td>
+      <td style="padding:0 0 12px 12px;vertical-align:top;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;background:#ffffff;">
+          <tr>
+            ${imageCell}
+            <td style="padding:10px 14px;vertical-align:middle;">
+              <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:${badgeColor};text-transform:uppercase;letter-spacing:0.06em;font-family:Arial,sans-serif;">${badgeLabel}</p>
+              <p style="margin:0;font-size:14px;font-weight:700;color:#111827;line-height:1.35;font-family:Arial,sans-serif;">${item.title}</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const content = `
+    <p><b>Hi ${name},</b></p>
+    <p>You have been enrolled in a new learning path. This is a structured programme designed to build your skills step by step, and you will earn a certificate when you complete every item.</p>
+
+    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;">
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:0.05em;">Your Learning Path</p>
+      <p style="margin:0 0 8px;font-size:20px;font-weight:800;color:#111827;">${pathTitle}</p>
+      ${pathDescription ? `<p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">${pathDescription}</p>` : ''}
+    </div>
+
+    ${items.length > 0 ? `
+    <p style="font-size:15px;font-weight:700;color:#111;margin-top:24px;margin-bottom:16px;">What's included (${items.length} item${items.length !== 1 ? 's' : ''})</p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${itemsHtml}
+    </table>` : ''}
+
+    <div style="margin:20px 0;padding:16px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;">
+      <p style="margin:0;font-size:14px;color:#92400e;line-height:1.6;">
+        <b>Complete each item in order</b> to earn your individual course certificates along the way.
+        Once you finish the entire path, you will receive a <b>Learning Path Certificate</b> to add to your profile.
+      </p>
+    </div>
+
+    ${cta('Start Learning Now', dashboardUrl)}
+
+    <br>
+    <p><b>Best regards,</b></p>
+    <p>AI Skills Africa Team</p>
+  `;
+
+  return shell(content);
+}
+
+// -- 13. Learning Path Certificate ---
+export function learningPathCertificateEmail(data: {
+  name: string;
+  pathTitle: string;
+  pathDescription?: string;
+  certUrl: string;
+  items: Array<{ title: string; coverImage?: string | null; isVE?: boolean }>;
+}) {
+  const { name, pathTitle, pathDescription, certUrl, items } = data;
+
+  const itemsHtml = items.slice(0, 6).map((item) => `
+    <tr>
+      <td style="padding:0 0 8px 0;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:10px;overflow:hidden;border:1px solid #d1fae5;background:#f0fdf4;">
+          <tr>
+            ${item.coverImage ? `
+            <td width="64" style="padding:0;vertical-align:middle;">
+              <img src="${item.coverImage}" width="64" height="52" style="display:block;width:64px;height:52px;object-fit:cover;" />
+            </td>` : `
+            <td width="64" style="padding:0;vertical-align:middle;background:linear-gradient(135deg,#064e3b,#065f46);text-align:center;height:52px;">
+              <span style="font-size:20px;line-height:52px;">${item.isVE ? '💼' : '📘'}</span>
+            </td>`}
+            <td style="padding:10px 14px;vertical-align:middle;">
+              <p style="margin:0 0 2px;font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:0.05em;">${item.isVE ? 'Virtual Experience' : 'Course'} · Completed ✓</p>
+              <p style="margin:0;font-size:13px;font-weight:700;color:#111827;">${item.title}</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  `).join('');
+
+  const content = `
+    <p><b>Hi ${name},</b></p>
+    <p style="color:#374151;">This is a major achievement. You have completed every item in your learning path and your certificate is ready.</p>
+
+    <div style="margin:20px 0;padding:24px;background:linear-gradient(135deg,#064e3b,#0f766e);border-radius:12px;text-align:center;">
+      <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6ee7b7;text-transform:uppercase;letter-spacing:0.1em;">Learning Path Completed</p>
+      <p style="margin:0 0 8px;font-size:22px;font-weight:900;color:#ffffff;line-height:1.2;">${pathTitle}</p>
+      ${pathDescription ? `<p style="margin:0 0 16px;font-size:13px;color:#a7f3d0;line-height:1.5;">${pathDescription}</p>` : '<div style="margin-bottom:16px;"></div>'}
+      <a href="${certUrl}" style="display:inline-block;background:#ffffff;color:#064e3b;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:800;font-size:14px;">🎓 View Your Certificate</a>
+    </div>
+
+    ${items.length > 0 ? `
+    <p style="font-size:15px;font-weight:700;color:#111;margin-top:24px;margin-bottom:12px;">Everything you completed</p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${itemsHtml}
+    </table>` : ''}
+
+    <div style="margin:20px 0;padding:16px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;">
+      <p style="margin:0;font-size:14px;color:#15803d;line-height:1.6;">
+        Add this certificate to your LinkedIn profile and CV to showcase the skills you have built.
+        Every credential you earn makes your profile stronger.
+      </p>
+    </div>
+
+    ${cta('View & Download Certificate', certUrl)}
+
+    <br>
+    <p><b>Congratulations,</b></p>
+    <p>AI Skills Africa Team</p>
+  `;
+
+  return shell(content);
+}

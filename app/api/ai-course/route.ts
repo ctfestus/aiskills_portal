@@ -481,16 +481,14 @@ Creator instructions:
 ${prompt || 'None provided'}
 
 Requirements:
-- Return HTML only.
-- Match this tone/style: ${style}.
-- Match this length preference: ${length === 'short' ? 'about 60-90 words' : length === 'long' ? 'about 140-220 words' : 'about 90-140 words'}.
-- Make it feel like a mini interactive course, not a bulky academic program.
-- Use only these tags when helpful: <p>, <strong>, <ul>, <li>.
-- Start with a strong opening sentence.
-- Clearly communicate what learners will gain.
-- Keep paragraphs short and easy to scan.
-- Do not use headings, dividers, or markdown.
-- End with a short motivating close.`,
+- Return plain text only. No HTML tags, no markdown, no bullet points, no special characters.
+- Length: ${length === 'short' ? '2-3 sentences' : length === 'long' ? '4-5 sentences' : '3-4 sentences'}.
+- Tone: professional, concise, benefit-driven.
+- Lead with the single most compelling outcome the learner will gain.
+- Focus on what the learner walks away with, not what the course covers.
+- Use clear, direct language. No jargon, no filler phrases like "In this course you will...".
+- Do not use lists or line breaks -- write it as flowing prose.
+- End with a forward-looking motivating sentence.`,
         config: {
           responseMimeType: 'application/json',
           responseSchema: {
