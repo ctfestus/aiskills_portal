@@ -623,12 +623,7 @@ export function learningPathAssignedEmail(data: {
         </tr>
       </table>`;
 
-    const connector = isLast ? '' : `
-      <table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
-        <tr>
-          <td width="2" height="16" style="border-left:2px dashed #d1d5db;font-size:0;line-height:0;">&nbsp;</td>
-        </tr>
-      </table>`;
+    const connector = '';
 
     const imageCell = item.coverImage
       ? `<td width="80" style="padding:0;vertical-align:top;"><img src="${item.coverImage}" width="80" height="64" style="display:block;width:80px;height:64px;object-fit:cover;" /></td>`
