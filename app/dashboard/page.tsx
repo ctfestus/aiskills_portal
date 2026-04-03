@@ -1119,7 +1119,7 @@ function CourseProgressTab({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
     const form     = forms.find(f => f.id === r.form_id);
     const cohortId = stu?.cohort_id ?? null;
     const totalQ   = form?.config?.questions?.length ?? 0;
-    const pct      = r.completed ? (r.score ?? 0) : totalQ > 0 ? Math.round((r.current_question_index / totalQ) * 100) : 0;
+    const pct      = r.completed ? 100 : totalQ > 0 ? Math.round((r.current_question_index / totalQ) * 100) : 0;
     return { ...r, studentName: (r.student_name?.trim() || stu?.full_name || r.student_email || '').trim(),
       courseTitle: form?.title ?? '--', cohortName: cohortId ? (cohortMap[cohortId] ?? '--') : '--', cohortId, pct };
   });

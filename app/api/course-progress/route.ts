@@ -51,8 +51,8 @@ export async function GET(req: NextRequest) {
   const ownedIds = (ownedForms ?? []).map((f: any) => f.id);
   if (!ownedIds.length) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  // Join students table to get up-to-date email and name
-  const { data: attempts } = await supabase
+  // Use admin client for cross-student data -- ownership already verified above via user-scoped RLS on forms.
+  const { data: attempts } = await adminClient()
     .from('course_attempts')
     .select('form_id, student_id, current_question_index, score, points, passed, completed_at, attempt_number, updated_at, students!inner(email, full_name)')
     .in('form_id', ownedIds)
@@ -64,8 +64,12 @@ export async function GET(req: NextRequest) {
     const key = `${a.student_id}::${a.form_id}`;
     const existing = map[key];
     if (!existing) { map[key] = a; continue; }
-    if (!a.completed_at && existing.completed_at) { map[key] = a; continue; }
-    if (a.completed_at && existing.completed_at && (a.score ?? 0) > (existing.score ?? 0)) map[key] = a;
+    // Prefer completed over incomplete
+    if (a.completed_at && !existing.completed_at) { map[key] = a; continue; }
+    // Among completed, prefer higher score
+    if (a.completed_at && existing.completed_at && (a.score ?? 0) > (existing.score ?? 0)) { map[key] = a; continue; }
+    // Among incomplete, prefer furthest progress
+    if (!a.completed_at && !existing.completed_at && (a.current_question_index ?? 0) > (existing.current_question_index ?? 0)) map[key] = a;
   }
 
   const progress = Object.values(map).map(a => ({
