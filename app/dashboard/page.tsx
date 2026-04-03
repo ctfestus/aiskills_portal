@@ -13,7 +13,7 @@ import {
   UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
   Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send,
 } from 'lucide-react';
-import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS } from '@/components/CertificateTemplate';
+import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS, TextPositions, defaultTextPositions } from '@/components/CertificateTemplate';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import NotificationBell from '@/components/NotificationBell';
@@ -2356,24 +2356,41 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
   const [saveMsg, setSaveMsg]     = useState<{ ok: boolean; msg: string } | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const [settings, setSettings]   = useState<CertificateSettings>(DEFAULT_CERT_SETTINGS);
-  const [previewScale, setPreviewScale] = useState(0.4);
+  const [selectedElement, setSelectedElement] = useState<keyof TextPositions | null>(null);
+  const [previewScale, setPreviewScale] = useState(1);
   const previewWrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = previewWrapRef.current;
+    if (!el) return;
+    const update = () => setPreviewScale(el.getBoundingClientRect().width / CERT_W);
+    update();
+    const obs = new ResizeObserver(update);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [loading]);
   const bgRef  = useRef<HTMLInputElement>(null);
   const logoRef = useRef<HTMLInputElement>(null);
   const sigRef  = useRef<HTMLInputElement>(null);
   const set = <K extends keyof CertificateSettings>(k: K, v: CertificateSettings[K]) =>
     setSettings(prev => ({ ...prev, [k]: v }));
 
-  useEffect(() => {
-    const el = previewWrapRef.current;
-    if (!el) return;
-    const update = (w: number) => { if (w > 0) setPreviewScale(w / CERT_W); };
-    // Measure immediately so the preview renders correctly on first paint
-    update(el.getBoundingClientRect().width);
-    const obs = new ResizeObserver(entries => update(entries[0].contentRect.width));
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
+  const setPos = (key: keyof TextPositions, axis: 'x' | 'y', val: number) =>
+    setSettings(prev => {
+      const base = {
+        ...defaultTextPositions(prev.paddingTop, prev.paddingLeft, prev.headingSize),
+        ...(prev.textPositions ?? {}),
+      };
+      const current = base[key] ?? { x: 0, y: 0 };
+      return {
+        ...prev,
+        textPositions: {
+          ...prev.textPositions,
+          [key]: { ...current, [axis]: val },
+        },
+      };
+    });
+
 
   useEffect(() => {
     (async () => {
@@ -2402,6 +2419,7 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
           paddingTop:         data.padding_top         ?? DEFAULT_CERT_SETTINGS.paddingTop,
           paddingLeft:        data.padding_left        ?? DEFAULT_CERT_SETTINGS.paddingLeft,
           lineSpacing:        (data.line_spacing       ?? DEFAULT_CERT_SETTINGS.lineSpacing) as CertificateSettings['lineSpacing'],
+          textPositions:      data.text_positions      ?? undefined,
         });
       }
       setLoading(false);
@@ -2455,7 +2473,7 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.faint }}/></div>;
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="space-y-5">
       <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
         <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Certificate Default Design</h2>
         <p className="text-xs" style={{ color: C.muted }}>Set once. All your courses inherit this design automatically.</p>
@@ -2553,6 +2571,74 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
             );
           })}
         </div>
+        {/* Text Layout */}
+        {(() => {
+          const resolved = {
+            ...defaultTextPositions(settings.paddingTop, settings.paddingLeft, settings.headingSize),
+            ...(settings.textPositions ?? {}),
+          } as Required<TextPositions>;
+
+          const ELEMENTS: { key: keyof TextPositions; label: string; color: string }[] = [
+            { key: 'institutionName', label: 'Institution Name',            color: '#f59e0b' },
+            { key: 'header',         label: 'Certificate of Completion',    color: '#10b981' },
+            { key: 'certifyText',    label: 'Certify Text',                 color: '#6366f1' },
+            { key: 'studentName',    label: 'Student Name',                 color: '#ef4444' },
+            { key: 'completionText', label: 'Completion Text',              color: '#ec4899' },
+            { key: 'courseName',     label: 'Course Title',                 color: '#3b82f6' },
+            { key: 'issueDate',      label: 'Issue Date',                   color: '#14b8a6' },
+            { key: 'certificateId',  label: 'Certificate ID',               color: '#a855f7' },
+            { key: 'signatory',      label: 'Signatory',                    color: '#f97316' },
+          ];
+
+          return (
+            <div className="border-t pt-4 space-y-3" style={{ borderColor: C.divider }}>
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Text Layout</h3>
+                <p className="text-xs mt-1" style={{ color: C.muted }}>Select an element, then click on the preview to place it. Or type exact pixel values.</p>
+              </div>
+              <div className="space-y-1.5">
+                {ELEMENTS.map(({ key, label, color }) => (
+                  <div key={key}
+                    onClick={() => setSelectedElement(selectedElement === key ? null : key)}
+                    className="grid grid-cols-[12px_1fr_88px_88px] items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors"
+                    style={{ background: selectedElement === key ? `${color}18` : 'transparent', border: `1px solid ${selectedElement === key ? color : 'transparent'}` }}>
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: color }}/>
+                    <span className="text-xs font-medium truncate" style={{ color: selectedElement === key ? color : C.muted }}>{label}</span>
+                    <input
+                      type="number" min={0} max={1860}
+                      value={resolved[key].x}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => setPos(key, 'x', Number(e.target.value))}
+                      className="w-full rounded-lg px-2 py-1 text-xs font-mono focus:outline-none"
+                      style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}
+                    />
+                    <input
+                      type="number" min={0} max={1200}
+                      value={resolved[key].y}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => setPos(key, 'y', Number(e.target.value))}
+                      className="w-full rounded-lg px-2 py-1 text-xs font-mono focus:outline-none"
+                      style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <div className="flex gap-1.5 text-[10px]" style={{ color: C.faint }}>
+                  <span className="font-mono px-1.5 py-0.5 rounded" style={{ background: C.pill }}>X</span> left 
+                  <span className="font-mono px-1.5 py-0.5 rounded ml-2" style={{ background: C.pill }}>Y</span> top 
+                </div>
+                <button
+                  onClick={() => { setSettings(prev => ({ ...prev, textPositions: undefined })); setSelectedElement(null); }}
+                  className="ml-auto text-xs px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
+                  style={{ color: C.faint, border: `1px solid ${C.cardBorder}` }}>
+                  Reset to defaults
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
         {saveMsg && (
           <div className={`flex items-center gap-2 text-sm ${saveMsg.ok ? 'text-emerald-500' : 'text-red-500'}`}>
             {saveMsg.ok ? <CheckCircle2 className="w-4 h-4"/> : <XCircle className="w-4 h-4"/>} {saveMsg.msg}
@@ -2566,21 +2652,102 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
         </button>
       </div>
 
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-        <div className="px-5 py-3 border-b" style={{ borderColor: C.divider }}>
-          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Preview</p>
-        </div>
-        <div ref={previewWrapRef} style={{ width: '100%', overflow: 'hidden', height: previewScale > 0 ? Math.round(CERT_H * previewScale) : 'auto' }}>
-          <div style={{ width: CERT_W, height: CERT_H, transform: `scale(${previewScale})`, transformOrigin: 'top left' }}>
-            <CertificateTemplate
-              settings={settings}
-              studentName="Sample Student"
-              courseName="Sample Course"
-              issueDate={new Date().toLocaleDateString()}
-            />
+      {/* Interactive Preview */}
+      {(() => {
+        const resolved = {
+          ...defaultTextPositions(settings.paddingTop, settings.paddingLeft, settings.headingSize),
+          ...(settings.textPositions ?? {}),
+        } as Required<TextPositions>;
+
+        const ELEMENT_COLORS: Partial<Record<keyof TextPositions, string>> = {
+          institutionName: '#f59e0b', header: '#10b981', certifyText: '#6366f1',
+          studentName: '#ef4444', completionText: '#ec4899', courseName: '#3b82f6',
+          issueDate: '#14b8a6', certificateId: '#a855f7', signatory: '#f97316',
+        };
+
+        const handlePreviewClick = (e: React.MouseEvent<HTMLDivElement>) => {
+          if (!selectedElement || !previewWrapRef.current) return;
+          const rect = previewWrapRef.current.getBoundingClientRect();
+          const certX = Math.round((e.clientX - rect.left) / previewScale);
+          const certY = Math.round((e.clientY - rect.top)  / previewScale);
+          setSettings(prev => {
+            const base = {
+              ...defaultTextPositions(prev.paddingTop, prev.paddingLeft, prev.headingSize),
+              ...(prev.textPositions ?? {}),
+            };
+            const current = base[selectedElement] ?? { x: 0, y: 0 };
+            return {
+              ...prev,
+              textPositions: {
+                ...prev.textPositions,
+                [selectedElement]: { ...current, x: certX, y: certY },
+              },
+            };
+          });
+        };
+
+        return (
+          <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+            <div className="px-5 py-3 border-b flex items-center justify-between" style={{ borderColor: C.divider }}>
+              <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Preview</p>
+              {selectedElement && (
+                <p className="text-xs font-medium" style={{ color: ELEMENT_COLORS[selectedElement] }}>
+                  Click to place <span className="font-semibold">{selectedElement}</span>
+                </p>
+              )}
+            </div>
+            {/* Same presentation as student certificate page */}
+            <div style={{ background: '#F9FAFB', padding: '32px', display: 'flex', justifyContent: 'center' }}>
+              <div
+                ref={previewWrapRef}
+                onClick={handlePreviewClick}
+                style={{
+                  width: '100%',
+                  height: previewScale > 0 ? Math.round(CERT_H * previewScale) : 'auto',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderRadius: '10px',
+                  boxShadow: '0 8px 40px rgba(0,0,0,0.16)',
+                  cursor: selectedElement ? 'crosshair' : 'default',
+                  flexShrink: 0,
+                }}>
+                {/* Certificate scaled to fit */}
+                <div style={{ width: CERT_W, height: CERT_H, transform: `scale(${previewScale})`, transformOrigin: 'top left', pointerEvents: 'none' }}>
+                  <CertificateTemplate
+                    settings={settings}
+                    studentName="Sample Student"
+                    courseName="Sample Course"
+                    issueDate={new Date().toLocaleDateString()}
+                  />
+                </div>
+                {/* Dots overlaid at scaled coordinates */}
+                {Object.entries(ELEMENT_COLORS).map(([key, color]) => {
+                  const p = resolved[key as keyof TextPositions];
+                  if (!p) return null;
+                  const isSelected = selectedElement === key;
+                  return (
+                    <div key={key} style={{
+                      position: 'absolute',
+                      left: p.x * previewScale,
+                      top:  p.y * previewScale,
+                      width: isSelected ? 14 : 10,
+                      height: isSelected ? 14 : 10,
+                      borderRadius: '50%',
+                      background: color,
+                      border: '2px solid white',
+                      transform: 'translate(-50%, -50%)',
+                      boxShadow: isSelected ? `0 0 0 3px ${color}55` : '0 1px 4px rgba(0,0,0,0.5)',
+                      zIndex: 50,
+                      pointerEvents: 'none',
+                      transition: 'all 0.15s',
+                    }}/>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        );
+      })()}
     </div>
   );
 }

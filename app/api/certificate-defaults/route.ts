@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
     padding_top:          body.paddingTop          ?? 280,
     padding_left:         body.paddingLeft         ?? 182,
     line_spacing:         body.lineSpacing         ?? 'normal',
+    text_positions:       body.textPositions       ?? null,
     updated_at:           new Date().toISOString(),
   }, { onConflict: 'user_id' });
 

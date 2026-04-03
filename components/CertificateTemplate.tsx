@@ -13,6 +13,20 @@ const C = {
   w45:        "rgba(255,255,255,0.45)",
 };
 
+export type TextPosition = { x: number; y: number };
+
+export interface TextPositions {
+  institutionName?: TextPosition;
+  header?:         TextPosition;
+  certifyText?:    TextPosition;
+  studentName?:    TextPosition;
+  completionText?: TextPosition;
+  courseName?:     TextPosition;
+  issueDate?:      TextPosition;
+  signatory?:      TextPosition;
+  certificateId?:  TextPosition;
+}
+
 export interface CertificateSettings {
   institutionName:    string;
   primaryColor:       string;
@@ -29,6 +43,7 @@ export interface CertificateSettings {
   paddingTop?:        number;
   paddingLeft?:       number;
   lineSpacing?:       "tight" | "normal" | "relaxed";
+  textPositions?:     TextPositions;
 }
 
 export const DEFAULT_CERT_SETTINGS: CertificateSettings = {
@@ -47,7 +62,24 @@ export const DEFAULT_CERT_SETTINGS: CertificateSettings = {
   paddingTop:       280,
   paddingLeft:      182,
   lineSpacing:      "normal",
+  textPositions:    undefined,
 };
+
+/** Compute default per-element positions from the legacy padding values. */
+export function defaultTextPositions(paddingTop = 280, paddingLeft = 182, headingSize: CertificateSettings["headingSize"] = "md"): Required<TextPositions> {
+  const headingPx = headingSize === "sm" ? 52 : headingSize === "lg" ? 78 : 65;
+  return {
+    institutionName: { x: paddingLeft, y: paddingTop },
+    header:          { x: paddingLeft, y: paddingTop + 34  },   // +28px text +6px mb
+    certifyText:     { x: paddingLeft, y: paddingTop + 79  },   // +35px text +10px mb
+    studentName:     { x: paddingLeft, y: paddingTop + 162 },   // +28px text +55px mb
+    completionText:  { x: paddingLeft, y: paddingTop + 162 + headingPx + 25 },
+    courseName:      { x: paddingLeft, y: paddingTop + 162 + headingPx + 25 + 55 },
+    issueDate:       { x: paddingLeft, y: paddingTop + 162 + headingPx + 25 + 55 + 95 },
+    signatory:       { x: paddingLeft, y: 980 },
+    certificateId:   { x: 1580, y: 120 },
+  };
+}
 
 const FONT_MAP: Record<CertificateSettings["fontFamily"], string> = {
   "serif":           "'Georgia', 'Times New Roman', serif",
@@ -116,13 +148,14 @@ const CertificateTemplate = React.forwardRef<HTMLDivElement, CertificateTemplate
     const hasCustomBg     = Boolean(s.backgroundImageUrl);
     const fontFamily      = FONT_MAP[s.fontFamily];
     const headingSize     = HEADING_PX[s.headingSize];
-    const spacingMul      = SPACING_MUL[s.lineSpacing ?? "normal"];
-    const paddingTop      = s.paddingTop  ?? 280;
-    const paddingLeft     = s.paddingLeft ?? 182;
-    const sp = (base: number) => `${Math.round(base * spacingMul)}px`;
     const primaryColor    = s.primaryColor  || C.bg;
     const accentColor     = s.accentColor   || C.orange;
     const accentDeep      = s.accentColor   || C.orangeDeep;
+
+    // Resolve positions: saved overrides take priority, then defaults derived from paddingTop/paddingLeft
+    const defaults = defaultTextPositions(s.paddingTop, s.paddingLeft, s.headingSize);
+    const tp = { ...defaults, ...(s.textPositions ?? {}) } as Required<TextPositions>;
+    const pos = (key: keyof TextPositions) => ({ position: "absolute" as const, left: `${tp[key].x}px`, top: `${tp[key].y}px` });
 
     return (
       <div
@@ -170,63 +203,55 @@ const CertificateTemplate = React.forwardRef<HTMLDivElement, CertificateTemplate
 
         {/* Certificate ID */}
         <div style={{
-          position: "absolute", top: "120px", right: "160px", zIndex: 20,
-          textAlign: "right", fontFamily, fontSize: "25px", fontWeight: "400", color: C.white,
+          ...pos("certificateId"), zIndex: 20,
+          fontFamily, fontSize: "25px", fontWeight: "400", color: C.white,
         }}>
           Certificate ID: {certId ? certId.slice(0, 8).toUpperCase() : 'PREVIEW'}
         </div>
 
-        {/* Main text block */}
-        <div style={{
-          position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-          paddingTop: `${paddingTop}px`, paddingLeft: `${paddingLeft}px`, paddingRight: "120px",
-          zIndex: 20, boxSizing: "border-box",
-        }}>
-          {/* Institution name */}
-          <p style={{ fontFamily, fontSize: "28px", fontWeight: "600", color: C.white,
-            textTransform: "uppercase", letterSpacing: "6px", margin: `0 0 ${sp(6)} 0`, opacity: 0.75 }}>
-            {s.institutionName}
-          </p>
+        {/* Certificate header */}
+        <p style={{ ...pos("header"), zIndex: 20, fontFamily, fontSize: "35px", fontWeight: "400",
+          color: C.white, textTransform: "uppercase", letterSpacing: "4px", margin: 0, opacity: 0.9 }}>
+          Certificate of Completion
+        </p>
 
-          {/* Certificate header */}
-          <p style={{ fontFamily, fontSize: "35px", fontWeight: "400", color: C.white,
-            textTransform: "uppercase", letterSpacing: "4px", margin: `0 0 ${sp(10)} 0`, opacity: 0.9 }}>
-            Certificate of Completion
-          </p>
+        {/* Certify text */}
+        <p style={{ ...pos("certifyText"), zIndex: 20, fontFamily, fontSize: "28px", fontWeight: "300",
+          color: C.white, margin: 0 }}>
+          {s.certifyText}
+        </p>
 
-          {/* Certify text */}
-          <p style={{ fontFamily, fontSize: "28px", fontWeight: "300", color: C.white, margin: `0 0 ${sp(55)} 0` }}>
-            {s.certifyText}
-          </p>
+        {/* Student Name */}
+        <p style={{ ...pos("studentName"), zIndex: 20, fontFamily, fontSize: headingSize, fontWeight: "700",
+          color: C.white, letterSpacing: "1px", lineHeight: "1.1", textTransform: "capitalize", margin: 0 }}>
+          {studentName}
+        </p>
 
-          {/* Student Name */}
-          <p style={{ fontFamily, fontSize: headingSize, fontWeight: "700", color: C.white,
-            letterSpacing: "1px", lineHeight: "1.1", textTransform: "capitalize", margin: `0 0 ${sp(25)} 0` }}>
-            {studentName}
-          </p>
+        {/* Completion text */}
+        <p style={{ ...pos("completionText"), zIndex: 20, fontFamily, fontSize: "30px", fontWeight: "300",
+          color: C.white, margin: 0 }}>
+          {s.completionText}
+        </p>
 
-          {/* Completion text */}
-          <p style={{ fontFamily, fontSize: "30px", fontWeight: "300", color: C.white, margin: `0 0 ${sp(25)} 0` }}>
-            {s.completionText}
-          </p>
+        {/* Course Title */}
+        <p style={{ ...pos("courseName"), zIndex: 20, fontFamily, fontSize: "50px", fontWeight: "700",
+          lineHeight: "1.2", maxWidth: "1400px", margin: 0,
+          background: "linear-gradient(90deg, #0cc0df, #ffde59)",
+          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          backgroundClip: "text", color: "transparent" }}>
+          {courseName}
+        </p>
 
-          {/* Course Title */}
-          <p style={{ fontFamily, fontSize: "50px", fontWeight: "700", color: C.white,
-            lineHeight: "1.2", maxWidth: "90%", margin: `0 0 ${sp(35)} 0` }}>
-            {courseName}
-          </p>
-
-          {/* Issue date */}
-          <p style={{ fontFamily, fontSize: "24px", fontWeight: "500", color: C.white, marginTop: "10px", opacity: 0.80 }}>
-            Verified and issued on {issueDate}.
-          </p>
-        </div>
+        {/* Issue date */}
+        <p style={{ ...pos("issueDate"), zIndex: 20, fontFamily, fontSize: "24px", fontWeight: "500",
+          color: C.white, margin: 0, opacity: 0.80 }}>
+          Verified and issued on {issueDate}.
+        </p>
 
         {/* Signatory */}
         {(s.signatoryName || s.signatureUrl) && (
           <div style={{
-            position: "absolute", bottom: hasCustomBg ? "60px" : "220px", left: "182px",
-            zIndex: 30, textAlign: "left",
+            ...pos("signatory"), zIndex: 30, textAlign: "left",
           }}>
             {s.signatureUrl && (
               // eslint-disable-next-line @next/next/no-img-element

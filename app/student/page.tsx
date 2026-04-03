@@ -540,7 +540,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
       // so that legacy rows with content_type='form' are still caught by config flags
       const [{ data: cohortForms }, { data: attempts }, certsRes] = await Promise.all([
         student?.cohort_id
-          ? supabase.from('forms').select('id, title, slug, config, content_type').contains('cohort_ids', [student.cohort_id])
+          ? supabase.from('forms').select('id, title, slug, config, content_type, status').contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
           : Promise.resolve({ data: [] }),
         supabase.from('course_attempts')
           .select('form_id, score, points, current_question_index, completed_at, passed, updated_at')
@@ -581,7 +581,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
 
       let extraForms: any[] = [];
       if (extraIds.length) {
-        const { data } = await supabase.from('forms').select('id, title, slug, config, content_type').in('id', extraIds);
+        const { data } = await supabase.from('forms').select('id, title, slug, config, content_type, status').in('id', extraIds).eq('status', 'published');
         extraForms = (data ?? []).filter(isCourseRow);
       }
 
@@ -787,8 +787,8 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
             .eq('student_id', userId)
             .order('registered_at', { ascending: false }),
           student?.cohort_id
-            ? supabase.from('forms').select('id, title, slug, config, content_type')
-                .contains('cohort_ids', [student.cohort_id])
+            ? supabase.from('forms').select('id, title, slug, config, content_type, status')
+                .contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
             : Promise.resolve({ data: [] }),
         ]);
 
@@ -3258,7 +3258,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
       const [formsRes, attemptsRes, gpAttRes, cohortAssignRes, certsData, lbData, actData, gapsData, asmRes] =
         await Promise.all([
           cohort
-            ? supabase.from('forms').select('id, title, slug, config, content_type').contains('cohort_ids', [cohort])
+            ? supabase.from('forms').select('id, title, slug, config, content_type, status').contains('cohort_ids', [cohort]).eq('status', 'published')
             : Promise.resolve({ data: [] as any[] }),
           supabase.from('course_attempts')
             .select('form_id, score, current_question_index, completed_at, passed, updated_at')

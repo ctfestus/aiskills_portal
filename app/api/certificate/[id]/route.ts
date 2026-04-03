@@ -52,6 +52,7 @@ export async function GET(
         paddingTop:         rawSettings.padding_top,
         paddingLeft:        rawSettings.padding_left,
         lineSpacing:        rawSettings.line_spacing,
+        textPositions:      rawSettings.text_positions ?? undefined,
       }
     : null;
 
