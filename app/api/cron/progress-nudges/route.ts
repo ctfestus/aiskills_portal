@@ -8,15 +8,21 @@ import { Resend } from 'resend';
 import { adminClient } from '@/lib/subscription';
 import { verifyQStashRequest } from '@/lib/qstash';
 import { nudgeEmail } from '@/lib/email-templates';
-import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
 
 export const dynamic = 'force-dynamic';
 
-const resend  = new Resend(process.env.RESEND_API_KEY);
-const FROM    = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
-const APP_URL = process.env.APP_URL || 'https://festforms.com';
+const resend            = new Resend(process.env.RESEND_API_KEY);
+const FROM              = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
+const APP_URL           = process.env.APP_URL || 'https://festforms.com';
 const INACTIVITY_DAYS   = Number(process.env.NUDGE_INACTIVITY_DAYS ?? 7);
 const RESEND_AFTER_DAYS = Number(process.env.NUDGE_RESEND_AFTER_DAYS ?? 14);
+const BATCH_SIZE        = 100; // Resend batch limit
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
 
 export async function POST(req: NextRequest) {
   const { valid } = await verifyQStashRequest(req);
@@ -119,12 +125,30 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  let sent = 0;
+  // Pre-fetch all recent inactivity nudges in bulk -- avoids one DB call per candidate
+  const nudgeCutoff = new Date(Date.now() - RESEND_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const candidateStudentIds = [...new Set(candidates.map(c => c.studentId))];
+  const { data: recentNudges } = candidateStudentIds.length
+    ? await supabase
+        .from('sent_nudges')
+        .select('student_id, form_id')
+        .eq('nudge_type', 'inactivity')
+        .in('student_id', candidateStudentIds)
+        .gte('sent_at', nudgeCutoff)
+    : { data: [] as any[] };
+
+  const nudgedSet = new Set(
+    (recentNudges ?? []).map((n: any) => `${n.student_id}|${n.form_id}`),
+  );
+
+  // Build email batch for all eligible candidates
+  type EmailPayload = Parameters<typeof resend.batch.send>[0][number];
+  const emailBatch: EmailPayload[] = [];
+  const nudgeRecords: { student_id: string; form_id: string }[] = [];
   let skipped = 0;
 
   for (const c of candidates) {
-    const alreadySent = await hasNudgeBeenSent(supabase, c.studentId, c.formId, 'inactivity', RESEND_AFTER_DAYS);
-    if (alreadySent) { skipped++; continue; }
+    if (nudgedSet.has(`${c.studentId}|${c.formId}`)) { skipped++; continue; }
 
     const relatedAssignmentTitle = assignmentMap.get(c.formId);
     const subject = `We miss you, ${c.name}! Come back and keep learning 👋`;
@@ -138,12 +162,39 @@ export async function POST(req: NextRequest) {
       relatedAssignmentTitle,
     });
 
+    emailBatch.push({ from: FROM, to: c.email, subject, html });
+    nudgeRecords.push({ student_id: c.studentId, form_id: c.formId });
+  }
+
+  if (!emailBatch.length) {
+    console.log(`[cron/progress-nudges] sent=0 skipped=${skipped}`);
+    return NextResponse.json({ ok: true, sent: 0, skipped });
+  }
+
+  // Send in batches of 100 (Resend limit)
+  const sentKeys = new Set<string>();
+  const batches = chunk(emailBatch, BATCH_SIZE);
+  let sent = 0;
+
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i];
+    const batchNudges = nudgeRecords.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
     try {
-      await resend.emails.send({ from: FROM, to: c.email, subject, html });
-      await recordNudge(supabase, c.studentId, c.formId, 'inactivity');
-      sent++;
+      await resend.batch.send(batch);
+      sent += batch.length;
+      for (const n of batchNudges) sentKeys.add(`${n.student_id}|${n.form_id}`);
     } catch (err) {
-      console.error('[cron/progress-nudges] send failed for', c.email, err);
+      console.error('[cron/progress-nudges] batch send failed:', err);
+    }
+  }
+
+  // Bulk insert nudge records for successfully sent emails
+  if (sentKeys.size) {
+    const toInsert = nudgeRecords
+      .filter(n => sentKeys.has(`${n.student_id}|${n.form_id}`))
+      .map(n => ({ student_id: n.student_id, form_id: n.form_id, nudge_type: 'inactivity' }));
+    if (toInsert.length) {
+      await supabase.from('sent_nudges').insert(toInsert);
     }
   }
 

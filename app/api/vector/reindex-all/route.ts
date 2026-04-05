@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     .select('id, title, config, cohort_ids, status, content_type, slug')
     .eq('status', 'published');
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) { console.error('[vector/reindex-all] fetch error:', error); return NextResponse.json({ error: 'Failed to fetch forms.' }, { status: 500 }); }
 
   const toIndex = (forms ?? []).filter((f: any) =>
     f.content_type === 'course' ||

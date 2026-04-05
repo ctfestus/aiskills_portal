@@ -120,12 +120,22 @@ export async function GET(req: NextRequest) {
     gpAttemptMap.set(`${a.student_id}|${a.form_id}`, a);
   }
 
+  // Pre-group students by cohort_id for O(1) lookup -- avoids O(forms × students) filter
+  const studentsByCohort = new Map<string, typeof students>();
+  for (const student of students ?? []) {
+    if (!studentsByCohort.has(student.cohort_id)) studentsByCohort.set(student.cohort_id, []);
+    studentsByCohort.get(student.cohort_id)!.push(student);
+  }
+
+  // Pre-build set of active cohort IDs for O(1) membership check
+  const activeCohortSet = new Set(activeCohortIds);
+
   // 5. Build unified rows
   const rows: any[] = [];
 
   for (const form of filteredForms) {
     const formCohortIds = (Array.isArray(form.cohort_ids) ? form.cohort_ids : [])
-      .filter((id: string) => activeCohortIds.includes(id));
+      .filter((id: string) => activeCohortSet.has(id));
     if (!formCohortIds.length) continue;
 
     const isVE = form.content_type === 'virtual_experience' || form.content_type === 'guided_project';
@@ -135,7 +145,8 @@ export async function GET(req: NextRequest) {
       ? totalRequirements(form.config)
       : (form.config?.questions?.length ?? 0);
 
-    const formStudents = students.filter(s => formCohortIds.includes(s.cohort_id));
+    // O(1) per cohort lookup instead of O(students) filter per form
+    const formStudents = formCohortIds.flatMap(cid => studentsByCohort.get(cid) ?? []);
 
     for (const student of formStudents) {
       const key = `${student.id}|${form.id}`;

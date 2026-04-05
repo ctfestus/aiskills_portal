@@ -4182,7 +4182,7 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
                       style={{ background: `${C.green}18`, color: C.green }}>
                       Edit
                     </button>
-                    <button onClick={() => deletePath(path.id)} disabled={deleting === path.id}
+                    <button onClick={() => { if (window.confirm(`Delete "${path.title}"? This cannot be undone.`)) deletePath(path.id); }} disabled={deleting === path.id}
                       className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl transition-all hover:opacity-80 disabled:opacity-50"
                       style={{ background: '#ef444418', color: '#ef4444' }}>
                       {deleting === path.id ? 'Deleting…' : 'Delete'}

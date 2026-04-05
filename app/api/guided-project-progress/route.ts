@@ -50,9 +50,10 @@ export async function GET(req: NextRequest) {
 
     const { data: attempts } = await supabase
       .from('guided_project_attempts')
-      .select('*')
+      .select('id, form_id, student_id, progress, completed_at, started_at, updated_at, review')
       .eq('form_id', formId)
-      .order('started_at', { ascending: false });
+      .order('started_at', { ascending: false })
+      .limit(200);
 
     return NextResponse.json({ attempts: attempts ?? [] });
   }
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
       .select('id')
       .single();
 
-    if (certErr) return NextResponse.json({ error: certErr.message }, { status: 500 });
+    if (certErr) { console.error('[guided-project-progress] certificate error:', certErr); return NextResponse.json({ error: 'Failed to issue certificate.' }, { status: 500 }); }
     return NextResponse.json({ certId: cert.id });
   }
 
@@ -189,7 +190,7 @@ export async function POST(req: NextRequest) {
       { onConflict: 'student_id,form_id' },
     );
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) { console.error('[guided-project-progress] upsert error:', error); return NextResponse.json({ error: 'Failed to save progress.' }, { status: 500 }); }
 
   // -- 80% milestone check (fire-and-forget) --
   if (progress && !completedAt && process.env.RESEND_API_KEY) {

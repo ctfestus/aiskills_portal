@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -7,8 +7,10 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 // when the module is evaluated more than once (e.g. hot reload, multiple tabs).
 // `auth.lock` is set to a no-op so the Web Locks API is never used,
 // which eliminates the "Lock broken by another request with the 'steal' option" AbortError.
+// createBrowserClient stores sessions in cookies instead of localStorage,
+// preventing session theft via XSS.
 const createSingletonClient = () =>
-  createClient(supabaseUrl, supabaseKey, {
+  createBrowserClient(supabaseUrl, supabaseKey, {
     auth: {
       lock: <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> => fn(),
     },

@@ -137,7 +137,7 @@ export async function GET(req: NextRequest) {
       .sort((a: any, b: any) => b.xp - a.xp || b.completions - a.completions)
       .map((s: any, i: number) => ({ ...s, rank: i + 1 }));
 
-    // Seed Redis if available (fire-and-forget)
+    // Seed Redis before responding so the next request hits the cache
     if (redis && ranked.length) {
       try {
         const pipeline = redis.pipeline();
@@ -149,7 +149,7 @@ export async function GET(req: NextRequest) {
         pipeline.hset(nameKey, nameEntries);
         pipeline.expire(lbKey,   600);
         pipeline.expire(nameKey, 600);
-        pipeline.exec().catch((err: any) => console.error('[leaderboard] redis seed failed', err));
+        await pipeline.exec();
       } catch (redisErr) {
         console.error('[leaderboard] redis seed error', redisErr);
       }

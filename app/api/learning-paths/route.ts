@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     .eq('instructor_id', user.id)
     .order('created_at', { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) { console.error('[learning-paths] GET error:', error); return NextResponse.json({ error: 'Failed to fetch learning paths.' }, { status: 500 }); }
   return NextResponse.json({ paths: paths ?? [] });
 }
 
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
       status: status ?? 'draft',
     }).select('id').single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) { console.error('[learning-paths] create error:', error); return NextResponse.json({ error: 'Failed to create learning path.' }, { status: 500 }); }
 
     // Send assignment emails if published with cohorts
     if ((status ?? 'draft') === 'published' && (cohort_ids ?? []).length > 0) {
@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
       .eq('id', id)
       .eq('instructor_id', user.id);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) { console.error('[learning-paths] update error:', error); return NextResponse.json({ error: 'Failed to update learning path.' }, { status: 500 }); }
 
     // Send assignment emails to cohorts that are newly added (or path just published)
     if ((status ?? 'draft') === 'published' && (cohort_ids ?? []).length > 0) {
@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
       .eq('id', id)
       .eq('instructor_id', user.id);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) { console.error('[learning-paths] delete error:', error); return NextResponse.json({ error: 'Failed to delete learning path.' }, { status: 500 }); }
     return NextResponse.json({ ok: true });
   }
 

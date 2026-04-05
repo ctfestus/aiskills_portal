@@ -5,8 +5,15 @@ import { confirmationEmail, reminderEmail, courseResultEmail, blastEmail } from 
 import { getVectorIndex, buildCourseEmbedText } from '@/lib/vector';
 
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
+const resend     = new Resend(process.env.RESEND_API_KEY);
+const FROM       = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
+const BATCH_SIZE = 100; // Resend batch limit
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
 
 const getAdminSupabase = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -393,6 +400,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'No valid recipients found for this form' }, { status: 400 });
       }
 
+      // Build all personalized email payloads first, then batch send
+      type EmailPayload = Parameters<typeof resend.batch.send>[0][number];
+      const emailBatch: EmailPayload[] = [];
+
       for (const [recipient, rowData] of responseByEmail) {
         const mergeValues: Record<string, string> = {
           name: resolveName(rowData) || 'there',
@@ -415,12 +426,11 @@ export async function POST(req: NextRequest) {
           body: personalizedBody,
         });
 
-        await resend.emails.send({
-          from: FROM,
-          to: recipient,
-          subject: personalizedSubject,
-          html: personalizedHtml,
-        });
+        emailBatch.push({ from: FROM, to: recipient, subject: personalizedSubject, html: personalizedHtml });
+      }
+
+      for (const batch of chunk(emailBatch, BATCH_SIZE)) {
+        await resend.batch.send(batch);
       }
 
       // Increment daily blast quota

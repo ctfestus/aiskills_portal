@@ -113,7 +113,8 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     console.error('[guided-project-save] insert error:', error);
-    return NextResponse.json({ error: `${error.message} (code: ${error.code})` }, { status: 500 });
+    console.error('[guided-project-save] insert error:', error);
+    return NextResponse.json({ error: 'Failed to save project.' }, { status: 500 });
   }
 
   // Upsert cohort_assignments for all assigned cohorts

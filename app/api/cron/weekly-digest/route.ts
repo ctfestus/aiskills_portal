@@ -13,13 +13,19 @@ import { Resend } from 'resend';
 import { adminClient } from '@/lib/subscription';
 import { verifyQStashRequest } from '@/lib/qstash';
 import { weeklyDigestEmail } from '@/lib/email-templates';
-import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
 
 export const dynamic = 'force-dynamic';
 
-const resend  = new Resend(process.env.RESEND_API_KEY);
-const FROM    = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
-const APP_URL = process.env.APP_URL || 'https://app.aiskillsafrica.com';
+const resend     = new Resend(process.env.RESEND_API_KEY);
+const FROM       = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
+const APP_URL    = process.env.APP_URL || 'https://app.aiskillsafrica.com';
+const BATCH_SIZE = 100; // Resend batch limit
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
 
 export async function POST(req: NextRequest) {
   const { valid } = await verifyQStashRequest(req);
@@ -98,16 +104,29 @@ export async function POST(req: NextRequest) {
     assignmentsByCohort.get(a.cohort_id)!.push(a);
   }
 
-  // -- 6. Build and send one digest per student --
-  let sent = 0;
+  // -- 6. Pre-fetch recent weekly digest nudges (bulk) to avoid per-student DB calls --
+  const sixDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
+  const studentIds = students.map((s: any) => s.id);
+  const { data: recentNudges } = await supabase
+    .from('sent_nudges')
+    .select('student_id')
+    .eq('nudge_type', 'weekly_digest')
+    .in('student_id', studentIds)
+    .gte('sent_at', sixDaysAgo);
+
+  const nudgedStudentIds = new Set((recentNudges ?? []).map((n: any) => n.student_id));
+
+  // -- 7. Build email batch for all eligible students --
+  type EmailPayload = Parameters<typeof resend.batch.send>[0][number];
+  const emailBatch: EmailPayload[] = [];
+  const nudgeRecords: { student_id: string }[] = [];
   let skipped = 0;
 
   for (const student of students) {
     const email = ((student.email as string) ?? '').trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
 
-    const alreadySent = await hasNudgeBeenSent(supabase, student.id, null, 'weekly_digest', 6);
-    if (alreadySent) { skipped++; continue; }
+    if (nudgedStudentIds.has(student.id)) { skipped++; continue; }
 
     const assignments = assignmentsByCohort.get(student.cohort_id) ?? [];
 
@@ -136,19 +155,16 @@ export async function POST(req: NextRequest) {
       }
 
       if (!attempt) {
-        // Never opened
         if (isOverdue) {
           missedDeadlines.push({ title: form.title, contentType, daysOverdue });
         } else {
           notStarted.push({ title: form.title, contentType });
         }
       } else if (attempt.completedAt) {
-        // Completed -- only highlight if finished this week
         if (attempt.completedAt >= sevenDaysAgo) {
           completed.push({ title: form.title, contentType, score: attempt.score });
         }
       } else {
-        // Started but not finished
         if (isOverdue) {
           missedDeadlines.push({ title: form.title, contentType, daysOverdue });
         } else {
@@ -178,12 +194,39 @@ export async function POST(req: NextRequest) {
       dashboardUrl: `${APP_URL}/student`,
     });
 
+    emailBatch.push({ from: FROM, to: email, subject, html });
+    nudgeRecords.push({ student_id: student.id });
+  }
+
+  if (!emailBatch.length) {
+    console.log(`[cron/weekly-digest] sent=0 skipped=${skipped}`);
+    return NextResponse.json({ ok: true, sent: 0, skipped });
+  }
+
+  // -- 8. Send in batches of 100 (Resend limit) --
+  const sentStudentIds = new Set<string>();
+  const batches = chunk(emailBatch, BATCH_SIZE);
+  let sent = 0;
+
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i];
+    const batchNudges = nudgeRecords.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
     try {
-      await resend.emails.send({ from: FROM, to: email, subject, html });
-      await recordNudge(supabase, student.id, null, 'weekly_digest');
-      sent++;
+      await resend.batch.send(batch);
+      sent += batch.length;
+      for (const n of batchNudges) sentStudentIds.add(n.student_id);
     } catch (err) {
-      console.error('[cron/weekly-digest] send failed for', email, err);
+      console.error('[cron/weekly-digest] batch send failed:', err);
+    }
+  }
+
+  // -- 9. Bulk insert nudge records for successfully sent emails --
+  if (sentStudentIds.size) {
+    const toInsert = nudgeRecords
+      .filter(n => sentStudentIds.has(n.student_id))
+      .map(n => ({ student_id: n.student_id, form_id: null, nudge_type: 'weekly_digest' }));
+    if (toInsert.length) {
+      await supabase.from('sent_nudges').insert(toInsert);
     }
   }
 

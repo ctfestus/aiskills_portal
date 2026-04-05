@@ -1,3 +1,4 @@
+import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 
 // App routes that must never be iframed
@@ -12,7 +13,7 @@ function generateNonce(): string {
   return btoa(String.fromCharCode(...bytes));
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://*.supabase.co';
   const isAppRoute  = APP_ROUTE.test(req.nextUrl.pathname);
 
@@ -41,15 +42,31 @@ export function middleware(req: NextRequest) {
     ...(isAppRoute ? ["frame-ancestors 'none'"] : []),
   ].join('; ');
 
-  const res = NextResponse.next({
-    request: {
-      headers: new Headers({
-        ...Object.fromEntries(req.headers),
-        // Pass nonce to Next.js so it stamps inline scripts automatically
-        'x-nonce': nonce,
-      }),
+  // Build request headers with nonce so Next.js stamps it onto inline scripts
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-nonce', nonce);
+
+  let res = NextResponse.next({ request: { headers: requestHeaders } });
+
+  // Refresh Supabase auth session cookies on every request so they don't expire mid-visit
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => req.cookies.getAll(),
+        setAll(cookiesToSet) {
+          // Recreate the response so updated session cookies are sent to the browser
+          res = NextResponse.next({ request: { headers: requestHeaders } });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            res.cookies.set(name, value, options),
+          );
+        },
+      },
     },
-  });
+  );
+
+  await supabase.auth.getUser();
 
   res.headers.set('Content-Security-Policy', nonce ? csp : '');
   return res;
