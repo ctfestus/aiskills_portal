@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight,
@@ -386,11 +387,7 @@ function VirtualExperienceCreatePageInner() {
     if (!file) return;
     setUploadingCover(true);
     try {
-      const ext = file.name.split('.').pop();
-      const path = `covers/${Date.now()}-${uid()}.${ext}`;
-      const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
-      if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
+      const publicUrl = await uploadToCloudinary(file, 'covers');
       setCoverImage(publicUrl);
       setConfig(c => c ? { ...c, coverImage: publicUrl } : c);
     } catch (e: any) {

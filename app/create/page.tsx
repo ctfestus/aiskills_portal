@@ -21,6 +21,7 @@ import { RichTextEditor } from '@/components/RichTextEditor';
 import { getFontById, loadGoogleFont } from '@/lib/fonts';
 import { FontPickerModal } from '@/components/FontPickerModal';
 import { supabase } from '@/lib/supabase';
+import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -1496,17 +1497,14 @@ const [isSaving, setIsSaving] = useState(false);
       handleUpdateQuestion(qId, { optionImages: newImages });
     };
 
-    const ext = file.name.split('.').pop() ?? 'jpg';
-    const path = `course-options/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
-    if (error) {
+    try {
+      const publicUrl = await uploadToCloudinary(file, 'course-options');
+      applyUrl(publicUrl);
+    } catch {
       const reader = new FileReader();
       reader.onload = ev => applyUrl(ev.target?.result as string);
       reader.readAsDataURL(file);
-      return;
     }
-    const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
-    applyUrl(publicUrl);
   };
 
   const handleRemoveQuestion = (id: string) => {
@@ -1566,20 +1564,14 @@ const [isSaving, setIsSaving] = useState(false);
     if (file.size > 20 * 1024 * 1024) { alert('File size exceeds 20MB limit.'); return; }
     e.target.value = '';
 
-    // Upload to Supabase Storage instead of storing as base64 in config.
-    // Base64 can be 100-500 KB per image and bloats every DB row that includes config.
-    const ext = file.name.split('.').pop() ?? 'jpg';
-    const path = `covers/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
-    if (error) {
-      // Fallback to base64 if storage bucket isn't set up yet
+    try {
+      const publicUrl = await uploadToCloudinary(file, 'covers');
+      updateConfig({ coverImage: publicUrl });
+    } catch {
       const reader = new FileReader();
       reader.onload = (ev) => updateConfig({ coverImage: ev.target?.result as string });
       reader.readAsDataURL(file);
-      return;
     }
-    const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
-    updateConfig({ coverImage: publicUrl });
   };
 
   // -- Shared view --
@@ -2810,13 +2802,13 @@ const [isSaving, setIsSaving] = useState(false);
                                       const file = e.target.files?.[0];
                                       if (!file) return;
                                       e.target.value = '';
-                                      const ext = file.name.split('.').pop() ?? 'jpg';
-                                      const path = `lesson-images/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-                                      const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
-                                      const url = error
-                                        ? await new Promise<string>(res => { const r = new FileReader(); r.onload = ev => res(ev.target?.result as string); r.readAsDataURL(file); })
-                                        : supabase.storage.from('form-assets').getPublicUrl(path).data.publicUrl;
-                                      handleUpdateQuestion(q.id, { lesson: { ...q.lesson, imageUrl: url as string } });
+                                      let url: string;
+                                      try {
+                                        url = await uploadToCloudinary(file, 'lesson-images');
+                                      } catch {
+                                        url = await new Promise<string>(res => { const r = new FileReader(); r.onload = ev => res(ev.target?.result as string); r.readAsDataURL(file); });
+                                      }
+                                      handleUpdateQuestion(q.id, { lesson: { ...q.lesson, imageUrl: url } });
                                     }}
                                   />
                                   <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-60" style={{ border: `1.5px dashed ${C.inputBorder}`, color: C.faint }}>

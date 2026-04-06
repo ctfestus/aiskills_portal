@@ -21,6 +21,7 @@ import { Star } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { sanitizeRichText } from '@/lib/sanitize';
+import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/uploadToCloudinary';
 
 // --- Design tokens ---
 const LIGHT_C = {
@@ -2431,16 +2432,12 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
     if (!user || !file.type.startsWith('image/')) return;
     setUploading(slot);
     setSaveMsg(null);
-    const ext  = file.name.split('.').pop() ?? 'png';
-    const path = `defaults/${user.id}/${slot}.${ext}`;
-    const { error } = await supabase.storage.from('cert-assets').upload(path, file, { upsert: true, contentType: file.type });
-    if (error) {
-      setSaveMsg({ ok: false, msg: `Image upload failed: ${error.message}` });
-    } else {
-      const { data: { publicUrl } } = supabase.storage.from('cert-assets').getPublicUrl(path);
+    try {
+      const url = await uploadToCloudinary(file, 'cert-assets');
       const key = slot === 'background' ? 'backgroundImageUrl' : slot === 'logo' ? 'logoUrl' : 'signatureUrl';
-      // eslint-disable-next-line react-hooks/purity
-      set(key, `${publicUrl}?v=${Date.now()}`);
+      set(key, url);
+    } catch (err: any) {
+      setSaveMsg({ ok: false, msg: `Image upload failed: ${err.message}` });
     }
     setUploading(null);
   };
@@ -3866,15 +3863,10 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
   const uploadCover = async (file: File) => {
     if (!file.type.startsWith('image/')) return;
     setUploadingCover(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setUploadingCover(false); return; }
-    const ext  = file.name.split('.').pop() ?? 'png';
-    const path = `learning-paths/${user.id}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('cert-assets').upload(path, file, { upsert: true, contentType: file.type });
-    if (!error) {
-      const { data: { publicUrl } } = supabase.storage.from('cert-assets').getPublicUrl(path);
-      setEditing((p: any) => ({ ...p, cover_image: `${publicUrl}?v=${Date.now()}` }));
-    }
+    try {
+      const url = await uploadToCloudinary(file, 'learning-paths');
+      setEditing((p: any) => ({ ...p, cover_image: url }));
+    } catch { /* ignore */ }
     setUploadingCover(false);
   };
 
@@ -4292,6 +4284,8 @@ export default function DashboardPage() {
   const [profile, setProfile]       = useState<any>(_cache.profile ?? null);
   const [formToDelete, setFormToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const deletingForm = forms.find(f => f.id === formToDelete);
+  const deletingName = deletingForm?.config?.title || deletingForm?.title || 'this item';
   const [shareMenuOpen, setShareMenuOpen] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<SectionId>('courses');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -4362,23 +4356,20 @@ export default function DashboardPage() {
       // Delete storage files associated with the form before removing the DB record
       const form = forms.find(f => f.id === formToDelete);
       if (form?.config) {
-        const paths: string[] = [];
-        const extractPath = (url?: string) => {
-          if (!url) return;
-          const m = url.match(/\/storage\/v1\/object\/public\/form-assets\/(.+)/);
-          if (m) paths.push(decodeURIComponent(m[1]));
+        const cloudinaryUrls: string[] = [];
+        const collect = (url?: string) => {
+          if (url && url.includes('res.cloudinary.com')) cloudinaryUrls.push(url);
         };
-        extractPath(form.config.coverImage);
+        collect(form.config.coverImage);
         for (const q of form.config.questions ?? []) {
-          extractPath(q.imageUrl);
-          extractPath(q.lesson?.imageUrl);
+          collect(q.imageUrl);
+          collect(q.lesson?.imageUrl);
         }
         for (const sp of form.config.eventDetails?.speakers ?? []) {
-          extractPath(sp.avatar_url);
+          collect(sp.avatar_url);
         }
-        if (paths.length) {
-          const { error: storageError } = await supabase.storage.from('form-assets').remove(paths);
-          if (storageError) console.error('[delete] storage cleanup failed:', storageError.message, paths);
+        if (cloudinaryUrls.length) {
+          await Promise.all(cloudinaryUrls.map(u => deleteFromCloudinary(u))).catch(e => console.error('[delete] cloudinary cleanup failed:', e));
         }
       }
       // Route deletion through the API (service role) so RLS does not block it
@@ -4598,14 +4589,14 @@ export default function DashboardPage() {
       {/* Delete modal */}
       <AnimatePresence>
         {formToDelete && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          <motion.div key="delete-modal" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
               className="p-6 rounded-2xl max-w-md w-full"
               style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 16px 48px rgba(0,0,0,0.15)' }}>
-              <h3 className="text-lg font-semibold mb-2" style={{ color: C.text }}>Delete?</h3>
-              <p className="text-sm mb-6" style={{ color: C.muted }}>This will permanently delete the form and all its responses. This cannot be undone.</p>
+              <h3 className="text-lg font-semibold mb-2" style={{ color: C.text }}>Delete &ldquo;{deletingName}&rdquo;?</h3>
+              <p className="text-sm mb-6" style={{ color: C.muted }}>This will permanently delete this item and all its responses. This cannot be undone.</p>
               <div className="flex items-center justify-end gap-3">
                 <button onClick={() => setFormToDelete(null)} disabled={isDeleting}
                   className="px-4 py-2 text-sm font-medium rounded-xl transition-colors ff-hover"

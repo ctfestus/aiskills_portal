@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { ImageCropModal } from '@/components/ImageCropModal';
 import { sanitizePlainText } from '@/lib/sanitize';
+import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/uploadToCloudinary';
 
 const INDUSTRIES = [
   'Accounting & Finance', 'Advertising & Marketing', 'Aerospace & Defence',
@@ -385,20 +386,16 @@ export default function SettingsPage() {
     load();
   }, []);
 
-  const deleteStorageUrl = async (url: string) => {
-    const m = url.match(/\/storage\/v1\/object\/public\/form-assets\/(.+)/);
-    if (m) await supabase.storage.from('form-assets').remove([decodeURIComponent(m[1])]);
-  };
-
   const uploadToStorage = async (file: File | Blob, folder: string, oldUrl?: string): Promise<string | null> => {
     if (file.size > 8 * 1024 * 1024) { alert('Image must be 8 MB or smaller.'); return null; }
-    const ext = file instanceof File ? (file.name.split('.').pop() ?? 'jpg') : 'jpg';
-    const path = `${folder}/${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
-    if (error) { console.error('[uploadToStorage]', error); return null; }
-    if (oldUrl) await deleteStorageUrl(oldUrl);
-    const { data } = supabase.storage.from('form-assets').getPublicUrl(path);
-    return data.publicUrl;
+    try {
+      const url = await uploadToCloudinary(file instanceof File ? file : new File([file], 'upload.jpg', { type: 'image/jpeg' }), folder);
+      if (oldUrl) deleteFromCloudinary(oldUrl).catch(() => {});
+      return url;
+    } catch (err: any) {
+      console.error('[uploadToStorage]', err);
+      return null;
+    }
   };
 
   const handleChangePassword = async () => {

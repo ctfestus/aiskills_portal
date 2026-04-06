@@ -24,6 +24,7 @@
     "@upstash/workflow": "^1.1.1",
     "autoprefixer": "^10.4.21",
     "class-variance-authority": "^0.7.1",
+    "cloudinary": "^2.9.0",
     "clsx": "^2.1.1",
     "html2canvas": "^1.4.1",
     "isomorphic-dompurify": "^3.6.0",

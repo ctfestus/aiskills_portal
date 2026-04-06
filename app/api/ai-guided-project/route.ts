@@ -41,7 +41,7 @@ const requirementSchema = {
     id:            { type: Type.STRING },
     label:         { type: Type.STRING },   // The question
     description:   { type: Type.STRING },   // Which column(s)/filter to use
-    type:          { type: Type.STRING },   // 'mcq'
+    type:          { type: Type.STRING },   // 'mcq' | 'task' | 'text'
     options:       { type: Type.ARRAY, items: { type: Type.STRING } }, // exactly 4 options
     correctAnswer:  { type: Type.STRING },   // must match one option exactly
     expectedAnswer: { type: Type.STRING },
@@ -135,22 +135,32 @@ DATASET:
 - The data must contain specific, calculable values (real numbers students can verify).
 - filename reflects the company (e.g. "narapay_transactions.csv").
 
-REQUIREMENTS (MULTIPLE CHOICE QUESTIONS):
-- ALL requirements must be type "mcq".
-- Each is a data analysis question students can ONLY answer by examining the dataset.
-- label: a specific, direct question referencing a column name or metric from the dataset (e.g. "Which region had the highest total transaction value in March?").
-- description: one sentence telling them exactly which column(s) to analyse (e.g. "Filter by month='March', group by region, sum the 'amount' column.").
-- options: exactly 4 plausible options. Use real values from the CSV (e.g. ["Lagos -- ₦4.2M", "Abuja -- ₦6.8M", "Kano -- ₦3.1M", "Port Harcourt -- ₦5.5M"]).
-- correctAnswer: must match one of the options EXACTLY and be derivable from the CSV data you generate.
-- Questions must progress in difficulty: early lessons = simple (filter/sum), later lessons = harder (correlation, % change, outlier detection).
-- NEVER ask questions answerable from general knowledge -- always tie to specific columns and values in the dataset.
+REQUIREMENTS (MIXED QUESTION TYPES):
+Each lesson must have exactly 4 requirements in this mix:
+- 2 × MCQ (type "mcq"): data analysis or tool/formula questions tied to the dataset.
+  - label: specific question referencing column names or metrics.
+  - description: exact columns/filters to use.
+  - options: exactly 4 plausible options using real values from the CSV.
+  - correctAnswer: must match one option EXACTLY and be derivable from the CSV.
+- 1 × Task (type "task"): a hands-on action the student must perform (checkbox to confirm).
+  - label: an imperative action (e.g. "Create a pivot table grouping transactions by region and summing the amount column.").
+  - description: brief context or acceptance criteria.
+  - NO options, NO correctAnswer, NO expectedAnswer.
+- 1 × Short Answer (type "text"): an open-ended reflection or interpretation question.
+  - label: the question (e.g. "What does the regional distribution of revenue suggest about the company's market focus?").
+  - description: one sentence guiding their thinking.
+  - expectedAnswer: a model answer (1-2 sentences) the system uses to validate; leave blank to accept any response.
+  - NO options, NO correctAnswer.
+
+Order within each lesson: mcq, mcq, task, short-answer.
+Questions must progress in difficulty across modules.
 
 IDs: use "mod-1", "les-1-1", "req-1-1-1" format.
 
 Generate:
 - 3-4 modules (each a project phase: data exploration  analysis  visualisation  insights)
 - 2-3 lessons per module
-- 3 mcq requirements per lesson (tied to the dataset)
+- 4 requirements per lesson (2 mcq + 1 task + 1 text) tied to the dataset
 - tagline: one punchy sentence
 - background: 2-3 direct sentences (HTML <p>)
 - description: 1 sentence summary (HTML <p>)
@@ -225,9 +235,9 @@ DATASET (generate this first, carefully):
       const pass1 = JSON.parse(pass1Res.text!);
       const csvContent = pass1.dataset?.csvContent || '';
 
-      // -- Pass 2: modules/lessons/MCQ questions (CSV provided) ---
+      // -- Pass 2: modules/lessons/questions (CSV provided) ---
       const pass2Prompt = `
-You are generating modules and MCQ questions for a virtual work experience project.
+You are generating modules and questions for a virtual work experience project.
 
 COMPANY: ${pass1.company} | ROLE: ${pass1.role} | INDUSTRY: ${industry} | TOOLS: ${toolsList}
 
@@ -237,16 +247,16 @@ ${csvContent}
 \`\`\`
 
 Generate 3-4 modules progressing through: data exploration  analysis  visualisation  insights.
-Each module: 2-3 lessons. Each lesson: exactly 3 MCQ questions.
+Each module: 2-3 lessons. Each lesson: exactly 4 requirements (2 mcq + 1 task + 1 text/short-answer).
 
 LESSON BODY RULES:
 - 2-3 sentences max (50-80 words). Plain <p> tags only.
 - Tell them exactly which columns/rows to look at and what to calculate or think about.
 - Example: "<p>Open ${pass1.dataset?.filename || 'the dataset'} and filter to rows where status = 'Completed'. Group by region and sum the amount column. Use this to answer the questions below.</p>"
 
-MCQ QUESTION TYPES -- each lesson MUST include a MIX of these 3 types (one of each per lesson):
+REQUIREMENT TYPES PER LESSON (in this order):
 
-TYPE A -- DATA QUESTION (1 per lesson):
+MCQ #1 -- DATA QUESTION (type "mcq"):
 - Answerable ONLY by calculating from the dataset above.
 - ACTUALLY CALCULATE the answer before writing options.
 - label: references exact column names (e.g. "Which region had the highest total sales in Q1?")
@@ -254,25 +264,30 @@ TYPE A -- DATA QUESTION (1 per lesson):
 - options: 4 plausible values using real numbers from the CSV. Wrong options = other real values from the data.
 - correctAnswer: MUST be correct based on the CSV. Do not guess.
 
-TYPE B -- FORMULA / FUNCTION QUESTION (1 per lesson):
-- Tests knowledge of the right tool, formula, or function for a specific task in this lesson.
-- Tied to the tools being used: ${toolsList}
-- Examples by tool:
-  * Excel: "Which formula calculates the average transaction value if the range is B2:B80?" / "Which chart type best shows change over time?" / "What does SUMIF do differently from SUMIFS?"
-  * SQL: "Which clause filters aggregated results in SQL?" / "What is the correct JOIN to return only matching rows?" / "Which function returns the number of non-null values?"
-  * Python/pandas: "Which pandas method removes duplicate rows?" / "What does .groupby().agg() do?" / "Which function reads a CSV into a DataFrame?"
-  * Power BI/Tableau: "Which visual best compares proportions of a whole?" / "What is a calculated field used for?" / "Which filter type applies across all visuals on a page?"
-- correctAnswer: the technically correct answer, well-known in the field.
+MCQ #2 -- FORMULA OR INTERPRETATION QUESTION (type "mcq"):
+- Alternate between formula/tool knowledge and analytical judgement questions across lessons.
+- Formula examples tied to ${toolsList}:
+  * Excel: chart type selection, SUMIF vs SUMIFS, VLOOKUP vs INDEX-MATCH, pivot table use cases
+  * SQL: GROUP BY vs HAVING, JOIN types, COUNT vs COUNT(DISTINCT), WHERE vs HAVING
+  * Python/pandas: .groupby(), .merge(), .fillna(), .drop_duplicates(), reading CSVs
+  * Power BI/Tableau: calculated fields, visual types for different insights, page-level filters
+- Interpretation examples: "What does a 22% churn rate suggest?" / "Which chart best shows regional differences to executives?"
+- options: 4 plausible options. correctAnswer: technically or analytically correct.
 
-TYPE C -- INTERPRETATION / JUDGEMENT QUESTION (1 per lesson):
-- Tests analytical thinking, not data lookup or tool knowledge.
-- Examples: "What does a 22% monthly churn rate suggest about customer retention?" / "Which chart would best communicate regional sales differences to a non-technical executive?" / "If two variables have a correlation of 0.85, what does this indicate?" / "An analyst notices the top 3 customers account for 70% of revenue. What risk does this represent?"
-- options: 4 plausible analyst-level interpretations.
-- correctAnswer: the most analytically sound answer.
+TASK (type "task"):
+- An imperative hands-on action the student must perform in their tool (confirmed by checkbox).
+- label: action verb phrase (e.g. "Create a pivot table grouping transactions by region and summing the amount column.").
+- description: brief context or acceptance criteria (e.g. "Use the pivot table to identify the top 2 regions by revenue.").
+- NO options, NO correctAnswer, NO expectedAnswer.
 
-DISTRIBUTION RULE: Across ALL lessons in the project, roughly one-third of questions should be each type. Do NOT follow a fixed A-B-C order -- vary the type order per lesson and vary how many of each type appear per lesson (e.g. one lesson might have 2×A + 1×C, another 1×A + 2×B, another 1×A + 1×B + 1×C). The goal is a natural, unpredictable mix, not a pattern students can spot.
-IDs: "mod-1", "les-1-1", "req-1-1-1".
-Requirement type: always "mcq".
+SHORT ANSWER (type "text"):
+- An open-ended reflection or interpretation question answered in the student's own words.
+- label: the question (e.g. "What does the regional revenue distribution suggest about where the company should focus its next marketing campaign?").
+- description: one guiding sentence (e.g. "Think about the top and bottom performing regions and what explains the gap.").
+- expectedAnswer: a model answer (1-2 sentences) used to validate; leave blank ("") to accept any response.
+- NO options, NO correctAnswer.
+
+IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", short answer = "req-1-1-4").
 `;
 
       const pass2Res = await ai.models.generateContent({
@@ -388,9 +403,9 @@ COMPANY:
 
       const pass1 = JSON.parse(pass1Res.text!);
 
-      // Pass 2: modules/lessons/MCQ -- using the full instructor dataset
+      // Pass 2: modules/lessons/questions -- using the full instructor dataset
       const pass2Prompt = `
-You are generating modules and MCQ questions for a virtual work experience project.
+You are generating modules and questions for a virtual work experience project.
 
 COMPANY: ${pass1.company} | ROLE: ${pass1.role} | INDUSTRY: ${industry} | TOOLS: ${toolsList}
 
@@ -400,15 +415,15 @@ ${csvContent}
 \`\`\`
 
 Generate 3-4 modules progressing through: data exploration  analysis  visualisation  insights.
-Each module: 2-3 lessons. Each lesson: exactly 3 MCQ questions.
+Each module: 2-3 lessons. Each lesson: exactly 4 requirements (2 mcq + 1 task + 1 text/short-answer).
 
 LESSON BODY RULES:
 - 2-3 sentences max (50-80 words). Plain <p> tags only.
 - Tell them exactly which columns/rows to look at and what to calculate or think about.
 
-MCQ QUESTION TYPES -- each lesson MUST include a MIX of these 3 types (one of each per lesson):
+REQUIREMENT TYPES PER LESSON (in this order):
 
-TYPE A -- DATA QUESTION (1 per lesson):
+MCQ #1 -- DATA QUESTION (type "mcq"):
 - Answerable ONLY by calculating from the dataset above.
 - ACTUALLY CALCULATE the answer before writing options.
 - label: references exact column names from the CSV.
@@ -416,25 +431,30 @@ TYPE A -- DATA QUESTION (1 per lesson):
 - options: 4 plausible values using real numbers from the CSV.
 - correctAnswer: MUST be correct based on the CSV. Do not guess.
 
-TYPE B -- FORMULA / FUNCTION QUESTION (1 per lesson):
-- Tests knowledge of the right tool, formula, or function for a task in this lesson.
-- Tied to the tools: ${toolsList}
-- Examples by tool:
+MCQ #2 -- FORMULA OR INTERPRETATION QUESTION (type "mcq"):
+- Alternate between formula/tool knowledge and analytical judgement questions across lessons.
+- Formula examples tied to ${toolsList}:
   * Excel: chart type selection, SUMIF vs SUMIFS, VLOOKUP vs INDEX-MATCH, pivot table use cases, conditional formatting rules
   * SQL: GROUP BY vs HAVING, JOIN types, COUNT vs COUNT(DISTINCT), WHERE vs HAVING
   * Python/pandas: .groupby(), .merge(), .fillna(), .drop_duplicates(), reading CSVs
   * Power BI/Tableau: calculated fields, visual types for different insights, page-level vs visual-level filters
-- correctAnswer: the technically correct answer.
+- Interpretation examples: "What does a 22% churn rate suggest?" / "Which chart best shows regional differences to executives?"
+- options: 4 plausible options. correctAnswer: technically or analytically correct.
 
-TYPE C -- INTERPRETATION / JUDGEMENT QUESTION (1 per lesson):
-- Tests analytical thinking and business judgment, not data lookup.
-- Examples: "What does a 22% churn rate suggest?" / "Which chart communicates regional differences best to executives?" / "If correlation = 0.85, what does this mean?" / "Top 3 customers = 70% of revenue -- what risk does this present?"
-- options: 4 plausible analyst-level interpretations.
-- correctAnswer: the most analytically sound answer.
+TASK (type "task"):
+- An imperative hands-on action the student must perform in their tool (confirmed by checkbox).
+- label: action verb phrase (e.g. "Create a pivot table grouping transactions by region and summing the amount column.").
+- description: brief context or acceptance criteria.
+- NO options, NO correctAnswer, NO expectedAnswer.
 
-QUESTION ORDER per lesson: TYPE A first, TYPE B second, TYPE C third.
-IDs: "mod-1", "les-1-1", "req-1-1-1".
-Requirement type: always "mcq".
+SHORT ANSWER (type "text"):
+- An open-ended reflection or interpretation question answered in the student's own words.
+- label: the question (e.g. "Based on the data, which customer segment should the company prioritise and why?").
+- description: one guiding sentence.
+- expectedAnswer: a model answer (1-2 sentences) used to validate; leave blank ("") to accept any response.
+- NO options, NO correctAnswer.
+
+IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", short answer = "req-1-1-4").
 `;
 
       const pass2Res = await ai.models.generateContent({
@@ -507,7 +527,7 @@ INSTRUCTOR INSTRUCTION: "${instruction}"
 RULES:
 - Only change what the instruction asks. Leave everything else exactly as-is (same IDs, same content).
 - If adding a new lesson or requirement, generate a new unique ID (e.g. "les-new-1", "req-new-1").
-- Keep all requirement types as "mcq" unless the instruction explicitly says otherwise.
+- Requirement types can be "mcq", "task", or "text". Only change types if the instruction asks. For "task": no options/correctAnswer/expectedAnswer. For "text": no options/correctAnswer, may have expectedAnswer.
 - Keep lesson bodies concise (2-3 sentences, plain <p> tags).
 - Return the COMPLETE modules array with ALL existing modules and lessons included.
 `;

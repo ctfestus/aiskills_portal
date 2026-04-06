@@ -74,12 +74,14 @@ export async function GET(req: NextRequest) {
 
   if (!candidates.length) return NextResponse.json({ results: [] });
 
-  // Verify candidates still exist in the database (vector index may contain stale/deleted courses)
+  // Verify candidates still exist in DB AND are still published
+  // (vector metadata may be stale if a course was set back to draft after indexing)
   const candidateIds = candidates.map((r: any) => r.metadata.formId);
   const { data: existingForms } = await supabase
     .from('forms')
     .select('id')
-    .in('id', candidateIds);
+    .in('id', candidateIds)
+    .eq('status', 'published');
 
   const existingIds = new Set((existingForms ?? []).map((f: any) => f.id));
 

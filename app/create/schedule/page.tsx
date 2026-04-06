@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { useTheme } from '@/components/ThemeProvider';
 import { motion } from 'motion/react';
 import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X } from 'lucide-react';
@@ -345,12 +346,8 @@ export default function CreateSchedulePage() {
                 const file = e.target.files?.[0]; if (!file) return;
                 setCoverUploading(true);
                 try {
-                  const ext = file.name.split('.').pop() ?? 'jpg';
-                  const path = `covers/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-                  const { error: upErr } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
-                  if (upErr) throw upErr;
-                  const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
-                  setCoverImage(publicUrl);
+                  const url = await uploadToCloudinary(file, 'covers');
+                  setCoverImage(url);
                 } catch (err: any) { setError(err?.message || 'Image upload failed.'); }
                 finally { setCoverUploading(false); e.target.value = ''; }
               }}/>

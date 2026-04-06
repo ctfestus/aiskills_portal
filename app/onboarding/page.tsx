@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { sanitizePlainText } from '@/lib/sanitize';
+import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 
 // -- Constants ---
 const INDUSTRIES = [
@@ -175,11 +176,8 @@ export default function OnboardingPage() {
     if (!file || !userId) return;
     setAvatarUploading(true);
     try {
-      const ext  = file.name.split('.').pop() ?? 'jpg';
-      const path = `${userId}/avatar.${ext}`;
-      await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
-      const { data } = supabase.storage.from('form-assets').getPublicUrl(path);
-      setAvatarUrl(`${data.publicUrl}?t=${Date.now()}`);
+      const url = await uploadToCloudinary(file, 'avatars');
+      setAvatarUrl(url);
     } catch { /* ignore */ }
     setAvatarUploading(false);
   };

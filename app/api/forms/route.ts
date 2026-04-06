@@ -2,6 +2,7 @@
 import { randomBytes } from 'crypto';
 import { adminClient } from '@/lib/subscription';
 import { sendAssignmentNotifications } from '@/lib/send-assignment-notification';
+import { getVectorIndex } from '@/lib/vector';
 
 export const dynamic = 'force-dynamic';
 
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', 'x-reindex-secret': process.env.REINDEX_SECRET ?? '' },
           body:    JSON.stringify({ formId: data.id }),
-        }).catch(() => {});
+        }).catch(e => console.error('[vector/index-course] fire-and-forget failed on create:', e?.message));
       }
       return NextResponse.json({ id: data.id, slug: data.slug, content_type: data.content_type, status: data.status });
     }
@@ -150,7 +151,7 @@ export async function PATCH(req: NextRequest) {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'x-reindex-secret': process.env.REINDEX_SECRET ?? '' },
       body:    JSON.stringify({ formId }),
-    }).catch(() => {});
+    }).catch(e => console.error('[vector/index-course] fire-and-forget failed on status change:', e?.message));
   }
 
   return NextResponse.json({ ok: true });
@@ -195,6 +196,10 @@ export async function DELETE(req: NextRequest) {
     console.error('[api/forms] delete error:', deleteError.message);
     return NextResponse.json({ error: 'Failed to delete form' }, { status: 500 });
   }
+
+  // Remove from vector index so deleted courses stop appearing in search immediately
+  const index = getVectorIndex();
+  if (index) index.delete([formId]).catch(e => console.error('[vector/delete] cleanup failed:', e?.message));
 
   return NextResponse.json({ ok: true });
 }
