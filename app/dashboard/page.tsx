@@ -11,7 +11,7 @@ import {
   ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
   Users, Megaphone, Trophy, Menu, CheckCircle2, XCircle,
   UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
-  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send,
+  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw,
 } from 'lucide-react';
 import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS, TextPositions, defaultTextPositions } from '@/components/CertificateTemplate';
 import Link from 'next/link';
@@ -870,6 +870,7 @@ const NAV_ITEMS = [
   { id: 'leaderboard',   label: 'Leaderboard',    Icon: Trophy,        adminOnly: false },
   { id: 'tracking',      label: 'Tracking',       Icon: Activity,      adminOnly: false },
   { id: 'cohorts',       label: 'Cohorts',        Icon: GraduationCap, adminOnly: true  },
+  { id: 'payments',      label: 'Payments',       Icon: CreditCard,    adminOnly: false },
 ] as const;
 type SectionId = typeof NAV_ITEMS[number]['id'];
 
@@ -4190,6 +4191,531 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
   );
 }
 
+// --- Payments section ---
+type PaymentStatus = 'unpaid' | 'partial' | 'paid' | 'waived' | string;
+
+const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  unpaid:  { bg: 'rgba(239,68,68,0.10)',   text: '#dc2626', label: 'Unpaid'  },
+  partial: { bg: 'rgba(245,158,11,0.10)',  text: '#d97706', label: 'Partial' },
+  paid:    { bg: 'rgba(34,197,94,0.10)',   text: '#16a34a', label: 'Paid'    },
+  waived:  { bg: 'rgba(148,163,184,0.15)', text: '#64748b', label: 'Waived'  },
+};
+
+function StatusBadge({ status, C }: { status: PaymentStatus; C: typeof LIGHT_C }) {
+  const s = STATUS_COLORS[status] ?? { bg: C.pill, text: C.faint, label: status };
+  return (
+    <span style={{ background: s.bg, color: s.text, borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', display: 'inline-block', textTransform: 'capitalize' }}>
+      {s.label}
+    </span>
+  );
+}
+
+function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
+  const [rows,       setRows]       = useState<any[]>([]);
+  const [cohorts,    setCohorts]    = useState<any[]>([]);
+  const [sheetUrl,   setSheetUrl]   = useState('');
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState('');
+  const [search,     setSearch]     = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Outstanding cohort selector (persisted in localStorage)
+  const [outstandingCohortId, setOutstandingCohortId] = useState<string>(() =>
+    typeof window !== 'undefined' ? (localStorage.getItem('outstandingCohortId') ?? '') : ''
+  );
+
+  // Move/restore action state
+  const [movingId,   setMovingId]   = useState<string | null>(null);
+
+  // Edit modal state
+  const [editRow,    setEditRow]    = useState<any | null>(null);
+  const [editFields, setEditFields] = useState<any>({});
+  const [saving,     setSaving]     = useState(false);
+  const [saveError,  setSaveError]  = useState('');
+
+  // New month modal
+  const [newMonthOpen,   setNewMonthOpen]   = useState(false);
+  const [newMonthLabel,  setNewMonthLabel]  = useState('');
+  const [newMonthAmount, setNewMonthAmount] = useState('');
+  const [newMonthSaving, setNewMonthSaving] = useState(false);
+  const [newMonthError,  setNewMonthError]  = useState('');
+
+  const getToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? '';
+  };
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    const token = await getToken();
+    try {
+      const res = await fetch('/api/payments?action=summary', {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(r => r.json());
+      if (res.error) { setError(res.error); return; }
+      setRows(res.rows ?? []);
+      setCohorts(res.cohorts ?? []);
+      setSheetUrl(res.sheetUrl ?? '');
+    } catch { setError('Failed to load payment data.'); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    const token = await getToken();
+
+    // Invalidate Redis cache so we get fresh data from the sheet
+    await fetch('/api/payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: 'refresh' }),
+    });
+
+    // Fetch updated rows
+    const res = await fetch('/api/payments?action=summary', {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(r => r.json());
+
+    if (!res.error) {
+      const fetchedRows: any[] = res.rows ?? [];
+      const currentOutstandingId = localStorage.getItem('outstandingCohortId') ?? '';
+
+      if (currentOutstandingId) {
+        const toRestore = fetchedRows.filter(r =>
+          r.student_id &&
+          r.current_cohort_id === currentOutstandingId &&
+          r.original_cohort_id &&
+          (r.status === 'paid' || r.status === 'waived')
+        );
+        const toMove = fetchedRows.filter(r =>
+          r.student_id &&
+          !r.payment_exempt &&           // skip manually exempted students
+          r.current_cohort_id !== currentOutstandingId &&
+          (r.status === 'unpaid' || r.status === 'partial')
+        );
+
+        if (toRestore.length > 0 || toMove.length > 0) {
+          await Promise.all([
+            ...toRestore.map(r =>
+              fetch('/api/payments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ action: 'restore-cohort', studentId: r.student_id }),
+              })
+            ),
+            ...toMove.map(r =>
+              fetch('/api/payments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ action: 'move-to-outstanding', studentId: r.student_id, outstandingCohortId: currentOutstandingId }),
+              })
+            ),
+          ]);
+          // Reload once more to reflect cohort changes
+          await load();
+          setRefreshing(false);
+          return;
+        }
+      }
+
+      setRows(fetchedRows);
+      setCohorts(res.cohorts ?? []);
+      setSheetUrl(res.sheetUrl ?? '');
+    }
+
+    setRefreshing(false);
+  };
+
+  const handleMoveToOutstanding = async (r: any) => {
+    if (!outstandingCohortId) { alert('Please select the outstanding cohort first.'); return; }
+    setMovingId(r.student_id);
+    const token = await getToken();
+    await fetch('/api/payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: 'move-to-outstanding', studentId: r.student_id, outstandingCohortId }),
+    });
+    await load();
+    setMovingId(null);
+  };
+
+  const handleToggleExempt = async (r: any, exempt: boolean) => {
+    setMovingId(r.student_id);
+    const token = await getToken();
+    await fetch('/api/payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: 'toggle-exempt', studentId: r.student_id, exempt }),
+    });
+    await load();
+    setMovingId(null);
+  };
+
+  const handleRestoreCohort = async (r: any) => {
+    setMovingId(r.student_id);
+    const token = await getToken();
+    const res = await fetch('/api/payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: 'restore-cohort', studentId: r.student_id }),
+    }).then(r => r.json());
+    if (res.error) alert(res.error);
+    await load();
+    setMovingId(null);
+  };
+
+  // Open edit modal pre-filled with the row's current values
+  const openEdit = (r: any) => {
+    setEditRow(r);
+    setEditFields({
+      billing_month: r.billing_month ?? '',
+      amount_due:    String(r.amount_due ?? ''),
+      amount_paid:   String(r.amount_paid ?? ''),
+      notes:         r.notes ?? '',
+    });
+    setSaveError('');
+  };
+
+  const handleSave = async () => {
+    if (!editRow) return;
+    setSaving(true); setSaveError('');
+    const token = await getToken();
+    try {
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action:        'update-row',
+          email:         editRow.email,
+          billing_month: editFields.billing_month,
+          amount_due:    Number(editFields.amount_due),
+          amount_paid:   Number(editFields.amount_paid),
+          notes:         editFields.notes,
+          // status omitted -- controlled by sheet formula
+        }),
+      }).then(r => r.json());
+      if (res.error) { setSaveError(res.error); } else { setEditRow(null); await load(); }
+    } catch { setSaveError('Failed to save changes.'); }
+    setSaving(false);
+  };
+
+  // Quick mark-paid without opening the modal
+  const handleMarkPaid = async (r: any) => {
+    const token = await getToken();
+    await fetch('/api/payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        action: 'update-row', email: r.email,
+        amount_paid: r.amount_due,
+      }),
+    });
+    await load();
+  };
+
+  // New month reset
+  const handleNewMonth = async () => {
+    if (!newMonthLabel.trim()) { setNewMonthError('Billing month is required.'); return; }
+    setNewMonthSaving(true); setNewMonthError('');
+    const token = await getToken();
+    try {
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action: 'new-month',
+          billing_month: newMonthLabel.trim(),
+          ...(newMonthAmount ? { amount_due: Number(newMonthAmount) } : {}),
+        }),
+      }).then(r => r.json());
+      if (res.error) { setNewMonthError(res.error); }
+      else { setNewMonthOpen(false); setNewMonthLabel(''); setNewMonthAmount(''); await load(); }
+    } catch { setNewMonthError('Failed to reset month.'); }
+    setNewMonthSaving(false);
+  };
+
+  const filtered = rows.filter(r => {
+    const matchSearch = !search || r.email?.toLowerCase().includes(search.toLowerCase()) || r.billing_month?.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === 'all' || r.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const withBalance      = new Set(rows.filter(r => r.status === 'unpaid' || r.status === 'partial').map(r => r.email)).size;
+  const totalOutstanding = rows.filter(r => r.status === 'unpaid' || r.status === 'partial').reduce((s, r) => s + (r.amount_due - r.amount_paid), 0);
+  const paidThisMonth    = (() => {
+    const label = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    return rows.filter(r => r.status === 'paid' && r.billing_month?.toLowerCase() === label.toLowerCase()).length;
+  })();
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight leading-none" style={{ color: C.text }}>Payments</h2>
+          <p className="text-xs mt-1.5" style={{ color: C.faint }}>Synced with your Google Sheet. Move outstanding students to their cohort directly from here.</p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {sheetUrl && (
+            <a href={sheetUrl} target="_blank" rel="noreferrer"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-opacity hover:opacity-80"
+              style={{ background: C.pill, color: C.text, textDecoration: 'none' }}>
+              <ExternalLink className="w-3.5 h-3.5"/> Open Sheet
+            </a>
+          )}
+          <button onClick={() => { setNewMonthLabel(''); setNewMonthAmount(''); setNewMonthError(''); setNewMonthOpen(true); }}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-opacity hover:opacity-80"
+            style={{ background: C.pill, color: C.text }}>
+            <RefreshCw className="w-3.5 h-3.5"/> New Month
+          </button>
+          <button onClick={handleRefresh} disabled={refreshing}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-opacity hover:opacity-80 disabled:opacity-50"
+            style={{ background: C.cta, color: C.ctaText }}>
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`}/> Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-3 gap-3">
+        <RKpi label="Students with Balance" value={withBalance} sub="unpaid or partial" accent="#dc2626" C={C} />
+        <RKpi label="Total Outstanding" value={`GHS ${totalOutstanding.toLocaleString()}`} sub="across all months" C={C} />
+        <RKpi label="Paid This Month" value={paidThisMonth} sub="billing rows marked paid" accent="#16a34a" C={C} />
+      </div>
+
+      {/* Outstanding cohort selector */}
+      <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+        <span className="text-xs font-semibold flex-shrink-0" style={{ color: C.muted }}>Outstanding Cohort:</span>
+        <select value={outstandingCohortId}
+          onChange={e => { setOutstandingCohortId(e.target.value); localStorage.setItem('outstandingCohortId', e.target.value); }}
+          className="flex-1 text-sm px-3 py-1.5 rounded-lg outline-none"
+          style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
+          <option value="">-- Select the outstanding cohort --</option>
+          {cohorts.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <span className="text-[11px]" style={{ color: C.faint }}>Students moved here lose access to all course resources.</span>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-2 flex-wrap">
+        <input placeholder="Search by email or month…" value={search} onChange={e => setSearch(e.target.value)}
+          className="flex-1 min-w-[180px] text-sm px-3 py-2 rounded-lg outline-none"
+          style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          className="text-sm px-3 py-2 rounded-lg outline-none"
+          style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
+          <option value="all">All Statuses</option>
+          <option value="unpaid">Unpaid</option>
+          <option value="partial">Partial</option>
+          <option value="paid">Paid</option>
+          <option value="waived">Waived</option>
+        </select>
+        <button onClick={() => reportExportCSV(
+          ['Email', 'Billing Month', 'Amount Due (GHS)', 'Amount Paid (GHS)', 'Balance (GHS)', 'Status', 'Notes'],
+          filtered.map(r => [r.email, r.billing_month, r.amount_due, r.amount_paid, r.amount_due - r.amount_paid, r.status, r.notes]),
+          'payments-export.csv'
+        )} className="text-xs font-semibold px-3 py-2 rounded-lg transition-opacity hover:opacity-80"
+          style={{ background: C.pill, color: C.text }}>
+          <Download className="w-3.5 h-3.5 inline mr-1"/> Export CSV
+        </button>
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div className="flex items-center gap-2 py-10 justify-center" style={{ color: C.faint }}>
+          <Loader2 className="w-4 h-4 animate-spin"/> Loading payment data…
+        </div>
+      ) : error ? (
+        <div className="py-10 text-center text-sm" style={{ color: '#dc2626' }}>
+          {error}
+          {!sheetUrl && <p className="mt-2 text-xs" style={{ color: C.faint }}>Make sure <code>GOOGLE_SHEETS_SPREADSHEET_ID</code> and service account credentials are set in your environment variables.</p>}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="py-10 text-center text-sm" style={{ color: C.faint }}>
+          {rows.length === 0 ? 'No payment data found. Add rows to your Google Sheet and click Refresh.' : 'No results match your filters.'}
+        </div>
+      ) : (
+        <div className="rounded-xl overflow-x-auto" style={{ border: `1px solid ${C.cardBorder}` }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 780 }}>
+            <thead>
+              <tr style={{ background: C.pill }}>
+                {['Email', 'Billing Month', 'Due', 'Paid', 'Balance', 'Status', 'Cohort', ''].map(h => (
+                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, fontSize: 10, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((r, i) => {
+                const balance = r.amount_due - r.amount_paid;
+                const isOutstanding = outstandingCohortId && r.current_cohort_id === outstandingCohortId;
+                return (
+                  <tr key={i} style={{ borderTop: `1px solid ${C.divider}`, background: i % 2 === 0 ? C.card : (C === DARK_C ? '#161616' : '#fafafa') }}>
+                    <td style={{ padding: '8px 10px', color: C.text, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.email}>{r.email}</td>
+                    <td style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r.billing_month}</td>
+                    <td style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{Number(r.amount_due).toLocaleString()}</td>
+                    <td style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{Number(r.amount_paid).toLocaleString()}</td>
+                    <td style={{ padding: '8px 10px', color: balance > 0 ? '#dc2626' : '#16a34a', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      {balance > 0 ? balance.toLocaleString() : '--'}
+                    </td>
+                    <td style={{ padding: '8px 10px' }}><StatusBadge status={r.status} C={C} /></td>
+                    <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', color: isOutstanding ? '#dc2626' : C.muted, fontWeight: isOutstanding ? 600 : 400 }}>
+                      {r.current_cohort_name ?? '--'}
+                    </td>
+                    <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {/* Exempt badge + revoke */}
+                        {r.payment_exempt && (
+                          <>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md"
+                              style={{ background: 'rgba(234,179,8,0.12)', color: '#a16207' }}>
+                              Exempt
+                            </span>
+                            <button onClick={() => handleToggleExempt(r, false)} disabled={movingId === r.student_id}
+                              className="text-[10px] font-semibold px-2 py-0.5 rounded-md transition-opacity hover:opacity-80 disabled:opacity-50"
+                              style={{ background: C.pill, color: C.muted }}>
+                              {movingId === r.student_id ? '…' : 'Revoke'}
+                            </button>
+                          </>
+                        )}
+                        {/* Move to Outstanding -- only if not exempt */}
+                        {!r.payment_exempt && (r.status === 'unpaid' || r.status === 'partial') && r.student_id && outstandingCohortId && !isOutstanding && (
+                          <button onClick={() => handleMoveToOutstanding(r)} disabled={movingId === r.student_id}
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded-md transition-opacity hover:opacity-80 disabled:opacity-50"
+                            style={{ background: 'rgba(220,38,38,0.12)', color: '#dc2626' }}>
+                            {movingId === r.student_id ? '…' : 'Move Out'}
+                          </button>
+                        )}
+                        {/* Restore */}
+                        {r.student_id && isOutstanding && r.original_cohort_id && (
+                          <button onClick={() => handleRestoreCohort(r)} disabled={movingId === r.student_id}
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded-md transition-opacity hover:opacity-80 disabled:opacity-50"
+                            style={{ background: 'rgba(34,197,94,0.12)', color: '#16a34a' }}>
+                            {movingId === r.student_id ? '…' : 'Restore'}
+                          </button>
+                        )}
+                        {(r.status === 'unpaid' || r.status === 'partial') && (
+                          <button onClick={() => handleMarkPaid(r)}
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded-md transition-opacity hover:opacity-80"
+                            style={{ background: 'rgba(34,197,94,0.12)', color: '#16a34a' }}>
+                            Paid
+                          </button>
+                        )}
+                        <button onClick={() => openEdit(r)}
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded-md transition-opacity hover:opacity-80"
+                          style={{ background: C.pill, color: C.muted }}>
+                          Edit
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="px-4 py-2.5 text-xs" style={{ color: C.faint, borderTop: `1px solid ${C.divider}`, background: C.pill }}>
+            {filtered.length} row{filtered.length !== 1 ? 's' : ''}{rows.length !== filtered.length ? ` of ${rows.length}` : ''}
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setEditRow(null)}>
+          <div className="w-full max-w-sm rounded-2xl p-6 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold" style={{ color: C.text }}>Edit Payment</h3>
+              <button onClick={() => setEditRow(null)} style={{ color: C.faint }}><X className="w-4 h-4"/></button>
+            </div>
+            <p className="text-xs font-medium" style={{ color: C.muted }}>{editRow.email}</p>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Billing Date</label>
+              <input type="date" value={editFields.billing_month}
+                onChange={e => setEditFields((p: any) => ({ ...p, billing_month: e.target.value }))}
+                className="w-full text-sm px-3 py-2 rounded-lg outline-none"
+                style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+            </div>
+
+            {[
+              { label: 'Amount Due (GHS)', key: 'amount_due', placeholder: '500' },
+              { label: 'Amount Paid (GHS)', key: 'amount_paid', placeholder: '0' },
+            ].map(f => (
+              <div key={f.key}>
+                <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>{f.label}</label>
+                <input type="number" value={editFields[f.key]} placeholder={f.placeholder}
+                  onChange={e => setEditFields((p: any) => ({ ...p, [f.key]: e.target.value }))}
+                  className="w-full text-sm px-3 py-2 rounded-lg outline-none"
+                  style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+              </div>
+            ))}
+
+            <div>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Notes</label>
+              <input type="text" value={editFields.notes} placeholder="Optional note"
+                onChange={e => setEditFields((p: any) => ({ ...p, notes: e.target.value }))}
+                className="w-full text-sm px-3 py-2 rounded-lg outline-none"
+                style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+            </div>
+            <p className="text-[11px]" style={{ color: C.faint }}>Status is managed automatically by your sheet formula.</p>
+
+            {saveError && <p className="text-xs" style={{ color: '#dc2626' }}>{saveError}</p>}
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setEditRow(null)} className="flex-1 py-2 rounded-xl text-sm font-semibold"
+                style={{ background: C.pill, color: C.muted }}>Cancel</button>
+              <button onClick={handleSave} disabled={saving} className="flex-1 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
+                style={{ background: C.cta, color: C.ctaText }}>
+                {saving ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Month modal */}
+      {newMonthOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setNewMonthOpen(false)}>
+          <div className="w-full max-w-sm rounded-2xl p-6 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold" style={{ color: C.text }}>Start New Month</h3>
+              <button onClick={() => setNewMonthOpen(false)} style={{ color: C.faint }}><X className="w-4 h-4"/></button>
+            </div>
+            <p className="text-xs leading-relaxed" style={{ color: C.muted }}>
+              This will reset <strong>all students</strong> to <strong>unpaid</strong> with the new billing month. Amount paid will be set to 0.
+            </p>
+            <div>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>New Billing Date</label>
+              <input type="date" value={newMonthLabel}
+                onChange={e => setNewMonthLabel(e.target.value)}
+                className="w-full text-sm px-3 py-2 rounded-lg outline-none"
+                style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>New Amount Due (GHS) -- leave blank to keep existing</label>
+              <input type="number" value={newMonthAmount} placeholder="e.g. 500"
+                onChange={e => setNewMonthAmount(e.target.value)}
+                className="w-full text-sm px-3 py-2 rounded-lg outline-none"
+                style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+            </div>
+            {newMonthError && <p className="text-xs" style={{ color: '#dc2626' }}>{newMonthError}</p>}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setNewMonthOpen(false)} className="flex-1 py-2 rounded-xl text-sm font-semibold"
+                style={{ background: C.pill, color: C.muted }}>Cancel</button>
+              <button onClick={handleNewMonth} disabled={newMonthSaving} className="flex-1 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
+                style={{ background: '#dc2626', color: 'white' }}>
+                {newMonthSaving ? 'Resetting…' : 'Reset All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // --- Section content router ---
 function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFormToDelete, C }: {
   section: SectionId; forms: any[]; shareMenuOpen: string | null;
@@ -4201,6 +4727,7 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
   if (section === 'certificates') return <CertificatesSection C={C} />;
   if (section === 'integrations') return <IntegrationsSection C={C} />;
   if (section === 'cohorts')      return <CohortsSection C={C} />;
+  if (section === 'payments')     return <PaymentsSection C={C} />;
   if (section === 'tracking')     return <StudentTrackingSection C={C} />;
   if (section === 'leaderboard')  return <LeaderboardSection C={C} />;
 

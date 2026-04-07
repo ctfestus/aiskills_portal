@@ -498,6 +498,28 @@ function SortableFieldCard({ f, isExpanded, toggleExpand, onRemove, onUpdate, in
   );
 }
 
+// --- Sortable wrapper for question/section cards ---
+function SortableQuestionShell({ id, children }: {
+  id: string;
+  children: (bag: { dragHandle: React.ReactNode; isDragging: boolean }) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const FE = useFEC();
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0 : 1 };
+  const dragHandle = (
+    <button
+      type="button"
+      className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0 transition-colors"
+      style={{ color: FE.faint }}
+      {...attributes}
+      {...listeners}
+    >
+      <GripVertical className="w-3.5 h-3.5" />
+    </button>
+  );
+  return <div ref={setNodeRef} style={style}>{children({ dragHandle, isDragging })}</div>;
+}
+
 // --- FormEditor Component ---
 interface FormEditorProps {
   formId: string;
@@ -563,6 +585,8 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
   const [lessonPromptModal, setLessonPromptModal] = useState<{ q: CourseQuestion } | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
+  const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [availableForms, setAvailableForms] = useState<{ id: string; title: string; slug: string }[]>([]);
   const [cohorts, setCohorts]               = useState<{ id: string; name: string }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
@@ -954,6 +978,23 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
     const newIdx = formConfig.fields.findIndex(f => f.id === over.id);
     updateConfig({ fields: arrayMove(formConfig.fields, oldIdx, newIdx) });
   };
+
+  const handleQuestionDragStart = (event: DragStartEvent) => setActiveQuestionId(String(event.active.id));
+
+  const handleQuestionDragEnd = (event: DragEndEvent) => {
+    setActiveQuestionId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id || !formConfig?.questions) return;
+    const oldIdx = formConfig.questions.findIndex(q => q.id === active.id);
+    const newIdx = formConfig.questions.findIndex(q => q.id === over.id);
+    updateConfig({ questions: arrayMove(formConfig.questions, oldIdx, newIdx) });
+  };
+
+  const toggleQuestion = (id: string) => setExpandedQuestions(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   const handleRemoveField = (id: string) => {
     if (!formConfig) return;
@@ -1941,44 +1982,68 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                     <p className="text-[10px]" style={{ color: FE.faint }}>Tracked per email address via submission records.</p>
                   </div>
 
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleQuestionDragStart} onDragEnd={handleQuestionDragEnd}>
+                    <SortableContext items={(formConfig.questions ?? []).map(q => q.id)} strategy={verticalListSortingStrategy}>
                   {formConfig.questions?.map((q, qIdx) => {
                     const qType: QuestionType = q.type ?? 'multiple_choice';
+                    const isExpanded = expandedQuestions.has(q.id);
 
                     // -- Section divider card --
                     if (q.isSection) {
                       return (
-                        <div key={q.id} className="rounded-xl overflow-hidden" style={{ background: FE.card, border: `1px solid ${accentColor}40`, borderLeft: `3px solid ${accentColor}` }}>
-                          <div className="flex items-center justify-between px-3.5 py-2.5" style={{ borderBottom: `1px solid ${FE.divider}` }}>
-                            <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentColor }}>Section</span>
-                            <button type="button" onClick={() => updateConfig({ questions: formConfig.questions?.filter(qq => qq.id !== q.id) })}
-                              className="p-1 rounded transition-colors hover:bg-red-500/10">
-                              <X className="w-3.5 h-3.5 text-red-400" />
-                            </button>
+                        <SortableQuestionShell key={q.id} id={q.id}>
+                          {({ dragHandle }) => (
+                          <div className="rounded-xl overflow-hidden" style={{ background: FE.card, border: `1px solid ${accentColor}40`, borderLeft: `3px solid ${accentColor}` }}>
+                            <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: isExpanded ? `1px solid ${FE.divider}` : 'none' }}>
+                              {dragHandle}
+                              <button type="button" onClick={() => toggleQuestion(q.id)} className="flex-1 text-left">
+                                <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentColor }}>
+                                  {q.sectionTitle || 'Section'}
+                                </span>
+                              </button>
+                              <button type="button" onClick={() => updateConfig({ questions: formConfig.questions?.filter(qq => qq.id !== q.id) })}
+                                className="p-1 rounded transition-colors hover:bg-red-500/10">
+                                <X className="w-3.5 h-3.5 text-red-400" />
+                              </button>
+                              <button type="button" onClick={() => toggleQuestion(q.id)} className="p-1 transition-colors" style={{ color: FE.faint }}>
+                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                            {isExpanded && (
+                            <div className="px-3.5 py-3 space-y-2">
+                              <input
+                                value={q.sectionTitle || ''}
+                                onChange={e => updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, sectionTitle: e.target.value } : qq) })}
+                                placeholder="Section title…"
+                                className={`${inputCls} font-semibold`}
+                                style={inputStyle}
+                              />
+                              <input
+                                value={q.sectionDescription || ''}
+                                onChange={e => updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, sectionDescription: e.target.value } : qq) })}
+                                placeholder="Optional description…"
+                                className={inputCls}
+                                style={inputStyle}
+                              />
+                            </div>
+                            )}
                           </div>
-                          <div className="px-3.5 py-3 space-y-2">
-                            <input
-                              value={q.sectionTitle || ''}
-                              onChange={e => updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, sectionTitle: e.target.value } : qq) })}
-                              placeholder="Section title…"
-                              className={`${inputCls} font-semibold`}
-                              style={inputStyle}
-                            />
-                            <input
-                              value={q.sectionDescription || ''}
-                              onChange={e => updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, sectionDescription: e.target.value } : qq) })}
-                              placeholder="Optional description…"
-                              className={inputCls}
-                              style={inputStyle}
-                            />
-                          </div>
-                        </div>
+                          )}
+                        </SortableQuestionShell>
                       );
                     }
 
                     return (
-                      <div key={q.id} className="rounded-xl overflow-hidden" style={{ background: FE.card, border: `1px solid ${FE.cardBorder}` }}>
-                        <div className="flex items-center justify-between px-3.5 py-2.5" style={{ borderBottom: `1px solid ${FE.divider}` }}>
-                          <span className="text-xs font-medium" style={{ color: FE.faint }}>Q{qIdx + 1}</span>
+                      <SortableQuestionShell key={q.id} id={q.id}>
+                        {({ dragHandle }) => (
+                      <div className="rounded-xl overflow-hidden" style={{ background: FE.card, border: `1px solid ${FE.cardBorder}` }}>
+                        <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: isExpanded ? `1px solid ${FE.divider}` : 'none' }}>
+                          {dragHandle}
+                          <button type="button" onClick={() => toggleQuestion(q.id)} className="flex-1 text-left min-w-0">
+                            <span className="text-xs font-medium truncate block" style={{ color: FE.faint }}>
+                              {q.lessonOnly ? '📖' : `Q${qIdx + 1}`}{q.question ? ` · ${q.question}` : ''}
+                            </span>
+                          </button>
                           <div className="flex items-center gap-1.5">
                             <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
                               {([
@@ -2016,10 +2081,13 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                             <button type="button" onClick={() => handleRemoveQuestion(q.id)} className="p-1 transition-colors hover:text-red-400" style={{ color: FE.faint }}>
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
+                            <button type="button" onClick={() => toggleQuestion(q.id)} className="p-1 transition-colors" style={{ color: FE.faint }}>
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
                           </div>
                         </div>
 
-                        <div className="p-3.5 space-y-3">
+                        {isExpanded && <div className="p-3.5 space-y-3">
                           <div className="flex flex-wrap gap-2">
                             {!q.lessonOnly && (<>
                             <button
@@ -2351,10 +2419,26 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                               </div>
                             )}
                           </div>
-                        </div>
+                        </div>}
                       </div>
+                        )}
+                      </SortableQuestionShell>
                     );
                   })}
+                    </SortableContext>
+                    <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.18,0.67,0.6,1.22)' }}>
+                      {activeQuestionId ? (() => {
+                        const aq = formConfig.questions?.find(q => q.id === activeQuestionId);
+                        if (!aq) return null;
+                        return (
+                          <div style={{ background: FE.card, border: `1.5px solid ${accentColor}`, borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, boxShadow: `0 16px 40px rgba(0,0,0,0.25)`, cursor: 'grabbing', transform: 'rotate(1deg) scale(1.02)' }}>
+                            <GripVertical className="w-3.5 h-3.5" style={{ color: accentColor }} />
+                            <span style={{ fontSize: 12, fontWeight: 600, color: FE.text, flex: 1 }}>{aq.isSection ? (aq.sectionTitle || 'Section') : (aq.question || 'Untitled question')}</span>
+                          </div>
+                        );
+                      })() : null}
+                    </DragOverlay>
+                  </DndContext>
                   {(!formConfig.questions || formConfig.questions.length === 0) && <p className="text-xs text-center py-3" style={{ color: FE.faint }}>No questions yet.</p>}
 
                   <div className="flex items-center gap-2 pt-1">

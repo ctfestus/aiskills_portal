@@ -1,14 +1,35 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight,
   Plus, Trash2, X, Check, RefreshCw, Upload, Pencil, Star, Clock, Download,
-  Link as LinkIcon, FileText, Database, PenLine, Table,
+  Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical,
 } from 'lucide-react';
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+function SortableVEShell({ id, children }: {
+  id: string;
+  children: (bag: { dragHandle: React.ReactNode }) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0 : 1 };
+  const dragHandle = (
+    <button type="button" {...attributes} {...listeners}
+      className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+      style={{ color: '#888' }}>
+      <GripVertical className="w-3.5 h-3.5" />
+    </button>
+  );
+  return <div ref={setNodeRef} style={style}>{children({ dragHandle })}</div>;
+}
 import { RichTextEditor } from '@/components/RichTextEditor';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -162,6 +183,33 @@ function VirtualExperienceCreatePageInner() {
     };
     init();
   }, [editId, router]);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const handleModuleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !config) return;
+    const oldIdx = config.modules.findIndex(m => m.id === active.id);
+    const newIdx = config.modules.findIndex(m => m.id === over.id);
+    setConfig(c => c ? { ...c, modules: arrayMove(c.modules, oldIdx, newIdx) } : c);
+  };
+
+  const handleLessonDragEnd = (moduleId: string) => (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !config) return;
+    setConfig(c => {
+      if (!c) return c;
+      return {
+        ...c,
+        modules: c.modules.map(m => {
+          if (m.id !== moduleId) return m;
+          const oldIdx = m.lessons.findIndex(l => l.id === active.id);
+          const newIdx = m.lessons.findIndex(l => l.id === over.id);
+          return { ...m, lessons: arrayMove(m.lessons, oldIdx, newIdx) };
+        }),
+      };
+    });
+  };
 
   // -- Helpers ---
   const toggleModule = (id: string) => setExpandedModules(prev => {
@@ -973,12 +1021,24 @@ function VirtualExperienceCreatePageInner() {
                   </div>
 
                   <div className="px-5 pb-5">
-                    {(() => {
-                      const allItems = (config.modules || []).flatMap((mod, mi) =>
-                        (mod.lessons || []).map((les, li) => ({ mod, mi, les, li }))
-                      );
-                      const totalItems = allItems.length;
-                      return allItems.map(({ mod, mi, les, li }, globalIdx) => {
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleModuleDragEnd}>
+                    <SortableContext items={(config.modules || []).map(m => m.id)} strategy={verticalListSortingStrategy}>
+                    {(config.modules || []).map((mod, mi) => {
+                      const globalOffset = (config.modules || []).slice(0, mi).reduce((s, m) => s + (m.lessons || []).length, 0);
+                      const totalItems   = (config.modules || []).reduce((s, m) => s + (m.lessons || []).length, 0);
+                      return (
+                      <SortableVEShell key={mod.id} id={mod.id}>
+                        {({ dragHandle: moduleDragHandle }) => (
+                        <div className="group">
+                          {/* Module drag strip */}
+                          <div className="flex items-center gap-1.5 mb-1 pl-1">
+                            {moduleDragHandle}
+                          </div>
+                          {/* Lessons within this module */}
+                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleLessonDragEnd(mod.id)}>
+                          <SortableContext items={(mod.lessons || []).map(l => l.id)} strategy={verticalListSortingStrategy}>
+                          {(mod.lessons || []).map((les, li) => {
+                        const globalIdx    = globalOffset + li;
                         const isIntro      = globalIdx === 0;
                         const isLastLesson = globalIdx === totalItems - 1;
                         const isLastInMod  = li === mod.lessons.length - 1;
@@ -986,9 +1046,14 @@ function VirtualExperienceCreatePageInner() {
                         const estTime  = reqCount <= 2 ? '15-30 mins' : reqCount <= 4 ? '30-60 mins' : '45-90 mins';
                         const lessonDiff = isIntro ? null : globalIdx === 1 ? 'Beginner' : config.difficulty.charAt(0).toUpperCase() + config.difficulty.slice(1);
                         const expandKey = `${mod.id}-${les.id}`;
+                        return (
+                        <SortableVEShell key={les.id} id={les.id}>
+                          {({ dragHandle: lessonDragHandle }) => (<>
 
                         return (
-                          <div key={les.id} className="flex items-start gap-3 group">
+                          <div className="flex items-start gap-3 group">
+                            {/* Lesson drag handle */}
+                            <div className="pt-2 flex-shrink-0">{lessonDragHandle}</div>
                             {/* Left col: circle + dashed connector */}
                             <div className="flex flex-col items-center flex-shrink-0">
                               {isIntro ? (
@@ -1214,9 +1279,19 @@ function VirtualExperienceCreatePageInner() {
                               )}
                             </div>
                           </div>
+                          </>)}
+                        </SortableVEShell>
                         );
-                      });
-                    })()}
+                      })}
+                          </SortableContext>
+                          </DndContext>
+                        </div>
+                        )}
+                      </SortableVEShell>
+                      );
+                    })}
+                    </SortableContext>
+                    </DndContext>
                   </div>
                 </div>
               </div>

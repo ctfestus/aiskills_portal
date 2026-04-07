@@ -7,9 +7,9 @@ import {
   BookOpen, CalendarDays, ClipboardList, Users, Megaphone,
   Calendar, Trophy, Award, ChevronDown, LogOut,
   Settings, User, Sun, Moon, Menu, X,
-  CheckCircle, Clock, AlertCircle, Star, ExternalLink,
+  CheckCircle, Clock, AlertCircle, AlertTriangle, Star, ExternalLink,
   GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
-  Play, Lock, FileText, BarChart3, Bell, Plus, ArrowLeft, Upload, Video,
+  Play, FileText, BarChart3, Bell, Plus, ArrowLeft, Upload, Video,
   ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase, Search, LayoutDashboard,
   Copy, Check,
 } from 'lucide-react';
@@ -624,7 +624,8 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
   const [detailCourse, setDetailCourse] = useState<any>(null);
   // VE attempt status map: formId -> { started, completed }
   const [veStatusMap, setVeStatusMap] = useState<Record<string, { started: boolean; completed: boolean }>>({});
-
+  const [isOutstanding, setIsOutstanding] = useState(false);
+  const [showOutstandingModal, setShowOutstandingModal] = useState(false);
   // Semantic search
   const [searchQuery,   setSearchQuery]   = useState('');
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
@@ -639,16 +640,23 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
 
-      // Get student's cohort
+      // Get student's cohort -- original_cohort_id being set means they're currently in outstanding
       const { data: student } = await supabase
         .from('students')
-        .select('cohort_id')
+        .select('cohort_id, original_cohort_id')
         .eq('id', user.id)
         .single();
+
+      const outstanding = !!student?.original_cohort_id;
+      setIsOutstanding(outstanding);
+      if (outstanding && !sessionStorage.getItem('outstandingModalDismissed')) {
+        setShowOutstandingModal(true);
+      }
 
       // Get session token for authenticated API calls
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token ?? '';
+
 
       // Load cohort courses + student attempts + certificates in parallel
       // Fetch all cohort forms (no content_type filter) and classify client-side
@@ -777,16 +785,85 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
     </div>
   );
 
-  if (!courses.length) return (
-    <EmptyState icon={BookOpen} title="No courses yet"
-      body="You have not started any courses. Browse available courses to get started."
-      action={<Link href="/" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold hover:opacity-80 dashboard-cta"
-        style={{ background: C.cta, color: C.ctaText }}><BookOpen className="w-4 h-4"/> Browse courses</Link>}/>
-  );
-
   return (
     <>
+    {/* Outstanding balance modal -- shown once per session */}
+    {showOutstandingModal && (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}>
+        <motion.div
+          initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+          className="w-full max-w-sm rounded-xl overflow-hidden"
+          style={{ background: C.card, boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
+
+          {/* Brand banner image */}
+          <div className="relative">
+            <img
+              src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Cover.jpg"
+              alt="AI Skills Africa"
+              className="w-full object-cover"
+              style={{ height: 140 }}
+            />
+            {/* Dark overlay with warning badge */}
+            <div className="absolute inset-0 flex items-end p-4" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 55%)' }}>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-md" style={{ background: 'rgba(220,38,38,0.9)', backdropFilter: 'blur(8px)' }}>
+                <AlertTriangle className="w-3.5 h-3.5" style={{ color: '#ffffff' }}/>
+                <span className="text-xs font-bold tracking-wide" style={{ color: '#ffffff' }}>Action Required</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {/* Heading */}
+            <div className="text-center space-y-1">
+              <h3 className="text-lg font-bold tracking-tight" style={{ color: C.text }}>Payment Overdue</h3>
+              <p className="text-sm" style={{ color: C.muted }}>Your course access has been temporarily restricted.</p>
+            </div>
+
+            {/* Steps */}
+            <div className="rounded-lg p-4 space-y-2.5" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }}>
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: C.faint }}>What to do</p>
+              {['Contact your instructor or admin', 'Confirm your payment has been made', 'Access is restored automatically'].map((step, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 text-[10px] font-bold"
+                    style={{ background: 'linear-gradient(135deg,#dc2626,#b91c1c)', color: 'white' }}>{i + 1}</div>
+                  <p className="text-xs" style={{ color: C.muted }}>{step}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* CTA */}
+            <button
+              onClick={() => { sessionStorage.setItem('outstandingModalDismissed', '1'); setShowOutstandingModal(false); }}
+              className="w-full py-3 rounded-lg text-sm font-bold tracking-wide transition-all hover:opacity-90 active:scale-95"
+              style={{ background: 'linear-gradient(135deg, #dc2626, #b91c1c)', color: 'white', boxShadow: '0 4px 20px rgba(220,38,38,0.4)' }}>
+              I Understand
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    )}
+
     <div className="space-y-6">
+      {/* Outstanding balance banner -- persistent while student is in outstanding cohort */}
+      {isOutstanding && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
+          style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.25)' }}>
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" style={{ color: '#dc2626' }}/>
+          <p className="text-sm font-medium flex-1" style={{ color: '#dc2626' }}>
+            Outstanding payment balance -- course access is restricted. Contact your instructor to resolve payment.
+          </p>
+        </div>
+      )}
+
+      {/* Empty state -- shown here so modal/banner still render above it */}
+      {!courses.length && !isOutstanding && (
+        <EmptyState icon={BookOpen} title="No courses yet"
+          body="You have not started any courses. Browse available courses to get started."
+          action={<Link href="/" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold hover:opacity-80 dashboard-cta"
+            style={{ background: C.cta, color: C.ctaText }}><BookOpen className="w-4 h-4"/> Browse courses</Link>}/>
+      )}
+
       {/* Semantic search bar */}
       <div className="relative">
         <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: C.muted }} />
@@ -833,7 +910,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
                   return (
                     <a key={r.formId} href={href}
                       className="rounded-2xl overflow-hidden no-underline flex flex-col transition-all hover:opacity-90"
-                      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, cursor: 'pointer' }}>
                       <div className="w-full h-36 flex items-center justify-center overflow-hidden flex-shrink-0"
                         style={{ background: `${C.green}12` }}>
                         {r.coverImage

@@ -399,6 +399,7 @@ export default function PublicFormPage() {
           if (name && email) {
             setPrefilledName(name);
             setPrefilledEmail(email);
+
             // Auto-start immediately (same batch) when coming from student dashboard
             if (new URLSearchParams(window.location.search).get('go') === '1') {
               setCourseStarted(true);
