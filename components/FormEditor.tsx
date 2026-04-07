@@ -590,6 +590,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
   const [availableForms, setAvailableForms] = useState<{ id: string; title: string; slug: string }[]>([]);
   const [cohorts, setCohorts]               = useState<{ id: string; name: string }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
+  const savedCohortIds = useRef<string[]>([]);
   const toggleCohort = (id: string) =>
     setSelectedCohortIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const [creatingMeeting, setCreatingMeeting] = useState<string | null>(null);
@@ -637,7 +638,9 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
       if (data && !error) {
         setFormConfig(data.config);
         setCustomSlug(data.slug || '');
-        if (data.cohort_ids?.length) setSelectedCohortIds(data.cohort_ids);
+        const loadedCohorts = data.cohort_ids ?? [];
+        if (loadedCohorts.length) setSelectedCohortIds(loadedCohorts);
+        savedCohortIds.current = loadedCohorts;
       }
       setIsLoading(false);
     });
@@ -950,6 +953,20 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
         console.error('Save error details:', error.code, error.message, error.details, error.hint);
         throw error;
       }
+      // Notify students in cohorts that were newly added in this edit
+      const addedCohortIds = selectedCohortIds.filter(id => !savedCohortIds.current.includes(id));
+      if (addedCohortIds.length) {
+        const { data: { session: notifySession } } = await supabase.auth.getSession();
+        if (notifySession?.access_token) {
+          fetch('/api/notify-assignment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${notifySession.access_token}` },
+            body: JSON.stringify({ formId }),
+          }).catch(() => {});
+        }
+      }
+      savedCohortIds.current = [...selectedCohortIds];
+
       setSaved(true);
       setPreviewKey(k => k + 1);
       setTimeout(() => setSaved(false), 2000);
