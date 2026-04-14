@@ -1,16 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
-const API_URL = process.env.AISA_API_URL ?? 'https://app.aiskillsafrica.com';
-const SUPABASE_URL = process.env.AISA_SUPABASE_URL ?? '';
-const SUPABASE_KEY = process.env.AISA_SUPABASE_ANON_KEY ?? '';
-const EMAIL = process.env.AISA_EMAIL ?? '';
-const PASSWORD = process.env.AISA_PASSWORD ?? '';
+const API_URL = process.env.MCP_API_URL ?? 'https://app.aiskillsafrica.com';
+const SUPABASE_URL = process.env.MCP_SUPABASE_URL ?? '';
+const SUPABASE_KEY = process.env.MCP_SUPABASE_ANON_KEY ?? '';
+const EMAIL = process.env.MCP_EMAIL ?? '';
+const PASSWORD = process.env.MCP_PASSWORD ?? '';
 let supabase = null;
 let sessionToken = null;
 // Sign in once at startup and refresh when needed
 export async function getToken() {
     if (!supabase) {
         if (!SUPABASE_URL || !SUPABASE_KEY)
-            throw new Error('AISA_SUPABASE_URL and AISA_SUPABASE_ANON_KEY are required');
+            throw new Error('MCP_SUPABASE_URL and MCP_SUPABASE_ANON_KEY are required');
         supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
     }
     if (sessionToken) {
@@ -20,7 +20,7 @@ export async function getToken() {
             return sessionToken;
     }
     if (!EMAIL || !PASSWORD)
-        throw new Error('AISA_EMAIL and AISA_PASSWORD are required');
+        throw new Error('MCP_EMAIL and MCP_PASSWORD are required');
     const { data, error } = await supabase.auth.signInWithPassword({ email: EMAIL, password: PASSWORD });
     if (error || !data.session)
         throw new Error(`Authentication failed: ${error?.message}`);

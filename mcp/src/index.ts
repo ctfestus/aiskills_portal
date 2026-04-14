@@ -3,10 +3,12 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { apiCall, apiGet, supabaseQuery, supabaseRun, getToken } from './api.js';
 
+const serverName = process.env.MCP_NAME ?? 'aisa-mcp';
+
 const server = new McpServer({
-  name:        'aisa-mcp',
+  name:        serverName,
   version:     '1.0.0',
-  description: 'AI Skills Africa platform tools. IMPORTANT RULES: (1) Never ask the user for IDs -- always resolve names to IDs yourself by calling the relevant list_* tool first. If the user says "the Python course" call list_courses, find it by name, and use its ID. If they say "Lagos cohort" call list_cohorts first. (2) All content is saved as draft -- never published unless the user explicitly asks. (3) All fields in every tool schema are fully supported. Do not tell users a field is unsupported.',
+  description: `${serverName} platform tools. IMPORTANT RULES: (1) Never ask the user for IDs -- always resolve names to IDs yourself by calling the relevant list_* tool first. If the user says "the Python course" call list_courses, find it by name, and use its ID. If they say "Lagos cohort" call list_cohorts first. (2) All content is saved as draft -- never published unless the user explicitly asks. (3) All fields in every tool schema are fully supported. Do not tell users a field is unsupported.`,
 });
 
 // --- COHORTS ---
@@ -159,7 +161,7 @@ server.tool(
 
 server.tool(
   'create_course',
-  'Create a new course on the AI Skills Africa platform. Each question supports: question text, options array, correct index, explanation, and an optional lesson object (title, body, videoUrl) for teaching content shown before the question. All fields are saved directly to the database.',
+  'Create a new course with questions and optional lesson content. No Bunny video required -- use this for text-based courses or when you already have video URLs. Use create_course_from_bunny only when building a course directly from a Bunny video collection.',
   {
     title:         z.string().describe('Course title'),
     description:   z.string().optional().describe('Short description shown on the course card'),
@@ -179,10 +181,12 @@ server.tool(
     passmark:      z.number().min(1).max(100).optional().describe('Pass percentage (default 50)'),
     deadline_days: z.number().optional().describe('Days to complete after assignment'),
     learn_outcomes: z.array(z.string()).optional().describe('What students will learn'),
-    theme:         z.enum(['forest', 'lime', 'emerald', 'rose', 'amber']).optional().describe('Color theme (default: forest)'),
-    mode:          z.enum(['dark', 'light', 'auto']).optional().describe('Display mode (default: dark)'),
+    theme:          z.enum(['forest', 'lime', 'emerald', 'rose', 'amber']).optional().describe('Color theme (default: forest)'),
+    mode:           z.enum(['dark', 'light', 'auto']).optional().describe('Display mode (default: dark)'),
+    points_enabled: z.boolean().optional().describe('Enable XP reward points for this course'),
+    points_base:    z.number().optional().describe('Base XP points per question (default 100)'),
   },
-  async ({ title, description, questions, cohort_ids, passmark, deadline_days, learn_outcomes, theme, mode }) => {
+  async ({ title, description, questions, cohort_ids, passmark, deadline_days, learn_outcomes, theme, mode, points_enabled, points_base }) => {
     const data = await apiCall('/api/forms', {
       title,
       description,
@@ -196,6 +200,8 @@ server.tool(
         learnOutcomes: learn_outcomes ?? [],
         theme:         theme ?? 'forest',
         mode:          mode ?? 'dark',
+        pointsEnabled: points_enabled ?? false,
+        pointsBase:    points_base ?? 100,
       },
     });
     return { content: [{ type: 'text', text: `Course created.\nID: ${data.id}\nSlug: ${data.slug}\nStatus: ${data.status}` }] };
@@ -226,10 +232,12 @@ server.tool(
     deadline_days: z.number().optional(),
     status:        z.enum(['draft', 'published']).optional(),
     learn_outcomes: z.array(z.string()).optional(),
-    theme:         z.enum(['forest', 'lime', 'emerald', 'rose', 'amber']).optional(),
-    mode:          z.enum(['dark', 'light', 'auto']).optional(),
+    theme:          z.enum(['forest', 'lime', 'emerald', 'rose', 'amber']).optional(),
+    mode:           z.enum(['dark', 'light', 'auto']).optional(),
+    points_enabled: z.boolean().optional().describe('Enable XP reward points'),
+    points_base:    z.number().optional().describe('Base XP points per question (default 100)'),
   },
-  async ({ id, title, description, questions, cohort_ids, passmark, deadline_days, status, learn_outcomes, theme, mode }) => {
+  async ({ id, title, description, questions, cohort_ids, passmark, deadline_days, status, learn_outcomes, theme, mode, points_enabled, points_base }) => {
     await apiCall('/api/forms', {
       id,
       title,
@@ -244,6 +252,8 @@ server.tool(
         learnOutcomes: learn_outcomes,
         theme,
         mode,
+        pointsEnabled: points_enabled,
+        pointsBase:    points_base,
       },
     }, 'PUT');
     return { content: [{ type: 'text', text: `Course updated. ID: ${id}` }] };
@@ -548,6 +558,8 @@ server.tool(
     theme:                    z.enum(['forest', 'lime', 'emerald', 'rose', 'amber']).optional(),
     mode:                     z.enum(['dark', 'light', 'auto']).optional(),
     learn_outcomes:           z.array(z.string()).optional().describe('What students will learn'),
+    points_enabled:           z.boolean().optional().describe('Enable XP reward points'),
+    points_base:              z.number().optional().describe('Base XP points per question (default 100)'),
     comprehension_questions:  z.array(z.array(z.object({
       question:    z.string(),
       options:     z.array(z.string()),
@@ -555,7 +567,7 @@ server.tool(
       explanation: z.string().optional(),
     }))).optional().describe('Array of question sets -- one array per video, in the same order as the videos. Each set is placed after its video slide.'),
   },
-  async ({ collection_id, title, description, cohort_ids, passmark, deadline_days, theme, mode, learn_outcomes, comprehension_questions }) => {
+  async ({ collection_id, title, description, cohort_ids, passmark, deadline_days, theme, mode, learn_outcomes, points_enabled, points_base, comprehension_questions }) => {
     // Fetch all videos sorted by sortIndex, then by title as fallback
     // Fetch all pages so no videos are missed
     let page = 1;
@@ -613,6 +625,8 @@ server.tool(
         learnOutcomes: learn_outcomes ?? [],
         theme:         theme ?? 'forest',
         mode:          mode ?? 'dark',
+        pointsEnabled: points_enabled ?? false,
+        pointsBase:    points_base ?? 100,
       },
     });
 

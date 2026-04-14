@@ -253,8 +253,8 @@ export async function PUT(req: NextRequest) {
       passmark:       config.passmark        ?? 50,
       course_timer:   config.timer           ?? config.courseTimer ?? null,
       learn_outcomes: config.learnOutcomes   ?? [],
-      points_enabled: config.pointsEnabled   ?? config.pointsSystem?.enabled   ?? false,
-      points_base:    config.pointsBase      ?? config.pointsSystem?.basePoints ?? 100,
+      points_enabled: config.pointsSystem?.enabled   ?? config.pointsEnabled   ?? false,
+      points_base:    config.pointsSystem?.basePoints ?? config.pointsBase      ?? 100,
       post_submission: config.postSubmission ?? null,
     };
   } else if (found.table === 'events') {

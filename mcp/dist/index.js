@@ -2,15 +2,16 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { apiCall, supabaseQuery, supabaseRun } from './api.js';
+const serverName = process.env.MCP_NAME ?? 'aisa-mcp';
 const server = new McpServer({
-    name: 'aisa-mcp',
+    name: serverName,
     version: '1.0.0',
-    description: 'AI Skills Africa platform tools. IMPORTANT RULES: (1) Never ask the user for IDs — always resolve names to IDs yourself by calling the relevant list_* tool first. If the user says "the Python course" call list_courses, find it by name, and use its ID. If they say "Lagos cohort" call list_cohorts first. (2) All content is saved as draft — never published unless the user explicitly asks. (3) All fields in every tool schema are fully supported. Do not tell users a field is unsupported.',
+    description: `${serverName} platform tools. IMPORTANT RULES: (1) Never ask the user for IDs -- always resolve names to IDs yourself by calling the relevant list_* tool first. If the user says "the Python course" call list_courses, find it by name, and use its ID. If they say "Lagos cohort" call list_cohorts first. (2) All content is saved as draft -- never published unless the user explicitly asks. (3) All fields in every tool schema are fully supported. Do not tell users a field is unsupported.`,
 });
-// ─── COHORTS ──────────────────────────────────────────────────────────────────
+// --- COHORTS ---
 server.tool('list_cohorts', 'List all cohorts. Use this to get cohort IDs before creating or assigning content.', {}, async () => {
     const data = await supabaseQuery('cohorts', 'id, name, created_at');
-    const formatted = data.map((c) => `• ${c.name} — ID: ${c.id}`).join('\n');
+    const formatted = data.map((c) => `• ${c.name} -- ID: ${c.id}`).join('\n');
     return { content: [{ type: 'text', text: formatted || 'No cohorts found.' }] };
 });
 server.tool('create_cohort', 'Create a new cohort.', {
@@ -20,7 +21,7 @@ server.tool('create_cohort', 'Create a new cohort.', {
     return { content: [{ type: 'text', text: `Cohort created.\nName: ${name}\nID: ${data.id}` }] };
 });
 server.tool('list_cohort_students', 'List all students in a cohort with their name, email, and XP.', {
-    cohort_id: z.string().describe('Cohort ID — if you only have a name, call list_cohorts first to resolve it'),
+    cohort_id: z.string().describe('Cohort ID -- if you only have a name, call list_cohorts first to resolve it'),
 }, async ({ cohort_id }) => {
     const students = await supabaseRun(sb => sb.from('students').select('id, full_name, email, role').eq('cohort_id', cohort_id).eq('role', 'student').order('full_name'));
     if (!students?.length)
@@ -30,11 +31,11 @@ server.tool('list_cohort_students', 'List all students in a cohort with their na
     const xpMap = {};
     for (const x of xpRows ?? [])
         xpMap[x.student_id] = x.total_xp;
-    const formatted = students.map((s, i) => `${i + 1}. ${s.full_name} — ${s.email} — ${xpMap[s.id] ?? 0} XP`).join('\n');
+    const formatted = students.map((s, i) => `${i + 1}. ${s.full_name} -- ${s.email} -- ${xpMap[s.id] ?? 0} XP`).join('\n');
     return { content: [{ type: 'text', text: `${students.length} students:\n\n${formatted}` }] };
 });
 server.tool('get_cohort_stats', 'Get completion and pass rate stats for a cohort across all assigned courses.', {
-    cohort_id: z.string().describe('Cohort ID — if you only have a name, call list_cohorts first to resolve it'),
+    cohort_id: z.string().describe('Cohort ID -- if you only have a name, call list_cohorts first to resolve it'),
 }, async ({ cohort_id }) => {
     const courses = await supabaseRun(sb => sb.from('courses').select('id, title').contains('cohort_ids', [cohort_id]));
     if (!courses?.length)
@@ -59,10 +60,10 @@ server.tool('get_cohort_stats', 'Get completion and pass rate stats for a cohort
         const passRate = s.completions ? Math.round((s.passes / s.completions) * 100) : 0;
         return `• ${c.title}\n  Completions: ${s.completions}/${studentCount} (${compRate}%) · Pass rate: ${passRate}%`;
     }).join('\n');
-    return { content: [{ type: 'text', text: `Cohort stats — ${studentCount} students:\n\n${lines}` }] };
+    return { content: [{ type: 'text', text: `Cohort stats -- ${studentCount} students:\n\n${lines}` }] };
 });
 server.tool('get_leaderboard', 'Get the top students by XP for a cohort.', {
-    cohort_id: z.string().describe('Cohort ID — if you only have a name, call list_cohorts first to resolve it'),
+    cohort_id: z.string().describe('Cohort ID -- if you only have a name, call list_cohorts first to resolve it'),
     limit: z.number().min(1).max(50).optional().describe('Number of students to return (default 10)'),
 }, async ({ cohort_id, limit = 10 }) => {
     const students = await supabaseRun(sb => sb.from('students').select('id, full_name').eq('cohort_id', cohort_id).eq('role', 'student'));
@@ -73,17 +74,17 @@ server.tool('get_leaderboard', 'Get the top students by XP for a cohort.', {
     const nameMap = {};
     for (const s of students)
         nameMap[s.id] = s.full_name;
-    const formatted = (xpRows ?? []).map((x, i) => `${i + 1}. ${nameMap[x.student_id] ?? 'Unknown'} — ${x.total_xp} XP`).join('\n');
+    const formatted = (xpRows ?? []).map((x, i) => `${i + 1}. ${nameMap[x.student_id] ?? 'Unknown'} -- ${x.total_xp} XP`).join('\n');
     return { content: [{ type: 'text', text: formatted || 'No XP data yet.' }] };
 });
-// ─── COURSES ──────────────────────────────────────────────────────────────────
+// --- COURSES ---
 server.tool('list_courses', 'List all courses created by the instructor.', {}, async () => {
     const data = await supabaseQuery('courses', 'id, title, status, slug, cohort_ids, created_at');
-    const formatted = data.map((c) => `• ${c.title} [${c.status}] — ID: ${c.id} — slug: ${c.slug}`).join('\n');
+    const formatted = data.map((c) => `• ${c.title} [${c.status}] -- ID: ${c.id} -- slug: ${c.slug}`).join('\n');
     return { content: [{ type: 'text', text: formatted || 'No courses found.' }] };
 });
 server.tool('get_course', 'Get the full content of a course by ID, including all questions and lesson slides. Use this before updating a course to see what already exists.', {
-    id: z.string().describe('Course ID — if you only have a name, call list_courses first to resolve it'),
+    id: z.string().describe('Course ID -- if you only have a name, call list_courses first to resolve it'),
 }, async ({ id }) => {
     const rows = await supabaseQuery('courses', 'id, title, description, status, slug, cohort_ids, questions, passmark, learn_outcomes, theme, mode, deadline_days');
     const data = rows.find((r) => r.id === id);
@@ -191,14 +192,14 @@ server.tool('publish_content', 'Publish or unpublish any course, virtual experie
     }
     return { content: [{ type: 'text', text: `${content_type} ${status === 'published' ? 'published' : 'set to draft'}. ID: ${id}` }] };
 });
-// ─── VIRTUAL EXPERIENCES (GUIDED PROJECTS) ────────────────────────────────────
+// --- VIRTUAL EXPERIENCES (GUIDED PROJECTS) ---
 server.tool('list_virtual_experiences', 'List all virtual experiences (guided projects) created by the instructor.', {}, async () => {
     const data = await supabaseQuery('virtual_experiences', 'id, title, status, slug, cohort_ids, industry, difficulty, created_at');
-    const formatted = data.map((v) => `• ${v.title} [${v.status}] — ID: ${v.id} — slug: ${v.slug}${v.industry ? ` — ${v.industry}` : ''}`).join('\n');
+    const formatted = data.map((v) => `• ${v.title} [${v.status}] -- ID: ${v.id} -- slug: ${v.slug}${v.industry ? ` -- ${v.industry}` : ''}`).join('\n');
     return { content: [{ type: 'text', text: formatted || 'No virtual experiences found.' }] };
 });
 server.tool('get_virtual_experience', 'Get the full content of a virtual experience by ID, including all modules and lessons.', {
-    id: z.string().describe('Virtual experience ID — if you only have a name, call list_virtual_experiences first to resolve it'),
+    id: z.string().describe('Virtual experience ID -- if you only have a name, call list_virtual_experiences first to resolve it'),
 }, async ({ id }) => {
     const rows = await supabaseQuery('virtual_experiences', 'id, title, status, slug, cohort_ids, modules, learn_outcomes, industry, difficulty, role, company, duration, tools, tagline, theme, mode, deadline_days');
     const data = rows.find((r) => r.id === id);
@@ -295,14 +296,14 @@ server.tool('update_virtual_experience', 'Update an existing virtual experience 
     });
     return { content: [{ type: 'text', text: `Virtual experience updated. ID: ${data.id ?? id}` }] };
 });
-// ─── LEARNING PATHS ───────────────────────────────────────────────────────────
+// --- LEARNING PATHS ---
 server.tool('list_learning_paths', 'List all learning paths created by the instructor.', {}, async () => {
     const data = await supabaseQuery('learning_paths', 'id, title, status, item_ids, cohort_ids, created_at');
-    const formatted = data.map((p) => `• ${p.title} [${p.status}] — ID: ${p.id} — ${p.item_ids?.length ?? 0} items`).join('\n');
+    const formatted = data.map((p) => `• ${p.title} [${p.status}] -- ID: ${p.id} -- ${p.item_ids?.length ?? 0} items`).join('\n');
     return { content: [{ type: 'text', text: formatted || 'No learning paths found.' }] };
 });
 server.tool('get_learning_path', 'Get the full content of a learning path by ID, including all item IDs and assigned cohorts.', {
-    id: z.string().describe('Learning path ID — if you only have a name, call list_learning_paths first to resolve it'),
+    id: z.string().describe('Learning path ID -- if you only have a name, call list_learning_paths first to resolve it'),
 }, async ({ id }) => {
     const rows = await supabaseQuery('learning_paths', 'id, title, description, status, item_ids, cohort_ids, created_at');
     const data = rows.find((r) => r.id === id);
@@ -345,7 +346,7 @@ server.tool('update_learning_path', 'Update an existing learning path by ID.', {
     });
     return { content: [{ type: 'text', text: `Learning path updated. ID: ${id}` }] };
 });
-// ─── BUNNY VIDEO IMPORT ───────────────────────────────────────────────────────
+// --- BUNNY VIDEO IMPORT ---
 const BUNNY_API_KEY = process.env.BUNNY_API_KEY ?? '';
 const BUNNY_LIBRARY_ID = process.env.BUNNY_LIBRARY_ID ?? '';
 async function bunnyGet(path) {
@@ -363,11 +364,11 @@ server.tool('list_bunny_collections', 'List all video collections (folders) in t
     const items = data.items ?? [];
     if (!items.length)
         return { content: [{ type: 'text', text: 'No collections found.' }] };
-    const formatted = items.map((c) => `• ${c.name} — ID: ${c.guid} — ${c.videoCount ?? 0} videos`).join('\n');
+    const formatted = items.map((c) => `• ${c.name} -- ID: ${c.guid} -- ${c.videoCount ?? 0} videos`).join('\n');
     return { content: [{ type: 'text', text: formatted }] };
 });
 server.tool('list_bunny_videos', 'List all videos in a Bunny.net collection (folder) in title order. Use this to preview video titles and order before creating a course.', {
-    collection_id: z.string().describe('Bunny collection ID — get this from list_bunny_collections'),
+    collection_id: z.string().describe('Bunny collection ID -- get this from list_bunny_collections'),
 }, async ({ collection_id }) => {
     let page = 1;
     let allVideos = [];
@@ -385,8 +386,8 @@ server.tool('list_bunny_videos', 'List all videos in a Bunny.net collection (fol
     const formatted = sorted.map((v, i) => `${i + 1}. ${v.title} (${Math.round((v.length ?? 0) / 60)}m)`).join('\n');
     return { content: [{ type: 'text', text: `${sorted.length} videos:\n\n${formatted}` }] };
 });
-server.tool('create_course_from_bunny', 'Fetch all videos from a Bunny.net collection (folder) in order and create a course. Each video becomes a lesson slide. If comprehension_questions are provided, they are interleaved after each video slide — one entry per video in the same order.', {
-    collection_id: z.string().describe('Bunny collection (folder) ID — get this from list_bunny_collections'),
+server.tool('create_course_from_bunny', 'Fetch all videos from a Bunny.net collection (folder) in order and create a course. Each video becomes a lesson slide. If comprehension_questions are provided, they are interleaved after each video slide -- one entry per video in the same order.', {
+    collection_id: z.string().describe('Bunny collection (folder) ID -- get this from list_bunny_collections'),
     title: z.string().describe('Course title'),
     description: z.string().optional().describe('Course description'),
     cohort_ids: z.array(z.string()).optional().describe('Cohort IDs to assign to'),
@@ -400,7 +401,7 @@ server.tool('create_course_from_bunny', 'Fetch all videos from a Bunny.net colle
         options: z.array(z.string()),
         correct: z.number().describe('Index of correct option (0-based)'),
         explanation: z.string().optional(),
-    }))).optional().describe('Array of question sets — one array per video, in the same order as the videos. Each set is placed after its video slide.'),
+    }))).optional().describe('Array of question sets -- one array per video, in the same order as the videos. Each set is placed after its video slide.'),
 }, async ({ collection_id, title, description, cohort_ids, passmark, deadline_days, theme, mode, learn_outcomes, comprehension_questions }) => {
     // Fetch all videos sorted by sortIndex, then by title as fallback
     // Fetch all pages so no videos are missed
@@ -466,6 +467,6 @@ server.tool('create_course_from_bunny', 'Fetch all videos from a Bunny.net colle
     }).join('\n');
     return { content: [{ type: 'text', text: `Course created.\nID: ${courseData.id}\nSlug: ${courseData.slug}\n${videos.length} videos · ${totalQ} questions\n\n${summary}` }] };
 });
-// ─── START SERVER ─────────────────────────────────────────────────────────────
+// --- START SERVER ---
 const transport = new StdioServerTransport();
 await server.connect(transport);

@@ -275,6 +275,7 @@ export function CourseTaker({
 
   // Existing certificate (student already completed this course)
   const [existingCertId, setExistingCertId] = useState<string | null>(null);
+  const [finishPending, setFinishPending] = useState<any[] | null>(null); // unanswered questions blocking finish
 
   const questions = config.questions || [];
   const learningOutcomes: string[] = config.learnOutcomes || [];
@@ -369,7 +370,7 @@ export function CourseTaker({
       }
     }
     // Auto-open lesson before question if timing is set to 'before' (only for unanswered questions)
-    if ((config as any).lessonTiming === 'before' && currentQuestion.lesson?.body && !prevAnswer) {
+    if ((config as any).lessonTiming === 'before' && (currentQuestion.lesson?.body || currentQuestion.lesson?.videoUrl || currentQuestion.lesson?.imageUrl) && !prevAnswer) {
       setLessonOpen(true);
     } else {
       setLessonOpen(false);
@@ -1512,9 +1513,6 @@ export function CourseTaker({
   if (phase === 'complete') {
     const percentage = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 100;
     const passed = totalQuestions === 0 ? true : percentage >= passmark;
-    const skippedStillPending = questions.filter(
-      (q: any) => !q.lessonOnly && !q.isSection && skippedQuestions.has(q.id) && !answers[q.id]
-    );
     const unansweredCount = questions.filter((q: any) => !q.lessonOnly && !q.isSection && !answers[q.id]).length;
 
     const handleGoBack = (idx: number) => {
@@ -1546,7 +1544,7 @@ export function CourseTaker({
             </p>
           </div>
 
-          {/* Skipped / unanswered warning */}
+          {/* Unanswered warning */}
           {unansweredCount > 0 && (
             <div className="rounded-xl border border-red-500/25 bg-red-500/8 p-4 text-left space-y-3">
               <div className="flex items-start gap-2.5">
@@ -1556,15 +1554,14 @@ export function CourseTaker({
                     {unansweredCount} question{unansweredCount > 1 ? 's' : ''} unanswered
                   </p>
                   <p className="text-xs text-red-400/70 mt-0.5">
-                    {skippedStillPending.length > 0
-                      ? `You skipped ${skippedStillPending.length} question${skippedStillPending.length > 1 ? 's' : ''}. Go back to answer them or submit anyway.`
-                      : 'You left some questions blank. Go back to answer them or submit anyway.'}
+                    Go back to answer them or submit anyway.
                   </p>
                 </div>
               </div>
-              {skippedStillPending.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pl-6">
-                  {skippedStillPending.map((q: any) => {
+              <div className="flex flex-wrap gap-1.5 pl-6">
+                {questions
+                  .filter((q: any) => !q.lessonOnly && !q.isSection && !answers[q.id])
+                  .map((q: any) => {
                     const idx = questions.findIndex((qq: any) => qq.id === q.id);
                     return (
                       <button
@@ -1576,8 +1573,7 @@ export function CourseTaker({
                       </button>
                     );
                   })}
-                </div>
-              )}
+              </div>
             </div>
           )}
 
@@ -1710,6 +1706,15 @@ export function CourseTaker({
     saveProgress(newAnswers, currentQuestionIndex + 1, newScore, newPoints, newStreak, hintsUsed);
   };
 
+  const doFinish = (finalScore: number) => {
+    const pending = questions.filter((q: any) => !q.lessonOnly && !q.isSection && !answers[q.id]);
+    if (!reviewMode && pending.length > 0) {
+      setFinishPending(pending);
+    } else {
+      clearProgress(finalScore).then(() => setPhase('complete'));
+    }
+  };
+
   const handleNext = () => {
     setLessonOpen(false);
     setDirection(1);
@@ -1725,7 +1730,6 @@ export function CourseTaker({
       setIsCorrect(null);
     } else {
       if (reviewMode) {
-        // Review complete -- just reset to start without saving anything
         setCurrentQuestionIndex(0);
         setAnswers({});
         setSelectedOption(null);
@@ -1733,7 +1737,7 @@ export function CourseTaker({
         setIsChecking(false);
         setIsCorrect(null);
       } else {
-        clearProgress(score).then(() => setPhase('complete'));
+        doFinish(score);
       }
     }
   };
@@ -1816,7 +1820,7 @@ export function CourseTaker({
         setIsChecking(false);
         setIsCorrect(null);
       } else {
-        clearProgress(newScore).then(() => setPhase('complete'));
+        doFinish(newScore);
       }
     }
   };
@@ -2084,6 +2088,68 @@ export function CourseTaker({
 
     if (typeof document === 'undefined') return null;
     return createPortal(lessonSlide, document.body);
+  }
+
+  // -- Unanswered questions confirmation modal --
+  if (finishPending) {
+    const goToQuestion = (idx: number) => {
+      setFinishPending(null);
+      setCurrentQuestionIndex(idx);
+      setSelectedOption(null);
+      setFillBlankAnswer('');
+      setIsChecking(false);
+      setIsCorrect(null);
+      setDirection(-1);
+    };
+    const modal = (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
+        <div className={`w-full max-w-sm rounded-2xl p-6 space-y-4 ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-zinc-200'}`}>
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className={`font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                {finishPending.length} question{finishPending.length > 1 ? 's' : ''} unanswered
+              </p>
+              <p className={`text-sm mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                Go back to answer them or submit anyway.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {finishPending.map((q: any) => {
+              const idx = questions.findIndex((qq: any) => qq.id === q.id);
+              return (
+                <button
+                  key={q.id}
+                  onClick={() => goToQuestion(idx)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors"
+                  style={{ borderColor: accent, color: accent, background: `${accent}15` }}
+                >
+                  Q{idx + 1}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => { setFinishPending(null); clearProgress(score).then(() => setPhase('complete')); }}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
+            >
+              Submit anyway
+            </button>
+            <button
+              onClick={() => setFinishPending(null)}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-80"
+              style={{ background: accent }}
+            >
+              Keep answering
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+    if (typeof document === 'undefined') return null;
+    return createPortal(modal, document.body);
   }
 
   const quizUI = (
@@ -2548,7 +2614,7 @@ export function CourseTaker({
                       <p>{currentQuestion.explanation}</p>
                     </div>
                   )}
-                  {currentQuestion?.lesson?.body && (config as any).lessonTiming !== 'before' && (
+                  {(currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl) && (config as any).lessonTiming !== 'before' && (
                     <button
                       onClick={() => setLessonOpen(true)}
                       className={`w-full py-3 rounded-2xl text-sm font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${isCorrect ? (isDark ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100') : (isDark ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 hover:bg-rose-100')}`}
