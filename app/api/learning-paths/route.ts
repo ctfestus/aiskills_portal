@@ -251,7 +251,7 @@ async function sendPathAssignmentEmails(
         title:      f?.title ?? 'Untitled',
         coverImage: f?.cover_image ?? null,
         isVE,
-        description: null,
+        description: undefined,
       };
     });
 
