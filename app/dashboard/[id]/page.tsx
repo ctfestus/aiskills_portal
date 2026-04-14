@@ -167,17 +167,15 @@ function ResponsesTab({
       };
     });
 
-    // Build enrolled student list: combine in-progress (courseProgress) + completed (responses) + not started (cohorts)
+    // Build enrolled student list: combine completed + in-progress (courseProgress) + not started (cohorts)
     const completedByEmail = new Map<string, any>();
-    for (const r of responses) {
-      const key = (r.data?.email || '').trim().toLowerCase();
-      if (!key) continue;
-      const existing = completedByEmail.get(key);
-      if (!existing || new Date(r.created_at) > new Date(existing.created_at)) completedByEmail.set(key, r);
+    for (const p of courseProgress.filter(p => p.completed)) {
+      const key = (p.student_email || '').trim().toLowerCase();
+      if (key) completedByEmail.set(key, p);
     }
     const inProgressStudents = courseProgress.filter(p => {
       const key = (p.student_email || '').trim().toLowerCase();
-      return key && !completedByEmail.has(key);
+      return key && !p.completed && !completedByEmail.has(key);
     });
     const inProgressEmails = new Set(inProgressStudents.map((p: any) => (p.student_email || '').trim().toLowerCase()));
     const notStartedStudents = (cohortStudents || []).filter(s => {
@@ -365,13 +363,14 @@ function ResponsesTab({
                     );
                   })}
                   {/* Completed students */}
-                  {[...completedByEmail.values()].map((r: any) => {
-                    const pct = r.data?.percentage ?? (r.data?.total ? Math.round((r.data.score / r.data.total) * 100) : 0);
-                    const pass = pct >= passmark;
+                  {[...completedByEmail.values()].map((p: any) => {
+                    const qTotal = questions.length || 1;
+                    const pct = Math.round(((p.score ?? 0) / qTotal) * 100);
+                    const pass = p.passed ?? false;
                     return (
-                      <tr key={`cp_${r.id}`} className={`transition-colors ${tableRow}`}>
-                        <td className={`px-6 py-3 font-medium ${textPrim}`}>{r.data?.name || <span className={`italic ${textMut}`}>Anonymous</span>}</td>
-                        <td className={`px-6 py-3 ${textMut}`}>{r.data?.email || '--'}</td>
+                      <tr key={`cp_${p.student_email}`} className={`transition-colors ${tableRow}`}>
+                        <td className={`px-6 py-3 font-medium ${textPrim}`}>{p.student_name || <span className={`italic ${textMut}`}>Unknown</span>}</td>
+                        <td className={`px-6 py-3 ${textMut}`}>{p.student_email || '--'}</td>
                         <td className="px-6 py-3">
                           <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${pass ? (isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700') : (isDark ? 'bg-rose-500/15 text-rose-300' : 'bg-rose-50 text-rose-700')}`}>
                             {pass ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
@@ -387,7 +386,7 @@ function ResponsesTab({
                           </div>
                         </td>
                         <td className={`px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>
-                          {new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          {p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--'}
                         </td>
                       </tr>
                     );
@@ -1279,40 +1278,24 @@ function EmailTab({ form, formUrl }: { form: any; formUrl: string }) {
 }
 
 // -- Leaderboard Tab ---
-function LeaderboardTab({ form }: { form: any }) {
+function LeaderboardTab({ form, courseProgress }: { form: any; courseProgress: any[] }) {
   const { theme } = useTheme();
   const isDark = theme !== 'light';
 
-  const [rows, setRows]       = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const passmark = form.config?.passmark ?? 50;
+  const totalQ   = form.config?.questions?.length ?? 1;
 
-  useEffect(() => {
-    supabase
-      .from('responses')
-      .select('data, created_at')
-      .eq('form_id', form.id)
-      .then(({ data }) => {
-        if (!data) { setLoading(false); return; }
-        const byEmail = new Map<string, any>();
-        for (const r of data) {
-          const key = (r.data?.email || '').toLowerCase() || `anon_${r.data?.name}`;
-          const existing = byEmail.get(key);
-          const pct = r.data?.percentage ?? 0;
-          if (!existing || pct > (existing.data?.percentage ?? 0)) byEmail.set(key, r);
-        }
-        const sorted = Array.from(byEmail.values()).sort((a, b) => {
-          const d = (b.data?.percentage ?? 0) - (a.data?.percentage ?? 0);
-          return d !== 0 ? d : (b.data?.points ?? 0) - (a.data?.points ?? 0);
-        });
-        setRows(sorted);
-        setLoading(false);
-      });
-  }, [form.id]);
+  // Only show completed attempts, sorted by score desc then points desc
+  const rows = courseProgress
+    .filter(p => p.completed)
+    .map(p => ({
+      ...p,
+      pct: Math.round(((p.score ?? 0) / totalQ) * 100),
+    }))
+    .sort((a, b) => b.pct - a.pct || (b.points ?? 0) - (a.points ?? 0));
 
-  const passmark   = form.config?.passmark ?? 50;
-  const totalQ     = form.config?.questions?.length ?? 0;
-  const passCount  = rows.filter(r => (r.data?.percentage ?? 0) >= passmark).length;
-  const avgPct     = rows.length ? Math.round(rows.reduce((s, r) => s + (r.data?.percentage ?? 0), 0) / rows.length) : 0;
+  const passCount = rows.filter(r => r.passed).length;
+  const avgPct    = rows.length ? Math.round(rows.reduce((s, r) => s + r.pct, 0) / rows.length) : 0;
 
   const rankStyle = (rank: number) => {
     if (rank === 1) return { color: '#f59e0b', glow: '0 0 12px rgba(245,158,11,0.4)' };
@@ -1325,12 +1308,6 @@ function LeaderboardTab({ form }: { form: any }) {
   const bdr  = isDark ? 'border-zinc-800/60' : 'border-zinc-200';
   const txt  = isDark ? 'text-white'         : 'text-zinc-900';
   const muted = isDark ? 'text-zinc-500'     : 'text-zinc-400';
-
-  if (loading) return (
-    <div className="flex items-center justify-center py-32">
-      <Loader2 className="w-5 h-5 animate-spin text-zinc-600" />
-    </div>
-  );
 
   if (rows.length === 0) return (
     <div className={`rounded-2xl border p-16 text-center ${bg} ${bdr}`}>
@@ -1369,12 +1346,12 @@ function LeaderboardTab({ form }: { form: any }) {
 
         {rows.map((r, i) => {
           const rank   = i + 1;
-          const name   = r.data?.name  || 'Anonymous';
-          const score  = r.data?.score ?? 0;
-          const total  = r.data?.total ?? totalQ;
-          const pct    = r.data?.percentage ?? 0;
-          const pts    = r.data?.points ?? 0;
-          const passed = pct >= passmark;
+          const name   = r.student_name || 'Unknown';
+          const score  = r.score ?? 0;
+          const total  = totalQ;
+          const pct    = r.pct;
+          const pts    = r.points ?? 0;
+          const passed = r.passed ?? false;
           const rs     = rankStyle(rank);
           const isTop  = rank <= 3;
 
@@ -2191,7 +2168,7 @@ export default function FormDetailPage() {
                 <VirtualExperienceReportTab form={form} />
               )}
               {activeTab === 'leaderboard' && (
-                <LeaderboardTab form={form} />
+                <LeaderboardTab form={form} courseProgress={courseProgress} />
               )}
               {activeTab === 'email' && (
                 <EmailTab form={form} formUrl={formUrl} />
