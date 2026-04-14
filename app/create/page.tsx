@@ -979,7 +979,9 @@ const [isSaving, setIsSaving] = useState(false);
             questions: course.questions ?? [], fields: course.fields ?? [],
             passmark: course.passmark, course_timer: course.course_timer,
             learnOutcomes: course.learn_outcomes, points_enabled: course.points_enabled,
-            points_base: course.points_base, postSubmission: course.post_submission,
+            points_base: course.points_base,
+            pointsSystem: { enabled: course.points_enabled ?? false, basePoints: course.points_base ?? 100 },
+            postSubmission: course.post_submission,
             coverImage: course.cover_image, deadline_days: course.deadline_days,
             theme: course.theme, mode: course.mode, font: course.font, customAccent: course.custom_accent };
         } else if (event) {

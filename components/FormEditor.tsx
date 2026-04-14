@@ -655,6 +655,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
             learnOutcomes: course.learn_outcomes ?? [],
             pointsEnabled: course.points_enabled,
             pointsBase: course.points_base,
+            pointsSystem: { enabled: course.points_enabled ?? false, basePoints: course.points_base ?? 100 },
             postSubmission: course.post_submission,
             deadline_days: course.deadline_days,
             theme: course.theme,

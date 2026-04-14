@@ -4886,7 +4886,9 @@ export default function DashboardPage() {
           questions: c.questions ?? [], fields: c.fields ?? [],
           passmark: c.passmark, course_timer: c.course_timer,
           learnOutcomes: c.learn_outcomes, points_enabled: c.points_enabled,
-          points_base: c.points_base, postSubmission: c.post_submission,
+          points_base: c.points_base,
+          pointsSystem: { enabled: c.points_enabled ?? false, basePoints: c.points_base ?? 100 },
+          postSubmission: c.post_submission,
           coverImage: c.cover_image, deadline_days: c.deadline_days,
           theme: c.theme, mode: c.mode, font: c.font, customAccent: c.custom_accent,
         }});

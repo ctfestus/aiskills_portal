@@ -1931,7 +1931,9 @@ export default function FormDetailPage() {
           questions: courseRow.questions ?? [], fields: courseRow.fields ?? [],
           passmark: courseRow.passmark, course_timer: courseRow.course_timer,
           learnOutcomes: courseRow.learn_outcomes, points_enabled: courseRow.points_enabled,
-          points_base: courseRow.points_base, postSubmission: courseRow.post_submission,
+          points_base: courseRow.points_base,
+          pointsSystem: { enabled: courseRow.points_enabled ?? false, basePoints: courseRow.points_base ?? 100 },
+          postSubmission: courseRow.post_submission,
           coverImage: courseRow.cover_image, deadline_days: courseRow.deadline_days,
           theme: courseRow.theme, mode: courseRow.mode, font: courseRow.font, customAccent: courseRow.custom_accent,
         }};
