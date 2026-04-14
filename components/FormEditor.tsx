@@ -118,6 +118,19 @@ interface PointsSystem {
   milestones: PointsMilestone[];
 }
 
+const DEFAULT_POINTS: PointsSystem = {
+  enabled: false,
+  basePoints: 100,
+  timeBonusEnabled: true,
+  timeBonusSeconds: 10,
+  timeBonusMultiplier: 1.5,
+  streakEnabled: true,
+  streakCount: 3,
+  streakBonus: 50,
+  hintPenalty: 20,
+  milestones: [],
+};
+
 interface FormConfig {
   title: string;
   description: string;
@@ -655,7 +668,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
             learnOutcomes: course.learn_outcomes ?? [],
             pointsEnabled: course.points_enabled,
             pointsBase: course.points_base,
-            pointsSystem: { enabled: course.points_enabled ?? false, basePoints: course.points_base ?? 100 },
+            pointsSystem: { ...DEFAULT_POINTS, enabled: course.points_enabled ?? false, basePoints: course.points_base ?? 100 },
             postSubmission: course.post_submission,
             deadline_days: course.deadline_days,
             theme: course.theme,
@@ -1242,18 +1255,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const inputStyle = { background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.text };
   const labelStyle = { color: FE.faint };
 
-  const defaultPoints: PointsSystem = {
-    enabled: false,
-    basePoints: 100,
-    timeBonusEnabled: true,
-    timeBonusSeconds: 10,
-    timeBonusMultiplier: 1.5,
-    streakEnabled: true,
-    streakCount: 3,
-    streakBonus: 50,
-    hintPenalty: 20,
-    milestones: [],
-  };
+  const defaultPoints = DEFAULT_POINTS;
 
   return (
     <div className="flex" style={{ minHeight: 'calc(100vh - 96px)', background: FE.page, color: FE.text }}>
