@@ -364,8 +364,7 @@ function ResponsesTab({
                   })}
                   {/* Completed students */}
                   {[...completedByEmail.values()].map((p: any) => {
-                    const qTotal = questions.length || 1;
-                    const pct = Math.round(((p.score ?? 0) / qTotal) * 100);
+                    const pct = p.score ?? 0;
                     const pass = p.passed ?? false;
                     return (
                       <tr key={`cp_${p.student_email}`} className={`transition-colors ${tableRow}`}>
@@ -1288,10 +1287,7 @@ function LeaderboardTab({ form, courseProgress }: { form: any; courseProgress: a
   // Only show completed attempts, sorted by score desc then points desc
   const rows = courseProgress
     .filter(p => p.completed)
-    .map(p => ({
-      ...p,
-      pct: Math.round(((p.score ?? 0) / totalQ) * 100),
-    }))
+    .map(p => ({ ...p, pct: p.score ?? 0 }))
     .sort((a, b) => b.pct - a.pct || (b.points ?? 0) - (a.points ?? 0));
 
   const passCount = rows.filter(r => r.passed).length;
@@ -1347,8 +1343,6 @@ function LeaderboardTab({ form, courseProgress }: { form: any; courseProgress: a
         {rows.map((r, i) => {
           const rank   = i + 1;
           const name   = r.student_name || 'Unknown';
-          const score  = r.score ?? 0;
-          const total  = totalQ;
           const pct    = r.pct;
           const pts    = r.points ?? 0;
           const passed = r.passed ?? false;
@@ -1392,7 +1386,6 @@ function LeaderboardTab({ form, courseProgress }: { form: any; courseProgress: a
               <div className="space-y-1.5">
                 <div className="flex items-center gap-1.5">
                   <span className={`text-sm font-bold tabular-nums ${passed ? 'text-emerald-400' : muted}`}>{pct}%</span>
-                  <span className={`text-[11px] tabular-nums ${muted}`}>{score}/{total}</span>
                 </div>
                 <div className={`h-1 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-100'}`}>
                   <div
