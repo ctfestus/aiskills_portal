@@ -870,7 +870,7 @@ const NAV_ITEMS = [
   { id: 'integrations',  label: 'Integrations',   Icon: Zap,           adminOnly: false },
   { id: 'leaderboard',   label: 'Leaderboard',    Icon: Trophy,        adminOnly: false },
   { id: 'tracking',      label: 'Tracking',       Icon: Activity,      adminOnly: false },
-  { id: 'cohorts',       label: 'Cohorts',        Icon: GraduationCap, adminOnly: true  },
+  { id: 'cohorts',       label: 'Cohorts',        Icon: GraduationCap, adminOnly: false },
   { id: 'payments',      label: 'Payments',       Icon: CreditCard,    adminOnly: false },
 ] as const;
 type SectionId = typeof NAV_ITEMS[number]['id'];
