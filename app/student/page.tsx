@@ -1225,7 +1225,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   return (
     <div>
       {orderedEvents.map((item, i) => {
-        const isPastItem = item.startsAt && item.startsAt.getTime() < now;
+        const isPastItem = item.startsAt ? item.startsAt.getTime() < now : undefined;
         return (
           <EventCard
             key={item.id}

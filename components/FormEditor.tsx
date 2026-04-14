@@ -135,9 +135,13 @@ interface FormConfig {
   lessonTiming?: 'before' | 'after';
   passmark?: number;
   courseTimer?: number;
+  timer?: number;
   maxAttempts?: number;
   postSubmission?: PostSubmission;
   pointsSystem?: PointsSystem;
+  pointsEnabled?: boolean;
+  pointsBase?: number;
+  deadline_days?: number | null;
 }
 
 // --- Constants ---
