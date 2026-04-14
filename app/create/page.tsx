@@ -962,8 +962,40 @@ const [isSaving, setIsSaving] = useState(false);
       } catch (e) { console.error('Invalid shared schema', e); }
       setIsLoadingEdit(false);
     } else if (editId) {
-      supabase.from('forms').select('*').eq('id', editId).single().then(({ data, error }) => {
-        if (data && !error) { setFormConfig(data.config); setSavedFormId(data.id); setCustomSlug(data.slug || ''); if (data.cohort_ids?.length) setSelectedCohortIds(data.cohort_ids); if (data.status) setFormStatus(data.status); }
+      // Load existing content from purpose-built tables
+      Promise.all([
+        supabase.from('courses').select('id, title, description, slug, status, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent').eq('id', editId).maybeSingle(),
+        supabase.from('events').select('id, title, description, slug, status, cohort_ids, fields, event_date, event_time, timezone, location, event_type, capacity, meeting_link, is_private, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, speakers').eq('id', editId).maybeSingle(),
+      ]).then(([{ data: course }, { data: event }]) => {
+        let id: string | null = null;
+        let config: any = null;
+        let slug = '';
+        let cohortIds: string[] = [];
+        let status = '';
+
+        if (course) {
+          id = course.id; slug = course.slug || ''; cohortIds = course.cohort_ids || []; status = course.status;
+          config = { isCourse: true, title: course.title, description: course.description,
+            questions: course.questions ?? [], fields: course.fields ?? [],
+            passmark: course.passmark, course_timer: course.course_timer,
+            learnOutcomes: course.learn_outcomes, points_enabled: course.points_enabled,
+            points_base: course.points_base, postSubmission: course.post_submission,
+            coverImage: course.cover_image, deadline_days: course.deadline_days,
+            theme: course.theme, mode: course.mode, font: course.font, customAccent: course.custom_accent };
+        } else if (event) {
+          id = event.id; slug = event.slug || ''; cohortIds = event.cohort_ids || []; status = event.status;
+          config = { title: event.title, description: event.description,
+            fields: event.fields ?? [],
+            eventDetails: { isEvent: true, date: event.event_date, time: event.event_time,
+              timezone: event.timezone, location: event.location, eventType: event.event_type,
+              capacity: event.capacity, meetingLink: event.meeting_link, isPrivate: event.is_private,
+              speakers: event.speakers ?? [] },
+            postSubmission: event.post_submission, coverImage: event.cover_image,
+            deadline_days: event.deadline_days, theme: event.theme, mode: event.mode,
+            font: event.font, customAccent: event.custom_accent };
+        }
+
+        if (id && config) { setFormConfig(config); setSavedFormId(id); setCustomSlug(slug); if (cohortIds.length) setSelectedCohortIds(cohortIds); if (status) setFormStatus(status); }
         setIsLoadingEdit(false);
       });
     } else {
@@ -988,11 +1020,11 @@ const [isSaving, setIsSaving] = useState(false);
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
       const { data } = await supabase
-        .from('forms')
-        .select('id, title, slug, config')
+        .from('events')
+        .select('id, title, slug, cover_image')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false });
-      if (data) setAvailableForms(data.filter(f => f.id !== savedFormId));
+      if (data) setAvailableForms(data.filter((f: any) => f.id !== savedFormId).map((e: any) => ({ ...e, config: { title: e.title, coverImage: e.cover_image } })));
     })();
   }, [formConfig?.postSubmission?.type, savedFormId]);
 
@@ -1063,11 +1095,22 @@ const [isSaving, setIsSaving] = useState(false);
         router.push(`/dashboard/${formId}?tab=settings`);
         return;
       } else {
-        // Fetch current cohort_ids before update to detect newly added cohorts
-        const { data: existingForm } = await supabase.from('forms').select('cohort_ids, slug, content_type, status').eq('id', formId!).single();
-        const { error } = await supabase.from('forms').update({ title: formConfig.title, description: formConfig.description, config: formConfig, slug: slugValue, cohort_ids: selectedCohortIds, status: saveStatus }).eq('id', formId!);
+        // Fetch current cohort_ids to detect newly added cohorts
+        const { data: { session: fetchSession } } = await supabase.auth.getSession();
+        const [{ data: existingCourse }, { data: existingEvent }] = await Promise.all([
+          supabase.from('courses').select('cohort_ids').eq('id', formId!).maybeSingle(),
+          supabase.from('events').select('cohort_ids').eq('id', formId!).maybeSingle(),
+        ]);
+        const existingForm = existingCourse ?? existingEvent;
+        const patchRes = await fetch('/api/forms', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${fetchSession?.access_token}` },
+          body: JSON.stringify({ id: formId, title: formConfig.title, description: formConfig.description, config: formConfig, slug: slugValue, cohort_ids: selectedCohortIds, status: saveStatus }),
+        });
+        const patchData = await patchRes.json();
+        const error = patchRes.ok ? null : patchData;
         if (!error) setFormStatus(saveStatus);
-        if (error) { if (error.code === '23505') { showToast('This URL slug is already taken. Try a different one.'); setIsSaving(false); return; } throw error; }
+        if (error) { if (patchRes.status === 409 || error.error?.includes('slug')) { showToast('This URL slug is already taken. Try a different one.'); setIsSaving(false); return; } throw new Error(error.error ?? 'Update failed'); }
         // Re-index via authenticated proxy -- secret stays server-side
         if (saveStatus === 'published') {
           supabase.auth.getSession().then(({ data: { session } }) => {

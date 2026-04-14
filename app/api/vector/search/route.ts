@@ -77,23 +77,26 @@ export async function GET(req: NextRequest) {
   // Verify candidates still exist in DB AND are still published
   // (vector metadata may be stale if a course was set back to draft after indexing)
   const candidateIds = candidates.map((r: any) => r.metadata.formId);
-  const { data: existingForms } = await supabase
-    .from('forms')
-    .select('id')
-    .in('id', candidateIds)
-    .eq('status', 'published');
+  const [{ data: existingCourses }, { data: existingVes }] = await Promise.all([
+    supabase.from('courses').select('id').in('id', candidateIds).eq('status', 'published'),
+    supabase.from('virtual_experiences').select('id').in('id', candidateIds).eq('status', 'published'),
+  ]);
 
-  const existingIds = new Set((existingForms ?? []).map((f: any) => f.id));
+  const existingIds = new Set([
+    ...(existingCourses ?? []).map((f: any) => f.id),
+    ...(existingVes    ?? []).map((f: any) => f.id),
+  ]);
 
   const filtered = candidates
     .filter((r: any) => existingIds.has(r.metadata.formId))
     .slice(0, 8)
     .map((r: any) => ({
-      formId:     r.metadata.formId,
-      title:      r.metadata.title,
-      slug:       r.metadata.slug,
-      coverImage: r.metadata.coverImage ?? null,
-      score:      Math.round((r.score ?? 0) * 100),
+      formId:      r.metadata.formId,
+      title:       r.metadata.title,
+      slug:        r.metadata.slug,
+      coverImage:  r.metadata.coverImage ?? null,
+      contentType: r.metadata.contentType,
+      score:       Math.round((r.score ?? 0) * 100),
     }));
 
   return NextResponse.json({ results: filtered });

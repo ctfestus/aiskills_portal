@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { GEMINI_MODEL } from '@/lib/ai';
-import { adminClient } from '@/lib/subscription';
+import { adminClient } from '@/lib/admin-client';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // allow up to 60s for streaming LLM responses

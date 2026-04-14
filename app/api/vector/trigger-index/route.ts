@@ -38,11 +38,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'formId required' }, { status: 400 });
   }
 
-  // 3. Verify the caller owns this form
-  const { data: form } = await supabase
-    .from('forms').select('user_id').eq('id', formId).single();
-  if (!form) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (form.user_id !== user.id && profile.role !== 'admin') {
+  // 3. Verify the caller owns this content (courses, events, or virtual_experiences)
+  const [{ data: course }, { data: eventRow }, { data: ve }] = await Promise.all([
+    supabase.from('courses').select('user_id').eq('id', formId).maybeSingle(),
+    supabase.from('events').select('user_id').eq('id', formId).maybeSingle(),
+    supabase.from('virtual_experiences').select('user_id').eq('id', formId).maybeSingle(),
+  ]);
+  const content = course ?? eventRow ?? ve;
+  if (!content) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (content.user_id !== user.id && profile.role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

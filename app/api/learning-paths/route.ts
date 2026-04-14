@@ -169,30 +169,34 @@ export async function POST(req: NextRequest) {
     const progressMap: Record<string, any> = {};
     for (const p of progRows ?? []) progressMap[p.learning_path_id] = p;
 
-    // Fetch form metadata for all item_ids across all paths
+    // Fetch content metadata for all item_ids across all paths
     const allItemIds = [...new Set(paths.flatMap((p: any) => p.item_ids ?? []))];
-    const { data: forms } = allItemIds.length
-      ? await supabase.from('forms').select('id, title, slug, config, content_type').in('id', allItemIds)
-      : { data: [] };
+    const [{ data: coursesRaw }, { data: vesRaw }] = allItemIds.length
+      ? await Promise.all([
+          supabase.from('courses').select('id, title, slug, cover_image').in('id', allItemIds),
+          supabase.from('virtual_experiences').select('id, title, slug, cover_image').in('id', allItemIds),
+        ])
+      : [{ data: [] }, { data: [] }];
 
     const formMap: Record<string, any> = {};
-    for (const f of forms ?? []) formMap[f.id] = f;
+    for (const c of coursesRaw ?? []) formMap[c.id] = { ...c, content_type: 'course' };
+    for (const v of vesRaw     ?? []) formMap[v.id] = { ...v, content_type: 'virtual_experience' };
 
     // Determine which items the student has actually completed by checking
     // course_attempts and guided_project_attempts directly -- this covers
     // courses completed before the learning path feature was deployed.
     const [{ data: courseAttempts }, { data: veAttempts }] = await Promise.all([
       allItemIds.length
-        ? supabase.from('course_attempts').select('form_id').eq('student_id', user.id).not('completed_at', 'is', null).in('form_id', allItemIds)
+        ? supabase.from('course_attempts').select('course_id').eq('student_id', user.id).not('completed_at', 'is', null).in('course_id', allItemIds)
         : { data: [] },
       allItemIds.length
-        ? supabase.from('guided_project_attempts').select('form_id').eq('student_id', user.id).not('completed_at', 'is', null).in('form_id', allItemIds)
+        ? supabase.from('guided_project_attempts').select('ve_id').eq('student_id', user.id).not('completed_at', 'is', null).in('ve_id', allItemIds)
         : { data: [] },
     ]);
 
     const actuallyCompleted = new Set([
-      ...(courseAttempts ?? []).map((a: any) => a.form_id),
-      ...(veAttempts ?? []).map((a: any) => a.form_id),
+      ...(courseAttempts ?? []).map((a: any) => a.course_id),
+      ...(veAttempts ?? []).map((a: any) => a.ve_id),
     ]);
 
     const result = paths.map((path: any) => {
@@ -228,21 +232,26 @@ async function sendPathAssignmentEmails(
   cohortIds: string[],
 ) {
   try {
-    // Fetch form metadata for email
-    const { data: forms } = itemIds.length
-      ? await supabase.from('forms').select('id, title, config, content_type').in('id', itemIds)
-      : { data: [] };
-    const formMap: Record<string, any> = {};
-    for (const f of forms ?? []) formMap[f.id] = f;
+    // Fetch content metadata for email from courses and virtual_experiences
+    const [{ data: coursesRaw }, { data: vesRaw }] = itemIds.length
+      ? await Promise.all([
+          supabase.from('courses').select('id, title, cover_image').in('id', itemIds),
+          supabase.from('virtual_experiences').select('id, title, cover_image').in('id', itemIds),
+        ])
+      : [{ data: [] }, { data: [] }];
+
+    const contentMap: Record<string, any> = {};
+    for (const c of coursesRaw ?? []) contentMap[c.id] = { ...c, content_type: 'course' };
+    for (const v of vesRaw     ?? []) contentMap[v.id] = { ...v, content_type: 'virtual_experience' };
 
     const items = itemIds.map((id: string) => {
-      const f = formMap[id];
-      const isVE = f && (f.content_type === 'virtual_experience' || f.content_type === 'guided_project' || f.config?.isVirtualExperience || f.config?.isGuidedProject);
+      const f = contentMap[id];
+      const isVE = f?.content_type === 'virtual_experience';
       return {
-        title: f?.title ?? 'Untitled',
-        coverImage: f?.config?.coverImage ?? null,
+        title:      f?.title ?? 'Untitled',
+        coverImage: f?.cover_image ?? null,
         isVE,
-        description: f?.config?.description ?? null,
+        description: null,
       };
     });
 

@@ -11,7 +11,7 @@ import {
   GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
   Play, FileText, BarChart3, Bell, Plus, ArrowLeft, Upload, Video,
   ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase, Search, LayoutDashboard,
-  Copy, Check,
+  Copy, Check, Layers,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -159,16 +159,17 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
 
 // --- Nav items ---
 const NAV_ITEMS = [
-  { id: 'overview',      label: 'Overview',       Icon: LayoutDashboard },
-  { id: 'courses',       label: 'My Courses',    Icon: BookOpen      },
-  { id: 'events',        label: 'Events',         Icon: CalendarDays  },
-  { id: 'assignments',   label: 'Assignments',    Icon: ClipboardList },
-  { id: 'community',     label: 'Community',      Icon: Users         },
-  { id: 'announcements', label: 'Announcements',  Icon: Megaphone     },
-  { id: 'virtual_experiences',  label: 'Virtual Experiences',  Icon: Briefcase   },
-  { id: 'schedule',         label: 'Schedule',         Icon: Calendar    },
-  { id: 'leaderboard',   label: 'Leaderboard',    Icon: Trophy        },
-  { id: 'certificates',  label: 'Certificates',   Icon: Award         },
+  { id: 'overview',          label: 'Overview',            Icon: LayoutDashboard },
+  { id: 'courses',           label: 'My Courses',          Icon: BookOpen        },
+  { id: 'learning_paths',    label: 'Learning Paths',      Icon: Layers          },
+  { id: 'virtual_experiences', label: 'Virtual Experiences', Icon: Briefcase     },
+  { id: 'events',            label: 'Events',              Icon: CalendarDays    },
+  { id: 'assignments',       label: 'Assignments',         Icon: ClipboardList   },
+  { id: 'community',         label: 'Community',           Icon: Users           },
+  { id: 'announcements',     label: 'Announcements',       Icon: Megaphone       },
+  { id: 'schedule',          label: 'Schedule',            Icon: Calendar        },
+  { id: 'leaderboard',       label: 'Leaderboard',         Icon: Trophy          },
+  { id: 'certificates',      label: 'Certificates',        Icon: Award           },
 ] as const;
 type SectionId = typeof NAV_ITEMS[number]['id'];
 
@@ -529,11 +530,18 @@ function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
     </div>
   );
 
-  if (!paths.length) return null;
+  if (!paths.length) return (
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.pill }}>
+        <Layers className="w-7 h-7" style={{ color: C.faint }}/>
+      </div>
+      <p className="font-semibold text-base mb-1" style={{ color: C.text }}>No learning paths yet</p>
+      <p className="text-sm max-w-xs" style={{ color: C.muted }}>Your instructor hasn't assigned any learning paths to your cohort yet.</p>
+    </div>
+  );
 
   return (
     <div className="space-y-3">
-      <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Learning Paths</p>
       {paths.map((path: any) => {
         const totalItems     = (path.item_ids ?? []).length;
         const completedIds: string[] = path.progress?.completed_item_ids ?? [];
@@ -659,14 +667,12 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
 
 
       // Load cohort courses + student attempts + certificates in parallel
-      // Fetch all cohort forms (no content_type filter) and classify client-side
-      // so that legacy rows with content_type='form' are still caught by config flags
-      const [{ data: cohortForms }, { data: attempts }, certsRes] = await Promise.all([
+      const [{ data: cohortCourseRows }, { data: attempts }, certsRes] = await Promise.all([
         student?.cohort_id
-          ? supabase.from('forms').select('id, title, slug, config, content_type, status').contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
+          ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, content_type:id').contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
           : Promise.resolve({ data: [] }),
         supabase.from('course_attempts')
-          .select('form_id, score, points, current_question_index, completed_at, passed, updated_at')
+          .select('course_id, score, points, current_question_index, completed_at, passed, updated_at')
           .eq('student_id', user.id)
           .order('started_at', { ascending: false }),
         token
@@ -680,22 +686,23 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
 
       // Build cert lookup: form_id -> cert id
       const certMap: Record<string, string> = {};
-      for (const c of (certsRes?.certs ?? [])) certMap[c.form_id] = c.id;
+      for (const c of (certsRes?.certs ?? [])) certMap[c.form_id ?? c.course_id] = c.id;
 
-      // Classify cohort items -- course if content_type='course' OR config.isCourse is set
-      const isCourseRow = (f: any) =>
-        f.content_type === 'course' || Boolean(f.config?.isCourse);
-      const cohortCourses = (cohortForms ?? []).filter(isCourseRow);
+      // Normalize course rows with config shape
+      const normalizeCourse = (c: any) => ({
+        ...c, content_type: 'course',
+        config: { isCourse: true, title: c.title, coverImage: c.cover_image,
+          questions: c.questions ?? [], deadline_days: c.deadline_days, passmark: c.passmark },
+      });
+      const cohortCourses = (cohortCourseRows ?? []).map(normalizeCourse);
 
       // Deduplicate: one row per course -- prefer active (in-progress) over completed; highest score among completed
       const progressMap: Record<string, any> = {};
       for (const a of attempts ?? []) {
-        const ex = progressMap[a.form_id];
-        if (!ex) { progressMap[a.form_id] = a; continue; }
-        // active beats completed
-        if (!a.completed_at) { progressMap[a.form_id] = a; continue; }
-        // among completed, prefer higher score
-        if (ex.completed_at && a.score > ex.score) progressMap[a.form_id] = a;
+        const ex = progressMap[a.course_id];
+        if (!ex) { progressMap[a.course_id] = a; continue; }
+        if (!a.completed_at) { progressMap[a.course_id] = a; continue; }
+        if (ex.completed_at && a.score > ex.score) progressMap[a.course_id] = a;
       }
 
       // Merge: cohort courses + any extra courses the student has attempted
@@ -704,8 +711,8 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
 
       let extraForms: any[] = [];
       if (extraIds.length) {
-        const { data } = await supabase.from('forms').select('id, title, slug, config, content_type, status').in('id', extraIds).eq('status', 'published');
-        extraForms = (data ?? []).filter(isCourseRow);
+        const { data } = await supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark').in('id', extraIds).eq('status', 'published');
+        extraForms = (data ?? []).map(normalizeCourse);
       }
 
       const allForms = [...cohortCourses, ...extraForms];
@@ -716,13 +723,13 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
         const cohortFormIds = cohortCourses.map((f: any) => f.id);
         const { data: assignments } = await supabase
           .from('cohort_assignments')
-          .select('form_id, assigned_at')
+          .select('content_id, assigned_at')
           .eq('cohort_id', student.cohort_id)
-          .in('form_id', cohortFormIds);
+          .in('content_id', cohortFormIds);
 
         const dlMap: Record<string, Date | null> = {};
         for (const form of cohortCourses as any[]) {
-          const asgn = (assignments ?? []).find((a: any) => a.form_id === form.id);
+          const asgn = (assignments ?? []).find((a: any) => a.content_id === form.id);
           const deadlineDays = form.config?.deadline_days;
           dlMap[form.id] = asgn && deadlineDays
             ? new Date(new Date(asgn.assigned_at).getTime() + Number(deadlineDays) * 86400000)
@@ -734,12 +741,12 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
       // Load guided_project_attempts for VE status in search results
       const { data: veAttempts } = await supabase
         .from('guided_project_attempts')
-        .select('form_id, completed_at')
+        .select('ve_id, completed_at')
         .eq('student_id', user.id);
       if (veAttempts?.length) {
         const map: Record<string, { started: boolean; completed: boolean }> = {};
         for (const a of veAttempts) {
-          map[a.form_id] = { started: true, completed: Boolean(a.completed_at) };
+          map[a.ve_id] = { started: true, completed: Boolean(a.completed_at) };
         }
         setVeStatusMap(map);
       }
@@ -975,21 +982,16 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
         const [{ data: regsData }, { data: cohortData }] = await Promise.all([
           supabase
             .from('event_registrations')
-            .select(`id, status, registered_at, events:event_id (id, title, description, cover_image, starts_at, ends_at, event_type, location, virtual_link, timezone)`)
-            .eq('student_id', userId)
-            .order('registered_at', { ascending: false }),
+            .select('event_id, registered_at')
+            .eq('student_id', userId),
           student?.cohort_id
-            ? supabase.from('forms').select('id, title, slug, config, content_type, status')
+            ? supabase.from('events').select('id, title, description, slug, cover_image, event_date, event_time, timezone, location, meeting_link, event_type, status')
                 .contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
             : Promise.resolve({ data: [] }),
         ]);
 
         setRegs(regsData ?? []);
-        // Include content_type='event' OR form with eventDetails.isEvent=true
-        const eventsOnly = (cohortData ?? []).filter((f: any) =>
-          f.content_type === 'event' || f.config?.eventDetails?.isEvent === true
-        );
-        setCohortEvents(eventsOnly);
+        setCohortEvents(cohortData ?? []);
       } finally {
         setLoading(false);
       }
@@ -1005,7 +1007,8 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
 
   const buildDateFromEventDetails = (eventDetails: any) => {
     if (!eventDetails?.date) return null;
-    const merged = eventDetails.time ? `${eventDetails.date}T${eventDetails.time}:00` : `${eventDetails.date}T00:00:00`;
+    const timeStr = eventDetails.time ? eventDetails.time.substring(0, 5) : '00:00';
+    const merged = `${eventDetails.date}T${timeStr}:00`;
     const d = new Date(merged);
     return Number.isNaN(d.getTime()) ? null : d;
   };
@@ -1020,70 +1023,35 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
     }
   };
 
-  const registeredEventIds = new Set(regs.map((r: any) => r.events?.id).filter(Boolean));
+  const registeredEventIds = new Set(regs.map((r: any) => r.event_id).filter(Boolean));
 
-  const fromRegistrations = regs
-    .map((reg: any) => {
-      const ev = reg.events;
-      if (!ev) return null;
-      const start = parseDate(ev.starts_at);
-      const end = parseDate(ev.ends_at);
-      const mode = (ev.event_type || '').toLowerCase() === 'virtual' ? 'Virtual' : 'In-Person';
-      const meetingUrl = sanitizeHttpUrl(ev.virtual_link);
-      return {
-        id: `registered-${reg.id}`,
-        eventId: ev.id,
-        title: ev.title || 'Untitled Event',
-        description: ev.description || '',
-        startsAt: start,
-        endsAt: end,
-        eventType: mode,
-        locationText: ev.location || '',
-        meetingProvider: meetingUrl?.includes('meet.google.') ? 'Google Meet' : 'Virtual Event',
-        meetingNote: meetingUrl ? 'Join link available' : (mode === 'Virtual' ? 'Link shared after registration' : ''),
-        meetingUrl,
-        imageUrl: ev.cover_image || '',
-        regStatus: reg.status,
-        regId: reg.id,
-        source: 'registration' as const,
-      };
-    })
-    .filter(Boolean) as any[];
+  const allCohortEvents = cohortEvents.map((f: any) => {
+    const start = buildDateFromEventDetails({ date: f.event_date, time: f.event_time });
+    const mode = (f.event_type || '').toLowerCase() === 'virtual' ? 'Virtual' : 'In-Person';
+    const meetingUrl = sanitizeHttpUrl(f.meeting_link);
+    const registered = registeredEventIds.has(f.id);
+    return {
+      id: `cohort-${f.id}`,
+      formId: f.id,
+      formSlug: f.slug,
+      title: f.title || 'Untitled Event',
+      description: f.description || '',
+      startsAt: start,
+      eventType: mode,
+      locationText: f.location || '',
+      meetingProvider: mode === 'Virtual' ? 'Google Meet' : 'Venue',
+      meetingNote: mode === 'Virtual' ? 'Link shared after registration' : (f.location || 'In-person event'),
+      meetingUrl,
+      imageUrl: f.cover_image || '',
+      source: registered ? 'registration' : 'cohort',
+    };
+  });
 
-  const fromCohortEvents = cohortEvents
-    .filter((f: any) => !registeredEventIds.has(f.id))
-    .map((f: any) => {
-      const cfg = f.config ?? {};
-      const ed = cfg.eventDetails ?? {};
-      const start = buildDateFromEventDetails(ed);
-      const mode = (ed.eventType || '').toLowerCase() === 'virtual' ? 'Virtual' : 'In-Person';
-      const meetingUrl = sanitizeHttpUrl(ed.meetingLink);
-      return {
-        id: `cohort-${f.id}`,
-        eventId: null,
-        formId: f.id,
-        formSlug: f.slug,
-        title: cfg.title || f.title || 'Untitled Event',
-        description: cfg.description || '',
-        startsAt: start,
-        endsAt: null,
-        eventType: mode,
-        locationText: ed.location || '',
-        meetingProvider: mode === 'Virtual' ? 'Google Meet' : 'Venue',
-        meetingNote: mode === 'Virtual' ? 'Link shared after registration' : (ed.location || 'In-person event'),
-        meetingUrl,
-        imageUrl: cfg.coverImage || '',
-        regStatus: null,
-        source: 'cohort' as const,
-      };
-    });
-
-  const allEvents = [...fromRegistrations, ...fromCohortEvents]
-    .sort((a, b) => {
-      const at = a.startsAt ? a.startsAt.getTime() : Number.MAX_SAFE_INTEGER;
-      const bt = b.startsAt ? b.startsAt.getTime() : Number.MAX_SAFE_INTEGER;
-      return at - bt;
-    });
+  const allEvents = allCohortEvents.sort((a, b) => {
+    const at = a.startsAt ? a.startsAt.getTime() : Number.MAX_SAFE_INTEGER;
+    const bt = b.startsAt ? b.startsAt.getTime() : Number.MAX_SAFE_INTEGER;
+    return at - bt;
+  });
 
   const now = Date.now();
   const upcoming = allEvents.filter(e => !e.startsAt || e.startsAt.getTime() >= now);
@@ -1099,7 +1067,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
     </div>
   );
 
-  if (!regs.length && !cohortEvents.length) return (
+  if (!cohortEvents.length) return (
     <EmptyState icon={CalendarDays} title="No events yet"
       body="No events have been assigned to the cohort yet." />
   );
@@ -1125,7 +1093,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
       ? item.startsAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : null;
     const isVirtual = item.eventType === 'Virtual';
-    const isRegistered = item.regStatus && item.regStatus !== 'cancelled';
+    const isRegistered = item.source === 'registration';
 
     const card = (
       <motion.div
@@ -1166,9 +1134,9 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
                 {item.eventType}
               </span>
               {isRegistered && (
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full"
-                  style={{ background: 'rgba(14,9,221,0.08)', color: C.green }}>
-                  ✓ Registered
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full"
+                  style={{ background: '#16a34a', color: '#fff' }}>
+                  <CheckCircle className="w-3 h-3" /> Registered
                 </span>
               )}
             </div>
@@ -1200,9 +1168,8 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
 
             {/* Description */}
             {item.description && (
-              <p className="text-xs leading-relaxed line-clamp-2" style={{ color: C.muted }}>
-                {item.description}
-              </p>
+              <div className="text-xs leading-relaxed line-clamp-2 rich-content" style={{ color: C.muted }}
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(item.description) }} />
             )}
 
             {/* Join button */}
@@ -1757,15 +1724,15 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
           .eq('student_id', userId),
       ]);
 
-      // Resolve related course data from forms table
+      // Resolve related course data from courses table
       const courseIds = [...new Set((assignments ?? []).map((a: any) => a.related_course).filter(Boolean))];
       let courseMap: Record<string, { title: string; slug: string; coverImage?: string }> = {};
       if (courseIds.length) {
-        const { data: courses } = await supabase.from('forms').select('id, title, slug, config').in('id', courseIds);
-        courseMap = Object.fromEntries((courses ?? []).map((c: any) => [c.id, {
+        const { data: courseRows } = await supabase.from('courses').select('id, title, slug, cover_image').in('id', courseIds);
+        courseMap = Object.fromEntries((courseRows ?? []).map((c: any) => [c.id, {
           title: c.title,
           slug: c.slug,
-          coverImage: c.config?.coverImage || null,
+          coverImage: c.cover_image || null,
         }]));
       }
 
@@ -2596,37 +2563,56 @@ function VirtualExperiencesSection({ userId, userEmail, C }: { userId: string; u
       const { data: profile } = await supabase.from('students').select('cohort_id').eq('id', userId).maybeSingle();
       if (!profile?.cohort_id) { setLoading(false); return; }
 
-      const { data: forms } = await supabase
-        .from('forms')
-        .select('*')
-        .in('content_type', ['virtual_experience', 'guided_project'])
-        .contains('cohort_ids', [profile.cohort_id]);
+      const { data: veRows } = await supabase
+        .from('virtual_experiences')
+        .select('id, title, slug, cover_image, modules, industry, difficulty, role, company, duration, tools, tagline, deadline_days, cohort_ids, status')
+        .contains('cohort_ids', [profile.cohort_id])
+        .eq('status', 'published');
 
-      setItems(forms ?? []);
+      const forms = (veRows ?? []).map((ve: any) => ({
+        ...ve,
+        content_type: 'virtual_experience',
+        config: {
+          title: ve.title,
+          coverImage: ve.cover_image,
+          modules: ve.modules ?? [],
+          deadline_days: ve.deadline_days,
+          industry: ve.industry,
+          difficulty: ve.difficulty,
+          role: ve.role,
+          company: ve.company,
+          duration: ve.duration,
+          tools: ve.tools,
+          tagline: ve.tagline,
+        },
+      }));
 
-      if (forms?.length) {
+      setItems(forms);
+
+      if (forms.length) {
         const ids = forms.map((f: any) => f.id);
         const [{ data: attRows }, { data: assignments }] = await Promise.all([
           supabase
             .from('guided_project_attempts')
             .select('*')
             .eq('student_id', userId)
-            .in('form_id', ids),
+            .in('ve_id', ids),
           supabase
             .from('cohort_assignments')
-            .select('form_id, assigned_at')
+            .select('content_id, assigned_at')
             .eq('cohort_id', profile.cohort_id)
-            .in('form_id', ids),
+            .eq('content_type', 'virtual_experience')
+            .in('content_id', ids),
         ]);
         const attMap: Record<string, any> = {};
-        for (const a of attRows ?? []) attMap[a.form_id] = a;
+        for (const a of attRows ?? []) attMap[a.ve_id] = a;
         setAttempts(attMap);
 
-        // Compute per-form deadlines
+        // Compute per-VE deadlines
         const dlMap: Record<string, Date | null> = {};
-        const assignmentByForm = new Map((assignments ?? []).map((a: any) => [a.form_id, a.assigned_at]));
+        const assignmentByForm = new Map((assignments ?? []).map((a: any) => [a.content_id, a.assigned_at]));
         for (const form of forms) {
-          const deadlineDays = form.config?.deadline_days;
+          const deadlineDays = form.deadline_days;
           const assignedAt   = assignmentByForm.get(form.id);
           if (deadlineDays && assignedAt) {
             dlMap[form.id] = new Date(new Date(assignedAt).getTime() + deadlineDays * 86400000);
@@ -2843,7 +2829,7 @@ function ScheduleSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
       const scheduleCourseIds = [...new Set(scheduleRows.map((r: any) => r.course_id).filter(Boolean))];
       let scheduleCourseMap: Record<string, string> = {};
       if (scheduleCourseIds.length) {
-        const { data: cForms } = await supabase.from('forms').select('id, title').in('id', scheduleCourseIds);
+        const { data: cForms } = await supabase.from('courses').select('id, title').in('id', scheduleCourseIds);
         (cForms ?? []).forEach((f: any) => { scheduleCourseMap[f.id] = f.title; });
       }
       const items: any[] = scheduleRows.map((r: any) => ({
@@ -2993,18 +2979,28 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
     const load = async () => {
       setLoading(true);
       try {
-        // Get current student's cohort
+        // Get current student's cohort -- query by auth user ID (reliable; email can mismatch)
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+        if (!userId) { setLoading(false); return; }
+
         const { data: me } = await supabase
           .from('students')
-          .select('cohort_id, cohorts(id, name)')
-          .eq('email', userEmail)
+          .select('cohort_id')
+          .eq('id', userId)
           .single();
 
         if (!me?.cohort_id) { setLoading(false); return; }
-        setCohort((me as any).cohorts);
+
+        // Fetch cohort name separately -- join can silently return null if RLS blocks it
+        const { data: cohortData } = await supabase
+          .from('cohorts')
+          .select('id, name')
+          .eq('id', me.cohort_id)
+          .single();
+        setCohort(cohortData ?? { id: me.cohort_id, name: 'Your Cohort' });
 
         // Fetch leaderboard via server API (service role bypasses RLS for cross-student reads)
-        const { data: { session } } = await supabase.auth.getSession();
         const res = await fetch(`/api/leaderboard?cohort_id=${me.cohort_id}`, {
           headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
         });
@@ -3201,22 +3197,24 @@ function CertificatesSection({ userId, userEmail, userName, C }: { userId: strin
       setLoading(true);
       const { data: certsData } = await supabase
         .from('certificates')
-        .select('id, form_id, student_name, issued_at')
+        .select('id, course_id, student_name, issued_at')
         .eq('student_id', userId)
         .eq('revoked', false)
         .order('issued_at', { ascending: false });
 
       if (!certsData?.length) { setLoading(false); return; }
 
-      const formIds = [...new Set(certsData.map(c => c.form_id))];
-      const { data: forms } = await supabase
-        .from('forms')
-        .select('id, title, config')
-        .in('id', formIds);
+      const courseIds = [...new Set(certsData.map((c: any) => c.course_id).filter(Boolean))];
+      const [{ data: courseRows }, { data: veRows }] = await Promise.all([
+        courseIds.length ? supabase.from('courses').select('id, title, cover_image').in('id', courseIds) : Promise.resolve({ data: [] }),
+        courseIds.length ? supabase.from('virtual_experiences').select('id, title, cover_image').in('id', courseIds) : Promise.resolve({ data: [] }),
+      ]);
+      const contentMap = Object.fromEntries([...(courseRows ?? []), ...(veRows ?? [])].map((r: any) => [r.id, r]));
 
-      setCerts(certsData.map(cert => ({
+      setCerts(certsData.map((cert: any) => ({
         ...cert,
-        form: forms?.find(f => f.id === cert.form_id),
+        form_id: cert.course_id,
+        form: cert.course_id ? contentMap[cert.course_id] : null,
       })));
       setLoading(false);
     };
@@ -3447,19 +3445,25 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
         .from('students').select('cohort_id').eq('id', user.id).single();
       const cohort = student?.cohort_id ?? null;
 
-      const [formsRes, attemptsRes, gpAttRes, cohortAssignRes, certsData, lbData, actData, gapsData, asmRes] =
+      const [courseRes, veRes, attemptsRes, gpAttRes, cohortAssignCrsRes, cohortAssignVeRes, certsData, lbData, actData, gapsData, asmRes] =
         await Promise.all([
           cohort
-            ? supabase.from('forms').select('id, title, slug, config, content_type, status').contains('cohort_ids', [cohort]).eq('status', 'published')
+            ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark').contains('cohort_ids', [cohort]).eq('status', 'published')
+            : Promise.resolve({ data: [] as any[] }),
+          cohort
+            ? supabase.from('virtual_experiences').select('id, title, slug, cover_image, modules, deadline_days').contains('cohort_ids', [cohort]).eq('status', 'published')
             : Promise.resolve({ data: [] as any[] }),
           supabase.from('course_attempts')
-            .select('form_id, score, current_question_index, completed_at, passed, updated_at')
+            .select('course_id, score, current_question_index, completed_at, passed, updated_at')
             .eq('student_id', user.id).order('updated_at', { ascending: false }),
           supabase.from('guided_project_attempts')
-            .select('form_id, completed_at, progress, updated_at')
+            .select('ve_id, completed_at, progress, updated_at')
             .eq('student_id', user.id),
           cohort
-            ? supabase.from('cohort_assignments').select('form_id, assigned_at').eq('cohort_id', cohort)
+            ? supabase.from('cohort_assignments').select('content_id, assigned_at').eq('cohort_id', cohort).eq('content_type', 'course')
+            : Promise.resolve({ data: [] as any[] }),
+          cohort
+            ? supabase.from('cohort_assignments').select('content_id, assigned_at').eq('cohort_id', cohort).eq('content_type', 'virtual_experience')
             : Promise.resolve({ data: [] as any[] }),
           token
             ? fetch('/api/course', {
@@ -3488,23 +3492,36 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
 
       if (cancelled) return;
 
+      // Normalize courses and VEs into a unified shape with config reconstruction
+      const normalizedCourses = (courseRes.data ?? []).map((c: any) => ({
+        ...c, content_type: 'course',
+        config: { isCourse: true, title: c.title, coverImage: c.cover_image, questions: c.questions ?? [], deadline_days: c.deadline_days, passmark: c.passmark },
+      }));
+      const normalizedVEs = (veRes.data ?? []).map((ve: any) => ({
+        ...ve, content_type: 'virtual_experience',
+        config: { isVirtualExperience: true, title: ve.title, coverImage: ve.cover_image, modules: ve.modules ?? [], deadline_days: ve.deadline_days },
+      }));
+
       // Deduplicate course attempts (active beats completed; higher score among completed)
       const caMap: Record<string, any> = {};
       for (const a of attemptsRes.data ?? []) {
-        const ex = caMap[a.form_id];
-        if (!ex) { caMap[a.form_id] = a; continue; }
-        if (!a.completed_at && ex.completed_at) { caMap[a.form_id] = a; continue; }
-        if (a.completed_at && ex.completed_at && (a.score ?? 0) > (ex.score ?? 0)) caMap[a.form_id] = a;
+        const key = a.course_id;
+        const ex = caMap[key];
+        if (!ex) { caMap[key] = a; continue; }
+        if (!a.completed_at && ex.completed_at) { caMap[key] = a; continue; }
+        if (a.completed_at && ex.completed_at && (a.score ?? 0) > (ex.score ?? 0)) caMap[key] = a;
       }
       const gpMap: Record<string, any> = {};
-      for (const a of gpAttRes.data ?? []) gpMap[a.form_id] = a;
+      for (const a of gpAttRes.data ?? []) gpMap[a.ve_id] = a;
 
       // Deadline map
       const assignedAtMap: Record<string, string> = {};
-      for (const ca of cohortAssignRes.data ?? []) assignedAtMap[ca.form_id] = ca.assigned_at;
+      for (const ca of cohortAssignCrsRes.data ?? []) assignedAtMap[ca.content_id] = ca.assigned_at;
+      for (const ca of cohortAssignVeRes.data ?? []) assignedAtMap[ca.content_id] = ca.assigned_at;
+      const allLearning = [...normalizedCourses, ...normalizedVEs];
       const dlMap: Record<string, Date | null> = {};
-      for (const f of formsRes.data ?? []) {
-        const dl = f.config?.deadline_days;
+      for (const f of allLearning) {
+        const dl = f.deadline_days;
         const aa = assignedAtMap[f.id];
         dlMap[f.id] = aa && dl ? new Date(new Date(aa).getTime() + Number(dl) * 86400000) : null;
       }
@@ -3513,7 +3530,6 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
         f.content_type === 'guided_project' || f.content_type === 'virtual_experience' ||
         f.config?.isGuidedProject || f.config?.isVirtualExperience;
       const isCrsForm  = (f: any) => f.content_type === 'course' || f.config?.isCourse;
-      const allLearning = (formsRes.data ?? []).filter((f: any) => isCrsForm(f) || isProjForm(f));
 
       // Activity (last 30 min)
       const ago30 = Date.now() - 30 * 60 * 1000;
@@ -4150,10 +4166,10 @@ export default function StudentDashboard() {
               <OverviewSection user={user} userEmail={user.email} username={profile?.username} C={C} onNavigate={goSection}/>
             )}
             {activeSection === 'courses' && user && (
-              <div className="space-y-8">
-                <LearningPathsSection C={C}/>
-                <CoursesSection userEmail={user.email} C={C}/>
-              </div>
+              <CoursesSection userEmail={user.email} C={C}/>
+            )}
+            {activeSection === 'learning_paths' && user && (
+              <LearningPathsSection C={C}/>
             )}
             {activeSection === 'events' && user && (
               <EventsSection userId={user.id} C={C}/>

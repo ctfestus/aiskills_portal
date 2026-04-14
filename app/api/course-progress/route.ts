@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // User-scoped client -- RLS enforces ownership at the DB level.
-// The service role is NOT used here so we never bypass RLS.
 function userClient(jwt: string) {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,7 +10,7 @@ function userClient(jwt: string) {
   );
 }
 
-// Admin client used only for auth.getUser() -- never for data queries.
+// Admin client used only for auth.getUser() and cross-student data queries.
 function adminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,29 +38,29 @@ export async function GET(req: NextRequest) {
   const ids = formIds ? formIds.split(',').filter(Boolean) : formId ? [formId] : [];
   if (!ids.length) return NextResponse.json({ error: 'formId or formIds is required' }, { status: 400 });
 
-  // Use the user-scoped client -- RLS on `forms` enforces user_id = auth.uid()
-  // so only forms this user owns will be returned. No manual ownership check needed.
+  // Use the user-scoped client -- RLS on `courses` enforces user_id = auth.uid()
+  // so only courses this user owns will be returned. No manual ownership check needed.
   const supabase = userClient(jwt);
 
-  const { data: ownedForms } = await supabase
-    .from('forms')
+  const { data: ownedCourses } = await supabase
+    .from('courses')
     .select('id')
     .in('id', ids);
 
-  const ownedIds = (ownedForms ?? []).map((f: any) => f.id);
+  const ownedIds = (ownedCourses ?? []).map((c: any) => c.id);
   if (!ownedIds.length) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  // Use admin client for cross-student data -- ownership already verified above via user-scoped RLS on forms.
+  // Use admin client for cross-student data -- ownership already verified above via user-scoped RLS.
   const { data: attempts } = await adminClient()
     .from('course_attempts')
-    .select('form_id, student_id, current_question_index, score, points, passed, completed_at, attempt_number, updated_at, students!inner(email, full_name)')
-    .in('form_id', ownedIds)
+    .select('course_id, student_id, current_question_index, score, points, passed, completed_at, attempt_number, updated_at, students!inner(email, full_name)')
+    .in('course_id', ownedIds)
     .order('student_id').order('attempt_number', { ascending: false });
 
   // Deduplicate: best attempt per student per course
   const map: Record<string, any> = {};
   for (const a of attempts ?? []) {
-    const key = `${a.student_id}::${a.form_id}`;
+    const key = `${a.student_id}::${a.course_id}`;
     const existing = map[key];
     if (!existing) { map[key] = a; continue; }
     // Prefer completed over incomplete
@@ -73,7 +72,7 @@ export async function GET(req: NextRequest) {
   }
 
   const progress = Object.values(map).map(a => ({
-    form_id:                a.form_id,
+    form_id:                a.course_id,
     student_id:             a.student_id,
     student_email:          (a.students as any)?.email ?? '',
     student_name:           (a.students as any)?.full_name ?? '',

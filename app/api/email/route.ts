@@ -37,16 +37,15 @@ async function getCreatorId(req: NextRequest): Promise<string | null> {
   return user?.id ?? null;
 }
 
-// Returns true if creatorId owns the given formId.
+// Returns true if creatorId owns the given content item (across courses, events, virtual_experiences).
 async function ownsForm(creatorId: string, formId: string): Promise<boolean> {
   const supabase = getAdminSupabase();
-  const { data } = await supabase
-    .from('forms')
-    .select('id')
-    .eq('id', formId)
-    .eq('user_id', creatorId)
-    .single();
-  return !!data;
+  const [{ data: c }, { data: e }, { data: v }] = await Promise.all([
+    supabase.from('courses').select('id').eq('id', formId).eq('user_id', creatorId).maybeSingle(),
+    supabase.from('events').select('id').eq('id', formId).eq('user_id', creatorId).maybeSingle(),
+    supabase.from('virtual_experiences').select('id').eq('id', formId).eq('user_id', creatorId).maybeSingle(),
+  ]);
+  return !!(c ?? e ?? v);
 }
 
 
@@ -122,10 +121,10 @@ export async function POST(req: NextRequest) {
         if (!data?.formId) return NextResponse.json({ error: 'formId is required' }, { status: 400 });
         if (!(await ownsForm(creatorId, data.formId))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-        // Validate form is actually an event
+        // Validate content is actually an event
         const supabase = getAdminSupabase();
-        const { data: form } = await supabase.from('forms').select('config').eq('id', data.formId).single();
-        if (!form?.config?.eventDetails?.isEvent) {
+        const { data: eventRow } = await supabase.from('events').select('id').eq('id', data.formId).maybeSingle();
+        if (!eventRow) {
           return NextResponse.json({ error: 'This form is not an event' }, { status: 400 });
         }
 
@@ -215,10 +214,26 @@ export async function POST(req: NextRequest) {
     if (type === 'course-result') {
       const supabase = getAdminSupabase();
 
-      const [{ data: form }, { data: cert }] = await Promise.all([
-        supabase.from('forms').select('config, slug').eq('id', data.formId).single(),
+      const [[{ data: courseRow }, { data: veRow }], { data: cert }] = await Promise.all([
+        Promise.all([
+          supabase.from('courses').select('title, slug, questions, learn_outcomes, cover_image').eq('id', data.formId).maybeSingle(),
+          supabase.from('virtual_experiences').select('title, slug, tagline').eq('id', data.formId).maybeSingle(),
+        ]),
         supabase.from('certificates').select('id').eq('response_id', data.responseId).eq('revoked', false).maybeSingle(),
       ]);
+
+      // Build a config-compatible shape for backward compat
+      const form = courseRow ?? veRow
+        ? {
+            slug: (courseRow ?? veRow)!.slug,
+            config: {
+              title:    (courseRow ?? veRow)!.title,
+              passmark: (courseRow as any)?.passmark ?? 50,
+              cohort_ids: [],
+            },
+            cohort_ids: [] as string[],
+          }
+        : null;
 
       const { data: response } = await supabase
         .from('responses').select('data').eq('id', data.responseId).eq('form_id', data.formId).single();
@@ -240,10 +255,10 @@ export async function POST(req: NextRequest) {
               .from('students').select('id, cohort_id').eq('email', studentEmail).maybeSingle();
 
             const { data: attempts } = student?.id
-              ? await supabase.from('course_attempts').select('form_id').eq('student_id', student.id)
+              ? await supabase.from('course_attempts').select('course_id').eq('student_id', student.id)
               : { data: [] };
 
-            const seenIds = new Set((attempts ?? []).map((a: any) => a.form_id));
+            const seenIds = new Set((attempts ?? []).map((a: any) => a.course_id));
             seenIds.add(data.formId);
 
             const queryText = buildCourseEmbedText(form.config, form.config?.title || '');
@@ -362,12 +377,18 @@ export async function POST(req: NextRequest) {
       }
 
       // Load recipients from DB -- never trust the client-supplied to list
-      const [{ data: responses, error }, { data: formRow }] = await Promise.all([
+      const [{ data: responses, error }, [{ data: blastCourse }, { data: blastEvent }, { data: blastVe }]] = await Promise.all([
         supabase.from('responses').select('data').eq('form_id', data.formId),
-        supabase.from('forms').select('cohort_ids').eq('id', data.formId).single(),
+        Promise.all([
+          supabase.from('courses').select('cohort_ids').eq('id', data.formId).maybeSingle(),
+          supabase.from('events').select('cohort_ids').eq('id', data.formId).maybeSingle(),
+          supabase.from('virtual_experiences').select('cohort_ids').eq('id', data.formId).maybeSingle(),
+        ]),
       ]);
 
       if (error) throw error;
+
+      const blastContent = blastCourse ?? blastEvent ?? blastVe;
 
       // Build deduplicated map of email -> merge data (responses first, then cohort students fill gaps)
       const responseByEmail = new Map<string, Record<string, any>>();
@@ -381,7 +402,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Also include students assigned via cohorts (catches students who haven't completed yet)
-      const cohortIds: string[] = Array.isArray(formRow?.cohort_ids) ? formRow.cohort_ids : [];
+      const cohortIds: string[] = Array.isArray(blastContent?.cohort_ids) ? blastContent.cohort_ids : [];
       if (cohortIds.length > 0) {
         const { data: cohortStudents } = await supabase
           .from('students')

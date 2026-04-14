@@ -36,7 +36,8 @@ interface Module {
 interface Dataset {
   filename: string;
   description: string;
-  csvContent: string;
+  csvContent?: string;
+  url?: string;
 }
 interface ProjectConfig {
   isVirtualExperience: true;
@@ -337,11 +338,15 @@ export default function VirtualExperienceTaker({
 
   const downloadDataset = () => {
     if (!config.dataset) return;
-    const blob = new Blob([config.dataset.csvContent], { type: 'text/csv' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url; a.download = config.dataset.filename;
-    a.click(); URL.revokeObjectURL(url);
+    if (config.dataset.csvContent) {
+      const blob = new Blob([config.dataset.csvContent], { type: 'text/csv' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = config.dataset.filename;
+      a.click(); URL.revokeObjectURL(url);
+    } else if (config.dataset.url) {
+      window.open(config.dataset.url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   // -- Completion screen ---

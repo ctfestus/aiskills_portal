@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     supabase.from('students').select('cohort_id').eq('id', user.id).single(),
     supabase
       .from('course_attempts')
-      .select('form_id')
+      .select('course_id')
       .eq('student_id', user.id)
       .not('completed_at', 'is', null)
       .eq('passed', true),
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   if (!student?.cohort_id) return NextResponse.json({ gaps: [] });
 
   const cohortId    = student.cohort_id;
-  const completedIds = new Set((completedAttempts ?? []).map((a: any) => a.form_id));
+  const completedIds = new Set((completedAttempts ?? []).map((a: any) => a.course_id));
 
   const index = getVectorIndex();
   if (!index) return NextResponse.json({ gaps: [] });

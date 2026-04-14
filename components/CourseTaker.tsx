@@ -311,7 +311,7 @@ export function CourseTaker({
   const fontOption = getFontById(config.font ?? 'sans');
   useEffect(() => { loadGoogleFont(fontOption); }, [fontOption]);
   const fontStyle = { fontFamily: fontOption.cssFamily };
-  const isDark = config.mode === 'auto' ? systemDark : config.mode !== 'light';
+  const isDark = (config.mode ?? 'dark') === 'auto' ? systemDark : (config.mode ?? 'dark') !== 'light';
   const cardBg = isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm';
   const textColor = isDark ? 'text-white' : 'text-zinc-900';
   const mutedColor = isDark ? 'text-zinc-400' : 'text-zinc-500';
@@ -496,7 +496,7 @@ export function CourseTaker({
           'Content-Type': 'application/json',
           ...(sessionTokenRef.current ? { Authorization: `Bearer ${sessionTokenRef.current}` } : {}),
         },
-        body: JSON.stringify({ action: 'get-progress', form_id: formId }),
+        body: JSON.stringify({ action: 'get-progress', course_id: formId }),
       });
       const d = await res.json();
 
@@ -583,7 +583,7 @@ export function CourseTaker({
       headers,
       body: JSON.stringify({
         action:                 'save-progress',
-        form_id:                formId,
+        course_id:              formId,
         student_email:          studentEmail.trim(),
         student_name:           studentName.trim(),
         current_question_index: newIndex,
@@ -596,29 +596,28 @@ export function CourseTaker({
     }).catch(() => {});
   }, [formId, studentEmail, studentName, reviewMode]);
 
-  // Mark active attempt as completed via API
-  const clearProgress = useCallback((finalScore: number) => {
+  // Mark active attempt as completed via API -- returns a promise so callers can await it
+  const clearProgress = useCallback(async (finalScore: number): Promise<void> => {
     if (!formId || !studentEmail.trim()) return;
     if (reviewMode) return; // review mode -- keep original completed attempt intact
     const scorePct = totalQuestions > 0 ? Math.round((finalScore / totalQuestions) * 100) : 100;
     const passed   = totalQuestions === 0 ? true : scorePct >= passmark;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      fetch('/api/course', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify({
-          action:                 'complete-attempt',
-          form_id:                formId,
-          score:                  scorePct,
-          passed,
-          points:                 totalPoints,
-          current_question_index: totalQuestions,
-        }),
-      }).catch(err => console.error('[clearProgress] failed:', err));
-    });
+    const { data: { session } } = await supabase.auth.getSession();
+    await fetch('/api/course', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({
+        action:                 'complete-attempt',
+        course_id:              formId,
+        score:                  scorePct,
+        passed,
+        points:                 totalPoints,
+        current_question_index: totalQuestions,
+      }),
+    }).catch(err => console.error('[clearProgress] failed:', err));
   }, [formId, studentEmail, totalQuestions, passmark, totalPoints, reviewMode]);
 
   // Resume from saved progress
@@ -647,7 +646,7 @@ export function CourseTaker({
             'Content-Type': 'application/json',
             ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
           },
-          body: JSON.stringify({ action: 'clear-progress', form_id: formId }),
+          body: JSON.stringify({ action: 'clear-progress', course_id: formId }),
         });
       } catch { /* ignore */ }
     }
@@ -716,32 +715,36 @@ export function CourseTaker({
   useEffect(() => {
     if (!isSuccess || !formId || !studentEmail) return;
     supabase
-      .from('responses')
-      .select('data')
-      .eq('form_id', formId)
+      .from('course_attempts')
+      .select('student_id, score, points, passed, students(email, full_name)')
+      .eq('course_id', formId)
+      .not('completed_at', 'is', null)
       .then(({ data }) => {
         if (!data) return;
+        // Keep best attempt per student
         const byEmail = new Map<string, any>();
         for (const r of data) {
-          const key = (r.data?.email || '').toLowerCase() || `anon_${r.data?.name}`;
-          const existing = byEmail.get(key);
-          if (!existing || (r.data?.percentage ?? 0) > (existing?.percentage ?? 0)) {
-            byEmail.set(key, r.data);
+          const email = ((r.students as any)?.email || '').toLowerCase();
+          const name  = (r.students as any)?.full_name || email;
+          const entry = { email, name, percentage: r.score ?? 0, points: r.points ?? 0, passed: r.passed };
+          const existing = byEmail.get(email);
+          if (!existing || (entry.percentage > existing.percentage)) {
+            byEmail.set(email, entry);
           }
         }
         const sorted = Array.from(byEmail.values()).sort((a, b) => {
-          const d = (b.percentage ?? 0) - (a.percentage ?? 0);
+          const d = b.percentage - a.percentage;
           return d !== 0 ? d : (b.points ?? 0) - (a.points ?? 0);
         });
         const myKey = studentEmail.trim().toLowerCase();
-        const idx   = sorted.findIndex(d => (d.email || '').toLowerCase() === myKey);
+        const idx   = sorted.findIndex(d => d.email === myKey);
         if (idx === -1) return;
         setRankCtx({
           rank:  idx + 1,
           total: sorted.length,
-          above: idx > 0           ? sorted[idx - 1] : null,
+          above: idx > 0                  ? sorted[idx - 1] : null,
           me:    sorted[idx],
-          below: idx < sorted.length - 1 ? sorted[idx + 1] : null,
+          below: idx < sorted.length - 1  ? sorted[idx + 1] : null,
         });
       });
   }, [isSuccess, formId, studentEmail]);
@@ -768,8 +771,7 @@ export function CourseTaker({
   // Detect on mount/resume and auto-transition to the completion screen.
   useEffect(() => {
     if (phase === 'course' && !reviewMode && totalSlides > 0 && currentQuestionIndex >= totalSlides) {
-      clearProgress(score);
-      setPhase('complete');
+      clearProgress(score).then(() => setPhase('complete'));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, currentQuestionIndex, totalSlides, reviewMode]);
@@ -963,18 +965,10 @@ export function CourseTaker({
           </div>
 
           {/* Footer */}
-          <div className={`px-7 sm:px-8 py-4 flex items-center justify-between border-t ${isDark ? 'border-zinc-800 bg-zinc-900/40' : 'border-zinc-100 bg-zinc-50/60'}`}>
-            {!isSharedView ? (
+          <div className={`px-7 sm:px-8 py-4 flex items-center justify-end border-t ${isDark ? 'border-zinc-800 bg-zinc-900/40' : 'border-zinc-100 bg-zinc-50/60'}`}>
+            {!isSharedView && (
               <button onClick={onReset} className={`text-xs flex items-center gap-1.5 font-medium ${mutedColor} hover:opacity-70 transition-opacity`}>
                 <RotateCcw className="w-3 h-3" /> Back to Editor
-              </button>
-            ) : (
-              <button
-                onClick={() => { window.location.href = window.location.pathname; }}
-                className="text-xs font-semibold transition-opacity hover:opacity-75"
-                style={{ color: accent }}
-              >
-                Create your own course
               </button>
             )}
             <p className={`text-xs ${mutedColor}`}>Results recorded</p>
@@ -1685,7 +1679,7 @@ export function CourseTaker({
     }
     setIsCorrect(correct);
     setIsChecking(true);
-    if (correct) {
+    if (correct && !reviewMode) {
       // Feature 3: if hint was used for this question, award 0.9 instead of 1
       const hintWasUsed = hintsUsed.has(currentQuestion.id);
       setScore(s => s + (hintWasUsed ? 0.9 : 1));
@@ -1739,8 +1733,7 @@ export function CourseTaker({
         setIsChecking(false);
         setIsCorrect(null);
       } else {
-        clearProgress(score);
-        setPhase('complete');
+        clearProgress(score).then(() => setPhase('complete'));
       }
     }
   };
@@ -1770,8 +1763,17 @@ export function CourseTaker({
       setIsChecking(false);
       setIsCorrect(null);
     } else {
-      clearProgress(score);
-      setPhase('complete');
+      if (reviewMode) {
+        // Review complete -- reset to start, same as handleNext/handleNextDirect
+        setCurrentQuestionIndex(0);
+        setAnswers({});
+        setSelectedOption(null);
+        setFillBlankAnswer('');
+        setIsChecking(false);
+        setIsCorrect(null);
+      } else {
+        clearProgress(score).then(() => setPhase('complete'));
+      }
     }
   };
 
@@ -1779,7 +1781,7 @@ export function CourseTaker({
     setLessonOpen(false);
     let newAnswers = answers;
     let newScore   = score;
-    if (isAnswered() && !answers[currentQuestion.id]) {
+    if (!reviewMode && isAnswered() && !answers[currentQuestion.id]) {
       const userAnswer = getCurrentAnswer();
       let correct = false;
       if (questionType === 'fill_blank') {
@@ -1805,8 +1807,17 @@ export function CourseTaker({
       setSelectedOption(null);
       setFillBlankAnswer('');
     } else {
-      clearProgress(newScore);
-      setPhase('complete');
+      if (reviewMode) {
+        // Review complete -- loop back to start, same as handleNext does
+        setCurrentQuestionIndex(0);
+        setAnswers({});
+        setSelectedOption(null);
+        setFillBlankAnswer('');
+        setIsChecking(false);
+        setIsCorrect(null);
+      } else {
+        clearProgress(newScore).then(() => setPhase('complete'));
+      }
     }
   };
 

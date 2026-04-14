@@ -1,7 +1,7 @@
 /**
  * POST /api/vector/index-course
- * Upserts a course (or guided project) into the Upstash Vector index.
- * Called fire-and-forget whenever a course is created/updated/published.
+ * Upserts a course or virtual experience into the Upstash Vector index.
+ * Called fire-and-forget whenever a course/VE is created/updated/published.
  *
  * Body: { formId: string }
  * Auth: internal -- must supply INTERNAL_API_SECRET header OR Supabase service call
@@ -51,33 +51,42 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = adminClient();
-  const { data: form, error } = await supabase
-    .from('forms')
-    .select('id, title, config, cohort_ids, status, content_type, slug')
-    .eq('id', formId)
-    .single();
 
-  if (error || !form) return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+  // Look up the content across courses and virtual_experiences
+  const [{ data: course }, { data: ve }] = await Promise.all([
+    supabase.from('courses').select('id, title, questions, cover_image, cohort_ids, status, slug, learn_outcomes').eq('id', formId).maybeSingle(),
+    supabase.from('virtual_experiences').select('id, title, modules, cover_image, cohort_ids, status, slug, industry, difficulty, role, company, tagline, learn_outcomes').eq('id', formId).maybeSingle(),
+  ]);
 
-  // Only index courses and guided projects
-  const isCourse  = form.content_type === 'course' || Boolean(form.config?.isCourse);
-  const isProject = form.content_type === 'guided_project' || Boolean(form.config?.isGuidedProject);
-  const isVE      = form.content_type === 'virtual_experience' || Boolean(form.config?.isVirtualExperience);
-  if (!isCourse && !isProject && !isVE) return NextResponse.json({ ok: true, skipped: 'not a course' });
+  let content: any = null;
+  let contentType: string = '';
+  let config: any = {};
 
-  const data = buildCourseEmbedText(form.config, form.title);
+  if (course) {
+    content = course;
+    contentType = 'course';
+    config = { questions: course.questions, coverImage: course.cover_image, learnOutcomes: course.learn_outcomes };
+  } else if (ve) {
+    content = ve;
+    contentType = 'virtual_experience';
+    config = { modules: ve.modules, coverImage: ve.cover_image, tagline: ve.tagline, industry: ve.industry, difficulty: ve.difficulty, role: ve.role, company: ve.company, learnOutcomes: ve.learn_outcomes };
+  }
+
+  if (!content) return NextResponse.json({ error: 'Content not found' }, { status: 404 });
+
+  const data = buildCourseEmbedText(config, content.title);
 
   await index.upsert({
-    id:       form.id,
+    id:       content.id,
     data,
     metadata: {
-      formId:      form.id,
-      title:       form.title,
-      slug:        form.slug ?? form.id,
-      cohortIds:   form.cohort_ids ?? [],
-      status:      form.status ?? 'published',
-      contentType: isProject ? 'guided_project' : isVE ? 'virtual_experience' : 'course',
-      coverImage:  form.config?.coverImage ?? null,
+      formId:      content.id,
+      title:       content.title,
+      slug:        content.slug ?? content.id,
+      cohortIds:   content.cohort_ids ?? [],
+      status:      content.status ?? 'published',
+      contentType,
+      coverImage:  config.coverImage ?? null,
     },
   });
 

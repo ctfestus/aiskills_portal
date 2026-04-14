@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { adminClient } from '@/lib/subscription';
+import { adminClient } from '@/lib/admin-client';
 import { nudgeEmail } from '@/lib/email-templates';
 
 export const dynamic = 'force-dynamic';
@@ -40,26 +40,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'status must be not_started or stalled' }, { status: 400 });
   }
 
-  // Verify the caller owns the form
-  const { data: form } = await supabase
-    .from('forms')
-    .select('user_id, title, slug, content_type, config')
-    .eq('id', formId)
-    .single();
+  // Look up content across courses, events, and virtual_experiences
+  const [{ data: course }, { data: event }, { data: ve }] = await Promise.all([
+    supabase.from('courses').select('user_id, title, slug, cover_image').eq('id', formId).maybeSingle(),
+    supabase.from('events').select('user_id, title, slug, cover_image').eq('id', formId).maybeSingle(),
+    supabase.from('virtual_experiences').select('user_id, title, slug, cover_image').eq('id', formId).maybeSingle(),
+  ]);
 
-  if (!form) return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+  let content: any = null;
+  let contentType: string = 'course';
+
+  if (course)      { content = course; contentType = 'course'; }
+  else if (event)  { content = event;  contentType = 'event'; }
+  else if (ve)     { content = ve;     contentType = 'virtual_experience'; }
+
+  if (!content) return NextResponse.json({ error: 'Content not found' }, { status: 404 });
 
   const { data: student } = await supabase.from('students').select('role').eq('id', user.id).single();
   const isAdmin = student?.role === 'admin';
 
-  if (form.user_id !== user.id && !isAdmin) {
+  if (content.user_id !== user.id && !isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // All email content derived from the server-side form record -- nothing trusted from body
-  const formTitle   = form.title || '';
-  const contentType = form.content_type || 'course';
-  const formUrl     = `${APP_URL}/${form.slug || formId}`;
+  const formUrl = `${APP_URL}/${content.slug || formId}`;
 
   const subject = status === 'not_started'
     ? `Your learning journey is waiting, ${studentName || 'there'}!`
@@ -67,11 +71,11 @@ export async function POST(req: NextRequest) {
 
   const html = nudgeEmail({
     name: studentName || 'there',
-    contentTitle: formTitle,
+    contentTitle: content.title,
     contentType,
     status,
     formUrl,
-    coverImage: form.config?.coverImage || null,
+    coverImage: content.cover_image || null,
   });
 
   try {

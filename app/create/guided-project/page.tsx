@@ -167,17 +167,26 @@ function VirtualExperienceCreatePageInner() {
       setCohorts(cohortData ?? []);
 
       if (editId) {
-        const { data: form } = await supabase.from('forms').select('*').eq('id', editId).single();
-        if (form) {
-          setTitle(form.title || '');
-          setCoverImage(form.config?.coverImage || '');
-          setSelectedCohorts(form.cohort_ids || []);
-          setDeadlineDays(form.config?.deadline_days ? String(form.config.deadline_days) : '');
-          setIndustry(form.config?.industry || 'fintech');
-          setDifficulty(form.config?.difficulty || 'intermediate');
-          setConfig(form.config as ProjectConfig);
+        const { data: ve } = await supabase.from('virtual_experiences').select('*').eq('id', editId).maybeSingle();
+        if (ve) {
+          const cfg: any = {
+            isVirtualExperience: true, modules: ve.modules ?? [], industry: ve.industry,
+            difficulty: ve.difficulty, role: ve.role, company: ve.company, duration: ve.duration,
+            tools: ve.tools, tagline: ve.tagline, background: ve.background,
+            learnOutcomes: ve.learn_outcomes, managerName: ve.manager_name, managerTitle: ve.manager_title,
+            dataset: ve.dataset, coverImage: ve.cover_image, deadline_days: ve.deadline_days,
+          };
+          setTitle(ve.title || '');
+          setCoverImage(cfg.coverImage || '');
+          setSelectedCohorts(ve.cohort_ids || []);
+          setDeadlineDays(cfg.deadline_days ? String(cfg.deadline_days) : '');
+          setIndustry(cfg.industry || 'fintech');
+          setDifficulty(cfg.difficulty || 'intermediate');
+          if (cfg.dataset?.url) setDatasetUrl(cfg.dataset.url);
+          if (cfg.dataset?.filename) setDatasetFilename(cfg.dataset.filename);
+          setConfig(cfg as ProjectConfig);
           setStep(2);
-          setExpandedModules(new Set((form.config?.modules || []).map((m: Module) => m.id)));
+          setExpandedModules(new Set((cfg.modules || []).map((m: Module) => m.id)));
         }
       }
     };
@@ -300,8 +309,8 @@ function VirtualExperienceCreatePageInner() {
           json.config.dataset = { ...(json.config.dataset || {}), url: datasetUrl.trim() };
         }
         // If only a URL was given with no CSV, create a minimal dataset entry
-        if (!datasetCsv.trim() && datasetUrl.trim() && !json.config.dataset?.csvContent) {
-          json.config.dataset = { filename: '', description: '', csvContent: '', url: datasetUrl.trim() };
+        if (!datasetCsv.trim() && datasetUrl.trim() && !json.config.dataset) {
+          json.config.dataset = { filename: '', description: '', url: datasetUrl.trim() };
         }
       }
       setConfig(json.config);
@@ -347,7 +356,7 @@ function VirtualExperienceCreatePageInner() {
     const dataset = datasetCsv.trim()
       ? { filename: datasetFilename || 'dataset.csv', description: '', csvContent: datasetCsv, url: datasetUrl.trim() || undefined }
       : datasetUrl.trim()
-        ? { filename: '', description: '', csvContent: '', url: datasetUrl.trim() }
+        ? { filename: '', description: '', url: datasetUrl.trim() }
         : undefined;
     const blankConfig: any = {
       isVirtualExperience: true,
@@ -391,17 +400,19 @@ function VirtualExperienceCreatePageInner() {
   };
 
   // -- Dataset file upload ---
-  const handleDatasetFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDatasetFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setDatasetFilename(file.name);
     setUploadingDataset(true);
-    const reader = new FileReader();
-    reader.onload = ev => {
-      setDatasetCsv(ev.target?.result as string || '');
-      setUploadingDataset(false);
-    };
-    reader.readAsText(file);
+
+    // Read into memory for AI generation use
+    const text = await file.text();
+    setDatasetCsv(text);
+
+    // Storage upload happens server-side in guided-project-save when the VE is saved
+
+    setUploadingDataset(false);
   };
 
   // -- AI Improve ---
@@ -448,12 +459,17 @@ function VirtualExperienceCreatePageInner() {
   // -- Dataset download ---
   const downloadDataset = () => {
     const dataset = (config as any)?.dataset;
-    if (!dataset?.csvContent) return;
-    const blob = new Blob([dataset.csvContent], { type: 'text/csv' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url; a.download = dataset.filename || 'dataset.csv'; a.click();
-    URL.revokeObjectURL(url);
+    if (!dataset) return;
+    const content = datasetCsv.trim() || dataset.csvContent || '';
+    if (content) {
+      const blob = new Blob([content], { type: 'text/csv' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = dataset.filename || 'dataset.csv'; a.click();
+      URL.revokeObjectURL(url);
+    } else if (dataset.url) {
+      window.open(dataset.url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   // -- Save ---
@@ -738,7 +754,7 @@ function VirtualExperienceCreatePageInner() {
                             {datasetFilename ? datasetFilename : 'Upload CSV file'}
                           </button>
                           {datasetFilename && (
-                            <button onClick={() => { setDatasetCsv(''); setDatasetFilename(''); }}
+                            <button onClick={() => { setDatasetCsv(''); setDatasetFilename(''); setDatasetUrl(''); }}
                               className="hover:opacity-70 transition-opacity" style={{ color: C.faint }}>
                               <X className="w-3.5 h-3.5"/>
                             </button>
@@ -1368,10 +1384,13 @@ function VirtualExperienceCreatePageInner() {
                         {(config as any).dataset.description && (
                           <p className="text-[12px] mt-0.5" style={{ color: C.muted }}>{(config as any).dataset.description}</p>
                         )}
-                        {(config as any).dataset.csvContent && (
+                        {(datasetCsv.trim() || (config as any).dataset.csvContent) && (
                           <p className="text-[12px] mt-0.5" style={{ color: C.faint }}>
-                            {((config as any).dataset.csvContent.split('\n').length || 1) - 1} rows
+                            {((datasetCsv.trim() || (config as any).dataset.csvContent || '').split('\n').length || 1) - 1} rows
                           </p>
+                        )}
+                        {!(datasetCsv.trim() || (config as any).dataset.csvContent) && (config as any).dataset.url && (
+                          <p className="text-[12px] mt-0.5" style={{ color: C.faint }}>Stored in cloud</p>
                         )}
                         {(config as any).dataset.url && (
                           <a href={(config as any).dataset.url} target="_blank" rel="noreferrer"
@@ -1391,23 +1410,30 @@ function VirtualExperienceCreatePageInner() {
                         placeholder="https://docs.google.com/spreadsheets/… (optional)"
                       />
                     </div>
-                    {(config as any).dataset.csvContent && (
-                      <>
-                        <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
-                          <div className="overflow-x-auto">
-                            <pre className="text-[12px] p-3 whitespace-pre leading-relaxed"
-                              style={{ color: C.muted, background: C.input, maxHeight: 120, overflow: 'auto' }}>
-                              {(config as any).dataset.csvContent.split('\n').slice(0, 6).join('\n')}
-                            </pre>
-                          </div>
-                        </div>
-                        <button onClick={downloadDataset}
-                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold transition-all hover:opacity-80"
-                          style={{ background: `${C.cta}18`, color: C.cta }}>
-                          <Download className="w-3.5 h-3.5" /> Download CSV
-                        </button>
-                      </>
-                    )}
+                    {(() => {
+                      const csvContent = datasetCsv.trim() || (config as any).dataset?.csvContent || '';
+                      const hasUrl = !!(config as any).dataset?.url;
+                      if (!csvContent && !hasUrl) return null;
+                      return (
+                        <>
+                          {csvContent && (
+                            <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+                              <div className="overflow-x-auto">
+                                <pre className="text-[12px] p-3 whitespace-pre leading-relaxed"
+                                  style={{ color: C.muted, background: C.input, maxHeight: 120, overflow: 'auto' }}>
+                                  {csvContent.split('\n').slice(0, 6).join('\n')}
+                                </pre>
+                              </div>
+                            </div>
+                          )}
+                          <button onClick={downloadDataset}
+                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold transition-all hover:opacity-80"
+                            style={{ background: `${C.cta}18`, color: C.cta }}>
+                            <Download className="w-3.5 h-3.5" /> {csvContent ? 'Download CSV' : 'Open Dataset'}
+                          </button>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 

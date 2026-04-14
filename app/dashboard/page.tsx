@@ -829,7 +829,8 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
 
             {/* Description */}
             {form.config?.description && (
-              <p className="text-xs leading-relaxed line-clamp-2" style={{ color: C.muted }}>{form.config.description}</p>
+              <div className="text-xs leading-relaxed line-clamp-2 rich-content" style={{ color: C.muted }}
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(form.config.description) }} />
             )}
 
             {/* Footer actions */}
@@ -1838,6 +1839,13 @@ function SchedulesManageSection({ C }: { C: typeof LIGHT_C }) {
     if (!confirmed) return;
 
     setDeletingId(id);
+
+    // Clean up Cloudinary cover image before deleting
+    const item = items.find(i => i.id === id);
+    if (item?.cover_image?.includes('res.cloudinary.com')) {
+      await deleteFromCloudinary(item.cover_image);
+    }
+
     const { error } = await supabase.from('schedules').delete().eq('id', id);
     setDeletingId(null);
     if (error) {
@@ -4862,15 +4870,56 @@ export default function DashboardPage() {
       if (studentData) { setProfile(studentData); _cache.profile = studentData; }
       _cache.user = user;
 
-      const { data: formsData } = await supabase
-        .from('forms')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      // Query all content tables
+      const [{ data: coursesData }, { data: eventsData }, { data: vesData }] = await Promise.all([
+        supabase.from('courses').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('events').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('virtual_experiences').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+      ]);
 
-      const loaded = formsData ?? [];
-      _cache.forms = loaded;
-      setForms(loaded);
+      // Build normalized form objects with reconstructed config
+      const allRows: any[] = [];
+
+      for (const c of coursesData ?? []) {
+        allRows.push({ ...c, content_type: 'course', config: {
+          isCourse: true, title: c.title, description: c.description,
+          questions: c.questions ?? [], fields: c.fields ?? [],
+          passmark: c.passmark, course_timer: c.course_timer,
+          learnOutcomes: c.learn_outcomes, points_enabled: c.points_enabled,
+          points_base: c.points_base, postSubmission: c.post_submission,
+          coverImage: c.cover_image, deadline_days: c.deadline_days,
+          theme: c.theme, mode: c.mode, font: c.font, customAccent: c.custom_accent,
+        }});
+      }
+      for (const e of eventsData ?? []) {
+        allRows.push({ ...e, content_type: 'event', config: {
+          title: e.title, description: e.description, fields: e.fields ?? [],
+          eventDetails: { isEvent: true, date: e.event_date, time: e.event_time,
+            timezone: e.timezone, location: e.location, eventType: e.event_type,
+            capacity: e.capacity, meetingLink: e.meeting_link, isPrivate: e.is_private,
+            speakers: e.speakers ?? [] },
+          postSubmission: e.post_submission, coverImage: e.cover_image,
+          deadline_days: e.deadline_days, theme: e.theme, mode: e.mode,
+          font: e.font, customAccent: e.custom_accent,
+        }});
+      }
+      for (const v of vesData ?? []) {
+        allRows.push({ ...v, content_type: 'virtual_experience', config: {
+          isVirtualExperience: true, title: v.title, description: v.description,
+          modules: v.modules ?? [], industry: v.industry, difficulty: v.difficulty,
+          role: v.role, company: v.company, duration: v.duration, tools: v.tools,
+          tagline: v.tagline, background: v.background, learnOutcomes: v.learn_outcomes,
+          managerName: v.manager_name, managerTitle: v.manager_title, dataset: v.dataset,
+          coverImage: v.cover_image, deadline_days: v.deadline_days,
+          theme: v.theme, mode: v.mode, font: v.font, customAccent: v.custom_accent,
+        }});
+      }
+
+      // Sort combined list by created_at descending
+      allRows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      _cache.forms = allRows;
+      setForms(allRows);
       setLoading(false);
     };
     fetchUserAndForms();
@@ -4880,25 +4929,7 @@ export default function DashboardPage() {
     if (!formToDelete) return;
     setIsDeleting(true);
     try {
-      // Delete storage files associated with the form before removing the DB record
-      const form = forms.find(f => f.id === formToDelete);
-      if (form?.config) {
-        const cloudinaryUrls: string[] = [];
-        const collect = (url?: string) => {
-          if (url && url.includes('res.cloudinary.com')) cloudinaryUrls.push(url);
-        };
-        collect(form.config.coverImage);
-        for (const q of form.config.questions ?? []) {
-          collect(q.imageUrl);
-          collect(q.lesson?.imageUrl);
-        }
-        for (const sp of form.config.eventDetails?.speakers ?? []) {
-          collect(sp.avatar_url);
-        }
-        if (cloudinaryUrls.length) {
-          await Promise.all(cloudinaryUrls.map(u => deleteFromCloudinary(u))).catch(e => console.error('[delete] cloudinary cleanup failed:', e));
-        }
-      }
+      // Cloudinary + storage cleanup is handled server-side in /api/forms DELETE
       // Route deletion through the API (service role) so RLS does not block it
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`/api/forms?id=${formToDelete}`, {

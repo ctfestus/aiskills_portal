@@ -4,8 +4,6 @@ import { createClient } from '@supabase/supabase-js';
 // Service role is appropriate here: this is a server-side public read-only
 // endpoint. It never exposes student_email, has no write operations, and
 // the output is deliberately minimal (display fields only).
-// The security boundary is enforced in application code -- only non-revoked
-// certs are served, and form_id is never included in the response.
 const anonSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -20,15 +18,15 @@ export async function GET(
 
   const { data: cert, error } = await anonSupabase
     .from('certificates')
-    .select('id, student_name, issued_at, revoked, form_id, learning_path_id')
+    .select('id, student_name, issued_at, revoked, course_id, learning_path_id')
     .eq('id', id)
     .single();
 
   if (error || !cert) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   if (cert.revoked)   return NextResponse.json({ revoked: true }, { status: 200 });
 
-  // Path certificate -- no form_id, look up path title and instructor settings
-  if (!cert.form_id && cert.learning_path_id) {
+  // Path certificate -- no course_id, look up path title and instructor settings
+  if (!cert.course_id && cert.learning_path_id) {
     const { data: path } = await anonSupabase
       .from('learning_paths')
       .select('title, instructor_id')
@@ -70,12 +68,17 @@ export async function GET(
     });
   }
 
-  // Use form_id only server-side for lookups -- never include it in the response.
-  const formId = cert.form_id;
-  const { data: form } = await anonSupabase.from('forms').select('title, config, user_id').eq('id', formId).single();
+  // Look up content by course_id -- could be a course or virtual experience
+  const courseId = cert.course_id;
+  const [{ data: courseRow }, { data: veRow }] = await Promise.all([
+    anonSupabase.from('courses').select('title, user_id').eq('id', courseId).maybeSingle(),
+    anonSupabase.from('virtual_experiences').select('title, user_id').eq('id', courseId).maybeSingle(),
+  ]);
 
-  const { data: rawSettings } = form?.user_id
-    ? await anonSupabase.from('certificate_defaults').select('*').eq('user_id', form.user_id).maybeSingle()
+  const content = courseRow ?? veRow;
+
+  const { data: rawSettings } = content?.user_id
+    ? await anonSupabase.from('certificate_defaults').select('*').eq('user_id', content.user_id).maybeSingle()
     : { data: null };
 
   const settings = rawSettings
@@ -102,7 +105,7 @@ export async function GET(
   return NextResponse.json({
     certId:      cert.id,
     studentName: cert.student_name,
-    courseName:  form?.config?.title || form?.title || 'Course',
+    courseName:  content?.title || 'Course',
     issueDate:   new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
     issuedAt:    cert.issued_at,
     settings,

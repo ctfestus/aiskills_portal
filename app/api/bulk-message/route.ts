@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { adminClient } from '@/lib/subscription';
+import { adminClient } from '@/lib/admin-client';
 import { blastEmail } from '@/lib/email-templates';
 
 export const dynamic = 'force-dynamic';
@@ -43,25 +43,29 @@ export async function POST(req: NextRequest) {
   if (!subject?.trim())     return NextResponse.json({ error: 'Subject is required' }, { status: 400 });
   if (!messageBody?.trim()) return NextResponse.json({ error: 'Message body is required' }, { status: 400 });
   if (!segment)             return NextResponse.json({ error: 'Segment is required' }, { status: 400 });
-  if (subject.length > 200)     return NextResponse.json({ error: 'Subject must be 200 characters or fewer' }, { status: 400 });
+  if (subject.length > 200)      return NextResponse.json({ error: 'Subject must be 200 characters or fewer' }, { status: 400 });
   if (messageBody.length > 5000) return NextResponse.json({ error: 'Message body must be 5 000 characters or fewer' }, { status: 400 });
 
-  // 1. Fetch instructor's forms -- optionally scoped to a single form
-  let formsQuery = supabase
-    .from('forms')
-    .select('id, title, content_type, cohort_ids, slug')
-    .eq('user_id', user.id)
-    .in('content_type', ['course', 'virtual_experience', 'guided_project']);
+  // 1. Fetch instructor's courses and VEs -- optionally scoped to a single item
+  const [{ data: coursesRaw }, { data: vesRaw }] = await Promise.all([
+    formId
+      ? supabase.from('courses').select('id, title, content_type:id, cohort_ids, slug').eq('user_id', user.id).eq('id', formId)
+      : supabase.from('courses').select('id, title, cohort_ids, slug').eq('user_id', user.id),
+    formId
+      ? supabase.from('virtual_experiences').select('id, title, cohort_ids, slug').eq('user_id', user.id).eq('id', formId)
+      : supabase.from('virtual_experiences').select('id, title, cohort_ids, slug').eq('user_id', user.id),
+  ]);
 
-  if (formId) {
-    formsQuery = formsQuery.eq('id', formId);
-  }
+  type ContentItem = { id: string; title: string; cohort_ids: string[]; slug: string; content_type: string };
+  const allContent: ContentItem[] = [
+    ...(coursesRaw ?? []).map((c: any) => ({ ...c, content_type: 'course' })),
+    ...(vesRaw     ?? []).map((v: any) => ({ ...v, content_type: 'virtual_experience' })),
+  ];
 
-  const { data: forms } = await formsQuery;
-  if (!forms?.length) return NextResponse.json({ error: 'No content found' }, { status: 404 });
+  if (!allContent.length) return NextResponse.json({ error: 'No content found' }, { status: 404 });
 
   // 2. Collect relevant cohort IDs
-  const allCohortIds = [...new Set(forms.flatMap(f => Array.isArray(f.cohort_ids) ? f.cohort_ids : []))];
+  const allCohortIds = [...new Set(allContent.flatMap(f => Array.isArray(f.cohort_ids) ? f.cohort_ids : []))];
   const activeCohortIds = cohortId && cohortId !== 'all'
     ? allCohortIds.filter(id => id === cohortId)
     : allCohortIds;
@@ -76,44 +80,45 @@ export async function POST(req: NextRequest) {
 
   if (!students?.length) return NextResponse.json({ error: 'No students found' }, { status: 404 });
 
-  const formIds = forms.map(f => f.id);
+  const courseIds = allContent.filter(f => f.content_type === 'course').map(f => f.id);
+  const veIds     = allContent.filter(f => f.content_type === 'virtual_experience').map(f => f.id);
 
   // 4. Fetch attempts
   const [{ data: courseAttempts }, { data: gpAttempts }] = await Promise.all([
-    supabase.from('course_attempts')
-      .select('student_id, form_id, completed_at, updated_at')
-      .in('form_id', formIds),
-    supabase.from('guided_project_attempts')
-      .select('student_id, form_id, completed_at, updated_at')
-      .in('form_id', formIds),
+    courseIds.length
+      ? supabase.from('course_attempts').select('student_id, course_id, completed_at, updated_at').in('course_id', courseIds)
+      : Promise.resolve({ data: [] as any[] }),
+    veIds.length
+      ? supabase.from('guided_project_attempts').select('student_id, ve_id, completed_at, updated_at').in('ve_id', veIds)
+      : Promise.resolve({ data: [] as any[] }),
   ]);
 
-  // Build attempt map
+  // Build attempt map: "studentId|contentId"
   const attemptMap = new Map<string, { completed: boolean; lastActive: string | null }>();
-  for (const a of [...(courseAttempts ?? []), ...(gpAttempts ?? [])]) {
-    const key = `${a.student_id}|${a.form_id}`;
+  for (const a of courseAttempts ?? []) {
+    const key = `${a.student_id}|${a.course_id}`;
     const existing = attemptMap.get(key);
     const isNewer = !existing || (a.updated_at && (!existing.lastActive || a.updated_at > existing.lastActive));
-    if (isNewer) {
-      attemptMap.set(key, {
-        completed:  !!a.completed_at,
-        lastActive: a.updated_at ?? null,
-      });
-    }
+    if (isNewer) attemptMap.set(key, { completed: !!a.completed_at, lastActive: a.updated_at ?? null });
+  }
+  for (const a of gpAttempts ?? []) {
+    const key = `${a.student_id}|${a.ve_id}`;
+    const existing = attemptMap.get(key);
+    const isNewer = !existing || (a.updated_at && (!existing.lastActive || a.updated_at > existing.lastActive));
+    if (isNewer) attemptMap.set(key, { completed: !!a.completed_at, lastActive: a.updated_at ?? null });
   }
 
   // 5. Build recipient list filtered by segment
-  const formMap  = new Map(forms.map(f => [f.id, f]));
   const seen     = new Set<string>();
   const recipients: { email: string; name: string }[] = [];
 
-  for (const form of forms) {
-    const formCohortIds = (Array.isArray(form.cohort_ids) ? form.cohort_ids : [])
+  for (const item of allContent) {
+    const itemCohortIds = (Array.isArray(item.cohort_ids) ? item.cohort_ids : [])
       .filter((id: string) => activeCohortIds.includes(id));
-    const formStudents = students.filter(s => formCohortIds.includes(s.cohort_id));
+    const itemStudents = students.filter(s => itemCohortIds.includes(s.cohort_id));
 
-    for (const student of formStudents) {
-      const key     = `${student.id}|${form.id}`;
+    for (const student of itemStudents) {
+      const key     = `${student.id}|${item.id}`;
       const attempt = attemptMap.get(key);
 
       let status: string;

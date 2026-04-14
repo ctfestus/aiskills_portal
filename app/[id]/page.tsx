@@ -286,7 +286,7 @@ export default function PublicFormPage() {
   // Override the dashboard's data-theme so the creator's chosen mode wins
   useEffect(() => {
     if (!form) return;
-    const rawMode = form.config?.mode ?? 'light';
+    const rawMode = form.config?.mode ?? 'dark';
     const resolved = rawMode === 'auto' ? (systemDark ? 'dark' : 'light') : rawMode;
     const prev = document.documentElement.getAttribute('data-theme');
     document.documentElement.setAttribute('data-theme', resolved);
@@ -352,15 +352,50 @@ export default function PublicFormPage() {
       const { data: { user } } = await supabase.auth.getUser();
 
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id as string);
+      const lookupField = isUUID ? 'id' : 'slug';
 
-      let query = supabase.from('forms').select('*');
-      if (isUUID) {
-        query = query.eq('id', id);
-      } else {
-        query = query.eq('slug', id);
+      // Query all content tables
+      const [{ data: course }, { data: event }, { data: ve }] = await Promise.all([
+        supabase.from('courses').select('*').eq(lookupField, id).maybeSingle(),
+        supabase.from('events').select('*').eq(lookupField, id).maybeSingle(),
+        supabase.from('virtual_experiences').select('*').eq(lookupField, id).maybeSingle(),
+      ]);
+
+      // Reconstruct a form-compatible object with config shape for the viewer
+      let data: any = null;
+      if (course) {
+        data = { ...course, content_type: 'course', config: {
+          title: course.title, description: course.description,
+          isCourse: true, questions: course.questions ?? [], fields: course.fields ?? [],
+          passmark: course.passmark, course_timer: course.course_timer,
+          learnOutcomes: course.learn_outcomes, points_enabled: course.points_enabled,
+          points_base: course.points_base, postSubmission: course.post_submission,
+          coverImage: course.cover_image, deadline_days: course.deadline_days,
+          theme: course.theme, mode: course.mode, font: course.font, customAccent: course.custom_accent,
+        }};
+      } else if (event) {
+        data = { ...event, content_type: 'event', config: {
+          title: event.title, description: event.description,
+          fields: event.fields ?? [],
+          eventDetails: { isEvent: true, date: event.event_date, time: event.event_time,
+            timezone: event.timezone, location: event.location, eventType: event.event_type,
+            capacity: event.capacity, meetingLink: event.meeting_link, isPrivate: event.is_private,
+            speakers: event.speakers ?? [] },
+          postSubmission: event.post_submission, coverImage: event.cover_image,
+          deadline_days: event.deadline_days, theme: event.theme, mode: event.mode,
+          font: event.font, customAccent: event.custom_accent,
+        }};
+      } else if (ve) {
+        data = { ...ve, content_type: 'virtual_experience', config: {
+          title: ve.title, description: ve.description,
+          isVirtualExperience: true, modules: ve.modules ?? [],
+          industry: ve.industry, difficulty: ve.difficulty, role: ve.role, company: ve.company,
+          duration: ve.duration, tools: ve.tools, tagline: ve.tagline, background: ve.background,
+          learnOutcomes: ve.learn_outcomes, managerName: ve.manager_name, managerTitle: ve.manager_title,
+          dataset: ve.dataset, coverImage: ve.cover_image, deadline_days: ve.deadline_days,
+          theme: ve.theme, mode: ve.mode, font: ve.font, customAccent: ve.custom_accent,
+        }};
       }
-
-      const { data } = await query.single();
       if (data) {
         setForm(data);
         if (data.config?.eventDetails?.isEvent) {
@@ -432,8 +467,11 @@ export default function PublicFormPage() {
       return;
     }
     if (ps?.type === 'events' && ps.relatedEventIds?.length) {
-      supabase.from('forms').select('id, slug, title, config').in('id', ps.relatedEventIds).then(({ data }) => {
-        if (data) setRelatedForms(data);
+      supabase.from('events').select('id, slug, title, event_date, event_time, cover_image').in('id', ps.relatedEventIds).then(({ data }) => {
+        if (data) setRelatedForms(data.map((e: any) => ({
+          ...e,
+          config: { title: e.title, coverImage: e.cover_image, eventDetails: { isEvent: true, date: e.event_date, time: e.event_time } }
+        })));
       });
     }
   }, [success, form]);
@@ -464,13 +502,19 @@ export default function PublicFormPage() {
     const responseId = crypto.randomUUID();
 
     if (form.config?.eventDetails?.isEvent) {
-      // Server-side atomic duplicate check + insert.
-      // Uniqueness is enforced by PRIMARY KEY (form_id, email) on event_registrations --
-      // no client-side preflight needed or used.
+      const { data: { session: eventSession } } = await supabase.auth.getSession();
+      if (!eventSession?.access_token) {
+        setSubmitting(false);
+        alert('You must be logged in to register for this event.');
+        return;
+      }
       const regRes = await fetch('/api/event-register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ formId: form.id, responseId, data }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${eventSession.access_token}`,
+        },
+        body: JSON.stringify({ formId: form.id }),
       });
       if (!regRes.ok) {
         const regJson = await regRes.json().catch(() => ({}));
@@ -479,11 +523,12 @@ export default function PublicFormPage() {
         }
         setSubmitting(false);
         alert(regJson.error === 'already_registered'
-          ? 'This email address is already registered for this event.'
-          : 'Failed to submit form. Please try again.');
+          ? 'You are already registered for this event.'
+          : 'Failed to register. Please try again.');
         return;
       }
-    } else {
+    } else if (!form.config?.isCourse) {
+      // Pure registration forms only -- courses track state in course_attempts
       const { error } = await supabase.from('responses').insert({
         id: responseId,
         form_id: form.id,
@@ -531,8 +576,7 @@ export default function PublicFormPage() {
               },
               body: JSON.stringify({
                 action:       'issue-certificate',
-                form_id:      form.id,
-                response_id:  responseId,
+                course_id:    form.id,
                 student_name: data.name,
               }),
             });
@@ -604,7 +648,7 @@ export default function PublicFormPage() {
   }
 
   const config = form.config;
-  const rawMode: ThemeMode = config.mode ?? 'light';
+  const rawMode: ThemeMode = config.mode ?? 'dark';
   const resolvedMode: 'light' | 'dark' = rawMode === 'auto' ? (systemDark ? 'dark' : 'light') : rawMode;
   const dark = resolvedMode === 'dark';
   const t = dark ? DARK_P : LIGHT_P;
@@ -856,11 +900,15 @@ export default function PublicFormPage() {
                 </button>
 
                 {/* Dataset download */}
-                {dataset?.csvContent && (
+                {(dataset?.csvContent || dataset?.url) && (
                   <button onClick={() => {
-                    const blob = new Blob([dataset.csvContent], { type: 'text/csv' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a'); a.href = url; a.download = dataset.filename || 'dataset.csv'; a.click(); URL.revokeObjectURL(url);
+                    if (dataset.csvContent) {
+                      const blob = new Blob([dataset.csvContent], { type: 'text/csv' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a'); a.href = url; a.download = dataset.filename || 'dataset.csv'; a.click(); URL.revokeObjectURL(url);
+                    } else if (dataset.url) {
+                      window.open(dataset.url, '_blank', 'noopener,noreferrer');
+                    }
                   }}
                   style={{ width: '100%', padding: '11px', borderRadius: 10, background: 'transparent', color: gp.body, fontSize: 13, fontWeight: 600, border: `1px solid ${gp.border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
                   <Download style={{ width: 14, height: 14 }} /> Download Dataset

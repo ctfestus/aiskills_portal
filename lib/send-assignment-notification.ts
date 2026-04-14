@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { adminClient } from '@/lib/subscription';
+import { adminClient } from '@/lib/admin-client';
 import { blastEmail } from '@/lib/email-templates';
 
 const resend = new Resend(process.env.RESEND_API_KEY);

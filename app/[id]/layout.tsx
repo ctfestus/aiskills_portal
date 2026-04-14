@@ -3,8 +3,24 @@ import type { Metadata } from 'next';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+async function findContent(id: string) {
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  const field = isUUID ? 'id' : 'slug';
+
+  const [{ data: course }, { data: event }, { data: ve }] = await Promise.all([
+    supabase.from('courses').select('id, title, description, cover_image').eq(field, id).maybeSingle(),
+    supabase.from('events').select('id, title, description, cover_image').eq(field, id).maybeSingle(),
+    supabase.from('virtual_experiences').select('id, title, description, cover_image').eq(field, id).maybeSingle(),
+  ]);
+
+  if (course) return { id: course.id, title: course.title, description: course.description, coverImage: course.cover_image };
+  if (event)  return { id: event.id,  title: event.title,  description: event.description,  coverImage: event.cover_image };
+  if (ve)     return { id: ve.id,     title: ve.title,     description: ve.description,     coverImage: ve.cover_image };
+  return null;
+}
 
 export async function generateMetadata({
   params,
@@ -12,12 +28,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-
-  const { data } = await (isUUID
-    ? supabase.from('forms').select('id, title, description, config').eq('id', id).single()
-    : supabase.from('forms').select('id, title, description, config').eq('slug', id).single()
-  );
+  const data = await findContent(id);
 
   if (!data) return { title: 'Not Found' };
 
@@ -41,20 +52,16 @@ export async function generateMetadata({
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
   const appUrl = rawUrl.replace(/\/$/, '');
 
-  const coverImage: string | undefined = data.config?.coverImage;
+  const coverImage = data.coverImage;
 
   let ogImage: string | undefined;
   if (coverImage) {
     if (coverImage.startsWith('https://images.pexels.com')) {
-      // Pexels originals can be 3-8 MB -- use their built-in resizer so
-      // WhatsApp / Telegram crawlers don't time out fetching a huge file.
       const base = coverImage.split('?')[0];
       ogImage = `${base}?auto=compress&cs=tinysrgb&w=1200&h=630&fit=crop`;
     } else if (coverImage.startsWith('http')) {
-      // Supabase storage or other public URL -- use directly.
       ogImage = coverImage;
     } else {
-      // Base64 data URL -- proxy through /api/og/ to convert to a real image response.
       ogImage = `${appUrl}/api/og/${data.id}`;
     }
   }

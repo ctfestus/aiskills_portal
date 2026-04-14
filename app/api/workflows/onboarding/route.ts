@@ -9,7 +9,7 @@
  */
 import { serve } from '@upstash/workflow/nextjs';
 import { Resend } from 'resend';
-import { adminClient } from '@/lib/subscription';
+import { adminClient } from '@/lib/admin-client';
 import {
   welcomeEmail,
   day3CheckInEmail,
@@ -54,19 +54,18 @@ export const { POST } = serve<{ email: string; name: string; userId: string }>(
       let courseUrl:   string | undefined;
 
       if (student?.cohort_id) {
-        const { data: form } = await supabase
-          .from('forms')
+        const { data: course } = await supabase
+          .from('courses')
           .select('title, slug, id')
           .contains('cohort_ids', [student.cohort_id])
           .eq('status', 'published')
-          .in('content_type', ['course'])
           .order('created_at', { ascending: true })
           .limit(1)
           .maybeSingle();
 
-        if (form) {
-          courseTitle = form.title;
-          courseUrl   = `${APP_URL}/${form.slug || form.id}?go=1`;
+        if (course) {
+          courseTitle = course.title;
+          courseUrl   = `${APP_URL}/${course.slug || course.id}?go=1`;
         }
       }
 
@@ -86,13 +85,13 @@ export const { POST } = serve<{ email: string; name: string; userId: string }>(
       // Check how many courses completed so far
       const { data: attempts } = await supabase
         .from('course_attempts')
-        .select('form_id')
+        .select('course_id')
         .eq('student_id', userId)
         .eq('passed', true)
         .not('completed_at', 'is', null);
 
-      const completedFormIds = [...new Set((attempts ?? []).map((a: any) => a.form_id))];
-      const coursesCompleted = completedFormIds.length;
+      const completedCourseIds = [...new Set((attempts ?? []).map((a: any) => a.course_id))];
+      const coursesCompleted = completedCourseIds.length;
       const hasStarted       = (attempts ?? []).length > 0 || coursesCompleted > 0;
 
       await resend.emails.send({

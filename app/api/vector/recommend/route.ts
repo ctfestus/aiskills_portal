@@ -38,33 +38,37 @@ export async function POST(req: NextRequest) {
 
   const supabase = adminClient();
 
-  // 1. Get student profile (cohort + email)
+  // 1. Get student profile (cohort)
   const { data: student } = await supabase
     .from('students')
-    .select('cohort_id, email')
+    .select('cohort_id')
     .eq('id', user.id)
     .single();
 
-  // 2. Get the completed course to build the query vector + its cohorts
-  const { data: completedForm } = await supabase
-    .from('forms')
-    .select('title, config, cohort_ids')
-    .eq('id', completedFormId)
-    .single();
+  // 2. Get the completed course/VE to build the query vector + its cohorts
+  const [{ data: completedCourse }, { data: completedVe }] = await Promise.all([
+    supabase.from('courses').select('title, questions, cover_image, cohort_ids, learn_outcomes').eq('id', completedFormId).maybeSingle(),
+    supabase.from('virtual_experiences').select('title, modules, cover_image, cohort_ids, tagline, industry, difficulty, role, company, learn_outcomes').eq('id', completedFormId).maybeSingle(),
+  ]);
 
-  if (!completedForm) return NextResponse.json({ recommendations: [] });
+  const completedContent = completedCourse ?? completedVe;
+  if (!completedContent) return NextResponse.json({ recommendations: [] });
+
+  const completedConfig = completedCourse
+    ? { questions: completedCourse.questions, coverImage: completedCourse.cover_image, learnOutcomes: completedCourse.learn_outcomes }
+    : { modules: completedVe!.modules, coverImage: completedVe!.cover_image, tagline: completedVe!.tagline, industry: completedVe!.industry, difficulty: completedVe!.difficulty, role: completedVe!.role, company: completedVe!.company, learnOutcomes: completedVe!.learn_outcomes };
 
   // 3. Get all course IDs the student has already started
   const { data: attempts } = await supabase
     .from('course_attempts')
-    .select('form_id')
+    .select('course_id')
     .eq('student_id', user.id);
 
-  const seenIds = new Set((attempts ?? []).map((a: any) => a.form_id));
+  const seenIds = new Set((attempts ?? []).map((a: any) => a.course_id));
   seenIds.add(completedFormId);
 
   // 4. Query vector index for similar courses
-  const queryText = buildCourseEmbedText(completedForm.config, completedForm.title);
+  const queryText = buildCourseEmbedText(completedConfig, completedContent.title);
   const results = await index.query({
     data:            queryText,
     topK:            12,
@@ -72,10 +76,8 @@ export async function POST(req: NextRequest) {
   });
 
   // 5. Filter: published, not already seen, cohort-scoped when possible
-  // If student has a cohort, filter to that cohort.
-  // Otherwise (instructor previewing) filter to cohorts of the completed course.
   const cohortId       = student?.cohort_id ?? null;
-  const fallbackCohorts: string[] = completedForm.cohort_ids ?? [];
+  const fallbackCohorts: string[] = completedContent.cohort_ids ?? [];
 
   const candidates = results
     .filter((r: any) => {
@@ -84,33 +86,36 @@ export async function POST(req: NextRequest) {
       if (m.status !== 'published') return false;
       if (seenIds.has(m.formId)) return false;
       const itemCohorts: string[] = Array.isArray(m.cohortIds) ? m.cohortIds : [];
-      if ((r.score ?? 0) < 0.6) return false; // only genuinely similar content
+      if ((r.score ?? 0) < 0.6) return false;
       if (cohortId) return itemCohorts.includes(cohortId);
-      // Instructor fallback: show anything in the same cohorts as the completed course
       return fallbackCohorts.some(c => itemCohorts.includes(c));
     })
     .slice(0, 12);
 
   if (!candidates.length) return NextResponse.json({ recommendations: [] });
 
-  // Verify candidates still exist in the database (vector index may contain stale/deleted courses)
+  // Verify candidates still exist in DB (vector index may contain stale/deleted entries)
   const candidateIds = candidates.map((r: any) => r.metadata.formId);
-  const { data: existingForms } = await supabase
-    .from('forms')
-    .select('id')
-    .in('id', candidateIds);
+  const [{ data: existingCourses }, { data: existingVes }] = await Promise.all([
+    supabase.from('courses').select('id').in('id', candidateIds),
+    supabase.from('virtual_experiences').select('id').in('id', candidateIds),
+  ]);
 
-  const existingIds = new Set((existingForms ?? []).map((f: any) => f.id));
+  const existingIds = new Set([
+    ...(existingCourses ?? []).map((f: any) => f.id),
+    ...(existingVes    ?? []).map((f: any) => f.id),
+  ]);
 
   const recs = candidates
     .filter((r: any) => existingIds.has(r.metadata.formId))
     .slice(0, 3)
     .map((r: any) => ({
-      formId:     r.metadata.formId,
-      title:      r.metadata.title,
-      slug:       r.metadata.slug,
-      coverImage: r.metadata.coverImage ?? null,
-      score:      Math.round((r.score ?? 0) * 100),
+      formId:      r.metadata.formId,
+      title:       r.metadata.title,
+      slug:        r.metadata.slug,
+      coverImage:  r.metadata.coverImage ?? null,
+      contentType: r.metadata.contentType,
+      score:       Math.round((r.score ?? 0) * 100),
     }));
 
   return NextResponse.json({ recommendations: recs });

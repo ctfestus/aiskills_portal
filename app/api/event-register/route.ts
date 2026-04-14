@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { confirmationEmail } from '@/lib/email-templates';
-import { getRedis } from '@/lib/redis';
 
-// Service role -- needed to call register_event_attendee (no public RLS policies)
 function adminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,12 +14,34 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM   = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
 
 export async function POST(req: NextRequest) {
-  // Check size BEFORE parsing to prevent memory spike from large payloads.
-  // content-length can be absent (chunked encoding) so treat missing as 0 and let
-  // the DB constraint be the hard backstop in that case.
   const contentLength = parseInt(req.headers.get('content-length') || '0', 10);
   if (contentLength > 65536) {
     return NextResponse.json({ error: 'Payload too large' }, { status: 413 });
+  }
+
+  // Require authenticated student
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const jwt = authHeader.slice(7);
+
+  const supabase = adminClient();
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Confirm they are a student
+  const { data: student } = await supabase
+    .from('students')
+    .select('id, email')
+    .eq('id', user.id)
+    .single();
+
+  if (!student) {
+    return NextResponse.json({ error: 'Student record not found' }, { status: 403 });
   }
 
   let body: any;
@@ -29,86 +49,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { formId, responseId, data } = body;
-
-  if (!formId || !responseId || !data || typeof data !== 'object') {
-    return NextResponse.json({ error: 'formId, responseId and data are required' }, { status: 400 });
+  const { formId } = body;
+  if (!formId) {
+    return NextResponse.json({ error: 'formId is required' }, { status: 400 });
   }
 
-  // Field-level validation -- prevent unbounded strings from being stored as JSONB.
-  const FIELD_LIMITS: Record<string, number> = { email: 254, name: 200, phone: 30, company: 200 };
-  for (const [field, maxLen] of Object.entries(FIELD_LIMITS)) {
-    if (typeof data[field] === 'string' && (data[field] as string).length > maxLen) {
-      return NextResponse.json({ error: `Field '${field}' exceeds maximum length of ${maxLen}` }, { status: 400 });
-    }
-  }
-  // Cap any remaining string fields at 2000 chars to prevent JSONB bloat.
-  for (const [key, val] of Object.entries(data as Record<string, unknown>)) {
-    if (typeof val === 'string' && val.length > 2000) {
-      return NextResponse.json({ error: `Field '${key}' exceeds maximum length of 2000` }, { status: 400 });
-    }
-  }
-
-  const email = typeof data.email === 'string' ? data.email.trim().toLowerCase() : '';
-  if (!email) {
-    return NextResponse.json({ error: 'Email is required for event registration' }, { status: 400 });
-  }
-
-  // -- Rate limiting (fail open if Redis unavailable) ---
-  // Tier 1: 10 registrations per IP per 15 minutes
-  // Tier 2: 3 registrations per email per hour
-  const redis = getRedis();
-  if (redis) {
-    try {
-      const ip     = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-      const ipKey  = `rate:event-register:ip:${ip}`;
-      const emlKey = `rate:event-register:email:${email}`;
-
-      const [ipCount, emlCount] = await Promise.all([
-        redis.incr(ipKey),
-        redis.incr(emlKey),
-      ]);
-
-      // Set TTL on first hit only
-      if (ipCount  === 1) await redis.expire(ipKey,  15 * 60);
-      if (emlCount === 1) await redis.expire(emlKey, 60 * 60);
-
-      if (ipCount > 10) {
-        return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
-      }
-      if (emlCount > 3) {
-        return NextResponse.json({ error: 'Too many registration attempts for this email.' }, { status: 429 });
-      }
-    } catch { /* Redis error -- fail open, let request through */ }
-  }
-
-  const supabase = adminClient();
-
-  // Confirm the form exists and is actually an event -- business logic stays
-  // in application code; the RPC handles only the atomic write.
-  const { data: form } = await supabase
-    .from('forms')
-    .select('id, slug, config')
+  // Confirm the event exists
+  const { data: event } = await supabase
+    .from('events')
+    .select('id, title, slug, event_date, event_time, timezone, location, meeting_link')
     .eq('id', formId)
-    .single();
+    .maybeSingle();
 
-  if (!form) return NextResponse.json({ error: 'Form not found' }, { status: 404 });
-  if (!form.config?.eventDetails?.isEvent) {
-    return NextResponse.json({ error: 'Not an event form' }, { status: 400 });
-  }
+  if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
 
-  // -- Single atomic transaction via Postgres RPC ---
-  // register_event_attendee inserts into event_registrations and responses in
-  // one transaction. If either insert fails the whole thing rolls back --
-  // no compensation pattern, no ghost registrations possible.
+  // Register via RPC
   const { data: result, error: rpcError } = await supabase.rpc('register_event_attendee', {
-    p_form_id:     formId,
-    p_email:       email,
-    p_response_id: responseId,
-    p_data:        data,
+    p_event_id:   formId,
+    p_student_id: student.id,
   });
 
   if (rpcError) {
+    console.error('[event-register] rpc error:', rpcError.message);
     return NextResponse.json({ error: rpcError.message }, { status: 500 });
   }
 
@@ -116,38 +78,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'already_registered' }, { status: 409 });
   }
 
-  // -- Send confirmation email server-side (fire-and-forget) ---
-  // All email content is derived from the DB-verified form record and the
-  // validated registration data -- never from untrusted client input.
-  if (process.env.RESEND_API_KEY) {
-    const cfg = form.config as Record<string, any>;
-    const subject = `You're registered: ${cfg?.title || 'Event'}`;
+  // Send confirmation email (fire-and-forget)
+  if (process.env.RESEND_API_KEY && student.email) {
+    const subject = `You're registered: ${event.title || 'Event'}`;
     const html = confirmationEmail({
-      name:          data.name || data.full_name || email,
-      eventTitle:    cfg?.title       || '',
-      eventDate:     cfg?.eventDetails?.date  || '',
-      eventTime:     cfg?.eventDetails?.time  || '',
-      eventTimezone: cfg?.eventDetails?.timezone || '',
-      eventLocation: cfg?.eventDetails?.location || '',
-      meetingLink:   cfg?.eventDetails?.meetingLink || '',
-      formUrl: `${process.env.APP_URL || 'https://app.aiskillsafrica.com'}/${form.slug ?? formId}`,
+      name:          student.email,
+      eventTitle:    event.title      || '',
+      eventDate:     event.event_date ? String(event.event_date) : '',
+      eventTime:     event.event_time ? String(event.event_time) : '',
+      eventTimezone: event.timezone   || '',
+      eventLocation: event.location   || '',
+      meetingLink:   event.meeting_link || '',
+      formUrl: `${process.env.APP_URL || 'https://app.aiskillsafrica.com'}/${event.slug ?? formId}`,
     });
 
-    // Idempotency: skip if already sent for this response
-    const { data: alreadySent } = await supabase
-      .from('sent_emails')
-      .select('id')
-      .eq('response_id', responseId)
-      .eq('type', 'confirmation')
-      .maybeSingle();
-
-    if (!alreadySent) {
-      resend.emails
-        .send({ from: FROM, to: email, subject, html })
-        .then(() => supabase.from('sent_emails').insert({ response_id: responseId, type: 'confirmation' }))
-        .catch((err: unknown) => console.error('[event-register] confirmation email failed:', err));
-    }
+    resend.emails
+      .send({ from: FROM, to: student.email, subject, html })
+      .catch((err: unknown) => console.error('[event-register] confirmation email failed:', err));
   }
 
-  return NextResponse.json({ success: true, responseId });
+  return NextResponse.json({ success: true });
 }

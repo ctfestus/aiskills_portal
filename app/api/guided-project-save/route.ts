@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminClient } from '@/lib/subscription';
+import { adminClient } from '@/lib/admin-client';
 import { sendAssignmentNotifications } from '@/lib/send-assignment-notification';
 
 export const dynamic = 'force-dynamic';
 
-async function upsertCohortAssignments(supabase: ReturnType<typeof adminClient>, formId: string, cohortIds: string[]) {
+async function upsertCohortAssignments(supabase: ReturnType<typeof adminClient>, veId: string, cohortIds: string[]) {
   if (!cohortIds.length) return;
-  const rows = cohortIds.map(cohortId => ({ form_id: formId, cohort_id: cohortId }));
+  const rows = cohortIds.map(cohortId => ({
+    content_type: 'virtual_experience',
+    content_id:   veId,
+    cohort_id:    cohortId,
+  }));
   const { error } = await supabase
     .from('cohort_assignments')
-    .upsert(rows, { onConflict: 'form_id,cohort_id', ignoreDuplicates: true });
+    .upsert(rows, { onConflict: 'content_id,cohort_id', ignoreDuplicates: true });
   if (error) console.error('[cohort_assignments] upsert error:', error.message, error.code);
 }
 
@@ -35,35 +39,70 @@ export async function POST(req: NextRequest) {
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
   if (!config)        return NextResponse.json({ error: 'Config is required' }, { status: 400 });
 
-  const finalConfig = {
-    ...config,
-    isVirtualExperience: true,
-    coverImage: coverImage || config.coverImage || '',
-    deadline_days: deadline_days ? Number(deadline_days) : (config.deadline_days ?? null),
-  };
-
   const newCohortIds: string[] = Array.isArray(cohort_ids) ? cohort_ids : [];
 
+  // Shared payload mapped to virtual_experiences columns
   const payload: any = {
-    title:        title.trim(),
-    config:       finalConfig,
-    cohort_ids:   newCohortIds,
-    content_type: 'virtual_experience',
-    description:  config.tagline || '',
-    status:       formStatus,
+    title:          title.trim(),
+    description:    config.tagline || '',
+    status:         formStatus,
+    cohort_ids:     newCohortIds,
+    cover_image:    coverImage || config.coverImage || null,
+    deadline_days:  deadline_days ? Number(deadline_days) : (config.deadline_days ? Number(config.deadline_days) : null),
+    theme:          config.theme         ?? null,
+    mode:           config.mode          ?? null,
+    font:           config.font          ?? null,
+    custom_accent:  config.customAccent  ?? null,
+    modules:        config.modules       ?? [],
+    industry:       config.industry      ?? null,
+    difficulty:     config.difficulty    ?? null,
+    role:           config.role          ?? null,
+    company:        config.company       ?? null,
+    duration:       config.duration      ?? null,
+    tools:          config.tools         ?? [],
+    tagline:        config.tagline       ?? null,
+    background:     config.background    ?? null,
+    learn_outcomes: config.learnOutcomes ?? [],
+    manager_name:   config.managerName   ?? null,
+    manager_title:  config.managerTitle  ?? 'Manager',
+    dataset:        null, // set below after optional storage upload
   };
+
+  // Upload CSV to Supabase Storage if csvContent is present, then strip it from DB payload
+  if (config.dataset) {
+    const { csvContent, ...datasetMeta } = config.dataset as any;
+    if (csvContent?.trim() && !datasetMeta.url && Buffer.byteLength(csvContent, 'utf-8') <= 50 * 1024 * 1024) {
+      try {
+        const safeName = (datasetMeta.filename || 'dataset.csv').replace(/[^a-zA-Z0-9._-]/g, '_');
+        const path = `${Date.now()}_${safeName}`;
+        const buffer = Buffer.from(csvContent, 'utf-8');
+        const { error: uploadError } = await supabase.storage
+          .from('datasets')
+          .upload(path, buffer, { contentType: 'text/csv', upsert: false });
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from('datasets').getPublicUrl(path);
+          datasetMeta.url = urlData.publicUrl;
+        } else {
+          console.error('[guided-project-save] dataset storage upload error:', uploadError.message);
+        }
+      } catch (e) {
+        console.error('[guided-project-save] dataset storage upload exception:', e);
+      }
+    }
+    payload.dataset = Object.keys(datasetMeta).length ? datasetMeta : null;
+  }
 
   if (editId) {
     // Fetch current cohort_ids before updating so we can detect newly added cohorts
     const { data: existing } = await supabase
-      .from('forms')
+      .from('virtual_experiences')
       .select('cohort_ids, slug')
       .eq('id', editId)
       .eq('user_id', user.id)
       .single();
 
     const { error } = await supabase
-      .from('forms')
+      .from('virtual_experiences')
       .update(payload)
       .eq('id', editId)
       .eq('user_id', user.id);
@@ -73,69 +112,61 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to save project.' }, { status: 500 });
     }
 
-    // Upsert cohort_assignments for all current cohorts (preserves original assigned_at)
-    console.log('[guided-project-save] upserting cohort_assignments for', newCohortIds.length, 'cohorts, formId:', editId);
     await upsertCohortAssignments(supabase, editId, newCohortIds);
 
-    // Notify students in cohorts that were newly added in this edit
     const oldCohortIds: string[] = Array.isArray(existing?.cohort_ids) ? existing.cohort_ids : [];
     const addedCohortIds = newCohortIds.filter(id => !oldCohortIds.includes(id));
     if (addedCohortIds.length && existing?.slug) {
       sendAssignmentNotifications({
-        cohortIds: addedCohortIds,
-        title: title.trim(),
-        slug: existing.slug,
+        cohortIds:   addedCohortIds,
+        title:       title.trim(),
+        slug:        existing.slug,
         contentType: 'virtual_experience',
       }).catch(() => {});
     }
 
-    // Re-index in vector DB so search/recommendations stay current
     if (formStatus === 'published') {
       fetch(`${process.env.APP_URL || ''}/api/vector/index-course`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'x-reindex-secret': process.env.REINDEX_SECRET ?? '' },
-        body:    JSON.stringify({ formId: editId }),
+        body:    JSON.stringify({ formId: editId, contentType: 'virtual_experience' }),
       }).catch(() => {});
     }
 
     return NextResponse.json({ id: editId });
   }
 
-  // Generate slug
+  // Generate slug for new VE
   const base = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const slug  = `${base}-${Math.random().toString(36).slice(2, 8)}`;
 
   const { data, error } = await supabase
-    .from('forms')
+    .from('virtual_experiences')
     .insert({ ...payload, slug, user_id: user.id })
     .select('id, slug')
     .single();
 
   if (error) {
     console.error('[guided-project-save] insert error:', error);
-    console.error('[guided-project-save] insert error:', error);
     return NextResponse.json({ error: 'Failed to save project.' }, { status: 500 });
   }
 
-  // Upsert cohort_assignments for all assigned cohorts
   await upsertCohortAssignments(supabase, data.id, newCohortIds);
 
-  // Fire-and-forget assignment notifications to cohort students
   if (newCohortIds.length) {
     sendAssignmentNotifications({
-      cohortIds: newCohortIds,
-      title: title.trim(),
-      slug: data.slug,
+      cohortIds:   newCohortIds,
+      title:       title.trim(),
+      slug:        data.slug,
       contentType: 'virtual_experience',
     }).catch(() => {});
   }
 
-  // Index in vector DB for semantic search/recommendations
   if (formStatus === 'published') {
     fetch(`${process.env.APP_URL || ''}/api/vector/index-course`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'x-reindex-secret': process.env.REINDEX_SECRET ?? '' },
-      body:    JSON.stringify({ formId: data.id }),
+      body:    JSON.stringify({ formId: data.id, contentType: 'virtual_experience' }),
     }).catch(() => {});
   }
 

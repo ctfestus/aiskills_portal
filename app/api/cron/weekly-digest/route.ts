@@ -1,16 +1,10 @@
 /**
  * Weekly cron -- Learning digest email.
  * Triggered by QStash every Monday at 08:00.
- *
- * Sends each student assigned to a cohort a summary of:
- *   - What they completed this week
- *   - What's in progress
- *   - Overdue items (deadline passed, not completed)
- *   - Programs not yet started
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { adminClient } from '@/lib/subscription';
+import { adminClient } from '@/lib/admin-client';
 import { verifyQStashRequest } from '@/lib/qstash';
 import { weeklyDigestEmail } from '@/lib/email-templates';
 
@@ -19,7 +13,7 @@ export const dynamic = 'force-dynamic';
 const resend     = new Resend(process.env.RESEND_API_KEY);
 const FROM       = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
 const APP_URL    = process.env.APP_URL || 'https://app.aiskillsafrica.com';
-const BATCH_SIZE = 100; // Resend batch limit
+const BATCH_SIZE = 100;
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -39,24 +33,30 @@ export async function POST(req: NextRequest) {
   const now = Date.now();
   const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  // -- 1. Fetch all cohort assignments --
+  // -- 1. Fetch all cohort assignments (polymorphic) --
   const { data: cohortAssignments } = await supabase
     .from('cohort_assignments')
-    .select('form_id, cohort_id, assigned_at');
+    .select('content_id, content_type, cohort_id, assigned_at');
 
   if (!cohortAssignments?.length) {
     return NextResponse.json({ ok: true, sent: 0, skipped: 0 });
   }
 
-  // -- 2. Fetch all relevant published forms --
-  const formIds = [...new Set(cohortAssignments.map((a: any) => a.form_id))];
-  const { data: forms } = await supabase
-    .from('forms')
-    .select('id, title, slug, content_type, config')
-    .in('id', formIds)
-    .eq('status', 'published');
+  // -- 2. Fetch published content from all three tables --
+  const courseIds = [...new Set(cohortAssignments.filter(a => a.content_type === 'course').map(a => a.content_id))];
+  const eventIds  = [...new Set(cohortAssignments.filter(a => a.content_type === 'event').map(a => a.content_id))];
+  const veIds     = [...new Set(cohortAssignments.filter(a => a.content_type === 'virtual_experience').map(a => a.content_id))];
 
-  const formMap = new Map((forms ?? []).map((f: any) => [f.id, f]));
+  const [{ data: courses }, { data: events }, { data: ves }] = await Promise.all([
+    courseIds.length ? supabase.from('courses').select('id, title, slug, deadline_days').in('id', courseIds).eq('status', 'published') : Promise.resolve({ data: [] }),
+    eventIds.length  ? supabase.from('events').select('id, title, slug, deadline_days').in('id', eventIds).eq('status', 'published')   : Promise.resolve({ data: [] }),
+    veIds.length     ? supabase.from('virtual_experiences').select('id, title, slug, deadline_days').in('id', veIds).eq('status', 'published') : Promise.resolve({ data: [] }),
+  ]);
+
+  const contentMap = new Map<string, { id: string; title: string; slug: string; deadline_days: number | null; content_type: string }>();
+  for (const c of courses ?? []) contentMap.set(c.id, { ...c, content_type: 'course' });
+  for (const e of events  ?? []) contentMap.set(e.id, { ...e, content_type: 'event' });
+  for (const v of ves     ?? []) contentMap.set(v.id, { ...v, content_type: 'virtual_experience' });
 
   // -- 3. Fetch all students in the relevant cohorts --
   const cohortIds = [...new Set(cohortAssignments.map((a: any) => a.cohort_id))];
@@ -67,31 +67,26 @@ export async function POST(req: NextRequest) {
 
   if (!students?.length) return NextResponse.json({ ok: true, sent: 0, skipped: 0 });
 
-  // -- 4. Fetch all attempts for the relevant forms --
+  // -- 4. Fetch all attempts for the relevant content --
+  const allContentIds = [...contentMap.keys()];
   const [{ data: courseAttempts }, { data: gpAttempts }] = await Promise.all([
-    supabase
-      .from('course_attempts')
-      .select('student_id, form_id, completed_at, score, updated_at')
-      .in('form_id', formIds),
-    supabase
-      .from('guided_project_attempts')
-      .select('student_id, form_id, completed_at, updated_at')
-      .in('form_id', formIds),
+    courseIds.length
+      ? supabase.from('course_attempts').select('student_id, course_id, completed_at, score, updated_at').in('course_id', courseIds)
+      : Promise.resolve({ data: [] }),
+    veIds.length
+      ? supabase.from('guided_project_attempts').select('student_id, ve_id, completed_at, updated_at').in('ve_id', veIds)
+      : Promise.resolve({ data: [] }),
   ]);
 
-  // Map: `${studentId}|${formId}` -> attempt
+  // Map: `${studentId}|${contentId}` -> attempt
   type AttemptData = { completedAt: string | null; score?: number | null; updatedAt: string };
   const attemptMap = new Map<string, AttemptData>();
 
   for (const a of courseAttempts ?? []) {
-    attemptMap.set(`${a.student_id}|${a.form_id}`, {
-      completedAt: a.completed_at,
-      score: a.score,
-      updatedAt: a.updated_at,
-    });
+    attemptMap.set(`${a.student_id}|${a.course_id}`, { completedAt: a.completed_at, score: a.score, updatedAt: a.updated_at });
   }
   for (const a of gpAttempts ?? []) {
-    const key = `${a.student_id}|${a.form_id}`;
+    const key = `${a.student_id}|${a.ve_id}`;
     if (!attemptMap.has(key)) {
       attemptMap.set(key, { completedAt: a.completed_at, updatedAt: a.updated_at });
     }
@@ -104,7 +99,7 @@ export async function POST(req: NextRequest) {
     assignmentsByCohort.get(a.cohort_id)!.push(a);
   }
 
-  // -- 6. Pre-fetch recent weekly digest nudges (bulk) to avoid per-student DB calls --
+  // -- 6. Pre-fetch recent weekly digest nudges --
   const sixDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
   const studentIds = students.map((s: any) => s.id);
   const { data: recentNudges } = await supabase
@@ -116,16 +111,15 @@ export async function POST(req: NextRequest) {
 
   const nudgedStudentIds = new Set((recentNudges ?? []).map((n: any) => n.student_id));
 
-  // -- 7. Build email batch for all eligible students --
+  // -- 7. Build email batch --
   type EmailPayload = Parameters<typeof resend.batch.send>[0][number];
-  const emailBatch: EmailPayload[] = [];
+  const emailBatch:   EmailPayload[] = [];
   const nudgeRecords: { student_id: string }[] = [];
   let skipped = 0;
 
   for (const student of students) {
     const email = ((student.email as string) ?? '').trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
-
     if (nudgedStudentIds.has(student.id)) { skipped++; continue; }
 
     const assignments = assignmentsByCohort.get(student.cohort_id) ?? [];
@@ -136,44 +130,35 @@ export async function POST(req: NextRequest) {
     const missedDeadlines: { title: string; contentType: string; daysOverdue: number }[] = [];
 
     for (const assignment of assignments) {
-      const form = formMap.get(assignment.form_id);
-      if (!form) continue;
+      const content = contentMap.get(assignment.content_id);
+      if (!content) continue;
 
-      const isVE = form.content_type === 'virtual_experience' || form.content_type === 'guided_project';
-      const contentType = isVE ? 'virtual_experience' : form.content_type;
-      const attempt = attemptMap.get(`${student.id}|${assignment.form_id}`);
+      const contentType = content.content_type;
+      const attempt = attemptMap.get(`${student.id}|${assignment.content_id}`);
 
-      // Deadline check
       let isOverdue = false;
       let daysOverdue = 0;
-      if (form.config?.deadline_days) {
-        const deadline = new Date(assignment.assigned_at).getTime() + Number(form.config.deadline_days) * 86400000;
+      if (content.deadline_days) {
+        const deadline = new Date(assignment.assigned_at).getTime() + Number(content.deadline_days) * 86400000;
         if (now > deadline && !attempt?.completedAt) {
-          isOverdue = true;
+          isOverdue  = true;
           daysOverdue = Math.floor((now - deadline) / 86400000);
         }
       }
 
       if (!attempt) {
-        if (isOverdue) {
-          missedDeadlines.push({ title: form.title, contentType, daysOverdue });
-        } else {
-          notStarted.push({ title: form.title, contentType });
-        }
+        if (isOverdue) missedDeadlines.push({ title: content.title, contentType, daysOverdue });
+        else           notStarted.push({ title: content.title, contentType });
       } else if (attempt.completedAt) {
         if (attempt.completedAt >= sevenDaysAgo) {
-          completed.push({ title: form.title, contentType, score: attempt.score });
+          completed.push({ title: content.title, contentType, score: attempt.score });
         }
       } else {
-        if (isOverdue) {
-          missedDeadlines.push({ title: form.title, contentType, daysOverdue });
-        } else {
-          inProgress.push({ title: form.title, contentType });
-        }
+        if (isOverdue) missedDeadlines.push({ title: content.title, contentType, daysOverdue });
+        else           inProgress.push({ title: content.title, contentType });
       }
     }
 
-    // Nothing meaningful to show -- skip
     if (!completed.length && !inProgress.length && !notStarted.length && !missedDeadlines.length) {
       skipped++;
       continue;
@@ -185,16 +170,17 @@ export async function POST(req: NextRequest) {
         ? `You completed ${completed.length} item${completed.length > 1 ? 's' : ''} this week 🎓`
         : `Your weekly learning update -- keep going!`;
 
-    const html = weeklyDigestEmail({
-      name: student.full_name || 'there',
-      completed,
-      inProgress,
-      notStarted,
-      missedDeadlines,
-      dashboardUrl: `${APP_URL}/student`,
+    emailBatch.push({
+      from: FROM, to: email, subject,
+      html: weeklyDigestEmail({
+        name: student.full_name || 'there',
+        completed,
+        inProgress,
+        notStarted,
+        missedDeadlines,
+        dashboardUrl: `${APP_URL}/student`,
+      }),
     });
-
-    emailBatch.push({ from: FROM, to: email, subject, html });
     nudgeRecords.push({ student_id: student.id });
   }
 
@@ -203,31 +189,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, sent: 0, skipped });
   }
 
-  // -- 8. Send in batches of 100 (Resend limit) --
   const sentStudentIds = new Set<string>();
   const batches = chunk(emailBatch, BATCH_SIZE);
   let sent = 0;
 
   for (let i = 0; i < batches.length; i++) {
-    const batch = batches[i];
     const batchNudges = nudgeRecords.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
     try {
-      await resend.batch.send(batch);
-      sent += batch.length;
+      await resend.batch.send(batches[i]);
+      sent += batches[i].length;
       for (const n of batchNudges) sentStudentIds.add(n.student_id);
     } catch (err) {
       console.error('[cron/weekly-digest] batch send failed:', err);
     }
   }
 
-  // -- 9. Bulk insert nudge records for successfully sent emails --
   if (sentStudentIds.size) {
     const toInsert = nudgeRecords
       .filter(n => sentStudentIds.has(n.student_id))
       .map(n => ({ student_id: n.student_id, form_id: null, nudge_type: 'weekly_digest' }));
-    if (toInsert.length) {
-      await supabase.from('sent_nudges').insert(toInsert);
-    }
+    if (toInsert.length) await supabase.from('sent_nudges').insert(toInsert);
   }
 
   console.log(`[cron/weekly-digest] sent=${sent} skipped=${skipped}`);

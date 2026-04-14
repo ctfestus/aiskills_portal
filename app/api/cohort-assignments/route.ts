@@ -1,12 +1,12 @@
 /**
  * POST /api/cohort-assignments
- * Upserts rows in cohort_assignments for the given form + cohort list.
+ * Upserts rows in cohort_assignments for the given content + cohort list.
  * Uses INSERT ... ON CONFLICT DO NOTHING so the original assigned_at is preserved
  * when cohorts are re-added after being removed.
  * Sends assignment notification emails only to cohorts that are newly added.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { adminClient } from '@/lib/subscription';
+import { adminClient } from '@/lib/admin-client';
 import { sendAssignmentNotifications } from '@/lib/send-assignment-notification';
 
 export const dynamic = 'force-dynamic';
@@ -34,43 +34,53 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, inserted: 0 });
   }
 
-  // Verify the form belongs to this user and get title/slug for notifications
-  const { data: form } = await supabase
-    .from('forms')
-    .select('id, title, slug, content_type')
-    .eq('id', formId)
-    .eq('user_id', user.id)
-    .single();
+  // Look up content across courses, events, and virtual_experiences
+  const [{ data: course }, { data: event }, { data: ve }] = await Promise.all([
+    supabase.from('courses').select('id, title, slug').eq('id', formId).eq('user_id', user.id).maybeSingle(),
+    supabase.from('events').select('id, title, slug').eq('id', formId).eq('user_id', user.id).maybeSingle(),
+    supabase.from('virtual_experiences').select('id, title, slug').eq('id', formId).eq('user_id', user.id).maybeSingle(),
+  ]);
 
-  if (!form) return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+  let content: any = null;
+  let contentType: string = '';
+
+  if (course)      { content = course; contentType = 'course'; }
+  else if (event)  { content = event;  contentType = 'event'; }
+  else if (ve)     { content = ve;     contentType = 'virtual_experience'; }
+
+  if (!content) return NextResponse.json({ error: 'Content not found' }, { status: 404 });
 
   // Fetch currently assigned cohorts so we can detect newly added ones
   const { data: existing } = await supabase
     .from('cohort_assignments')
     .select('cohort_id')
-    .eq('form_id', formId);
+    .eq('content_id', formId);
 
   const existingSet = new Set((existing ?? []).map((r: { cohort_id: string }) => r.cohort_id));
   const newCohortIds = cohortIds.filter((id: string) => !existingSet.has(id));
 
   // Upsert -- ON CONFLICT DO NOTHING preserves the original assigned_at
-  const rows = cohortIds.map((cohortId: string) => ({ form_id: formId, cohort_id: cohortId }));
+  const rows = cohortIds.map((cohortId: string) => ({
+    content_id:   formId,
+    content_type: contentType,
+    cohort_id:    cohortId,
+  }));
   const { error } = await supabase
     .from('cohort_assignments')
-    .upsert(rows, { onConflict: 'form_id,cohort_id', ignoreDuplicates: true });
+    .upsert(rows, { onConflict: 'content_type,content_id,cohort_id', ignoreDuplicates: true });
 
   if (error) {
     console.error('[cohort-assignments] upsert error:', error);
     return NextResponse.json({ error: 'Failed to save cohort assignments.' }, { status: 500 });
   }
 
-  // Send notifications to newly assigned cohorts (includes re-assignments after removal)
-  if (newCohortIds.length > 0 && form.slug) {
+  // Send notifications to newly assigned cohorts
+  if (newCohortIds.length > 0 && content.slug) {
     sendAssignmentNotifications({
       cohortIds: newCohortIds,
-      title: form.title,
-      slug: form.slug,
-      contentType: form.content_type ?? 'course',
+      title:       content.title,
+      slug:        content.slug,
+      contentType,
     });
   }
 

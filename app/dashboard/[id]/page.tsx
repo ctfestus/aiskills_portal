@@ -1912,12 +1912,51 @@ export default function FormDetailPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) { window.location.href = '/auth'; return; }
 
-      const [{ data: { user } }, { data: formData }, { data: responseData, count }] = await Promise.all([
+      const [{ data: { user } }, [{ data: courseRow }, { data: eventRow }, { data: veRow }], { data: responseData, count }] = await Promise.all([
         supabase.auth.getUser(),
-        supabase.from('forms').select('*').eq('id', id as string).single(),
+        Promise.all([
+          supabase.from('courses').select('*').eq('id', id as string).maybeSingle(),
+          supabase.from('events').select('*').eq('id', id as string).maybeSingle(),
+          supabase.from('virtual_experiences').select('*').eq('id', id as string).maybeSingle(),
+        ]),
         supabase.from('responses').select('*', { count: 'exact' }).eq('form_id', id as string)
           .order('created_at', { ascending: false }).range(0, PAGE_SIZE - 1),
       ]);
+
+      // Reconstruct form-compatible object with config shape
+      let formData: any = null;
+      if (courseRow) {
+        formData = { ...courseRow, content_type: 'course', config: {
+          isCourse: true, title: courseRow.title, description: courseRow.description,
+          questions: courseRow.questions ?? [], fields: courseRow.fields ?? [],
+          passmark: courseRow.passmark, course_timer: courseRow.course_timer,
+          learnOutcomes: courseRow.learn_outcomes, points_enabled: courseRow.points_enabled,
+          points_base: courseRow.points_base, postSubmission: courseRow.post_submission,
+          coverImage: courseRow.cover_image, deadline_days: courseRow.deadline_days,
+          theme: courseRow.theme, mode: courseRow.mode, font: courseRow.font, customAccent: courseRow.custom_accent,
+        }};
+      } else if (eventRow) {
+        formData = { ...eventRow, content_type: 'event', config: {
+          title: eventRow.title, description: eventRow.description, fields: eventRow.fields ?? [],
+          eventDetails: { isEvent: true, date: eventRow.event_date, time: eventRow.event_time,
+            timezone: eventRow.timezone, location: eventRow.location, eventType: eventRow.event_type,
+            capacity: eventRow.capacity, meetingLink: eventRow.meeting_link, isPrivate: eventRow.is_private,
+            speakers: eventRow.speakers ?? [] },
+          postSubmission: eventRow.post_submission, coverImage: eventRow.cover_image,
+          deadline_days: eventRow.deadline_days, theme: eventRow.theme, mode: eventRow.mode,
+          font: eventRow.font, customAccent: eventRow.custom_accent,
+        }};
+      } else if (veRow) {
+        formData = { ...veRow, content_type: 'virtual_experience', config: {
+          isVirtualExperience: true, title: veRow.title, description: veRow.description,
+          modules: veRow.modules ?? [], industry: veRow.industry, difficulty: veRow.difficulty,
+          role: veRow.role, company: veRow.company, duration: veRow.duration, tools: veRow.tools,
+          tagline: veRow.tagline, background: veRow.background, learnOutcomes: veRow.learn_outcomes,
+          managerName: veRow.manager_name, managerTitle: veRow.manager_title, dataset: veRow.dataset,
+          coverImage: veRow.cover_image, deadline_days: veRow.deadline_days,
+          theme: veRow.theme, mode: veRow.mode, font: veRow.font, customAccent: veRow.custom_accent,
+        }};
+      }
       if (!user) { window.location.href = '/auth'; return; }
       if (formData) setForm(formData);
       if (responseData) setResponses(responseData);
@@ -1983,17 +2022,24 @@ export default function FormDetailPage() {
     const baseSlug = (form.slug || form.title || 'form')
       .toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 48);
     const uniqueSlug = `${baseSlug}-${Date.now().toString(36)}`;
-    const { data: cloned, error } = await supabase.from('forms').insert({
-      user_id: session.user.id,
-      title: `${form.title} (Copy)`,
-      description: form.description,
-      config: { ...form.config, title: `${form.config?.title || form.title} (Copy)` },
-      slug: uniqueSlug,
-      content_type: form.content_type,
-      cohort_ids: form.cohort_ids ?? [],
-    }).select('id').single();
-    if (!error && cloned?.id) {
-      router.push(`/dashboard/${cloned.id}`);
+    // Route clone through the API to hit the correct table
+    const { data: { session: cloneSession } } = await supabase.auth.getSession();
+    const cloneRes = await fetch('/api/forms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cloneSession?.access_token}` },
+      body: JSON.stringify({
+        title: `${form.title} (Copy)`,
+        description: form.description,
+        config: { ...form.config, title: `${form.config?.title || form.title} (Copy)` },
+        slug: uniqueSlug,
+        content_type: form.content_type,
+        cohort_ids: [],
+        status: 'draft',
+      }),
+    });
+    const cloneData = await cloneRes.json();
+    if (cloneRes.ok && cloneData?.id) {
+      router.push(`/dashboard/${cloneData.id}`);
     } else {
       alert('Clone failed. Please try again.');
     }
@@ -2123,7 +2169,7 @@ export default function FormDetailPage() {
           transition={{ duration: 0.18, ease: 'easeOut' }}
         >
           {activeTab === 'settings' && type !== 'virtual_experience' ? (
-            <FormEditor formId={id as string} />
+            <FormEditor formId={id as string} contentType={type === 'course' ? 'course' : 'event'} />
           ) : (
             <div className="px-4 sm:px-6 py-6 sm:py-8 max-w-6xl w-full">
               {activeTab === 'responses' && type !== 'virtual_experience' && (

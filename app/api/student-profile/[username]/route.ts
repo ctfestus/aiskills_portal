@@ -42,32 +42,34 @@ export async function GET(
   const work_experience = extra?.work_experience ?? [];
   const skills          = extra?.skills          ?? [];
 
-  // 3. Certificates (by student_id, non-revoked)
+  // 3. Certificates (by student_id, non-revoked) -- use course_id (migrated from form_id)
   const { data: certsRaw } = await supabase
     .from('certificates')
-    .select('id, form_id, student_name, issued_at')
+    .select('id, course_id, student_name, issued_at')
     .eq('student_id', student.id)
     .eq('revoked', false)
     .order('issued_at', { ascending: false });
 
-  // 4. Fetch form metadata for certificates to get content_type
-  const certFormIds = [...new Set((certsRaw ?? []).map((c: any) => c.form_id))];
-  const { data: formsRaw } = certFormIds.length
-    ? await supabase
-        .from('forms')
-        .select('id, title, config, content_type')
-        .in('id', certFormIds)
-    : { data: [] };
+  // 4. Fetch content metadata for certificates from courses and virtual_experiences
+  const certContentIds = [...new Set((certsRaw ?? []).map((c: any) => c.course_id).filter(Boolean))];
 
-  const formMap: Record<string, any> = {};
-  for (const f of formsRaw ?? []) formMap[f.id] = f;
+  const [{ data: coursesRaw }, { data: vesRaw }] = certContentIds.length
+    ? await Promise.all([
+        supabase.from('courses').select('id, title, cover_image').in('id', certContentIds),
+        supabase.from('virtual_experiences').select('id, title, cover_image').in('id', certContentIds),
+      ])
+    : [{ data: [] }, { data: [] }];
+
+  const contentMap: Record<string, any> = {};
+  for (const c of coursesRaw ?? []) contentMap[c.id] = { ...c, content_type: 'course' };
+  for (const v of vesRaw     ?? []) contentMap[v.id] = { ...v, content_type: 'virtual_experience' };
 
   const allCerts = (certsRaw ?? []).map((c: any) => ({
     id:          c.id,
     studentName: c.student_name,
-    courseName:  formMap[c.form_id]?.config?.title || formMap[c.form_id]?.title || 'Course',
-    coverImage:  formMap[c.form_id]?.config?.coverImage ?? null,
-    contentType: formMap[c.form_id]?.content_type ?? 'course',
+    courseName:  contentMap[c.course_id]?.title || 'Course',
+    coverImage:  contentMap[c.course_id]?.cover_image ?? null,
+    contentType: contentMap[c.course_id]?.content_type ?? 'course',
     issuedAt:    c.issued_at,
   }));
 

@@ -110,7 +110,7 @@ export default function CreateSchedulePage() {
       }
 
       const [{ data: coursesData }, { data: cohortsData }] = await Promise.all([
-        supabase.from('forms').select('id, title').eq('content_type', 'course').order('title'),
+        supabase.from('courses').select('id, title').eq('user_id', session.user.id).order('title'),
         supabase.from('cohorts').select('id, name').order('name'),
       ]);
       if (coursesData) setCourses(coursesData);

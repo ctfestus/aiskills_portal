@@ -21,44 +21,41 @@ async function getUser(req: NextRequest) {
   return user;
 }
 
-// -- GET /api/guided-project-progress?formId= ---
-// Returns the attempt row for a student (used by the taker to restore state)
-// Also used by dashboard (creator): ?formId= without studentId returns all attempts
+// -- GET /api/guided-project-progress?veId= ---
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const formId    = searchParams.get('formId');
-  const studentId = searchParams.get('studentId'); // optional: if omitted, returns all (creator view)
+  const veId      = searchParams.get('veId') ?? searchParams.get('formId'); // formId kept for backward compat
+  const studentId = searchParams.get('studentId');
 
-  if (!formId) return NextResponse.json({ error: 'formId required' }, { status: 400 });
+  if (!veId) return NextResponse.json({ error: 'veId required' }, { status: 400 });
 
   const supabase = adminClient();
 
-  // Creator/admin view -- return all attempts for a form
+  // Creator/admin view -- return all attempts for a VE
   if (!studentId) {
     const user = await getUser(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Verify ownership
-    const [{ data: form }, { data: profile }] = await Promise.all([
-      supabase.from('forms').select('user_id').eq('id', formId).single(),
+    const [{ data: ve }, { data: profile }] = await Promise.all([
+      supabase.from('virtual_experiences').select('user_id').eq('id', veId).single(),
       supabase.from('students').select('role').eq('id', user.id).single(),
     ]);
     const isAdmin = profile?.role === 'admin';
-    if (!form || (form.user_id !== user.id && !isAdmin)) {
+    if (!ve || (ve.user_id !== user.id && !isAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const { data: attempts } = await supabase
       .from('guided_project_attempts')
-      .select('id, form_id, student_id, progress, completed_at, started_at, updated_at, review')
-      .eq('form_id', formId)
+      .select('id, ve_id, student_id, progress, completed_at, started_at, updated_at, review')
+      .eq('ve_id', veId)
       .order('started_at', { ascending: false })
       .limit(200);
 
     return NextResponse.json({ attempts: attempts ?? [] });
   }
 
-  // Student view -- caller must be authenticated and their id must match
+  // Student view
   const user = await getUser(req);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (user.id !== studentId) {
@@ -68,7 +65,7 @@ export async function GET(req: NextRequest) {
   const { data: attempt } = await supabase
     .from('guided_project_attempts')
     .select('*')
-    .eq('form_id', formId)
+    .eq('ve_id', veId)
     .eq('student_id', user.id)
     .maybeSingle();
 
@@ -76,7 +73,6 @@ export async function GET(req: NextRequest) {
 }
 
 // -- POST /api/guided-project-progress ---
-// Upserts a student's progress, or saves an instructor review
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const supabase = adminClient();
@@ -89,21 +85,20 @@ export async function POST(req: NextRequest) {
     const { attemptId, score, feedback } = body;
     if (!attemptId) return NextResponse.json({ error: 'attemptId required' }, { status: 400 });
 
-    // Verify the attempt's form belongs to this creator
     const { data: attempt } = await supabase
       .from('guided_project_attempts')
-      .select('form_id')
+      .select('ve_id')
       .eq('id', attemptId)
       .single();
 
     if (!attempt) return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
 
-    const [{ data: form }, { data: reviewProfile }] = await Promise.all([
-      supabase.from('forms').select('user_id').eq('id', attempt.form_id).single(),
+    const [{ data: ve }, { data: reviewProfile }] = await Promise.all([
+      supabase.from('virtual_experiences').select('user_id').eq('id', attempt.ve_id).single(),
       supabase.from('students').select('role').eq('id', user.id).single(),
     ]);
     const isAdmin = reviewProfile?.role === 'admin';
-    if (!form || (form.user_id !== user.id && !isAdmin)) {
+    if (!ve || (ve.user_id !== user.id && !isAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -125,39 +120,38 @@ export async function POST(req: NextRequest) {
 
   // -- Issue certificate --
   if (body.action === 'issue-certificate') {
-    const { formId, studentName } = body;
-    if (!formId) return NextResponse.json({ error: 'formId required' }, { status: 400 });
+    const { veId, studentName } = body;
+    // Accept veId or formId (backward compat)
+    const resolvedVeId = veId ?? body.formId;
+    if (!resolvedVeId) return NextResponse.json({ error: 'veId required' }, { status: 400 });
 
     const certUser = await getUser(req);
     if (!certUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Verify the attempt is completed
     const { data: attempt } = await supabase
       .from('guided_project_attempts')
       .select('id, completed_at')
-      .eq('form_id', formId)
+      .eq('ve_id', resolvedVeId)
       .eq('student_id', certUser.id)
       .not('completed_at', 'is', null)
       .maybeSingle();
 
     if (!attempt) return NextResponse.json({ error: 'Project not completed' }, { status: 403 });
 
-    // Return existing certificate if already issued
     const { data: existing } = await supabase
       .from('certificates')
       .select('id')
-      .eq('form_id', formId)
+      .eq('course_id', resolvedVeId)
       .eq('student_id', certUser.id)
       .eq('revoked', false)
       .maybeSingle();
 
     if (existing?.id) return NextResponse.json({ certId: existing.id });
 
-    // Issue new certificate
     const { data: cert, error: certErr } = await supabase
       .from('certificates')
       .insert({
-        form_id:      formId,
+        course_id:    resolvedVeId,
         student_name: studentName || certUser.email,
         student_id:   certUser.id,
       })
@@ -169,9 +163,10 @@ export async function POST(req: NextRequest) {
   }
 
   // -- Student progress save --
-  const { formId, studentName, progress, currentModuleId, currentLessonId, completedAt } = body;
+  const { veId, formId, studentName, progress, currentModuleId, currentLessonId, completedAt } = body;
+  const resolvedVeId = veId ?? formId; // formId kept for backward compat
 
-  if (!formId) return NextResponse.json({ error: 'formId required' }, { status: 400 });
+  if (!resolvedVeId) return NextResponse.json({ error: 'veId required' }, { status: 400 });
 
   const progressUser = await getUser(req);
   if (!progressUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -180,14 +175,14 @@ export async function POST(req: NextRequest) {
     .from('guided_project_attempts')
     .upsert(
       {
-        form_id:           formId,
+        ve_id:             resolvedVeId,
         student_id:        progressUser.id,
         progress:          progress || {},
         current_module_id: currentModuleId || null,
         current_lesson_id: currentLessonId || null,
         completed_at:      completedAt || null,
       },
-      { onConflict: 'student_id,form_id' },
+      { onConflict: 'student_id,ve_id' },
     );
 
   if (error) { console.error('[guided-project-progress] upsert error:', error); return NextResponse.json({ error: 'Failed to save progress.' }, { status: 500 }); }
@@ -196,21 +191,21 @@ export async function POST(req: NextRequest) {
   if (progress && !completedAt && process.env.RESEND_API_KEY) {
     (async () => {
       try {
-        const { data: form } = await supabase
-          .from('forms')
-          .select('config, title, slug, content_type')
-          .eq('id', formId)
+        const { data: ve } = await supabase
+          .from('virtual_experiences')
+          .select('modules, title, slug')
+          .eq('id', resolvedVeId)
           .single();
 
-        if (!form) return;
-        const total = totalRequirements(form.config);
+        if (!ve) return;
+        const total = totalRequirements(ve.modules);
         if (total === 0) return;
 
         const done = completedRequirements(progress);
         const pct  = Math.round((done / total) * 100);
         if (pct < 80) return;
 
-        const alreadySent = await hasNudgeBeenSent(supabase, progressUser.id, formId, 'milestone_80');
+        const alreadySent = await hasNudgeBeenSent(supabase, progressUser.id, resolvedVeId, 'milestone_80');
         if (alreadySent) return;
 
         const { data: studentProfile } = await supabase
@@ -221,12 +216,11 @@ export async function POST(req: NextRequest) {
 
         if (!studentProfile?.email) return;
 
-        const isVE = form.content_type === 'virtual_experience' || form.content_type === 'guided_project';
         const html = milestoneEmail({
           name:         studentName || studentProfile.full_name || 'there',
-          contentTitle: form.title,
-          contentType:  isVE ? 'virtual_experience' : form.content_type,
-          formUrl:      `${APP_URL}/${form.slug ?? formId}`,
+          contentTitle: ve.title,
+          contentType:  'virtual_experience',
+          formUrl:      `${APP_URL}/${ve.slug ?? resolvedVeId}`,
         });
 
         await resend.emails.send({
@@ -235,7 +229,7 @@ export async function POST(req: NextRequest) {
           subject: `You are 80% done. Finish strong! 🎯`,
           html,
         });
-        await recordNudge(supabase, progressUser.id, formId, 'milestone_80');
+        await recordNudge(supabase, progressUser.id, resolvedVeId, 'milestone_80');
       } catch (err) {
         console.error('[guided-project-progress] milestone check failed', err);
       }

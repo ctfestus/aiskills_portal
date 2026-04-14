@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 // Exact hostnames allowed as image sources.
@@ -28,13 +28,15 @@ function isAllowedImageUrl(raw: string): boolean {
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { data } = await supabase
-    .from('forms')
-    .select('config')
-    .eq('id', id)
-    .single();
 
-  const coverImage: string | undefined = data?.config?.coverImage;
+  // cover_image is now a typed column on each content table
+  const [{ data: course }, { data: event }, { data: ve }] = await Promise.all([
+    supabase.from('courses').select('cover_image').eq('id', id).maybeSingle(),
+    supabase.from('events').select('cover_image').eq('id', id).maybeSingle(),
+    supabase.from('virtual_experiences').select('cover_image').eq('id', id).maybeSingle(),
+  ]);
+
+  const coverImage: string | undefined = course?.cover_image ?? event?.cover_image ?? ve?.cover_image;
   if (!coverImage) return new NextResponse(null, { status: 404 });
 
   // Base64 data URL -- no network fetch, no SSRF risk.

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminClient } from '@/lib/subscription';
+import { adminClient } from '@/lib/admin-client';
 
 export const dynamic = 'force-dynamic';
 

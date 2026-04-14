@@ -1,6 +1,6 @@
 /**
  * POST /api/vector/reindex-all
- * Bulk-indexes all published courses and guided projects.
+ * Bulk-indexes all published courses and virtual experiences.
  * Call this once after setting up the vector index, then it stays current
  * via the per-course fire-and-forget calls on save/publish.
  */
@@ -31,41 +31,53 @@ export async function POST(req: NextRequest) {
 
   const supabase = adminClient();
 
-  // Fetch ALL published forms -- filter client-side to catch legacy rows
-  // where content_type='form' but config.isCourse / config.isGuidedProject is set
-  const { data: forms, error } = await supabase
-    .from('forms')
-    .select('id, title, config, cohort_ids, status, content_type, slug')
-    .eq('status', 'published');
+  const [{ data: courses, error: ce }, { data: ves, error: ve }] = await Promise.all([
+    supabase.from('courses').select('id, title, questions, cover_image, cohort_ids, status, slug, learn_outcomes').eq('status', 'published'),
+    supabase.from('virtual_experiences').select('id, title, modules, cover_image, cohort_ids, status, slug, industry, difficulty, role, company, tagline, learn_outcomes').eq('status', 'published'),
+  ]);
 
-  if (error) { console.error('[vector/reindex-all] fetch error:', error); return NextResponse.json({ error: 'Failed to fetch forms.' }, { status: 500 }); }
+  if (ce || ve) {
+    console.error('[vector/reindex-all] fetch error:', ce?.message ?? ve?.message);
+    return NextResponse.json({ error: 'Failed to fetch content' }, { status: 500 });
+  }
 
-  const toIndex = (forms ?? []).filter((f: any) =>
-    f.content_type === 'course' ||
-    f.content_type === 'guided_project' ||
-    f.content_type === 'virtual_experience' ||
-    Boolean(f.config?.isCourse) ||
-    Boolean(f.config?.isGuidedProject) ||
-    Boolean(f.config?.isVirtualExperience),
-  );
+  const vectors: { id: string; data: string; metadata: Record<string, any> }[] = [];
 
-  if (!toIndex.length) return NextResponse.json({ indexed: 0 });
+  for (const c of courses ?? []) {
+    const config = { questions: c.questions, coverImage: c.cover_image, learnOutcomes: c.learn_outcomes };
+    vectors.push({
+      id:   c.id,
+      data: buildCourseEmbedText(config, c.title),
+      metadata: {
+        formId:      c.id,
+        title:       c.title,
+        slug:        c.slug ?? c.id,
+        cohortIds:   c.cohort_ids ?? [],
+        status:      c.status ?? 'published',
+        contentType: 'course',
+        coverImage:  c.cover_image ?? null,
+      },
+    });
+  }
 
-  const vectors = toIndex.map((f: any) => ({
-    id:       f.id,
-    data:     buildCourseEmbedText(f.config, f.title),
-    metadata: {
-      formId:      f.id,
-      title:       f.title,
-      slug:        f.slug ?? f.id,
-      cohortIds:   f.cohort_ids ?? [],
-      status:      f.status ?? 'published',
-      contentType: (f.content_type === 'guided_project' || Boolean(f.config?.isGuidedProject)) ? 'guided_project'
-               : (f.content_type === 'virtual_experience' || Boolean(f.config?.isVirtualExperience)) ? 'virtual_experience'
-               : 'course',
-      coverImage:  f.config?.coverImage ?? null,
-    },
-  }));
+  for (const v of ves ?? []) {
+    const config = { modules: v.modules, coverImage: v.cover_image, tagline: v.tagline, industry: v.industry, difficulty: v.difficulty, role: v.role, company: v.company, learnOutcomes: v.learn_outcomes };
+    vectors.push({
+      id:   v.id,
+      data: buildCourseEmbedText(config, v.title),
+      metadata: {
+        formId:      v.id,
+        title:       v.title,
+        slug:        v.slug ?? v.id,
+        cohortIds:   v.cohort_ids ?? [],
+        status:      v.status ?? 'published',
+        contentType: 'virtual_experience',
+        coverImage:  v.cover_image ?? null,
+      },
+    });
+  }
+
+  if (!vectors.length) return NextResponse.json({ indexed: 0 });
 
   await index.upsert(vectors);
 

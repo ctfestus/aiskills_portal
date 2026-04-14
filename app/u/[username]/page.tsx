@@ -168,12 +168,15 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
         .single();
       if (!prof) { setNotFound(true); setLoading(false); return; }
       setProfile(prof);
-      const { data: allForms } = await supabase
-        .from('forms')
-        .select('id, slug, title, description, config, created_at')
-        .eq('user_id', prof.id)
-        .order('created_at', { ascending: false });
-      setForms(allForms ?? []);
+      const [{ data: courseRows }, { data: eventRows }] = await Promise.all([
+        supabase.from('courses').select('id, slug, title, description, cover_image, created_at').eq('user_id', prof.id).eq('status', 'published').order('created_at', { ascending: false }),
+        supabase.from('events').select('id, slug, title, description, cover_image, event_date, is_private, created_at').eq('user_id', prof.id).eq('status', 'published').order('created_at', { ascending: false }),
+      ]);
+      const allForms = [
+        ...(courseRows ?? []).map((c: any) => ({ ...c, content_type: 'course', config: { isCourse: true, title: c.title, coverImage: c.cover_image } })),
+        ...(eventRows ?? []).map((e: any) => ({ ...e, content_type: 'event', config: { title: e.title, coverImage: e.cover_image, eventDetails: { isEvent: true, isPrivate: e.is_private, date: e.event_date } } })),
+      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setForms(allForms);
       setLoading(false);
     };
     load();

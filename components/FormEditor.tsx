@@ -523,10 +523,11 @@ function SortableQuestionShell({ id, children }: {
 // --- FormEditor Component ---
 interface FormEditorProps {
   formId: string;
+  contentType: 'course' | 'event';
   onSaved?: (id: string) => void;
 }
 
-export default function FormEditor({ formId, onSaved }: FormEditorProps) {
+export default function FormEditor({ formId, contentType, onSaved }: FormEditorProps) {
   const [formConfig, setFormConfig] = useState<FormConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -634,16 +635,70 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
   // Load form on mount
   useEffect(() => {
     setIsLoading(true);
-    supabase.from('forms').select('*').eq('id', formId).single().then(({ data, error }) => {
-      if (data && !error) {
-        setFormConfig(data.config);
-        setCustomSlug(data.slug || '');
-        const loadedCohorts = data.cohort_ids ?? [];
-        if (loadedCohorts.length) setSelectedCohortIds(loadedCohorts);
-        savedCohortIds.current = loadedCohorts;
+    (async () => {
+      if (contentType === 'course') {
+        const { data: course } = await supabase.from('courses').select('id, title, description, slug, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent').eq('id', formId).maybeSingle();
+        if (course) {
+          setFormConfig({
+            isCourse: true,
+            title: course.title,
+            description: course.description ?? '',
+            coverImage: course.cover_image,
+            questions: course.questions ?? [],
+            fields: course.fields ?? [],
+            passmark: course.passmark,
+            timer: course.course_timer,
+            learnOutcomes: course.learn_outcomes ?? [],
+            pointsEnabled: course.points_enabled,
+            pointsBase: course.points_base,
+            postSubmission: course.post_submission,
+            deadline_days: course.deadline_days,
+            theme: course.theme,
+            mode: course.mode,
+            font: course.font,
+            customAccent: course.custom_accent,
+          });
+          setCustomSlug(course.slug || '');
+          const loadedCohorts = course.cohort_ids ?? [];
+          if (loadedCohorts.length) setSelectedCohortIds(loadedCohorts);
+          savedCohortIds.current = loadedCohorts;
+        }
+      } else {
+        const { data: event } = await supabase.from('events').select('id, title, description, slug, cohort_ids, fields, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, event_date, event_time, timezone, location, event_type, capacity, meeting_link, is_private, speakers').eq('id', formId).maybeSingle();
+        if (event) {
+          setFormConfig({
+            isCourse: false,
+            title: event.title,
+            description: event.description ?? '',
+            coverImage: event.cover_image,
+            fields: event.fields ?? [],
+            postSubmission: event.post_submission,
+            deadline_days: event.deadline_days,
+            theme: event.theme,
+            mode: event.mode,
+            font: event.font,
+            customAccent: event.custom_accent,
+            eventDetails: {
+              isEvent: true,
+              date: event.event_date ?? '',
+              time: event.event_time ?? '',
+              timezone: event.timezone ?? '',
+              location: event.location ?? '',
+              eventType: event.event_type ?? 'in-person',
+              capacity: event.capacity ?? null,
+              meetingLink: event.meeting_link ?? '',
+              isPrivate: event.is_private ?? false,
+              speakers: event.speakers ?? [],
+            },
+          });
+          setCustomSlug(event.slug || '');
+          const loadedCohorts = event.cohort_ids ?? [];
+          if (loadedCohorts.length) setSelectedCohortIds(loadedCohorts);
+          savedCohortIds.current = loadedCohorts;
+        }
       }
       setIsLoading(false);
-    });
+    })();
     supabase.from('cohorts').select('id, name').order('name').then(({ data }) => {
       if (data) setCohorts(data);
     });
@@ -655,11 +710,11 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
       const { data } = await supabase
-        .from('forms')
-        .select('id, title, slug, config')
+        .from('events')
+        .select('id, title, slug')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false });
-      if (data) setAvailableForms(data.filter(f => f.id !== formId));
+      if (data) setAvailableForms(data.filter((f: any) => f.id !== formId));
     })();
   }, [formConfig?.postSubmission?.type, formId]);
 
@@ -926,32 +981,28 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
     setIsSaving(true);
     try {
       const slugValue = customSlug.trim() || undefined;
-      const isCourse = Boolean(formConfig?.isCourse);
-      const isEvent  = Boolean(formConfig?.eventDetails?.isEvent);
-      const content_type = isCourse ? 'course' : isEvent ? 'event' : null;
-      if (!content_type) {
-        showToast('Cannot save: content must be a course or event.');
-        return;
-      }
+      const { data: { session: saveSession } } = await supabase.auth.getSession();
+      if (!saveSession?.access_token) throw new Error('Not authenticated');
 
-      const { error } = await supabase
-        .from('forms')
-        .update({
+      const res = await fetch('/api/forms', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${saveSession.access_token}` },
+        body: JSON.stringify({
+          id: formId,
           title: formConfig.title,
           description: formConfig.description,
           config: formConfig,
           cohort_ids: selectedCohortIds,
-          content_type,
           ...(slugValue ? { slug: slugValue } : {}),
-        })
-        .eq('id', formId);
-      if (error) {
-        if (error.code === '23505') {
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (err?.error?.includes('slug')) {
           showToast('This URL slug is already taken. Try a different one.');
           return;
         }
-        console.error('Save error details:', error.code, error.message, error.details, error.hint);
-        throw error;
+        throw new Error(err?.error || 'Save failed');
       }
       // Notify students in cohorts that were newly added in this edit
       const addedCohortIds = selectedCohortIds.filter(id => !savedCohortIds.current.includes(id));
@@ -1182,7 +1233,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
     );
   }
 
-  const accentColor = formConfig.customAccent ?? themeAccentColors[formConfig.theme];
+  const accentColor = formConfig.customAccent ?? themeAccentColors[formConfig.theme] ?? '#006128';
   const inputStyle = { background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.text };
   const labelStyle = { color: FE.faint };
 
@@ -1471,7 +1522,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
               const isEditing = speakerEditId !== null;
 
               return (
-                <EditorSection title="Speakers" defaultOpen={false}>
+                <EditorSection title="Speakers" defaultOpen={speakers.length > 0}>
                   {/* Crop modal */}
                   {speakerCropSrc && (
                     <ImageCropModal
@@ -1770,7 +1821,7 @@ export default function FormEditor({ formId, onSaved }: FormEditorProps) {
                     >
                       <input
                         type="color"
-                        value={formConfig.customAccent ?? accentColor}
+                        value={formConfig.customAccent || accentColor || '#6366f1'}
                         onChange={e => updateConfig({ customAccent: e.target.value })}
                         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', border: 'none', padding: 0 }}
                       />
