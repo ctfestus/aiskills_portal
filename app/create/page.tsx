@@ -995,7 +995,7 @@ const [isSaving, setIsSaving] = useState(false);
             font: event.font, customAccent: event.custom_accent };
         }
 
-        if (id && config) { setFormConfig(config); setSavedFormId(id); setCustomSlug(slug); if (cohortIds.length) setSelectedCohortIds(cohortIds); if (status) setFormStatus(status); }
+        if (id && config) { setFormConfig(config); setSavedFormId(id); setCustomSlug(slug); if (cohortIds.length) setSelectedCohortIds(cohortIds); if (status === 'draft' || status === 'published') setFormStatus(status); }
         setIsLoadingEdit(false);
       });
     } else {
