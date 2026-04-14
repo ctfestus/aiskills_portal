@@ -669,7 +669,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
       // Load cohort courses + student attempts + certificates in parallel
       const [{ data: cohortCourseRows }, { data: attempts }, certsRes] = await Promise.all([
         student?.cohort_id
-          ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, content_type:id').contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
+          ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes, content_type:id').contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
           : Promise.resolve({ data: [] }),
         supabase.from('course_attempts')
           .select('course_id, score, points, current_question_index, completed_at, passed, updated_at')
@@ -692,7 +692,8 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
       const normalizeCourse = (c: any) => ({
         ...c, content_type: 'course',
         config: { isCourse: true, title: c.title, coverImage: c.cover_image,
-          questions: c.questions ?? [], deadline_days: c.deadline_days, passmark: c.passmark },
+          questions: c.questions ?? [], deadline_days: c.deadline_days, passmark: c.passmark,
+          description: c.description ?? '', learnOutcomes: c.learn_outcomes ?? [] },
       });
       const cohortCourses = (cohortCourseRows ?? []).map(normalizeCourse);
 
@@ -711,7 +712,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
 
       let extraForms: any[] = [];
       if (extraIds.length) {
-        const { data } = await supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark').in('id', extraIds).eq('status', 'published');
+        const { data } = await supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes').in('id', extraIds).eq('status', 'published');
         extraForms = (data ?? []).map(normalizeCourse);
       }
 
@@ -3448,7 +3449,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
       const [courseRes, veRes, attemptsRes, gpAttRes, cohortAssignCrsRes, cohortAssignVeRes, certsData, lbData, actData, gapsData, asmRes] =
         await Promise.all([
           cohort
-            ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark').contains('cohort_ids', [cohort]).eq('status', 'published')
+            ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes').contains('cohort_ids', [cohort]).eq('status', 'published')
             : Promise.resolve({ data: [] as any[] }),
           cohort
             ? supabase.from('virtual_experiences').select('id, title, slug, cover_image, modules, deadline_days').contains('cohort_ids', [cohort]).eq('status', 'published')
@@ -3495,7 +3496,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
       // Normalize courses and VEs into a unified shape with config reconstruction
       const normalizedCourses = (courseRes.data ?? []).map((c: any) => ({
         ...c, content_type: 'course',
-        config: { isCourse: true, title: c.title, coverImage: c.cover_image, questions: c.questions ?? [], deadline_days: c.deadline_days, passmark: c.passmark },
+        config: { isCourse: true, title: c.title, coverImage: c.cover_image, questions: c.questions ?? [], deadline_days: c.deadline_days, passmark: c.passmark, description: c.description ?? '', learnOutcomes: c.learn_outcomes ?? [] },
       }));
       const normalizedVEs = (veRes.data ?? []).map((ve: any) => ({
         ...ve, content_type: 'virtual_experience',
