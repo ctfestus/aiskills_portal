@@ -314,13 +314,9 @@ export default function PublicFormPage() {
   const [projectInitModId,    setProjectInitModId]    = useState('');
   const [projectInitLesId,    setProjectInitLesId]    = useState('');
   // Course sign-up flow
-  const [signUpOpen, setSignUpOpen] = useState(false);
   const [courseStarted, setCourseStarted] = useState(false);
   const [prefilledName, setPrefilledName] = useState('');
   const [prefilledEmail, setPrefilledEmail] = useState('');
-  const [signUpNameInput, setSignUpNameInput] = useState('');
-  const [signUpEmailInput, setSignUpEmailInput] = useState('');
-  const [signUpError, setSignUpError] = useState('');
   const [calPopupOpen, setCalPopupOpen] = useState(false);
   const [creatorProfile, setCreatorProfile] = useState<any>(null);
   const [profilePopupOpen, setProfilePopupOpen] = useState(false);
@@ -429,9 +425,9 @@ export default function PublicFormPage() {
             .select('full_name, email')
             .eq('id', user.id)
             .single();
-          const name  = student?.full_name || user.user_metadata?.full_name || '';
+          const name  = student?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || '';
           const email = student?.email || user.email || '';
-          if (name && email) {
+          if (email) {
             setPrefilledName(name);
             setPrefilledEmail(email);
 
@@ -942,17 +938,6 @@ export default function PublicFormPage() {
       ? assessmentCount * (config.pointsSystem.basePoints || 100)
       : 0;
 
-    const handleSignUpSubmit = (e: React.FormEvent) => {
-      e.preventDefault();
-      setSignUpError('');
-      if (!signUpNameInput.trim()) { setSignUpError('Please enter your full name.'); return; }
-      const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRe.test(signUpEmailInput.trim())) { setSignUpError('Please enter a valid email address.'); return; }
-      setPrefilledName(signUpNameInput.trim());
-      setPrefilledEmail(signUpEmailInput.trim());
-      setSignUpOpen(false);
-      setCourseStarted(true);
-    };
 
     return (
       <div className="ff-pub" style={{ minHeight: '100vh', background: t.page, position: 'relative', transition: 'background 0.3s' }}>
@@ -1032,7 +1017,7 @@ export default function PublicFormPage() {
                   <span style={{ fontSize: 22, fontWeight: 800, color: accentColor }}>{config.passmark ?? 50}%</span>
                 </div>
                 <button
-                  onClick={() => prefilledName && prefilledEmail ? setCourseStarted(true) : setSignUpOpen(true)}
+                  onClick={() => setCourseStarted(true)}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 28px', borderRadius: 16, fontWeight: 700, fontSize: 15, color: 'white', background: accentColor, border: 'none', cursor: 'pointer', letterSpacing: '-0.01em', boxShadow: `0 4px 16px ${accentColor}55`, transition: 'opacity 0.2s, transform 0.15s' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.92'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'; }}
@@ -1092,78 +1077,6 @@ export default function PublicFormPage() {
         </main>
         )}
 
-        {/* Sign-up modal */}
-        {signUpOpen && (
-          <div
-            onClick={() => setSignUpOpen(false)}
-            style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)' }}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 12 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              onClick={e => e.stopPropagation()}
-              style={{ background: t.card, borderRadius: 24, border: `1px solid ${t.cardBorder}`, boxShadow: '0 24px 64px rgba(0,0,0,0.35)', width: '100%', maxWidth: 420, overflow: 'hidden' }}
-            >
-              {/* Modal header accent bar */}
-              <div style={{ height: 5, background: accentColor }}/>
-              <form onSubmit={handleSignUpSubmit} style={{ padding: '28px 28px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-                <div>
-                  <h2 style={{ fontSize: 18, fontWeight: 800, color: t.title, marginBottom: 4 }}>Start your course</h2>
-                  <p style={{ fontSize: 13, color: t.muted }}>Enter your details so we can track your progress and issue a certificate on completion.</p>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: t.muted, marginBottom: 6 }}>Full Name</label>
-                    <AnimatedField theme={config.theme || 'forest'} mode={config.mode || 'dark'}>
-                      <input
-                        type="text"
-                        value={signUpNameInput}
-                        onChange={e => setSignUpNameInput(e.target.value)}
-                        placeholder="Your full name..."
-                        autoFocus
-                        className={`w-full bg-transparent border-none outline-none px-4 py-3 text-sm ${dark ? 'text-white placeholder:text-zinc-600' : 'text-zinc-900 placeholder:text-zinc-400'}`}
-                      />
-                    </AnimatedField>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: t.muted, marginBottom: 6 }}>Email Address</label>
-                    <AnimatedField theme={config.theme || 'forest'} mode={config.mode || 'dark'}>
-                      <input
-                        type="email"
-                        value={signUpEmailInput}
-                        onChange={e => setSignUpEmailInput(e.target.value)}
-                        placeholder="your@email.com"
-                        className={`w-full bg-transparent border-none outline-none px-4 py-3 text-sm ${dark ? 'text-white placeholder:text-zinc-600' : 'text-zinc-900 placeholder:text-zinc-400'}`}
-                      />
-                    </AnimatedField>
-                  </div>
-                </div>
-
-                {signUpError && (
-                  <p style={{ fontSize: 12, color: '#ef4444', fontWeight: 500, marginTop: -8 }}>{signUpError}</p>
-                )}
-
-                <button
-                  type="submit"
-                  style={{ width: '100%', padding: '14px', borderRadius: 14, fontWeight: 700, fontSize: 15, color: 'white', background: accentColor, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                >
-                  Begin Course <ArrowRight style={{ width: 16, height: 16 }}/>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSignUpOpen(false)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: t.muted, textAlign: 'center' }}
-                >
-                  Cancel
-                </button>
-              </form>
-            </motion.div>
-          </div>
-        )}
 
         {/* CourseTaker -- renders via portal once started */}
         {courseStarted && (
@@ -1174,7 +1087,7 @@ export default function PublicFormPage() {
             isSuccess={success}
             onReset={() => {}}
             isSharedView={true}
-            collectStudentInfo={!prefilledEmail}
+            collectStudentInfo={false}
             initialStudentName={prefilledName}
             initialStudentEmail={prefilledEmail}
             formId={form.id}

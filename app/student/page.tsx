@@ -227,18 +227,18 @@ function ProgressBar({ value, max = 100, color }: { value: number; max?: number;
 
 // --- Course card ---
 function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?: Date | null; C: typeof LIGHT_C; onDetails: () => void }) {
-  const questions = course.form?.config?.questions ?? [];
+  const questions = course.config?.questions ?? course.form?.config?.questions ?? [];
   const totalQ = questions.length;
   const currentIdx = course.current_question_index ?? 0;
   const completed = !!course.completed_at;
   const passed = course.passed === true;
   const progress = completed ? 100 : (totalQ > 0 ? Math.round((currentIdx / totalQ) * 100) : 0);
   const score = course.score ?? 0;
-  const coverImage = course.form?.config?.coverImage;
+  const coverImage = course.config?.coverImage ?? course.form?.config?.coverImage;
   const certId: string | null = course.cert_id ?? null;
   const [imgErr, setImgErr] = useState(false);
 
-  const courseUrl = `/${course.form?.slug || course.form_id}?go=1`;
+  const courseUrl = `/${course.slug || course.form?.slug || course.form_id}?go=1`;
   const actionHref = courseUrl;
   const actionLabel = completed ? (passed ? 'Review' : 'Retake') : currentIdx > 0 ? 'Continue' : 'Start';
 
@@ -334,7 +334,7 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
 function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT_C; onClose: () => void }) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const config = course.form?.config ?? {};
+  const config = course.config ?? course.form?.config ?? {};
   const questions: any[] = config.questions ?? [];
   const lessons = questions.filter((q: any) => q.lesson?.title || q.lesson?.body);
   const lessonCount = lessons.length;
@@ -347,7 +347,7 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
   const progress = completed ? 100 : (assessmentCount > 0 ? Math.round((currentIdx / assessmentCount) * 100) : 0);
   const [imgErr, setImgErr] = useState(false);
 
-  const courseUrl = `/${course.form?.slug || course.form_id}?go=1`;
+  const courseUrl = `/${course.slug || course.form?.slug || course.form_id}?go=1`;
   const actionHref = completed && passed && certId ? `/certificate/${certId}` : courseUrl;
   const actionLabel = completed ? (passed && certId ? 'View Certificate' : 'Retake') : currentIdx > 0 ? 'Continue' : 'Start';
 
