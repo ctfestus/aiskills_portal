@@ -170,7 +170,7 @@ export default function StudentPublicProfile() {
   const { username } = useParams<{ username: string }>();
   const { t, isDark } = useT();
   const { toggle: toggleTheme } = useTheme();
-  const { logoUrl } = useTenant();
+  const { logoUrl, emailBannerUrl } = useTenant();
 
   const [data, setData]         = useState<any>(null);
   const [loading, setLoading]   = useState(true);
@@ -259,7 +259,7 @@ export default function StudentPublicProfile() {
             {/* Cover image */}
             <div style={{ height: 180, overflow: 'hidden', borderRadius: '12px 12px 0 0' }}>
               <img
-                src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Cover.jpg"
+                src={emailBannerUrl || logoUrl}
                 alt="Cover"
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               />

@@ -808,7 +808,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
           {/* Brand banner image */}
           <div className="relative">
             <img
-              src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Cover.jpg"
+              src={emailBannerUrl || logoUrl}
               alt=""
               className="w-full object-cover"
               style={{ height: 140 }}
@@ -3926,7 +3926,7 @@ export default function StudentDashboard() {
   const [mounted, setMounted] = useState(false);
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl } = useTenant();
+  const { logoUrl, emailBannerUrl } = useTenant();
   const router = useRouter();
   const [user, setUser]       = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
