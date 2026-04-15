@@ -809,7 +809,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
           <div className="relative">
             <img
               src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Cover.jpg"
-              alt={appName}
+              alt=""
               className="w-full object-cover"
               style={{ height: 140 }}
             />

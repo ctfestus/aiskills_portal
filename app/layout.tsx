@@ -24,9 +24,9 @@ export async function generateMetadata(): Promise<Metadata> {
     title: t.appName,
     description: process.env.NEXT_PUBLIC_APP_DESCRIPTION ?? `${t.appName} -- empowering Africans with practical data and AI skills for work.`,
     icons: {
-      icon: '/icon.png',
-      shortcut: '/icon.png',
-      apple: '/icon.png',
+      icon: t.logoUrl || '/icon.png',
+      shortcut: t.logoUrl || '/icon.png',
+      apple: t.logoUrl || '/icon.png',
     },
   };
 }
