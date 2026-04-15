@@ -11,7 +11,7 @@ import {
   ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
   Users, Megaphone, Trophy, Menu, CheckCircle2, XCircle,
   UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
-  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw,
+  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw, Palette,
 } from 'lucide-react';
 import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS, TextPositions, defaultTextPositions } from '@/components/CertificateTemplate';
 import Link from 'next/link';
@@ -872,6 +872,7 @@ const NAV_ITEMS = [
   { id: 'tracking',      label: 'Tracking',       Icon: Activity,      adminOnly: false },
   { id: 'cohorts',       label: 'Cohorts',        Icon: GraduationCap, adminOnly: false },
   { id: 'payments',      label: 'Payments',       Icon: CreditCard,    adminOnly: false },
+  { id: 'branding',      label: 'Platform',       Icon: Palette,       adminOnly: false },
 ] as const;
 type SectionId = typeof NAV_ITEMS[number]['id'];
 
@@ -4724,12 +4725,173 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
+// --- Branding / Platform settings section ---
+function BrandingSection({ C }: { C: typeof LIGHT_C }) {
+  const [form, setForm] = useState({
+    appName:     '',
+    orgName:     '',
+    appUrl:      '',
+    logoUrl:     '',
+    brandColor:  '',
+    senderName:  '',
+    teamName:    '',
+    supportEmail: '',
+    appDescription: '',
+  });
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [msg, setMsg]           = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch('/api/platform-settings', { headers: { Authorization: `Bearer ${session.access_token}` } });
+      if (res.ok) {
+        const { data } = await res.json();
+        if (data) setForm({
+          appName:        data.app_name        ?? '',
+          orgName:        data.org_name        ?? '',
+          appUrl:         data.app_url         ?? '',
+          logoUrl:        data.logo_url        ?? '',
+          brandColor:     data.brand_color     ?? '',
+          senderName:     data.sender_name     ?? '',
+          teamName:       data.team_name       ?? '',
+          supportEmail:   data.support_email   ?? '',
+          appDescription: data.app_description ?? '',
+        });
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch('/api/platform-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify(form),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Save failed');
+      setMsg({ ok: true, text: 'Platform settings saved. Changes will reflect across the platform within 60 seconds.' });
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message });
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMsg(null), 6000);
+    }
+  };
+
+  const field = (key: keyof typeof form, label: string, placeholder: string, hint?: string, type = 'text') => (
+    <div className="space-y-1">
+      <label className="text-xs font-semibold" style={{ color: C.muted }}>{label}</label>
+      <input
+        type={type}
+        value={form[key]}
+        onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+        style={{ background: C.pill, border: `1px solid ${C.cardBorder}`, color: C.text }}
+      />
+      {hint && <p className="text-[11px]" style={{ color: C.faint }}>{hint}</p>}
+    </div>
+  );
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="w-5 h-5 animate-spin" style={{ color: C.faint }}/>
+    </div>
+  );
+
+  return (
+    <div className="space-y-5 max-w-xl">
+      <div className="rounded-2xl p-5 space-y-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: C.faint }}>Platform Branding</h2>
+          <p className="text-xs leading-relaxed" style={{ color: C.muted }}>
+            Override the default branding for this deployment. Changes are stored in the database and applied across emails and the platform.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          {field('appName',     'App / Platform Name',  'AI Skills Africa',                    'Used in page titles and emails.')}
+          {field('orgName',     'Organisation Name',    'AI Skills Africa',                    'Used in certificates and formal text.')}
+          {field('supportEmail','Support Email',        'support@app.aiskillsafrica.com',      'Shown in footer of emails.')}
+          {field('appUrl',      'App URL',              'https://app.aiskillsafrica.com', 'Base URL used in email links.')}
+        </div>
+
+        {field('appDescription', 'App Description', 'Empowering Africans with practical AI skills…', 'Used in SEO meta description tag.')}
+        {field('logoUrl',        'Logo URL',         'https://…/logo.png', 'Full URL to your logo image (publicly accessible).')}
+
+        <div className="space-y-1">
+          <label className="text-xs font-semibold" style={{ color: C.muted }}>Brand Colour</label>
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              value={form.brandColor || '#006128'}
+              onChange={e => setForm(prev => ({ ...prev, brandColor: e.target.value }))}
+              className="w-10 h-9 rounded-lg cursor-pointer border-0 p-0.5"
+              style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}
+            />
+            <input
+              type="text"
+              value={form.brandColor}
+              onChange={e => setForm(prev => ({ ...prev, brandColor: e.target.value }))}
+              placeholder="#006128"
+              className="flex-1 px-3 py-2 rounded-xl text-sm outline-none font-mono"
+              style={{ background: C.pill, border: `1px solid ${C.cardBorder}`, color: C.text }}
+            />
+          </div>
+          <p className="text-[11px]" style={{ color: C.faint }}>Used for buttons and accents on certificate defaults.</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          {field('senderName', 'Email Sender Name', 'AI Skills Africa - Learning Experience Team', 'Shown as sender label in emails.')}
+          {field('teamName',   'Team Sign-off Name', 'The AI Skills Africa Team',                  'Used in email footers.')}
+        </div>
+
+        {msg && (
+          <div className={`flex items-start gap-2 text-xs px-3 py-2.5 rounded-xl ${msg.ok ? 'text-emerald-600' : 'text-red-500'}`}
+            style={{ background: msg.ok ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)' }}>
+            {msg.ok ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/> : <XCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/>}
+            {msg.text}
+          </div>
+        )}
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-80"
+          style={{ background: C.cta, color: C.ctaText }}>
+          {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto"/> : 'Save Platform Settings'}
+        </button>
+      </div>
+
+      <div className="rounded-2xl p-4" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+        <p className="text-xs font-semibold mb-1" style={{ color: C.muted }}>Environment Variable Override</p>
+        <p className="text-xs leading-relaxed" style={{ color: C.faint }}>
+          Settings saved here take effect immediately via the database. For a white-label deployment, you can also set
+          <code className="mx-1 px-1 py-0.5 rounded text-[10px]" style={{ background: C.cardBorder }}>NEXT_PUBLIC_APP_NAME</code>,
+          <code className="mx-1 px-1 py-0.5 rounded text-[10px]" style={{ background: C.cardBorder }}>NEXT_PUBLIC_ORG_NAME</code>, and other
+          <code className="mx-1 px-1 py-0.5 rounded text-[10px]" style={{ background: C.cardBorder }}>NEXT_PUBLIC_*</code> env vars in Vercel to bake branding into the build.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // --- Section content router ---
 function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFormToDelete, C }: {
   section: SectionId; forms: any[]; shareMenuOpen: string | null;
   setShareMenuOpen: (id: string | null) => void; setFormToDelete: (id: string) => void; C: typeof LIGHT_C;
 }) {
   if (COMING_SOON.includes(section)) return <ComingSoon id={section} C={C} />;
+  if (section === 'branding')     return <BrandingSection C={C} />;
   if (section === 'reports')      return <ReportsSection forms={forms} C={C} />;
   if (section === 'learning_paths') return <LearningPathsSection C={C} forms={forms} />;
   if (section === 'certificates') return <CertificatesSection C={C} />;

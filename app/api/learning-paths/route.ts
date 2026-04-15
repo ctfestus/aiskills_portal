@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { learningPathAssignedEmail } from '@/lib/email-templates';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 
-const resend  = new Resend(process.env.RESEND_API_KEY);
-const FROM    = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
-const APP_URL = process.env.APP_URL || 'https://app.aiskillsafrica.com';
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 function adminClient() {
   return createClient(
@@ -88,16 +87,16 @@ export async function POST(req: NextRequest) {
     // Fetch previous state to detect newly published or newly added cohorts
     const { data: prev } = await supabase.from('learning_paths').select('status, cohort_ids').eq('id', id).single();
 
+    const updateData: any = { updated_at: new Date().toISOString() };
+    if (title       !== undefined) updateData.title       = title.trim();
+    if (description !== undefined) updateData.description = description;
+    if (cover_image !== undefined) updateData.cover_image = cover_image;
+    if (item_ids    !== undefined) updateData.item_ids    = item_ids;
+    if (cohort_ids  !== undefined) updateData.cohort_ids  = cohort_ids;
+    if (status      !== undefined) updateData.status      = status;
+
     const { error } = await supabase.from('learning_paths')
-      .update({
-        title: title?.trim(),
-        description: description ?? null,
-        cover_image: cover_image ?? null,
-        item_ids: item_ids ?? [],
-        cohort_ids: cohort_ids ?? [],
-        status: status ?? 'draft',
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', id)
       .eq('instructor_id', user.id);
 
@@ -264,7 +263,10 @@ async function sendPathAssignmentEmails(
 
     if (!students?.length) return;
 
-    const dashboardUrl = `${APP_URL}/student?section=courses`;
+    const t        = await getTenantSettings();
+    const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+    const branding = { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+    const dashboardUrl = `${t.appUrl}/student?section=courses`;
 
     for (const student of students) {
       if (!student.email) continue;
@@ -279,6 +281,7 @@ async function sendPathAssignmentEmails(
             pathDescription: pathDescription ?? undefined,
             dashboardUrl,
             items,
+            branding,
           }),
         });
       } catch (e) {

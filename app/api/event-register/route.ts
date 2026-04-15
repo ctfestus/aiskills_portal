@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { confirmationEmail } from '@/lib/email-templates';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 
 function adminClient() {
   return createClient(
@@ -11,7 +12,6 @@ function adminClient() {
 }
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM   = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
 
 export async function POST(req: NextRequest) {
   const contentLength = parseInt(req.headers.get('content-length') || '0', 10);
@@ -80,6 +80,9 @@ export async function POST(req: NextRequest) {
 
   // Send confirmation email (fire-and-forget)
   if (process.env.RESEND_API_KEY && student.email) {
+    const t       = await getTenantSettings();
+    const FROM    = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+    const branding = { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
     const subject = `You're registered: ${event.title || 'Event'}`;
     const html = confirmationEmail({
       name:          student.email,
@@ -89,7 +92,8 @@ export async function POST(req: NextRequest) {
       eventTimezone: event.timezone   || '',
       eventLocation: event.location   || '',
       meetingLink:   event.meeting_link || '',
-      formUrl: `${process.env.APP_URL || 'https://app.aiskillsafrica.com'}/${event.slug ?? formId}`,
+      formUrl:       `${t.appUrl}/${event.slug ?? formId}`,
+      branding,
     });
 
     resend.emails

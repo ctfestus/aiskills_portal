@@ -3,12 +3,11 @@ import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { milestoneEmail } from '@/lib/email-templates';
 import { hasNudgeBeenSent, recordNudge, totalRequirements, completedRequirements } from '@/lib/nudge-helpers';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 
 export const dynamic = 'force-dynamic';
 
-const resend  = new Resend(process.env.RESEND_API_KEY);
-const FROM    = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
-const APP_URL = process.env.APP_URL || 'https://festforms.com';
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const adminClient = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -216,11 +215,16 @@ export async function POST(req: NextRequest) {
 
         if (!studentProfile?.email) return;
 
+        const t        = await getTenantSettings();
+        const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+        const branding = { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+
         const html = milestoneEmail({
           name:         studentName || studentProfile.full_name || 'there',
           contentTitle: ve.title,
           contentType:  'virtual_experience',
-          formUrl:      `${APP_URL}/${ve.slug ?? resolvedVeId}`,
+          formUrl:      `${t.appUrl}/${ve.slug ?? resolvedVeId}`,
+          branding,
         });
 
         await resend.emails.send({

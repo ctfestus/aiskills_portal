@@ -15,26 +15,27 @@ import {
   day3CheckInEmail,
   day7EncouragementEmail,
 } from '@/lib/email-templates';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 
-const resend  = new Resend(process.env.RESEND_API_KEY);
-const FROM    = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
-const APP_URL = process.env.APP_URL || 'https://app.aiskillsafrica.com';
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const DAY = 24 * 60 * 60 * 1000; // ms
 
 export const { POST } = serve<{ email: string; name: string; userId: string }>(
   async (context) => {
     const { email, name, userId } = context.requestPayload;
-    const studentUrl = `${APP_URL}/student`;
-    const supabase   = adminClient();
+    const supabase = adminClient();
 
     // -- Step 1: Welcome email (immediate) ---
     await context.run('send-welcome', async () => {
+      const t        = await getTenantSettings();
+      const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+      const branding = { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
       await resend.emails.send({
         from:    FROM,
         to:      email,
-        subject: `Welcome to AI Skills Africa, ${name}! 🎉`,
-        html:    welcomeEmail({ name, studentUrl }),
+        subject: `Welcome to ${t.appName}, ${name}! 🎉`,
+        html:    welcomeEmail({ name, studentUrl: `${t.appUrl}/student`, branding }),
       });
     });
 
@@ -43,7 +44,10 @@ export const { POST } = serve<{ email: string; name: string; userId: string }>(
 
     // -- Step 2: Day-3 check-in ---
     await context.run('day3-checkin', async () => {
-      // Find the first published course assigned to this student's cohort
+      const t        = await getTenantSettings();
+      const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+      const branding = { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+
       const { data: student } = await supabase
         .from('students')
         .select('cohort_id')
@@ -65,7 +69,7 @@ export const { POST } = serve<{ email: string; name: string; userId: string }>(
 
         if (course) {
           courseTitle = course.title;
-          courseUrl   = `${APP_URL}/${course.slug || course.id}?go=1`;
+          courseUrl   = `${t.appUrl}/${course.slug || course.id}?go=1`;
         }
       }
 
@@ -73,7 +77,7 @@ export const { POST } = serve<{ email: string; name: string; userId: string }>(
         from:    FROM,
         to:      email,
         subject: `${name}, your courses are waiting for you 👋`,
-        html:    day3CheckInEmail({ name, studentUrl, courseTitle, courseUrl }),
+        html:    day3CheckInEmail({ name, studentUrl: `${t.appUrl}/student`, courseTitle, courseUrl, branding }),
       });
     });
 
@@ -82,7 +86,10 @@ export const { POST } = serve<{ email: string; name: string; userId: string }>(
 
     // -- Step 3: Day-7 encouragement ---
     await context.run('day7-encouragement', async () => {
-      // Check how many courses completed so far
+      const t        = await getTenantSettings();
+      const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+      const branding = { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+
       const { data: attempts } = await supabase
         .from('course_attempts')
         .select('course_id')
@@ -102,7 +109,7 @@ export const { POST } = serve<{ email: string; name: string; userId: string }>(
           : hasStarted
             ? `Keep going, ${name} -- you are almost there! 💪`
             : `${name}, your learning journey is still waiting for you`,
-        html: day7EncouragementEmail({ name, studentUrl, hasStarted, coursesCompleted }),
+        html: day7EncouragementEmail({ name, studentUrl: `${t.appUrl}/student`, hasStarted, coursesCompleted, branding }),
       });
     });
   },

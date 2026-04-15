@@ -1665,6 +1665,30 @@ CREATE POLICY "Instructors delete datasets"
   USING (bucket_id = 'datasets' AND owner = auth.uid());
 
 
+-- ── platform_settings (branding customization) ───────────────
+CREATE TABLE IF NOT EXISTS public.platform_settings (
+  id              text PRIMARY KEY DEFAULT 'default',
+  app_name        text,
+  org_name        text,
+  app_url         text,
+  logo_url        text,
+  brand_color     text,
+  sender_name     text,
+  team_name       text,
+  support_email   text,
+  app_description text,
+  updated_at      timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.platform_settings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "instructor_or_admin" ON public.platform_settings FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.students
+    WHERE students.id = auth.uid()
+    AND students.role IN ('admin', 'instructor')
+  ));
+
 -- ─────────────────────────────────────────────────────────────
 --  DONE — this is the only SQL file you need to run.
 --

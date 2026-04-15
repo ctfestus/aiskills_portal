@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import './globals.css';
 import ThemeProvider from '@/components/ThemeProvider';
 import NavigationProgress from '@/components/NavigationProgress';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 // preload: false -- these fonts are only used when a form creator picks serif/mono
@@ -16,15 +17,18 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export const metadata: Metadata = {
-  title: 'AI Skills Africa',
-  description: 'AI Skills Africa -- empowering Africans with practical data and AI skills for work.',
-  icons: {
-    icon: '/icon.png',
-    shortcut: '/icon.png',
-    apple: '/icon.png',
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTenantSettings();
+  return {
+    title: t.appName,
+    description: process.env.NEXT_PUBLIC_APP_DESCRIPTION ?? `${t.appName} -- empowering Africans with practical data and AI skills for work.`,
+    icons: {
+      icon: '/icon.png',
+      shortcut: '/icon.png',
+      apple: '/icon.png',
+    },
+  };
+}
 
 // Async server component so we can read the per-request nonce set by middleware.
 // Next.js uses the nonce on the <html> element to stamp its own inline bootstrap

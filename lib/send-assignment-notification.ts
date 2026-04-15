@@ -1,10 +1,9 @@
 import { Resend } from 'resend';
 import { adminClient } from '@/lib/admin-client';
 import { blastEmail } from '@/lib/email-templates';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
-const APP_URL = process.env.APP_URL || 'https://app.aiskillsafrica.com';
 
 const TYPE_LABELS: Record<string, string> = {
   course: 'course',
@@ -27,8 +26,6 @@ const TYPE_CTA: Record<string, string> = {
   announcement: 'View Announcement',
 };
 
-const SENDER = 'AI Skills Africa - Learning Experience Team';
-
 /**
  * Fire-and-forget: sends assignment notification emails to all students
  * in the given cohorts. Errors are logged but never thrown.
@@ -48,6 +45,10 @@ export async function sendAssignmentNotifications({
   if (!cohortIds.length) return;
 
   try {
+    const t        = await getTenantSettings();
+    const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+    const branding = { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+
     const supabase = adminClient();
     const { data: students } = await supabase
       .from('students')
@@ -56,11 +57,11 @@ export async function sendAssignmentNotifications({
 
     if (!students?.length) return;
 
-    const typeLabel = TYPE_LABELS[contentType] ?? contentType.replace(/_/g, ' ');
+    const typeLabel   = TYPE_LABELS[contentType]   ?? contentType.replace(/_/g, ' ');
     const typeMessage = TYPE_MESSAGES[contentType] ?? 'You have been assigned new content.';
-    const ctaLabel = TYPE_CTA[contentType] ?? 'View';
-    const formUrl = `${APP_URL}/${slug}`;
-    const subject = `You've been assigned: ${title}`;
+    const ctaLabel    = TYPE_CTA[contentType]      ?? 'View';
+    const formUrl     = `${t.appUrl}/${slug}`;
+    const subject     = `You've been assigned: ${title}`;
 
     // Deduplicate by email
     const seen = new Set<string>();
@@ -79,7 +80,7 @@ export async function sendAssignmentNotifications({
     for (let i = 0; i < recipients.length; i += 100) {
       const batch = recipients.slice(i, i + 100).map(({ email, name }) => {
         const body = `Hi ${name},\n\n${typeMessage}\n\n<b>${title}</b>\n\nClick the button below to open your ${typeLabel}.`;
-        const html = blastEmail({ subject, body, formTitle: title, formUrl, ctaLabel, senderName: SENDER });
+        const html = blastEmail({ subject, body, formTitle: title, formUrl, ctaLabel, senderName: t.senderName, branding });
         return { from: FROM, to: email, subject, html };
       });
       await resend.batch.send(batch);

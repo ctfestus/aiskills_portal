@@ -6,12 +6,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { adminClient } from '@/lib/admin-client';
 import { blastEmail } from '@/lib/email-templates';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 
 export const dynamic = 'force-dynamic';
 
-const resend  = new Resend(process.env.RESEND_API_KEY);
-const FROM    = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
-const APP_URL = process.env.APP_URL || 'https://app.aiskillsafrica.com';
+const resend = new Resend(process.env.RESEND_API_KEY);
 const STALL_DAYS = 7;
 
 function daysSince(d: string | null) {
@@ -32,6 +31,9 @@ export async function POST(req: NextRequest) {
   const supabase = adminClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
   if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const t = await getTenantSettings();
+  const FROM = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
 
   let body: any;
   try { body = await req.json(); } catch {
@@ -154,9 +156,10 @@ export async function POST(req: NextRequest) {
       const html = blastEmail({
         subject,
         body:       personalBody,
-        formTitle:  'AI Skills Africa',
-        formUrl:    `${APP_URL}/student`,
-        senderName: 'AI Skills Africa - Learning Experience Team',
+        formTitle:  t.appName,
+        formUrl:    `${t.appUrl}/student`,
+        senderName: t.senderName,
+        branding:   { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl },
       });
       return { from: FROM, to: email, subject, html };
     });

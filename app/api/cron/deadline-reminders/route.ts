@@ -9,12 +9,9 @@ import { Resend } from 'resend';
 import { adminClient } from '@/lib/admin-client';
 import { verifyQStashRequest } from '@/lib/qstash';
 import { deadlineReminderEmail } from '@/lib/email-templates';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 
 export const dynamic = 'force-dynamic';
-
-const resend  = new Resend(process.env.RESEND_API_KEY);
-const FROM    = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
-const APP_URL = process.env.APP_URL || 'https://app.aiskillsafrica.com';
 
 const BATCH_SIZE = 100;
 
@@ -23,6 +20,8 @@ function chunk<T>(arr: T[], size: number): T[][] {
   for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
   return chunks;
 }
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
   const REMINDER_DAYS_BEFORE = Number(process.env.DEADLINE_REMINDER_DAYS ?? 3);
@@ -126,6 +125,10 @@ export async function POST(req: NextRequest) {
   }
 
   // -- 5. Build email batch ---
+  const t        = await getTenantSettings();
+  const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+  const branding = { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+
   type EmailPayload = Parameters<typeof resend.batch.send>[0][number];
   const emailBatch:   EmailPayload[] = [];
   const nudgeRecords: { student_id: string; form_id: string; nudge_type: string }[] = [];
@@ -153,8 +156,9 @@ export async function POST(req: NextRequest) {
           name:         student.full_name || 'there',
           contentTitle: content.title,
           contentType:  content.content_type,
-          formUrl:      `${APP_URL}/${slug}`,
+          formUrl:      `${t.appUrl}/${slug}`,
           daysLeft,
+          branding,
         }),
       });
 

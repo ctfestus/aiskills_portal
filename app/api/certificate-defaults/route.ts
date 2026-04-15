@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   const { error } = await adminClient().from('certificate_defaults').upsert({
     user_id:              user.id,
-    institution_name:     body.institutionName     ?? 'AI Skills Africa',
+    institution_name:     body.institutionName     ?? (process.env.NEXT_PUBLIC_ORG_NAME ?? 'AI Skills Africa'),
     primary_color:        body.primaryColor        ?? '#006128',
     accent_color:         body.accentColor         ?? '#ADEE66',
     background_image_url: body.backgroundImageUrl  ?? null,

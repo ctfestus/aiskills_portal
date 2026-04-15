@@ -1,0 +1,41 @@
+/**
+ * Server-only. Returns branding settings from the database,
+ * falling back to env vars (lib/tenant.ts) if no DB row exists.
+ *
+ * Cached for 60 seconds via Next.js data cache.
+ * Call revalidateTag('tenant-settings') after admin saves to bust the cache immediately.
+ */
+import { unstable_cache } from 'next/cache';
+import { adminClient } from './admin-client';
+import { tenant } from './tenant';
+
+export type TenantSettings = typeof tenant;
+
+export const getTenantSettings = unstable_cache(
+  async (): Promise<TenantSettings> => {
+    try {
+      const { data } = await adminClient()
+        .from('platform_settings')
+        .select('*')
+        .eq('id', 'default')
+        .maybeSingle();
+
+      if (!data) return tenant;
+
+      return {
+        appName:      data.app_name      || tenant.appName,
+        orgName:      data.org_name      || tenant.orgName,
+        appUrl:       data.app_url       || tenant.appUrl,
+        logoUrl:      data.logo_url      || tenant.logoUrl,
+        teamName:     data.team_name     || tenant.teamName,
+        senderName:   data.sender_name   || tenant.senderName,
+        supportEmail: data.support_email || tenant.supportEmail,
+        brandColor:   data.brand_color   || tenant.brandColor,
+      };
+    } catch {
+      return tenant;
+    }
+  },
+  ['tenant-settings'],
+  { revalidate: 60, tags: ['tenant-settings'] },
+);

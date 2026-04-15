@@ -3,10 +3,9 @@ import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
 import { confirmationEmail, reminderEmail, courseResultEmail, blastEmail } from '@/lib/email-templates';
 import { getVectorIndex, buildCourseEmbedText } from '@/lib/vector';
-
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 
 const resend     = new Resend(process.env.RESEND_API_KEY);
-const FROM       = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
 const BATCH_SIZE = 100; // Resend batch limit
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -49,13 +48,12 @@ async function ownsForm(creatorId: string, formId: string): Promise<boolean> {
 }
 
 
-async function sendBatch(emails: string[], subject: string, html: string) {
+async function sendBatch(emails: string[], subject: string, html: string, from: string) {
   const unique = [...new Set(emails.filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)))];
   if (!unique.length) return;
-  // Resend batch: max 100 per call
   for (let i = 0; i < unique.length; i += 100) {
     await resend.batch.send(
-      unique.slice(i, i + 100).map(to => ({ from: FROM, to, subject, html }))
+      unique.slice(i, i + 100).map(to => ({ from, to, subject, html }))
     );
   }
 }
@@ -85,6 +83,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const t        = await getTenantSettings();
+    const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+    const branding = { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+
     const { type, to, data } = await req.json();
 
     if (!type || (!to && !data?.formId)) {
@@ -129,7 +131,7 @@ export async function POST(req: NextRequest) {
         }
 
         const reminderSubject = data.isOneHour ? `Starting in 1 hour: ${data.eventTitle}` : `Tomorrow: ${data.eventTitle}`;
-        const reminderHtml = reminderEmail(data);
+        const reminderHtml = reminderEmail({ ...data, branding });
 
         if (typeof to === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim())) {
           // Test mode: creator provided a single email -- send once
@@ -145,7 +147,7 @@ export async function POST(req: NextRequest) {
             .filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
         )];
         if (!emails.length) return NextResponse.json({ error: 'No valid recipients found' }, { status: 400 });
-        await sendBatch(emails, reminderSubject, reminderHtml);
+        await sendBatch(emails, reminderSubject, reminderHtml, FROM);
         return NextResponse.json({ success: true, count: emails.length });
       }
       // Cron path falls through to switch/send below
@@ -154,7 +156,7 @@ export async function POST(req: NextRequest) {
       // Test mode only is still supported here (creator previewing template).
       if (typeof to === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim()) && !data?.responseId) {
         if (!await getCreatorId(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        const html = confirmationEmail(data);
+        const html = confirmationEmail({ ...data, branding });
         await resend.emails.send({ from: FROM, to: to.trim(), subject: `You're registered: ${data?.eventTitle || 'Event'}`, html });
         return NextResponse.json({ success: true, test: true });
       }
@@ -165,7 +167,7 @@ export async function POST(req: NextRequest) {
       // Test mode: single email + no responseId -> creator-initiated test send
       if (typeof to === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim()) && !data?.responseId) {
         if (!await getCreatorId(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        const html = courseResultEmail(data);
+        const html = courseResultEmail({ ...data, branding });
         const testSubject = data?.passed ? `🎉 Congratulations! Your certificate for ${data?.courseTitle || 'Course'} is ready.` : `Your result: ${data?.courseTitle || 'Course'}`;
         await resend.emails.send({ from: FROM, to: to.trim(), subject: testSubject, html });
         return NextResponse.json({ success: true, test: true });
@@ -301,20 +303,20 @@ export async function POST(req: NextRequest) {
     switch (type) {
       case 'confirmation':
         subject = `You're registered: ${data.eventTitle}`;
-        html = confirmationEmail(data);
+        html = confirmationEmail({ ...data, branding });
         break;
 
       case 'reminder':
         subject = data.isOneHour
           ? `Starting in 1 hour: ${data.eventTitle}`
           : `Tomorrow: ${data.eventTitle}`;
-        html = reminderEmail(data);
+        html = reminderEmail({ ...data, branding });
         break;
 
       case 'course-result': {
         const d = courseResultData!;
         subject = d.passed ? `🎉 Congratulations! Your certificate for ${d.courseTitle} is ready.` : `Your result: ${d.courseTitle}`;
-        html = courseResultEmail(d as Parameters<typeof courseResultEmail>[0]);
+        html = courseResultEmail({ ...(d as Parameters<typeof courseResultEmail>[0]), branding });
         break;
       }
 
@@ -351,7 +353,7 @@ export async function POST(req: NextRequest) {
         };
         const testSubject = applyMergeTags(String(data.subject || ''), mergeValues);
         const testBody = applyMergeTags(String(data.body || ''), mergeValues);
-        const testHtml = blastEmail({ ...data, subject: testSubject, body: testBody });
+        const testHtml = blastEmail({ ...data, subject: testSubject, body: testBody, branding });
         await resend.emails.send({ from: FROM, to: testTo, subject: testSubject, html: testHtml });
         return NextResponse.json({ success: true, test: true });
       }
@@ -445,6 +447,7 @@ export async function POST(req: NextRequest) {
           ...data,
           subject: personalizedSubject,
           body: personalizedBody,
+          branding,
         });
 
         emailBatch.push({ from: FROM, to: recipient, subject: personalizedSubject, html: personalizedHtml });
@@ -462,7 +465,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ success: true, count: responseByEmail.size });
     } else if (Array.isArray(to)) {
-      await sendBatch(to, subject, html);
+      await sendBatch(to, subject, html, FROM);
     } else if (typeof to === 'string') {
       await resend.emails.send({ from: FROM, to, subject, html });
       // Record idempotency key so this confirmation/course-result isn't sent twice

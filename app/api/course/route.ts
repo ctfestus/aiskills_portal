@@ -5,10 +5,9 @@ import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
 import { learningPathCertificateEmail } from '@/lib/email-templates';
 import { getRedis, leaderboardKey, studentNameKey } from '@/lib/redis';
 import { publishActivity } from '@/lib/activity';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 
-const resend  = new Resend(process.env.RESEND_API_KEY);
-const FROM    = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
-const APP_URL = process.env.APP_URL || 'https://festforms.com';
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -378,7 +377,10 @@ async function updateLearningPathProgress(supabase: any, studentId: string, comp
                 };
               });
 
-              const certUrl = `${APP_URL}/certificate/${pathCert.id}`;
+              const t        = await getTenantSettings();
+              const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+              const branding = { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+              const certUrl  = `${t.appUrl}/certificate/${pathCert.id}`;
               await resend.emails.send({
                 from: FROM,
                 to: studentRow.email,
@@ -388,6 +390,7 @@ async function updateLearningPathProgress(supabase: any, studentId: string, comp
                   pathTitle: fullPath?.title ?? path.title,
                   certUrl,
                   items,
+                  branding,
                 }),
               });
             } catch (emailErr) {

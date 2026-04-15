@@ -1,9 +1,22 @@
-﻿const BANNER = 'https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Cover.jpg';
-const APP_URL = process.env.APP_URL || 'https://app.aiskillsafrica.com';
+﻿import { tenant } from './tenant';
+
+const BANNER  = tenant.logoUrl;
+const APP_URL = process.env.APP_URL || tenant.appUrl;
+
+export interface EmailBranding {
+  logoUrl?:  string;
+  teamName?: string;
+  appName?:  string;
+  appUrl?:   string;
+}
 
 // -- Shared shell ---
-function shell(content: string, bannerUrl?: string) {
-  const resolvedBanner = bannerUrl || BANNER;
+function shell(content: string, opts?: { bannerUrl?: string } & EmailBranding) {
+  const banner   = opts?.bannerUrl || opts?.logoUrl || BANNER;
+  const appName  = opts?.appName   || tenant.appName;
+  const appUrl_  = opts?.appUrl    || APP_URL;
+  const teamName = opts?.teamName;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -18,8 +31,8 @@ function shell(content: string, bannerUrl?: string) {
         <!-- Banner -->
         <tr><td>
           <img
-            src="${resolvedBanner}"
-            alt="AI Skills Africa"
+            src="${banner}"
+            alt="${appName}"
             width="600"
             style="width:100%;height:auto;display:block;"
           />
@@ -28,11 +41,12 @@ function shell(content: string, bannerUrl?: string) {
         <!-- Content -->
         <tr><td style="padding:20px;">
           ${content}
+          ${teamName ? `<p style="color:#374151;font-size:14px;">${teamName}</p>` : ''}
 
           <!-- Footer -->
           <p style="font-size:12px;color:#a1a1aa;margin-top:24px;">
-            You received this because you submitted a form on AI Skills Africa. &middot;
-            <a href="${APP_URL}" style="color:#2563eb;">Visit AI Skills Africa</a>
+            You received this because you are enrolled on ${appName}. &middot;
+            <a href="${appUrl_}" style="color:#2563eb;">Visit ${appName}</a>
           </p>
         </td></tr>
 
@@ -87,8 +101,9 @@ export function confirmationEmail(data: {
   customTitle?: string;
   customBody?: string;
   bannerUrl?: string;
+  branding?: EmailBranding;
 }) {
-  const { name, eventTitle, eventDate, eventTime, eventLocation, eventTimezone, meetingLink, formUrl, customTitle, customBody, bannerUrl } = data;
+  const { name, eventTitle, eventDate, eventTime, eventLocation, eventTimezone, meetingLink, formUrl, customTitle, customBody, bannerUrl, branding } = data;
 
   const meetingBlock = meetingLink ? `
     <div style="margin:16px 0;padding:16px;background:#f0f7ff;border-radius:10px;border:1px solid #c5deff;text-align:center;">
@@ -113,10 +128,9 @@ export function confirmationEmail(data: {
     <p>Keep this email for your records. You'll receive a reminder before the event starts.</p>
     <br>
     <p><b>Best regards,</b></p>
-    <p>The AI Skills Africa Team</p>
   `;
 
-  return shell(content, bannerUrl);
+  return shell(content, { ...branding, bannerUrl: bannerUrl || branding?.logoUrl });
 }
 
 // -- 2. Event Reminder ---
@@ -131,8 +145,9 @@ export function reminderEmail(data: {
   formUrl: string;
   isOneHour?: boolean;
   bannerUrl?: string;
+  branding?: EmailBranding;
 }) {
-  const { name, eventTitle, eventDate, eventTime, eventLocation, eventTimezone, meetingLink, formUrl, isOneHour, bannerUrl } = data;
+  const { name, eventTitle, eventDate, eventTime, eventLocation, eventTimezone, meetingLink, formUrl, isOneHour, bannerUrl, branding } = data;
   const timeLabel = isOneHour ? '1 hour' : 'tomorrow';
 
   const meetingBlock = meetingLink ? `
@@ -157,10 +172,9 @@ export function reminderEmail(data: {
     <p>You can access your dashboard anytime to view your upcoming events.</p>
     <br>
     <p><b>Best regards,</b></p>
-    <p>The AI Skills Africa Team</p>
   `;
 
-  return shell(content, bannerUrl);
+  return shell(content, { ...branding, bannerUrl: bannerUrl || branding?.logoUrl });
 }
 
 // -- 3. Course Result ---
@@ -176,9 +190,10 @@ export function courseResultEmail(data: {
   formUrl: string;
   certUrl?: string;
   recommendations?: Array<{ title: string; slug: string; coverImage?: string | null }>;
+  branding?: EmailBranding;
 }) {
-  const { name, courseTitle, score, total, percentage, passed, points, passmark, formUrl, certUrl, recommendations } = data;
-  const appUrl = process.env.APP_URL || 'https://app.aiskillsafrica.com';
+  const { name, courseTitle, score, total, percentage, passed, points, passmark, formUrl, certUrl, recommendations, branding } = data;
+  const appUrl = branding?.appUrl || process.env.APP_URL || tenant.appUrl;
 
   const recsHtml = recommendations?.length ? `
     <p style="font-size:16px;font-weight:bold;margin-top:32px;margin-bottom:4px;">What to take next</p>
@@ -213,15 +228,14 @@ export function courseResultEmail(data: {
 
     <br>
     <p><b>Best regards,</b></p>
-    <p>The AI Skills Africa Team</p>
   `;
 
-  return shell(content);
+  return shell(content, branding);
 }
 
 // -- 4. Course OTP Verification ---
-export function otpEmail(data: { code: string; courseName?: string }) {
-  const { code, courseName } = data;
+export function otpEmail(data: { code: string; courseName?: string; branding?: EmailBranding }) {
+  const { code, courseName, branding } = data;
 
   const content = `
     <p><b>Hi there,</b></p>
@@ -237,10 +251,9 @@ export function otpEmail(data: { code: string; courseName?: string }) {
     <p style="color:#a1a1aa;font-size:13px;">If you did not request this, you can safely ignore this email.</p>
     <br>
     <p><b>Best regards,</b></p>
-    <p>The AI Skills Africa Team</p>
   `;
 
-  return shell(content);
+  return shell(content, branding);
 }
 
 // -- 5. Student Nudge (not started / stalled) ---
@@ -252,8 +265,9 @@ export function nudgeEmail(data: {
   formUrl: string;
   coverImage?: string | null;
   relatedAssignmentTitle?: string;
+  branding?: EmailBranding;
 }) {
-  const { name, contentTitle, contentType, status, formUrl, coverImage, relatedAssignmentTitle } = data;
+  const { name, contentTitle, contentType, status, formUrl, coverImage, relatedAssignmentTitle, branding } = data;
   const typeLabel = contentType === 'virtual_experience' ? 'virtual experience' : contentType;
   const ctaLabel  = status === 'not_started' ? `Start ${typeLabel}` : 'Continue where you left off';
 
@@ -309,10 +323,9 @@ export function nudgeEmail(data: {
 
     <br>
     <p><b>Best regards,</b></p>
-    <p>AI Skills Africa - Learning Experience Team</p>
   `;
 
-  return shell(content);
+  return shell(content, branding);
 }
 
 // -- 6. 80% Milestone ---
@@ -321,8 +334,9 @@ export function milestoneEmail(data: {
   contentTitle: string;
   contentType: string;
   formUrl: string;
+  branding?: EmailBranding;
 }) {
-  const { name, contentTitle, contentType, formUrl } = data;
+  const { name, contentTitle, contentType, formUrl, branding } = data;
   const typeLabel = contentType === 'virtual_experience' ? 'virtual experience' : contentType;
 
   const content = `
@@ -351,10 +365,9 @@ export function milestoneEmail(data: {
 
     <br>
     <p><b>Best regards,</b></p>
-    <p>AI Skills Africa - Learning Experience Team</p>
   `;
 
-  return shell(content);
+  return shell(content, branding);
 }
 
 // -- 7. Weekly Digest ---
@@ -365,8 +378,9 @@ export function weeklyDigestEmail(data: {
   notStarted: { title: string; contentType: string }[];
   missedDeadlines: { title: string; contentType: string; daysOverdue: number }[];
   dashboardUrl: string;
+  branding?: EmailBranding;
 }) {
-  const { name, completed, inProgress, notStarted, missedDeadlines, dashboardUrl } = data;
+  const { name, completed, inProgress, notStarted, missedDeadlines, dashboardUrl, branding } = data;
 
   const typeLabel = (t: string) => t === 'virtual_experience' ? 'Virtual Experience' : t === 'course' ? 'Course' : t;
 
@@ -447,10 +461,9 @@ export function weeklyDigestEmail(data: {
 
     <br>
     <p><b>Best regards,</b></p>
-    <p>AI Skills Africa - Learning Experience Team</p>
   `;
 
-  return shell(content);
+  return shell(content, branding);
 }
 
 // -- 8. Blast / Announcement ---
@@ -460,8 +473,9 @@ export function deadlineReminderEmail(data: {
   contentType: string;
   formUrl: string;
   daysLeft: number;
+  branding?: EmailBranding;
 }) {
-  const { name, contentTitle, contentType, formUrl, daysLeft } = data;
+  const { name, contentTitle, contentType, formUrl, daysLeft, branding } = data;
   const typeLabel = contentType === 'course' ? 'course' : 'virtual experience';
   const urgency = daysLeft <= 0 ? 'Your deadline has passed'
     : daysLeft === 1 ? 'You have 1 day left'
@@ -484,17 +498,17 @@ export function deadlineReminderEmail(data: {
     <p>If you need any help or have questions, our team is always here for you. Just reply to this email.</p>
     <br>
     <p><b>Best regards,</b></p>
-    <p>AI Skills Africa - Learning Experience Team</p>
   `;
 
-  return shell(content);
+  return shell(content, branding);
 }
 
 // -- 9. Onboarding Welcome ---
-export function welcomeEmail(data: { name: string; studentUrl: string }) {
-  const { name, studentUrl } = data;
+export function welcomeEmail(data: { name: string; studentUrl: string; branding?: EmailBranding }) {
+  const { name, studentUrl, branding } = data;
+  const appName = branding?.appName || tenant.appName;
   const content = `
-    <p><b>Welcome to AI Skills Africa, ${name}! 🎉</b></p>
+    <p><b>Welcome to ${appName}, ${name}! 🎉</b></p>
     <p>We are thrilled to have you on board. You have just taken the first step toward building industry-relevant skills that will shape your career.</p>
 
     <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;">
@@ -513,17 +527,17 @@ export function welcomeEmail(data: { name: string; studentUrl: string }) {
 
     <br>
     <p><b>Welcome aboard,</b></p>
-    <p>AI Skills Africa Team</p>
   `;
-  return shell(content);
+  return shell(content, branding);
 }
 
 // -- 10. Onboarding Day-3 Check-in ---
-export function day3CheckInEmail(data: { name: string; studentUrl: string; courseTitle?: string; courseUrl?: string }) {
-  const { name, studentUrl, courseTitle, courseUrl } = data;
+export function day3CheckInEmail(data: { name: string; studentUrl: string; courseTitle?: string; courseUrl?: string; branding?: EmailBranding }) {
+  const { name, studentUrl, courseTitle, courseUrl, branding } = data;
+  const appName = branding?.appName || tenant.appName;
   const content = `
     <p><b>Hi ${name},</b></p>
-    <p>It has been a few days since you joined AI Skills Africa. We just wanted to check in -- have you had a chance to explore your courses yet?</p>
+    <p>It has been a few days since you joined ${appName}. We just wanted to check in -- have you had a chance to explore your courses yet?</p>
 
     ${courseTitle && courseUrl ? `
     <div style="margin:20px 0;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;">
@@ -541,14 +555,13 @@ export function day3CheckInEmail(data: { name: string; studentUrl: string; cours
 
     <br>
     <p><b>Cheering you on,</b></p>
-    <p>AI Skills Africa Team</p>
   `;
-  return shell(content);
+  return shell(content, branding);
 }
 
 // -- 11. Onboarding Day-7 Encouragement ---
-export function day7EncouragementEmail(data: { name: string; studentUrl: string; hasStarted: boolean; coursesCompleted: number }) {
-  const { name, studentUrl, hasStarted, coursesCompleted } = data;
+export function day7EncouragementEmail(data: { name: string; studentUrl: string; hasStarted: boolean; coursesCompleted: number; branding?: EmailBranding }) {
+  const { name, studentUrl, hasStarted, coursesCompleted, branding } = data;
   const content = `
     <p><b>Hi ${name},</b></p>
     ${hasStarted && coursesCompleted > 0 ? `
@@ -568,9 +581,8 @@ export function day7EncouragementEmail(data: { name: string; studentUrl: string;
     ${cta('Continue Learning', studentUrl)}
     <br>
     <p><b>Best,</b></p>
-    <p>AI Skills Africa Team</p>
   `;
-  return shell(content);
+  return shell(content, branding);
 }
 
 export function blastEmail(data: {
@@ -581,8 +593,9 @@ export function blastEmail(data: {
   formUrl: string;
   bannerUrl?: string;
   ctaLabel?: string;
+  branding?: EmailBranding;
 }) {
-  const { body, senderName, formTitle, formUrl, bannerUrl, ctaLabel } = data;
+  const { body, senderName, formTitle, formUrl, bannerUrl, ctaLabel, branding } = data;
 
   const content = `
     <p>${body.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>')}</p>
@@ -594,7 +607,8 @@ export function blastEmail(data: {
     <p>${senderName || formTitle}</p>
   `;
 
-  return shell(content, bannerUrl);
+  // blastEmail uses senderName as sign-off -- do not pass teamName to shell
+  return shell(content, { ...branding, bannerUrl: bannerUrl || branding?.logoUrl, teamName: undefined });
 }
 
 // -- 12. Learning Path Assignment ---
@@ -604,8 +618,9 @@ export function learningPathAssignedEmail(data: {
   pathDescription?: string;
   dashboardUrl: string;
   items: Array<{ title: string; coverImage?: string | null; isVE?: boolean; description?: string }>;
+  branding?: EmailBranding;
 }) {
-  const { name, pathTitle, pathDescription, dashboardUrl, items } = data;
+  const { name, pathTitle, pathDescription, dashboardUrl, items, branding } = data;
 
   const visibleItems = items.slice(0, 6);
 
@@ -675,10 +690,9 @@ export function learningPathAssignedEmail(data: {
 
     <br>
     <p><b>Best regards,</b></p>
-    <p>AI Skills Africa Team</p>
   `;
 
-  return shell(content);
+  return shell(content, branding);
 }
 
 // -- 13. Learning Path Certificate ---
@@ -688,8 +702,9 @@ export function learningPathCertificateEmail(data: {
   pathDescription?: string;
   certUrl: string;
   items: Array<{ title: string; coverImage?: string | null; isVE?: boolean }>;
+  branding?: EmailBranding;
 }) {
-  const { name, pathTitle, pathDescription, certUrl, items } = data;
+  const { name, pathTitle, pathDescription, certUrl, items, branding } = data;
 
   const itemsHtml = items.slice(0, 6).map((item) => `
     <tr>
@@ -741,8 +756,7 @@ export function learningPathCertificateEmail(data: {
 
     <br>
     <p><b>Congratulations,</b></p>
-    <p>AI Skills Africa Team</p>
   `;
 
-  return shell(content);
+  return shell(content, branding);
 }

@@ -47,7 +47,7 @@ export interface CertificateSettings {
 }
 
 export const DEFAULT_CERT_SETTINGS: CertificateSettings = {
-  institutionName:  "AI Skills Africa",
+  institutionName:  process.env.NEXT_PUBLIC_ORG_NAME ?? "AI Skills Africa",
   primaryColor:     "#0b07d5",
   accentColor:      "#ff9500",
   backgroundImageUrl: null,

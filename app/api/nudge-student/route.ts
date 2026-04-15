@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { adminClient } from '@/lib/admin-client';
 import { nudgeEmail } from '@/lib/email-templates';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 
 export const dynamic = 'force-dynamic';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = process.env.RESEND_FROM_EMAIL || 'AI Skills Africa <support@app.aiskillsafrica.com>';
-const APP_URL = process.env.APP_URL || 'https://app.aiskillsafrica.com';
 
 export async function POST(req: NextRequest) {
   if (!process.env.RESEND_API_KEY) {
@@ -63,7 +62,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const formUrl = `${APP_URL}/${content.slug || formId}`;
+  const t        = await getTenantSettings();
+  const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+  const branding = { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+  const formUrl  = `${t.appUrl}/${content.slug || formId}`;
 
   const subject = status === 'not_started'
     ? `Your learning journey is waiting, ${studentName || 'there'}!`
@@ -76,6 +78,7 @@ export async function POST(req: NextRequest) {
     status,
     formUrl,
     coverImage: content.cover_image || null,
+    branding,
   });
 
   try {
