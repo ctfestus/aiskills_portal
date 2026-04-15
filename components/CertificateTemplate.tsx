@@ -236,9 +236,7 @@ const CertificateTemplate = React.forwardRef<HTMLDivElement, CertificateTemplate
         {/* Course Title */}
         <p style={{ ...pos("courseName"), zIndex: 20, fontFamily, fontSize: "50px", fontWeight: "700",
           lineHeight: "1.2", maxWidth: "1400px", margin: 0,
-          background: "linear-gradient(90deg, #0cc0df, #ffde59)",
-          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-          backgroundClip: "text", color: "transparent" }}>
+          color: C.white }}>
           {courseName}
         </p>
 

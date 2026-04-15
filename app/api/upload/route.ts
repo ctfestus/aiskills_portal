@@ -23,8 +23,9 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const form = await req.formData();
-  const file   = form.get('file') as File | null;
-  const folder = (form.get('folder') as string | null) ?? 'assets';
+  const file     = form.get('file') as File | null;
+  const folder   = (form.get('folder')   as string | null) ?? 'assets';
+  const publicId = (form.get('publicId') as string | null) ?? undefined;
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
   if (file.size > 20 * 1024 * 1024) return NextResponse.json({ error: 'File too large (max 20 MB)' }, { status: 413 });
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
 
   const result = await new Promise<{ secure_url: string; public_id: string }>((resolve, reject) => {
     cloudinary.uploader.upload_stream(
-      { folder, resource_type: 'auto', overwrite: true },
+      { folder, resource_type: 'auto', overwrite: true, ...(publicId ? { public_id: publicId } : {}) },
       (err, res) => {
         if (err || !res) reject(err ?? new Error('Upload failed'));
         else resolve(res as { secure_url: string; public_id: string });

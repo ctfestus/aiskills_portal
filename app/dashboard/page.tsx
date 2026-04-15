@@ -4797,7 +4797,7 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
   const handleLogoUpload = async (file: File) => {
     setLogoUploading(true);
     try {
-      const raw = await uploadToCloudinary(file, 'branding');
+      const raw = await uploadToCloudinary(file, 'branding', 'branding/logo');
       // Remove f_auto,q_auto so SVG logos are served as-is rather than
       // being rasterised by Cloudinary (which breaks SVGs with complex features).
       const url = raw.replace('/upload/f_auto,q_auto/', '/upload/');
@@ -4813,7 +4813,8 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
   const handleFaviconUpload = async (file: File) => {
     setFaviconUploading(true);
     try {
-      const url = await uploadToCloudinary(file, 'branding');
+      const raw = await uploadToCloudinary(file, 'branding', 'branding/favicon');
+      const url = raw.replace('/upload/f_auto,q_auto/', '/upload/');
       setForm(prev => ({ ...prev, faviconUrl: url }));
     } catch (e: any) {
       setMsg({ ok: false, text: e.message ?? 'Favicon upload failed' });
