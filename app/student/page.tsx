@@ -627,6 +627,7 @@ function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
 
 // --- Courses section ---
 function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
+  const { logoUrl, emailBannerUrl } = useTenant();
   const [courses,   setCourses]   = useState<any[]>([]);
   const [deadlines, setDeadlines] = useState<Record<string, Date | null>>({});
   const [loading,   setLoading]   = useState(true);
@@ -3926,7 +3927,7 @@ export default function StudentDashboard() {
   const [mounted, setMounted] = useState(false);
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl, emailBannerUrl } = useTenant();
+  const { logoUrl } = useTenant();
   const router = useRouter();
   const [user, setUser]       = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
