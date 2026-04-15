@@ -327,7 +327,7 @@ export default function VirtualExperienceTaker({
       const res = await fetch('/api/guided-project-progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader },
-        body: JSON.stringify({ action: 'issue-certificate', formId, studentEmail, studentName }),
+        body: JSON.stringify({ action: 'issue-certificate', veId: formId, studentEmail, studentName }),
       });
       const json = await res.json();
       if (json.certId) setCertId(json.certId);

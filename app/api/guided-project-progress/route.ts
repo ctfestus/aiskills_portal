@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
-import { milestoneEmail } from '@/lib/email-templates';
+import { milestoneEmail, courseResultEmail } from '@/lib/email-templates';
 import { hasNudgeBeenSent, recordNudge, totalRequirements, completedRequirements } from '@/lib/nudge-helpers';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 
@@ -158,6 +158,45 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (certErr) { console.error('[guided-project-progress] certificate error:', certErr); return NextResponse.json({ error: 'Failed to issue certificate.' }, { status: 500 }); }
+
+    // Fire-and-forget certificate email
+    if (process.env.RESEND_API_KEY) {
+      (async () => {
+        try {
+          const [{ data: ve }, { data: student }] = await Promise.all([
+            supabase.from('virtual_experiences').select('title, slug').eq('id', resolvedVeId).single(),
+            supabase.from('students').select('email, full_name').eq('id', certUser.id).single(),
+          ]);
+          if (!student?.email || !ve) return;
+
+          const t        = await getTenantSettings();
+          const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+          const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+          const certUrl  = `${t.appUrl}/certificate/${cert.id}`;
+          const formUrl  = `${t.appUrl}/${ve.slug ?? resolvedVeId}`;
+
+          await resend.emails.send({
+            from:    FROM,
+            to:      student.email,
+            subject: `Your certificate is ready: ${ve.title}`,
+            html:    courseResultEmail({
+              name:        studentName || student.full_name || 'there',
+              courseTitle: ve.title,
+              score:       0,
+              total:       0,
+              percentage:  100,
+              passed:      true,
+              certUrl,
+              formUrl,
+              branding,
+            }),
+          });
+        } catch (emailErr) {
+          console.error('[guided-project-progress] certificate email failed', emailErr);
+        }
+      })();
+    }
+
     return NextResponse.json({ certId: cert.id });
   }
 

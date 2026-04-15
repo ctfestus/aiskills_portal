@@ -1036,271 +1036,224 @@ function VirtualExperienceCreatePageInner() {
                     </button>
                   </div>
 
-                  <div className="px-5 pb-5">
+                  <div className="px-5 pb-5 space-y-4">
                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleModuleDragEnd}>
                     <SortableContext items={(config.modules || []).map(m => m.id)} strategy={verticalListSortingStrategy}>
                     {(config.modules || []).map((mod, mi) => {
-                      const globalOffset = (config.modules || []).slice(0, mi).reduce((s, m) => s + (m.lessons || []).length, 0);
-                      const totalItems   = (config.modules || []).reduce((s, m) => s + (m.lessons || []).length, 0);
                       return (
                       <SortableVEShell key={mod.id} id={mod.id}>
                         {({ dragHandle: moduleDragHandle }) => (
-                        <div className="group">
-                          {/* Module drag strip */}
-                          <div className="flex items-center gap-1.5 mb-1 pl-1">
-                            {moduleDragHandle}
+                        <div className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${C.cardBorder}`, background: C.page }}>
+
+                          {/* -- MODULE HEADER -- */}
+                          <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: `${C.cta}12`, borderBottom: `1px solid ${C.cta}28` }}>
+                            <div className="flex-shrink-0" title="Drag to reorder module">{moduleDragHandle}</div>
+                            <span className="text-[11px] font-black uppercase tracking-widest flex-shrink-0" style={{ color: C.cta }}>Module {mi + 1}</span>
+                            <input
+                              value={mod.title}
+                              onChange={e => updateModule(mod.id, { title: e.target.value })}
+                              className="flex-1 bg-transparent text-[13px] font-bold outline-none min-w-0"
+                              style={{ color: C.cta }}
+                              placeholder="Module title…"
+                            />
+                            <button onClick={() => removeModule(mod.id)}
+                              className="hover:text-red-400 flex-shrink-0 transition-colors"
+                              style={{ color: C.faint }} title="Delete module">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
-                          {/* Lessons within this module */}
-                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleLessonDragEnd(mod.id)}>
-                          <SortableContext items={(mod.lessons || []).map(l => l.id)} strategy={verticalListSortingStrategy}>
-                          {(mod.lessons || []).map((les, li) => {
-                        const globalIdx    = globalOffset + li;
-                        const isIntro      = globalIdx === 0;
-                        const isLastLesson = globalIdx === totalItems - 1;
-                        const isLastInMod  = li === mod.lessons.length - 1;
-                        const reqCount = les.requirements?.length || 0;
-                        const estTime  = reqCount <= 2 ? '15-30 mins' : reqCount <= 4 ? '30-60 mins' : '45-90 mins';
-                        const lessonDiff = isIntro ? null : globalIdx === 1 ? 'Beginner' : config.difficulty.charAt(0).toUpperCase() + config.difficulty.slice(1);
-                        const expandKey = `${mod.id}-${les.id}`;
-                        return (
-                        <SortableVEShell key={les.id} id={les.id}>
-                          {({ dragHandle: lessonDragHandle }) => (<>
 
-                        return (
-                          <div className="flex items-start gap-3 group">
-                            {/* Lesson drag handle */}
-                            <div className="pt-2 flex-shrink-0">{lessonDragHandle}</div>
-                            {/* Left col: circle + dashed connector */}
-                            <div className="flex flex-col items-center flex-shrink-0">
-                              {isIntro ? (
-                                <div className="w-9 h-9 rounded-full flex items-center justify-center"
-                                  style={{ background: C.cta, border: `2px solid ${C.cta}` }}>
-                                  <Star className="w-4 h-4" style={{ color: 'white' }} fill="white" />
-                                </div>
-                              ) : (
-                                <div className="w-9 h-9 rounded-full flex items-center justify-center"
-                                  style={{ background: C.card, border: `2px solid ${C.cardBorder}` }}>
-                                  <span className="text-[13px] font-bold" style={{ color: C.muted }}>{globalIdx}</span>
-                                </div>
-                              )}
-                              {!isLastLesson && (
-                                <div style={{
-                                  width: 0,
-                                  minHeight: 24,
-                                  flex: 1,
-                                  borderLeft: `2px dashed ${C.cardBorder}`,
-                                  marginTop: 4,
-                                  marginBottom: 4,
-                                }} />
-                              )}
-                            </div>
+                          {/* -- LESSONS -- */}
+                          <div className="p-3 space-y-2">
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleLessonDragEnd(mod.id)}>
+                            <SortableContext items={(mod.lessons || []).map(l => l.id)} strategy={verticalListSortingStrategy}>
+                            {(mod.lessons || []).map((les, li) => {
+                              const reqCount  = les.requirements?.length || 0;
+                              const estTime   = reqCount <= 2 ? '15-30 mins' : reqCount <= 4 ? '30-60 mins' : '45-90 mins';
+                              const expandKey = `${mod.id}-${les.id}`;
+                              return (
+                              <SortableVEShell key={les.id} id={les.id}>
+                                {({ dragHandle: lessonDragHandle }) => (
+                                <div className="rounded-xl overflow-hidden group" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
 
-                            {/* Content */}
-                            <div className="flex-1 min-w-0" style={{ paddingBottom: isLastLesson ? 8 : 20, paddingTop: 2 }}>
-                              {li === 0 && (
-                                <input value={mod.title}
-                                  onChange={e => updateModule(mod.id, { title: e.target.value })}
-                                  className="bg-transparent text-[12px] font-bold uppercase tracking-widest outline-none block mb-0.5"
-                                  style={{ color: C.cta }}
-                                  placeholder="Module name…" />
-                              )}
-                              <div className="flex items-center gap-1">
-                                <input value={les.title}
-                                  onChange={e => updateLesson(mod.id, les.id, { title: e.target.value })}
-                                  className="flex-1 bg-transparent text-[15px] font-semibold outline-none min-w-0"
-                                  style={{ color: C.text }}
-                                  placeholder="Lesson title…" />
-                                <button onClick={() => removeLesson(mod.id, les.id)}
-                                  className="hover:text-red-400 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  style={{ color: C.faint }}>
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                              {lessonDiff && (
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                  <span className="text-[12px]" style={{ color: C.faint }}>{lessonDiff}</span>
-                                  <span className="text-[12px]" style={{ color: C.faint }}>·</span>
-                                  <Clock className="w-3 h-3 flex-shrink-0" style={{ color: C.faint }} />
-                                  <span className="text-[12px]" style={{ color: C.faint }}>{estTime}</span>
-                                </div>
-                              )}
-                              <button onClick={() => toggleModule(expandKey)}
-                                className="mt-1 text-[12px] hover:opacity-70 flex items-center gap-1"
-                                style={{ color: C.faint }}>
-                                {expandedModules.has(expandKey)
-                                  ? <><ChevronDown className="w-3 h-3" /> Hide editor</>
-                                  : <><ChevronRight className="w-3 h-3" /> Edit · {reqCount} task{reqCount !== 1 ? 's' : ''}</>}
-                              </button>
-                              {expandedModules.has(expandKey) && (
-                                <div className="mt-2 space-y-2 border-l-2 pl-3 ml-1" style={{ borderColor: `${C.cta}40` }}>
-                                  <RichTextEditor
-                                    value={les.body || ''}
-                                    onChange={html => updateLesson(mod.id, les.id, { body: html })}
-                                    placeholder="Write the lesson content here. What should the student read, understand, or do?"
-                                  />
-                                  <input style={{ ...inp, fontSize: 13 }} value={les.videoUrl || ''} placeholder="Video URL (optional)"
-                                    onChange={e => updateLesson(mod.id, les.id, { videoUrl: e.target.value })} />
-                                  <div className="space-y-2">
-                                    <p className="text-[12px] font-bold uppercase tracking-wide" style={{ color: C.faint }}>Questions</p>
-                                    {les.requirements.map((req, qi) => {
-                                      const opts = req.options?.length === 4 ? req.options : ['', '', '', ''];
-                                      const TYPE_COLORS: Record<string, { bg: string; color: string; label: string }> = {
-                                        mcq:    { bg: `${C.cta}18`, color: C.cta,  label: 'MCQ' },
-                                        text:   { bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6', label: 'Short Answer' },
-                                        upload: { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b', label: 'File Upload' },
-                                        task:   { bg: 'rgba(59,130,246,0.12)', color: '#3b82f6', label: 'Task' },
-                                      };
-                                      const tc = TYPE_COLORS[req.type] || TYPE_COLORS.mcq;
-                                      return (
-                                        <div key={req.id} className="rounded-xl p-3 space-y-2" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
-                                          {/* Header: type + number + delete */}
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-[12px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                                              style={{ background: tc.bg, color: tc.color }}>Q{qi + 1}</span>
-                                            <select value={req.type}
-                                              onChange={e => updateReq(mod.id, les.id, req.id, {
-                                                type: e.target.value as Requirement['type'],
-                                                options: e.target.value === 'mcq' ? ['', '', '', ''] : undefined,
-                                                correctAnswer: e.target.value === 'mcq' ? '' : undefined,
-                                                expectedAnswer: undefined,
-                                              })}
-                                              style={{ padding: '2px 6px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.input, color: tc.color, fontSize: 11, fontWeight: 700 }}>
-                                              <option value="mcq">Multiple Choice</option>
-                                              <option value="text">Short Answer</option>
-                                              <option value="upload">File Upload</option>
-                                              <option value="task">Task (Checkbox)</option>
-                                            </select>
-                                            <input value={req.label}
-                                              onChange={e => updateReq(mod.id, les.id, req.id, { label: e.target.value })}
-                                              className="flex-1 bg-transparent text-[13px] font-semibold outline-none"
-                                              style={{ color: C.text }} placeholder="Question…" />
-                                            <button onClick={() => removeReq(mod.id, les.id, req.id)} className="hover:text-red-400 flex-shrink-0" style={{ color: C.faint }}>
-                                              <X className="w-3.5 h-3.5" />
-                                            </button>
-                                          </div>
+                                  {/* Lesson header row */}
+                                  <div className="flex items-center gap-2 px-3 py-2.5">
+                                    <div className="flex-shrink-0" title="Drag to reorder lesson">{lessonDragHandle}</div>
+                                    <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold"
+                                      style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+                                      {li + 1}
+                                    </div>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest flex-shrink-0 px-1.5 py-0.5 rounded"
+                                      style={{ background: C.pill, color: C.faint }}>Lesson</span>
+                                    <input
+                                      value={les.title}
+                                      onChange={e => updateLesson(mod.id, les.id, { title: e.target.value })}
+                                      className="flex-1 bg-transparent text-[14px] font-semibold outline-none min-w-0"
+                                      style={{ color: C.text }}
+                                      placeholder="Lesson title…"
+                                    />
+                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                      <div className="flex items-center gap-1" style={{ color: C.faint }}>
+                                        <Clock className="w-3 h-3" />
+                                        <span className="text-[11px]">{estTime}</span>
+                                      </div>
+                                      <button onClick={() => toggleModule(expandKey)}
+                                        className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg transition-all hover:opacity-70"
+                                        style={{ background: expandedModules.has(expandKey) ? `${C.cta}18` : C.pill, color: expandedModules.has(expandKey) ? C.cta : C.muted }}>
+                                        {expandedModules.has(expandKey)
+                                          ? <><ChevronDown className="w-3 h-3" /> Hide</>
+                                          : <><ChevronRight className="w-3 h-3" /> {reqCount} task{reqCount !== 1 ? 's' : ''}</>}
+                                      </button>
+                                      <button onClick={() => removeLesson(mod.id, les.id)}
+                                        className="hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                        style={{ color: C.faint }}>
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
 
-                                          {/* Hint / instructions */}
-                                          <input value={req.description}
-                                            onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}
-                                            style={{ ...inp, fontSize: 12 }}
-                                            placeholder={req.type === 'mcq' ? 'Hint: which column(s) to analyse…' : req.type === 'upload' ? 'Instructions for the student…' : 'Prompt or context…'} />
+                                  {/* -- EXPANDED: lesson body + tasks -- */}
+                                  {expandedModules.has(expandKey) && (
+                                    <div className="px-3 pb-3 space-y-3 border-t" style={{ borderColor: C.divider }}>
+                                      <div className="pt-3">
+                                        <RichTextEditor
+                                          value={les.body || ''}
+                                          onChange={html => updateLesson(mod.id, les.id, { body: html })}
+                                          placeholder="Write the lesson content here. What should the student read, understand, or do?"
+                                        />
+                                      </div>
+                                      <input style={{ ...inp, fontSize: 13 }} value={les.videoUrl || ''} placeholder="Video URL (optional)"
+                                        onChange={e => updateLesson(mod.id, les.id, { videoUrl: e.target.value })} />
 
-                                          {/* MCQ options */}
-                                          {req.type === 'mcq' && (
-                                            <div className="space-y-1">
-                                              {opts.map((opt, oi) => {
-                                                const letter = String.fromCharCode(65 + oi);
-                                                const isCorrect = req.correctAnswer === opt && opt !== '';
-                                                return (
-                                                  <div key={oi} className="flex items-center gap-2">
-                                                    <button
-                                                      onClick={() => opt && updateReq(mod.id, les.id, req.id, { correctAnswer: opt })}
-                                                      title={opt ? `Mark "${letter}" as correct answer` : 'Fill in this option first'}
-                                                      className="w-5 h-5 rounded-full flex items-center justify-center text-[12px] font-bold flex-shrink-0 transition-all"
-                                                      style={{
-                                                        background: isCorrect ? C.cta : C.input,
-                                                        border: `1.5px solid ${isCorrect ? C.cta : C.cardBorder}`,
-                                                        color: isCorrect ? 'white' : C.muted,
-                                                      }}>
-                                                      {letter}
-                                                    </button>
-                                                    <input value={opt}
-                                                      onChange={e => {
-                                                        const newOpts = [...opts];
-                                                        newOpts[oi] = e.target.value;
-                                                        updateReq(mod.id, les.id, req.id, {
-                                                          options: newOpts,
-                                                          correctAnswer: req.correctAnswer === opt ? e.target.value : req.correctAnswer,
-                                                        });
-                                                      }}
-                                                      className="flex-1 bg-transparent text-[13px] outline-none"
-                                                      style={{
-                                                        ...inp, padding: '4px 8px', fontSize: 12,
-                                                        borderColor: isCorrect ? C.cta : C.cardBorder,
-                                                        color: isCorrect ? C.cta : C.text,
-                                                        fontWeight: isCorrect ? 600 : 400,
-                                                      }}
-                                                      placeholder={`Option ${letter}…`} />
+                                      {/* Tasks */}
+                                      <div className="space-y-2">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[11px] font-black uppercase tracking-widest" style={{ color: C.muted }}>Tasks</span>
+                                          <div className="flex-1 h-px" style={{ background: C.divider }}/>
+                                        </div>
+                                        {les.requirements.map((req, qi) => {
+                                          const opts = req.options?.length === 4 ? req.options : ['', '', '', ''];
+                                          const TYPE_COLORS: Record<string, { bg: string; color: string; label: string }> = {
+                                            mcq:    { bg: `${C.cta}18`,              color: C.cta,       label: 'Multiple Choice' },
+                                            text:   { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6',   label: 'Short Answer'    },
+                                            upload: { bg: 'rgba(245,158,11,0.12)',   color: '#f59e0b',   label: 'File Upload'     },
+                                            task:   { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6',   label: 'Task (Checkbox)' },
+                                          };
+                                          const tc = TYPE_COLORS[req.type] || TYPE_COLORS.mcq;
+                                          return (
+                                            <div key={req.id} className="rounded-xl p-3 space-y-2" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                                                  style={{ background: tc.bg, color: tc.color }}>Task {qi + 1}</span>
+                                                <select value={req.type}
+                                                  onChange={e => updateReq(mod.id, les.id, req.id, {
+                                                    type: e.target.value as Requirement['type'],
+                                                    options: e.target.value === 'mcq' ? ['', '', '', ''] : undefined,
+                                                    correctAnswer: e.target.value === 'mcq' ? '' : undefined,
+                                                    expectedAnswer: undefined,
+                                                  })}
+                                                  style={{ padding: '2px 6px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.input, color: tc.color, fontSize: 11, fontWeight: 700 }}>
+                                                  <option value="mcq">Multiple Choice</option>
+                                                  <option value="text">Short Answer</option>
+                                                  <option value="upload">File Upload</option>
+                                                  <option value="task">Task (Checkbox)</option>
+                                                </select>
+                                                <input value={req.label}
+                                                  onChange={e => updateReq(mod.id, les.id, req.id, { label: e.target.value })}
+                                                  className="flex-1 bg-transparent text-[13px] font-semibold outline-none"
+                                                  style={{ color: C.text }} placeholder="Task description…" />
+                                                <button onClick={() => removeReq(mod.id, les.id, req.id)} className="hover:text-red-400 flex-shrink-0" style={{ color: C.faint }}>
+                                                  <X className="w-3.5 h-3.5" />
+                                                </button>
+                                              </div>
+                                              <input value={req.description}
+                                                onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}
+                                                style={{ ...inp, fontSize: 12 }}
+                                                placeholder={req.type === 'mcq' ? 'Hint: which column(s) to analyse…' : req.type === 'upload' ? 'Instructions for the student…' : 'Prompt or context…'} />
+                                              {req.type === 'mcq' && (
+                                                <div className="space-y-1">
+                                                  {opts.map((opt, oi) => {
+                                                    const letter = String.fromCharCode(65 + oi);
+                                                    const isCorrect = req.correctAnswer === opt && opt !== '';
+                                                    return (
+                                                      <div key={oi} className="flex items-center gap-2">
+                                                        <button
+                                                          onClick={() => opt && updateReq(mod.id, les.id, req.id, { correctAnswer: opt })}
+                                                          title={opt ? `Mark "${letter}" as correct answer` : 'Fill in this option first'}
+                                                          className="w-5 h-5 rounded-full flex items-center justify-center text-[12px] font-bold flex-shrink-0 transition-all"
+                                                          style={{ background: isCorrect ? C.cta : C.input, border: `1.5px solid ${isCorrect ? C.cta : C.cardBorder}`, color: isCorrect ? 'white' : C.muted }}>
+                                                          {letter}
+                                                        </button>
+                                                        <input value={opt}
+                                                          onChange={e => {
+                                                            const newOpts = [...opts]; newOpts[oi] = e.target.value;
+                                                            updateReq(mod.id, les.id, req.id, { options: newOpts, correctAnswer: req.correctAnswer === opt ? e.target.value : req.correctAnswer });
+                                                          }}
+                                                          className="flex-1 bg-transparent text-[13px] outline-none"
+                                                          style={{ ...inp, padding: '4px 8px', fontSize: 12, borderColor: isCorrect ? C.cta : C.cardBorder, color: isCorrect ? C.cta : C.text, fontWeight: isCorrect ? 600 : 400 }}
+                                                          placeholder={`Option ${letter}…`} />
+                                                      </div>
+                                                    );
+                                                  })}
+                                                  {req.correctAnswer && <p className="text-[12px] pt-1" style={{ color: C.cta }}>✓ Correct: {req.correctAnswer}</p>}
+                                                </div>
+                                              )}
+                                              {req.type === 'upload' && (
+                                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: `${C.cta}0a`, color: C.muted }}>
+                                                  <LinkIcon className="w-3 h-3 flex-shrink-0" />Students will upload a file or paste a link
+                                                </div>
+                                              )}
+                                              {req.type === 'text' && (
+                                                <div className="space-y-1.5">
+                                                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: 'rgba(139,92,246,0.06)', color: C.muted }}>
+                                                    <FileText className="w-3 h-3 flex-shrink-0" />Students will type a written response
                                                   </div>
-                                                );
-                                              })}
-                                              {req.correctAnswer && (
-                                                <p className="text-[12px] pt-1" style={{ color: C.cta }}>
-                                                  ✓ Correct: {req.correctAnswer}
-                                                </p>
+                                                  <input value={req.expectedAnswer || ''} onChange={e => updateReq(mod.id, les.id, req.id, { expectedAnswer: e.target.value })}
+                                                    style={{ ...inp, fontSize: 12 }} placeholder="Expected / model answer (shown to student after submission)…" />
+                                                </div>
+                                              )}
+                                              {req.type === 'task' && (
+                                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: 'rgba(59,130,246,0.06)', color: C.muted }}>
+                                                  <Check className="w-3 h-3 flex-shrink-0" />Students tick a checkbox to confirm completion
+                                                </div>
                                               )}
                                             </div>
-                                          )}
-
-                                          {/* Upload preview */}
-                                          {req.type === 'upload' && (
-                                            <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]"
-                                              style={{ background: `${C.cta}0a`, color: C.muted }}>
-                                              <LinkIcon className="w-3 h-3 flex-shrink-0" />
-                                              Students will upload a file or paste a link
-                                            </div>
-                                          )}
-
-                                          {req.type === 'text' && (
-                                            <div className="space-y-1.5">
-                                              <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]"
-                                                style={{ background: 'rgba(139,92,246,0.06)', color: C.muted }}>
-                                                <FileText className="w-3 h-3 flex-shrink-0" />
-                                                Students will type a written response
-                                              </div>
-                                              <input
-                                                value={req.expectedAnswer || ''}
-                                                onChange={e => updateReq(mod.id, les.id, req.id, { expectedAnswer: e.target.value })}
-                                                style={{ ...inp, fontSize: 12 }}
-                                                placeholder="Expected / model answer (shown to student after submission)…" />
-                                            </div>
-                                          )}
-                                          {req.type === 'task' && (
-                                            <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]"
-                                              style={{ background: 'rgba(59,130,246,0.06)', color: C.muted }}>
-                                              <Check className="w-3 h-3 flex-shrink-0" />
-                                              Students tick a checkbox to confirm completion
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                    <button onClick={() => addReq(mod.id, les.id)}
-                                      className="text-[13px] flex items-center gap-1 hover:opacity-70" style={{ color: C.cta }}>
-                                      <Plus className="w-3 h-3" /> Add question
-                                    </button>
-                                  </div>
+                                          );
+                                        })}
+                                        <button onClick={() => addReq(mod.id, les.id)}
+                                          className="text-[12px] flex items-center gap-1 hover:opacity-70 font-medium" style={{ color: C.cta }}>
+                                          <Plus className="w-3 h-3" /> Add task
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
+                                )}
+                              </SortableVEShell>
+                              );
+                            })}
+                            </SortableContext>
+                            </DndContext>
 
-                              {/* Solution video + Add lesson -- shown after last lesson of each module */}
-                              {isLastInMod && (
-                                <div className="mt-3 space-y-2">
-                                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
-                                    style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
-                                    <LinkIcon className="w-3 h-3 flex-shrink-0" style={{ color: C.faint }} />
-                                    <input
-                                      value={mod.solutionVideo || ''}
-                                      onChange={e => updateModule(mod.id, { solutionVideo: e.target.value })}
-                                      className="flex-1 bg-transparent text-[12px] outline-none"
-                                      style={{ color: C.muted }}
-                                      placeholder={`Solution video or file link for "${mod.title}" (YouTube, Bunny, Google Drive, PDF…)`} />
-                                  </div>
-                                  <button onClick={() => addLesson(mod.id)}
-                                    className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-xl border"
-                                    style={{ border: `1px dashed ${C.cardBorder}`, color: C.muted }}>
-                                    <Plus className="w-3 h-3" /> Add lesson to {mod.title}
-                                  </button>
-                                </div>
-                              )}
+                            {/* Solution video + Add lesson */}
+                            <div className="space-y-2 pt-1">
+                              <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
+                                style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                                <LinkIcon className="w-3 h-3 flex-shrink-0" style={{ color: C.faint }} />
+                                <input
+                                  value={mod.solutionVideo || ''}
+                                  onChange={e => updateModule(mod.id, { solutionVideo: e.target.value })}
+                                  className="flex-1 bg-transparent text-[12px] outline-none"
+                                  style={{ color: C.muted }}
+                                  placeholder={`Solution video or file link for "${mod.title}" (YouTube, Bunny, Google Drive, PDF…)`} />
+                              </div>
+                              <button onClick={() => addLesson(mod.id)}
+                                className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-xl border w-full justify-center"
+                                style={{ border: `1px dashed ${C.cardBorder}`, color: C.muted }}>
+                                <Plus className="w-3 h-3" /> Add lesson to {mod.title}
+                              </button>
                             </div>
                           </div>
-                          </>)}
-                        </SortableVEShell>
-                        );
-                      })}
-                          </SortableContext>
-                          </DndContext>
                         </div>
                         )}
                       </SortableVEShell>
