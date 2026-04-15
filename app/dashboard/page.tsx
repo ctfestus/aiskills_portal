@@ -1659,8 +1659,75 @@ const GP_IND_COLORS: Record<string, string> = {
   edtech: '#8b5cf6', healthcare: '#ef4444', ecommerce: '#f97316', consulting: '#14b8a6',
 };
 
-function VirtualExperiencesManageSection({ C, forms, setFormToDelete }: { C: typeof LIGHT_C; forms: any[]; setFormToDelete: (id: string) => void }) {
+function VirtualExperiencesManageSection({ C, forms, setFormToDelete, onDuplicated }: { C: typeof LIGHT_C; forms: any[]; setFormToDelete: (id: string) => void; onDuplicated: (newForm: any) => void }) {
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const gpForms = forms.filter(f => f.content_type === 'virtual_experience' || f.content_type === 'guided_project' || f.config?.isVirtualExperience || f.config?.isGuidedProject);
+
+  const handleDuplicate = async (form: any) => {
+    if (duplicatingId) return;
+    setDuplicatingId(form.id);
+    try {
+      const { data: original } = await supabase
+        .from('virtual_experiences')
+        .select('*')
+        .eq('id', form.id)
+        .single();
+      if (!original) return;
+
+      const slugBase = (original.slug || original.id).replace(/-copy(-\d+)?$/, '');
+      const newSlug  = `${slugBase}-copy-${Date.now().toString(36)}`;
+
+      const { data: newVe, error } = await supabase
+        .from('virtual_experiences')
+        .insert({
+          user_id:       original.user_id,
+          title:         `${original.title} (Copy)`,
+          slug:          newSlug,
+          description:   original.description,
+          industry:      original.industry,
+          difficulty:    original.difficulty,
+          role:          original.role,
+          company:       original.company,
+          duration:      original.duration,
+          tools:         original.tools,
+          tagline:       original.tagline,
+          background:    original.background,
+          learn_outcomes: original.learn_outcomes,
+          manager_name:  original.manager_name,
+          manager_title: original.manager_title,
+          modules:       original.modules,
+          dataset:       original.dataset,
+          cover_image:   original.cover_image,
+          deadline_days: original.deadline_days,
+          theme:         original.theme,
+          mode:          original.mode,
+          font:          original.font,
+          custom_accent: original.custom_accent,
+          status:        'draft',
+          cohort_ids:    [],
+        })
+        .select('*')
+        .single();
+
+      if (error || !newVe) { console.error('[duplicate VE]', error); return; }
+
+      // Normalise to the same shape the dashboard uses
+      const normalised = { ...newVe, content_type: 'virtual_experience', config: {
+        title: newVe.title, description: newVe.description,
+        isVirtualExperience: true, modules: newVe.modules ?? [],
+        industry: newVe.industry, difficulty: newVe.difficulty,
+        role: newVe.role, company: newVe.company, duration: newVe.duration,
+        tools: newVe.tools, tagline: newVe.tagline, background: newVe.background,
+        learnOutcomes: newVe.learn_outcomes, managerName: newVe.manager_name,
+        managerTitle: newVe.manager_title, dataset: newVe.dataset,
+        coverImage: newVe.cover_image, deadline_days: newVe.deadline_days,
+        theme: newVe.theme, mode: newVe.mode, font: newVe.font, customAccent: newVe.custom_accent,
+      }};
+      onDuplicated(normalised);
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
 
   if (gpForms.length === 0) {
     return (
@@ -1722,6 +1789,13 @@ function VirtualExperiencesManageSection({ C, forms, setFormToDelete }: { C: typ
                     style={{ background: `${color}18`, color }}>
                     Edit
                   </Link>
+                  <button onClick={() => handleDuplicate(form)} disabled={!!duplicatingId}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80 disabled:opacity-50"
+                    style={{ background: C.pill, color: C.muted }} title="Duplicate">
+                    {duplicatingId === form.id
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Copy className="w-3.5 h-3.5" />}
+                  </button>
                   <button onClick={() => setFormToDelete(form.id)}
                     className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
                     style={{ background: C.deleteBg, color: C.deleteText }} title="Delete">
@@ -5022,9 +5096,10 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
 }
 
 // --- Section content router ---
-function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFormToDelete, C }: {
+function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFormToDelete, onDuplicated, C }: {
   section: SectionId; forms: any[]; shareMenuOpen: string | null;
-  setShareMenuOpen: (id: string | null) => void; setFormToDelete: (id: string) => void; C: typeof LIGHT_C;
+  setShareMenuOpen: (id: string | null) => void; setFormToDelete: (id: string) => void;
+  onDuplicated: (newForm: any) => void; C: typeof LIGHT_C;
 }) {
   if (COMING_SOON.includes(section)) return <ComingSoon id={section} C={C} />;
   if (section === 'branding')     return <BrandingSection C={C} />;
@@ -5039,7 +5114,7 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
 
   if (section === 'assignments') return <AssignmentsManageSection C={C}/>;
 
-  if (section === 'virtual_experiences') return <VirtualExperiencesManageSection C={C} forms={forms} setFormToDelete={setFormToDelete} />;
+  if (section === 'virtual_experiences') return <VirtualExperiencesManageSection C={C} forms={forms} setFormToDelete={setFormToDelete} onDuplicated={onDuplicated} />;
 
   if (section === 'community') return <GenericListSection table="communities" label="Communities" createHref="/create/community" createLabel="New Community" Icon={Users} C={C} renderRow={item => (
     <div className="min-w-0">
@@ -5439,6 +5514,11 @@ export default function DashboardPage() {
               shareMenuOpen={shareMenuOpen}
               setShareMenuOpen={setShareMenuOpen}
               setFormToDelete={setFormToDelete}
+              onDuplicated={newForm => {
+                const updated = [newForm, ...forms];
+                _cache.forms = updated;
+                setForms(updated);
+              }}
               C={C}
             />
           </motion.div>
