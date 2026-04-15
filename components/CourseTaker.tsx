@@ -604,7 +604,7 @@ export function CourseTaker({
   const clearProgress = useCallback(async (finalScore: number): Promise<void> => {
     if (!formId || !studentEmail.trim()) return;
     if (reviewMode) return; // review mode -- keep original completed attempt intact
-    const scorePct = totalQuestions > 0 ? Math.round((finalScore / totalQuestions) * 100) : 100;
+    const scorePct = totalQuestions > 0 ? Math.round((Math.min(finalScore, totalQuestions) / totalQuestions) * 100) : 100;
     const passed   = totalQuestions === 0 ? true : scorePct >= passmark;
     const { data: { session } } = await supabase.auth.getSession();
     await fetch('/api/course', {

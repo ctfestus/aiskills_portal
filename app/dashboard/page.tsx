@@ -4738,9 +4738,11 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
     supportEmail: '',
     appDescription: '',
   });
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [msg, setMsg]           = useState<{ ok: boolean; text: string } | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [msg, setMsg]             = useState<{ ok: boolean; text: string } | null>(null);
+  const logoInputRef              = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -4787,6 +4789,24 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
     }
   };
 
+  const handleLogoUpload = async (file: File) => {
+    setLogoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('folder', 'branding');
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      if (!res.ok) throw new Error('Upload failed');
+      const { url } = await res.json();
+      setForm(prev => ({ ...prev, logoUrl: url }));
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message ?? 'Logo upload failed' });
+      setTimeout(() => setMsg(null), 4000);
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
   const field = (key: keyof typeof form, label: string, placeholder: string, hint?: string, type = 'text') => (
     <div className="space-y-1">
       <label className="text-xs font-semibold" style={{ color: C.muted }}>{label}</label>
@@ -4826,7 +4846,30 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
         </div>
 
         {field('appDescription', 'App Description', 'Empowering Africans with practical AI skills…', 'Used in SEO meta description tag.')}
-        {field('logoUrl',        'Logo URL',         'https://…/logo.png', 'Full URL to your logo image (publicly accessible).')}
+
+        <div className="space-y-1">
+          <label className="text-xs font-semibold" style={{ color: C.muted }}>Logo</label>
+          <input ref={logoInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); e.target.value = ''; }} />
+          <div className="flex items-center gap-3">
+            {form.logoUrl ? (
+              <img src={form.logoUrl} alt="Logo preview" className="h-10 w-auto max-w-[120px] rounded-lg object-contain"
+                style={{ background: C.pill, border: `1px solid ${C.cardBorder}`, padding: 4 }} />
+            ) : (
+              <div className="h-10 w-16 rounded-lg flex items-center justify-center"
+                style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                <span className="text-[10px]" style={{ color: C.faint }}>No logo</span>
+              </div>
+            )}
+            <button type="button" onClick={() => logoInputRef.current?.click()} disabled={logoUploading}
+              className="px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80 disabled:opacity-50 flex items-center gap-1.5"
+              style={{ background: C.pill, border: `1px solid ${C.cardBorder}`, color: C.text }}>
+              {logoUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Upload className="w-3.5 h-3.5"/>}
+              {logoUploading ? 'Uploading…' : form.logoUrl ? 'Replace' : 'Upload Logo'}
+            </button>
+          </div>
+          <p className="text-[11px]" style={{ color: C.faint }}>Uploaded to Cloudinary. PNG, SVG or JPG recommended.</p>
+        </div>
 
         <div className="space-y-1">
           <label className="text-xs font-semibold" style={{ color: C.muted }}>Brand Colour</label>
