@@ -320,7 +320,7 @@ function SelectField({ value, onChange, options, placeholder }: { value: string;
 export default function SettingsPage() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl, appName } = useTenant();
+  const { logoUrl } = useTenant();
   const router = useRouter();
   const [user, setUser]       = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -498,7 +498,7 @@ export default function SettingsPage() {
           </button>
           <img
             src={logoUrl}
-            alt={appName}
+            alt=""
             className="h-7 w-auto"
           />
         </div>

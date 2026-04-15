@@ -239,7 +239,7 @@ const STATS = [
 
 // --- Page ---
 export default function LandingPage() {
-  const { logoUrl, appName } = useTenant();
+  const { logoUrl } = useTenant();
   const [user, setUser]         = useState<any>(null);
   const [profile, setProfile]   = useState<any>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -280,7 +280,7 @@ export default function LandingPage() {
         <div className="flex items-center">
           <img
             src={logoUrl}
-            alt={appName}
+            alt=""
             className="h-9 w-auto"
           />
         </div>
@@ -592,7 +592,7 @@ export default function LandingPage() {
               <div className="flex items-center">
                 <img
                   src={logoUrl}
-                  alt={appName}
+                  alt=""
                   className="h-9 w-auto"
                 />
               </div>

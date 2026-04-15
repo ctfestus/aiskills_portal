@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
   if (body.teamName       !== undefined) record.team_name       = body.teamName.trim()       || null;
   if (body.supportEmail   !== undefined) record.support_email   = body.supportEmail.trim()   || null;
   if (body.appDescription !== undefined) record.app_description = body.appDescription.trim() || null;
+  if (body.faviconUrl     !== undefined) record.favicon_url     = body.faviconUrl.trim()     || null;
 
   const { error } = await adminClient()
     .from('platform_settings')

@@ -256,7 +256,7 @@ const downloadIcs = (title: string, date: string, time: string, location: string
 };
 
 export default function PublicFormPage() {
-  const { logoUrl, appName } = useTenant();
+  const { logoUrl } = useTenant();
   const { id } = useParams();
   const [form, setForm] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -755,7 +755,7 @@ export default function PublicFormPage() {
         {/* -- Sticky nav -- */}
         <nav style={{ position: 'sticky', top: 0, zIndex: 30, backdropFilter: 'blur(14px)', background: isLight ? '#0e09dd' : 'rgba(13,13,13,0.88)', borderBottom: `1px solid ${isLight ? '#0b07b3' : gp.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 56 }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-            <img src={logoUrl} alt={appName} style={{ height: 28, width: 'auto' }} />
+            <img src={logoUrl} alt="" style={{ height: 28, width: 'auto' }} />
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: isLight ? 'rgba(255,255,255,0.15)' : `${indColor}18`, color: isLight ? '#fff' : indColor, fontWeight: 700, textTransform: 'capitalize', letterSpacing: '0.02em' }}>{config.industry}</span>
@@ -949,7 +949,7 @@ export default function PublicFormPage() {
         {/* Navbar */}
         <nav style={{ position: 'sticky', top: 0, zIndex: 30, background: t.nav, borderBottom: `1px solid ${t.navBorder}`, backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 56, transition: 'background 0.3s' }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-            <img src={logoUrl} alt={appName} style={{ height: 32, width: 'auto' }} />
+            <img src={logoUrl} alt="" style={{ height: 32, width: 'auto' }} />
           </Link>
           <button onClick={() => { navigator.clipboard?.writeText(pageUrl); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: t.navText, background: 'none', border: 'none', cursor: 'pointer' }}>
             {linkCopied ? <Check style={{ width: 16, height: 16, color: '#006128' }}/> : <Copy style={{ width: 16, height: 16 }}/>}
@@ -1112,7 +1112,7 @@ export default function PublicFormPage() {
       {/* Navbar */}
       <nav style={{ position: 'sticky', top: 0, zIndex: 30, background: t.nav, borderBottom: `1px solid ${t.navBorder}`, backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 56, transition: 'background 0.3s' }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-          <img src={logoUrl} alt={appName} style={{ height: 32, width: 'auto' }} />
+          <img src={logoUrl} alt="" style={{ height: 32, width: 'auto' }} />
         </Link>
         <button onClick={() => { navigator.clipboard?.writeText(pageUrl); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: t.navText, background: 'none', border: 'none', cursor: 'pointer' }}>
           {linkCopied ? <Check style={{ width: 16, height: 16, color: '#006128' }}/> : <Copy style={{ width: 16, height: 16 }}/>}

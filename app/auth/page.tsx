@@ -18,7 +18,7 @@ function GoogleLogo() {
 }
 
 export default function AuthPage() {
-  const { logoUrl, appName } = useTenant();
+  const { logoUrl } = useTenant();
   const [email, setEmail]                 = useState('');
   const [password, setPassword]           = useState('');
   const [isLogin, setIsLogin]             = useState(true);
@@ -79,7 +79,7 @@ export default function AuthPage() {
         <div className="mb-10">
           <img
             src={logoUrl}
-            alt={appName}
+            alt=""
             className="h-8 w-auto"
           />
         </div>

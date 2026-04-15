@@ -4733,17 +4733,20 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
     orgName:     '',
     appUrl:      '',
     logoUrl:     '',
+    faviconUrl:  '',
     brandColor:  '',
     senderName:  '',
     teamName:    '',
     supportEmail: '',
     appDescription: '',
   });
-  const [loading, setLoading]     = useState(true);
-  const [saving, setSaving]       = useState(false);
-  const [logoUploading, setLogoUploading] = useState(false);
-  const [msg, setMsg]             = useState<{ ok: boolean; text: string } | null>(null);
-  const logoInputRef              = useRef<HTMLInputElement>(null);
+  const [loading, setLoading]         = useState(true);
+  const [saving, setSaving]           = useState(false);
+  const [logoUploading, setLogoUploading]       = useState(false);
+  const [faviconUploading, setFaviconUploading] = useState(false);
+  const [msg, setMsg]                 = useState<{ ok: boolean; text: string } | null>(null);
+  const logoInputRef                  = useRef<HTMLInputElement>(null);
+  const faviconInputRef               = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -4757,6 +4760,7 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
           orgName:        data.org_name        ?? '',
           appUrl:         data.app_url         ?? '',
           logoUrl:        data.logo_url        ?? '',
+          faviconUrl:     data.favicon_url     ?? '',
           brandColor:     data.brand_color     ?? '',
           senderName:     data.sender_name     ?? '',
           teamName:       data.team_name       ?? '',
@@ -4793,18 +4797,26 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
   const handleLogoUpload = async (file: File) => {
     setLogoUploading(true);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('folder', 'branding');
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      if (!res.ok) throw new Error('Upload failed');
-      const { url } = await res.json();
+      const url = await uploadToCloudinary(file, 'branding');
       setForm(prev => ({ ...prev, logoUrl: url }));
     } catch (e: any) {
       setMsg({ ok: false, text: e.message ?? 'Logo upload failed' });
       setTimeout(() => setMsg(null), 4000);
     } finally {
       setLogoUploading(false);
+    }
+  };
+
+  const handleFaviconUpload = async (file: File) => {
+    setFaviconUploading(true);
+    try {
+      const url = await uploadToCloudinary(file, 'branding');
+      setForm(prev => ({ ...prev, faviconUrl: url }));
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message ?? 'Favicon upload failed' });
+      setTimeout(() => setMsg(null), 4000);
+    } finally {
+      setFaviconUploading(false);
     }
   };
 
@@ -4870,6 +4882,30 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
             </button>
           </div>
           <p className="text-[11px]" style={{ color: C.faint }}>Uploaded to Cloudinary. PNG, SVG or JPG recommended.</p>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-semibold" style={{ color: C.muted }}>Favicon</label>
+          <input ref={faviconInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleFaviconUpload(f); e.target.value = ''; }} />
+          <div className="flex items-center gap-3">
+            {form.faviconUrl ? (
+              <img src={form.faviconUrl} alt="Favicon preview" className="h-8 w-8 rounded object-contain"
+                style={{ background: C.pill, border: `1px solid ${C.cardBorder}`, padding: 4 }} />
+            ) : (
+              <div className="h-8 w-8 rounded flex items-center justify-center"
+                style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                <span className="text-[10px]" style={{ color: C.faint }}>None</span>
+              </div>
+            )}
+            <button type="button" onClick={() => faviconInputRef.current?.click()} disabled={faviconUploading}
+              className="px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80 disabled:opacity-50 flex items-center gap-1.5"
+              style={{ background: C.pill, border: `1px solid ${C.cardBorder}`, color: C.text }}>
+              {faviconUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Upload className="w-3.5 h-3.5"/>}
+              {faviconUploading ? 'Uploading…' : form.faviconUrl ? 'Replace' : 'Upload Favicon'}
+            </button>
+          </div>
+          <p className="text-[11px]" style={{ color: C.faint }}>Shown in browser tabs. PNG or ICO, 32×32 or 64×64 recommended.</p>
         </div>
 
         <div className="space-y-1">
@@ -5019,7 +5055,7 @@ const _cache: { forms: any[] | null; profile: any | null; user: any | null } = {
 export default function DashboardPage() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl, appName } = useTenant();
+  const { logoUrl } = useTenant();
   const [forms, setForms]           = useState<any[]>(_cache.forms ?? []);
   const [loading, setLoading]       = useState(_cache.forms === null);
   const [user, setUser]             = useState<any>(_cache.user ?? null);
@@ -5219,7 +5255,7 @@ export default function DashboardPage() {
             <Menu className="w-5 h-5"/>
           </button>
           <Link href="/dashboard" className="flex items-center gap-2">
-            <img src={logoUrl} alt={appName} className="h-8 w-auto" />
+            <img src={logoUrl} alt="" className="h-8 w-auto" />
           </Link>
         </div>
         <div className="flex items-center gap-2">

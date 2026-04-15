@@ -1677,6 +1677,7 @@ CREATE TABLE IF NOT EXISTS public.platform_settings (
   team_name       text,
   support_email   text,
   app_description text,
+  favicon_url     text,
   updated_at      timestamptz DEFAULT now()
 );
 

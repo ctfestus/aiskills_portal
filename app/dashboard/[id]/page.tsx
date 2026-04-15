@@ -1864,7 +1864,7 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
 
 // -- Main Page ---
 export default function FormDetailPage() {
-  const { logoUrl, appName } = useTenant();
+  const { logoUrl } = useTenant();
   const { id } = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -2070,7 +2070,7 @@ export default function FormDetailPage() {
           <div className="flex items-center gap-2.5 min-w-0">
             {isLight && (
               <Link href="/dashboard" className="flex items-center gap-1.5 hover:opacity-70 transition-opacity flex-shrink-0">
-                <img src={logoUrl} alt={appName} className="h-6 w-auto" />
+                <img src={logoUrl} alt="" className="h-6 w-auto" />
               </Link>
             )}
             <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border flex-shrink-0 ${isLight ? lightBadge[type] : meta.badge}`}>

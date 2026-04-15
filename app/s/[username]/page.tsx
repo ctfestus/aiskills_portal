@@ -170,7 +170,7 @@ export default function StudentPublicProfile() {
   const { username } = useParams<{ username: string }>();
   const { t, isDark } = useT();
   const { toggle: toggleTheme } = useTheme();
-  const { logoUrl, appName } = useTenant();
+  const { logoUrl } = useTenant();
 
   const [data, setData]         = useState<any>(null);
   const [loading, setLoading]   = useState(true);
@@ -228,7 +228,7 @@ export default function StudentPublicProfile() {
         <div className="max-w-2xl mx-auto px-5 h-13 flex items-center justify-between" style={{ height: 52 }}>
           <Link href="/">
             <img src={logoUrl}
-              alt={appName} style={{ height: 26, width: 'auto', filter: isDark ? 'none' : 'brightness(0) invert(1)' }}/>
+              alt="" style={{ height: 26, width: 'auto', filter: isDark ? 'none' : 'brightness(0) invert(1)' }}/>
           </Link>
           <div className="flex items-center gap-1.5">
             <button onClick={toggleTheme}

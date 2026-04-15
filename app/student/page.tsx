@@ -3926,7 +3926,7 @@ export default function StudentDashboard() {
   const [mounted, setMounted] = useState(false);
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl, appName } = useTenant();
+  const { logoUrl } = useTenant();
   const router = useRouter();
   const [user, setUser]       = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);

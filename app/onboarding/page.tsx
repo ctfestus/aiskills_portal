@@ -55,10 +55,10 @@ const STEPS = [
 
 // -- Logo ---
 function Logo() {
-  const { logoUrl, appName } = useTenant();
+  const { logoUrl } = useTenant();
   return (
     <div className="flex items-center gap-2">
-      <img src={logoUrl} alt={appName} className="h-8 w-auto" />
+      <img src={logoUrl} alt="" className="h-8 w-auto" />
     </div>
   );
 }
