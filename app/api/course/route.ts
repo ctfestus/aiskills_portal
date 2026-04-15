@@ -379,7 +379,7 @@ async function updateLearningPathProgress(supabase: any, studentId: string, comp
 
               const t        = await getTenantSettings();
               const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
-              const branding = { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+              const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
               const certUrl  = `${t.appUrl}/certificate/${pathCert.id}`;
               await resend.emails.send({
                 from: FROM,

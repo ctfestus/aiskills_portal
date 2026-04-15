@@ -265,7 +265,7 @@ async function sendPathAssignmentEmails(
 
     const t        = await getTenantSettings();
     const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
-    const branding = { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+    const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
     const dashboardUrl = `${t.appUrl}/student?section=courses`;
 
     for (const student of students) {

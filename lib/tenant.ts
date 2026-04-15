@@ -6,6 +6,7 @@ export const tenant = {
   teamName:     process.env.NEXT_PUBLIC_TEAM_NAME    ?? 'The AI Skills Africa Team',
   senderName:   process.env.NEXT_PUBLIC_SENDER_NAME  ?? 'AI Skills Africa - Learning Experience Team',
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? 'support@app.aiskillsafrica.com',
-  brandColor:   process.env.NEXT_PUBLIC_BRAND_COLOR  ?? '#006128',
-  faviconUrl:   '/icon.png',
+  brandColor:      process.env.NEXT_PUBLIC_BRAND_COLOR   ?? '#006128',
+  faviconUrl:      '/icon.png',
+  emailBannerUrl:  process.env.NEXT_PUBLIC_EMAIL_BANNER_URL ?? '',
 };

@@ -23,8 +23,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           teamName:     d.team_name     || tenant.teamName,
           senderName:   d.sender_name   || tenant.senderName,
           supportEmail: d.support_email || tenant.supportEmail,
-          brandColor:   d.brand_color   || tenant.brandColor,
-          faviconUrl:   d.favicon_url   || tenant.faviconUrl,
+          brandColor:     d.brand_color      || tenant.brandColor,
+          faviconUrl:     d.favicon_url      || tenant.faviconUrl,
+          emailBannerUrl: d.email_banner_url || tenant.emailBannerUrl,
         });
       })
       .catch(() => {});

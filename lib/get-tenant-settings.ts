@@ -30,8 +30,9 @@ export const getTenantSettings = unstable_cache(
         teamName:     data.team_name     || tenant.teamName,
         senderName:   data.sender_name   || tenant.senderName,
         supportEmail: data.support_email || tenant.supportEmail,
-        brandColor:   data.brand_color   || tenant.brandColor,
-        faviconUrl:   data.favicon_url   || tenant.faviconUrl,
+        brandColor:     data.brand_color      || tenant.brandColor,
+        faviconUrl:     data.favicon_url      || tenant.faviconUrl,
+        emailBannerUrl: data.email_banner_url || tenant.emailBannerUrl,
       };
     } catch {
       return tenant;

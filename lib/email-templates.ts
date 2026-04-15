@@ -4,15 +4,16 @@ const BANNER  = tenant.logoUrl;
 const APP_URL = process.env.APP_URL || tenant.appUrl;
 
 export interface EmailBranding {
-  logoUrl?:  string;
-  teamName?: string;
-  appName?:  string;
-  appUrl?:   string;
+  logoUrl?:        string;
+  emailBannerUrl?: string;
+  teamName?:       string;
+  appName?:        string;
+  appUrl?:         string;
 }
 
 // -- Shared shell ---
 function shell(content: string, opts?: { bannerUrl?: string } & EmailBranding) {
-  const banner   = opts?.bannerUrl || opts?.logoUrl || BANNER;
+  const banner   = opts?.bannerUrl || opts?.emailBannerUrl || opts?.logoUrl || BANNER;
   const appName  = opts?.appName   || tenant.appName;
   const appUrl_  = opts?.appUrl    || APP_URL;
   const teamName = opts?.teamName;

@@ -4729,24 +4729,27 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
 // --- Branding / Platform settings section ---
 function BrandingSection({ C }: { C: typeof LIGHT_C }) {
   const [form, setForm] = useState({
-    appName:     '',
-    orgName:     '',
-    appUrl:      '',
-    logoUrl:     '',
-    faviconUrl:  '',
-    brandColor:  '',
-    senderName:  '',
-    teamName:    '',
-    supportEmail: '',
+    appName:        '',
+    orgName:        '',
+    appUrl:         '',
+    logoUrl:        '',
+    faviconUrl:     '',
+    emailBannerUrl: '',
+    brandColor:     '',
+    senderName:     '',
+    teamName:       '',
+    supportEmail:   '',
     appDescription: '',
   });
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
-  const [logoUploading, setLogoUploading]       = useState(false);
-  const [faviconUploading, setFaviconUploading] = useState(false);
+  const [logoUploading, setLogoUploading]               = useState(false);
+  const [faviconUploading, setFaviconUploading]         = useState(false);
+  const [emailBannerUploading, setEmailBannerUploading] = useState(false);
   const [msg, setMsg]                 = useState<{ ok: boolean; text: string } | null>(null);
   const logoInputRef                  = useRef<HTMLInputElement>(null);
   const faviconInputRef               = useRef<HTMLInputElement>(null);
+  const emailBannerInputRef           = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -4760,8 +4763,9 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
           orgName:        data.org_name        ?? '',
           appUrl:         data.app_url         ?? '',
           logoUrl:        data.logo_url        ?? '',
-          faviconUrl:     data.favicon_url     ?? '',
-          brandColor:     data.brand_color     ?? '',
+          faviconUrl:     data.favicon_url      ?? '',
+          emailBannerUrl: data.email_banner_url ?? '',
+          brandColor:     data.brand_color      ?? '',
           senderName:     data.sender_name     ?? '',
           teamName:       data.team_name       ?? '',
           supportEmail:   data.support_email   ?? '',
@@ -4821,6 +4825,20 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
       setTimeout(() => setMsg(null), 4000);
     } finally {
       setFaviconUploading(false);
+    }
+  };
+
+  const handleEmailBannerUpload = async (file: File) => {
+    setEmailBannerUploading(true);
+    try {
+      const raw = await uploadToCloudinary(file, 'branding', 'branding/email-banner');
+      const url = raw.replace('/upload/f_auto,q_auto/', '/upload/');
+      setForm(prev => ({ ...prev, emailBannerUrl: url }));
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message ?? 'Email banner upload failed' });
+      setTimeout(() => setMsg(null), 4000);
+    } finally {
+      setEmailBannerUploading(false);
     }
   };
 
@@ -4910,6 +4928,40 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
             </button>
           </div>
           <p className="text-[11px]" style={{ color: C.faint }}>Shown in browser tabs. PNG or ICO, 32×32 or 64×64 recommended.</p>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-semibold" style={{ color: C.muted }}>Email Banner</label>
+          <input ref={emailBannerInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleEmailBannerUpload(f); e.target.value = ''; }} />
+          <div className="flex items-start gap-3">
+            {form.emailBannerUrl ? (
+              <img src={form.emailBannerUrl} alt="Email banner preview"
+                className="rounded-lg object-cover"
+                style={{ width: 160, height: 48, border: `1px solid ${C.cardBorder}` }} />
+            ) : (
+              <div className="rounded-lg flex items-center justify-center"
+                style={{ width: 160, height: 48, background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                <span className="text-[10px]" style={{ color: C.faint }}>No banner</span>
+              </div>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <button type="button" onClick={() => emailBannerInputRef.current?.click()} disabled={emailBannerUploading}
+                className="px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80 disabled:opacity-50 flex items-center gap-1.5"
+                style={{ background: C.pill, border: `1px solid ${C.cardBorder}`, color: C.text }}>
+                {emailBannerUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Upload className="w-3.5 h-3.5"/>}
+                {emailBannerUploading ? 'Uploading…' : form.emailBannerUrl ? 'Replace' : 'Upload Banner'}
+              </button>
+              {form.emailBannerUrl && (
+                <button type="button" onClick={() => setForm(prev => ({ ...prev, emailBannerUrl: '' }))}
+                  className="px-3 py-1.5 rounded-xl text-xs transition-opacity hover:opacity-80"
+                  style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}` }}>
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+          <p className="text-[11px]" style={{ color: C.faint }}>Full-width header image for emails. 600px wide recommended. If not set, the logo is used.</p>
         </div>
 
         <div className="space-y-1">

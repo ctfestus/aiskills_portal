@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
         formTitle:  t.appName,
         formUrl:    `${t.appUrl}/student`,
         senderName: t.senderName,
-        branding:   { logoUrl: t.logoUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl },
+        branding:   { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl },
       });
       return { from: FROM, to: email, subject, html };
     });
