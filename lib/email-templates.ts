@@ -131,7 +131,7 @@ export function confirmationEmail(data: {
     <p><b>Best regards,</b></p>
   `;
 
-  return shell(content, { ...branding, bannerUrl: bannerUrl || branding?.logoUrl });
+  return shell(content, { ...branding, bannerUrl: bannerUrl || undefined });
 }
 
 // -- 2. Event Reminder ---
@@ -175,7 +175,7 @@ export function reminderEmail(data: {
     <p><b>Best regards,</b></p>
   `;
 
-  return shell(content, { ...branding, bannerUrl: bannerUrl || branding?.logoUrl });
+  return shell(content, { ...branding, bannerUrl: bannerUrl || undefined });
 }
 
 // -- 3. Course Result ---
@@ -609,7 +609,7 @@ export function blastEmail(data: {
   `;
 
   // blastEmail uses senderName as sign-off -- do not pass teamName to shell
-  return shell(content, { ...branding, bannerUrl: bannerUrl || branding?.logoUrl, teamName: undefined });
+  return shell(content, { ...branding, bannerUrl: bannerUrl || undefined, teamName: undefined });
 }
 
 // -- 12. Learning Path Assignment ---
