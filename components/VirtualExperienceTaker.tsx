@@ -175,6 +175,7 @@ export default function VirtualExperienceTaker({
   const [review,       setReview]       = useState<any>(null);
   const [certId,       setCertId]       = useState<string | null>(null);
   const [certLoading,  setCertLoading]  = useState(false);
+  const [certError,    setCertError]    = useState<string | null>(null);
   const [uploadingReq, setUploadingReq] = useState<string | null>(null);
   const saveTimeout  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mainScrollRef = useRef<HTMLDivElement>(null);
@@ -304,7 +305,6 @@ export default function VirtualExperienceTaker({
 
   const handleComplete = async () => {
     const now = new Date().toISOString();
-    setCompleted(true);
     setSaving(true);
     try {
       await fetch('/api/guided-project-progress', {
@@ -316,6 +316,7 @@ export default function VirtualExperienceTaker({
           currentLessonId: currentLesId, completedAt: now,
         }),
       });
+      setCompleted(true);
     } finally {
       setSaving(false);
     }
@@ -323,6 +324,7 @@ export default function VirtualExperienceTaker({
 
   const handleGetCertificate = async () => {
     setCertLoading(true);
+    setCertError(null);
     try {
       const res = await fetch('/api/guided-project-progress', {
         method: 'POST',
@@ -330,7 +332,15 @@ export default function VirtualExperienceTaker({
         body: JSON.stringify({ action: 'issue-certificate', veId: formId, studentEmail, studentName }),
       });
       const json = await res.json();
-      if (json.certId) setCertId(json.certId);
+      if (json.certId) {
+        setCertId(json.certId);
+      } else {
+        setCertError(json.error || 'Something went wrong. Please try again.');
+        console.error('[VE cert]', json);
+      }
+    } catch (err) {
+      setCertError('Network error. Please try again.');
+      console.error('[VE cert]', err);
     } finally {
       setCertLoading(false);
     }
@@ -459,12 +469,17 @@ export default function VirtualExperienceTaker({
                 <Award className="w-5 h-5" /> View Certificate
               </a>
             ) : (
-              <button onClick={handleGetCertificate} disabled={certLoading}
-                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90 disabled:opacity-60"
-                style={{ background: accentColor, color: isDark ? '#111' : '#fff', boxShadow: `0 8px 24px ${accentColor}35` }}>
-                {certLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Award className="w-5 h-5" />}
-                {certLoading ? 'Generating Certificate…' : 'Get Certificate'}
-              </button>
+              <>
+                <button onClick={handleGetCertificate} disabled={certLoading}
+                  className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90 disabled:opacity-60"
+                  style={{ background: accentColor, color: isDark ? '#111' : '#fff', boxShadow: `0 8px 24px ${accentColor}35` }}>
+                  {certLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Award className="w-5 h-5" />}
+                  {certLoading ? 'Generating Certificate…' : 'Get Certificate'}
+                </button>
+                {certError && (
+                  <p className="text-center text-[13px] px-2" style={{ color: '#f87171' }}>{certError}</p>
+                )}
+              </>
             )}
             <button onClick={() => { setReviewMode(true); setCurrentModId(modules[0]?.id || ''); setCurrentLesId(modules[0]?.lessons[0]?.id || ''); }}
               className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-[14px] border transition-all hover:opacity-70"

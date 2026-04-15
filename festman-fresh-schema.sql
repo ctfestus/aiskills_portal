@@ -402,18 +402,22 @@ CREATE TABLE public.student_xp (
 -- ── certificates ──────────────────────────────────────────────
 CREATE TABLE public.certificates (
   id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  course_id        uuid        REFERENCES public.courses(id) ON DELETE SET NULL,
-  learning_path_id uuid        REFERENCES public.learning_paths(id) ON DELETE SET NULL,
+  course_id        uuid,        -- no FK: certificate must outlive its course
+  ve_id            uuid,        -- no FK: certificate must outlive its virtual experience
+  learning_path_id uuid,        -- no FK: certificate must outlive its learning path
   student_id       uuid        NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
   student_name     text        NOT NULL,
   revoked          boolean     NOT NULL DEFAULT false,
   revoked_at       timestamptz,
   issued_at        timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT check_cert_has_content CHECK (course_id IS NOT NULL OR learning_path_id IS NOT NULL)
+  CONSTRAINT check_cert_has_content CHECK (course_id IS NOT NULL OR ve_id IS NOT NULL OR learning_path_id IS NOT NULL)
 );
 CREATE UNIQUE INDEX certificates_unique_active_student
   ON public.certificates (course_id, student_id)
   WHERE revoked = false AND course_id IS NOT NULL;
+CREATE UNIQUE INDEX certificates_unique_active_student_ve
+  ON public.certificates (ve_id, student_id)
+  WHERE revoked = false AND ve_id IS NOT NULL;
 
 -- ── certificate_defaults ──────────────────────────────────────
 CREATE TABLE public.certificate_defaults (

@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     try {
       const { data: certs } = await adminClient()
         .from('certificates')
-        .select('id, course_id')
+        .select('id, course_id, ve_id, learning_path_id')
         .eq('student_id', sessionUser.id)
         .eq('revoked', false);
       return NextResponse.json({ certs: certs ?? [] });

@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
     const { data: existing } = await supabase
       .from('certificates')
       .select('id')
-      .eq('course_id', resolvedVeId)
+      .eq('ve_id', resolvedVeId)
       .eq('student_id', certUser.id)
       .eq('revoked', false)
       .maybeSingle();
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
     const { data: cert, error: certErr } = await supabase
       .from('certificates')
       .insert({
-        course_id:    resolvedVeId,
+        ve_id:        resolvedVeId,
         student_name: studentName || certUser.email,
         student_id:   certUser.id,
       })
