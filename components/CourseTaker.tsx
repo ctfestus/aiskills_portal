@@ -245,6 +245,7 @@ export function CourseTaker({
   const [lessonOpen, setLessonOpen] = useState(false);
   const lessonOpenRef = useRef(false);
   useEffect(() => { lessonOpenRef.current = lessonOpen; }, [lessonOpen]);
+  useEffect(() => { scoringLockRef.current = false; }, [currentQuestionIndex]);
 
   // Points system state
   const [totalPoints, setTotalPoints] = useState(0);
@@ -269,6 +270,8 @@ export function CourseTaker({
   const [showResumePrompt, setShowResumePrompt] = useState(false);
 
   const sessionTokenRef = useRef<string | null>(null);
+  // Prevents double-scoring when Check/Next is clicked twice before React state settles
+  const scoringLockRef = useRef(false);
 
   // Leaderboard rank context (shown on result screen)
   const [rankCtx, setRankCtx] = useState<{ above: any; me: any; below: any; rank: number; total: number } | null>(null);
@@ -1469,19 +1472,19 @@ export function CourseTaker({
           ) : showResumePrompt && savedProgress ? (
             <div className={`rounded-2xl overflow-hidden ${isDark ? 'bg-zinc-800/50 border border-zinc-700/50' : 'bg-zinc-50 border border-zinc-200/80'}`}>
               <div className={`h-0.5 w-full ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
-                <div className="h-full transition-all duration-700" style={{ width: `${Math.round((savedProgress.current_question_index / totalQuestions) * 100)}%`, background: accent }} />
+                <div className="h-full transition-all duration-700" style={{ width: `${Math.round((savedProgress.current_question_index / totalSlides) * 100)}%`, background: accent }} />
               </div>
               <div className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>Continue where you left off</p>
                     <p className={`text-xs mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                      Question {savedProgress.current_question_index + 1} of {totalQuestions}
+                      Slide {savedProgress.current_question_index + 1} of {totalSlides}
                       {savedProgress.points > 0 && <> &middot; <span style={{ color: accent }}>{savedProgress.points} XP earned</span></>}
                     </p>
                   </div>
                   <span className={`text-xs font-semibold tabular-nums px-2 py-1 rounded-lg ${isDark ? 'bg-zinc-700 text-zinc-300' : 'bg-zinc-200 text-zinc-600'}`}>
-                    {Math.round((savedProgress.current_question_index / totalQuestions) * 100)}%
+                    {Math.round((savedProgress.current_question_index / totalSlides) * 100)}%
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -1664,6 +1667,8 @@ export function CourseTaker({
   const handleCheck = () => {
     if (!isAnswered()) return;
     if (answers[currentQuestion.id]) return; // already answered -- no re-awarding
+    if (scoringLockRef.current) return; // prevent double-fire before state settles
+    scoringLockRef.current = true;
     const userAnswer = getCurrentAnswer();
     let correct = false;
     if (questionType === 'fill_blank') {
@@ -1786,6 +1791,8 @@ export function CourseTaker({
     let newAnswers = answers;
     let newScore   = score;
     if (!reviewMode && isAnswered() && !answers[currentQuestion.id]) {
+      if (scoringLockRef.current) return; // prevent double-fire before state settles
+      scoringLockRef.current = true;
       const userAnswer = getCurrentAnswer();
       let correct = false;
       if (questionType === 'fill_blank') {
