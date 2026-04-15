@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from '@/components/ThemeProvider';
+import { useTenant } from '@/components/TenantProvider';
 
 /* --- Theme tokens --- */
 const LIGHT = {
@@ -150,6 +151,7 @@ function formatDate(dateStr: string) {
 /* --- Page --- */
 export default function PublicProfile({ params }: { params: Promise<{ username: string }> }) {
   const { theme, toggle: toggleDark } = useTheme();
+  const { logoUrl, appName } = useTenant();
   const dark = theme === 'dark';
   const t = dark ? DARK : LIGHT;
   const [profile, setProfile] = useState<any>(null);
@@ -220,7 +222,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
       <nav className="sticky top-0 z-30 px-6 md:px-10 h-14 flex items-center justify-between backdrop-blur-md border-b"
         style={{ background: t.nav, borderColor: t.navBorder, transition: 'background 0.3s, border-color 0.3s' }}>
         <Link href="/" className="flex items-center gap-2.5">
-          <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-8 w-auto" />
+          <img src={logoUrl} alt={appName} className="h-8 w-auto" />
         </Link>
 
         <div className="flex items-center gap-3">

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { useTheme } from '@/components/ThemeProvider';
+import { useTenant } from '@/components/TenantProvider';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sparkles, Loader2, CheckCircle2, ArrowRight, Check,
@@ -843,6 +844,7 @@ function SortableFieldCard({ f, isExpanded, toggleExpand, onRemove, onUpdate, in
 export default function Page() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
+  const { logoUrl, appName } = useTenant();
   const router = useRouter();
   const inputStyle = { background: C.input, border: `1px solid ${C.inputBorder}`, color: C.text };
   const labelStyle = { color: C.faint };
@@ -1643,7 +1645,7 @@ const [isSaving, setIsSaving] = useState(false);
       <main className="min-h-screen flex flex-col" style={{ background: C.page, color: C.text }}>
         <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-4 sm:py-5 backdrop-blur-sm" style={{ borderBottom: `1px solid ${theme === 'dark' ? C.navBorder : '#0b07b3'}`, background: theme === 'dark' ? C.nav : '#0e09dd' }}>
           <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-7 w-auto" />
+            <img src={logoUrl} alt={appName} className="h-7 w-auto" />
             <span className="text-sm font-semibold tracking-tight" style={{ color: theme === 'dark' ? C.text : 'white' }}>AI Skills Africa</span>
           </Link>
           {user ? (
@@ -1761,7 +1763,7 @@ const [isSaving, setIsSaving] = useState(false);
         <div className="flex items-center justify-between px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-70 transition-opacity">
-              <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-6 w-auto" />
+              <img src={logoUrl} alt={appName} className="h-6 w-auto" />
               <span className="text-sm font-semibold tracking-tight" style={{ color: theme === 'dark' ? C.text : 'white' }}>AI Skills Africa</span>
             </Link>
             <div className="w-px h-4" style={{ background: theme === 'dark' ? C.divider : 'rgba(255,255,255,0.2)' }} />

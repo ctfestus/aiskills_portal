@@ -11,6 +11,7 @@ import {
   Briefcase, Share2, Link2,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
+import { useTenant } from '@/components/TenantProvider';
 
 /* --- Tokens --- */
 const LIGHT = {
@@ -169,6 +170,7 @@ export default function StudentPublicProfile() {
   const { username } = useParams<{ username: string }>();
   const { t, isDark } = useT();
   const { toggle: toggleTheme } = useTheme();
+  const { logoUrl, appName } = useTenant();
 
   const [data, setData]         = useState<any>(null);
   const [loading, setLoading]   = useState(true);
@@ -225,8 +227,8 @@ export default function StudentPublicProfile() {
         style={{ background: t.nav, borderBottom: `1px solid ${t.navBorder}` }}>
         <div className="max-w-2xl mx-auto px-5 h-13 flex items-center justify-between" style={{ height: 52 }}>
           <Link href="/">
-            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg"
-              alt="AI Skills Africa" style={{ height: 26, width: 'auto', filter: isDark ? 'none' : 'brightness(0) invert(1)' }}/>
+            <img src={logoUrl}
+              alt={appName} style={{ height: 26, width: 'auto', filter: isDark ? 'none' : 'brightness(0) invert(1)' }}/>
           </Link>
           <div className="flex items-center gap-1.5">
             <button onClick={toggleTheme}

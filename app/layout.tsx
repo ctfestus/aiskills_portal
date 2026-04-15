@@ -5,6 +5,7 @@ import './globals.css';
 import ThemeProvider from '@/components/ThemeProvider';
 import NavigationProgress from '@/components/NavigationProgress';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
+import { TenantProvider } from '@/components/TenantProvider';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 // preload: false -- these fonts are only used when a form creator picks serif/mono
@@ -40,9 +41,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en" nonce={nonce} className={`${inter.variable} ${playfair.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <body nonce={nonce} suppressHydrationWarning>
         <NavigationProgress />
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+        <TenantProvider>
+          <ThemeProvider>
+            {children}
+          </ThemeProvider>
+        </TenantProvider>
       </body>
     </html>
   );

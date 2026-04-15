@@ -38,6 +38,7 @@ const INDUSTRIES = [
 ];
 import Link from 'next/link';
 import { useTheme } from '@/components/ThemeProvider';
+import { useTenant } from '@/components/TenantProvider';
 
 const PEXELS_KEY = process.env.NEXT_PUBLIC_PEXELS_API_KEY ?? '';
 
@@ -319,6 +320,7 @@ function SelectField({ value, onChange, options, placeholder }: { value: string;
 export default function SettingsPage() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
+  const { logoUrl, appName } = useTenant();
   const router = useRouter();
   const [user, setUser]       = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -495,8 +497,8 @@ export default function SettingsPage() {
             <ArrowLeft className="w-5 h-5"/>
           </button>
           <img
-            src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg"
-            alt="AI Skills Africa"
+            src={logoUrl}
+            alt={appName}
             className="h-7 w-auto"
           />
         </div>

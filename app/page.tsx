@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, useInView, AnimatePresence } from 'motion/react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { useTenant } from '@/components/TenantProvider';
 import { ArrowRight, Check, LayoutDashboard, ChevronDown, User, Settings, LogOut, BookOpen, Calendar, Briefcase, Award, Star, TrendingUp, Users, Zap } from 'lucide-react';
 
 // --- Brand palette ---
@@ -238,6 +239,7 @@ const STATS = [
 
 // --- Page ---
 export default function LandingPage() {
+  const { logoUrl, appName } = useTenant();
   const [user, setUser]         = useState<any>(null);
   const [profile, setProfile]   = useState<any>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -277,8 +279,8 @@ export default function LandingPage() {
         {/* Logo */}
         <div className="flex items-center">
           <img
-            src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg"
-            alt="AI Skills Africa"
+            src={logoUrl}
+            alt={appName}
             className="h-9 w-auto"
           />
         </div>
@@ -589,8 +591,8 @@ export default function LandingPage() {
             <div className="md:col-span-2 space-y-4">
               <div className="flex items-center">
                 <img
-                  src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg"
-                  alt="AI Skills Africa"
+                  src={logoUrl}
+                  alt={appName}
                   className="h-9 w-auto"
                 />
               </div>

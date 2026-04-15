@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useTenant } from '@/components/TenantProvider';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Loader2, ArrowRight, ArrowLeft, Check, Camera,
@@ -54,9 +55,10 @@ const STEPS = [
 
 // -- Logo ---
 function Logo() {
+  const { logoUrl, appName } = useTenant();
   return (
     <div className="flex items-center gap-2">
-      <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-8 w-auto" />
+      <img src={logoUrl} alt={appName} className="h-8 w-auto" />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import NotificationBell from '@/components/NotificationBell';
 import { useTheme } from '@/components/ThemeProvider';
+import { useTenant } from '@/components/TenantProvider';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { RichTextEditor } from '@/components/RichTextEditor';
 
@@ -808,7 +809,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
           <div className="relative">
             <img
               src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Cover.jpg"
-              alt="AI Skills Africa"
+              alt={appName}
               className="w-full object-cover"
               style={{ height: 140 }}
             />
@@ -3925,6 +3926,7 @@ export default function StudentDashboard() {
   const [mounted, setMounted] = useState(false);
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
+  const { logoUrl, appName } = useTenant();
   const router = useRouter();
   const [user, setUser]       = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -4062,7 +4064,7 @@ export default function StudentDashboard() {
           </button>
           {/* Logo / brand */}
           <Link href="/" className="flex items-center block">
-            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="Logo" className="h-8 w-auto" />
+            <img src={logoUrl} alt="Logo" className="h-8 w-auto" />
           </Link>
         </div>
         <div className="flex items-center gap-2">

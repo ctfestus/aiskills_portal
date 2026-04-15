@@ -19,6 +19,7 @@ import { useRouter } from 'next/navigation';
 import NotificationBell from '@/components/NotificationBell';
 import { Star } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
+import { useTenant } from '@/components/TenantProvider';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/uploadToCloudinary';
@@ -5018,6 +5019,7 @@ const _cache: { forms: any[] | null; profile: any | null; user: any | null } = {
 export default function DashboardPage() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
+  const { logoUrl, appName } = useTenant();
   const [forms, setForms]           = useState<any[]>(_cache.forms ?? []);
   const [loading, setLoading]       = useState(_cache.forms === null);
   const [user, setUser]             = useState<any>(_cache.user ?? null);
@@ -5217,7 +5219,7 @@ export default function DashboardPage() {
             <Menu className="w-5 h-5"/>
           </button>
           <Link href="/dashboard" className="flex items-center gap-2">
-            <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg" alt="AI Skills Africa" className="h-8 w-auto" />
+            <img src={logoUrl} alt={appName} className="h-8 w-auto" />
           </Link>
         </div>
         <div className="flex items-center gap-2">

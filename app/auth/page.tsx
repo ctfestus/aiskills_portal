@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useTenant } from '@/components/TenantProvider';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 
@@ -17,6 +18,7 @@ function GoogleLogo() {
 }
 
 export default function AuthPage() {
+  const { logoUrl, appName } = useTenant();
   const [email, setEmail]                 = useState('');
   const [password, setPassword]           = useState('');
   const [isLogin, setIsLogin]             = useState(true);
@@ -76,8 +78,8 @@ export default function AuthPage() {
         {/* Logo */}
         <div className="mb-10">
           <img
-            src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/AI%20Skills%20Logo.svg"
-            alt="AI Skills Africa"
+            src={logoUrl}
+            alt={appName}
             className="h-8 w-auto"
           />
         </div>
