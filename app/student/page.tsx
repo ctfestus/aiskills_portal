@@ -3200,25 +3200,34 @@ function CertificatesSection({ userId, userEmail, userName, C }: { userId: strin
       setLoading(true);
       const { data: certsData } = await supabase
         .from('certificates')
-        .select('id, course_id, student_name, issued_at')
+        .select('id, course_id, ve_id, learning_path_id, student_name, issued_at')
         .eq('student_id', userId)
         .eq('revoked', false)
         .order('issued_at', { ascending: false });
 
       if (!certsData?.length) { setLoading(false); return; }
 
-      const courseIds = [...new Set(certsData.map((c: any) => c.course_id).filter(Boolean))];
-      const [{ data: courseRows }, { data: veRows }] = await Promise.all([
-        courseIds.length ? supabase.from('courses').select('id, title, cover_image').in('id', courseIds) : Promise.resolve({ data: [] }),
-        courseIds.length ? supabase.from('virtual_experiences').select('id, title, cover_image').in('id', courseIds) : Promise.resolve({ data: [] }),
-      ]);
-      const contentMap = Object.fromEntries([...(courseRows ?? []), ...(veRows ?? [])].map((r: any) => [r.id, r]));
+      const courseIds  = [...new Set(certsData.map((c: any) => c.course_id).filter(Boolean))];
+      const veIds      = [...new Set(certsData.map((c: any) => c.ve_id).filter(Boolean))];
+      const pathIds    = [...new Set(certsData.map((c: any) => c.learning_path_id).filter(Boolean))];
 
-      setCerts(certsData.map((cert: any) => ({
-        ...cert,
-        form_id: cert.course_id,
-        form: cert.course_id ? contentMap[cert.course_id] : null,
-      })));
+      const [{ data: courseRows }, { data: veRows }, { data: pathRows }] = await Promise.all([
+        courseIds.length ? supabase.from('courses').select('id, title, cover_image').in('id', courseIds) : Promise.resolve({ data: [] }),
+        veIds.length     ? supabase.from('virtual_experiences').select('id, title, cover_image').in('id', veIds) : Promise.resolve({ data: [] }),
+        pathIds.length   ? supabase.from('learning_paths').select('id, title').in('id', pathIds) : Promise.resolve({ data: [] }),
+      ]);
+
+      const courseMap = Object.fromEntries((courseRows ?? []).map((r: any) => [r.id, r]));
+      const veMap     = Object.fromEntries((veRows     ?? []).map((r: any) => [r.id, r]));
+      const pathMap   = Object.fromEntries((pathRows   ?? []).map((r: any) => [r.id, r]));
+
+      setCerts(certsData.map((cert: any) => {
+        const content = cert.course_id ? courseMap[cert.course_id]
+          : cert.ve_id ? veMap[cert.ve_id]
+          : cert.learning_path_id ? pathMap[cert.learning_path_id]
+          : null;
+        return { ...cert, content };
+      }));
       setLoading(false);
     };
     load();
@@ -3248,22 +3257,26 @@ function CertificatesSection({ userId, userEmail, userName, C }: { userId: strin
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {certs.map((cert, i) => (
-          <motion.div key={cert.form_id} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.06 }}
+          <motion.div key={cert.id} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.06 }}
             className="rounded-2xl overflow-hidden group"
             style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}
             onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
             onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
-            {/* Certificate visual */}
-            <div className="relative h-32 flex flex-col items-center justify-center gap-1"
-              style={{ background: `linear-gradient(135deg, ${C.green}15 0%, ${C.lime}25 100%)`, borderBottom: `1px solid ${C.cardBorder}` }}>
-              <Award className="w-10 h-10" style={{ color: C.green }}/>
-              <span className="text-[11px] font-bold tracking-widest uppercase" style={{ color: C.green }}>Certificate</span>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                style={{ background: C.lime, color: C.green }}>Passed</span>
-            </div>
+            {/* Cover image or gradient banner */}
+            {cert.content?.cover_image
+              ? <img src={cert.content.cover_image} alt="" className="w-full h-32 object-cover" />
+              : <div className="relative h-32 flex flex-col items-center justify-center gap-1"
+                  style={{ background: `linear-gradient(135deg, ${C.green}15 0%, ${C.lime}25 100%)`, borderBottom: `1px solid ${C.cardBorder}` }}>
+                  <Award className="w-10 h-10" style={{ color: C.green }}/>
+                  <span className="text-[11px] font-bold tracking-widest uppercase" style={{ color: C.green }}>Certificate</span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                    style={{ background: C.lime, color: C.green }}>Passed</span>
+                </div>}
             {/* Info */}
             <div className="p-5">
-              <h3 className="text-sm font-semibold mb-1" style={{ color: C.text }}>{cert.form?.config?.title || cert.form?.title}</h3>
+              <h3 className="text-sm font-semibold mb-1" style={{ color: C.text }}>
+                {cert.content?.title || 'Certificate'}
+              </h3>
               <p className="text-xs mb-4" style={{ color: C.faint }}>
                 Issued {new Date(cert.issued_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
