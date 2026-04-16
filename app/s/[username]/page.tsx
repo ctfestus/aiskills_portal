@@ -119,12 +119,20 @@ function TimelineItem({ icon: Icon, title, sub, meta, description, isLast, t }:
   );
 }
 
+/* --- Type badge --- */
+const TYPE_BADGE: Record<string, { label: string; bg: string; darkBg: string; color: string; darkColor: string }> = {
+  course:             { label: 'Course',           bg: '#eff6ff', darkBg: 'rgba(59,130,246,0.12)', color: '#1d4ed8', darkColor: '#60a5fa' },
+  virtual_experience: { label: 'Virtual Experience', bg: '#f0fdf4', darkBg: 'rgba(34,197,94,0.12)',  color: '#15803d', darkColor: '#4ade80' },
+  learning_path:      { label: 'Learning Path',    bg: '#fdf4ff', darkBg: 'rgba(168,85,247,0.12)', color: '#7e22ce', darkColor: '#c084fc' },
+};
+
 /* --- Certificate row --- */
 function CertRow({ cert, t, isDark, showMeta = false }: { cert: any; t: typeof LIGHT; isDark: boolean; showMeta?: boolean }) {
   const date = cert.issuedAt
     ? new Date(cert.issuedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
     : '';
   const shortId = cert.id ? String(cert.id).slice(0, 8).toUpperCase() : '';
+  const badge = TYPE_BADGE[cert.contentType];
   return (
     <Link href={`/certificate/${cert.id}`} target="_blank" rel="noreferrer"
       className="group flex items-center gap-4 px-6 py-4 transition-colors"
@@ -141,7 +149,18 @@ function CertRow({ cert, t, isDark, showMeta = false }: { cert: any; t: typeof L
             </div>}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate" style={{ color: t.text }}>{cert.courseName}</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-sm font-semibold truncate" style={{ color: t.text }}>{cert.courseName}</p>
+          {badge && (
+            <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+              style={{
+                background: isDark ? badge.darkBg : badge.bg,
+                color: isDark ? badge.darkColor : badge.color,
+              }}>
+              {badge.label}
+            </span>
+          )}
+        </div>
         {showMeta && (
           <div className="flex flex-wrap items-center gap-2 mt-1">
             {date && (
@@ -206,13 +225,14 @@ export default function StudentPublicProfile() {
     </div>
   );
 
-  const { profile, certificates, virtualExpCerts } = data;
+  const { profile, certificates, virtualExpCerts, pathCerts } = data;
   const initials        = (profile.fullName || username || '?').slice(0, 2).toUpperCase();
   const socialEntries   = Object.entries(profile.socialLinks ?? {}).filter(([, v]) => v);
   const hasWork         = profile.workExperience?.length > 0;
   const hasEdu          = profile.education?.length > 0;
   const hasCerts        = (certificates ?? []).length > 0;
   const hasVirtualExp   = (virtualExpCerts ?? []).length > 0;
+  const hasPathCerts    = (pathCerts ?? []).length > 0;
   const hasSkills       = (profile.skills ?? []).length > 0;
 
   return (
@@ -420,8 +440,20 @@ export default function StudentPublicProfile() {
           </Card>
         )}
 
+        {/* -- Learning Paths -- */}
+        {hasPathCerts && (
+          <Card t={t} delay={0.24}>
+            <SectionHeader title="Learning Paths" count={pathCerts.length} t={t}/>
+            <div className="pb-2">
+              {pathCerts.map((cert: any) => (
+                <CertRow key={cert.id} cert={cert} t={t} isDark={isDark} showMeta/>
+              ))}
+            </div>
+          </Card>
+        )}
+
         {/* -- Empty -- */}
-        {!hasWork && !hasEdu && !hasCerts && !hasVirtualExp && !hasSkills && (
+        {!hasWork && !hasEdu && !hasCerts && !hasVirtualExp && !hasPathCerts && !hasSkills && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
             className="flex flex-col items-center justify-center py-24 gap-2 text-center rounded-2xl"
             style={{ background: t.card, border: `1px solid ${t.cardBorder}` }}>

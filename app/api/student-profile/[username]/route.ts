@@ -42,39 +42,48 @@ export async function GET(
   const work_experience = extra?.work_experience ?? [];
   const skills          = extra?.skills          ?? [];
 
-  // 3. Certificates (by student_id, non-revoked) -- use course_id (migrated from form_id)
+  // 3. Certificates (by student_id, non-revoked)
   const { data: certsRaw } = await supabase
     .from('certificates')
-    .select('id, course_id, student_name, issued_at')
+    .select('id, course_id, ve_id, learning_path_id, student_name, issued_at')
     .eq('student_id', student.id)
     .eq('revoked', false)
     .order('issued_at', { ascending: false });
 
-  // 4. Fetch content metadata for certificates from courses and virtual_experiences
-  const certContentIds = [...new Set((certsRaw ?? []).map((c: any) => c.course_id).filter(Boolean))];
+  // 4. Fetch content metadata from each relevant table
+  const courseIds = [...new Set((certsRaw ?? []).map((c: any) => c.course_id).filter(Boolean))];
+  const veIds     = [...new Set((certsRaw ?? []).map((c: any) => c.ve_id).filter(Boolean))];
+  const pathIds   = [...new Set((certsRaw ?? []).map((c: any) => c.learning_path_id).filter(Boolean))];
 
-  const [{ data: coursesRaw }, { data: vesRaw }] = certContentIds.length
-    ? await Promise.all([
-        supabase.from('courses').select('id, title, cover_image').in('id', certContentIds),
-        supabase.from('virtual_experiences').select('id, title, cover_image').in('id', certContentIds),
-      ])
-    : [{ data: [] }, { data: [] }];
+  const [{ data: coursesRaw }, { data: vesRaw }, { data: pathsRaw }] = await Promise.all([
+    courseIds.length ? supabase.from('courses').select('id, title, cover_image').in('id', courseIds) : Promise.resolve({ data: [] }),
+    veIds.length     ? supabase.from('virtual_experiences').select('id, title, cover_image').in('id', veIds) : Promise.resolve({ data: [] }),
+    pathIds.length   ? supabase.from('learning_paths').select('id, title').in('id', pathIds) : Promise.resolve({ data: [] }),
+  ]);
 
-  const contentMap: Record<string, any> = {};
-  for (const c of coursesRaw ?? []) contentMap[c.id] = { ...c, content_type: 'course' };
-  for (const v of vesRaw     ?? []) contentMap[v.id] = { ...v, content_type: 'virtual_experience' };
+  const courseMap: Record<string, any> = Object.fromEntries((coursesRaw ?? []).map((r: any) => [r.id, r]));
+  const veMap:     Record<string, any> = Object.fromEntries((vesRaw     ?? []).map((r: any) => [r.id, r]));
+  const pathMap:   Record<string, any> = Object.fromEntries((pathsRaw   ?? []).map((r: any) => [r.id, r]));
 
-  const allCerts = (certsRaw ?? []).map((c: any) => ({
-    id:          c.id,
-    studentName: c.student_name,
-    courseName:  contentMap[c.course_id]?.title || 'Course',
-    coverImage:  contentMap[c.course_id]?.cover_image ?? null,
-    contentType: contentMap[c.course_id]?.content_type ?? 'course',
-    issuedAt:    c.issued_at,
-  }));
+  const allCerts = (certsRaw ?? []).map((c: any) => {
+    const isCourse = !!c.course_id;
+    const isVE     = !!c.ve_id;
+    const isPath   = !!c.learning_path_id;
+    const content  = isCourse ? courseMap[c.course_id] : isVE ? veMap[c.ve_id] : isPath ? pathMap[c.learning_path_id] : null;
+    const contentType = isCourse ? 'course' : isVE ? 'virtual_experience' : isPath ? 'learning_path' : 'course';
+    return {
+      id:          c.id,
+      studentName: c.student_name,
+      courseName:  content?.title || (isVE ? 'Virtual Experience' : isPath ? 'Learning Path' : 'Course'),
+      coverImage:  content?.cover_image ?? null,
+      contentType,
+      issuedAt:    c.issued_at,
+    };
+  });
 
-  const certificates    = allCerts.filter((c: any) => c.contentType !== 'virtual_experience');
+  const certificates    = allCerts.filter((c: any) => c.contentType === 'course');
   const virtualExpCerts = allCerts.filter((c: any) => c.contentType === 'virtual_experience');
+  const pathCerts       = allCerts.filter((c: any) => c.contentType === 'learning_path');
 
   // 5. Leaderboard rank within cohort
   let leaderboardRank: number | null = null;
@@ -124,5 +133,6 @@ export async function GET(
     },
     certificates,
     virtualExpCerts,
+    pathCerts,
   });
 }
