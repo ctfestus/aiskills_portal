@@ -2070,7 +2070,7 @@ export function CourseTaker({
 
               {lesson.body && (
                 <div
-                  className={`prose prose-base sm:prose-lg max-w-none ${isDark
+                  className={`prose prose-base sm:prose-lg max-w-none ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
                     ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.65] prose-headings:text-white prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-300 prose-blockquote:not-italic'
                     : 'prose-p:text-zinc-700 prose-p:leading-[1.65] prose-headings:text-zinc-900 prose-strong:text-zinc-900 prose-li:text-zinc-700 prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-700 prose-blockquote:not-italic'
                   }`}
@@ -2208,7 +2208,7 @@ export function CourseTaker({
       >
         {/* Progress + Timer -- pinned at top */}
         <div className={`flex-shrink-0 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 ${isDark ? 'border-b border-zinc-800/60' : 'border-b border-zinc-200'}`}>
-          <div className={`${questionType === 'image' || questionType === 'code' ? 'max-w-3xl' : 'max-w-2xl'} mx-auto`}>
+          <div className="max-w-6xl mx-auto">
             <div className="flex justify-between items-center mb-2">
               <div className="flex items-center gap-2">
                 {/* Feature 2: back arrow */}
@@ -2319,7 +2319,7 @@ export function CourseTaker({
 
         {/* Question content -- no card, directly on page */}
         <div
-          className={`flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 w-full mx-auto ${questionType === 'image' || questionType === 'code' ? 'max-w-3xl' : 'max-w-2xl'} ${isDark ? 'course-scroll' : 'course-scroll course-scroll-light'}`}
+          className={`flex-1 overflow-y-auto px-5 sm:px-24 lg:px-40 pt-2 sm:pt-3 pb-4 sm:pb-6 w-full ${isDark ? 'course-scroll' : 'course-scroll course-scroll-light'}`}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
@@ -2338,12 +2338,6 @@ export function CourseTaker({
               transition={{ duration: 0.2 }}
             >
               <div className="flex items-center gap-2 mb-5">
-                <span
-                  className="inline-block text-[10px] font-bold tracking-widest uppercase px-2.5 py-1 rounded-full"
-                  style={{ background: accent, color: 'white' }}
-                >
-                  Q {currentQuestionIndex + 1}
-                </span>
                 {questionType !== 'multiple_choice' && questionType !== 'image' && (
                   <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border ${isDark ? 'border-zinc-700 text-zinc-500' : 'border-zinc-200 text-zinc-400'}`}>
                     {questionType === 'fill_blank' ? 'Fill in the blank' : questionType === 'arrange' ? 'Arrange in order' : questionType === 'code' ? 'Code Snippet' : ''}
@@ -2533,26 +2527,34 @@ export function CourseTaker({
 
                     let borderStyle = '';
                     let bgStyle = '';
-                    let labelStyle = '';
                     let buttonInlineStyle: React.CSSProperties = {};
-                    let labelInlineStyle: React.CSSProperties = {};
+                    // Number colour -- plain text, no circle
+                    const numColor: React.CSSProperties = showCorrect
+                      ? { color: '#10b981' }
+                      : showWrong
+                        ? { color: '#f43f5e' }
+                        : isSelected
+                          ? { color: accent }
+                          : { color: isDark ? '#52525b' : '#a1a1aa' };
+
+                    // border thickness: slightly visible by default, thick when active
+                    const borderWidth = (showCorrect || showWrong || isSelected) ? 'border-2' : 'border-[1.5px]';
+                    const optionTextColor = (isSelected || showCorrect || showWrong)
+                      ? (isDark ? 'text-white' : 'text-zinc-900')
+                      : (isDark ? 'text-zinc-400' : 'text-zinc-500');
 
                     if (showCorrect) {
                       borderStyle = 'border-emerald-500';
                       bgStyle = 'bg-emerald-500/10';
-                      labelStyle = 'border-emerald-500 bg-emerald-500 text-white';
                     } else if (showWrong) {
                       borderStyle = 'border-rose-500';
                       bgStyle = 'bg-rose-500/10';
-                      labelStyle = 'border-rose-500 bg-rose-500 text-white';
                     } else if (isSelected) {
                       borderStyle = 'border-transparent';
                       buttonInlineStyle = { borderColor: accent, backgroundColor: `${accent}18` };
-                      labelInlineStyle = { borderColor: accent, backgroundColor: accent, color: 'white' };
                     } else {
-                      borderStyle = isDark ? 'border-zinc-700 hover:border-zinc-500' : 'border-zinc-200 hover:border-zinc-400';
-                      bgStyle = isDark ? 'hover:bg-zinc-800/50' : 'hover:bg-zinc-50';
-                      labelStyle = isDark ? 'border-zinc-600 text-zinc-500' : 'border-zinc-300 text-zinc-400';
+                      borderStyle = isDark ? 'border-zinc-700/60 hover:border-zinc-600' : 'border-zinc-200 hover:border-zinc-300';
+                      bgStyle = isDark ? 'hover:bg-zinc-800/40' : 'hover:bg-zinc-50';
                     }
 
                     return (
@@ -2561,18 +2563,13 @@ export function CourseTaker({
                         disabled={isChecking}
                         onClick={() => setSelectedOption(option)}
                         style={buttonInlineStyle}
-                        className={`w-full text-left px-4 py-3.5 rounded-xl border-2 transition-all duration-150 flex items-center gap-3.5 ${borderStyle} ${bgStyle} ${textColor}`}
+                        className={`w-full text-left px-5 py-4 rounded-2xl ${borderWidth} transition-all duration-150 flex items-center gap-3 ${borderStyle} ${bgStyle} ${optionTextColor}`}
                       >
-                        <span
-                          style={labelInlineStyle}
-                          className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center text-[11px] font-bold transition-all ${labelStyle}`}
-                        >
-                          {String.fromCharCode(65 + idx)}
-                        </span>
-                        <span className="text-sm font-medium leading-snug">{option}</span>
-                        <span className="ml-auto flex-shrink-0">
+                        <span className="flex-1 text-base font-medium leading-snug">{option}</span>
+                        <span className="flex-shrink-0 flex items-center gap-2">
                           {showCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
                           {showWrong && <XCircle className="w-4 h-4 text-rose-500" />}
+                          <span className="text-sm font-semibold tabular-nums" style={numColor}>{idx + 1}</span>
                         </span>
                       </button>
                     );
@@ -2582,118 +2579,107 @@ export function CourseTaker({
             </motion.div>
           </AnimatePresence>
 
-          {/* Action area */}
-          <div className="mt-6 space-y-2">
-            {showAnswers === 'per_question' ? (
-              isChecking ? (
-                <>
-                  {(questionType === 'multiple_choice' || questionType === 'image' || questionType === 'code') ? (
-                    <div className={`rounded-2xl p-5 flex items-center justify-between gap-4 ${isCorrect ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-rose-500/10 border border-rose-500/20'}`}>
-                      <div className={`flex items-center gap-2.5 min-w-0 ${isCorrect ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {isCorrect ? <CheckCircle2 className="w-5 h-5 flex-shrink-0" /> : <XCircle className="w-5 h-5 flex-shrink-0" />}
-                        <div className="min-w-0">
-                          <p className="text-base font-semibold">{isCorrect ? 'Correct!' : 'Incorrect'}</p>
-                          {!isCorrect && <p className="text-sm opacity-80 truncate">Answer: {correctAnswerDisplay()}</p>}
-                        </div>
-                      </div>
-                      <button
-                        onClick={handleNext}
-                        className="flex-shrink-0 flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white text-sm transition-all active:scale-95"
-                        style={{ background: isCorrect ? '#10b981' : '#f43f5e' }}
-                      >
-                        {currentQuestionIndex < totalSlides - 1 ? 'Next' : 'Finish'}
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={handleNext}
-                      className="w-full py-4 rounded-2xl font-semibold text-white text-base transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-                      style={{ background: accent }}
-                    >
-                      {currentQuestionIndex < totalSlides - 1 ? 'Next Question' : 'Finish Course'}
-                      <ChevronRight className="w-5 h-5" />
-                    </button>
-                  )}
-                  {currentQuestion?.explanation && (
-                    <div className={`rounded-2xl p-4 border text-sm leading-relaxed ${isDark ? 'bg-blue-500/10 border-blue-500/20 text-blue-100' : 'bg-blue-50 border-blue-200 text-blue-900'}`}>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] mb-1 opacity-70">Explanation</p>
-                      <p>{currentQuestion.explanation}</p>
-                    </div>
-                  )}
-                  {(currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl) && (config as any).lessonTiming !== 'before' && (
-                    <button
-                      onClick={() => setLessonOpen(true)}
-                      className={`w-full py-3 rounded-2xl text-sm font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${isCorrect ? (isDark ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100') : (isDark ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20' : 'bg-rose-50 text-rose-600 hover:bg-rose-100')}`}
-                    >
-                      <BookOpen className="w-4 h-4" />
-                      {isCorrect ? 'Review Lesson' : 'Why?'}
-                    </button>
-                  )}
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={handleCheck}
-                    disabled={!isAnswered()}
-                    className="w-full py-4 rounded-2xl font-semibold text-base transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed"
-                    style={{
-                      background: isAnswered() ? accent : (isDark ? '#27272a' : '#e4e4e7'),
-                      color: isAnswered() ? 'white' : (isDark ? '#52525b' : '#a1a1aa'),
-                    }}
-                  >
-                    Check Answer
-                  </button>
-                  {/* Feature 2: Skip button */}
+        </div>
+
+        {/* -- Sticky bottom action bar -- */}
+        {(() => {
+          const barBg = isChecking
+            ? (isCorrect
+                ? (isDark ? '#0a2e1a' : '#f0fdf4')
+                : (isDark ? '#2d0f0f' : '#fff1f1'))
+            : (isDark ? '#111113' : '#ffffff');
+          const barBorder = isChecking
+            ? (isCorrect ? (isDark ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)') : (isDark ? 'rgba(244,63,94,0.3)' : 'rgba(244,63,94,0.25)'))
+            : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)');
+          const hasLesson = (currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl) && (config as any).lessonTiming !== 'before';
+
+          return (
+            <div className="flex-shrink-0 px-5 sm:px-8 py-4" style={{ background: barBg, borderTop: isChecking ? 'none' : `1px solid ${barBorder}` }}>
+              {/* Explanation strip above bar buttons */}
+              {isChecking && currentQuestion?.explanation && (
+                <div className={`mb-3 px-[10px] py-2 text-sm leading-relaxed ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                  <span className="font-semibold text-[11px] uppercase tracking-wider opacity-50 mr-2">Explanation</span>
+                  {currentQuestion.explanation}
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-2 sm:gap-4">
+                {/* Left: feedback badge OR skip link */}
+                {isChecking ? (
+                  <div className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 rounded-full border-2 font-bold text-sm sm:text-base flex-shrink-0 bg-white ${isCorrect ? 'border-emerald-500 text-emerald-500' : 'border-rose-500 text-rose-500'}`}>
+                    {isCorrect ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                    {isCorrect ? 'Correct!' : 'Incorrect!'}
+                  </div>
+                ) : (
                   <button
                     onClick={handleSkip}
-                    className={`w-full py-2.5 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
+                    className={`text-sm font-medium transition-colors flex-shrink-0 ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
                   >
                     Skip
                   </button>
-                </>
-              )
-            ) : (
-              <>
-                {/* Contextual assignment banner on last question */}
-                {relatedAssignment && currentQuestionIndex === totalQuestions - 1 && (
-                  <div
-                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl border`}
-                    style={{
-                      background: `${accent}12`,
-                      borderColor: `${accent}30`,
-                    }}
-                  >
-                    <BookOpen className="w-4 h-4 flex-shrink-0" style={{ color: accent }} />
-                    <p className="text-xs leading-relaxed flex-1" style={{ color: isDark ? '#a1a1aa' : '#52525b' }}>
-                      <span className="font-semibold" style={{ color: accent }}>Almost there!</span>{' '}
-                      Submit your results to unlock the <span className="font-semibold">"{relatedAssignment.title}"</span> assignment.
-                    </p>
-                  </div>
                 )}
-                <button
-                  onClick={handleNextDirect}
-                  disabled={!isAnswered() && questionType !== 'arrange'}
-                  className="w-full py-4 rounded-2xl font-semibold text-base transition-all active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  style={{
-                    background: (isAnswered() || questionType === 'arrange') ? accent : (isDark ? '#27272a' : '#e4e4e7'),
-                    color: (isAnswered() || questionType === 'arrange') ? 'white' : (isDark ? '#52525b' : '#a1a1aa'),
-                  }}
-                >
-                  {currentQuestionIndex < totalSlides - 1 ? 'Next Question' : 'Finish Course'}
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-                {/* Feature 2: Skip button */}
-                <button
-                  onClick={handleSkip}
-                  className={`w-full py-2.5 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                >
-                  Skip
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+
+                {/* Right: action buttons */}
+                <div className="flex items-center gap-2 sm:gap-3">
+                  {showAnswers === 'per_question' ? (
+                    isChecking ? (
+                      <>
+                        {hasLesson && (
+                          <button
+                            onClick={() => setLessonOpen(true)}
+                            className={`px-3 sm:px-5 py-3 sm:py-4 rounded-2xl text-sm font-semibold transition-all active:scale-95 ${isCorrect ? (isDark ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-emerald-50 text-emerald-600') : (isDark ? 'bg-rose-500/15 text-rose-400 hover:bg-rose-500/25' : 'bg-rose-50 text-rose-600')}`}
+                          >
+                            <BookOpen className="w-4 h-4 inline mr-1 sm:mr-1.5 -mt-0.5" />
+                            {isCorrect ? 'Review Lesson' : 'Why?'}
+                          </button>
+                        )}
+                        <button
+                          onClick={handleNext}
+                          className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-3 sm:py-4 rounded-2xl font-semibold text-white text-sm transition-all active:scale-95"
+                          style={{ background: isCorrect ? '#10b981' : '#f43f5e' }}
+                        >
+                          {currentQuestionIndex < totalSlides - 1 ? 'Continue' : 'Finish'}
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={handleCheck}
+                        disabled={!isAnswered()}
+                        className="px-6 sm:px-8 py-3 sm:py-4 rounded-2xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                        style={{
+                          background: isAnswered() ? accent : (isDark ? '#27272a' : '#e4e4e7'),
+                          color: isAnswered() ? 'white' : (isDark ? '#52525b' : '#a1a1aa'),
+                        }}
+                      >
+                        Check Answer
+                      </button>
+                    )
+                  ) : (
+                    <>
+                      {relatedAssignment && currentQuestionIndex === totalQuestions - 1 && (
+                        <p className="text-xs hidden sm:block" style={{ color: isDark ? '#a1a1aa' : '#52525b' }}>
+                          Complete to unlock <span className="font-semibold" style={{ color: accent }}>{relatedAssignment.title}</span>
+                        </p>
+                      )}
+                      <button
+                        onClick={handleNextDirect}
+                        disabled={!isAnswered() && questionType !== 'arrange'}
+                        className="flex items-center gap-1.5 sm:gap-2 px-6 sm:px-8 py-3 sm:py-4 rounded-2xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                        style={{
+                          background: (isAnswered() || questionType === 'arrange') ? accent : (isDark ? '#27272a' : '#e4e4e7'),
+                          color: (isAnswered() || questionType === 'arrange') ? 'white' : (isDark ? '#52525b' : '#a1a1aa'),
+                        }}
+                      >
+                        {currentQuestionIndex < totalSlides - 1 ? 'Continue' : 'Finish Course'}
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Lesson sheet */}
@@ -2770,7 +2756,7 @@ export function CourseTaker({
                   {/* body text */}
                   {currentQuestion.lesson.body && (
                     <div
-                      className={`prose prose-base sm:prose-lg max-w-none ${isDark
+                      className={`prose prose-base sm:prose-lg max-w-none ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
                         ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.65] prose-headings:text-white prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-300 prose-blockquote:not-italic'
                         : 'prose-p:text-zinc-700 prose-p:leading-[1.65] prose-headings:text-zinc-900 prose-strong:text-zinc-900 prose-li:text-zinc-700 prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-700 prose-blockquote:not-italic'
                       }`}

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-const API_URL = process.env.MCP_API_URL ?? 'https://app.aiskillsafrica.com';
+const API_URL = process.env.MCP_API_URL ?? '';
 const SUPABASE_URL = process.env.MCP_SUPABASE_URL ?? '';
 const SUPABASE_KEY = process.env.MCP_SUPABASE_ANON_KEY ?? '';
 const EMAIL = process.env.MCP_EMAIL ?? '';
@@ -30,6 +30,8 @@ export async function getToken() {
 // Generic API call helper
 export async function apiCall(path, body, method = 'POST') {
     const token = await getToken();
+    if (!API_URL)
+        throw new Error('MCP_API_URL is not set — add it to your MCP env config (e.g. https://learn.festman.com or https://app.aiskillsafrica.com)');
     const res = await fetch(`${API_URL}${path}`, {
         method,
         headers: {
@@ -69,4 +71,15 @@ export async function supabaseRun(fn) {
     if (error)
         throw new Error(error.message);
     return data;
+}
+// Return the authenticated client + current user ID — used for direct DB writes that need user_id
+export async function getAuthenticatedClient() {
+    const token = await getToken();
+    if (!supabase)
+        throw new Error('Supabase client not initialized');
+    await supabase.auth.setSession({ access_token: token, refresh_token: '' });
+    const { data: { user } } = await supabase.auth.getUser(token);
+    if (!user)
+        throw new Error('Not authenticated');
+    return { sb: supabase, userId: user.id };
 }

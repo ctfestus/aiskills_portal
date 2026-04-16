@@ -21,8 +21,9 @@ export function sanitizePlainText(value: string): string {
 export function sanitizeRichText(html: string): string {
   return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: ['p', 'br', 'b', 'strong', 'i', 'em', 'u', 's', 'ul', 'ol', 'li',
-                   'h1', 'h2', 'h3', 'h4', 'blockquote', 'a', 'code', 'pre', 'hr', 'span'],
-    ALLOWED_ATTR: ['href', 'target', 'rel'],
+                   'h1', 'h2', 'h3', 'h4', 'blockquote', 'a', 'code', 'pre', 'hr', 'span',
+                   'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'colspan', 'rowspan', 'scope'],
     // Prevent javascript: and data: URIs in href
     ALLOW_DATA_ATTR: false,
   });

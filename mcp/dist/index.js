@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { apiCall, supabaseQuery, supabaseRun, getToken } from './api.js';
+import { apiCall, supabaseQuery, supabaseRun, getToken, getAuthenticatedClient } from './api.js';
 const serverName = process.env.MCP_NAME ?? 'aisa-mcp';
 const server = new McpServer({
     name: serverName,
@@ -217,104 +217,294 @@ server.tool('get_virtual_experience', 'Get the full content of a virtual experie
         return { content: [{ type: 'text', text: `Virtual experience not found: ${id}` }] };
     return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
 });
-server.tool('create_virtual_experience', 'Create a new virtual experience (guided project / job simulation). Returns the VE ID and slug.', {
+const MODULE_SCHEMA = z.object({
+    title: z.string().describe('Module title'),
+    description: z.string().optional().describe('Brief module overview shown to students'),
+    lessons: z.array(z.object({
+        title: z.string().describe('Lesson title'),
+        body: z.string().optional().describe('Lesson body / instructions (HTML or plain text)'),
+        videoUrl: z.string().optional().describe('Optional video URL for this lesson'),
+        requirements: z.array(z.object({
+            type: z.enum(['text', 'upload', 'mcq']).describe('Requirement type: text = short answer, upload = file submission, mcq = multiple choice quiz'),
+            label: z.string().describe('Requirement title / label'),
+            description: z.string().optional().describe('Detailed instructions for this requirement'),
+            options: z.array(z.string()).optional().describe('Answer options (mcq type only)'),
+            correctAnswer: z.string().optional().describe('Correct answer text (mcq type only)'),
+        })).optional(),
+    })),
+});
+function uid() { return Math.random().toString(36).slice(2, 10); }
+// Strip inline style/bgcolor/color/background attributes so AI-generated dark
+// styles don't bleed through when content is viewed on a light background.
+function stripInlineStyles(html) {
+    return html
+        .replace(/\s+style="[^"]*"/gi, '')
+        .replace(/\s+style='[^']*'/gi, '')
+        .replace(/\s+bgcolor="[^"]*"/gi, '')
+        .replace(/\s+bgcolor='[^']*'/gi, '')
+        .replace(/\s+background="[^"]*"/gi, '')
+        .replace(/\s+color="[^"]*"/gi, '');
+}
+// Wrap plain text in <p> tags so the rich-text renderer displays it correctly
+function wrapBody(raw) {
+    if (!raw)
+        return '';
+    const s = raw.trim();
+    if (!s)
+        return '';
+    // Already contains HTML tags — strip inline styles then return
+    if (/<[a-z][\s\S]*>/i.test(s))
+        return stripInlineStyles(s);
+    // Plain text — wrap each non-empty line in <p>
+    return s.split(/\n+/).filter(l => l.trim()).map(l => `<p>${l.trim()}</p>`).join('');
+}
+// Ensure every module / lesson / requirement has an id, and field names match what the app expects
+function normalizeModules(modules) {
+    return modules.map(m => ({
+        id: m.id || `mod-${uid()}`,
+        title: m.title || 'Untitled Module',
+        description: m.description || '',
+        solutionVideo: m.solutionVideo ?? undefined,
+        lessons: (m.lessons ?? []).map((l) => ({
+            id: l.id || `les-${uid()}`,
+            title: l.title || 'Untitled Lesson',
+            body: wrapBody(l.body ?? l.content),
+            videoUrl: l.videoUrl ?? undefined,
+            requirements: (l.requirements ?? []).map((r) => ({
+                id: r.id || `req-${uid()}`,
+                label: r.label || r.prompt || '',
+                description: r.description || r.prompt || '',
+                type: r.type || 'text',
+                options: r.options ?? undefined,
+                correctAnswer: r.correctAnswer ?? undefined,
+            })),
+        })),
+    }));
+}
+const DATASET_SCHEMA = z.object({
+    filename: z.string().describe('Dataset filename, e.g. "transactions.csv"'),
+    description: z.string().optional().describe('What the dataset contains and how to use it'),
+    url: z.string().optional().describe('Public URL if already hosted — omit if providing csvContent'),
+    csvContent: z.string().optional().describe('Raw CSV text to upload to storage (max ~3 MB). Omit if url is provided.'),
+}).describe('Dataset file students download to complete tasks');
+async function veClient() {
+    return getAuthenticatedClient();
+}
+async function uploadDataset(sb, dataset) {
+    if (!dataset)
+        return null;
+    const { csvContent, ...meta } = dataset;
+    if (csvContent?.trim() && !meta.url) {
+        const safeName = (meta.filename || 'dataset.csv').replace(/[^a-zA-Z0-9._-]/g, '_');
+        const path = `${Date.now()}_${safeName}`;
+        const { error } = await sb.storage.from('datasets').upload(path, Buffer.from(csvContent, 'utf-8'), { contentType: 'text/csv', upsert: false });
+        if (!error) {
+            const { data: urlData } = sb.storage.from('datasets').getPublicUrl(path);
+            meta.url = urlData.publicUrl;
+        }
+    }
+    return Object.keys(meta).filter(k => meta[k] != null).length ? meta : null;
+}
+server.tool('create_virtual_experience', 'Create a new virtual experience (guided project / job simulation). Writes directly to the database — supports large module content with no body-size limit. Returns the VE ID and slug.', {
     title: z.string().describe('VE title'),
     tagline: z.string().optional().describe('One-line description shown on the card'),
+    background: z.string().optional().describe('Scenario / context paragraph shown to students — describes the company situation and what they need to do'),
+    manager_name: z.string().optional().describe('Name of the fictional manager, e.g. "Sarah Johnson"'),
+    manager_title: z.string().optional().describe('Title of the fictional manager, e.g. "Head of Analytics" (default: Manager)'),
     industry: z.string().optional().describe('e.g. Finance, Healthcare, Tech'),
     difficulty: z.enum(['Beginner', 'Intermediate', 'Advanced']).optional(),
     role: z.string().optional().describe('Job role this simulates, e.g. Data Analyst'),
     company: z.string().optional().describe('Fictional company name for the scenario'),
-    duration: z.string().optional().describe('Estimated duration, e.g. "2 hours"'),
-    tools: z.array(z.string()).optional().describe('Tools used, e.g. ["Excel", "Python"]'),
-    modules: z.array(z.object({
-        title: z.string().describe('Module title'),
-        lessons: z.array(z.object({
-            title: z.string().describe('Lesson title'),
-            content: z.string().optional().describe('Lesson body / instructions'),
-            requirements: z.array(z.object({
-                type: z.enum(['text', 'file', 'quiz']).describe('Requirement type'),
-                prompt: z.string().describe('What the student must do'),
-            })).optional(),
-        })),
-    })).describe('Modules and lessons structure'),
+    duration: z.string().optional().describe('Estimated duration, e.g. "3–4 hours"'),
+    tools: z.array(z.string()).optional().describe('Tools used, e.g. ["Excel", "SQL", "Power BI"]'),
+    modules: z.array(MODULE_SCHEMA).describe('Modules and lessons structure'),
+    dataset: DATASET_SCHEMA.optional(),
     learn_outcomes: z.array(z.string()).optional().describe('What students will learn'),
     cohort_ids: z.array(z.string()).optional().describe('Cohort IDs to assign to'),
     deadline_days: z.number().optional(),
+    cover_image: z.string().optional().describe('Public URL of the cover image shown on the VE card'),
+    status: z.enum(['draft', 'published']).optional().describe('Default: draft. Pass "published" to make it live immediately.'),
     theme: z.enum(['forest', 'lime', 'emerald', 'rose', 'amber']).optional().describe('Color theme (default: forest)'),
     mode: z.enum(['dark', 'light', 'auto']).optional().describe('Display mode (default: dark)'),
-}, async ({ title, tagline, industry, difficulty, role, company, duration, tools, modules, learn_outcomes, cohort_ids, deadline_days, theme, mode }) => {
-    const data = await apiCall('/api/guided-project-save', {
-        title,
+}, async ({ title, tagline, background, manager_name, manager_title, industry, difficulty, role, company, duration, tools, modules, dataset, learn_outcomes, cohort_ids, deadline_days, cover_image, status, theme, mode }) => {
+    const { sb, userId } = await veClient();
+    const datasetPayload = await uploadDataset(sb, dataset);
+    const normalizedMods = normalizeModules(modules ?? []);
+    const base = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const slug = `${base}-${Math.random().toString(36).slice(2, 8)}`;
+    const { data: ve, error } = await sb.from('virtual_experiences').insert({
+        title: title.trim(),
+        slug,
+        user_id: userId,
+        status: status ?? 'draft',
+        description: tagline || '',
+        tagline: tagline ?? null,
+        background: background ?? null,
+        manager_name: manager_name ?? null,
+        manager_title: manager_title ?? null,
+        industry: industry ?? null,
+        difficulty: difficulty?.toLowerCase() ?? null,
+        role: role ?? null,
+        company: company ?? null,
+        duration: duration ?? null,
+        tools: tools ?? [],
+        modules: normalizedMods,
+        learn_outcomes: learn_outcomes ?? [],
         cohort_ids: cohort_ids ?? [],
         deadline_days: deadline_days ?? null,
-        status: 'draft',
-        config: {
-            tagline,
-            industry,
-            difficulty,
-            role,
-            company,
-            duration,
-            tools: tools ?? [],
-            modules: modules ?? [],
-            learnOutcomes: learn_outcomes ?? [],
-            theme: theme ?? 'forest',
-            mode: mode ?? 'dark',
-        },
-    });
-    return { content: [{ type: 'text', text: `Virtual experience created.\nID: ${data.id}\nSlug: ${data.slug}` }] };
+        cover_image: cover_image ?? null,
+        theme: theme ?? null,
+        mode: mode ?? null,
+        dataset: datasetPayload,
+    }).select('id, slug').single();
+    if (error)
+        throw new Error(`Failed to create virtual experience: ${error.message}`);
+    if ((cohort_ids ?? []).length > 0) {
+        await sb.from('cohort_assignments').upsert(cohort_ids.map(cohortId => ({ content_type: 'virtual_experience', content_id: ve.id, cohort_id: cohortId })), { onConflict: 'content_id,cohort_id', ignoreDuplicates: true });
+    }
+    const totalLessons = normalizedMods.reduce((sum, m) => sum + (m.lessons?.length ?? 0), 0);
+    const totalReqs = normalizedMods.reduce((sum, m) => sum + (m.lessons ?? []).reduce((s, l) => s + (l.requirements?.length ?? 0), 0), 0);
+    return { content: [{ type: 'text', text: [
+                    `Virtual experience created.`,
+                    `ID:       ${ve.id}`,
+                    `Slug:     ${ve.slug}`,
+                    `Status:   ${status ?? 'draft'}`,
+                    `Modules:  ${normalizedMods.length}  ·  Lessons: ${totalLessons}  ·  Requirements: ${totalReqs}`,
+                    datasetPayload ? `Dataset:  ${datasetPayload.filename ?? 'uploaded'}` : null,
+                ].filter(Boolean).join('\n') }] };
 });
-server.tool('update_virtual_experience', 'Update an existing virtual experience by ID.', {
+server.tool('update_virtual_experience', 'Update an existing virtual experience by ID. Writes directly to the database — supports large module content with no body-size limit. Only fields you pass are updated; unset fields keep their current values.', {
     id: z.string().describe('VE ID to update'),
     title: z.string().optional(),
     tagline: z.string().optional(),
+    background: z.string().optional().describe('Scenario / context paragraph shown to students'),
+    manager_name: z.string().optional().describe('Name of the fictional manager'),
+    manager_title: z.string().optional().describe('Title of the fictional manager'),
     industry: z.string().optional(),
     difficulty: z.enum(['Beginner', 'Intermediate', 'Advanced']).optional(),
     role: z.string().optional(),
     company: z.string().optional(),
     duration: z.string().optional(),
     tools: z.array(z.string()).optional(),
-    modules: z.array(z.object({
-        title: z.string(),
-        lessons: z.array(z.object({
-            title: z.string(),
-            content: z.string().optional(),
-            requirements: z.array(z.object({
-                type: z.enum(['text', 'file', 'quiz']),
-                prompt: z.string(),
-            })).optional(),
-        })),
-    })).optional(),
+    modules: z.array(MODULE_SCHEMA).optional(),
+    dataset: DATASET_SCHEMA.optional(),
     learn_outcomes: z.array(z.string()).optional(),
     cohort_ids: z.array(z.string()).optional(),
     deadline_days: z.number().optional(),
+    cover_image: z.string().optional().describe('Public URL of the cover image shown on the VE card'),
     status: z.enum(['draft', 'published']).optional(),
     theme: z.enum(['forest', 'lime', 'emerald', 'rose', 'amber']).optional(),
     mode: z.enum(['dark', 'light', 'auto']).optional(),
-}, async ({ id, title, tagline, industry, difficulty, role, company, duration, tools, modules, learn_outcomes, cohort_ids, deadline_days, status, theme, mode }) => {
-    // Fetch current state so unset fields are not wiped
-    const cur = await supabaseRun(sb => sb.from('virtual_experiences').select('title, cohort_ids, deadline_days, status, tagline, industry, difficulty, role, company, duration, tools, modules, learn_outcomes, theme, mode').eq('id', id).single());
-    const data = await apiCall('/api/guided-project-save', {
-        editId: id,
+}, async ({ id, title, tagline, background, manager_name, manager_title, industry, difficulty, role, company, duration, tools, modules, dataset, learn_outcomes, cohort_ids, deadline_days, cover_image, status, theme, mode }) => {
+    const { sb, userId } = await veClient();
+    const { data: cur, error: fetchErr } = await sb
+        .from('virtual_experiences')
+        .select('title, description, cohort_ids, deadline_days, status, tagline, background, manager_name, manager_title, industry, difficulty, role, company, duration, tools, modules, learn_outcomes, cover_image, theme, mode, dataset')
+        .eq('id', id)
+        .eq('user_id', userId)
+        .single();
+    if (fetchErr || !cur)
+        throw new Error(`Virtual experience not found or not yours: ${id}`);
+    const finalMods = modules !== undefined ? normalizeModules(modules) : cur.modules;
+    const updatePayload = {
         title: title ?? cur.title,
+        description: (tagline ?? cur.tagline) || cur.description || '',
+        tagline: tagline ?? cur.tagline,
+        background: background !== undefined ? background : cur.background,
+        manager_name: manager_name !== undefined ? manager_name : cur.manager_name,
+        manager_title: manager_title !== undefined ? manager_title : cur.manager_title,
+        industry: industry ?? cur.industry,
+        difficulty: (difficulty?.toLowerCase()) ?? cur.difficulty,
+        role: role ?? cur.role,
+        company: company ?? cur.company,
+        duration: duration ?? cur.duration,
+        tools: tools ?? cur.tools,
+        modules: finalMods,
+        learn_outcomes: learn_outcomes ?? cur.learn_outcomes,
         cohort_ids: cohort_ids ?? cur.cohort_ids,
         deadline_days: deadline_days ?? cur.deadline_days,
+        cover_image: cover_image !== undefined ? cover_image : cur.cover_image,
         status: status ?? cur.status,
-        config: {
-            tagline: tagline ?? cur.tagline,
-            industry: industry ?? cur.industry,
-            difficulty: difficulty ?? cur.difficulty,
-            role: role ?? cur.role,
-            company: company ?? cur.company,
-            duration: duration ?? cur.duration,
-            tools: tools ?? cur.tools,
-            modules: modules ?? cur.modules,
-            learnOutcomes: learn_outcomes ?? cur.learn_outcomes,
-            theme: theme ?? cur.theme,
-            mode: mode ?? cur.mode,
-        },
-    });
-    return { content: [{ type: 'text', text: `Virtual experience updated. ID: ${data.id ?? id}` }] };
+        theme: theme ?? cur.theme,
+        mode: mode ?? cur.mode,
+        dataset: dataset !== undefined ? await uploadDataset(sb, dataset) : cur.dataset,
+    };
+    const { error: updateErr } = await sb
+        .from('virtual_experiences')
+        .update(updatePayload)
+        .eq('id', id)
+        .eq('user_id', userId);
+    if (updateErr)
+        throw new Error(`Failed to update virtual experience: ${updateErr.message}`);
+    // Upsert cohort_assignments for any newly added cohorts
+    if (cohort_ids) {
+        const oldCohorts = Array.isArray(cur.cohort_ids) ? cur.cohort_ids : [];
+        const added = cohort_ids.filter(c => !oldCohorts.includes(c));
+        if (added.length) {
+            await sb.from('cohort_assignments').upsert(added.map(cohortId => ({ content_type: 'virtual_experience', content_id: id, cohort_id: cohortId })), { onConflict: 'content_id,cohort_id', ignoreDuplicates: true });
+        }
+    }
+    const totalLessons = finalMods.reduce((sum, m) => sum + (m.lessons?.length ?? 0), 0);
+    const totalReqs = finalMods.reduce((sum, m) => sum + (m.lessons ?? []).reduce((s, l) => s + (l.requirements?.length ?? 0), 0), 0);
+    return { content: [{ type: 'text', text: [
+                    `Virtual experience updated.`,
+                    `ID:       ${id}`,
+                    `Status:   ${updatePayload.status}`,
+                    `Modules:  ${finalMods.length}  ·  Lessons: ${totalLessons}  ·  Requirements: ${totalReqs}`,
+                ].join('\n') }] };
+});
+server.tool('clone_virtual_experience', 'Duplicate an existing virtual experience with a new title. All modules, lessons, requirements, dataset, and settings are copied. The clone is always created as a draft.', {
+    id: z.string().describe('VE ID to clone -- if you only have a name, call list_virtual_experiences first'),
+    title: z.string().describe('Title for the new cloned VE'),
+}, async ({ id, title }) => {
+    const { sb, userId } = await veClient();
+    const { data: src, error: fetchErr } = await sb
+        .from('virtual_experiences')
+        .select('tagline, background, manager_name, manager_title, industry, difficulty, role, company, duration, tools, modules, learn_outcomes, cover_image, theme, mode, dataset, deadline_days, font, custom_accent')
+        .eq('id', id)
+        .single();
+    if (fetchErr || !src)
+        throw new Error(`Virtual experience not found: ${id}`);
+    const base = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const slug = `${base}-${Math.random().toString(36).slice(2, 8)}`;
+    // Re-generate IDs so lessons/requirements don't share IDs with the source
+    const clonedMods = normalizeModules((src.modules ?? []).map((m) => ({ ...m, id: undefined, lessons: (m.lessons ?? []).map((l) => ({ ...l, id: undefined, requirements: (l.requirements ?? []).map((r) => ({ ...r, id: undefined })) })) })));
+    const { data: ve, error } = await sb.from('virtual_experiences').insert({
+        title: title.trim(),
+        slug,
+        user_id: userId,
+        status: 'draft',
+        description: src.tagline || '',
+        tagline: src.tagline,
+        background: src.background,
+        manager_name: src.manager_name,
+        manager_title: src.manager_title,
+        industry: src.industry,
+        difficulty: src.difficulty,
+        role: src.role,
+        company: src.company,
+        duration: src.duration,
+        tools: src.tools ?? [],
+        modules: clonedMods,
+        learn_outcomes: src.learn_outcomes ?? [],
+        cohort_ids: [],
+        cover_image: src.cover_image,
+        theme: src.theme,
+        mode: src.mode,
+        font: src.font,
+        custom_accent: src.custom_accent,
+        deadline_days: src.deadline_days,
+        dataset: src.dataset,
+    }).select('id, slug').single();
+    if (error)
+        throw new Error(`Failed to clone virtual experience: ${error.message}`);
+    const totalLessons = clonedMods.reduce((sum, m) => sum + (m.lessons?.length ?? 0), 0);
+    return { content: [{ type: 'text', text: [
+                    `Virtual experience cloned.`,
+                    `ID:      ${ve.id}`,
+                    `Slug:    ${ve.slug}`,
+                    `Modules: ${clonedMods.length}  ·  Lessons: ${totalLessons}`,
+                ].join('\n') }] };
 });
 // --- LEARNING PATHS ---
 server.tool('list_learning_paths', 'List all learning paths created by the instructor.', {}, async () => {
@@ -617,7 +807,7 @@ server.tool('send_bulk_message', 'Send a custom email to a segment of students. 
         if (!recipients.length)
             return { content: [{ type: 'text', text: `No students match segment "${segment}".` }] };
         const sample = recipients.slice(0, 5).map((r) => `${r.full_name ?? 'Unknown'} <${r.email}>`).join('\n  ');
-        return { content: [{ type: 'text', text: `Dry run — would send to ${recipients.length} student(s) in segment "${segment}".\n\nSample:\n  ${sample}\n\nCall again with dry_run: false to actually send.` }] };
+        return { content: [{ type: 'text', text: `Dry run -- would send to ${recipients.length} student(s) in segment "${segment}".\n\nSample:\n  ${sample}\n\nCall again with dry_run: false to actually send.` }] };
     }
     // Actually send
     const data = await apiCall('/api/bulk-message', {
@@ -662,7 +852,7 @@ server.tool('nudge_cohort', 'Send motivational nudge emails to students who have
     });
     if (!targets.length)
         return { content: [{ type: 'text', text: `No ${status.replace('_', ' ')} students found for this course.` }] };
-    // Check sent_nudges — skip students nudged by instructor in the last 7 days for this course
+    // Check sent_nudges -- skip students nudged by instructor in the last 7 days for this course
     const NUDGE_COOLDOWN_DAYS = 7;
     const cooloffCutoff = new Date(Date.now() - NUDGE_COOLDOWN_DAYS * 86400000).toISOString();
     const targetIds = targets.map((s) => s.id);
@@ -752,7 +942,7 @@ server.tool('list_students_at_risk', 'List students in a cohort who have not sta
 server.tool('create_assignment', 'Create a new assignment and assign it to one or more cohorts.', {
     title: z.string().describe('Assignment title'),
     scenario: z.string().optional().describe('Business scenario / background context for the student'),
-    brief: z.string().optional().describe('The assignment brief — what it is about'),
+    brief: z.string().optional().describe('The assignment brief -- what it is about'),
     tasks: z.string().optional().describe('Step-by-step tasks for the student'),
     requirements: z.string().optional().describe('Deliverables and submission requirements'),
     submission_instructions: z.string().optional().describe('How to submit'),
@@ -958,7 +1148,7 @@ server.tool('analyze_cohort_performance', 'Analyze a cohort across all assigned 
     const studentIds = students.map((s) => s.id);
     const attempts = await supabaseRun(sb => sb.from('course_attempts').select('student_id, course_id, completed_at, passed, score')
         .in('course_id', courseIds).in('student_id', studentIds));
-    const lines = [`Cohort performance — ${studentCount} students\n`];
+    const lines = [`Cohort performance -- ${studentCount} students\n`];
     const flags = [];
     for (const course of courses) {
         const courseAttempts = attempts.filter((a) => a.course_id === course.id);
@@ -976,9 +1166,9 @@ server.tool('analyze_cohort_performance', 'Analyze a cohort across all assigned 
         if (notStarted > studentCount * 0.5)
             flags.push(`⚠ "${course.title}": ${notStarted} students (${Math.round(notStarted / studentCount * 100)}%) haven't started`);
         if (passRate < 50 && completedAll.length >= 3)
-            flags.push(`⚠ "${course.title}": low pass rate (${passRate}%) — questions may be too hard or lessons unclear`);
+            flags.push(`⚠ "${course.title}": low pass rate (${passRate}%) -- questions may be too hard or lessons unclear`);
         if (avgScore < 40 && completedAll.length >= 3)
-            flags.push(`⚠ "${course.title}": avg score ${avgScore}% — consider reviewing content difficulty`);
+            flags.push(`⚠ "${course.title}": avg score ${avgScore}% -- consider reviewing content difficulty`);
     }
     if (flags.length) {
         lines.push('', '--- Flags ---');
@@ -1013,7 +1203,7 @@ server.tool('suggest_course_improvements', 'Analyse a course and return specific
     // Short/vague questions
     const vague = questions.filter((q) => !q.lessonOnly && (q.question ?? '').length < 20);
     if (vague.length) {
-        suggestions.push(`${vague.length} question(s) are very short (under 20 chars) — consider making them clearer.`);
+        suggestions.push(`${vague.length} question(s) are very short (under 20 chars) -- consider making them clearer.`);
     }
     // Per-question wrong answer analysis from stored answers
     if (completedAttempts.length >= 5) {
@@ -1041,7 +1231,7 @@ server.tool('suggest_course_improvements', 'Analyse a course and return specific
             for (const hq of hardQuestions) {
                 const q = questions.find((q) => q.id === hq.id);
                 const text = (q?.question ?? '').slice(0, 80);
-                suggestions.push(`  • "${text}" — ${Math.round(hq.rate * 100)}% got it wrong (${hq.wrong}/${hq.total} attempts)`);
+                suggestions.push(`  • "${text}" -- ${Math.round(hq.rate * 100)}% got it wrong (${hq.wrong}/${hq.total} attempts)`);
             }
         }
     }
@@ -1050,13 +1240,13 @@ server.tool('suggest_course_improvements', 'Analyse a course and return specific
         const avgScore = Math.round(completedAttempts.reduce((s, a) => s + (a.score ?? 0), 0) / completedAttempts.length);
         const passRate = Math.round(completedAttempts.filter((a) => a.passed).length / completedAttempts.length * 100);
         if (passRate < 40)
-            suggestions.push(`Pass rate is ${passRate}% with passmark at ${course.passmark ?? 50}% — consider lowering the passmark or simplifying questions.`);
+            suggestions.push(`Pass rate is ${passRate}% with passmark at ${course.passmark ?? 50}% -- consider lowering the passmark or simplifying questions.`);
         if (passRate > 95 && completedAttempts.length >= 10)
-            suggestions.push(`Pass rate is ${passRate}% — course may be too easy. Consider raising the passmark or adding harder questions.`);
+            suggestions.push(`Pass rate is ${passRate}% -- course may be too easy. Consider raising the passmark or adding harder questions.`);
         suggestions.push(`Avg score: ${avgScore}% across ${completedAttempts.length} completions.`);
     }
     if (!suggestions.length) {
-        return { content: [{ type: 'text', text: `"${course.title}" looks good — no obvious issues found.` }] };
+        return { content: [{ type: 'text', text: `"${course.title}" looks good -- no obvious issues found.` }] };
     }
     return { content: [{ type: 'text', text: `Improvement suggestions for "${course.title}":\n\n${suggestions.join('\n')}` }] };
 });

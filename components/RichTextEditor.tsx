@@ -139,7 +139,7 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         data-placeholder={placeholder}
-        className="px-3 py-2.5 outline-none min-h-[100px] max-h-[300px] overflow-y-auto rich-editor"
+        className={`px-3 py-2.5 outline-none min-h-[100px] max-h-[300px] overflow-y-auto rich-editor${dark ? ' dark' : ''}`}
         style={{ color: textColor }}
       />
 

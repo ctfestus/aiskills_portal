@@ -381,9 +381,25 @@ body {
 [data-theme="dark"] .rich-content a       { color: #ADEE66; }
 [data-theme="dark"] .rich-content blockquote { color: #a1a1aa; }
 
+/* Lesson body / editor table styles — light mode (! needed to override AI inline styles) */
+.ve-lesson-body table, .rich-editor table { width: 100% !important; border-collapse: collapse !important; }
+.ve-lesson-body thead tr, .rich-editor thead tr { background-color: #f1f5f9 !important; }
+.ve-lesson-body th, .rich-editor th { padding: 0.5rem 0.75rem !important; font-weight: 600 !important; color: #374151 !important; text-align: left !important; border-bottom: 1px solid #e2e8f0 !important; background-color: #f1f5f9 !important; }
+.ve-lesson-body td, .rich-editor td { padding: 0.5rem 0.75rem !important; color: #4b5563 !important; border-bottom: 1px solid #f1f5f9 !important; background-color: transparent !important; }
+.ve-lesson-body tbody tr:nth-child(even), .rich-editor tbody tr:nth-child(even) { background-color: #f8fafc !important; }
+.ve-lesson-body tbody tr:nth-child(even) td, .rich-editor tbody tr:nth-child(even) td { background-color: #f8fafc !important; }
+
+/* Lesson body / editor table styles — dark mode */
+.ve-lesson-body.dark thead tr, .rich-editor.dark thead tr { background-color: #27272a !important; }
+.ve-lesson-body.dark th, .rich-editor.dark th { color: #d4d4d8 !important; border-bottom: 1px solid #3f3f46 !important; background-color: #27272a !important; }
+.ve-lesson-body.dark td, .rich-editor.dark td { color: #a1a1aa !important; border-bottom: 1px solid #27272a !important; background-color: transparent !important; }
+.ve-lesson-body.dark tbody tr:nth-child(even), .rich-editor.dark tbody tr:nth-child(even) { background-color: #232326 !important; }
+.ve-lesson-body.dark tbody tr:nth-child(even) td, .rich-editor.dark tbody tr:nth-child(even) td { background-color: #232326 !important; }
+
 /* Custom Student Dashboard CTA Hover */
 [data-theme="light"] .dashboard-cta:hover {
   background-color: #ff9933 !important;
   color: white !important;
   opacity: 1 !important;
 }
+
