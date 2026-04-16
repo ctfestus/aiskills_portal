@@ -17,6 +17,7 @@ export default function CertificatePage() {
     settings: CertificateSettings;
     issuedAt: string;
     certType: 'course' | 'virtual_experience' | 'learning_path';
+    pathItems?: { id: string; title: string; coverImage: string | null }[];
   } | null>(null);
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function CertificatePage() {
         settings:    data.settings ?? DEFAULT_CERT_SETTINGS,
         issuedAt:    data.issuedAt,
         certType:    data.certType ?? 'course',
+        pathItems:   data.pathItems,
       });
       setState("ready");
     };

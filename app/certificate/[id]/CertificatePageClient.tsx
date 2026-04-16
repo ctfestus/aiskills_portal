@@ -15,6 +15,7 @@ interface Props {
   settings:    CertificateSettings;
   issuedAt:    string;
   certType:    'course' | 'virtual_experience' | 'learning_path';
+  pathItems?:  { id: string; title: string; coverImage: string | null }[];
 }
 
 const CERT_TYPE_BADGE: Record<string, { label: string; bg: string; color: string; border: string }> = {
@@ -32,7 +33,7 @@ function LinkedInIcon() {
 }
 
 
-export default function CertificatePageClient({ certId, studentName, courseName, issueDate, settings, issuedAt, certType }: Props) {
+export default function CertificatePageClient({ certId, studentName, courseName, issueDate, settings, issuedAt, certType, pathItems }: Props) {
   const certRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -93,18 +94,17 @@ export default function CertificatePageClient({ certId, studentName, courseName,
           {/* Title row */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight">Certificate of Completion</h1>
-                {CERT_TYPE_BADGE[certType] && (() => {
-                  const b = CERT_TYPE_BADGE[certType];
-                  return (
-                    <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0"
-                      style={{ background: b.bg, color: b.color, border: `1px solid ${b.border}` }}>
-                      {b.label}
-                    </span>
-                  );
-                })()}
-              </div>
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight">Certificate of Completion</h1>
+              {CERT_TYPE_BADGE[certType] ? (
+                <span className="mt-1 inline-block text-[11px] font-semibold px-2.5 py-0.5 rounded-full"
+                  style={{
+                    background: CERT_TYPE_BADGE[certType].bg,
+                    color: CERT_TYPE_BADGE[certType].color,
+                    border: `1px solid ${CERT_TYPE_BADGE[certType].border}`,
+                  }}>
+                  {CERT_TYPE_BADGE[certType].label}
+                </span>
+              ) : null}
               <p className="text-xs sm:text-sm text-gray-500 mt-0.5 truncate">{courseName}</p>
             </div>
             {/* Desktop: download button in header */}
@@ -132,11 +132,21 @@ export default function CertificatePageClient({ certId, studentName, courseName,
 
       {/* -- Certificate preview -- */}
       <div className="flex flex-col items-center py-6 sm:py-10 px-4">
-        {/* Verified badge */}
-        <div className="mb-4 text-center">
+        {/* Verified badge + type badge */}
+        <div className="mb-4 flex items-center justify-center gap-2 flex-wrap">
           <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold px-3 py-1 rounded-full border border-emerald-200">
             ✓ Verified · ID: {certId.slice(0, 8).toUpperCase()}
           </span>
+          {CERT_TYPE_BADGE[certType] ? (
+            <span className="inline-flex items-center text-xs font-semibold px-3 py-1 rounded-full"
+              style={{
+                background: CERT_TYPE_BADGE[certType].bg,
+                color: CERT_TYPE_BADGE[certType].color,
+                border: `1px solid ${CERT_TYPE_BADGE[certType].border}`,
+              }}>
+              {CERT_TYPE_BADGE[certType].label}
+            </span>
+          ) : null}
         </div>
 
         {/* Scaled certificate -- fills screen width on mobile */}
@@ -171,6 +181,31 @@ export default function CertificatePageClient({ certId, studentName, courseName,
           <p className="text-xs text-gray-500 mt-0.5">successfully completed</p>
           <p className="text-sm font-semibold text-gray-700 mt-0.5">{courseName}</p>
         </div>
+
+        {/* Learning path courses */}
+        {certType === 'learning_path' && pathItems && pathItems.length > 0 && (
+          <div className="mt-8 w-full" style={{ maxWidth: `${previewW}px` }}>
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Courses in this learning path</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {pathItems.map((item, i) => (
+                <div key={item.id ?? i} className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 overflow-hidden"
+                  style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                  <div className="w-16 h-16 flex-shrink-0 overflow-hidden"
+                    style={{ background: item.coverImage ? undefined : '#ede9fe' }}>
+                    {item.coverImage
+                      ? <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover"/>
+                      : <div className="w-full h-full flex items-center justify-center">
+                          <svg className="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25"/>
+                          </svg>
+                        </div>}
+                  </div>
+                  <p className="text-sm font-medium text-gray-800 pr-3 leading-snug line-clamp-2">{item.title}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* -- Mobile sticky bottom bar -- */}

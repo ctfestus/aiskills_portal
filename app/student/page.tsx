@@ -3274,9 +3274,19 @@ function CertificatesSection({ userId, userEmail, userName, C }: { userId: strin
                 </div>}
             {/* Info */}
             <div className="p-5">
-              <h3 className="text-sm font-semibold mb-1" style={{ color: C.text }}>
+              <h3 className="text-sm font-semibold mb-1.5" style={{ color: C.text }}>
                 {cert.content?.title || 'Certificate'}
               </h3>
+              <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2"
+                style={
+                  cert.ve_id
+                    ? { background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }
+                    : cert.learning_path_id
+                    ? { background: '#fdf4ff', color: '#7e22ce', border: '1px solid #e9d5ff' }
+                    : { background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }
+                }>
+                {cert.ve_id ? 'Virtual Experience' : cert.learning_path_id ? 'Learning Path' : 'Course'}
+              </span>
               <p className="text-xs mb-4" style={{ color: C.faint }}>
                 Issued {new Date(cert.issued_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
               </p>

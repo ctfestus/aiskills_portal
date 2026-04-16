@@ -72,13 +72,31 @@ export async function GET(
   if (!cert.course_id && cert.learning_path_id) {
     const { data: path } = await anonSupabase
       .from('learning_paths')
-      .select('title, instructor_id')
+      .select('title, instructor_id, item_ids')
       .eq('id', cert.learning_path_id)
       .single();
 
-    const { data: rawSettings } = path?.instructor_id
-      ? await anonSupabase.from('certificate_defaults').select('*').eq('user_id', path.instructor_id).maybeSingle()
-      : { data: null };
+    const [{ data: rawSettings }, pathItemsResult] = await Promise.all([
+      path?.instructor_id
+        ? anonSupabase.from('certificate_defaults').select('*').eq('user_id', path.instructor_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      (path?.item_ids ?? []).length > 0
+        ? Promise.all([
+            anonSupabase.from('courses').select('id, title, cover_image').in('id', path!.item_ids),
+            anonSupabase.from('virtual_experiences').select('id, title, cover_image').in('id', path!.item_ids),
+          ])
+        : Promise.resolve(null),
+    ]);
+
+    let pathItems: { id: string; title: string; coverImage: string | null }[] = [];
+    if (pathItemsResult && path?.item_ids) {
+      const [{ data: pCourses }, { data: pVes }] = pathItemsResult as any;
+      const itemMap: Record<string, { title: string; coverImage: string | null }> = Object.fromEntries([
+        ...(pCourses ?? []).map((r: any) => [r.id, { title: r.title, coverImage: r.cover_image ?? null }]),
+        ...(pVes     ?? []).map((r: any) => [r.id, { title: r.title, coverImage: r.cover_image ?? null }]),
+      ]);
+      pathItems = (path.item_ids as string[]).map(id => ({ id, ...itemMap[id] })).filter(r => r.title);
+    }
 
     const settings = rawSettings ? {
       institutionName:    rawSettings.institution_name,
@@ -106,6 +124,7 @@ export async function GET(
       issueDate:   new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
       issuedAt:    cert.issued_at,
       certType:    'learning_path',
+      pathItems,
       settings,
       revoked:     false,
     });
