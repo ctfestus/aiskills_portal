@@ -14,7 +14,14 @@ interface Props {
   issueDate:   string;
   settings:    CertificateSettings;
   issuedAt:    string;
+  certType:    'course' | 'virtual_experience' | 'learning_path';
 }
+
+const CERT_TYPE_BADGE: Record<string, { label: string; bg: string; color: string; border: string }> = {
+  course:             { label: 'Course',            bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
+  virtual_experience: { label: 'Virtual Experience', bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' },
+  learning_path:      { label: 'Learning Path',     bg: '#fdf4ff', color: '#7e22ce', border: '#e9d5ff' },
+};
 
 function LinkedInIcon() {
   return (
@@ -25,7 +32,7 @@ function LinkedInIcon() {
 }
 
 
-export default function CertificatePageClient({ certId, studentName, courseName, issueDate, settings, issuedAt }: Props) {
+export default function CertificatePageClient({ certId, studentName, courseName, issueDate, settings, issuedAt, certType }: Props) {
   const certRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -86,7 +93,18 @@ export default function CertificatePageClient({ certId, studentName, courseName,
           {/* Title row */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight">Certificate of Completion</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-base sm:text-lg font-bold text-gray-900 leading-tight">Certificate of Completion</h1>
+                {CERT_TYPE_BADGE[certType] && (() => {
+                  const b = CERT_TYPE_BADGE[certType];
+                  return (
+                    <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0"
+                      style={{ background: b.bg, color: b.color, border: `1px solid ${b.border}` }}>
+                      {b.label}
+                    </span>
+                  );
+                })()}
+              </div>
               <p className="text-xs sm:text-sm text-gray-500 mt-0.5 truncate">{courseName}</p>
             </div>
             {/* Desktop: download button in header */}

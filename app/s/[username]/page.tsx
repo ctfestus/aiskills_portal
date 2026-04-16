@@ -119,67 +119,79 @@ function TimelineItem({ icon: Icon, title, sub, meta, description, isLast, t }:
   );
 }
 
-/* --- Type badge --- */
-const TYPE_BADGE: Record<string, { label: string; bg: string; darkBg: string; color: string; darkColor: string }> = {
-  course:             { label: 'Course',           bg: '#eff6ff', darkBg: 'rgba(59,130,246,0.12)', color: '#1d4ed8', darkColor: '#60a5fa' },
-  virtual_experience: { label: 'Virtual Experience', bg: '#f0fdf4', darkBg: 'rgba(34,197,94,0.12)',  color: '#15803d', darkColor: '#4ade80' },
-  learning_path:      { label: 'Learning Path',    bg: '#fdf4ff', darkBg: 'rgba(168,85,247,0.12)', color: '#7e22ce', darkColor: '#c084fc' },
-};
-
 /* --- Certificate row --- */
 function CertRow({ cert, t, isDark, showMeta = false }: { cert: any; t: typeof LIGHT; isDark: boolean; showMeta?: boolean }) {
   const date = cert.issuedAt
     ? new Date(cert.issuedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
     : '';
   const shortId = cert.id ? String(cert.id).slice(0, 8).toUpperCase() : '';
-  const badge = TYPE_BADGE[cert.contentType];
+  const pathItems: string[] = cert.pathItems ?? [];
+  const [tipVisible, setTipVisible] = useState(false);
+
   return (
-    <Link href={`/certificate/${cert.id}`} target="_blank" rel="noreferrer"
-      className="group flex items-center gap-4 px-6 py-4 transition-colors"
-      style={{ borderTop: `1px solid ${t.divider}` }}
-      onMouseEnter={e => (e.currentTarget.style.background = t.pill)}
-      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-      {/* Thumbnail */}
-      <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0"
-        style={{ background: cert.coverImage ? undefined : isDark ? '#1e1b4b' : '#ede9fe' }}>
-        {cert.coverImage
-          ? <img src={cert.coverImage} alt={cert.courseName} className="w-full h-full object-cover"/>
-          : <div className="w-full h-full flex items-center justify-center">
-              <Award className="w-5 h-5" style={{ color: isDark ? '#818cf8' : '#6366f1' }}/>
-            </div>}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
+    <div className="relative"
+      onMouseEnter={() => pathItems.length > 0 && setTipVisible(true)}
+      onMouseLeave={() => setTipVisible(false)}>
+      {/* Tooltip */}
+      {tipVisible && pathItems.length > 0 && (
+        <div className="absolute left-6 bottom-full mb-2 z-50 pointer-events-none"
+          style={{
+            background: isDark ? '#1e1e1e' : '#ffffff',
+            border: `1px solid ${t.divider}`,
+            borderRadius: 10,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
+            padding: '10px 14px',
+            minWidth: 180,
+            maxWidth: 280,
+          }}>
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: t.faint }}>Includes</p>
+          <ul className="space-y-1">
+            {pathItems.map((title: string, i: number) => (
+              <li key={i} className="flex items-start gap-2">
+                <span className="mt-1.5 w-1 h-1 rounded-full flex-shrink-0" style={{ background: t.accent }}/>
+                <span className="text-xs leading-snug" style={{ color: t.text }}>{title}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <Link href={`/certificate/${cert.id}`} target="_blank" rel="noreferrer"
+        className="group flex items-center gap-4 px-6 py-4 transition-colors"
+        style={{ borderTop: `1px solid ${t.divider}` }}
+        onMouseEnter={e => (e.currentTarget.style.background = t.pill)}
+        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+        {/* Thumbnail */}
+        <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0"
+          style={{ background: cert.coverImage ? undefined : isDark ? '#1e1b4b' : '#ede9fe' }}>
+          {cert.coverImage
+            ? <img src={cert.coverImage} alt={cert.courseName} className="w-full h-full object-cover"/>
+            : <div className="w-full h-full flex items-center justify-center">
+                <Award className="w-5 h-5" style={{ color: isDark ? '#818cf8' : '#6366f1' }}/>
+              </div>}
+        </div>
+        <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate" style={{ color: t.text }}>{cert.courseName}</p>
-          {badge && (
-            <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full"
-              style={{
-                background: isDark ? badge.darkBg : badge.bg,
-                color: isDark ? badge.darkColor : badge.color,
-              }}>
-              {badge.label}
-            </span>
+          {showMeta && (
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              {date && (
+                <span className="text-xs" style={{ color: t.faint }}>Issued {date}</span>
+              )}
+              {shortId && (
+                <span className="text-xs" style={{ color: t.faint }}>
+                  Credential ID {shortId}
+                </span>
+              )}
+            </div>
+          )}
+          {!showMeta && date && (
+            <p className="text-xs mt-0.5" style={{ color: t.faint }}>{date}</p>
           )}
         </div>
-        {showMeta && (
-          <div className="flex flex-wrap items-center gap-2 mt-1">
-            {date && (
-              <span className="text-xs" style={{ color: t.faint }}>Issued {date}</span>
-            )}
-            {shortId && (
-              <span className="text-xs" style={{ color: t.faint }}>
-                Credential ID {shortId}
-              </span>
-            )}
-          </div>
-        )}
-        {!showMeta && date && (
-          <p className="text-xs mt-0.5" style={{ color: t.faint }}>{date}</p>
-        )}
-      </div>
-      <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-        style={{ color: t.accent }}/>
-    </Link>
+        <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ color: t.accent }}/>
+      </Link>
+    </div>
   );
 }
 

@@ -58,12 +58,23 @@ export async function GET(
   const [{ data: coursesRaw }, { data: vesRaw }, { data: pathsRaw }] = await Promise.all([
     courseIds.length ? supabase.from('courses').select('id, title, cover_image').in('id', courseIds) : Promise.resolve({ data: [] }),
     veIds.length     ? supabase.from('virtual_experiences').select('id, title, cover_image').in('id', veIds) : Promise.resolve({ data: [] }),
-    pathIds.length   ? supabase.from('learning_paths').select('id, title').in('id', pathIds) : Promise.resolve({ data: [] }),
+    pathIds.length   ? supabase.from('learning_paths').select('id, title, item_ids').in('id', pathIds) : Promise.resolve({ data: [] }),
   ]);
 
   const courseMap: Record<string, any> = Object.fromEntries((coursesRaw ?? []).map((r: any) => [r.id, r]));
   const veMap:     Record<string, any> = Object.fromEntries((vesRaw     ?? []).map((r: any) => [r.id, r]));
   const pathMap:   Record<string, any> = Object.fromEntries((pathsRaw   ?? []).map((r: any) => [r.id, r]));
+
+  // Resolve learning path item titles for tooltips
+  const allItemIds = [...new Set((pathsRaw ?? []).flatMap((p: any) => p.item_ids ?? []))];
+  const [{ data: pathCourses }, { data: pathVes }] = await Promise.all([
+    allItemIds.length ? supabase.from('courses').select('id, title').in('id', allItemIds) : Promise.resolve({ data: [] }),
+    allItemIds.length ? supabase.from('virtual_experiences').select('id, title').in('id', allItemIds) : Promise.resolve({ data: [] }),
+  ]);
+  const itemTitleMap: Record<string, string> = Object.fromEntries([
+    ...(pathCourses ?? []).map((r: any) => [r.id, r.title]),
+    ...(pathVes     ?? []).map((r: any) => [r.id, r.title]),
+  ]);
 
   const allCerts = (certsRaw ?? []).map((c: any) => {
     const isCourse = !!c.course_id;
@@ -71,6 +82,9 @@ export async function GET(
     const isPath   = !!c.learning_path_id;
     const content  = isCourse ? courseMap[c.course_id] : isVE ? veMap[c.ve_id] : isPath ? pathMap[c.learning_path_id] : null;
     const contentType = isCourse ? 'course' : isVE ? 'virtual_experience' : isPath ? 'learning_path' : 'course';
+    const pathItems = isPath
+      ? (content?.item_ids ?? []).map((id: string) => itemTitleMap[id]).filter(Boolean)
+      : undefined;
     return {
       id:          c.id,
       studentName: c.student_name,
@@ -78,6 +92,7 @@ export async function GET(
       coverImage:  content?.cover_image ?? null,
       contentType,
       issuedAt:    c.issued_at,
+      ...(pathItems ? { pathItems } : {}),
     };
   });
 

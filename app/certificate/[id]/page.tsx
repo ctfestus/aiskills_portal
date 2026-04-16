@@ -16,6 +16,7 @@ export default function CertificatePage() {
     issueDate: string;
     settings: CertificateSettings;
     issuedAt: string;
+    certType: 'course' | 'virtual_experience' | 'learning_path';
   } | null>(null);
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function CertificatePage() {
         issueDate:   data.issueDate,
         settings:    data.settings ?? DEFAULT_CERT_SETTINGS,
         issuedAt:    data.issuedAt,
+        certType:    data.certType ?? 'course',
       });
       setState("ready");
     };

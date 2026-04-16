@@ -62,6 +62,7 @@ export async function GET(
       courseName:  ve?.title ?? 'Virtual Experience',
       issueDate:   new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
       issuedAt:    cert.issued_at,
+      certType:    'virtual_experience',
       settings,
       revoked:     false,
     });
@@ -104,9 +105,9 @@ export async function GET(
       courseName:  path?.title ?? 'Learning Path',
       issueDate:   new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
       issuedAt:    cert.issued_at,
+      certType:    'learning_path',
       settings,
       revoked:     false,
-      isPathCert:  true,
     });
   }
 
@@ -148,6 +149,7 @@ export async function GET(
     courseName:  content?.title || 'Course',
     issueDate:   new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
     issuedAt:    cert.issued_at,
+    certType:    'course',
     settings,
     revoked:     false,
   });
