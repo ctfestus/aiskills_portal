@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'motion/react';
@@ -125,73 +125,96 @@ function CertRow({ cert, t, isDark, showMeta = false }: { cert: any; t: typeof L
     ? new Date(cert.issuedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
     : '';
   const shortId = cert.id ? String(cert.id).slice(0, 8).toUpperCase() : '';
-  const pathItems: string[] = cert.pathItems ?? [];
-  const [tipVisible, setTipVisible] = useState(false);
+  const pathItems: { title: string; coverImage: string | null }[] = cert.pathItems ?? [];
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [tipStyle, setTipStyle] = useState<React.CSSProperties | null>(null);
+
+  const showTip = () => {
+    if (!pathItems.length || !rowRef.current) return;
+    const rect = rowRef.current.getBoundingClientRect();
+    setTipStyle({
+      position: 'fixed',
+      top: rect.top - 8, // will use transform to push above
+      left: rect.left + 24,
+      transform: 'translateY(-100%)',
+      zIndex: 9999,
+    });
+  };
 
   return (
-    <div className="relative"
-      onMouseEnter={() => pathItems.length > 0 && setTipVisible(true)}
-      onMouseLeave={() => setTipVisible(false)}>
-      {/* Tooltip */}
-      {tipVisible && pathItems.length > 0 && (
-        <div className="absolute left-6 bottom-full mb-2 z-50 pointer-events-none"
-          style={{
-            background: isDark ? '#1e1e1e' : '#ffffff',
-            border: `1px solid ${t.divider}`,
-            borderRadius: 10,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
-            padding: '10px 14px',
-            minWidth: 180,
-            maxWidth: 280,
-          }}>
-          <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: t.faint }}>Includes</p>
-          <ul className="space-y-1">
-            {pathItems.map((title: string, i: number) => (
-              <li key={i} className="flex items-start gap-2">
-                <span className="mt-1.5 w-1 h-1 rounded-full flex-shrink-0" style={{ background: t.accent }}/>
-                <span className="text-xs leading-snug" style={{ color: t.text }}>{title}</span>
+    <>
+      {/* Tooltip rendered at body level via fixed positioning */}
+      {tipStyle && pathItems.length > 0 && (
+        <div style={{
+          ...tipStyle,
+          background: isDark ? '#1e1e1e' : '#ffffff',
+          border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
+          borderRadius: 12,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+          padding: '12px 14px',
+          minWidth: 220,
+          maxWidth: 300,
+          pointerEvents: 'none',
+        }}>
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-2.5" style={{ color: t.faint }}>Includes</p>
+          <ul className="space-y-2">
+            {pathItems.map((item, i) => (
+              <li key={i} className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0"
+                  style={{ background: item.coverImage ? undefined : isDark ? '#2a2a3a' : '#ede9fe' }}>
+                  {item.coverImage
+                    ? <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover"/>
+                    : <div className="w-full h-full flex items-center justify-center">
+                        <Award className="w-3.5 h-3.5" style={{ color: isDark ? '#818cf8' : '#6366f1' }}/>
+                      </div>}
+                </div>
+                <span className="text-xs leading-snug font-medium" style={{ color: t.text }}>{item.title}</span>
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      <Link href={`/certificate/${cert.id}`} target="_blank" rel="noreferrer"
-        className="group flex items-center gap-4 px-6 py-4 transition-colors"
-        style={{ borderTop: `1px solid ${t.divider}` }}
-        onMouseEnter={e => (e.currentTarget.style.background = t.pill)}
-        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-        {/* Thumbnail */}
-        <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0"
-          style={{ background: cert.coverImage ? undefined : isDark ? '#1e1b4b' : '#ede9fe' }}>
-          {cert.coverImage
-            ? <img src={cert.coverImage} alt={cert.courseName} className="w-full h-full object-cover"/>
-            : <div className="w-full h-full flex items-center justify-center">
-                <Award className="w-5 h-5" style={{ color: isDark ? '#818cf8' : '#6366f1' }}/>
-              </div>}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold truncate" style={{ color: t.text }}>{cert.courseName}</p>
-          {showMeta && (
-            <div className="flex flex-wrap items-center gap-2 mt-1">
-              {date && (
-                <span className="text-xs" style={{ color: t.faint }}>Issued {date}</span>
-              )}
-              {shortId && (
-                <span className="text-xs" style={{ color: t.faint }}>
-                  Credential ID {shortId}
-                </span>
-              )}
-            </div>
-          )}
-          {!showMeta && date && (
-            <p className="text-xs mt-0.5" style={{ color: t.faint }}>{date}</p>
-          )}
-        </div>
-        <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ color: t.accent }}/>
-      </Link>
-    </div>
+      <div ref={rowRef}
+        onMouseEnter={showTip}
+        onMouseLeave={() => setTipStyle(null)}>
+        <Link href={`/certificate/${cert.id}`} target="_blank" rel="noreferrer"
+          className="group flex items-center gap-4 px-6 py-4 transition-colors"
+          style={{ borderTop: `1px solid ${t.divider}` }}
+          onMouseEnter={e => (e.currentTarget.style.background = t.pill)}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+          {/* Thumbnail */}
+          <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0"
+            style={{ background: cert.coverImage ? undefined : isDark ? '#1e1b4b' : '#ede9fe' }}>
+            {cert.coverImage
+              ? <img src={cert.coverImage} alt={cert.courseName} className="w-full h-full object-cover"/>
+              : <div className="w-full h-full flex items-center justify-center">
+                  <Award className="w-5 h-5" style={{ color: isDark ? '#818cf8' : '#6366f1' }}/>
+                </div>}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold truncate" style={{ color: t.text }}>{cert.courseName}</p>
+            {showMeta && (
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                {date && (
+                  <span className="text-xs" style={{ color: t.faint }}>Issued {date}</span>
+                )}
+                {shortId && (
+                  <span className="text-xs" style={{ color: t.faint }}>
+                    Credential ID {shortId}
+                  </span>
+                )}
+              </div>
+            )}
+            {!showMeta && date && (
+              <p className="text-xs mt-0.5" style={{ color: t.faint }}>{date}</p>
+            )}
+          </div>
+          <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{ color: t.accent }}/>
+        </Link>
+      </div>
+    </>
   );
 }
 

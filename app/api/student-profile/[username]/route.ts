@@ -65,15 +65,15 @@ export async function GET(
   const veMap:     Record<string, any> = Object.fromEntries((vesRaw     ?? []).map((r: any) => [r.id, r]));
   const pathMap:   Record<string, any> = Object.fromEntries((pathsRaw   ?? []).map((r: any) => [r.id, r]));
 
-  // Resolve learning path item titles for tooltips
+  // Resolve learning path item titles + cover images for tooltips
   const allItemIds = [...new Set((pathsRaw ?? []).flatMap((p: any) => p.item_ids ?? []))];
   const [{ data: pathCourses }, { data: pathVes }] = await Promise.all([
-    allItemIds.length ? supabase.from('courses').select('id, title').in('id', allItemIds) : Promise.resolve({ data: [] }),
-    allItemIds.length ? supabase.from('virtual_experiences').select('id, title').in('id', allItemIds) : Promise.resolve({ data: [] }),
+    allItemIds.length ? supabase.from('courses').select('id, title, cover_image').in('id', allItemIds) : Promise.resolve({ data: [] }),
+    allItemIds.length ? supabase.from('virtual_experiences').select('id, title, cover_image').in('id', allItemIds) : Promise.resolve({ data: [] }),
   ]);
-  const itemTitleMap: Record<string, string> = Object.fromEntries([
-    ...(pathCourses ?? []).map((r: any) => [r.id, r.title]),
-    ...(pathVes     ?? []).map((r: any) => [r.id, r.title]),
+  const itemMap: Record<string, { title: string; coverImage: string | null }> = Object.fromEntries([
+    ...(pathCourses ?? []).map((r: any) => [r.id, { title: r.title, coverImage: r.cover_image ?? null }]),
+    ...(pathVes     ?? []).map((r: any) => [r.id, { title: r.title, coverImage: r.cover_image ?? null }]),
   ]);
 
   const allCerts = (certsRaw ?? []).map((c: any) => {
@@ -83,7 +83,7 @@ export async function GET(
     const content  = isCourse ? courseMap[c.course_id] : isVE ? veMap[c.ve_id] : isPath ? pathMap[c.learning_path_id] : null;
     const contentType = isCourse ? 'course' : isVE ? 'virtual_experience' : isPath ? 'learning_path' : 'course';
     const pathItems = isPath
-      ? (content?.item_ids ?? []).map((id: string) => itemTitleMap[id]).filter(Boolean)
+      ? (content?.item_ids ?? []).map((id: string) => itemMap[id]).filter(Boolean)
       : undefined;
     return {
       id:          c.id,
