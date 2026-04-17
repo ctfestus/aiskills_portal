@@ -59,6 +59,7 @@ export default function CreateRecordingPage() {
   const [cohorts, setCohorts]           = useState<{ id: string; name: string }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
   const [entries, setEntries]           = useState<Entry[]>([]);
+  const [originalWeeks, setOriginalWeeks] = useState<Set<number>>(new Set());
 
   const toggleCohort = (id: string) =>
     setSelectedCohortIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -98,6 +99,7 @@ export default function CreateRecordingPage() {
           setEntries(entriesData.map((e: any) => ({
             id: e.id, week: e.week, topic: e.topic, url: e.url,
           })));
+          setOriginalWeeks(new Set(entriesData.map((e: any) => e.week)));
         }
       }
     };
@@ -160,6 +162,22 @@ export default function CreateRecordingPage() {
         }));
         const { error: entErr } = await supabase.from('recording_entries').insert(rows);
         if (entErr) throw entErr;
+      }
+
+      // Notify if: new recording published, OR existing published recording has new weeks added
+      const currentWeeks = entries.map(e => e.week);
+      const addedWeeks = !editId
+        ? [...new Set(currentWeeks)]
+        : [...new Set(currentWeeks)].filter(w => !originalWeeks.has(w));
+      if (status === 'published' && recId && addedWeeks.length > 0) {
+        fetch('/api/recording-notify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ recordingId: recId, newWeeks: addedWeeks }),
+        }).catch(() => {});
       }
 
       router.push('/dashboard?section=recordings');

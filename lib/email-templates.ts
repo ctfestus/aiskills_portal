@@ -696,6 +696,33 @@ export function learningPathAssignedEmail(data: {
   return shell(content, branding);
 }
 
+// -- Recording Published ---
+export function recordingPublishedEmail(data: {
+  name: string;
+  recordingTitle: string;
+  newWeeks: number[];
+  dashboardUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { name, recordingTitle, newWeeks, dashboardUrl, branding } = data;
+
+  const weekLabel = newWeeks.length === 1
+    ? `Week ${newWeeks[0]}`
+    : newWeeks.map(w => `Week ${w}`).join(', ');
+
+  const content = `
+    <p><b>Hi ${name},</b></p>
+    <p><b>${weekLabel}</b> recordings for <b>${recordingTitle}</b> are now available. Log in to watch them and stay on track with your programme.</p>
+
+    ${cta('Watch Recordings', dashboardUrl)}
+
+    <br>
+    <p><b>Best regards,</b></p>
+  `;
+
+  return shell(content, branding);
+}
+
 // -- 13. Learning Path Certificate ---
 export function learningPathCertificateEmail(data: {
   name: string;

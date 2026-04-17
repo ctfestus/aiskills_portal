@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import { Loader2, UploadIcon, Eye, EyeOff, RotateCcw, CheckCircle2, Zap } from 'lucide-react';
-import { createClient } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 interface Bounds { x: number; y: number; w: number; h: number; }
 interface CritiqueElement {
@@ -94,7 +94,6 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
       const mimeType = file.type;
 
       try {
-        const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
         const res = await fetch('/api/dashboard-critique', {
           method: 'POST',
