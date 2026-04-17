@@ -30,9 +30,18 @@ export const getTenantSettings = unstable_cache(
         teamName:     data.team_name     || tenant.teamName,
         senderName:   data.sender_name   || tenant.senderName,
         supportEmail: data.support_email || tenant.supportEmail,
-        brandColor:     data.brand_color      || tenant.brandColor,
-        faviconUrl:     data.favicon_url      || tenant.faviconUrl,
-        emailBannerUrl: data.email_banner_url || tenant.emailBannerUrl,
+        brandColor:      data.brand_color      || tenant.brandColor,
+        faviconUrl:      data.favicon_url      || tenant.faviconUrl,
+        emailBannerUrl:  data.email_banner_url || tenant.emailBannerUrl,
+        primaryColor:    data.primary_color    || tenant.primaryColor,
+        accentColor:     data.accent_color     || tenant.accentColor,
+        heroTitle:       data.hero_title       || tenant.heroTitle,
+        heroTitleAccent: data.hero_title_accent || tenant.heroTitleAccent,
+        heroSubheadline: data.hero_subheadline || tenant.heroSubheadline,
+        heroPrimaryCta:  data.hero_primary_cta || tenant.heroPrimaryCta,
+        footerTagline:   data.footer_tagline   || tenant.footerTagline,
+        statsEnrolled:   data.stats_enrolled   || tenant.statsEnrolled,
+        statsRating:     data.stats_rating     || tenant.statsRating,
       };
     } catch {
       return tenant;

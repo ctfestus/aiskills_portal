@@ -11,7 +11,13 @@
       "Bash(node scripts/fix-chars.mjs)",
       "WebFetch(domain:festman.io)",
       "WebFetch(domain:adplist.org)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "WebFetch(domain:www.teachable.com)",
+      "Bash(curl -s https://www.teachable.com/)",
+      "Bash(curl -s \"https://cdn.prod.website-files.com/687904fb2b26c434698c47e9/css/fs-teachable.shared.88000560f.min.css\")",
+      "Bash(curl -s \"https://www.teachable.com/\")",
+      "Bash(curl -s \"https://cdn.prod.website-files.com/687904fb2b26c434698c47e9/css/fs-teachable.68b18a352897a262d4000b50.0b2d19903.opt.min.css\")",
+      "mcp__Claude_Preview__preview_start"
     ]
   }
 }
