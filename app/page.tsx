@@ -410,7 +410,7 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
                       <div className="space-y-2">
                         {p.description && <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.72)' }}>{p.description}</p>}
                         <div className="flex items-end justify-between gap-3">
-                          <h3 className="text-lg font-black leading-tight text-white" style={{ fontFamily: hFont }}>{p.title}</h3>
+                          <h3 className="text-lg font-black leading-tight" style={{ color: '#ffffff', fontFamily: hFont }}>{p.title}</h3>
                           <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: accentColor }}>
                             <ArrowRight className="w-4 h-4 text-white" />
                           </div>
