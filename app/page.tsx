@@ -298,7 +298,7 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
             : `linear-gradient(145deg, #0f0c29 0%, ${primaryColor} 50%, #302b63 100%)`,
         }}>
         <div className="absolute inset-0" style={{ background: (() => { const c = heroOverlayColor || '#000000'; const r = parseInt(c.slice(1,3),16), g = parseInt(c.slice(3,5),16), b = parseInt(c.slice(5,7),16); return `rgba(${r},${g},${b},${parseFloat(heroOverlayOpacity||'58')/100})`; })() }} />
-        <div className="relative z-10 max-w-4xl mx-auto text-center space-y-8">
+        <div className="relative z-10 max-w-4xl mx-auto text-center space-y-6 md:space-y-8">
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-semibold"
             style={{ borderColor: 'rgba(255,255,255,0.3)', color: 'rgba(255,255,255,0.85)' }}>
@@ -306,13 +306,13 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
             Applications open now
           </motion.div>
           <motion.h1 initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, delay: 0.15 }}
-            className="leading-[1.0]"
-            style={{ fontFamily: hFont, fontWeight: 900, letterSpacing: '-0.03em', fontSize: `clamp(${Math.round(parseInt(heroFontSize||'62')*0.39)}px, ${(parseInt(heroFontSize||'62')/1200*100).toFixed(2)}vw, ${heroFontSize||'62'}px)` }}>
+            className="leading-[1.2] md:leading-[1.05]"
+            style={{ fontFamily: hFont, fontWeight: 900, letterSpacing: '-0.02em', fontSize: `clamp(${Math.round(parseInt(heroFontSize||'62')*0.39)}px, ${(parseInt(heroFontSize||'62')/1200*100).toFixed(2)}vw, ${heroFontSize||'62'}px)` }}>
             <span style={{ color: 'white' }}>{heroTitle}</span><br />
             <span style={{ color: accentColor }}>{heroTitleAccent}</span>
           </motion.h1>
           <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.3 }}
-            className="text-[18px] max-w-xl mx-auto" style={{ color: 'rgba(255,255,255,0.72)', lineHeight: 1.75, fontFamily: bFont }}>
+            className="text-base md:text-[18px] max-w-xl mx-auto" style={{ color: 'rgba(255,255,255,0.72)', lineHeight: 1.75, fontFamily: bFont }}>
             {heroSubheadline}
           </motion.p>
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.45 }}
@@ -1057,12 +1057,12 @@ export default function LandingPage() {
           background: `radial-gradient(ellipse 75% 65% at 50% 50%, transparent 40%, ${primaryColor} 100%)`,
         }} />
 
-        <div className="relative z-10 max-w-5xl mx-auto text-center space-y-8">
+        <div className="relative z-10 max-w-5xl mx-auto text-center space-y-6 md:space-y-8">
           <motion.h1
             initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.65, delay: 0.2, ease: [0.23, 1, 0.32, 1] }}
-            className="leading-[1.05] md:leading-[1.0]"
-            style={{ letterSpacing: '-0.03em', fontFamily: hFont ?? 'var(--font-sans)', fontWeight: 900, fontSize: `clamp(${Math.round(parseInt(heroFontSize||'56')*0.39)}px, ${(parseInt(heroFontSize||'56')/1200*100).toFixed(2)}vw, ${heroFontSize||'56'}px)` }}
+            className="leading-[1.2] md:leading-[1.05]"
+            style={{ letterSpacing: '-0.02em', fontFamily: hFont ?? 'var(--font-sans)', fontWeight: 900, fontSize: `clamp(${Math.round(parseInt(heroFontSize||'56')*0.39)}px, ${(parseInt(heroFontSize||'56')/1200*100).toFixed(2)}vw, ${heroFontSize||'56'}px)` }}
           >
             <span style={{ color: 'white' }}>{heroTitle}</span><br />
             <span style={{ color: accentColor }}>{heroTitleAccent}</span>
@@ -1071,7 +1071,7 @@ export default function LandingPage() {
           <motion.p
             initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.35 }}
-            className="text-[18px] max-w-2xl mx-auto text-white/70" style={{ lineHeight: 1.7, fontFamily: bFont }}
+            className="text-base md:text-[18px] max-w-2xl mx-auto text-white/70" style={{ lineHeight: 1.7, fontFamily: bFont }}
           >
             {heroSubheadline}
           </motion.p>
