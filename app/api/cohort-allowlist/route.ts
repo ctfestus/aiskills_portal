@@ -85,17 +85,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No valid emails provided' }, { status: 400 });
   }
 
-  const { data, error } = await adminClient()
+  let data: any, error: any;
+  const insert = await adminClient()
     .from('cohort_allowed_emails')
     .insert(rows)
-    .select('id, email, created_at')
-    .throwOnError()
-    .then(r => r)
-    .catch(() => adminClient()
+    .select('id, email, created_at');
+
+  if (insert.error) {
+    const upsert = await adminClient()
       .from('cohort_allowed_emails')
       .upsert(rows, { onConflict: 'email', ignoreDuplicates: true })
-      .select('id, email, created_at')
-    );
+      .select('id, email, created_at');
+    data = upsert.data;
+    error = upsert.error;
+  } else {
+    data = insert.data;
+    error = insert.error;
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ inserted: data ?? [] });
