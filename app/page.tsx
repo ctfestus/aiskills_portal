@@ -820,21 +820,10 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
         </>}
         {!footerBgImageUrl && <div className="absolute inset-0 z-0" style={{ background: dark_bg }} />}
         <div className="relative z-10 max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
             <div className="md:col-span-2 space-y-4">
               <img src={logoUrl} alt="" className="h-9 w-auto" />
               <p className="text-sm leading-relaxed max-w-xs" style={{ color: on_dark, opacity: 0.45 }}>{footerTagline}</p>
-            </div>
-            <div className="space-y-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: on_dark, opacity: 0.3 }}>{footerLinksHeading || 'Explore'}</p>
-              {[
-                { label: footerLink1Label, url: footerLink1Url },
-                { label: footerLink2Label, url: footerLink2Url },
-                { label: footerLink3Label, url: footerLink3Url },
-                { label: footerLink4Label, url: footerLink4Url },
-              ].filter(l => l.label).map(l => (
-                <Link key={l.label} href={l.url || (user ? '/student' : '/auth')} className="block text-sm transition-colors hover:opacity-80" style={{ color: on_dark, opacity: 0.5 }}>{l.label}</Link>
-              ))}
             </div>
             <div className="space-y-3">
               <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: on_dark, opacity: 0.3 }}>Account</p>
@@ -1404,7 +1393,7 @@ export default function LandingPage() {
         </>}
         {!footerBgImageUrl && <div className="absolute inset-0 z-0" style={{ background: primaryColor }} />}
         <div className="relative z-10 max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
             <div className="md:col-span-2 space-y-4">
               <div className="flex items-center">
                 <img src={logoUrl} alt="" className="h-9 w-auto" />
@@ -1420,22 +1409,6 @@ export default function LandingPage() {
                   </span>
                 ))}
               </div>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.45)' }}>{footerLinksHeading || 'Learn'}</p>
-              {[
-                { label: footerLink1Label, url: footerLink1Url },
-                { label: footerLink2Label, url: footerLink2Url },
-                { label: footerLink3Label, url: footerLink3Url },
-                { label: footerLink4Label, url: footerLink4Url },
-              ].filter(l => l.label).map(l => (
-                <Link key={l.label} href={l.url || (user ? '/student' : '/auth')}
-                  className="block text-sm transition-colors hover:text-white"
-                  style={{ color: 'rgba(255,255,255,0.65)' }}>
-                  {l.label}
-                </Link>
-              ))}
             </div>
 
             <div className="space-y-3">

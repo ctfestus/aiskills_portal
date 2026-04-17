@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import { apiCall, apiGet, supabaseQuery, supabaseRun, getToken, getAuthenticatedClient } from './api.js';
 
@@ -1663,5 +1664,22 @@ server.tool(
 
 // --- START SERVER ---
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+if (process.env.MCP_MODE === 'http') {
+  const { default: express } = await import('express');
+  const app = express();
+  app.use(express.json());
+
+  app.post('/mcp', async (req, res) => {
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  });
+
+  app.get('/health', (_req, res) => res.json({ ok: true }));
+
+  const PORT = process.env.PORT ?? 3001;
+  app.listen(PORT, () => console.log(`MCP server running on port ${PORT}`));
+} else {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}

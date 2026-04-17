@@ -1884,16 +1884,40 @@ export default function FormDetailPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) { window.location.href = '/auth'; return; }
 
-      const [{ data: { user } }, [{ data: courseRow }, { data: eventRow }, { data: veRow }], { data: responseData, count }] = await Promise.all([
+      const [{ data: { user } }, [{ data: courseRow }, { data: eventRow }, { data: veRow }]] = await Promise.all([
         supabase.auth.getUser(),
         Promise.all([
           supabase.from('courses').select('*').eq('id', id as string).maybeSingle(),
           supabase.from('events').select('*').eq('id', id as string).maybeSingle(),
           supabase.from('virtual_experiences').select('*').eq('id', id as string).maybeSingle(),
         ]),
-        supabase.from('responses').select('*', { count: 'exact' }).eq('form_id', id as string)
-          .order('created_at', { ascending: false }).range(0, PAGE_SIZE - 1),
       ]);
+
+      const isEventContent = !!eventRow;
+      let responseData: any[] | null = null;
+      let count: number | null = null;
+
+      if (isEventContent) {
+        const { data: regData, count: regCount } = await supabase
+          .from('event_registrations')
+          .select('*, student:students(id, full_name, email)', { count: 'exact' })
+          .eq('event_id', id as string)
+          .order('registered_at', { ascending: false })
+          .range(0, PAGE_SIZE - 1);
+        responseData = (regData ?? []).map((r: any) => ({
+          id: r.id,
+          created_at: r.registered_at,
+          data: { name: r.student?.full_name ?? '', email: r.student?.email ?? '' },
+          student: r.student,
+        }));
+        count = regCount;
+      } else {
+        const { data: rData, count: rCount } = await supabase
+          .from('responses').select('*', { count: 'exact' }).eq('form_id', id as string)
+          .order('created_at', { ascending: false }).range(0, PAGE_SIZE - 1);
+        responseData = rData;
+        count = rCount;
+      }
 
       // Reconstruct form-compatible object with config shape
       let formData: any = null;
@@ -1963,11 +1987,27 @@ export default function FormDetailPage() {
   const fetchPage = async (newPage: number) => {
     setPageLoading(true);
     const from = newPage * PAGE_SIZE;
-    const { data } = await supabase.from('responses').select('*')
-      .eq('form_id', id as string)
-      .order('created_at', { ascending: false })
-      .range(from, from + PAGE_SIZE - 1);
-    if (data) setResponses(data);
+    const isEventContent = form?.content_type === 'event';
+    if (isEventContent) {
+      const { data } = await supabase
+        .from('event_registrations')
+        .select('*, student:students(id, full_name, email)')
+        .eq('event_id', id as string)
+        .order('registered_at', { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+      if (data) setResponses(data.map((r: any) => ({
+        id: r.id,
+        created_at: r.registered_at,
+        data: { name: r.student?.full_name ?? '', email: r.student?.email ?? '' },
+        student: r.student,
+      })));
+    } else {
+      const { data } = await supabase.from('responses').select('*')
+        .eq('form_id', id as string)
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
+      if (data) setResponses(data);
+    }
     setPage(newPage);
     setPageLoading(false);
   };

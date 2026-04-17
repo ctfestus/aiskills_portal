@@ -1357,7 +1357,8 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
         newFileRecords.push({ submission_id: sub.id, file_name: null, file_url: url.trim() });
       }
       if (newFileRecords.length) {
-        const { data: inserted } = await supabase.from('assignment_submission_files').insert(newFileRecords).select();
+        const { data: inserted, error: fileErr } = await supabase.from('assignment_submission_files').insert(newFileRecords).select();
+        if (fileErr) throw fileErr;
         setSavedFiles(prev => [...prev, ...(inserted ?? [])]);
       }
 

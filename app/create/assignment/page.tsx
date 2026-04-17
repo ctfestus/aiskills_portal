@@ -82,7 +82,9 @@ export default function CreateAssignmentPage() {
   const [cohorts, setCohorts]         = useState<{ id: string; name: string }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
   const [coverUploading, setCoverUploading]       = useState(false);
+  const [resourceUploading, setResourceUploading] = useState<Record<string, boolean>>({});
   const coverRef = useRef<HTMLInputElement>(null);
+  const resourceFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const toggleCohort = (id: string) =>
     setSelectedCohortIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
@@ -207,6 +209,28 @@ export default function CreateAssignmentPage() {
       setError(err?.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  // -- Resource file upload ---
+  async function handleResourceFileUpload(resourceId: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setResourceUploading(prev => ({ ...prev, [resourceId]: true }));
+    try {
+      const path = `assignment-resources/${resourceId}/${Date.now()}-${file.name}`;
+      const { error: upErr } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
+      updateResource(resourceId, 'url', publicUrl);
+      if (!resources.find(r => r.id === resourceId)?.name) {
+        updateResource(resourceId, 'name', file.name);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'File upload failed.');
+    } finally {
+      setResourceUploading(prev => ({ ...prev, [resourceId]: false }));
+      e.target.value = '';
     }
   }
 
@@ -371,11 +395,39 @@ export default function CreateAssignmentPage() {
                     onChange={e => updateResource(resource.id, 'name', sanitizePlainText(e.target.value))}
                     style={{ ...inputStyle(C), width: '100%' }} maxLength={200}
                   />
-                  <input
-                    type="url" placeholder="https://…" value={resource.url}
-                    onChange={e => updateResource(resource.id, 'url', e.target.value)}
-                    style={{ ...inputStyle(C), width: '100%' }}
-                  />
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type="url" placeholder={resource.resource_type === 'file' ? 'Upload a file or paste URL…' : 'https://…'} value={resource.url}
+                      onChange={e => updateResource(resource.id, 'url', e.target.value)}
+                      style={{ ...inputStyle(C), width: '100%', flex: 1 }}
+                    />
+                    {resource.resource_type === 'file' && (
+                      <>
+                        <input
+                          type="file"
+                          style={{ display: 'none' }}
+                          ref={el => { resourceFileRefs.current[resource.id] = el; }}
+                          onChange={e => handleResourceFileUpload(resource.id, e)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => resourceFileRefs.current[resource.id]?.click()}
+                          disabled={resourceUploading[resource.id]}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 5,
+                            padding: '9px 12px', borderRadius: 10, border: `1px solid ${C.cardBorder}`,
+                            background: C.pill, color: C.muted, fontSize: 12, fontWeight: 600,
+                            cursor: resourceUploading[resource.id] ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                          }}
+                        >
+                          {resourceUploading[resource.id]
+                            ? <Loader2 style={{ width: 12, height: 12 }} className="animate-spin"/>
+                            : <Upload style={{ width: 12, height: 12 }}/>}
+                          {resourceUploading[resource.id] ? 'Uploading…' : 'Upload'}
+                        </button>
+                      </>
+                    )}
+                  </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     {(['link', 'file'] as const).map(t => (
                       <button
