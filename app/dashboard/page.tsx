@@ -11,7 +11,7 @@ import {
   ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
   Users, Megaphone, Trophy, Menu, CheckCircle2, XCircle,
   UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
-  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw, Palette,
+  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw, Palette, Mail,
 } from 'lucide-react';
 import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS, TextPositions, defaultTextPositions } from '@/components/CertificateTemplate';
 import Link from 'next/link';
@@ -2967,6 +2967,12 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   const [deletingId, setDeletingId]     = useState<string | null>(null);
   const [view, setView]                 = useState<'members' | 'unassigned'>('members');
   const [reassignId, setReassignId]     = useState<string | null>(null);
+  const [allowedEmails, setAllowedEmails]   = useState<any[]>([]);
+  const [emailInput, setEmailInput]         = useState('');
+  const [emailPanelOpen, setEmailPanelOpen] = useState(false);
+  const [emailLoading, setEmailLoading]     = useState(false);
+  const [emailSaving, setEmailSaving]       = useState(false);
+  const [emailFileRef]                      = useState<{ current: HTMLInputElement | null }>({ current: null });
 
   const showToast = (ok: boolean, text: string) => {
     setToast({ ok, text });
@@ -2986,6 +2992,92 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (selectedCohort?.id) loadAllowedEmails(selectedCohort.id);
+    else setAllowedEmails([]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCohort?.id]);
+
+  const loadAllowedEmails = async (cohortId: string) => {
+    setEmailLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`/api/cohort-allowlist?cohortId=${cohortId}`, {
+      headers: { Authorization: `Bearer ${session?.access_token}` },
+    });
+    const json = await res.json();
+    setAllowedEmails(json.emails ?? []);
+    setEmailLoading(false);
+  };
+
+  const addEmails = async () => {
+    if (!selectedCohort || !emailInput.trim()) return;
+    const parsed = emailInput
+      .split(/[\n,;]+/)
+      .map(e => e.trim().toLowerCase())
+      .filter(e => e.includes('@'));
+    if (!parsed.length) return;
+    setEmailSaving(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/cohort-allowlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ cohortId: selectedCohort.id, emails: parsed }),
+    });
+    const json = await res.json();
+    if (json.error) { showToast(false, json.error); }
+    else {
+      setEmailInput('');
+      showToast(true, `${json.inserted?.length ?? parsed.length} email(s) added`);
+      loadAllowedEmails(selectedCohort.id);
+    }
+    setEmailSaving(false);
+  };
+
+  const removeEmail = async (id: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    await fetch('/api/cohort-allowlist', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ id }),
+    });
+    setAllowedEmails(prev => prev.filter(e => e.id !== id));
+  };
+
+  const handleEmailFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedCohort) return;
+    setEmailSaving(true);
+    try {
+      const XLSX = await import('xlsx');
+      const buf  = await file.arrayBuffer();
+      const wb   = XLSX.read(buf, { type: 'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      const emails = rows
+        .flat()
+        .map((v: any) => String(v ?? '').toLowerCase().trim())
+        .filter(v => v.includes('@'));
+      if (!emails.length) { showToast(false, 'No valid emails found in file'); return; }
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/cohort-allowlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ cohortId: selectedCohort.id, emails }),
+      });
+      const json = await res.json();
+      if (json.error) { showToast(false, json.error); }
+      else {
+        showToast(true, `${emails.length} email(s) imported from file`);
+        loadAllowedEmails(selectedCohort.id);
+      }
+    } catch (err: any) {
+      showToast(false, err?.message || 'Failed to read file');
+    } finally {
+      setEmailSaving(false);
+      e.target.value = '';
+    }
+  };
 
   const createCohort = async () => {
     if (!newName.trim()) return;
@@ -3327,6 +3419,97 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
           )}
         </div>
       </div>
+
+      {/* Allowed Emails panel */}
+      {selectedCohort && (
+        <div className="rounded-2xl overflow-hidden" style={card}>
+          <div className="px-5 py-3.5 flex items-center justify-between border-b" style={{ borderColor: C.divider }}>
+            <div className="flex items-center gap-2.5">
+              <Mail className="w-4 h-4" style={{ color: C.muted }}/>
+              <p className="text-sm font-semibold" style={{ color: C.text }}>Allowed Emails</p>
+              <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: C.pill, color: C.muted }}>
+                {allowedEmails.length}
+              </span>
+            </div>
+            <button onClick={() => setEmailPanelOpen(v => !v)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+              style={{ background: emailPanelOpen ? C.pill : C.cta, color: emailPanelOpen ? C.muted : C.ctaText }}>
+              {emailPanelOpen ? 'Close' : 'Manage'}
+            </button>
+          </div>
+
+          {emailPanelOpen && (
+            <div className="p-5 space-y-4">
+              {/* Add emails */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium" style={{ color: C.muted }}>Add emails (one per line, or comma/semicolon separated)</p>
+                  <div>
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      ref={el => { emailFileRef.current = el; }}
+                      onChange={handleEmailFile}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => emailFileRef.current?.click()}
+                      disabled={emailSaving}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 transition-colors"
+                      style={{ background: C.pill, color: C.muted }}>
+                      {emailSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Upload className="w-3.5 h-3.5"/>}
+                      Upload CSV / Excel
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  value={emailInput}
+                  onChange={e => setEmailInput(e.target.value)}
+                  rows={3}
+                  placeholder="student@example.com&#10;another@example.com"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none"
+                  style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}
+                />
+                <button onClick={addEmails} disabled={emailSaving || !emailInput.trim()}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-40"
+                  style={{ background: C.cta, color: C.ctaText }}>
+                  {emailSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4"/>}
+                  Add Emails
+                </button>
+              </div>
+
+              {/* Email list */}
+              <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+                {emailLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: C.faint }}/>
+                  </div>
+                ) : allowedEmails.length === 0 ? (
+                  <div className="flex flex-col items-center py-10 gap-1.5">
+                    <Mail className="w-8 h-8 opacity-20" style={{ color: C.faint }}/>
+                    <p className="text-sm" style={{ color: C.faint }}>No emails added yet</p>
+                    <p className="text-xs" style={{ color: C.faint }}>Add student emails above to allow them to register</p>
+                  </div>
+                ) : (
+                  <div className="max-h-[320px] overflow-y-auto">
+                    {allowedEmails.map((e, i) => (
+                      <div key={e.id} className="flex items-center gap-3 px-4 py-2.5 group"
+                        style={{ borderBottom: i < allowedEmails.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
+                        <p className="flex-1 text-sm truncate" style={{ color: C.text }}>{e.email}</p>
+                        <button onClick={() => removeEmail(e.id)}
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded-lg transition-all hover:bg-red-500/10"
+                          style={{ color: '#ef4444' }}>
+                          <X className="w-3.5 h-3.5"/>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

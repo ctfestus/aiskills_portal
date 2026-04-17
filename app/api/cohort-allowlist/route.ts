@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
     .then(r => r)
     .catch(() => adminClient()
       .from('cohort_allowed_emails')
-      .upsert(rows, { onConflict: 'cohort_id,email', ignoreDuplicates: true })
+      .upsert(rows, { onConflict: 'email', ignoreDuplicates: true })
       .select('id, email, created_at')
     );
 

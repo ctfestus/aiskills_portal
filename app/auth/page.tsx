@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/components/TenantProvider';
 import { motion, AnimatePresence } from 'motion/react';
@@ -27,6 +27,13 @@ export default function AuthPage() {
   const [message, setMessage]             = useState('');
   const [showPass, setShowPass]           = useState(false);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error') === 'not_allowed') {
+      setMessage('Your Google account email is not on the approved list. Contact your administrator.');
+    }
+  }, []);
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -44,6 +51,14 @@ export default function AuthPage() {
         else if (student.role === 'student') window.location.href = '/student';
         else window.location.href = '/dashboard';
       } else {
+        // Check allowlist before creating account
+        const res = await fetch(`/api/cohort-allowlist?email=${encodeURIComponent(email)}`);
+        const { allowed, cohortId } = await res.json();
+        if (!allowed) {
+          throw new Error('Your email is not on the approved list. Contact your administrator.');
+        }
+        // Store cohort for callback to pick up
+        document.cookie = `cohort_assign=${cohortId}; path=/; max-age=600; SameSite=Lax`;
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         setMessage('Check your email for the confirmation link.');
@@ -59,7 +74,7 @@ export default function AuthPage() {
     setGoogleLoading(true);
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/onboarding` },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
   };
 

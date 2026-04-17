@@ -10,7 +10,7 @@ CREATE TABLE public.cohort_allowed_emails (
   added_by   uuid        REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT cohort_allowed_emails_email_lower CHECK (email = lower(email)),
-  UNIQUE (cohort_id, email)
+  UNIQUE (email)
 );
 
 ALTER TABLE public.cohort_allowed_emails ENABLE ROW LEVEL SECURITY;
