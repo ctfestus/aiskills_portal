@@ -168,7 +168,6 @@ const ELEVATE_EMPTY = {
   cardOverlayColor: '', cardOverlayOpacity: '',
   hideOfferings: '', hideSteps: '', hideFeatures: '',
   hideTestimonials: '', hideCta: '', hidePartners: '', hideStats: '',
-  floatingCtaHeading: '', floatingCtaSubtext: '', floatingCtaButton: '', floatingCtaImageUrl: '', floatingCtaBgColor: '', hideFloatingCta: '',
 };
 
 const MOMENTUM_EMPTY = {
@@ -184,7 +183,6 @@ const MOMENTUM_EMPTY = {
   highlight5: '', highlight6: '', highlight7: '', highlight8: '',
   hideOfferings: '', hideSteps: '', hideFeatures: '',
   hideTestimonials: '', hideCta: '', hidePartners: '', hideStats: '',
-  floatingCtaHeading: '', floatingCtaSubtext: '', floatingCtaButton: '', floatingCtaImageUrl: '', floatingCtaBgColor: '', hideFloatingCta: '',
 };
 
 export const TEMPLATES: Template[] = [

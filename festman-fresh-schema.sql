@@ -500,6 +500,16 @@ CREATE TABLE public.notifications (
   created_at timestamptz DEFAULT now()
 );
 
+-- ── site_settings (landing page template + config) ────────────
+CREATE TABLE public.site_settings (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  singleton   boolean     UNIQUE DEFAULT true CHECK (singleton = true),
+  template    text        NOT NULL DEFAULT 'momentum',
+  config      jsonb       NOT NULL DEFAULT '{}',
+  updated_by  uuid        REFERENCES auth.users(id) ON DELETE SET NULL,
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
 
 -- ─────────────────────────────────────────────────────────────
 --  4. SECURITY HELPER FUNCTIONS
@@ -571,6 +581,7 @@ ALTER TABLE public.sent_nudges                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.learning_path_progress     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meeting_integrations       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.site_settings              ENABLE ROW LEVEL SECURITY;
 
 
 -- ─────────────────────────────────────────────────────────────
@@ -634,6 +645,14 @@ CREATE TRIGGER trg_meeting_integrations_updated_at
   BEFORE UPDATE ON public.meeting_integrations FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_learning_path_progress_updated_at
   BEFORE UPDATE ON public.learning_path_progress FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE OR REPLACE FUNCTION public.trg_site_settings_updated_at()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN NEW.updated_at = now(); RETURN NEW; END; $$;
+
+CREATE TRIGGER trg_set_site_settings_updated_at
+  BEFORE UPDATE ON public.site_settings
+  FOR EACH ROW EXECUTE FUNCTION public.trg_site_settings_updated_at();
 
 
 -- ─────────────────────────────────────────────────────────────
@@ -1473,6 +1492,25 @@ CREATE POLICY "notifications_own_update"
   ON public.notifications FOR UPDATE
   USING (user_id = (SELECT auth.uid()));
 
+-- ── site_settings ─────────────────────────────────────────────
+CREATE POLICY "public_read_site_settings"
+  ON public.site_settings FOR SELECT
+  USING (true);
+
+CREATE POLICY "admin_write_site_settings"
+  ON public.site_settings FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.students
+      WHERE students.id = auth.uid()
+        AND students.role IN ('admin', 'instructor')
+    )
+  );
+
+INSERT INTO public.site_settings (singleton, template, config)
+VALUES (true, 'momentum', '{}')
+ON CONFLICT (singleton) DO NOTHING;
+
 
 -- ─────────────────────────────────────────────────────────────
 --  10. INDEXES
@@ -1589,6 +1627,8 @@ CREATE INDEX idx_meeting_integrations_user ON public.meeting_integrations(user_i
 
 -- notifications
 CREATE INDEX notifications_user_id_idx ON public.notifications(user_id, created_at DESC);
+
+-- site_settings (no additional indexes needed — singleton table)
 
 
 -- ─────────────────────────────────────────────────────────────
