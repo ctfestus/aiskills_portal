@@ -17,7 +17,10 @@
       "Bash(curl -s \"https://cdn.prod.website-files.com/687904fb2b26c434698c47e9/css/fs-teachable.shared.88000560f.min.css\")",
       "Bash(curl -s \"https://www.teachable.com/\")",
       "Bash(curl -s \"https://cdn.prod.website-files.com/687904fb2b26c434698c47e9/css/fs-teachable.68b18a352897a262d4000b50.0b2d19903.opt.min.css\")",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "Bash(curl -s -X POST https://claudemcp-production-c706.up.railway.app/mcp -H \"Content-Type: application/json\" -H \"Accept: application/json, text/event-stream\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}')",
+      "Bash(curl -s https://claudemcp-production-c706.up.railway.app/health)",
+      "Bash(curl -v -X POST https://claudemcp-production-c706.up.railway.app/mcp -H \"Content-Type: application/json\" -H \"Accept: application/json, text/event-stream\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}')"
     ]
   }
 }

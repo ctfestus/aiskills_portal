@@ -1023,12 +1023,15 @@ const [isSaving, setIsSaving] = useState(false);
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
-      const { data } = await supabase
-        .from('events')
-        .select('id, title, slug, cover_image')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false });
-      if (data) setAvailableForms(data.filter((f: any) => f.id !== savedFormId).map((e: any) => ({ ...e, config: { title: e.title, coverImage: e.cover_image } })));
+      const [{ data: events }, { data: courses }] = await Promise.all([
+        supabase.from('events').select('id, title, slug, cover_image').eq('user_id', session.user.id).order('created_at', { ascending: false }),
+        supabase.from('courses').select('id, title, slug, cover_image').eq('user_id', session.user.id).order('created_at', { ascending: false }),
+      ]);
+      const all = [
+        ...(events ?? []).map((e: any) => ({ ...e, _type: 'event', config: { title: e.title, coverImage: e.cover_image } })),
+        ...(courses ?? []).map((c: any) => ({ ...c, _type: 'course', config: { title: c.title, coverImage: c.cover_image } })),
+      ].filter(f => f.id !== savedFormId);
+      setAvailableForms(all);
     })();
   }, [formConfig?.postSubmission?.type, savedFormId]);
 
@@ -3265,12 +3268,12 @@ const [isSaving, setIsSaving] = useState(false);
                   </div>
                 )}
 
-                {/* Show Events */}
+                {/* Show Programs */}
                 {(formConfig.postSubmission?.type === 'events') && (
                   <div className="space-y-2">
-                    <label className={labelCls} style={labelStyle}>Select forms/events to show</label>
+                    <label className={labelCls} style={labelStyle}>Select courses/events to show</label>
                     {availableForms.length === 0 ? (
-                      <p className="text-[11px] py-2" style={{ color: C.faint }}>No other forms found.</p>
+                      <p className="text-[11px] py-2" style={{ color: C.faint }}>No other courses or events found.</p>
                     ) : (
                       <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
                         {availableForms.map(f => {
@@ -3288,7 +3291,10 @@ const [isSaving, setIsSaving] = useState(false);
                                 className="w-3.5 h-3.5 rounded"
                                 style={{ accentColor: accentColor }}
                               />
-                              <span className="text-xs truncate" style={{ color: C.text }}>{(f as any).config?.title || f.title || f.slug}</span>
+                              <span className="text-xs truncate flex-1" style={{ color: C.text }}>{(f as any).config?.title || f.title || f.slug}</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0" style={{ background: (f as any)._type === 'course' ? '#3b82f620' : '#8b5cf620', color: (f as any)._type === 'course' ? '#3b82f6' : '#8b5cf6' }}>
+                                {(f as any)._type === 'course' ? 'Course' : 'Event'}
+                              </span>
                             </label>
                           );
                         })}

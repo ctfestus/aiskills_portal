@@ -467,11 +467,24 @@ export default function PublicFormPage() {
       return;
     }
     if (ps?.type === 'events' && ps.relatedEventIds?.length) {
-      supabase.from('events').select('id, slug, title, event_date, event_time, cover_image').in('id', ps.relatedEventIds).then(({ data }) => {
-        if (data) setRelatedForms(data.map((e: any) => ({
-          ...e,
-          config: { title: e.title, coverImage: e.cover_image, eventDetails: { isEvent: true, date: e.event_date, time: e.event_time } }
-        })));
+      const ids = ps.relatedEventIds;
+      Promise.all([
+        supabase.from('events').select('id, slug, title, event_date, event_time, cover_image').in('id', ids),
+        supabase.from('courses').select('id, slug, title, cover_image').in('id', ids),
+      ]).then(([{ data: events }, { data: courses }]) => {
+        const combined = [
+          ...(events ?? []).map((e: any) => ({
+            ...e,
+            config: { title: e.title, coverImage: e.cover_image, eventDetails: { isEvent: true, date: e.event_date, time: e.event_time } },
+          })),
+          ...(courses ?? []).map((c: any) => ({
+            ...c,
+            config: { title: c.title, coverImage: c.cover_image },
+          })),
+        ];
+        // preserve the order the instructor selected
+        combined.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+        setRelatedForms(combined);
       });
     }
   }, [success, form]);
@@ -1322,7 +1335,7 @@ export default function PublicFormPage() {
                             )}
                           </div>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: accentColor }}>
-                            Register now <ArrowRight style={{ width: 12, height: 12 }} />
+                            {rfConfig.eventDetails?.isEvent ? 'Register now' : 'Start learning'} <ArrowRight style={{ width: 12, height: 12 }} />
                           </span>
                         </div>
                       </a>
