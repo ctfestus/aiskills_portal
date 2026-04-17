@@ -8,14 +8,15 @@ const CERT_W = 1860;
 const CERT_H = 1200;
 
 interface Props {
-  certId:      string;
-  studentName: string;
-  courseName:  string;
-  issueDate:   string;
-  settings:    CertificateSettings;
-  issuedAt:    string;
-  certType:    'course' | 'virtual_experience' | 'learning_path';
-  pathItems?:  { id: string; title: string; coverImage: string | null }[];
+  certId:          string;
+  studentName:     string;
+  courseName:      string;
+  issueDate:       string;
+  settings:        CertificateSettings;
+  issuedAt:        string;
+  certType:        'course' | 'virtual_experience' | 'learning_path';
+  pathItems?:      { id: string; title: string; coverImage: string | null }[];
+  pathCoverImage?: string | null;
 }
 
 const CERT_TYPE_BADGE: Record<string, { label: string; bg: string; color: string; border: string }> = {
@@ -33,7 +34,7 @@ function LinkedInIcon() {
 }
 
 
-export default function CertificatePageClient({ certId, studentName, courseName, issueDate, settings, issuedAt, certType, pathItems }: Props) {
+export default function CertificatePageClient({ certId, studentName, courseName, issueDate, settings, issuedAt, certType, pathItems, pathCoverImage }: Props) {
   const certRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -182,28 +183,37 @@ export default function CertificatePageClient({ certId, studentName, courseName,
           <p className="text-sm font-semibold text-gray-700 mt-0.5">{courseName}</p>
         </div>
 
-        {/* Learning path courses */}
-        {certType === 'learning_path' && pathItems && pathItems.length > 0 && (
+        {/* Learning path cover image + courses list */}
+        {certType === 'learning_path' && (pathCoverImage || (pathItems && pathItems.length > 0)) && (
           <div className="mt-8 w-full" style={{ maxWidth: `${previewW}px` }}>
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Courses in this learning path</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {pathItems.map((item, i) => (
-                <div key={item.id ?? i} className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 overflow-hidden"
-                  style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
-                  <div className="w-16 h-16 flex-shrink-0 overflow-hidden"
-                    style={{ background: item.coverImage ? undefined : '#ede9fe' }}>
-                    {item.coverImage
-                      ? <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover"/>
-                      : <div className="w-full h-full flex items-center justify-center">
-                          <svg className="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25"/>
-                          </svg>
-                        </div>}
-                  </div>
-                  <p className="text-sm font-medium text-gray-800 pr-3 leading-snug line-clamp-2">{item.title}</p>
+            {pathCoverImage && (
+              <div className="mb-5 rounded-xl overflow-hidden" style={{ height: 160, boxShadow: '0 2px 12px rgba(0,0,0,0.10)' }}>
+                <img src={pathCoverImage} alt={courseName} className="w-full h-full object-cover" />
+              </div>
+            )}
+            {pathItems && pathItems.length > 0 && (
+              <>
+                <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Courses in this learning path</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {pathItems.map((item, i) => (
+                    <div key={item.id ?? i} className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 overflow-hidden"
+                      style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                      <div className="w-16 h-16 flex-shrink-0 overflow-hidden"
+                        style={{ background: item.coverImage ? undefined : '#ede9fe' }}>
+                        {item.coverImage
+                          ? <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center">
+                              <svg className="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25"/>
+                              </svg>
+                            </div>}
+                      </div>
+                      <p className="text-sm font-medium text-gray-800 pr-3 leading-snug line-clamp-2">{item.title}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </div>
         )}
       </div>

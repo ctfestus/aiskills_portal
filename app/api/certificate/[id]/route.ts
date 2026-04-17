@@ -72,7 +72,7 @@ export async function GET(
   if (!cert.course_id && cert.learning_path_id) {
     const { data: path } = await anonSupabase
       .from('learning_paths')
-      .select('title, instructor_id, item_ids')
+      .select('title, instructor_id, item_ids, cover_image')
       .eq('id', cert.learning_path_id)
       .single();
 
@@ -118,15 +118,16 @@ export async function GET(
     } : null;
 
     return NextResponse.json({
-      certId:      cert.id,
-      studentName: cert.student_name,
-      courseName:  path?.title ?? 'Learning Path',
-      issueDate:   new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-      issuedAt:    cert.issued_at,
-      certType:    'learning_path',
+      certId:          cert.id,
+      studentName:     cert.student_name,
+      courseName:      path?.title ?? 'Learning Path',
+      issueDate:       new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+      issuedAt:        cert.issued_at,
+      certType:        'learning_path',
       pathItems,
+      pathCoverImage:  (path as any)?.cover_image ?? null,
       settings,
-      revoked:     false,
+      revoked:         false,
     });
   }
 

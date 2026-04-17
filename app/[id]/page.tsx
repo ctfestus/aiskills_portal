@@ -422,6 +422,30 @@ export default function PublicFormPage() {
             .then(({ data: asgn }) => { if (asgn) setRelatedAssignment(asgn); });
         }
 
+        // Auto-resume VE: if user is already authenticated, skip the cover page
+        if (user && (data.config?.isVirtualExperience || data.config?.isGuidedProject)) {
+          const { data: { session } } = await supabase.auth.getSession();
+          const { data: student } = await supabase.from('students').select('full_name, email').eq('id', user.id).single();
+          const name  = student?.full_name || user.user_metadata?.full_name || '';
+          const email = student?.email || user.email || '';
+          try {
+            const r = await fetch(`/api/guided-project-progress?formId=${data.id}&studentId=${user.id}`, {
+              headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+            });
+            const { attempt } = await r.json();
+            if (attempt) {
+              setProjectProgress(attempt.progress || {});
+              setProjectInitModId(attempt.current_module_id || '');
+              setProjectInitLesId(attempt.current_lesson_id || '');
+            }
+          } catch {}
+          setProjectStudentName(name);
+          setProjectStudentEmail(email);
+          setProjectUserId(user.id);
+          setProjectSessionToken(session?.access_token ?? '');
+          setProjectStarted(true);
+        }
+
         // Pre-fill from logged-in student
         if (user && data.config?.isCourse) {
           const { data: student } = await supabase

@@ -30,7 +30,7 @@ export default function AuthPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('error') === 'not_allowed') {
-      setMessage('Your Google account email is not on the approved list. Contact your administrator.');
+      setMessage('You do not have access to this portal. Contact your Learning Advisor.');
     }
   }, []);
 
@@ -55,7 +55,7 @@ export default function AuthPage() {
         const res = await fetch(`/api/cohort-allowlist?email=${encodeURIComponent(email)}`);
         const { allowed, cohortId } = await res.json();
         if (!allowed) {
-          throw new Error('Your email is not on the approved list. Contact your administrator.');
+          throw new Error('You do not have access to this portal. Contact your Learning Advisor.');
         }
         // Store cohort for callback to pick up
         document.cookie = `cohort_assign=${cohortId}; path=/; max-age=600; SameSite=Lax`;

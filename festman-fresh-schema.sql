@@ -217,6 +217,7 @@ CREATE TABLE public.assignments (
   related_course          uuid        REFERENCES public.courses(id) ON DELETE SET NULL,
   created_by              uuid        REFERENCES auth.users(id) ON DELETE SET NULL,
   cohort_ids              uuid[]      NOT NULL DEFAULT '{}',
+  cover_image             text,
   status                  text        NOT NULL DEFAULT 'draft'
                                         CHECK (status IN ('draft','published','closed')),
   created_at              timestamptz NOT NULL DEFAULT now(),
@@ -266,6 +267,7 @@ CREATE TABLE public.communities (
   name          text        NOT NULL,
   whatsapp_link text,
   description   text,
+  cover_image   text,
   created_by    uuid        REFERENCES auth.users(id) ON DELETE SET NULL,
   cohort_ids    uuid[]      NOT NULL DEFAULT '{}',
   status        text        NOT NULL DEFAULT 'active'
@@ -280,6 +282,7 @@ CREATE TABLE public.announcements (
   title        text        NOT NULL,
   content      text        NOT NULL,
   cover_image  text,
+  youtube_url  text,
   author_id    uuid        REFERENCES auth.users(id) ON DELETE SET NULL,
   cohort_ids   uuid[]      NOT NULL DEFAULT '{}',
   is_pinned    boolean     NOT NULL DEFAULT false,
@@ -288,6 +291,31 @@ CREATE TABLE public.announcements (
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT announcements_expiry_valid CHECK (expires_at IS NULL OR expires_at > published_at)
+);
+
+-- ── recordings ────────────────────────────────────────────────
+CREATE TABLE public.recordings (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  title       text        NOT NULL,
+  description text,
+  cover_image text,
+  cohort_ids  uuid[]      NOT NULL DEFAULT '{}',
+  created_by  uuid        REFERENCES auth.users(id) ON DELETE SET NULL,
+  status      text        NOT NULL DEFAULT 'draft'
+                            CHECK (status IN ('draft','published')),
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- ── recording_entries ──────────────────────────────────────────
+CREATE TABLE public.recording_entries (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  recording_id uuid        NOT NULL REFERENCES public.recordings(id) ON DELETE CASCADE,
+  week         integer     NOT NULL CHECK (week >= 1),
+  topic        text        NOT NULL,
+  url          text        NOT NULL,
+  order_index  integer     NOT NULL DEFAULT 0,
+  created_at   timestamptz NOT NULL DEFAULT now()
 );
 
 -- ── schedules ─────────────────────────────────────────────────

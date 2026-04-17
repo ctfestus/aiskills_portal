@@ -142,7 +142,7 @@ function useProgrammes() {
     Promise.all([
       supabase.from('courses').select('id,title,cover_image,slug').eq('status', 'published').limit(12),
       supabase.from('virtual_experiences').select('id,title,cover_image,slug,tagline,difficulty,industry').eq('status', 'published').limit(12),
-      supabase.from('learning_paths').select('id,title,description').eq('status', 'published').limit(8),
+      supabase.from('learning_paths').select('id,title,description,cover_image').eq('status', 'published').limit(8),
     ]).then(([c, v, lp]) => {
       const courses: ProgrammeItem[] = (c.data ?? []).map((r: any) => ({
         id: r.id, title: r.title, description: r.learn_outcomes?.[0] ?? '',
@@ -156,7 +156,7 @@ function useProgrammes() {
       }));
       const paths: ProgrammeItem[] = (lp.data ?? []).map((r: any) => ({
         id: r.id, title: r.title, description: r.description ?? '',
-        imageUrl: '', badge: 'Learning Path', type: 'path', slug: '',
+        imageUrl: r.cover_image ?? '', badge: 'Learning Path', type: 'path', slug: '',
       }));
       const merged = [...courses, ...ves, ...paths];
       if (merged.length > 0) setItems(merged);

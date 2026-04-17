@@ -59,10 +59,11 @@ interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'dashboard_critique';
   options?: string[];
   correctAnswer?: string;
   expectedAnswer?: string;
+  rubric?: string[];
 }
 interface Lesson {
   id: string;
@@ -108,6 +109,64 @@ const INDUSTRIES = [
 ];
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
+
+function RubricBuilder({ criteria, onChange, C, inp }: {
+  criteria: string[];
+  onChange: (rubric: string[]) => void;
+  C: typeof LIGHT_C;
+  inp: React.CSSProperties;
+}) {
+  const [draft, setDraft] = useState('');
+  const add = () => {
+    const val = draft.trim();
+    if (!val) return;
+    onChange([...criteria, val]);
+    setDraft('');
+  };
+  return (
+    <div className="rounded-xl p-3 space-y-2" style={{ background: C.input, border: `1px solid ${C.cardBorder}` }}>
+      <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: '#6366f1' }}>
+        Grading Rubric
+        <span className="ml-1.5 normal-case font-normal tracking-normal" style={{ color: C.faint }}>
+          -- optional · AI grades each criterion as Pass / Fail
+        </span>
+      </p>
+      {criteria.map((crit, ci) => (
+        <div key={ci} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
+          style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ background: '#6366f118' }}>
+            <span className="text-[9px] font-black" style={{ color: '#6366f1' }}>{ci + 1}</span>
+          </div>
+          <p className="flex-1 text-[12px]" style={{ color: C.text }}>{crit}</p>
+          <button onClick={() => onChange(criteria.filter((_, j) => j !== ci))}
+            className="hover:text-red-400 flex-shrink-0 transition-colors" style={{ color: C.faint }}>
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <input
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          style={{ ...inp, fontSize: 12, padding: '6px 10px' }}
+          placeholder="e.g. Must include a KPI row with at least 3 metrics"
+        />
+        <button onClick={add} disabled={!draft.trim()}
+          className="flex items-center gap-1 px-3 rounded-xl text-[12px] font-semibold flex-shrink-0 transition-all hover:opacity-80 disabled:opacity-40"
+          style={{ background: '#6366f118', color: '#6366f1', border: '1px solid #6366f130' }}>
+          <Plus className="w-3 h-3" /> Add
+        </button>
+      </div>
+      {criteria.length === 0 && (
+        <p className="text-[11px]" style={{ color: C.faint }}>
+          No criteria yet -- AI will use McKinsey-level standards. Add criteria to grade against your specific assignment requirements.
+        </p>
+      )}
+    </div>
+  );
+}
 
 // -- Page ---
 function VirtualExperienceCreatePageInner() {
@@ -1135,9 +1194,10 @@ function VirtualExperienceCreatePageInner() {
                                           const opts = req.options?.length === 4 ? req.options : ['', '', '', ''];
                                           const TYPE_COLORS: Record<string, { bg: string; color: string; label: string }> = {
                                             mcq:    { bg: `${C.cta}18`,              color: C.cta,       label: 'Multiple Choice' },
-                                            text:   { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6',   label: 'Short Answer'    },
-                                            upload: { bg: 'rgba(245,158,11,0.12)',   color: '#f59e0b',   label: 'File Upload'     },
-                                            task:   { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6',   label: 'Task (Checkbox)' },
+                                            text:               { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6',   label: 'Short Answer'       },
+                                            upload:             { bg: 'rgba(245,158,11,0.12)',   color: '#f59e0b',   label: 'File Upload'         },
+                                            task:               { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6',   label: 'Task (Checkbox)'     },
+                                            dashboard_critique: { bg: 'rgba(16,185,129,0.12)',   color: '#10b981',   label: 'AI Dashboard Critique' },
                                           };
                                           const tc = TYPE_COLORS[req.type] || TYPE_COLORS.mcq;
                                           return (
@@ -1157,6 +1217,7 @@ function VirtualExperienceCreatePageInner() {
                                                   <option value="text">Short Answer</option>
                                                   <option value="upload">File Upload</option>
                                                   <option value="task">Task (Checkbox)</option>
+                                                  <option value="dashboard_critique">AI Dashboard Critique</option>
                                                 </select>
                                                 <input value={req.label}
                                                   onChange={e => updateReq(mod.id, les.id, req.id, { label: e.target.value })}
@@ -1215,6 +1276,20 @@ function VirtualExperienceCreatePageInner() {
                                               {req.type === 'task' && (
                                                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: 'rgba(59,130,246,0.06)', color: C.muted }}>
                                                   <Check className="w-3 h-3 flex-shrink-0" />Students tick a checkbox to confirm completion
+                                                </div>
+                                              )}
+                                              {req.type === 'dashboard_critique' && (
+                                                <div className="space-y-2">
+                                                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: 'rgba(16,185,129,0.06)', color: C.muted }}>
+                                                    <Star className="w-3 h-3 flex-shrink-0" style={{ color: '#10b981' }} />
+                                                    Students upload a dashboard screenshot -- AI critiques every element and delivers a full audit report
+                                                  </div>
+                                                  <RubricBuilder
+                                                    criteria={req.rubric ?? []}
+                                                    onChange={rubric => updateReq(mod.id, les.id, req.id, { rubric })}
+                                                    C={C}
+                                                    inp={inp}
+                                                  />
                                                 </div>
                                               )}
                                             </div>

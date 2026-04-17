@@ -8,13 +8,14 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
+import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
 
 // -- Types ---
 interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'dashboard_critique';
   options?: string[];
   correctAnswer?: string;
   expectedAnswer?: string;
@@ -285,6 +286,7 @@ export default function VirtualExperienceTaker({
     if (!isUnlocked(idx)) return;
     setCurrentModId(modId);
     setCurrentLesId(lesId);
+    saveProgress(progress, modId, lesId);
   };
 
   useEffect(() => {
@@ -891,6 +893,41 @@ export default function VirtualExperienceTaker({
                                   style={{ color: isDark ? '#f0f0f0' : '#111' }} />
                               </div>
                             </div>
+                          </div>
+                        );
+                      }
+
+                      // -- Dashboard Critique --
+                      if (req.type === 'dashboard_critique') {
+                        const saved = progress[req.id];
+                        return (
+                          <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-4">
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
+                                style={{ background: `${accentColor}18`, color: accentColor }}>AI Critique</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[14.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
+                                {req.description && <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
+                              </div>
+                              {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
+                            </div>
+                            <DashboardCritiquePlayer
+                              reqId={req.id}
+                              isDark={isDark ?? false}
+                              accentColor={accentColor}
+                              completed={done}
+                              savedResult={saved?.notes ? (() => { try { return JSON.parse(saved.notes!); } catch { return undefined; } })() : undefined}
+                              savedImageUrl={undefined}
+                              rubric={(req as any).rubric}
+                              onComplete={(result, _imageDataUrl) => {
+                                setProgress(prev => {
+                                  // Store only the analysis JSON in notes (not the base64 image -- too large for DB)
+                                  const next = { ...prev, [req.id]: { completed: true, notes: JSON.stringify(result) } };
+                                  saveProgress(next, currentModId, currentLesId);
+                                  return next;
+                                });
+                              }}
+                            />
                           </div>
                         );
                       }

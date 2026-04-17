@@ -169,6 +169,7 @@ const NAV_ITEMS = [
   { id: 'community',         label: 'Community',           Icon: Users           },
   { id: 'announcements',     label: 'Announcements',       Icon: Megaphone       },
   { id: 'schedule',          label: 'Schedule',            Icon: Calendar        },
+  { id: 'recordings',       label: 'Recordings',          Icon: Video           },
   { id: 'leaderboard',       label: 'Leaderboard',         Icon: Trophy          },
   { id: 'certificates',      label: 'Certificates',        Icon: Award           },
 ] as const;
@@ -1711,6 +1712,7 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<any>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -1751,9 +1753,9 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
       setLoading(false);
     };
     load();
-  }, [userId]);
+  }, [userId, refreshKey]);
 
-  if (selected) return <AssignmentDetail assignment={selected} userId={userId} C={C} onBack={() => setSelected(null)}/>;
+  if (selected) return <AssignmentDetail assignment={selected} userId={userId} C={C} onBack={() => { setSelected(null); setRefreshKey(k => k + 1); }}/>;
 
   const skCard = (
     <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
@@ -2812,6 +2814,189 @@ function ScheduleDetail({ schedule, C, onBack }: { schedule: any; C: typeof LIGH
         </div>
       </div>
     </motion.div>
+  );
+}
+
+function RecordingsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
+  const [recordings, setRecordings] = useState<any[]>([]);
+  const [entries, setEntries]       = useState<Record<string, any[]>>({});
+  const [loading, setLoading]       = useState(true);
+  const [selected, setSelected]     = useState<any | null>(null);
+  const [activeWeek, setActiveWeek] = useState<number | null>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const { data: student } = await supabase.from('students').select('cohort_id').eq('id', userId).single();
+      const cohortId = student?.cohort_id;
+      if (!cohortId) { setLoading(false); return; }
+      const { data } = await supabase.from('recordings')
+        .select('id, title, description, cover_image')
+        .contains('cohort_ids', [cohortId]).eq('status', 'published')
+        .order('created_at', { ascending: false });
+      setRecordings(data ?? []);
+      setLoading(false);
+    };
+    load();
+  }, [userId]);
+
+  async function openRecording(rec: any) {
+    setSelected(rec);
+    setActiveWeek(null);
+    topRef.current?.closest('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+    if (!entries[rec.id]) {
+      const { data } = await supabase.from('recording_entries')
+        .select('id, week, topic, url, order_index')
+        .eq('recording_id', rec.id).order('week').order('order_index');
+      const rows = data ?? [];
+      setEntries(prev => ({ ...prev, [rec.id]: rows }));
+      const firstWeek = rows.length ? Math.min(...rows.map((r: any) => r.week)) : null;
+      setActiveWeek(firstWeek);
+    } else {
+      const rows = entries[rec.id];
+      const firstWeek = rows.length ? Math.min(...rows.map((r: any) => r.week)) : null;
+      setActiveWeek(firstWeek);
+    }
+  }
+
+  if (loading) return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {[0,1,2,3,4,5].map(i => (
+        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <Sk h={160} r={0}/><div className="p-3 space-y-2"><Sk h={13} w="70%"/><Sk h={10} w="45%"/></div>
+        </div>
+      ))}
+    </div>
+  );
+
+  if (!recordings.length) return (
+    <EmptyState icon={Video} title="No recordings yet" body="Recordings for your courses will appear here once published."/>
+  );
+
+  /* -- Detail view -- */
+  if (selected) {
+    const recEntries = entries[selected.id] ?? [];
+    const weeks = [...new Set(recEntries.map((e: any) => e.week))].sort((a, b) => a - b);
+    const currentWeek = activeWeek ?? weeks[0] ?? null;
+    const weekEntries = recEntries.filter((e: any) => e.week === currentWeek);
+    const totalEntries = recEntries.length;
+
+    return (
+      <motion.div ref={topRef} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+        {/* Back + title */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          <button onClick={() => setSelected(null)}
+            style={{ width: 34, height: 34, borderRadius: 10, border: `1px solid ${C.cardBorder}`,
+              background: C.card, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', flexShrink: 0 }}>
+            <ArrowLeft size={15} style={{ color: C.text }}/>
+          </button>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 16, fontWeight: 800, color: C.text, lineHeight: 1.2 }} className="truncate">{selected.title}</p>
+            <p style={{ fontSize: 12, color: C.faint, marginTop: 1 }}>{totalEntries} recording{totalEntries !== 1 ? 's' : ''} · {weeks.length} week{weeks.length !== 1 ? 's' : ''}</p>
+          </div>
+        </div>
+
+        {/* Cover banner */}
+        {selected.cover_image && (
+          <div style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 16, height: 180,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }}>
+            <img src={selected.cover_image} alt={selected.title} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }}/>
+          </div>
+        )}
+
+        {/* Description */}
+        {selected.description && (
+          <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, marginBottom: 16 }}
+            dangerouslySetInnerHTML={{ __html: selected.description }}/>
+        )}
+
+        {/* Week tabs */}
+        {weeks.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 16 }}
+            className="hide-scrollbar">
+            {weeks.map(w => (
+              <button key={w} onClick={() => setActiveWeek(w)}
+                style={{
+                  padding: '6px 14px', borderRadius: 999, fontSize: 13, fontWeight: 700,
+                  whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: 0, border: 'none',
+                  background: currentWeek === w ? C.green : C.pill,
+                  color: currentWeek === w ? (C === LIGHT_C ? '#fff' : '#111') : C.muted,
+                  transition: 'all 0.15s',
+                }}>
+                Week {w}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Entries for selected week */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {weekEntries.length === 0
+            ? <p style={{ fontSize: 13, color: C.faint, textAlign: 'center', padding: '24px 0' }}>No recordings for this week.</p>
+            : weekEntries.map((entry: any, idx: number) => (
+                <motion.a key={entry.id} href={entry.url} target="_blank" rel="noopener noreferrer"
+                  initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
+                    borderRadius: 16, background: C.card, border: `1px solid ${C.cardBorder}`,
+                    textDecoration: 'none', boxShadow: C.cardShadow, transition: 'transform 0.15s, box-shadow 0.15s' }}
+                  className="hover:scale-[1.01]">
+                  {/* Play button */}
+                  <div style={{ width: 40, height: 40, borderRadius: 12, background: C.green,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Play size={16} fill={C === LIGHT_C ? '#fff' : '#111'} style={{ color: C === LIGHT_C ? '#fff' : '#111', marginLeft: 2 }}/>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.3 }} className="truncate">
+                      {entry.topic}
+                    </p>
+                    <p style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>Week {entry.week} · Recording {idx + 1}</p>
+                  </div>
+                  <ExternalLink size={14} style={{ color: C.faint, flexShrink: 0 }}/>
+                </motion.a>
+              ))
+          }
+        </div>
+      </motion.div>
+    );
+  }
+
+  /* -- Grid view -- */
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {recordings.map((rec, i) => (
+        <motion.button key={rec.id} onClick={() => openRecording(rec)}
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+          className="text-left w-full"
+          style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 16,
+            overflow: 'hidden', boxShadow: C.cardShadow, cursor: 'pointer' }}>
+          {/* Cover */}
+          <div style={{ height: 160, background: C.pill, position: 'relative', overflow: 'hidden' }}>
+            {rec.cover_image
+              ? <img src={rec.cover_image} alt={rec.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+              : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Video size={28} style={{ color: C.faint }}/>
+                </div>
+            }
+            {/* Play overlay */}
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.92)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 2px 10px rgba(0,0,0,0.22)' }}>
+                <Play size={14} fill={C.green} style={{ color: C.green, marginLeft: 2 }}/>
+              </div>
+            </div>
+          </div>
+          {/* Info */}
+          <div style={{ padding: '10px 12px 12px' }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.3 }}
+              className="line-clamp-2">{rec.title}</p>
+          </div>
+        </motion.button>
+      ))}
+    </div>
   );
 }
 
@@ -4125,22 +4310,21 @@ export default function StudentDashboard() {
               transition={{ duration: 0.2, ease: 'easeInOut' }}
               className={`fixed lg:static inset-y-0 left-0 z-40 lg:z-auto flex flex-col border-r overflow-hidden transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
               style={{ background: theme === 'dark' ? '#1E1F26' : '#1f1bc3', borderColor: C.navBorder, top: 57, color: 'white' }}>
-              {/* Collapse toggle -- desktop only */}
-              <div className="px-2 pt-2 pb-1 hidden lg:flex" style={{ justifyContent: navCollapsed ? 'center' : 'flex-end' }}>
-                <button
-                  onClick={() => setNavCollapsed(o => !o)}
-                  className="p-1.5 rounded-lg transition-all"
-                  style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = theme === 'dark' ? C.lime : '#ff9933'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                  {navCollapsed
-                    ? <ChevronRight className="w-4 h-4" style={{ color: theme === 'dark' ? '#A2AFBC' : 'rgba(255,255,255,0.8)' }}/>
-                    : <ChevronLeft className="w-4 h-4" style={{ color: theme === 'dark' ? '#A2AFBC' : 'rgba(255,255,255,0.8)' }}/>}
-                </button>
-              </div>
-
-              {/* Nav items */}
-              <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-hidden">
+              {/* Nav items + collapse toggle share the same scroll area */}
+              <nav className="flex-1 px-2 pt-1 pb-2 space-y-0.5 overflow-y-auto overflow-x-hidden sidebar-nav">
+                {/* Collapse toggle as first row -- desktop only */}
+                <div className="hidden lg:flex pb-0.5" style={{ justifyContent: navCollapsed ? 'center' : 'flex-end' }}>
+                  <button
+                    onClick={() => setNavCollapsed(o => !o)}
+                    className="p-1.5 rounded-lg transition-all"
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = theme === 'dark' ? C.lime : '#ff9933'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                    {navCollapsed
+                      ? <ChevronRight className="w-4 h-4" style={{ color: theme === 'dark' ? '#A2AFBC' : 'rgba(255,255,255,0.8)' }}/>
+                      : <ChevronLeft className="w-4 h-4" style={{ color: theme === 'dark' ? '#A2AFBC' : 'rgba(255,255,255,0.8)' }}/>}
+                  </button>
+                </div>
                 {NAV_ITEMS.map(item => {
                   const isActive = activeSection === item.id;
                   return (
@@ -4213,6 +4397,9 @@ export default function StudentDashboard() {
             )}
             {activeSection === 'virtual_experiences' && user && (
               <VirtualExperiencesSection userId={user.id} userEmail={user.email} C={C}/>
+            )}
+            {activeSection === 'recordings' && user && (
+              <RecordingsSection userId={user.id} C={C}/>
             )}
             {activeSection === 'schedule' && user && (
               <ScheduleSection userId={user.id} C={C}/>
