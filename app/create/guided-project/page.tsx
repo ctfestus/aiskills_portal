@@ -1314,7 +1314,7 @@ function VirtualExperienceCreatePageInner() {
                                                       spellCheck={false}
                                                       placeholder="Paste CREATE TABLE statements or describe the DataFrame columns. The AI uses this to validate student code against the actual schema."
                                                       className="w-full resize-none outline-none text-[12px] font-mono px-3 py-2.5 rounded-lg"
-                                                      style={{ background: inp, color: C.text, border: `1px solid ${C.cardBorder}`, lineHeight: 1.6 }}
+                                                      style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}`, lineHeight: 1.6 }}
                                                     />
                                                   </div>
                                                   <div className="flex items-center gap-3">
@@ -1325,7 +1325,7 @@ function VirtualExperienceCreatePageInner() {
                                                       onChange={e => updateReq(mod.id, les.id, req.id, { minScore: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
                                                       placeholder="0"
                                                       className="w-20 outline-none text-[12px] font-mono px-2 py-1 rounded-lg"
-                                                      style={{ background: inp, color: C.text, border: `1px solid ${C.cardBorder}` }}
+                                                      style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}
                                                     />
                                                     <p className="text-[11px]" style={{ color: C.muted }}>out of 10 · leave blank for no gate</p>
                                                   </div>
@@ -1352,7 +1352,7 @@ function VirtualExperienceCreatePageInner() {
                                                       spellCheck={false}
                                                       placeholder="Include the domain so the AI applies the right expertise. e.g. This is a financial model for a retail business. B5 should calculate total revenue using SUMIF on column D, C10 should show profit margin as a percentage. Or: This is an HR payroll sheet. Column F should calculate net pay after tax deductions. Or: This is a BI sales dashboard for a fintech company. D12 should show month-on-month growth using XLOOKUP."
                                                       className="w-full resize-none outline-none text-[12px] font-mono px-3 py-2.5 rounded-lg"
-                                                      style={{ background: inp, color: C.text, border: `1px solid ${C.cardBorder}`, lineHeight: 1.6 }}
+                                                      style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}`, lineHeight: 1.6 }}
                                                     />
                                                   </div>
                                                   <div className="flex items-center gap-3">
@@ -1363,7 +1363,7 @@ function VirtualExperienceCreatePageInner() {
                                                       onChange={e => updateReq(mod.id, les.id, req.id, { minScore: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
                                                       placeholder="0"
                                                       className="w-20 outline-none text-[12px] font-mono px-2 py-1 rounded-lg"
-                                                      style={{ background: inp, color: C.text, border: `1px solid ${C.cardBorder}` }}
+                                                      style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}
                                                     />
                                                     <p className="text-[11px]" style={{ color: C.muted }}>out of 10 · leave blank for no gate</p>
                                                   </div>
