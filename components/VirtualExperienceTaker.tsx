@@ -9,16 +9,22 @@ import {
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
+import CodeReviewPlayer, { LeanSubmission } from '@/components/CodeReviewPlayer';
+import ExcelReviewPlayer, { ExcelLeanSubmission } from '@/components/ExcelReviewPlayer';
 
-// -- Types ---
+// Types
 interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'dashboard_critique';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'dashboard_critique' | 'code_review' | 'excel_review';
   options?: string[];
   correctAnswer?: string;
   expectedAnswer?: string;
+  rubric?: string[];
+  schema?: string;
+  context?: string;
+  minScore?: number;
 }
 interface Lesson {
   id: string;
@@ -76,7 +82,7 @@ interface Props {
   accentColor?: string;
 }
 
-// -- Helpers ---
+// Helpers
 const REQ_META: Record<string, { label: string; color: string; bg: string }> = {
   task:        { label: 'Task',        color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
   deliverable: { label: 'Deliverable', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
@@ -89,7 +95,7 @@ function getVideoEmbedUrl(url: string): string | null {
   if (yt) return `https://www.youtube.com/embed/${yt[1]}?rel=0`;
   const vimeo = url.match(/vimeo\.com\/(\d+)/);
   if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
-  // Bunny.net -- all known URL patterns
+  // Bunny.net: all known URL patterns
   if (url.includes('iframe.mediadelivery.net/embed/') ||
       url.includes('player.mediadelivery.net/embed/') ||
       url.includes('video.bunnycdn.com/')) return url;
@@ -137,7 +143,7 @@ function DifficultyDots({ difficulty, color }: { difficulty: string; color: stri
   );
 }
 
-// -- Component ---
+// Component
 export default function VirtualExperienceTaker({
   formId, formSlug, config, studentName, studentEmail, userId, sessionToken,
   initialProgress = {}, initialModuleId, initialLessonId,
@@ -213,7 +219,7 @@ export default function VirtualExperienceTaker({
       .catch(() => {});
   }, [formId, studentEmail, authHeader]);
 
-  // Save progress (debounced 800ms) -- skipped in review mode
+  // Save progress (debounced 800ms): skipped in review mode
   const saveProgress = useCallback((prog: Progress, modId: string, lesId: string, completedAt?: string) => {
     if (reviewMode) return;
     clearTimeout(saveTimeout.current);
@@ -361,7 +367,7 @@ export default function VirtualExperienceTaker({
     }
   };
 
-  // -- Completion screen ---
+  // Completion screen
   if (completed && !reviewMode) {
     const totalLessons  = modules.reduce((a, m) => a + m.lessons.length, 0);
     const totalModules  = modules.length;
@@ -500,16 +506,16 @@ export default function VirtualExperienceTaker({
     );
   }
 
-  // -- Main layout ---
+  // Main layout
   return (
     <div className="relative flex h-screen overflow-hidden font-sans" style={{ background: bg, color: text }}>
 
-      {/* Mobile backdrop -- tap to close sidebar */}
+      {/* Mobile backdrop: tap to close sidebar */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-30 sm:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* -- Sidebar -- absolute overlay on mobile, in-flow on sm+ */}
+      {/* Sidebar: absolute overlay on mobile, in-flow on sm+ */}
       <aside className="absolute inset-y-0 left-0 z-40 sm:relative sm:inset-auto flex-shrink-0 flex flex-col border-r transition-all duration-300"
         style={{
           width: sidebarOpen ? 280 : 0, minWidth: sidebarOpen ? 280 : 0,
@@ -634,7 +640,7 @@ export default function VirtualExperienceTaker({
         </nav>
       </aside>
 
-      {/* -- Main content -- */}
+      {/* Main content */}
       <main className="flex-1 overflow-hidden flex flex-col">
         {/* Top bar */}
         <div className="sticky top-0 z-10 flex items-center gap-3 px-4 sm:px-6 py-3 border-b flex-shrink-0"
@@ -673,7 +679,7 @@ export default function VirtualExperienceTaker({
           </div>
         )}
 
-        {/* Lesson content -- subtle grey background, single white card */}
+        {/* Lesson content: subtle grey background, single white card */}
         <div ref={mainScrollRef} className="flex-1 overflow-y-auto" style={{ background: isDark ? '#141414' : '#F2F2F0' }}>
           <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 space-y-4">
           {!currentLes && modules.length === 0 && (
@@ -691,7 +697,7 @@ export default function VirtualExperienceTaker({
           )}
           {currentLes ? (
             <>
-              {/* Single unified card -- title + body + video + questions */}
+              {/* Single unified card: title + body + video + questions */}
               <div className="rounded-xl overflow-hidden"
                 style={{
                   background: isDark ? '#1e1e1e' : '#ffffff',
@@ -706,7 +712,7 @@ export default function VirtualExperienceTaker({
                 </div>
 
                 {/* Lesson body */}
-                {/* Video -- above body, padded + rounded */}
+                {/* Video: above body, padded + rounded */}
                 {embedUrl && (
                   <div className="px-4 sm:px-8 pt-5 sm:pt-7 pb-2">
                     <div className="rounded-lg overflow-hidden" style={{ aspectRatio: '16/9', background: '#000' }}>
@@ -836,7 +842,7 @@ export default function VirtualExperienceTaker({
                         );
                       }
 
-                      // -- File Upload question ---
+                      // File Upload question
                       if (req.type === 'upload') {
                         const fileUrl  = progress[req.id]?.fileUrl || '';
                         const linkUrl  = progress[req.id]?.linkUrl || '';
@@ -897,7 +903,7 @@ export default function VirtualExperienceTaker({
                         );
                       }
 
-                      // -- Dashboard Critique --
+                      // Dashboard Critique
                       if (req.type === 'dashboard_critique') {
                         const saved = progress[req.id];
                         return (
@@ -921,7 +927,7 @@ export default function VirtualExperienceTaker({
                               rubric={(req as any).rubric}
                               onComplete={(result, _imageDataUrl) => {
                                 setProgress(prev => {
-                                  // Store only the analysis JSON in notes (not the base64 image -- too large for DB)
+                                  // Store only the analysis JSON in notes (not the base64 image: too large for DB)
                                   const next = { ...prev, [req.id]: { completed: true, notes: JSON.stringify(result) } };
                                   saveProgress(next, currentModId, currentLesId);
                                   return next;
@@ -932,7 +938,79 @@ export default function VirtualExperienceTaker({
                         );
                       }
 
-                      // -- Short Answer / Text question ---
+                      // Code Review
+                      if (req.type === 'code_review') {
+                        const saved = progress[req.id];
+                        return (
+                          <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-4">
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
+                                style={{ background: `${accentColor}18`, color: accentColor }}>AI Code Review</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[14.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
+                                {req.description && <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
+                              </div>
+                              {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
+                            </div>
+                            <CodeReviewPlayer
+                              reqId={req.id}
+                              isDark={isDark ?? false}
+                              accentColor={accentColor}
+                              completed={done}
+                              submissions={saved?.notes ? (() => { try { const p = JSON.parse(saved.notes!); return Array.isArray(p) ? p as LeanSubmission[] : []; } catch { return []; } })() : []}
+                              rubric={req.rubric}
+                              schema={req.schema}
+                              minScore={req.minScore}
+                              onComplete={(_, lean, passed) => {
+                                setProgress(prev => {
+                                  const existing: LeanSubmission[] = prev[req.id]?.notes ? (() => { try { const p = JSON.parse(prev[req.id].notes!); return Array.isArray(p) ? p : []; } catch { return []; } })() : [];
+                                  const next = { ...prev, [req.id]: { completed: passed, notes: JSON.stringify([...existing, lean]) } };
+                                  saveProgress(next, currentModId, currentLesId);
+                                  return next;
+                                });
+                              }}
+                            />
+                          </div>
+                        );
+                      }
+
+                      // Excel Review
+                      if (req.type === 'excel_review') {
+                        const saved = progress[req.id];
+                        return (
+                          <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-4">
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
+                                style={{ background: `rgba(34,197,94,0.12)`, color: '#22c55e' }}>AI Excel Review</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[14.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
+                                {req.description && <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
+                              </div>
+                              {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
+                            </div>
+                            <ExcelReviewPlayer
+                              reqId={req.id}
+                              isDark={isDark ?? false}
+                              accentColor={accentColor}
+                              completed={done}
+                              submissions={saved?.notes ? (() => { try { const p = JSON.parse(saved.notes!); return Array.isArray(p) ? p as ExcelLeanSubmission[] : []; } catch { return []; } })() : []}
+                              context={req.context}
+                              rubric={req.rubric}
+                              minScore={req.minScore}
+                              onComplete={(_, lean, passed) => {
+                                setProgress(prev => {
+                                  const existing: ExcelLeanSubmission[] = prev[req.id]?.notes ? (() => { try { const p = JSON.parse(prev[req.id].notes!); return Array.isArray(p) ? p : []; } catch { return []; } })() : [];
+                                  const next = { ...prev, [req.id]: { completed: passed, notes: JSON.stringify([...existing, lean]) } };
+                                  saveProgress(next, currentModId, currentLesId);
+                                  return next;
+                                });
+                              }}
+                            />
+                          </div>
+                        );
+                      }
+
+                      // Short Answer / Text question
                       if (req.type === 'text') {
                         const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
                         // submitted = student has clicked Submit (progress.notes set); done = correct + completed
@@ -1021,7 +1099,7 @@ export default function VirtualExperienceTaker({
                         );
                       }
 
-                      // -- Default fallback (task / deliverable / reflection) -
+                      //: Default fallback (task / deliverable / reflection) -
                       const meta    = REQ_META[req.type] || REQ_META.task;
                       const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
 
@@ -1083,7 +1161,7 @@ export default function VirtualExperienceTaker({
 
               </div>{/* end unified card */}
 
-              {/* Module solution -- video or file link -- shown when all lessons in module are complete */}
+              {/* Module solution: video or file link, shown when all lessons in module are complete */}
               {(() => {
                 const modLessons = currentMod?.lessons || [];
                 const modAllDone = modLessons.length > 0 && modLessons.every(l => lessonProgress(l, progress) === 100);
@@ -1103,7 +1181,7 @@ export default function VirtualExperienceTaker({
                       <p className="text-[13px] font-bold" style={{ color: accentColor }}>
                         {isFile ? 'Module Solution File' : 'Module Solution Video'}
                       </p>
-                      <p className="text-[12px] ml-auto" style={{ color: isDark ? '#666' : '#999' }}>Unlocked -- module complete</p>
+                      <p className="text-[12px] ml-auto" style={{ color: isDark ? '#666' : '#999' }}>Unlocked: module complete</p>
                     </div>
                     {isFile ? (
                       <div className="px-6 py-5 flex items-center gap-3">

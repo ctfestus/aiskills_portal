@@ -35,7 +35,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 
-// -- Design tokens ---
+// Design tokens
 const LIGHT_C = {
   page: '#F3F4F2', card: 'white', cardBorder: 'rgba(0,100,40,0.13)',
   cardShadow: '0 1px 4px rgba(0,0,0,0.06)', green: '#006128', lime: '#ADEE66',
@@ -54,16 +54,19 @@ const DARK_C = {
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
-// -- Types ---
+// Types
 interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'dashboard_critique';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'dashboard_critique' | 'code_review' | 'excel_review';
   options?: string[];
   correctAnswer?: string;
   expectedAnswer?: string;
   rubric?: string[];
+  schema?: string;
+  context?: string;
+  minScore?: number;
 }
 interface Lesson {
   id: string;
@@ -128,7 +131,7 @@ function RubricBuilder({ criteria, onChange, C, inp }: {
       <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: '#6366f1' }}>
         Grading Rubric
         <span className="ml-1.5 normal-case font-normal tracking-normal" style={{ color: C.faint }}>
-          -- optional · AI grades each criterion as Pass / Fail
+          · optional · AI grades each criterion as Pass / Fail
         </span>
       </p>
       {criteria.map((crit, ci) => (
@@ -161,14 +164,14 @@ function RubricBuilder({ criteria, onChange, C, inp }: {
       </div>
       {criteria.length === 0 && (
         <p className="text-[11px]" style={{ color: C.faint }}>
-          No criteria yet -- AI will use McKinsey-level standards. Add criteria to grade against your specific assignment requirements.
+          No criteria yet. AI will use its default standards. Add criteria to grade against your specific assignment requirements.
         </p>
       )}
     </div>
   );
 }
 
-// -- Page ---
+// Page
 function VirtualExperienceCreatePageInner() {
   const C = useC();
   const router = useRouter();
@@ -279,7 +282,7 @@ function VirtualExperienceCreatePageInner() {
     });
   };
 
-  // -- Helpers ---
+  // Helpers
   const toggleModule = (id: string) => setExpandedModules(prev => {
     const next = new Set(prev);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -345,7 +348,7 @@ function VirtualExperienceCreatePageInner() {
     if (l) updateLesson(moduleId, lessonId, { requirements: l.requirements.filter(r => r.id !== reqId) });
   };
 
-  // -- Generate ---
+  // Generate
   const handleGenerate = async () => {
     setGenerating(true); setGenError('');
     try {
@@ -384,7 +387,7 @@ function VirtualExperienceCreatePageInner() {
     }
   };
 
-  // -- Generate from uploaded dataset ---
+  // Generate from uploaded dataset
   const handleGenerateFromData = async () => {
     if (!datasetCsv.trim()) { setGenError('Please paste or upload a dataset first.'); return; }
     setGenerating(true); setGenError('');
@@ -409,7 +412,7 @@ function VirtualExperienceCreatePageInner() {
     }
   };
 
-  // -- Manual scaffold ---
+  // Manual scaffold
   const handleManual = () => {
     const ind = INDUSTRIES.find(i => i.id === industry) || INDUSTRIES[0];
     const dataset = datasetCsv.trim()
@@ -458,7 +461,7 @@ function VirtualExperienceCreatePageInner() {
     setStep(2);
   };
 
-  // -- Dataset file upload ---
+  // Dataset file upload
   const handleDatasetFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -474,7 +477,7 @@ function VirtualExperienceCreatePageInner() {
     setUploadingDataset(false);
   };
 
-  // -- AI Improve ---
+  // AI Improve
   const handleImprove = async () => {
     if (!improveInstruction.trim() || !config) return;
     setImproving(true);
@@ -499,7 +502,7 @@ function VirtualExperienceCreatePageInner() {
     }
   };
 
-  // -- Cover image upload ---
+  // Cover image upload
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -515,7 +518,7 @@ function VirtualExperienceCreatePageInner() {
     }
   };
 
-  // -- Dataset download ---
+  // Dataset download
   const downloadDataset = () => {
     const dataset = (config as any)?.dataset;
     if (!dataset) return;
@@ -531,7 +534,7 @@ function VirtualExperienceCreatePageInner() {
     }
   };
 
-  // -- Save ---
+  // Save
   const handleSave = async (status: 'draft' | 'published') => {
     if (!config || !title.trim()) { setSaveError('Title is required'); return; }
     setSaving(true); setSaveError('');
@@ -567,7 +570,7 @@ function VirtualExperienceCreatePageInner() {
     }
   };
 
-  // -- Render ---
+  // Render
   const inp = {
     width: '100%', padding: '9px 13px', borderRadius: 10,
     border: `1px solid ${C.cardBorder}`, background: C.input,
@@ -616,7 +619,7 @@ function VirtualExperienceCreatePageInner() {
 
       <div className="px-4 sm:px-6 py-10">
 
-        {/* -- STEP 1: Configure -- */}
+        {/* STEP 1: Configure */}
         {step === 1 && (
           <div className="max-w-3xl mx-auto space-y-6">
             {/* Eyebrow + H1 */}
@@ -667,7 +670,7 @@ function VirtualExperienceCreatePageInner() {
               ))}
             </div>
 
-            {/* Config card -- appears when mode selected */}
+            {/* Config card: appears when mode selected */}
             {creationMode && (
               <div className="space-y-6 mt-2">
                 <div style={card}>
@@ -732,7 +735,7 @@ function VirtualExperienceCreatePageInner() {
                     </div>
                   </div>
 
-                  {/* Company & Scenario -- AI + data modes */}
+                  {/* Company & Scenario: AI + data modes */}
                   {creationMode !== 'manual' && (
                     <div className="px-5 pb-5 pt-4 border-t space-y-3" style={{ borderColor: C.divider }}>
                       <div>
@@ -899,7 +902,7 @@ function VirtualExperienceCreatePageInner() {
           </div>
         )}
 
-        {/* -- STEP 2: Review & Edit -- */}
+        {/* STEP 2: Review & Edit */}
         {step === 2 && config && (() => {
           const indInfo = INDUSTRIES.find(i => i.id === config.industry) || INDUSTRIES[0];
           const managerName  = config.managerName  || 'Your Manager';
@@ -1104,7 +1107,7 @@ function VirtualExperienceCreatePageInner() {
                         {({ dragHandle: moduleDragHandle }) => (
                         <div className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${C.cardBorder}`, background: C.page }}>
 
-                          {/* -- MODULE HEADER -- */}
+                          {/* MODULE HEADER */}
                           <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: `${C.cta}12`, borderBottom: `1px solid ${C.cta}28` }}>
                             <div className="flex-shrink-0" title="Drag to reorder module">{moduleDragHandle}</div>
                             <span className="text-[11px] font-black uppercase tracking-widest flex-shrink-0" style={{ color: C.cta }}>Module {mi + 1}</span>
@@ -1122,7 +1125,7 @@ function VirtualExperienceCreatePageInner() {
                             </button>
                           </div>
 
-                          {/* -- LESSONS -- */}
+                          {/* LESSONS */}
                           <div className="p-3 space-y-2">
                             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleLessonDragEnd(mod.id)}>
                             <SortableContext items={(mod.lessons || []).map(l => l.id)} strategy={verticalListSortingStrategy}>
@@ -1171,7 +1174,7 @@ function VirtualExperienceCreatePageInner() {
                                     </div>
                                   </div>
 
-                                  {/* -- EXPANDED: lesson body + tasks -- */}
+                                  {/* EXPANDED: lesson body + tasks */}
                                   {expandedModules.has(expandKey) && (
                                     <div className="px-3 pb-3 space-y-3 border-t" style={{ borderColor: C.divider }}>
                                       <div className="pt-3">
@@ -1198,6 +1201,8 @@ function VirtualExperienceCreatePageInner() {
                                             upload:             { bg: 'rgba(245,158,11,0.12)',   color: '#f59e0b',   label: 'File Upload'         },
                                             task:               { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6',   label: 'Task (Checkbox)'     },
                                             dashboard_critique: { bg: 'rgba(16,185,129,0.12)',   color: '#10b981',   label: 'AI Dashboard Critique' },
+                                            code_review:        { bg: 'rgba(99,102,241,0.12)',   color: '#6366f1',   label: 'AI Code Review' },
+                                            excel_review:       { bg: 'rgba(34,197,94,0.12)',    color: '#22c55e',   label: 'AI Excel Review' },
                                           };
                                           const tc = TYPE_COLORS[req.type] || TYPE_COLORS.mcq;
                                           return (
@@ -1218,6 +1223,8 @@ function VirtualExperienceCreatePageInner() {
                                                   <option value="upload">File Upload</option>
                                                   <option value="task">Task (Checkbox)</option>
                                                   <option value="dashboard_critique">AI Dashboard Critique</option>
+                                                  <option value="code_review">AI Code Review</option>
+                                                  <option value="excel_review">AI Excel Review</option>
                                                 </select>
                                                 <input value={req.label}
                                                   onChange={e => updateReq(mod.id, les.id, req.id, { label: e.target.value })}
@@ -1282,7 +1289,83 @@ function VirtualExperienceCreatePageInner() {
                                                 <div className="space-y-2">
                                                   <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: 'rgba(16,185,129,0.06)', color: C.muted }}>
                                                     <Star className="w-3 h-3 flex-shrink-0" style={{ color: '#10b981' }} />
-                                                    Students upload a dashboard screenshot -- AI critiques every element and delivers a full audit report
+                                                    Students upload a dashboard screenshot. AI critiques every element and delivers a full audit report
+                                                  </div>
+                                                  <RubricBuilder
+                                                    criteria={req.rubric ?? []}
+                                                    onChange={rubric => updateReq(mod.id, les.id, req.id, { rubric })}
+                                                    C={C}
+                                                    inp={inp}
+                                                  />
+                                                </div>
+                                              )}
+                                              {req.type === 'code_review' && (
+                                                <div className="space-y-2">
+                                                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: 'rgba(99,102,241,0.06)', color: C.muted }}>
+                                                    <Star className="w-3 h-3 flex-shrink-0" style={{ color: '#6366f1' }} />
+                                                    Students paste their code. AI reviews correctness, quality, efficiency, and best practices with line-level feedback
+                                                  </div>
+                                                  <div>
+                                                    <p className="text-[11px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: C.muted }}>Table Schema / Data Context (optional)</p>
+                                                    <textarea
+                                                      value={req.schema ?? ''}
+                                                      onChange={e => updateReq(mod.id, les.id, req.id, { schema: e.target.value })}
+                                                      rows={4}
+                                                      spellCheck={false}
+                                                      placeholder="Paste CREATE TABLE statements or describe the DataFrame columns. The AI uses this to validate student code against the actual schema."
+                                                      className="w-full resize-none outline-none text-[12px] font-mono px-3 py-2.5 rounded-lg"
+                                                      style={{ background: inp, color: C.text, border: `1px solid ${C.cardBorder}`, lineHeight: 1.6 }}
+                                                    />
+                                                  </div>
+                                                  <div className="flex items-center gap-3">
+                                                    <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: C.muted }}>Minimum pass score</p>
+                                                    <input
+                                                      type="number" min={0} max={10} step={0.5}
+                                                      value={req.minScore ?? ''}
+                                                      onChange={e => updateReq(mod.id, les.id, req.id, { minScore: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+                                                      placeholder="0"
+                                                      className="w-20 outline-none text-[12px] font-mono px-2 py-1 rounded-lg"
+                                                      style={{ background: inp, color: C.text, border: `1px solid ${C.cardBorder}` }}
+                                                    />
+                                                    <p className="text-[11px]" style={{ color: C.muted }}>out of 10 · leave blank for no gate</p>
+                                                  </div>
+                                                  <RubricBuilder
+                                                    criteria={req.rubric ?? []}
+                                                    onChange={rubric => updateReq(mod.id, les.id, req.id, { rubric })}
+                                                    C={C}
+                                                    inp={inp}
+                                                  />
+                                                </div>
+                                              )}
+                                              {req.type === 'excel_review' && (
+                                                <div className="space-y-2">
+                                                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: 'rgba(34,197,94,0.06)', color: C.muted }}>
+                                                    <Star className="w-3 h-3 flex-shrink-0" style={{ color: '#22c55e' }} />
+                                                    Students upload their .xlsx file. AI reviews formula correctness, formula choice, and value accuracy.
+                                                  </div>
+                                                  <div>
+                                                    <p className="text-[11px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: C.muted }}>Spreadsheet Context (optional)</p>
+                                                    <textarea
+                                                      value={req.context ?? ''}
+                                                      onChange={e => updateReq(mod.id, les.id, req.id, { context: e.target.value })}
+                                                      rows={4}
+                                                      spellCheck={false}
+                                                      placeholder="Include the domain so the AI applies the right expertise. e.g. This is a financial model for a retail business. B5 should calculate total revenue using SUMIF on column D, C10 should show profit margin as a percentage. Or: This is an HR payroll sheet. Column F should calculate net pay after tax deductions. Or: This is a BI sales dashboard for a fintech company. D12 should show month-on-month growth using XLOOKUP."
+                                                      className="w-full resize-none outline-none text-[12px] font-mono px-3 py-2.5 rounded-lg"
+                                                      style={{ background: inp, color: C.text, border: `1px solid ${C.cardBorder}`, lineHeight: 1.6 }}
+                                                    />
+                                                  </div>
+                                                  <div className="flex items-center gap-3">
+                                                    <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: C.muted }}>Minimum pass score</p>
+                                                    <input
+                                                      type="number" min={0} max={10} step={0.5}
+                                                      value={req.minScore ?? ''}
+                                                      onChange={e => updateReq(mod.id, les.id, req.id, { minScore: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+                                                      placeholder="0"
+                                                      className="w-20 outline-none text-[12px] font-mono px-2 py-1 rounded-lg"
+                                                      style={{ background: inp, color: C.text, border: `1px solid ${C.cardBorder}` }}
+                                                    />
+                                                    <p className="text-[11px]" style={{ color: C.muted }}>out of 10 · leave blank for no gate</p>
                                                   </div>
                                                   <RubricBuilder
                                                     criteria={req.rubric ?? []}
@@ -1390,7 +1473,7 @@ function VirtualExperienceCreatePageInner() {
                       type="number"
                       min={1}
                       max={365}
-                      placeholder="--"
+                      placeholder=""
                       value={deadlineDays}
                       onChange={e => setDeadlineDays(e.target.value.replace(/\D/g, ''))}
                     />

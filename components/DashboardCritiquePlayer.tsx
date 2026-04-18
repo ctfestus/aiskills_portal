@@ -139,7 +139,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
   const text = isDark ? '#f0f0f0' : '#111';
   const muted = isDark ? '#888' : '#666';
 
-  // -- Upload state --
+  // Upload state
   if (!imageDataUrl) {
     return (
       <div
@@ -158,7 +158,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
         </div>
         <div className="text-center">
           <p className="text-sm font-semibold" style={{ color: text }}>Drop your dashboard screenshot here</p>
-          <p className="text-xs mt-1" style={{ color: muted }}>or click to browse -- PNG or JPG</p>
+          <p className="text-xs mt-1" style={{ color: muted }}>or click to browse · PNG or JPG</p>
         </div>
         {error && <p className="text-xs font-medium text-red-400">{error}</p>}
         <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/jpg" className="hidden"
@@ -167,7 +167,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
     );
   }
 
-  // -- Analyzing state --
+  // Analyzing state
   if (analyzing) {
     return (
       <div className="rounded-2xl flex flex-col items-center justify-center gap-4 py-16" style={{ background: card, border: `1px solid ${border}` }}>
@@ -185,7 +185,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
     );
   }
 
-  // -- Interactive result state --
+  // Interactive result state
   return (
     <div className="space-y-3">
       {/* Toolbar */}
@@ -215,7 +215,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
         </div>
       </div>
 
-      {/* Image + overlay container -- no overflow-hidden so zones aren't clipped */}
+      {/* Image + overlay container: no overflow-hidden so zones aren't clipped */}
       <div
         ref={containerRef}
         className="relative rounded-2xl select-none"
@@ -263,7 +263,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
         })}
       </div>
 
-      {/* Fixed tooltip -- rendered at viewport level, never clipped */}
+      {/* Fixed tooltip: rendered at viewport level, never clipped */}
       {hovered && (() => {
         const TIP_W = 320;
         const OFFSET = 16;
@@ -348,21 +348,19 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
           style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}30` }}>
           <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
           <p className="text-xs font-medium" style={{ color: accentColor }}>
-            {result.elements.length} elements analysed -- hover each zone to explore the feedback
+            {result.elements.length} elements analysed · hover each zone to explore the feedback
           </p>
         </div>
       )}
       {error && <p className="text-xs text-red-400 font-medium">{error}</p>}
 
-      {/* -- Holistic Audit Report -- */}
+      {/* Holistic Audit Report */}
       {result?.audit && <AuditReport audit={result.audit} accentColor={accentColor} isDark={isDark} />}
     </div>
   );
 }
 
-/* ---
-   Holistic Audit Report
---- */
+
 
 const CATEGORY_ICONS: Record<string, React.ReactElement> = {
   'Layout & Structure': (
@@ -409,7 +407,7 @@ function AuditReport({ audit, accentColor, isDark }: { audit: Audit; accentColor
   return (
     <div className="space-y-3" style={{ background: bg, borderRadius: 24, padding: 16 }}>
 
-      {/* -- Overall Score Header -- */}
+      {/* Overall Score Header */}
       <div style={{ background: isDark ? '#272727' : '#1e2d6b', borderRadius: 20, padding: '28px 28px 24px' }}>
         <p className="text-[10px] font-bold uppercase tracking-[0.14em] mb-5" style={{ color: '#ADEE66' }}>
           Expert Dashboard Review
@@ -429,7 +427,7 @@ function AuditReport({ audit, accentColor, isDark }: { audit: Audit; accentColor
         <p className="text-[14px] leading-[1.7]" style={{ color: 'rgba(255,255,255,0.65)' }}>{audit.executiveSummary}</p>
       </div>
 
-      {/* -- Rubric -- */}
+      {/* Rubric */}
       {audit.rubricGrades && audit.rubricGrades.length > 0 && (() => {
         const passed     = audit.rubricGrades.filter(g => g.passed).length;
         const total      = audit.rubricGrades.length;
@@ -475,7 +473,7 @@ function AuditReport({ audit, accentColor, isDark }: { audit: Audit; accentColor
         );
       })()}
 
-      {/* -- Category Cards -- */}
+      {/* Category Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {audit.categories.map(cat => {
           const barColor = scoreBarColor(cat.score);
@@ -525,7 +523,7 @@ function AuditReport({ audit, accentColor, isDark }: { audit: Audit; accentColor
         })}
       </div>
 
-      {/* -- Top Priority Actions -- */}
+      {/* Top Priority Actions */}
       {audit.topRecommendations.length > 0 && (
         <div style={{ background: isDark ? '#272727' : '#1e2d6b', borderRadius: 20, padding: '22px 28px 28px' }}>
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] mb-6" style={{ color: '#ADEE66' }}>
