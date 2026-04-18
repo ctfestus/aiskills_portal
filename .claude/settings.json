@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Read(//c/Users/DELL/Documents/ALL Apps/Landing pages/elevate-landing/**)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(npm audit *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\DELL\\Documents\\ALL Apps\\Landing pages\\elevate-landing\\app",

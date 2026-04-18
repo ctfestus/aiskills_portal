@@ -3011,6 +3011,13 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   const handleEmailFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedCohort) return;
+    const allowed = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel', 'text/csv'];
+    if (!allowed.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv)$/i)) {
+      showToast(false, 'Only .xlsx, .xls, or .csv files are allowed'); return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showToast(false, 'File too large. Maximum size is 2 MB'); return;
+    }
     setEmailSaving(true);
     try {
       const XLSX = await import('xlsx');
