@@ -46,7 +46,7 @@ async function checkRateLimit(userId: string): Promise<NextResponse | null> {
 
 async function extractFromWorkbook(buffer: ArrayBuffer): Promise<string> {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(Buffer.from(buffer) as unknown as Buffer);
+  await wb.xlsx.load(buffer as unknown as Buffer);
 
   const sections: string[] = [];
 
