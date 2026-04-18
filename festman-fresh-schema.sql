@@ -164,10 +164,13 @@ CREATE TABLE public.events (
   event_type      text        DEFAULT 'in-person'
                                 CHECK (event_type IN ('in-person','virtual')),
   capacity        integer,
-  meeting_link    text,
-  speakers        jsonb       DEFAULT '[]',
-  is_private      boolean     NOT NULL DEFAULT false,
-  post_submission jsonb,
+  meeting_link         text,
+  speakers             jsonb       DEFAULT '[]',
+  is_private           boolean     NOT NULL DEFAULT false,
+  recurrence           text        DEFAULT 'once',
+  recurrence_end_date  date,
+  recurrence_days      int[],
+  post_submission      jsonb,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );

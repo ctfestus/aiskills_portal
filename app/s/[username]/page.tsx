@@ -255,7 +255,7 @@ export default function StudentPublicProfile() {
     <div className="min-h-screen flex flex-col items-center justify-center gap-3 px-6 text-center"
       style={{ background: t.page }}>
       <p className="text-2xl font-bold" style={{ color: t.text }}>404</p>
-      <p className="text-sm" style={{ color: t.muted }}>This profile doesn't exist.</p>
+      <p className="text-sm" style={{ color: t.muted }}>This profile doesn&apos;t exist.</p>
       <Link href="/" className="mt-2 text-sm font-semibold" style={{ color: t.accent }}> Go home</Link>
     </div>
   );
@@ -494,7 +494,7 @@ export default function StudentPublicProfile() {
             style={{ background: t.card, border: `1px solid ${t.cardBorder}` }}>
             <p className="text-sm font-medium" style={{ color: t.muted }}>Nothing to show yet</p>
             <p className="text-xs max-w-xs leading-relaxed" style={{ color: t.faint }}>
-              Achievements and courses will appear here once they're completed.
+              Achievements and courses will appear here once they&apos;re completed.
             </p>
           </motion.div>
         )}

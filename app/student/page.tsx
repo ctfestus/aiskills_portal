@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -11,7 +11,7 @@ import {
   GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
   Play, FileText, BarChart3, Bell, Plus, ArrowLeft, Upload, Video,
   ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase, Search, LayoutDashboard,
-  Copy, Check, Layers,
+  Copy, Check, Layers, Repeat,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -164,7 +164,7 @@ const NAV_ITEMS = [
   { id: 'courses',           label: 'My Courses',          Icon: BookOpen        },
   { id: 'learning_paths',    label: 'Learning Paths',      Icon: Layers          },
   { id: 'virtual_experiences', label: 'Virtual Experiences', Icon: Briefcase     },
-  { id: 'events',            label: 'Events',              Icon: CalendarDays    },
+  { id: 'events',            label: 'Live Events',          Icon: CalendarDays    },
   { id: 'assignments',       label: 'Assignments',         Icon: ClipboardList   },
   { id: 'community',         label: 'Community',           Icon: Users           },
   { id: 'announcements',     label: 'Announcements',       Icon: Megaphone       },
@@ -538,7 +538,7 @@ function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
         <Layers className="w-7 h-7" style={{ color: C.faint }}/>
       </div>
       <p className="font-semibold text-base mb-1" style={{ color: C.text }}>No learning paths yet</p>
-      <p className="text-sm max-w-xs" style={{ color: C.muted }}>Your instructor hasn't assigned any learning paths to your cohort yet.</p>
+      <p className="text-sm max-w-xs" style={{ color: C.muted }}>Your instructor hasn&apos;t assigned any learning paths to your cohort yet.</p>
     </div>
   );
 
@@ -989,7 +989,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
             .select('event_id, registered_at')
             .eq('student_id', userId),
           student?.cohort_id
-            ? supabase.from('events').select('id, title, description, slug, cover_image, event_date, event_time, timezone, location, meeting_link, event_type, status')
+            ? supabase.from('events').select('id, title, description, slug, cover_image, event_date, event_time, timezone, location, meeting_link, event_type, status, recurrence, recurrence_end_date, recurrence_days')
                 .contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
             : Promise.resolve({ data: [] }),
         ]);
@@ -1048,6 +1048,9 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
       meetingUrl,
       imageUrl: f.cover_image || '',
       source: registered ? 'registration' : 'cohort',
+      recurrence: f.recurrence ?? 'once',
+      recurrenceEndDate: f.recurrence_end_date ?? null,
+      recurrenceDays: f.recurrence_days ?? [],
     };
   });
 
@@ -1099,6 +1102,17 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
     const isVirtual = item.eventType === 'Virtual';
     const isRegistered = item.source === 'registration';
 
+    const DAY_LABELS: Record<number, string> = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
+    const recurrenceLabel = (() => {
+      if (!item.recurrence || item.recurrence === 'once') return null;
+      if (item.recurrence === 'daily') return 'Repeats Daily';
+      if (item.recurrence === 'weekly') {
+        const days = (item.recurrenceDays ?? []).sort((a: number, b: number) => a - b).map((d: number) => DAY_LABELS[d]).join(' · ');
+        return days ? `Every ${days}` : 'Weekly';
+      }
+      return null;
+    })();
+
     const card = (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -1137,6 +1151,12 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
                 }}>
                 {item.eventType}
               </span>
+              {recurrenceLabel && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full"
+                  style={{ background: `${C.green}15`, color: C.green }}>
+                  <Repeat className="w-3 h-3" /> {recurrenceLabel}
+                </span>
+              )}
               {isRegistered && (
                 <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full"
                   style={{ background: '#16a34a', color: '#fff' }}>
@@ -2685,7 +2705,10 @@ function ScheduleDetail({ schedule, C, onBack }: { schedule: any; C: typeof LIGH
     const load = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/schedule?id=${schedule.id}`);
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(`/api/schedule?id=${schedule.id}`, {
+          headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+        });
         const d = await res.json();
         setTopics(d.topics ?? []);
         setResources(d.resources ?? []);
@@ -2909,7 +2932,7 @@ function RecordingsSection({ userId, C }: { userId: string; C: typeof LIGHT_C })
         {/* Description */}
         {selected.description && (
           <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, marginBottom: 16 }}
-            dangerouslySetInnerHTML={{ __html: selected.description }}/>
+            dangerouslySetInnerHTML={{ __html: sanitizeRichText(selected.description) }}/>
         )}
 
         {/* Week tabs */}
@@ -3494,7 +3517,8 @@ function ContinueLearningCard({ form, attempt, isProject, deadline, C }: {
   form: any; attempt: any; isProject: boolean; deadline: Date | null; C: typeof LIGHT_C;
 }) {
   const [imgErr, setImgErr] = useState(false);
-  const now = Date.now();
+  // eslint-disable-next-line react-hooks/purity
+  const now = useMemo(() => Date.now(), []);
   const totalQ = isProject
     ? (form.config?.modules ?? []).reduce((a: number, m: any) => a + (m.lessons ?? []).reduce((b: number, l: any) => b + (l.requirements ?? []).length, 0), 0)
     : (form.config?.questions ?? []).length;
@@ -3776,7 +3800,8 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
     f.content_type === 'guided_project' || f.content_type === 'virtual_experience' ||
     f.config?.isGuidedProject || f.config?.isVirtualExperience;
 
-  const now = Date.now();
+  // eslint-disable-next-line react-hooks/purity
+  const now = useMemo(() => Date.now(), []);
 
   // Shared helper -- true if the item has genuine remaining work
   const isEffectivelyDone = (f: any, a: any, proj: boolean): boolean => {
@@ -4150,6 +4175,7 @@ export default function StudentDashboard() {
   const [cohortIdForTicker,  setCohortIdForTicker]  = useState<string | null>(null);
   const seenActivityGlobal = useRef<Set<string>>(new Set());
   const tickerTimerGlobal  = useRef<any>(null);
+  // eslint-disable-next-line react-hooks/purity
   const pageLoadTimeGlobal = useRef(Date.now());
 
   useEffect(() => {

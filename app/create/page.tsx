@@ -93,6 +93,9 @@ interface EventDetails {
   eventType?: 'in-person' | 'virtual';
   meetingLink?: string;
   speakers?: Speaker[];
+  recurrence?: 'once' | 'daily' | 'weekly';
+  recurrenceEndDate?: string;
+  recurrenceDays?: number[];
 }
 
 interface PostSubmission {
@@ -916,10 +919,6 @@ const [isSaving, setIsSaving] = useState(false);
 
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
-  // Meeting integrations
-  const [connectedPlatforms, setConnectedPlatforms] = useState<Record<string, { email?: string }>>({});
-  const [creatingMeeting, setCreatingMeeting] = useState<string | null>(null);
-  const [meetingError, setMeetingError] = useState('');
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -941,12 +940,6 @@ const [isSaving, setIsSaving] = useState(false);
 
       // cohorts loaded in separate effect below
 
-      fetch('/api/integrations/status', {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
-        .then(r => r.ok ? r.json() : {})
-        .then(data => setConnectedPlatforms(data))
-        .catch(() => {});
 
     });
   }, [router]);
@@ -967,7 +960,7 @@ const [isSaving, setIsSaving] = useState(false);
       // Load existing content from purpose-built tables
       Promise.all([
         supabase.from('courses').select('id, title, description, slug, status, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent').eq('id', editId).maybeSingle(),
-        supabase.from('events').select('id, title, description, slug, status, cohort_ids, fields, event_date, event_time, timezone, location, event_type, capacity, meeting_link, is_private, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, speakers').eq('id', editId).maybeSingle(),
+        supabase.from('events').select('id, title, description, slug, status, cohort_ids, fields, event_date, event_time, timezone, location, event_type, capacity, meeting_link, is_private, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, speakers, recurrence, recurrence_end_date, recurrence_days').eq('id', editId).maybeSingle(),
       ]).then(([{ data: course }, { data: event }]) => {
         let id: string | null = null;
         let config: any = null;
@@ -993,7 +986,10 @@ const [isSaving, setIsSaving] = useState(false);
             eventDetails: { isEvent: true, date: event.event_date, time: event.event_time,
               timezone: event.timezone, location: event.location, eventType: event.event_type,
               capacity: event.capacity, meetingLink: event.meeting_link, isPrivate: event.is_private,
-              speakers: event.speakers ?? [] },
+              speakers: event.speakers ?? [],
+              recurrence: event.recurrence ?? 'once',
+              recurrenceEndDate: event.recurrence_end_date ?? '',
+              recurrenceDays: event.recurrence_days ?? [] },
             postSubmission: event.post_submission, coverImage: event.cover_image,
             deadline_days: event.deadline_days, theme: event.theme, mode: event.mode,
             font: event.font, customAccent: event.custom_accent };
@@ -1034,28 +1030,6 @@ const [isSaving, setIsSaving] = useState(false);
       setAvailableForms(all);
     })();
   }, [formConfig?.postSubmission?.type, savedFormId]);
-
-  // -- Create meeting via integration --
-  const handleCreateMeeting = async (provider: string) => {
-    if (!user) return;
-    setCreatingMeeting(provider);
-    setMeetingError('');
-    const ev = formConfig?.eventDetails;
-    const startTime = ev?.date && ev?.time ? `${ev.date}T${ev.time}:00` : undefined;
-    const { data: { session } } = await supabase.auth.getSession();
-    const res = await fetch('/api/integrations/create-meeting', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ provider, title: formConfig?.title || 'Event', startTime }),
-    });
-    const data = await res.json();
-    if (data.url) {
-      updateConfig({ eventDetails: { ...formConfig!.eventDetails!, meetingLink: data.url } });
-    } else {
-      setMeetingError(data.error || 'Failed to create meeting.');
-    }
-    setCreatingMeeting(null);
-  };
 
   // -- Supabase save/share --
   const handleShare = async (saveStatus: 'draft' | 'published' = 'published') => {
@@ -2008,40 +1982,65 @@ const [isSaving, setIsSaving] = useState(false);
                   </div>
                 </div>
 
+                {/* Recurrence */}
+                <div>
+                  <label className={labelCls} style={labelStyle}>Recurrence</label>
+                  <div className="flex gap-1 p-1 rounded-xl" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
+                    {(['once', 'daily', 'weekly'] as const).map(freq => {
+                      const active = (formConfig.eventDetails!.recurrence ?? 'once') === freq;
+                      const labels = { once: 'One-time', daily: 'Daily', weekly: 'Weekly' };
+                      return (
+                        <button key={freq} type="button"
+                          onClick={() => updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrence: freq } })}
+                          className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-all"
+                          style={{ background: active ? C.segmentActive : 'transparent', color: active ? C.segmentActiveText : C.faint, boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : undefined }}>
+                          {labels[freq]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {(formConfig.eventDetails!.recurrence ?? 'once') !== 'once' && (
+                  <div>
+                    <label className={labelCls} style={labelStyle}>End Date</label>
+                    <input type="date"
+                      value={formConfig.eventDetails.recurrenceEndDate || ''}
+                      onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrenceEndDate: e.target.value } })}
+                      className={`${inputCls} [color-scheme:light]`} style={inputStyle} />
+                  </div>
+                )}
+
+                {(formConfig.eventDetails!.recurrence ?? 'once') === 'weekly' && (
+                  <div>
+                    <label className={labelCls} style={labelStyle}>Repeat on</label>
+                    <div className="flex gap-1.5 flex-wrap mt-1">
+                      {[
+                        { day: 1, label: 'Mon' }, { day: 2, label: 'Tue' }, { day: 3, label: 'Wed' },
+                        { day: 4, label: 'Thu' }, { day: 5, label: 'Fri' }, { day: 6, label: 'Sat' }, { day: 0, label: 'Sun' },
+                      ].map(({ day, label }) => {
+                        const selected = (formConfig.eventDetails!.recurrenceDays ?? []).includes(day);
+                        return (
+                          <button key={day} type="button"
+                            onClick={() => {
+                              const days = formConfig.eventDetails!.recurrenceDays ?? [];
+                              const next = selected ? days.filter(d => d !== day) : [...days, day];
+                              updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrenceDays: next } });
+                            }}
+                            className="w-10 h-9 rounded-lg text-xs font-semibold transition-all"
+                            style={{ background: selected ? accentColor : C.input, color: selected ? C.ctaText : C.faint, border: `1px solid ${selected ? accentColor : C.inputBorder}` }}>
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Location / Meeting link -- full width below grid */}
                 <div className="mt-2">
                   {(formConfig.eventDetails.eventType ?? 'in-person') === 'virtual' ? (
                     <>
-                      {/* Connected platform quick-create buttons */}
-                      {Object.keys(connectedPlatforms).length > 0 && (
-                        <div className="mb-2">
-                          <label className={labelCls} style={labelStyle}>Create with connected account</label>
-                          <div className="flex items-center gap-2 mt-1">
-                            {([
-                              { id: 'google_meet', name: 'Google Meet', logo: 'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Meet.png' },
-                              { id: 'zoom',        name: 'Zoom',         logo: 'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Zoom.png' },
-                              { id: 'teams',       name: 'Teams',        logo: 'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Teams.png' },
-                            ] as const).filter(p => connectedPlatforms[p.id]).map(p => (
-                              <button key={p.id} type="button"
-                                title={`Generate ${p.name} link`}
-                                onClick={() => handleCreateMeeting(p.id)}
-                                disabled={!!creatingMeeting}
-                                className="flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:opacity-80 disabled:opacity-40"
-                                style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
-                                {creatingMeeting === p.id
-                                  ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: C.text }}/>
-                                  : <img src={p.logo} alt={p.name} className="w-5 h-5 object-contain" />}
-                              </button>
-                            ))}
-                          </div>
-                          {meetingError && <p className="text-[11px] mt-1.5 text-red-500">{meetingError}</p>}
-                          {formConfig.eventDetails.meetingLink && (
-                            <p className="text-[11px] mt-1.5 flex items-center gap-1" style={{ color: '#10b981' }}>
-                              <CheckCircle2 className="w-3 h-3"/> Link created -- edit below if needed
-                            </p>
-                          )}
-                        </div>
-                      )}
                       <label className={labelCls} style={labelStyle}>Meeting Link</label>
                       <input type="url" value={formConfig.eventDetails.meetingLink || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, meetingLink: e.target.value } })} placeholder="https://meet.google.com/..." className={inputCls} style={inputStyle} />
                     </>

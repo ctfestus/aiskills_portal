@@ -9,6 +9,7 @@ import {
   ChevronLeft, BookOpen, X, ExternalLink, ArrowRight,
 } from 'lucide-react';
 import { AnimatedField } from '@/components/AnimatedField';
+import { sanitizeRichText } from '@/lib/sanitize';
 import { supabase } from '@/lib/supabase';
 import { getFontById, loadGoogleFont } from '@/lib/fonts';
 import {
@@ -1158,7 +1159,7 @@ export function CourseTaker({
                         <div>
                           <p className={`font-semibold text-sm leading-snug ${textColor}`}>{rfConfig.title || rf.title}</p>
                           {rfConfig.description && (
-                            <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${mutedColor}`} dangerouslySetInnerHTML={{ __html: rfConfig.description }} />
+                            <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${mutedColor}`} dangerouslySetInnerHTML={{ __html: sanitizeRichText(rfConfig.description) }} />
                           )}
                         </div>
                         <span className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: accent }}>
@@ -2075,7 +2076,7 @@ export function CourseTaker({
                     : 'prose-p:text-zinc-700 prose-p:leading-[1.65] prose-headings:text-zinc-900 prose-strong:text-zinc-900 prose-li:text-zinc-700 prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-700 prose-blockquote:not-italic'
                   }`}
                   style={{ color: isDark ? '#d4d4d8' : '#3f3f46', ...fontStyle }}
-                  dangerouslySetInnerHTML={{ __html: lesson.body }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(lesson.body) }}
                 />
               )}
 
@@ -2761,7 +2762,7 @@ export function CourseTaker({
                         : 'prose-p:text-zinc-700 prose-p:leading-[1.65] prose-headings:text-zinc-900 prose-strong:text-zinc-900 prose-li:text-zinc-700 prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-700 prose-blockquote:not-italic'
                       }`}
                       style={{ color: isDark ? '#d4d4d8' : '#3f3f46', ...fontStyle }}
-                      dangerouslySetInnerHTML={{ __html: currentQuestion.lesson.body }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentQuestion.lesson.body) }}
                     />
                   )}
 

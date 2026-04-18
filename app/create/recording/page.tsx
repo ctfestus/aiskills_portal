@@ -307,7 +307,7 @@ export default function CreateRecordingPage() {
 
             {entries.length === 0 && (
               <div style={{ textAlign: 'center', padding: '32px 0', color: C.faint, fontSize: 14 }}>
-                No recordings yet. Click "Add Recording" to get started.
+                No recordings yet. Click &quot;Add Recording&quot; to get started.
               </div>
             )}
 

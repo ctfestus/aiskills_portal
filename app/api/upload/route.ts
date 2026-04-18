@@ -15,20 +15,29 @@ async function getSession() {
   return session;
 }
 
+const SAFE_SUBFOLDER = /^[a-zA-Z0-9_\-/]+$/;
+
 // POST /api/upload
-// Body: multipart/form-data with `file` (File) and `folder` (string)
+// Body: multipart/form-data with `file` (File) and optional `folder` (subfolder name)
 // Returns: { url: string, publicId: string }
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const form = await req.formData();
-  const file     = form.get('file') as File | null;
-  const folder   = (form.get('folder')   as string | null) ?? 'assets';
-  const publicId = (form.get('publicId') as string | null) ?? undefined;
+  const file          = form.get('file') as File | null;
+  const rawSubfolder  = (form.get('folder') as string | null) ?? 'assets';
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
   if (file.size > 20 * 1024 * 1024) return NextResponse.json({ error: 'File too large (max 20 MB)' }, { status: 413 });
+
+  // Reject any subfolder that contains path traversal or unsafe characters
+  if (!SAFE_SUBFOLDER.test(rawSubfolder) || rawSubfolder.includes('..')) {
+    return NextResponse.json({ error: 'Invalid folder' }, { status: 400 });
+  }
+
+  // Always scope uploads to the authenticated user -- client never controls the root path
+  const folder = `users/${session.user.id}/${rawSubfolder}`;
 
   // Convert Web File Buffer
   const arrayBuffer = await file.arrayBuffer();
@@ -36,7 +45,7 @@ export async function POST(req: NextRequest) {
 
   const result = await new Promise<{ secure_url: string; public_id: string }>((resolve, reject) => {
     cloudinary.uploader.upload_stream(
-      { folder, resource_type: 'auto', overwrite: true, ...(publicId ? { public_id: publicId } : {}) },
+      { folder, resource_type: 'auto', overwrite: true },
       (err, res) => {
         if (err || !res) reject(err ?? new Error('Upload failed'));
         else resolve(res as { secure_url: string; public_id: string });
@@ -61,6 +70,11 @@ export async function DELETE(req: NextRequest) {
   const publicId: string | null = body?.publicId ?? (body?.url ? extractPublicId(body.url) : null);
 
   if (!publicId) return NextResponse.json({ error: 'No publicId provided' }, { status: 400 });
+
+  // Ownership check -- publicId must live under the caller's own folder
+  if (!publicId.startsWith(`users/${session.user.id}/`)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   await cloudinary.uploader.destroy(publicId, { resource_type: 'image' }).catch(() => {});
 

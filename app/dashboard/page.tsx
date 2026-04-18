@@ -870,7 +870,6 @@ const NAV_ITEMS = [
   { id: 'reports',       label: 'Reports',        Icon: BarChart3,     adminOnly: false },
   { id: 'learning_paths', label: 'Learning Paths',  Icon: BookOpen,      adminOnly: false },
   { id: 'certificates',  label: 'Certificates',   Icon: Award,         adminOnly: false },
-  { id: 'integrations',  label: 'Integrations',   Icon: Zap,           adminOnly: false },
   { id: 'leaderboard',   label: 'Leaderboard',    Icon: Trophy,        adminOnly: false },
   { id: 'tracking',      label: 'Tracking',       Icon: Activity,      adminOnly: false },
   { id: 'cohorts',       label: 'Cohorts',        Icon: GraduationCap, adminOnly: false },
@@ -1994,6 +1993,7 @@ function RecordingsManageSection({ C }: { C: typeof LIGHT_C }) {
     setLoading(false);
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   async function handleDelete(id: string) {
@@ -2909,118 +2909,6 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
           </div>
         );
       })()}
-    </div>
-  );
-}
-
-// --- Integrations section ---
-function IntegrationsSection({ C }: { C: typeof LIGHT_C }) {
-  const [integrations, setIntegrations] = useState<Record<string, { connected: boolean; email?: string }>>({});
-  const [msg, setMsg]       = useState<{ ok: boolean; text: string } | null>(null);
-  const [connecting, setConnecting]   = useState<string | null>(null);
-  const [disconnecting, setDisconnecting] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      // Handle OAuth redirect params
-      const sp = new URLSearchParams(window.location.search);
-      if (sp.get('integration_success')) {
-        const names: Record<string, string> = { google_meet: 'Google Meet', zoom: 'Zoom', teams: 'Microsoft Teams' };
-        setMsg({ ok: true, text: `${names[sp.get('integration_success')!] ?? sp.get('integration_success')} connected!` });
-        window.history.replaceState({}, '', window.location.pathname);
-        setTimeout(() => setMsg(null), 5000);
-      }
-      if (sp.get('integration_error')) {
-        setMsg({ ok: false, text: 'Connection failed. Please try again.' });
-        window.history.replaceState({}, '', window.location.pathname);
-        setTimeout(() => setMsg(null), 5000);
-      }
-      const res = await fetch('/api/integrations/status', { headers: { Authorization: `Bearer ${session.access_token}` } });
-      if (res.ok) setIntegrations(await res.json());
-    })();
-  }, []);
-
-  const handleConnect = async (provider: string) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    setConnecting(provider);
-    try {
-      const res = await fetch(`/api/integrations/${provider}/auth`, { method: 'POST', headers: { Authorization: `Bearer ${session.access_token}` } });
-      if (!res.ok) { setMsg({ ok: false, text: 'Could not start connection. Try again.' }); return; }
-      const { url } = await res.json();
-      if (url) window.location.href = url;
-    } catch { setMsg({ ok: false, text: 'Connection failed.' }); }
-    finally { setConnecting(null); }
-  };
-
-  const handleDisconnect = async (provider: string) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    setDisconnecting(provider);
-    await fetch('/api/integrations/disconnect', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ provider }) });
-    setIntegrations(prev => { const n = { ...prev }; delete n[provider]; return n; });
-    setMsg({ ok: true, text: 'Account disconnected.' });
-    setTimeout(() => setMsg(null), 3000);
-    setDisconnecting(null);
-  };
-
-  const PROVIDERS = [
-    { id: 'google_meet', name: 'Google Meet', logo: 'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Meet.png' },
-    { id: 'zoom',        name: 'Zoom',        logo: 'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Zoom.png' },
-    { id: 'teams',       name: 'Microsoft Teams', logo: 'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Teams.png' },
-  ] as const;
-
-  return (
-    <div className="space-y-5 max-w-xl">
-      <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-        <div className="flex items-center gap-3">
-          <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Meeting Integrations</h2>
-          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981' }}>Beta</span>
-        </div>
-        <p className="text-xs leading-relaxed" style={{ color: C.muted }}>Connect your video conferencing account to create meeting links directly when building virtual events.</p>
-        {msg && (
-          <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-xl ${msg.ok ? 'text-emerald-600' : 'text-red-500'}`}
-            style={{ background: msg.ok ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)' }}>
-            {msg.ok ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0"/> : <XCircle className="w-3.5 h-3.5 flex-shrink-0"/>}
-            {msg.text}
-          </div>
-        )}
-        <div className="space-y-2">
-          {PROVIDERS.map(({ id, name, logo }) => {
-            const info = integrations[id];
-            return (
-              <div key={id} className="flex items-center justify-between px-3 py-3 rounded-xl" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
-                <div className="flex items-center gap-3">
-                  <img src={logo} alt={name} className="w-8 h-8 rounded-lg object-contain" style={{ background: 'white', padding: 2 }}/>
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: C.text }}>{name}</p>
-                    <p className="text-[11px] mt-0.5" style={{ color: C.faint }}>{info?.email ?? 'Not connected'}</p>
-                  </div>
-                </div>
-                {info?.connected ? (
-                  <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-500">
-                      <CheckCircle2 className="w-3 h-3"/>Connected
-                    </span>
-                    <button onClick={() => handleDisconnect(id)} disabled={disconnecting === id}
-                      className="text-[11px] px-2.5 py-1 rounded-lg" style={{ color: '#ef4444' }}>
-                      {disconnecting === id ? <Loader2 className="w-3 h-3 animate-spin"/> : 'Disconnect'}
-                    </button>
-                  </div>
-                ) : (
-                  <button onClick={() => handleConnect(id)} disabled={connecting === id}
-                    className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-50"
-                    style={{ background: C.cta, color: C.ctaText }}>
-                    {connecting === id ? 'Connecting…' : 'Connect'}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 }
@@ -4204,6 +4092,7 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
     setLoading(false);
   };
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
 
   const uploadCover = async (file: File) => {
@@ -6216,7 +6105,6 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
   if (section === 'reports')      return <ReportsSection forms={forms} C={C} />;
   if (section === 'learning_paths') return <LearningPathsSection C={C} forms={forms} />;
   if (section === 'certificates') return <CertificatesSection C={C} />;
-  if (section === 'integrations') return <IntegrationsSection C={C} />;
   if (section === 'cohorts')      return <CohortsSection C={C} />;
   if (section === 'payments')     return <PaymentsSection C={C} />;
   if (section === 'tracking')     return <StudentTrackingSection C={C} />;

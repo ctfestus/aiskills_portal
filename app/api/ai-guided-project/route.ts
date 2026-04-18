@@ -1,8 +1,56 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { GEMINI_MODEL } from '@/lib/ai';
+import { createClient } from '@supabase/supabase-js';
+import { getRedis } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
+
+const ALLOWED_ACTIONS = new Set(['generate', 'generate-from-data', 'improve']);
+
+function adminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+}
+
+async function authenticate(req: NextRequest): Promise<{ user: any; role: string } | NextResponse> {
+  const token = req.headers.get('authorization')?.replace('Bearer ', '');
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { data: { user }, error } = await adminClient().auth.getUser(token);
+  if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { data: profile } = await adminClient()
+    .from('students').select('role').eq('id', user.id).single();
+  if (!profile || !['instructor', 'admin'].includes(profile.role)) {
+    return NextResponse.json({ error: 'Forbidden: instructor or admin access required' }, { status: 403 });
+  }
+
+  return { user, role: profile.role };
+}
+
+async function checkRateLimit(userId: string, role: string): Promise<NextResponse | null> {
+  const redis = getRedis();
+  if (!redis) return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
+
+  const limit = role === 'admin' ? 50 : 10;
+  try {
+    const key   = `rate:ai-guided-project:${userId}`;
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, 3600);
+    if (count > limit) {
+      return NextResponse.json(
+        { error: `AI generation limit reached. You can make up to ${limit} requests per hour.` },
+        { status: 429 },
+      );
+    }
+  } catch {
+    return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
+  }
+  return null;
+}
 
 const getAI = () => {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -39,12 +87,16 @@ const requirementSchema = {
   type: Type.OBJECT,
   properties: {
     id:            { type: Type.STRING },
-    label:         { type: Type.STRING },   // The question
-    description:   { type: Type.STRING },   // Which column(s)/filter to use
-    type:          { type: Type.STRING },   // 'mcq' | 'task' | 'text'
-    options:       { type: Type.ARRAY, items: { type: Type.STRING } }, // exactly 4 options
-    correctAnswer:  { type: Type.STRING },   // must match one option exactly
+    label:         { type: Type.STRING },
+    description:   { type: Type.STRING },
+    type:          { type: Type.STRING }, // 'mcq' | 'task' | 'text' | 'code_review' | 'excel_review' | 'dashboard_critique'
+    options:       { type: Type.ARRAY, items: { type: Type.STRING } },
+    correctAnswer:  { type: Type.STRING },
     expectedAnswer: { type: Type.STRING },
+    rubric:        { type: Type.ARRAY, items: { type: Type.STRING } },
+    schema:        { type: Type.STRING },
+    context:       { type: Type.STRING },
+    minScore:      { type: Type.NUMBER },
   },
   required: ['id', 'label', 'description', 'type'],
 };
@@ -74,8 +126,18 @@ const moduleSchema = {
 };
 
 export async function POST(req: NextRequest) {
+  const auth = await authenticate(req);
+  if (auth instanceof NextResponse) return auth;
+
   const body = await req.json();
   const { action } = body;
+
+  if (!ALLOWED_ACTIONS.has(action)) {
+    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+  }
+
+  const rateLimitError = await checkRateLimit(auth.user.id, auth.role);
+  if (rateLimitError) return rateLimitError;
 
   try {
     const ai = getAI();
@@ -136,23 +198,41 @@ DATASET:
 - filename reflects the company (e.g. "narapay_transactions.csv").
 
 REQUIREMENTS (MIXED QUESTION TYPES):
-Each lesson must have exactly 4 requirements in this mix:
-- 2 × MCQ (type "mcq"): data analysis or tool/formula questions tied to the dataset.
+Most lessons: exactly 4 requirements -- 2 MCQ + 1 Task + 1 Short Answer.
+
+- MCQ (type "mcq"): data analysis or tool/formula questions tied to the dataset.
   - label: specific question referencing column names or metrics.
   - description: exact columns/filters to use.
   - options: exactly 4 plausible options using real values from the CSV.
   - correctAnswer: must match one option EXACTLY and be derivable from the CSV.
-- 1 × Task (type "task"): a hands-on action the student must perform (checkbox to confirm).
+- Task (type "task"): a hands-on action the student must perform (checkbox to confirm).
   - label: an imperative action (e.g. "Create a pivot table grouping transactions by region and summing the amount column.").
   - description: brief context or acceptance criteria.
   - NO options, NO correctAnswer, NO expectedAnswer.
-- 1 × Short Answer (type "text"): an open-ended reflection or interpretation question.
-  - label: the question (e.g. "What does the regional distribution of revenue suggest about the company's market focus?").
+- Short Answer (type "text"): an open-ended reflection or interpretation question.
+  - label: the question.
   - description: one sentence guiding their thinking.
-  - expectedAnswer: a model answer (1-2 sentences) the system uses to validate; leave blank to accept any response.
+  - expectedAnswer: a model answer (1-2 sentences).
   - NO options, NO correctAnswer.
 
-Order within each lesson: mcq, mcq, task, short-answer.
+CAPSTONE LESSON (last lesson of each module): replace the short answer with one AI Reviewer step.
+Choose the reviewer type based on the tools used in this module:
+- SQL or Python present  type "code_review"
+- Excel present (and no SQL/Python focus)  type "excel_review"
+- Power BI, Tableau, or dashboard tools  type "dashboard_critique"
+- If multiple apply, pick the one most relevant to the module's focus.
+
+AI Reviewer step fields:
+- label: clear task instruction e.g. "Submit your SQL query for AI review" or "Upload your completed Excel model for AI review".
+- description: what the student should have built or written by this point.
+- rubric: array of exactly 4 specific grading criteria relevant to this module's learning objectives. Each criterion should be a single evaluable statement e.g. "Query uses SUMIF or SUMIFS correctly to aggregate by the required dimension" or "Revenue calculation formula references the correct column range without hardcoded values".
+- schema: (code_review only) describe the dataset columns as a simple column list or CREATE TABLE statement so the AI can validate references.
+- context: (excel_review only) describe the domain and what key cells or ranges should calculate e.g. "This is a financial model. Column F should calculate net profit margin using revenue in column D and costs in column E."
+- minScore: 6 for all AI reviewer steps.
+- NO options, NO correctAnswer, NO expectedAnswer.
+
+Order within regular lessons: mcq, mcq, task, text.
+Order within capstone lessons: mcq, mcq, task, ai_reviewer.
 Questions must progress in difficulty across modules.
 
 IDs: use "mod-1", "les-1-1", "req-1-1-1" format.
@@ -160,7 +240,7 @@ IDs: use "mod-1", "les-1-1", "req-1-1-1" format.
 Generate:
 - 3-4 modules (each a project phase: data exploration  analysis  visualisation  insights)
 - 2-3 lessons per module
-- 4 requirements per lesson (2 mcq + 1 task + 1 text) tied to the dataset
+- 4 requirements per lesson: regular lessons get 2 mcq + 1 task + 1 text; capstone lessons (last lesson of each module) get 2 mcq + 1 task + 1 AI reviewer step (code_review, excel_review, or dashboard_critique) with rubric, schema/context, and minScore: 6
 - tagline: one punchy sentence
 - background: 2-3 direct sentences (HTML <p>)
 - description: 1 sentence summary (HTML <p>)
@@ -246,48 +326,59 @@ HERE IS THE EXACT DATASET THE STUDENT WILL USE:
 ${csvContent}
 \`\`\`
 
-Generate 3-4 modules progressing through: data exploration  analysis  visualisation  insights.
-Each module: 2-3 lessons. Each lesson: exactly 4 requirements (2 mcq + 1 task + 1 text/short-answer).
+Generate 3-4 modules progressing through: data exploration, analysis, visualisation, insights.
+Each module: 2-3 lessons. Each lesson: exactly 4 requirements.
+Regular lessons: 2 mcq + 1 task + 1 text.
+Capstone lesson (LAST lesson of each module): 2 mcq + 1 task + 1 AI reviewer step.
 
 LESSON BODY RULES:
 - 2-3 sentences max (50-80 words). Plain <p> tags only.
 - Tell them exactly which columns/rows to look at and what to calculate or think about.
 - Example: "<p>Open ${pass1.dataset?.filename || 'the dataset'} and filter to rows where status = 'Completed'. Group by region and sum the amount column. Use this to answer the questions below.</p>"
 
-REQUIREMENT TYPES PER LESSON (in this order):
+REQUIREMENT TYPES:
 
-MCQ #1 -- DATA QUESTION (type "mcq"):
+MCQ #1 (type "mcq") -- DATA QUESTION:
 - Answerable ONLY by calculating from the dataset above.
 - ACTUALLY CALCULATE the answer before writing options.
 - label: references exact column names (e.g. "Which region had the highest total sales in Q1?")
-- description: exact columns/filters to use (e.g. "Filter by quarter='Q1', group by region, sum the 'amount' column.")
-- options: 4 plausible values using real numbers from the CSV. Wrong options = other real values from the data.
+- description: exact columns/filters to use.
+- options: 4 plausible values using real numbers from the CSV.
 - correctAnswer: MUST be correct based on the CSV. Do not guess.
 
-MCQ #2 -- FORMULA OR INTERPRETATION QUESTION (type "mcq"):
-- Alternate between formula/tool knowledge and analytical judgement questions across lessons.
+MCQ #2 (type "mcq") -- FORMULA OR INTERPRETATION QUESTION:
+- Alternate between formula/tool knowledge and analytical judgement across lessons.
 - Formula examples tied to ${toolsList}:
   * Excel: chart type selection, SUMIF vs SUMIFS, VLOOKUP vs INDEX-MATCH, pivot table use cases
   * SQL: GROUP BY vs HAVING, JOIN types, COUNT vs COUNT(DISTINCT), WHERE vs HAVING
   * Python/pandas: .groupby(), .merge(), .fillna(), .drop_duplicates(), reading CSVs
-  * Power BI/Tableau: calculated fields, visual types for different insights, page-level filters
-- Interpretation examples: "What does a 22% churn rate suggest?" / "Which chart best shows regional differences to executives?"
+  * Power BI/Tableau: calculated fields, visual types, page-level filters
 - options: 4 plausible options. correctAnswer: technically or analytically correct.
 
 TASK (type "task"):
-- An imperative hands-on action the student must perform in their tool (confirmed by checkbox).
-- label: action verb phrase (e.g. "Create a pivot table grouping transactions by region and summing the amount column.").
-- description: brief context or acceptance criteria (e.g. "Use the pivot table to identify the top 2 regions by revenue.").
+- An imperative hands-on action confirmed by checkbox.
+- label: action verb phrase.
+- description: brief context or acceptance criteria.
 - NO options, NO correctAnswer, NO expectedAnswer.
 
-SHORT ANSWER (type "text"):
-- An open-ended reflection or interpretation question answered in the student's own words.
-- label: the question (e.g. "What does the regional revenue distribution suggest about where the company should focus its next marketing campaign?").
-- description: one guiding sentence (e.g. "Think about the top and bottom performing regions and what explains the gap.").
-- expectedAnswer: a model answer (1-2 sentences) used to validate; leave blank ("") to accept any response.
+SHORT ANSWER (type "text") -- regular lessons only:
+- Open-ended reflection or interpretation.
+- label: the question.
+- description: one guiding sentence.
+- expectedAnswer: model answer (1-2 sentences).
 - NO options, NO correctAnswer.
 
-IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", short answer = "req-1-1-4").
+AI REVIEWER STEP -- capstone lessons only (last lesson of each module):
+Choose type based on tools: SQL or Python present  "code_review". Excel present (no SQL/Python focus)  "excel_review". Power BI, Tableau, or dashboard tools  "dashboard_critique". If multiple apply, pick the most relevant to this module's focus.
+- label: clear instruction e.g. "Submit your SQL query for AI review" or "Upload your completed Excel model for AI review".
+- description: what the student should have built or written at this point.
+- rubric: array of exactly 4 specific grading criteria for this module's objectives. Each is one evaluable statement e.g. "Query correctly uses GROUP BY to aggregate ${pass1.dataset?.filename ? 'the dataset' : 'data'} by the required dimension" or "Revenue formula references the correct column range without hardcoded values".
+- schema: (code_review only) list the dataset columns as a simple column description so the AI can validate references e.g. "Table: transactions. Columns: id (int), region (text), amount (decimal), date (date), status (text)".
+- context: (excel_review only) describe the domain and what key cells should calculate e.g. "This is a sales analysis model for ${pass1.company || 'the company'}. Column E should calculate total revenue using SUMIF on the region column.".
+- minScore: 6.
+- NO options, NO correctAnswer, NO expectedAnswer.
+
+IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", 4th requirement = "req-1-1-4").
 `;
 
       const pass2Res = await ai.models.generateContent({
@@ -560,8 +651,6 @@ RULES:
         },
       });
     }
-
-    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 
   } catch (err: any) {
     console.error('[ai-guided-project]', err);

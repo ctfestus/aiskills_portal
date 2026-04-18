@@ -19,7 +19,13 @@ async function verifyCreator(req: NextRequest): Promise<string | null> {
   const auth = req.headers.get('authorization');
   if (!auth?.startsWith('Bearer ')) return null;
   const { data: { user } } = await serviceClient().auth.getUser(auth.slice(7));
-  return user?.id ?? null;
+  if (!user) return null;
+
+  const { data: profile } = await serviceClient()
+    .from('students').select('role').eq('id', user.id).single();
+  if (!profile || !['instructor', 'admin'].includes(profile.role)) return null;
+
+  return user.id;
 }
 
 // Cache the CDN hostname so we only fetch library info once per process

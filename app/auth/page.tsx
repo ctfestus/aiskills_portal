@@ -53,12 +53,10 @@ export default function AuthPage() {
       } else {
         // Check allowlist before creating account
         const res = await fetch(`/api/cohort-allowlist?email=${encodeURIComponent(email)}`);
-        const { allowed, cohortId } = await res.json();
+        const { allowed } = await res.json();
         if (!allowed) {
           throw new Error('You do not have access to this portal. Contact your Learning Advisor.');
         }
-        // Store cohort for callback to pick up
-        document.cookie = `cohort_assign=${cohortId}; path=/; max-age=600; SameSite=Lax`;
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         setMessage('Check your email for the confirmation link.');

@@ -30,27 +30,19 @@ export async function GET(request: NextRequest) {
   if (user) {
     const db = adminClient();
 
-    // Check for a pre-validated cohort cookie (email/password flow)
-    const cohortCookie = cookieStore.get('cohort_assign')?.value;
-
-    let cohortId: string | null = cohortCookie ?? null;
-
-    // Google OAuth flow -- no cookie, check allowlist by email
-    if (!cohortId && user.email) {
-      const { data } = await db.rpc('check_email_allowlist', { p_email: user.email });
-      cohortId = data ?? null;
-    }
-
-    if (cohortId) {
-      await db.from('students').update({ cohort_id: cohortId }).eq('id', user.id);
-    } else if (!cohortCookie) {
-      // Google OAuth with email not on any allowlist -- reject
+    if (!user.email) {
       await db.auth.admin.deleteUser(user.id);
       return NextResponse.redirect(new URL('/auth?error=not_allowed', request.url));
     }
 
-    // Clear the cohort cookie
-    cookieStore.set('cohort_assign', '', { maxAge: 0, path: '/' });
+    const { data: cohortId } = await db.rpc('check_email_allowlist', { p_email: user.email });
+
+    if (!cohortId) {
+      await db.auth.admin.deleteUser(user.id);
+      return NextResponse.redirect(new URL('/auth?error=not_allowed', request.url));
+    }
+
+    await db.from('students').update({ cohort_id: cohortId }).eq('id', user.id);
   }
 
   return NextResponse.redirect(new URL('/onboarding', request.url));

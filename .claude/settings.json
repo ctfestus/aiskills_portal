@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/DELL/Documents/ALL Apps/Landing pages/elevate-landing/**)",
+      "Bash(npx next *)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\DELL\\Documents\\ALL Apps\\Landing pages\\elevate-landing\\app",
+      "C:\\Users\\DELL\\Documents\\ALL Apps\\Landing pages\\elevate-landing"
+    ]
+  }
+}

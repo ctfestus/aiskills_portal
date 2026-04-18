@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { adminClient } from '@/lib/admin-client';
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,11 @@ async function getAuthUser(req: NextRequest) {
 }
 
 export async function GET() {
-  const { data } = await adminClient()
+  const anon = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  );
+  const { data } = await anon
     .from('platform_settings')
     .select('*')
     .eq('id', 'default')

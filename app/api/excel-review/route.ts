@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getRedis } from '@/lib/redis';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,42 +44,39 @@ async function checkRateLimit(userId: string): Promise<NextResponse | null> {
   return null;
 }
 
-function extractFromWorkbook(buffer: ArrayBuffer): string {
-  const wb = XLSX.read(buffer, { type: 'array', cellFormula: true, cellNF: true });
+async function extractFromWorkbook(buffer: ArrayBuffer): Promise<string> {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(Buffer.from(buffer));
+
   const sections: string[] = [];
 
-  for (const sheetName of wb.SheetNames) {
-    const ws = wb.Sheets[sheetName];
-    if (!ws) continue;
-
-    const lines: string[] = [`Sheet: ${sheetName}`];
-    const ref = ws['!ref'];
-    if (!ref) { lines.push('(empty)'); sections.push(lines.join('\n')); continue; }
-
-    const range = XLSX.utils.decode_range(ref);
+  for (const ws of wb.worksheets) {
+    const lines: string[] = [`Sheet: ${ws.name}`];
     let formulaCount = 0;
 
-    for (let R = range.s.r; R <= range.e.r; R++) {
-      for (let C = range.s.c; C <= range.e.c; C++) {
-        const addr = XLSX.utils.encode_cell({ r: R, c: C });
-        const cell = ws[addr];
-        if (!cell) continue;
-
-        if (cell.f) {
-          const val = cell.v !== undefined ? ` => ${cell.v}` : '';
-          lines.push(`  ${addr}: =${cell.f}${val}`);
+    ws.eachRow((row) => {
+      if (formulaCount >= MAX_FORMULAS) return;
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        if (formulaCount >= MAX_FORMULAS) return;
+        const addr = cell.address;
+        if (cell.formula) {
+          const raw = cell.value;
+          const result = raw !== null && typeof raw === 'object' && 'result' in raw
+            ? (raw as any).result
+            : undefined;
+          const val = result !== undefined ? ` => ${result}` : '';
+          lines.push(`  ${addr}: =${cell.formula}${val}`);
           formulaCount++;
           if (formulaCount >= MAX_FORMULAS) {
             lines.push(`  ... (truncated at ${MAX_FORMULAS} formulas)`);
-            break;
           }
-        } else if (cell.v !== undefined && cell.v !== '') {
-          lines.push(`  ${addr}: ${cell.v}`);
+        } else if (cell.value !== null && cell.value !== undefined && cell.value !== '') {
+          lines.push(`  ${addr}: ${cell.value}`);
         }
-      }
-      if (formulaCount >= MAX_FORMULAS) break;
-    }
+      });
+    });
 
+    if (lines.length === 1) lines.push('(empty)');
     sections.push(lines.join('\n'));
   }
 
@@ -206,7 +203,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer   = await file.arrayBuffer();
-    const extracted = extractFromWorkbook(buffer);
+    const extracted = await extractFromWorkbook(buffer);
 
     if (!extracted.trim()) {
       return NextResponse.json({ error: 'No data found in the spreadsheet.' }, { status: 400 });

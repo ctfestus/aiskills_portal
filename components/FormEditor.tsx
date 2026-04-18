@@ -611,8 +611,6 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const savedCohortIds = useRef<string[]>([]);
   const toggleCohort = (id: string) =>
     setSelectedCohortIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  const [creatingMeeting, setCreatingMeeting] = useState<string | null>(null);
-  const [meetingError, setMeetingError] = useState('');
   const [speakerAddOpen, setSpeakerAddOpen] = useState(false);
   const [speakerEditId, setSpeakerEditId] = useState<string | null>(null);
   const [speakerDraft, setSpeakerDraft] = useState({ name: '', title: '', bio: '', avatar_url: '', linkedin_url: '' });
@@ -738,27 +736,6 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
 
   const updateConfig = (updates: Partial<FormConfig>) => {
     if (formConfig) setFormConfig({ ...formConfig, ...updates });
-  };
-
-  const handleCreateMeeting = async (provider: string) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return;
-    setCreatingMeeting(provider);
-    setMeetingError('');
-    const ev = formConfig?.eventDetails;
-    const startTime = ev?.date && ev?.time ? `${ev.date}T${ev.time}:00` : undefined;
-    const res = await fetch('/api/integrations/create-meeting', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ provider, title: formConfig?.title || 'Event', startTime }),
-    });
-    const data = await res.json();
-    if (data.url) {
-      updateConfig({ eventDetails: { ...formConfig!.eventDetails!, meetingLink: data.url } });
-    } else {
-      setMeetingError(data.error || 'Failed to create meeting.');
-    }
-    setCreatingMeeting(null);
   };
 
   const runAiAction = async <T,>(label: string, task: () => Promise<T>) => {
@@ -1420,29 +1397,6 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     <>
                       <label className={labelCls} style={labelStyle}>Meeting Link</label>
                       <input type="url" value={formConfig.eventDetails.meetingLink || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, meetingLink: e.target.value } })} placeholder="https://meet.google.com/..." className={inputCls} style={inputStyle} />
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-[11px]" style={{ color: FE.faint }}>Generate with:</span>
-                        {([
-                          { id: 'google_meet', name: 'Google Meet', logo: 'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Meet.png' },
-                          { id: 'zoom',        name: 'Zoom',         logo: 'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Zoom.png' },
-                          { id: 'teams',       name: 'Teams',        logo: 'https://gmokwtuyxccnjwpmifug.supabase.co/storage/v1/object/public/form-assets/Logos/Teams.png' },
-                        ] as const).map(p => (
-                          <button
-                            key={p.id}
-                            type="button"
-                            title={`Generate ${p.name} link`}
-                            disabled={!!creatingMeeting}
-                            onClick={() => handleCreateMeeting(p.id)}
-                            className="relative flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:opacity-80 disabled:opacity-40"
-                            style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}
-                          >
-                            {creatingMeeting === p.id
-                              ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: FE.text }} />
-                              : <img src={p.logo} alt={p.name} className="w-5 h-5 object-contain" />}
-                          </button>
-                        ))}
-                      </div>
-                      {meetingError && <p className="text-xs text-red-500 mt-1">{meetingError}</p>}
                     </>
                   ) : (
                     <>

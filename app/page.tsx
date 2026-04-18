@@ -888,6 +888,7 @@ export default function LandingPage() {
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(resolveConfig('momentum', {}));
   const [templateId, setTemplateId] = useState('momentum');
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     // Preview mode: config passed via localStorage from dashboard
     const params = new URLSearchParams(window.location.search);
@@ -916,6 +917,7 @@ export default function LandingPage() {
       .catch(e => console.error('[site-settings]', e))
       .finally(() => setLoading(false));
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Live preview: receive config updates from dashboard iframe via postMessage
   useEffect(() => {
