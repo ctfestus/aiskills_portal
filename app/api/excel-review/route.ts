@@ -46,7 +46,6 @@ async function checkRateLimit(userId: string): Promise<NextResponse | null> {
 
 async function extractFromWorkbook(buffer: ArrayBuffer): Promise<string> {
   const wb = new ExcelJS.Workbook();
-  // @ts-expect-error ExcelJS type predates generic Buffer in @types/node; ArrayBuffer is accepted at runtime
   await wb.xlsx.load(buffer);
 
   const sections: string[] = [];
