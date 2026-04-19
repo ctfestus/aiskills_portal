@@ -282,7 +282,7 @@ export default function StudentPublicProfile() {
         style={{ background: t.nav, borderBottom: `1px solid ${t.navBorder}` }}>
         <div className="max-w-2xl mx-auto px-5 h-13 flex items-center justify-between" style={{ height: 52 }}>
           <Link href="/">
-            <img src={logoUrl}
+            <img src={logoUrl || undefined}
               alt="" style={{ height: 26, width: 'auto', filter: isDark ? 'none' : 'brightness(0) invert(1)' }}/>
           </Link>
           <div className="flex items-center gap-1.5">

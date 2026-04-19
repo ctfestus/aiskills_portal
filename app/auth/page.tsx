@@ -91,7 +91,7 @@ export default function AuthPage() {
         {/* Logo */}
         <div className="mb-10">
           <img
-            src={logoUrl}
+            src={logoUrl || undefined}
             alt=""
             className="h-8 w-auto"
           />

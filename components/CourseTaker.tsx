@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   CheckCircle2, XCircle, Loader2, ChevronRight, RotateCcw,
   Clock, EyeOff, AlertTriangle, ShieldAlert, GripVertical,
-  ChevronLeft, BookOpen, X, ExternalLink, ArrowRight,
+  ChevronLeft, BookOpen, X, ExternalLink, ArrowRight, MoreHorizontal,
 } from 'lucide-react';
 import { AnimatedField } from '@/components/AnimatedField';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -58,44 +58,6 @@ interface CourseQuestion {
   };
 }
 
-// -- Web Audio sounds --
-function playCorrectSound() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const notes = [523.25, 659.25, 783.99]; // C5 E5 G5
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      const t = ctx.currentTime + i * 0.12;
-      gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(0.25, t + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
-      osc.start(t);
-      osc.stop(t + 0.35);
-    });
-  } catch { /* ignore if AudioContext unavailable */ }
-}
-
-function playWrongSound() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(220, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.3);
-    gain.gain.setValueAtTime(0.18, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.35);
-  } catch { /* ignore */ }
-}
 
 // -- Confetti burst --
 function burstConfetti(canvas: HTMLCanvasElement, accent: string) {
@@ -255,6 +217,11 @@ export function CourseTaker({
   const [floatingPoints, setFloatingPoints] = useState<{ id: number; text: string; x: number; y: number } | null>(null);
   const [displayedPoints, setDisplayedPoints] = useState(0);
 
+  // 3-dot menu + XP badge
+  const [showMenu, setShowMenu] = useState(false);
+  const [xpNotify, setXpNotify] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
   // Anti-cheat state
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isObscured, setIsObscured] = useState(false);
@@ -280,7 +247,7 @@ export function CourseTaker({
   // Existing certificate (student already completed this course)
   const [existingCertId, setExistingCertId] = useState<string | null>(null);
   const [finishPending, setFinishPending] = useState<any[] | null>(null); // unanswered questions blocking finish
-
+  const [streakToast, setStreakToast] = useState<string | null>(null);
   const questions = config.questions || [];
   const learningOutcomes: string[] = config.learnOutcomes || [];
   const currentQuestion = questions[currentQuestionIndex];
@@ -315,6 +282,16 @@ export function CourseTaker({
 
   const fontOption = getFontById(config.font ?? 'sans');
   useEffect(() => { loadGoogleFont(fontOption); }, [fontOption]);
+
+  // Close 3-dot menu on outside click
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowMenu(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showMenu]);
   const fontStyle = { fontFamily: fontOption.cssFamily };
   const isDark = (config.mode ?? 'dark') === 'auto' ? systemDark : (config.mode ?? 'dark') !== 'light';
   const cardBg = isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm';
@@ -704,7 +681,7 @@ export function CourseTaker({
 
   // -- Points system --
   const ps = (config as any).pointsSystem;
-  const pointsEnabled = ps?.enabled === true;
+  const pointsEnabled = ps?.enabled !== false;
 
   // -- Animated points counter --
   useEffect(() => {
@@ -1611,20 +1588,21 @@ export function CourseTaker({
 
   const calcPoints = (hintUsed: boolean): { earned: number; label: string; isTimeBonus: boolean; isStreak: boolean } => {
     if (!pointsEnabled) return { earned: 0, label: '', isTimeBonus: false, isStreak: false };
-    const base = ps.basePoints ?? 100;
+    const base = ps?.basePoints ?? 50;
     const elapsed = (Date.now() - questionStartTime) / 1000;
-    const timeBonusEnabled = ps.timeBonusEnabled ?? true;
-    const withinTimeBonus = timeBonusEnabled && elapsed <= (ps.timeBonusSeconds ?? 10);
-    const multiplier = withinTimeBonus ? (ps.timeBonusMultiplier ?? 1.5) : 1;
-    let earned = Math.round(base * multiplier);
-    if (hintUsed) earned = Math.max(0, earned - (ps.hintPenalty ?? 20));
+    const timeBonusEnabled = ps?.timeBonusEnabled ?? true;
+    const withinTimeBonus = timeBonusEnabled && elapsed <= (ps?.timeBonusSeconds ?? 10);
+    const timeMultiplier = withinTimeBonus ? (ps?.timeBonusMultiplier ?? 1.5) : 1;
     const newStreak = streak + 1;
-    const streakEnabled = ps.streakEnabled ?? true;
-    const isStreak = streakEnabled && newStreak > 0 && newStreak % (ps.streakCount ?? 3) === 0;
-    if (isStreak) earned += (ps.streakBonus ?? 50);
+    const streakEnabled = ps?.streakEnabled ?? true;
+    const isStreak = streakEnabled && newStreak >= (ps?.streakCount ?? 3);
+    const streakMultiplier = isStreak ? 1.2 : 1;
+    let earned = Math.round(base * timeMultiplier * streakMultiplier);
+    if (hintUsed) earned = Math.max(0, earned - (ps?.hintPenalty ?? 20));
     let label = `+${earned} XP`;
-    if (withinTimeBonus) label = `⚡ +${earned} XP`;
-    if (isStreak) label = `🔥 +${earned} XP`;
+    if (withinTimeBonus && isStreak) label = `🔥⚡ +${earned} XP`;
+    else if (isStreak) label = `🔥 +${earned} XP`;
+    else if (withinTimeBonus) label = `⚡ +${earned} XP`;
     return { earned, label, isTimeBonus: withinTimeBonus, isStreak };
   };
 
@@ -1685,7 +1663,6 @@ export function CourseTaker({
       // Feature 3: if hint was used for this question, award 0.9 instead of 1
       const hintWasUsed = hintsUsed.has(currentQuestion.id);
       setScore(s => s + (hintWasUsed ? 0.9 : 1));
-      playCorrectSound();
       if (confettiRef.current) burstConfetti(confettiRef.current, accent);
       // Points system
       if (pointsEnabled && !reviewMode) {
@@ -1695,9 +1672,14 @@ export function CourseTaker({
         setStreak(newStreak);
         setFloatingPoints({ id: Date.now(), text: label, x: 50, y: 60 });
         setTimeout(() => setFloatingPoints(null), 1200);
+        setXpNotify(true);
+        setTimeout(() => setXpNotify(false), 2500);
+        if (isStreak) {
+          setStreakToast(`${newStreak} in a row! 1.2× XP`);
+          setTimeout(() => setStreakToast(null), 2200);
+        }
       }
     } else {
-      playWrongSound();
       if (pointsEnabled && !reviewMode) {
         setStreak(0);
       }
@@ -1724,6 +1706,11 @@ export function CourseTaker({
   const handleNext = () => {
     setLessonOpen(false);
     setDirection(1);
+    setSelectedOption(null);
+    setFillBlankAnswer('');
+    setIsChecking(false);
+    setIsCorrect(null);
+
     if (currentQuestionIndex < totalSlides - 1) {
       const nextIndex = currentQuestionIndex + 1;
       if (currentQuestion?.lessonOnly) {
@@ -1833,7 +1820,7 @@ export function CourseTaker({
     }
   };
 
-  const progressPct = (currentQuestionIndex / totalSlides) * 100;
+  const progressPct = totalQuestions > 0 ? (score / totalQuestions) * 100 : 0;
   const timerWarning = timeLeft !== null && timeLeft <= 60;
 
   // -- Correct answer display for after-check feedback --
@@ -2201,18 +2188,27 @@ export function CourseTaker({
 
       {/* -- Quiz UI -- full screen overlay (or inline in editor) -- */}
       <div
-        className={`${inlineMode ? 'relative flex flex-col rounded-xl overflow-hidden min-h-[500px]' : 'fixed inset-0 z-[200] overflow-y-auto flex flex-col'} ${isDark ? 'bg-black' : 'bg-zinc-50'}`}
+        className={`${inlineMode ? 'relative flex flex-col rounded-xl overflow-hidden min-h-[500px]' : 'fixed inset-0 z-[200] overflow-y-auto flex flex-col'} ${isDark ? 'bg-black' : 'bg-white'}`}
         style={{ ...noSelect, color: isDark ? '#ffffff' : '#18181b', ...fontStyle }}
         onCopy={blockCopy}
         onCut={blockCopy}
         onContextMenu={blockMenu}
       >
-        {/* Progress + Timer -- pinned at top */}
+        {/* Progress + controls -- pinned at top */}
         <div className={`flex-shrink-0 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 ${isDark ? 'border-b border-zinc-800/60' : 'border-b border-zinc-200'}`}>
           <div className="max-w-6xl mx-auto">
             <div className="flex justify-between items-center mb-2">
-              <div className="flex items-center gap-2">
-                {/* Feature 2: back arrow */}
+              {/* Left: X close + back arrow */}
+              <div className="flex items-center gap-1">
+                {!inlineMode && (
+                  <button
+                    onClick={() => window.history.back()}
+                    className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
+                    title="Exit course"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
                 {currentQuestionIndex > 0 && (
                   <button
                     onClick={handleBack}
@@ -2222,34 +2218,94 @@ export function CourseTaker({
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                 )}
-                <span className={`text-xs font-medium ${mutedColor}`}>
-                  {currentSection?.sectionTitle
-                    ? <span className="truncate max-w-[140px] inline-block align-bottom">{currentSection.sectionTitle}</span>
-                    : (currentQuestion?.lessonOnly ? 'Lesson' : 'Question')
-                  }{' '}
-                  {currentQuestionIndex + 1} <span className={mutedColor}>of {totalSlides}</span>
-                </span>
               </div>
-              <div className="flex items-center gap-2 sm:gap-3">
+
+              {/* Right: timer + 3-dot menu */}
+              <div className="flex items-center gap-2">
                 {timeLeft !== null && (
                   <span className={`flex items-center gap-1 text-xs font-semibold tabular-nums ${timerWarning ? 'text-rose-400' : mutedColor}`}>
                     <Clock className="w-3 h-3" />
                     {formatTime(timeLeft)}
                   </span>
                 )}
-                {reviewMode ? (
+                {reviewMode && (
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
                     style={{ background: isDark ? 'rgba(99,102,241,0.2)' : '#ede9fe', color: isDark ? '#a5b4fc' : '#6d28d9' }}>
                     Review Mode
                   </span>
-                ) : pointsEnabled && (
-                  <div className="flex items-center gap-1 text-xs font-bold tabular-nums" style={{ color: isDark ? '#facc15' : '#10b981' }}>
-                    ⭐ {displayedPoints.toLocaleString()} XP
-                    {streak >= 2 && <span className="text-orange-400 ml-1">🔥 {streak}</span>}
-                  </div>
                 )}
+                {/* 3-dot menu */}
+                <div ref={menuRef} className="relative">
+                  <button
+                    onClick={() => setShowMenu(v => !v)}
+                    className={`relative p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
+                    title="Course info"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                    {xpNotify && (
+                      <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    )}
+                  </button>
+                  <AnimatePresence>
+                    {showMenu && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                        transition={{ duration: 0.12 }}
+                        className={`absolute right-0 top-9 z-50 w-52 rounded-xl shadow-xl border overflow-hidden ${isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-white border-zinc-200'}`}
+                        onMouseLeave={() => setShowMenu(false)}
+                      >
+                        <div className={`px-4 py-3 border-b ${isDark ? 'border-zinc-800' : 'border-zinc-100'}`}>
+                          <p className={`text-[10px] font-semibold uppercase tracking-widest ${mutedColor}`}>Course Progress</p>
+                        </div>
+                        <div className="px-4 py-3 space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className={`text-xs ${mutedColor}`}>Current</span>
+                            <span className="text-xs font-semibold" style={{ color: accent }}>{currentQuestionIndex + 1} of {totalSlides}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className={`text-xs ${mutedColor}`}>Total lessons</span>
+                            <span className={`text-xs font-semibold`} style={{ color: isDark ? '#fff' : '#18181b' }}>{totalSlides}</span>
+                          </div>
+                          {pointsEnabled && (
+                            <div className="flex justify-between items-center">
+                              <span className={`text-xs ${mutedColor}`}>XP earned</span>
+                              <span className="text-xs font-bold tabular-nums flex items-center gap-1" style={{ color: isDark ? '#facc15' : '#10b981' }}>
+                                ⭐ {displayedPoints.toLocaleString()}
+                                {streak >= 2 && <span className="text-orange-400">🔥{streak}</span>}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </div>
+
+            {/* Streak toast -- sits on the progress bar */}
+            <div className="relative">
+            <AnimatePresence>
+              {streakToast && (
+                <motion.div
+                  key="streak-toast"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none"
+                >
+                  <span className="flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-semibold text-white shadow-sm"
+                    style={{ background: '#10b981' }}>
+                    🔥 {streakToast.replace(/^🔥\s*/, '')}
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Progress bar */}
             <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
               <motion.div
                 className="h-full rounded-full"
@@ -2268,53 +2324,7 @@ export function CourseTaker({
                 />
               </div>
             )}
-            {/* Feature 2: dot navigation */}
-            {totalSlides > 1 && (
-              <div className="flex items-center gap-1 mt-2 flex-wrap">
-                {questions.slice(0, Math.min(totalSlides, 15)).map((q: any, idx: number) => {
-                  const isCurrentDot = idx === currentQuestionIndex;
-                  const isAnsweredDot = !!answers[q.id];
-                  const isSkippedDot = skippedQuestions.has(q.id);
-                  const isSectionDot = !!q.isSection;
-                  let dotColor = isDark ? '#3f3f46' : '#d4d4d8'; // unanswered gray
-                  if (isCurrentDot) dotColor = accent;
-                  else if (isSectionDot) dotColor = accent;
-                  else if (isAnsweredDot) dotColor = '#10b981'; // green
-                  else if (isSkippedDot) dotColor = '#ef4444'; // red
-                  if (isSectionDot) {
-                    // Section dividers shown as a taller vertical bar
-                    return (
-                      <button
-                        key={q.id}
-                        onClick={() => { setDirection(idx > currentQuestionIndex ? 1 : -1); setCurrentQuestionIndex(idx); }}
-                        className="transition-all duration-150 hover:scale-110 rounded-sm flex-shrink-0"
-                        style={{ width: isCurrentDot ? 3 : 2, height: isCurrentDot ? 14 : 10, background: dotColor, opacity: isCurrentDot ? 1 : 0.5 }}
-                        title={q.sectionTitle || 'Section'}
-                      />
-                    );
-                  }
-                  return (
-                    <button
-                      key={q.id}
-                      onClick={() => {
-                        setDirection(idx > currentQuestionIndex ? 1 : -1);
-                        setCurrentQuestionIndex(idx);
-                      }}
-                      className="transition-all duration-150 hover:scale-125 rounded-full flex-shrink-0"
-                      style={{
-                        width: isCurrentDot ? 10 : 6,
-                        height: isCurrentDot ? 10 : 6,
-                        background: dotColor,
-                      }}
-                      title={`Q${idx + 1}`}
-                    />
-                  );
-                })}
-                {totalSlides > 15 && (
-                  <span className={`text-[10px] ${mutedColor}`}>+{totalSlides - 15}</span>
-                )}
-              </div>
-            )}
+            </div>{/* end progress bar wrapper */}
           </div>
         </div>
 
@@ -2606,8 +2616,8 @@ export function CourseTaker({
               <div className="flex items-center justify-between gap-2 sm:gap-4">
                 {/* Left: feedback badge OR skip link */}
                 {isChecking ? (
-                  <div className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 rounded-full border-2 font-bold text-sm sm:text-base flex-shrink-0 bg-white ${isCorrect ? 'border-emerald-500 text-emerald-500' : 'border-rose-500 text-rose-500'}`}>
-                    {isCorrect ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                  <div className={`flex items-center gap-2 px-4 sm:px-6 py-[9px] sm:py-[13px] rounded-2xl font-semibold text-base flex-shrink-0 bg-white border-[3px] ${isCorrect ? 'border-emerald-500 text-emerald-600' : 'border-rose-500 text-rose-600'}`}>
+                    {isCorrect ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-rose-500" />}
                     {isCorrect ? 'Correct!' : 'Incorrect!'}
                   </div>
                 ) : (
@@ -2627,7 +2637,7 @@ export function CourseTaker({
                         {hasLesson && (
                           <button
                             onClick={() => setLessonOpen(true)}
-                            className={`px-3 sm:px-5 py-3 sm:py-4 rounded-2xl text-sm font-semibold transition-all active:scale-95 ${isCorrect ? (isDark ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-emerald-50 text-emerald-600') : (isDark ? 'bg-rose-500/15 text-rose-400 hover:bg-rose-500/25' : 'bg-rose-50 text-rose-600')}`}
+                            className={`px-3 sm:px-5 py-[11px] sm:py-[15px] rounded-2xl text-sm font-semibold transition-all active:scale-95 ${isCorrect ? (isDark ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-emerald-50 text-emerald-600') : (isDark ? 'bg-rose-500/15 text-rose-400 hover:bg-rose-500/25' : 'bg-rose-50 text-rose-600')}`}
                           >
                             <BookOpen className="w-4 h-4 inline mr-1 sm:mr-1.5 -mt-0.5" />
                             {isCorrect ? 'Review Lesson' : 'Why?'}
@@ -2635,7 +2645,7 @@ export function CourseTaker({
                         )}
                         <button
                           onClick={handleNext}
-                          className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-3 sm:py-4 rounded-2xl font-semibold text-white text-sm transition-all active:scale-95"
+                          className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-[11px] sm:py-[15px] rounded-2xl font-semibold text-white text-sm transition-all active:scale-95"
                           style={{ background: isCorrect ? '#10b981' : '#f43f5e' }}
                         >
                           {currentQuestionIndex < totalSlides - 1 ? 'Continue' : 'Finish'}
@@ -2646,7 +2656,7 @@ export function CourseTaker({
                       <button
                         onClick={handleCheck}
                         disabled={!isAnswered()}
-                        className="px-6 sm:px-8 py-3 sm:py-4 rounded-2xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="px-6 sm:px-8 py-[11px] sm:py-[15px] rounded-2xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                         style={{
                           background: isAnswered() ? accent : (isDark ? '#27272a' : '#e4e4e7'),
                           color: isAnswered() ? 'white' : (isDark ? '#52525b' : '#a1a1aa'),
@@ -2665,7 +2675,7 @@ export function CourseTaker({
                       <button
                         onClick={handleNextDirect}
                         disabled={!isAnswered() && questionType !== 'arrange'}
-                        className="flex items-center gap-1.5 sm:gap-2 px-6 sm:px-8 py-3 sm:py-4 rounded-2xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="flex items-center gap-1.5 px-6 py-2.5 rounded-full font-semibold text-sm transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed shadow-sm"
                         style={{
                           background: (isAnswered() || questionType === 'arrange') ? accent : (isDark ? '#27272a' : '#e4e4e7'),
                           color: (isAnswered() || questionType === 'arrange') ? 'white' : (isDark ? '#52525b' : '#a1a1aa'),

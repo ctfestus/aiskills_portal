@@ -975,7 +975,7 @@ const [isSaving, setIsSaving] = useState(false);
             passmark: course.passmark, course_timer: course.course_timer,
             learnOutcomes: course.learn_outcomes, points_enabled: course.points_enabled,
             points_base: course.points_base,
-            pointsSystem: { enabled: course.points_enabled ?? false, basePoints: course.points_base ?? 100 },
+            pointsSystem: { enabled: course.points_enabled ?? true, basePoints: course.points_base ?? 50 },
             postSubmission: course.post_submission,
             coverImage: course.cover_image, deadline_days: course.deadline_days,
             theme: course.theme, mode: course.mode, font: course.font, customAccent: course.custom_accent };
@@ -1622,7 +1622,7 @@ const [isSaving, setIsSaving] = useState(false);
       <main className="min-h-screen flex flex-col" style={{ background: C.page, color: C.text }}>
         <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-4 sm:py-5 backdrop-blur-sm" style={{ borderBottom: `1px solid ${theme === 'dark' ? C.navBorder : '#0b07b3'}`, background: theme === 'dark' ? C.nav : '#0e09dd' }}>
           <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-            <img src={logoUrl} alt="" className="h-7 w-auto" />
+            <img src={logoUrl || undefined} alt="" className="h-7 w-auto" />
             <span className="text-sm font-semibold tracking-tight" style={{ color: theme === 'dark' ? C.text : 'white' }}>AI Skills Africa</span>
           </Link>
           {user ? (
@@ -1721,14 +1721,14 @@ const [isSaving, setIsSaving] = useState(false);
   const accentColor = formConfig.customAccent ?? themeAccentColors[formConfig.theme];
 
   const defaultPoints: PointsSystem = {
-    enabled: false,
-    basePoints: 100,
+    enabled: true,
+    basePoints: 50,
     timeBonusEnabled: true,
     timeBonusSeconds: 10,
     timeBonusMultiplier: 1.5,
     streakEnabled: true,
     streakCount: 3,
-    streakBonus: 50,
+    streakBonus: 0,
     hintPenalty: 20,
     milestones: [],
   };
@@ -1740,7 +1740,7 @@ const [isSaving, setIsSaving] = useState(false);
         <div className="flex items-center justify-between px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-70 transition-opacity">
-              <img src={logoUrl} alt="" className="h-6 w-auto" />
+              <img src={logoUrl || undefined} alt="" className="h-6 w-auto" />
               <span className="text-sm font-semibold tracking-tight" style={{ color: theme === 'dark' ? C.text : 'white' }}>AI Skills Africa</span>
             </Link>
             <div className="w-px h-4" style={{ background: theme === 'dark' ? C.divider : 'rgba(255,255,255,0.2)' }} />
@@ -3032,14 +3032,14 @@ const [isSaving, setIsSaving] = useState(false);
                     <div className="p-3 rounded-xl space-y-2" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
                       <div className="flex items-center justify-between">
                         <label className={`${labelCls} mb-0`} style={labelStyle}>Base points per question</label>
-                        <span className="text-xs font-semibold" style={{ color: accentColor }}>{formConfig.pointsSystem?.basePoints ?? 100} pts</span>
+                        <span className="text-xs font-semibold" style={{ color: accentColor }}>{formConfig.pointsSystem?.basePoints ?? 50} pts</span>
                       </div>
                       <div className="flex gap-1.5 flex-wrap">
                         {[50, 100, 200, 500].map(n => (
                           <button key={n} type="button"
                             onClick={() => updateConfig({ pointsSystem: { ...defaultPoints, ...formConfig.pointsSystem, basePoints: n } })}
                             className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                            style={(formConfig.pointsSystem?.basePoints ?? 100) === n ? { background: accentColor, color: 'white' } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.muted }}
+                            style={(formConfig.pointsSystem?.basePoints ?? 50) === n ? { background: accentColor, color: 'white' } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.muted }}
                           >{n}</button>
                         ))}
                       </div>

@@ -277,7 +277,7 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
         className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 py-4 transition-all duration-300"
         style={{ background: nav_bg, boxShadow: scrolled ? '0 1px 24px rgba(0,0,0,0.10)' : `0 1px 0 rgba(0,0,0,0.06)` }}
       >
-        <img src={logoUrl} alt="" className="h-9 w-auto" />
+        <img src={logoUrl || undefined} alt="" className="h-9 w-auto" />
         <div className="flex items-center gap-3">
           {user ? <NavProfileMenu user={user} profile={profile} /> : (
             <>
@@ -822,7 +822,7 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
         <div className="relative z-10 max-w-6xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
             <div className="md:col-span-2 space-y-4">
-              <img src={logoUrl} alt="" className="h-9 w-auto" />
+              <img src={logoUrl || undefined} alt="" className="h-9 w-auto" />
               <p className="text-sm leading-relaxed max-w-xs" style={{ color: on_dark, opacity: 0.45 }}>{footerTagline}</p>
             </div>
             <div className="space-y-3">
@@ -1021,7 +1021,7 @@ export default function LandingPage() {
         style={{ background: primaryColor, boxShadow: scrolled ? `0 2px 20px ${primaryColor}4d` : 'none' }}
       >
         <div className="flex items-center">
-          <img src={logoUrl} alt="" className="h-9 w-auto" />
+          <img src={logoUrl || undefined} alt="" className="h-9 w-auto" />
         </div>
 
 
@@ -1398,7 +1398,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
             <div className="md:col-span-2 space-y-4">
               <div className="flex items-center">
-                <img src={logoUrl} alt="" className="h-9 w-auto" />
+                <img src={logoUrl || undefined} alt="" className="h-9 w-auto" />
               </div>
               <p className="text-sm leading-relaxed max-w-xs" style={{ color: 'rgba(255,255,255,0.65)' }}>
                 {footerTagline}

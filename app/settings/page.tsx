@@ -497,7 +497,7 @@ export default function SettingsPage() {
             <ArrowLeft className="w-5 h-5"/>
           </button>
           <img
-            src={logoUrl}
+            src={logoUrl || undefined}
             alt=""
             className="h-7 w-auto"
           />

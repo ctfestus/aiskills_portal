@@ -4300,7 +4300,7 @@ export default function StudentDashboard() {
           </button>
           {/* Logo / brand */}
           <Link href="/" className="flex items-center block">
-            <img src={logoUrl} alt="Logo" className="h-8 w-auto" />
+            <img src={logoUrl || undefined} alt="Logo" className="h-8 w-auto" />
           </Link>
         </div>
         <div className="flex items-center gap-2">

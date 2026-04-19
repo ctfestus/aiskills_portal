@@ -135,8 +135,8 @@ export async function POST(req: NextRequest) {
           passmark:       config.passmark        ?? 50,
           course_timer:   config.courseTimer     ?? null,
           learn_outcomes: config.learnOutcomes   ?? [],
-          points_enabled: config.pointsSystem?.enabled   ?? false,
-          points_base:    config.pointsSystem?.basePoints ?? 100,
+          points_enabled: config.pointsSystem?.enabled   ?? true,
+          points_base:    config.pointsSystem?.basePoints ?? 50,
           post_submission: config.postSubmission ?? null,
         })
         .select('id, slug, status')
@@ -256,8 +256,8 @@ export async function PUT(req: NextRequest) {
       passmark:       config.passmark        ?? 50,
       course_timer:   config.timer           ?? config.courseTimer ?? null,
       learn_outcomes: config.learnOutcomes   ?? [],
-      points_enabled: config.pointsSystem?.enabled   ?? config.pointsEnabled   ?? false,
-      points_base:    config.pointsSystem?.basePoints ?? config.pointsBase      ?? 100,
+      points_enabled: config.pointsSystem?.enabled   ?? config.pointsEnabled   ?? true,
+      points_base:    config.pointsSystem?.basePoints ?? config.pointsBase      ?? 50,
       post_submission: config.postSubmission ?? null,
     };
   } else if (found.table === 'events') {

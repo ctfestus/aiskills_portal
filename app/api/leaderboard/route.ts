@@ -42,17 +42,7 @@ export async function GET(req: NextRequest) {
     const isInstructorOrAdmin = profile.role === 'instructor' || profile.role === 'admin';
 
     // --- Access control ---
-    if (isInstructorOrAdmin) {
-      // Instructor must own at least one piece of content assigned to this cohort
-      const [{ data: ownedCourse }, { data: ownedEvent }, { data: ownedVe }] = await Promise.all([
-        supabase.from('courses').select('id').eq('user_id', user.id).contains('cohort_ids', [cohortId]).limit(1).maybeSingle(),
-        supabase.from('events').select('id').eq('user_id', user.id).contains('cohort_ids', [cohortId]).limit(1).maybeSingle(),
-        supabase.from('virtual_experiences').select('id').eq('user_id', user.id).contains('cohort_ids', [cohortId]).limit(1).maybeSingle(),
-      ]);
-      if (!(ownedCourse ?? ownedEvent ?? ownedVe) && profile.role !== 'admin') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    } else {
+    if (!isInstructorOrAdmin) {
       // Students can only view their own cohort's leaderboard
       if (profile.cohort_id !== cohortId) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
