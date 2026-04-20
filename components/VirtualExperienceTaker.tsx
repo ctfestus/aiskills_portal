@@ -48,6 +48,7 @@ interface Dataset {
 }
 interface ProjectConfig {
   isVirtualExperience: true;
+  title?: string;
   industry: string;
   difficulty: string;
   role: string;
