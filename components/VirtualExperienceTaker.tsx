@@ -80,11 +80,12 @@ interface Props {
   initialLessonId?: string;
   isDark?: boolean;
   accentColor?: string;
+  shortCourse?: boolean;
 }
 
 // Helpers
 const REQ_META: Record<string, { label: string; color: string; bg: string }> = {
-  task:        { label: 'Task',        color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
+  task:        { label: 'Deliverable', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
   deliverable: { label: 'Deliverable', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
   reflection:  { label: 'Reflection',  color: '#00b95c', bg: 'rgba(0,185,92,0.12)' },
 };
@@ -147,7 +148,7 @@ function DifficultyDots({ difficulty, color }: { difficulty: string; color: stri
 export default function VirtualExperienceTaker({
   formId, formSlug, config, studentName, studentEmail, userId, sessionToken,
   initialProgress = {}, initialModuleId, initialLessonId,
-  isDark = true, accentColor = '#00b95c',
+  isDark = true, accentColor = '#00b95c', shortCourse = false,
 }: Props) {
   const authHeader = useMemo(
     () => sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {} as Record<string, string>,
@@ -390,17 +391,19 @@ export default function VirtualExperienceTaker({
             {/* Badge */}
             <div className="flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-widest"
               style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', backdropFilter: 'blur(6px)' }}>
-              <Trophy className="w-3.5 h-3.5" /> Virtual Experience Complete
+              <Trophy className="w-3.5 h-3.5" /> {shortCourse ? 'Course Complete' : 'Virtual Experience Complete'}
             </div>
             {/* Name */}
             <h1 className="text-4xl sm:text-5xl font-black leading-tight" style={{ color: '#fff' }}>
               Well done, {studentName.split(' ')[0]}!
             </h1>
-            {/* Company + role */}
-            <p className="text-[15px] max-w-xl" style={{ color: 'rgba(255,255,255,0.75)' }}>
-              You completed the <span style={{ color: '#fff', fontWeight: 600 }}>{config.role}</span> experience at{' '}
-              <span style={{ color: '#fff', fontWeight: 700 }}>{config.company}</span>.
-            </p>
+            {/* Company + role (VE only) */}
+            {!shortCourse && (
+              <p className="text-[15px] max-w-xl" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                You completed the <span style={{ color: '#fff', fontWeight: 600 }}>{config.role}</span> experience at{' '}
+                <span style={{ color: '#fff', fontWeight: 700 }}>{config.company}</span>.
+              </p>
+            )}
           </div>
         </div>
 
@@ -410,9 +413,9 @@ export default function VirtualExperienceTaker({
           {/* Stats row */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: 'Modules', value: totalModules },
-              { label: 'Lessons', value: totalLessons },
-              { label: 'Score', value: '100%' },
+              { label: 'Milestones', value: totalModules },
+              { label: 'Missions',   value: totalLessons },
+              { label: 'Score',      value: '100%' },
             ].map(s => (
               <div key={s.label} className="rounded-2xl p-4 text-center"
                 style={{ background: isDark ? '#1c1c1c' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'}` }}>
@@ -523,11 +526,16 @@ export default function VirtualExperienceTaker({
           overflow: sidebarOpen ? 'auto' : 'hidden',
         }}>
 
-        {/* Company header */}
+        {/* Company / title header */}
         <div className="px-4 py-4 border-b flex items-center gap-3 flex-shrink-0" style={{ borderColor: border }}>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold truncate" style={{ color: text }}>{config.company}</p>
-            <p className="text-[11px] truncate" style={{ color: muted }}>{config.role}</p>
+            {shortCourse
+              ? <p className="text-xs font-bold truncate" style={{ color: text }}>{config.title || 'Short Course'}</p>
+              : <>
+                  <p className="text-xs font-bold truncate" style={{ color: text }}>{config.company}</p>
+                  <p className="text-[11px] truncate" style={{ color: muted }}>{config.role}</p>
+                </>
+            }
           </div>
           <button onClick={() => setSidebarOpen(false)} style={{ color: muted }} className="flex-shrink-0 hover:opacity-60">
             <X className="w-4 h-4" />
@@ -692,7 +700,7 @@ export default function VirtualExperienceTaker({
           {!currentLes && modules.length > 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <BookOpen className="w-10 h-10 mb-3 opacity-20" style={{ color: muted }} />
-              <p className="text-sm font-medium" style={{ color: muted }}>Select a lesson from the sidebar</p>
+              <p className="text-sm font-medium" style={{ color: muted }}>Select a mission from the sidebar</p>
             </div>
           )}
           {currentLes ? (
@@ -1179,9 +1187,9 @@ export default function VirtualExperienceTaker({
                       style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
                       <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: accentColor }} />
                       <p className="text-[13px] font-bold" style={{ color: accentColor }}>
-                        {isFile ? 'Module Solution File' : 'Module Solution Video'}
+                        {isFile ? 'Milestone Solution File' : 'Milestone Solution Video'}
                       </p>
-                      <p className="text-[12px] ml-auto" style={{ color: isDark ? '#666' : '#999' }}>Unlocked: module complete</p>
+                      <p className="text-[12px] ml-auto" style={{ color: isDark ? '#666' : '#999' }}>Unlocked: milestone complete</p>
                     </div>
                     {isFile ? (
                       <div className="px-6 py-5 flex items-center gap-3">

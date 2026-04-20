@@ -18,7 +18,7 @@ import { useRouter } from 'next/navigation';
 import NotificationBell from '@/components/NotificationBell';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
-import { sanitizeRichText } from '@/lib/sanitize';
+import { sanitizeRichText, renderAnnouncementContent } from '@/lib/sanitize';
 import { RichTextEditor } from '@/components/RichTextEditor';
 
 // --- Design tokens ---
@@ -387,7 +387,7 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
             <div style={{ height: 180, overflow: 'hidden', flexShrink: 0 }}>
               <img src={config.coverImage} alt={course.form?.title}
                 onError={() => setImgErr(true)}
-                className="w-full h-full object-cover"/>
+                className="w-full h-full object-cover object-center"/>
             </div>
           )}
 
@@ -593,16 +593,18 @@ function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
                   <p className="px-4 py-3 text-sm border-b" style={{ color: C.muted, borderColor: C.cardBorder }}>{path.description}</p>
                 )}
                 {(path.items ?? []).map((item: any, idx: number) => {
-                  const done = completedIds.includes(item.id);
+                  const done      = completedIds.includes(item.id);
+                  const isCurrent = !done && (idx === 0 || completedIds.includes((path.items[idx - 1] as any)?.id));
                   const isVE = item.content_type === 'virtual_experience' || item.content_type === 'guided_project' || item.config?.isVirtualExperience || item.config?.isGuidedProject;
-                  const href = isVE ? `/student?section=virtual_experiences` : `/${item.slug || item.id}?go=1`;
+                  const href = isVE ? `/student?section=virtual_experiences` : `/${item.slug || item.id}`;
                   return (
-                    <div key={item.id} className="flex items-center gap-3 px-4 py-3 border-t first:border-t-0" style={{ borderColor: C.cardBorder }}>
+                    <div key={item.id} className="flex items-center gap-3 px-4 py-3 border-t first:border-t-0"
+                      style={{ borderColor: C.cardBorder, background: isCurrent ? `${C.green}09` : 'transparent' }}>
                       <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-                        style={{ background: done ? '#16a34a' : C.cardBorder }}>
+                        style={{ background: done ? '#16a34a' : isCurrent ? C.green : C.cardBorder }}>
                         {done
                           ? <CheckCircle className="w-3.5 h-3.5 text-white"/>
-                          : <span className="text-[10px] font-bold" style={{ color: C.faint }}>{idx + 1}</span>}
+                          : <span className="text-[10px] font-bold" style={{ color: isCurrent ? '#fff' : C.faint }}>{idx + 1}</span>}
                       </div>
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
                         style={{ background: isVE ? '#6366f120' : '#3b82f620', color: isVE ? '#6366f1' : '#3b82f6' }}>
@@ -1403,6 +1405,28 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
     setSavedFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
+  async function handleResubmit() {
+    if (!submission) return;
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      const res = await fetch('/api/assignments/resubmit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ submissionId: submission.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to resubmit');
+      setSubmission((prev: any) => ({ ...prev, status: 'draft', score: null, feedback: null, graded_by: null, graded_at: null }));
+    } catch (err: any) {
+      setSubmitError(err?.message || 'Failed to resubmit. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const isGraded = submission?.status === 'graded';
   const isSubmitted = submission?.status === 'submitted';
   const uploading = readyFiles.some(f => f.status === 'uploading');
@@ -1606,6 +1630,17 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
                       <p className="text-xs font-semibold mb-1" style={{ color: passed ? '#10b981' : failed ? '#ef4444' : C.faint }}>Instructor Feedback</p>
                       <div className="rich-content text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(submission.feedback) }}/>
                     </div>
+                  )}
+                  {failed && (
+                    <button
+                      onClick={handleResubmit}
+                      disabled={submitting}
+                      className="mt-4 w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+                      style={{ background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1.5px solid rgba(239,68,68,0.25)' }}
+                    >
+                      {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      Resubmit Assignment
+                    </button>
                   )}
                 </>
               );
@@ -1961,7 +1996,8 @@ function AnnouncementPost({ ann, userId, myReactions, C }: {
 
   const LONG = 280;
   const plainText = ann.content?.replace(/<[^>]*>/g, ' ').trim() ?? '';
-  const isLong = plainText.length > LONG;
+  const hasEmbed = ann.content ? /yt-embed|youtube\.com\/embed/.test(ann.content) : false;
+  const isLong = !hasEmbed && plainText.length > LONG;
 
   async function toggleReaction(type: 'like' | 'bookmark') {
     if (acting) return;
@@ -1984,40 +2020,56 @@ function AnnouncementPost({ ann, userId, myReactions, C }: {
     } finally { setActing(false); }
   }
 
+  const author = ann.author;
+  const authorName = author?.full_name || 'Admin';
+  const authorInitials = authorName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl overflow-hidden"
-      style={{ background: C.card, border: `1px solid ${ann.is_pinned ? C.green + '50' : C.cardBorder}`, boxShadow: C.cardShadow }}>
+      className="rounded-2xl overflow-hidden px-5 pt-4 pb-0"
+      style={{ background: C.card, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
 
-      {/* Header */}
-      <div className="flex items-start gap-3 px-5 pt-4 pb-3">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-          style={{ background: C.thumbBg }}>
-          <Megaphone className="w-4 h-4" style={{ color: C.green }}/>
+      {/* Poster profile row */}
+      <div className="flex items-center gap-3 mb-3">
+        {/* Avatar */}
+        <div className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden text-sm font-bold"
+          style={{ background: C.green, color: typeof C.ctaText === 'string' ? C.ctaText : '#fff' }}>
+          {author?.avatar_url
+            ? <img src={author.avatar_url} alt={authorName} className="w-full h-full object-cover"/>
+            : authorInitials}
         </div>
+        {/* Name + timestamp */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold" style={{ color: C.text }}>AI Skills Africa</span>
+          <p className="text-sm font-semibold leading-tight truncate" style={{ color: C.text }}>{authorName}</p>
+          <div className="flex items-center gap-1.5 mt-0.5">
             {ann.is_pinned && (
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1"
-                style={{ background: C.thumbBg, color: C.green }}>
-                📌 Pinned
-              </span>
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                style={{ background: `${C.green}18`, color: C.green }}>📌 Pinned</span>
             )}
+            <p className="text-[11px]" style={{ color: C.faint }}>{age}</p>
           </div>
-          <p className="text-xs" style={{ color: C.faint }}>Announcement · {age}</p>
         </div>
       </div>
 
+      {/* Cover image -- shown at top as thumbnail */}
+      {ann.cover_image && (
+        <div className="pb-3">
+          <div className="overflow-hidden rounded-xl" style={{ maxHeight: 280 }}>
+            <img src={ann.cover_image} alt={ann.title} className="w-full object-cover"
+              style={{ maxHeight: 280 }} onError={e => (e.currentTarget.parentElement!.style.display = 'none')}/>
+          </div>
+        </div>
+      )}
+
       {/* Title + content */}
-      <div className="px-5 pb-3">
-        <h2 className="font-bold mb-2" style={{ fontSize: '1.6rem', lineHeight: 1.2, letterSpacing: '-0.02em', color: C.text }}>{ann.title}</h2>
+      <div className="pb-3">
+        <h2 className="font-bold mb-2" style={{ fontSize: '1.5rem', lineHeight: 1.2, letterSpacing: '-0.02em', color: C.text }}>{ann.title}</h2>
         {ann.content && (
           <div>
             <div
               className="rich-content"
               style={isLong && !expanded ? { overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' } : undefined}
-              dangerouslySetInnerHTML={{ __html: sanitizeRichText(ann.content) }}
+              dangerouslySetInnerHTML={{ __html: renderAnnouncementContent(ann.content) }}
             />
             {isLong && (
               <button onClick={() => setExpanded(e => !e)}
@@ -2030,23 +2082,13 @@ function AnnouncementPost({ ann, userId, myReactions, C }: {
         )}
       </div>
 
-      {/* Cover image */}
-      {ann.cover_image && (
-        <div className="px-5 pb-3">
-          <div className="rounded-xl overflow-hidden" style={{ maxHeight: 280 }}>
-            <img src={ann.cover_image} alt={ann.title} className="w-full object-cover"
-              style={{ maxHeight: 280 }} onError={e => (e.currentTarget.parentElement!.style.display = 'none')}/>
-          </div>
-        </div>
-      )}
-
-      {/* YouTube embed */}
+      {/* YouTube embed (separate field -- fallback for non-inline videos) */}
       {ann.youtube_url && (() => {
         const embedId = ann.youtube_url.match(/(?:v=|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/)?.[1];
         if (!embedId) return null;
         return (
-          <div className="px-5 pb-3">
-            <div className="rounded-xl overflow-hidden" style={{ position: 'relative', paddingBottom: '56.25%', height: 0 }}>
+          <div className="pb-3">
+            <div className="overflow-hidden rounded-xl" style={{ position: 'relative', paddingBottom: '56.25%', height: 0 }}>
               <iframe
                 src={`https://www.youtube.com/embed/${embedId}`}
                 title={ann.title}
@@ -2078,7 +2120,7 @@ function AnnouncementPost({ ann, userId, myReactions, C }: {
       )}
 
       {/* Action buttons */}
-      <div className="flex" style={{ borderTop: `1px solid ${C.divider}` }}>
+      <div className="flex -mx-5" style={{ borderTop: `1px solid ${C.divider}` }}>
         {[
           { label: 'Like', icon: ThumbsUp, active: liked, count: likeCount, action: () => toggleReaction('like'), activeColor: '#2563eb' },
           { label: 'Save', icon: Bookmark, active: bookmarked, count: bookmarkCount, action: () => toggleReaction('bookmark'), activeColor: C.green },
@@ -2118,11 +2160,19 @@ function AnnouncementsSection({ C }: { C: typeof LIGHT_C }) {
 
       const { data: anns } = await supabase
         .from('announcements')
-        .select('id, title, content, cover_image, youtube_url, is_pinned, published_at')
+        .select('id, title, content, cover_image, youtube_url, is_pinned, published_at, author_id')
         .contains('cohort_ids', [student.cohort_id])
         .order('is_pinned', { ascending: false })
         .order('published_at', { ascending: false })
         .limit(50);
+
+      // Fetch author profiles via security-definer RPC (returns only name+avatar, not email)
+      const authorIds = [...new Set((anns ?? []).map((a: any) => a.author_id).filter(Boolean))];
+      const { data: authors } = authorIds.length
+        ? await supabase.rpc('get_staff_profiles', { p_ids: authorIds })
+        : { data: [] };
+      const authorMap: Record<string, any> = {};
+      for (const a of authors ?? []) authorMap[a.id] = a;
 
       // Fetch reactions separately -- table may not exist yet, so swallow errors
       const { data: reactions } = await supabase
@@ -2135,7 +2185,12 @@ function AnnouncementsSection({ C }: { C: typeof LIGHT_C }) {
       for (const r of reactions ?? []) sets[r.type]?.add(r.announcement_id);
       setMyReactions(sets);
 
-      setItems((anns ?? []).map((a: any) => ({ ...a, like_count: 0, bookmark_count: 0 })));
+      setItems((anns ?? []).map((a: any) => ({
+        ...a,
+        like_count: 0,
+        bookmark_count: 0,
+        author: authorMap[a.author_id] ?? null,
+      })));
       setLoading(false);
     };
     load();
@@ -2161,7 +2216,7 @@ function AnnouncementsSection({ C }: { C: typeof LIGHT_C }) {
   );
 
   return (
-    <div className="space-y-4 max-w-2xl mx-auto">
+    <div className="max-w-2xl space-y-4">
       {items.map(ann => (
         <AnnouncementPost key={ann.id} ann={ann} userId={userId} myReactions={myReactions} C={C}/>
       ))}
@@ -2473,9 +2528,9 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
             <div className="flex items-center gap-0 rounded-xl overflow-hidden"
               style={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'}` }}>
               {[
-                modules.length > 0 && { icon: <BarChart3 className="w-3.5 h-3.5" style={{ color }}/>, value: modules.length, label: 'Modules' },
-                totalLessons > 0 && { icon: <BookOpen className="w-3.5 h-3.5" style={{ color }}/>, value: totalLessons, label: 'Lessons' },
-                totalReqs > 0 && { icon: <ClipboardList className="w-3.5 h-3.5" style={{ color }}/>, value: totalReqs, label: 'Tasks' },
+                modules.length > 0 && { icon: <BarChart3 className="w-3.5 h-3.5" style={{ color }}/>, value: modules.length, label: 'Milestones' },
+                totalLessons > 0 && { icon: <BookOpen className="w-3.5 h-3.5" style={{ color }}/>, value: totalLessons, label: 'Missions' },
+                totalReqs > 0 && { icon: <ClipboardList className="w-3.5 h-3.5" style={{ color }}/>, value: totalReqs, label: 'Deliverables' },
                 cfg.duration && { icon: <Clock className="w-3.5 h-3.5" style={{ color }}/>, value: cfg.duration, label: 'Duration' },
               ].filter(Boolean).map((s: any, i, arr) => (
                 <div key={i} className="flex-1 flex flex-col items-center justify-center py-3 px-2 text-center"
@@ -2540,7 +2595,7 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
                         <div className="flex-1 min-w-0">
                           <span className="text-sm font-medium leading-snug" style={{ color: C.text }}>{m.title}</span>
                           {(m.lessons || []).length > 0 && (
-                            <span className="text-xs ml-2" style={{ color: C.muted }}>{m.lessons.length} lesson{m.lessons.length !== 1 ? 's' : ''}</span>
+                            <span className="text-xs ml-2" style={{ color: C.muted }}>{m.lessons.length} mission{m.lessons.length !== 1 ? 's' : ''}</span>
                           )}
                         </div>
                       </div>

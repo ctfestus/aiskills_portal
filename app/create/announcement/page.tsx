@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2, Save, Upload, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RichTextEditor } from '@/components/RichTextEditor';
-import { sanitizeRichText, sanitizePlainText } from '@/lib/sanitize';
+import { sanitizeAnnouncementContent, sanitizePlainText } from '@/lib/sanitize';
 
 // --- Design tokens ---
 const LIGHT_C = {
@@ -126,7 +126,7 @@ export default function CreateAnnouncementPage() {
     setLoading(true);
     try {
       const payload = {
-        title: trimmedTitle, content: sanitizeRichText(content), cover_image: coverImage.trim() || null,
+        title: trimmedTitle, content: sanitizeAnnouncementContent(content), cover_image: coverImage.trim() || null,
         youtube_url: youtubeUrl.trim() || null,
         is_pinned: isPinned, cohort_ids: selectedCohortIds,
         published_at: publishedDate.toISOString(), expires_at: expiresDate ? expiresDate.toISOString() : null,

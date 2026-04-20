@@ -139,11 +139,18 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ success: true, test: true });
         }
 
-        // Production mode: derive recipients from DB
-        const { data: responses } = await supabase.from('responses').select('data').eq('form_id', data.formId);
+        // Production mode: event registrants live in event_registrations (validated as event above)
+        const { data: registrations } = await supabase
+          .from('event_registrations')
+          .select('student:students(email)')
+          .eq('event_id', data.formId);
+
         const emails = [...new Set(
-          (responses || [])
-            .map((r: any) => String(r.data?.email || '').trim().toLowerCase())
+          (registrations || [])
+            .map((reg: any) => {
+              const s = Array.isArray(reg.student) ? reg.student[0] : reg.student;
+              return String(s?.email || '').trim().toLowerCase();
+            })
             .filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
         )];
         if (!emails.length) return NextResponse.json({ error: 'No valid recipients found' }, { status: 400 });
@@ -391,30 +398,49 @@ export async function POST(req: NextRequest) {
       if (error) throw error;
 
       const blastContent = blastCourse ?? blastEvent ?? blastVe;
+      const isEvent = !!blastEvent;
 
-      // Build deduplicated map of email -> merge data (responses first, then cohort students fill gaps)
+      // Build deduplicated map of email -> merge data
       const responseByEmail = new Map<string, Record<string, any>>();
 
-      for (const response of responses || []) {
-        const rowData = (response as any)?.data || {};
-        const emailKey = normalizeEmail(rowData.email);
-        if (emailKey && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey) && !responseByEmail.has(emailKey)) {
-          responseByEmail.set(emailKey, rowData);
-        }
-      }
+      if (isEvent) {
+        // For events: only send to actual registrants, not all cohort members
+        const { data: registrants } = await supabase
+          .from('event_registrations')
+          .select('responses, student:students(full_name, email)')
+          .eq('event_id', data.formId);
 
-      // Also include students assigned via cohorts (catches students who haven't completed yet)
-      const cohortIds: string[] = Array.isArray(blastContent?.cohort_ids) ? blastContent.cohort_ids : [];
-      if (cohortIds.length > 0) {
-        const { data: cohortStudents } = await supabase
-          .from('students')
-          .select('full_name, email')
-          .in('cohort_id', cohortIds);
-
-        for (const student of cohortStudents || []) {
+        for (const reg of registrants || []) {
+          const student = (reg as any).student;
+          if (!student?.email) continue;
           const emailKey = normalizeEmail(student.email);
           if (emailKey && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey) && !responseByEmail.has(emailKey)) {
-            responseByEmail.set(emailKey, { name: student.full_name, email: student.email });
+            const regResponses = (reg as any).responses ?? {};
+            responseByEmail.set(emailKey, { name: student.full_name, email: student.email, ...regResponses });
+          }
+        }
+      } else {
+        // For courses / VEs: responses first, then cohort students fill gaps
+        for (const response of responses || []) {
+          const rowData = (response as any)?.data || {};
+          const emailKey = normalizeEmail(rowData.email);
+          if (emailKey && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey) && !responseByEmail.has(emailKey)) {
+            responseByEmail.set(emailKey, rowData);
+          }
+        }
+
+        const cohortIds: string[] = Array.isArray(blastContent?.cohort_ids) ? blastContent.cohort_ids : [];
+        if (cohortIds.length > 0) {
+          const { data: cohortStudents } = await supabase
+            .from('students')
+            .select('full_name, email')
+            .in('cohort_id', cohortIds);
+
+          for (const student of cohortStudents || []) {
+            const emailKey = normalizeEmail(student.email);
+            if (emailKey && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey) && !responseByEmail.has(emailKey)) {
+              responseByEmail.set(emailKey, { name: student.full_name, email: student.email });
+            }
           }
         }
       }

@@ -192,8 +192,10 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
   const newIssues      = prev ? currentTitles.filter(t => !prev.issueTitles.includes(t)) : [];
   const scoreDelta     = prev ? +(result.overallScore - prev.overallScore).toFixed(1) : null;
 
+  const JB = 'var(--font-mono)';
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" style={{ fontFamily: JB }}>
 
       {/* Diff panel */}
       {prev && (
@@ -298,7 +300,7 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
                     </span>
                     <p style={{ fontSize: 13, fontWeight: 700, color: text }}>{issue.title}</p>
                     {issue.cell && (
-                      <span style={{ fontSize: 11, fontFamily: 'monospace', padding: '2px 8px',
+                      <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', padding: '2px 8px',
                         background: inner, color: muted, borderRadius: 4, marginLeft: 'auto' }}>
                         {issue.cell}
                       </span>
@@ -308,7 +310,7 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
                   {issue.fix && (
                     <div style={{ background: isDark ? 'rgba(37,99,235,0.08)' : '#eff6ff', borderLeft: '2px solid #3b82f6', padding: '10px 14px' }}>
                       <p style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#3b82f6', marginBottom: 5 }}>Fix</p>
-                      <p style={{ fontSize: 12.5, color: isDark ? '#93c5fd' : '#1e40af', lineHeight: 1.6, fontFamily: 'monospace' }}>{issue.fix}</p>
+                      <p style={{ fontSize: 12.5, color: isDark ? '#93c5fd' : '#1e40af', lineHeight: 1.6, fontFamily: 'var(--font-mono)' }}>{issue.fix}</p>
                     </div>
                   )}
                 </div>

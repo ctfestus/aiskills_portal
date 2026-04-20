@@ -61,7 +61,7 @@ function shell(content: string, opts?: { bannerUrl?: string } & EmailBranding) {
 function cta(label: string, url: string) {
   return `<table cellpadding="0" cellspacing="0" style="margin:16px 0;">
     <tr><td>
-      <a href="${url}" style="background-color:#2563eb;color:#ffffff;padding:14px 26px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">${label}</a>
+      <a href="${url}" style="background-color:#2563eb;color:#ffffff;padding:14px 26px;border-radius:0;text-decoration:none;font-weight:bold;display:inline-block;">${label}</a>
     </td></tr>
   </table>`;
 }
@@ -107,9 +107,9 @@ export function confirmationEmail(data: {
   const { name, eventTitle, eventDate, eventTime, eventLocation, eventTimezone, meetingLink, formUrl, customTitle, customBody, bannerUrl, branding } = data;
 
   const meetingBlock = meetingLink ? `
-    <div style="margin:16px 0;padding:16px;background:#f0f7ff;border-radius:10px;border:1px solid #c5deff;text-align:center;">
+    <div style="margin:16px 0;padding:16px;background:#f0f7ff;border-radius:0;border:1px solid #c5deff;text-align:center;">
       <p style="margin:0 0 10px;font-weight:600;color:#333;">${platformName(meetingLink)}</p>
-      <a href="${meetingLink}" style="display:inline-block;padding:10px 24px;background:${platformColor(meetingLink)};color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">Join Meeting -></a>
+      <a href="${meetingLink}" style="display:inline-block;padding:10px 24px;background:${platformColor(meetingLink)};color:white;border-radius:0;text-decoration:none;font-weight:600;font-size:14px;">Join Meeting</a>
       <p style="margin:8px 0 0;font-size:12px;color:#888;">Keep this link. You will need it to attend.</p>
     </div>` : '';
 
@@ -152,9 +152,9 @@ export function reminderEmail(data: {
   const timeLabel = isOneHour ? '1 hour' : 'tomorrow';
 
   const meetingBlock = meetingLink ? `
-    <div style="margin:16px 0;padding:16px;background:#f0f7ff;border-radius:10px;border:1px solid #c5deff;text-align:center;">
+    <div style="margin:16px 0;padding:16px;background:#f0f7ff;border-radius:0;border:1px solid #c5deff;text-align:center;">
       <p style="margin:0 0 10px;font-weight:600;color:#333;">${platformName(meetingLink)}</p>
-      <a href="${meetingLink}" style="display:inline-block;padding:10px 24px;background:${platformColor(meetingLink)};color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">Join Meeting -></a>
+      <a href="${meetingLink}" style="display:inline-block;padding:10px 24px;background:${platformColor(meetingLink)};color:white;border-radius:0;text-decoration:none;font-weight:600;font-size:14px;">Join Meeting</a>
     </div>` : '';
 
   const content = `
@@ -200,7 +200,7 @@ export function courseResultEmail(data: {
     <p style="font-size:16px;font-weight:bold;margin-top:32px;margin-bottom:4px;">What to take next</p>
     <p style="color:#666;font-size:14px;margin-top:0;margin-bottom:20px;">Based on what you just completed, you might enjoy these:</p>
     ${recommendations.slice(0, 3).map(r => `
-      <a href="${appUrl}/${r.slug}?go=1" style="display:block;text-decoration:none;margin-bottom:14px;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+      <a href="${appUrl}/${r.slug}?go=1" style="display:block;text-decoration:none;margin-bottom:14px;border-radius:0;overflow:hidden;border:1px solid #e5e7eb;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
         ${r.coverImage ? `
           <img src="${r.coverImage}" width="100%" height="140" style="display:block;width:100%;height:140px;object-fit:cover;" />
         ` : `
@@ -244,7 +244,7 @@ export function otpEmail(data: { code: string; courseName?: string; branding?: E
 
     <p style="font-size:18px;font-weight:bold;margin-top:16px;">Your Verification Code</p>
 
-    <div style="margin:20px 0;padding:24px;background:#f0fdf4;border:2px solid #22c55e;border-radius:10px;text-align:center;">
+    <div style="margin:20px 0;padding:24px;background:#f0fdf4;border:2px solid #22c55e;border-radius:0;text-align:center;">
       <span style="font-size:36px;font-weight:900;letter-spacing:0.3em;color:#16a34a;font-family:'Courier New',Courier,monospace;">${code}</span>
     </div>
 
@@ -280,7 +280,7 @@ export function nudgeEmail(data: {
     <p><b>Hi ${name},</b></p>
     <p>${intro}</p>
 
-    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;">
+    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;">
       <p style="margin:0 0 10px;font-weight:700;color:#15803d;font-size:15px;">Why upskilling matters 🚀</p>
       <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;">
         In today's fast-moving world, the skills you build today directly shape the opportunities you unlock tomorrow.
@@ -299,7 +299,7 @@ export function nudgeEmail(data: {
       to give you real skills. Not just theory.
     </p>`}
 
-    <div style="margin:20px 0;padding:20px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;">
+    <div style="margin:20px 0;padding:20px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0;">
       <p style="margin:0 0 6px;font-weight:700;color:#92400e;font-size:14px;">Need support? We are here for you. 🤝</p>
       <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;">
         If anything felt unclear, you got stuck, or life simply got in the way. Please do not hesitate to reach out.
@@ -311,7 +311,7 @@ export function nudgeEmail(data: {
 
     ${relatedAssignmentTitle ? `
     <p style="margin:20px 0 10px;font-weight:700;color:#111827;font-size:14px;">📋 Related assignment waiting for you</p>
-    <a href="${formUrl}" style="display:block;text-decoration:none;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;margin-bottom:16px;">
+    <a href="${formUrl}" style="display:block;text-decoration:none;border-radius:0;overflow:hidden;border:1px solid #e5e7eb;margin-bottom:16px;">
       ${coverImage ? `<img src="${coverImage}" alt="${contentTitle}" style="display:block;width:100%;height:160px;object-fit:cover;" />` : `<div style="width:100%;height:120px;background:linear-gradient(135deg,#1e3a5f,#0f766e);display:flex;align-items:center;justify-content:center;"><span style="color:white;font-size:28px;">📚</span></div>`}
       <div style="padding:14px 16px;background:#ffffff;">
         <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Continue Learning</p>
@@ -344,7 +344,7 @@ export function milestoneEmail(data: {
     <p><b>Hi ${name},</b></p>
     <p>You are <b>80% of the way through</b> <b>${contentTitle}</b>. That is incredible progress! 🎉</p>
 
-    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;text-align:center;">
+    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;text-align:center;">
       <div style="font-size:40px;font-weight:900;color:#16a34a;">80%</div>
       <div style="font-size:14px;color:#15803d;font-weight:600;margin-top:4px;">Almost there!</div>
     </div>
@@ -354,7 +354,7 @@ export function milestoneEmail(data: {
       Completing this ${typeLabel} will add a real, demonstrable skill to your profile.
     </p>
 
-    <div style="margin:20px 0;padding:16px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;">
+    <div style="margin:20px 0;padding:16px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0;">
       <p style="margin:0;font-weight:700;color:#92400e;font-size:14px;">💡 Did you know?</p>
       <p style="margin:8px 0 0;color:#374151;font-size:14px;line-height:1.7;">
         Students who reach 80% completion are <b>3× more likely to finish</b>. You are already in that group.
@@ -439,7 +439,7 @@ export function weeklyDigestEmail(data: {
 
     ${missedDeadlines.length > 0 ? `
     <p style="font-size:15px;font-weight:700;color:#dc2626;margin-top:24px;">⚠️ Overdue -- action needed</p>
-    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #fee2e2;background:#fff5f5;border-radius:8px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #fee2e2;background:#fff5f5;border-radius:0;">
       ${missedRows}
     </table>
     <p style="font-size:13px;color:#6b7280;margin-top:8px;">These items have passed their deadline. Reach out to your instructor if you need an extension.</p>` : ''}
@@ -451,7 +451,7 @@ export function weeklyDigestEmail(data: {
     </table>
     <p style="font-size:13px;color:#6b7280;margin-top:8px;">You have been assigned these programs. Starting is the hardest part -- log in and take the first step.</p>` : ''}
 
-    <div style="margin:24px 0;padding:16px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;">
+    <div style="margin:24px 0;padding:16px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;">
       <p style="margin:0;color:#15803d;font-size:14px;line-height:1.7;">
         <b>Every week counts.</b> The skills you are building here open doors to real opportunities.
         Consistency is the single most powerful habit you can build as a learner.
@@ -487,12 +487,12 @@ export function deadlineReminderEmail(data: {
     <h2 style="color:#111;font-size:22px;margin-bottom:8px;">⏰ ${urgency}</h2>
     <p>Hi ${name},</p>
     <p>This is a reminder that your deadline for the following ${typeLabel} is approaching:</p>
-    <div style="background:#f9fafb;border-left:4px solid ${urgencyColor};border-radius:4px;padding:16px;margin:16px 0;">
+    <div style="background:#f9fafb;border-left:4px solid ${urgencyColor};border-radius:0;padding:16px;margin:16px 0;">
       <p style="font-weight:700;font-size:16px;margin:0;">${contentTitle}</p>
       <p style="color:#ef4444;font-weight:600;margin:6px 0 0;">${urgency}</p>
     </div>
     <p>Do not let your progress go to waste. Every skill you build today is an investment in your future career. Log in now and keep going.</p>
-    <p style="background:#f0fdf4;border-radius:8px;padding:12px;font-size:14px;color:#166534;">
+    <p style="background:#f0fdf4;border-radius:0;padding:12px;font-size:14px;color:#166534;">
       💡 <b>Quick tip:</b> Even 15 minutes of focused learning counts. You can do this!
     </p>
     ${cta('Complete Now', formUrl)}
@@ -512,7 +512,7 @@ export function welcomeEmail(data: { name: string; studentUrl: string; branding?
     <p><b>Welcome to ${appName}, ${name}! 🎉</b></p>
     <p>We are thrilled to have you on board. You have just taken the first step toward building industry-relevant skills that will shape your career.</p>
 
-    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;">
+    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;">
       <p style="margin:0 0 10px;font-weight:700;color:#15803d;font-size:15px;">Here is what to expect 🚀</p>
       <ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2;">
         <li>Practical courses built around real African industry scenarios</li>
@@ -541,14 +541,14 @@ export function day3CheckInEmail(data: { name: string; studentUrl: string; cours
     <p>It has been a few days since you joined ${appName}. We just wanted to check in -- have you had a chance to explore your courses yet?</p>
 
     ${courseTitle && courseUrl ? `
-    <div style="margin:20px 0;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;">
+    <div style="margin:20px 0;border-radius:0;overflow:hidden;border:1px solid #e5e7eb;">
       <div style="padding:16px;background:#ffffff;">
         <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:0.05em;">Ready for you</p>
         <p style="margin:0 0 8px;font-size:16px;font-weight:700;color:#111827;">${courseTitle}</p>
         <p style="margin:0;font-size:13px;color:#6b7280;">Start this course and take your first step toward a new skill.</p>
       </div>
       <div style="padding:12px 16px;background:#f9fafb;">
-        <a href="${courseUrl}" style="background:#22c55e;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:13px;display:inline-block;">Start Course </a>
+        <a href="${courseUrl}" style="background:#22c55e;color:#fff;padding:10px 20px;border-radius:0;text-decoration:none;font-weight:bold;font-size:13px;display:inline-block;">Start Course </a>
       </div>
     </div>` : `
     <p style="color:#374151;">Log in now and pick a course to get started. Even 15 minutes a day adds up fast.</p>
@@ -567,7 +567,7 @@ export function day7EncouragementEmail(data: { name: string; studentUrl: string;
     <p><b>Hi ${name},</b></p>
     ${hasStarted && coursesCompleted > 0 ? `
     <p>One week in and you have already completed <b>${coursesCompleted} course${coursesCompleted > 1 ? 's' : ''}</b>. That is outstanding progress! 🏆</p>
-    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;text-align:center;">
+    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;text-align:center;">
       <div style="font-size:40px;font-weight:900;color:#16a34a;">${coursesCompleted}</div>
       <div style="font-size:14px;color:#15803d;font-weight:600;margin-top:4px;">Course${coursesCompleted > 1 ? 's' : ''} completed in your first week</div>
     </div>
@@ -635,15 +635,15 @@ export function learningPathAssignedEmail(data: {
     const circle = `
       <table cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;">
         <tr>
-          <td width="28" height="28" bgcolor="${circleColor}" style="border-radius:14px;color:#ffffff;font-size:12px;font-weight:800;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;line-height:28px;">${idx + 1}</td>
+          <td width="28" height="28" bgcolor="${circleColor}" style="border-radius:0;color:#ffffff;font-size:12px;font-weight:800;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;line-height:28px;">${idx + 1}</td>
         </tr>
       </table>`;
 
     const connector = '';
 
     const imageCell = item.coverImage
-      ? `<td width="80" style="padding:0;vertical-align:top;"><img src="${item.coverImage}" width="80" height="64" style="display:block;width:80px;height:64px;object-fit:cover;" /></td>`
-      : `<td width="80" bgcolor="#1e3a5f" style="padding:0;vertical-align:middle;text-align:center;height:64px;"><span style="font-size:22px;">${emoji}</span></td>`;
+      ? `<td width="72" style="padding:0;vertical-align:top;"><img src="${item.coverImage}" width="72" height="72" style="display:block;width:72px;height:72px;object-fit:cover;border-radius:4px;" /></td>`
+      : `<td width="72" bgcolor="#1e3a5f" style="padding:0;vertical-align:top;text-align:center;height:72px;border-radius:4px;"><span style="font-size:24px;line-height:72px;">${emoji}</span></td>`;
 
     return `
     <tr>
@@ -651,12 +651,15 @@ export function learningPathAssignedEmail(data: {
         ${circle}${connector}
       </td>
       <td style="padding:0 0 12px 12px;vertical-align:top;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;background:#ffffff;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:transparent;">
           <tr>
             ${imageCell}
             <td style="padding:10px 14px;vertical-align:middle;">
-              <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:${badgeColor};text-transform:uppercase;letter-spacing:0.06em;font-family:Arial,sans-serif;">${badgeLabel}</p>
-              <p style="margin:0;font-size:14px;font-weight:700;color:#111827;line-height:1.35;font-family:Arial,sans-serif;">${item.title}</p>
+              <p style="margin:0 0 3px;font-size:13px;font-weight:700;color:#111827;line-height:1.35;font-family:Arial,sans-serif;">${item.title}</p>
+              ${item.description ? `<p style="margin:0;font-size:12px;color:#6b7280;line-height:1.4;font-family:Arial,sans-serif;">${item.description}</p>` : `<p style="margin:0;font-size:11px;font-weight:600;color:${badgeColor};text-transform:uppercase;letter-spacing:0.05em;font-family:Arial,sans-serif;">${badgeLabel}</p>`}
+            </td>
+            <td width="36" style="padding:0 12px;text-align:center;vertical-align:middle;">
+              <span style="font-size:18px;color:#9ca3af;font-family:Arial,sans-serif;"></span>
             </td>
           </tr>
         </table>
@@ -668,7 +671,7 @@ export function learningPathAssignedEmail(data: {
     <p><b>Hi ${name},</b></p>
     <p>You have been enrolled in a new learning path. This is a structured programme designed to build your skills step by step, and you will earn a certificate when you complete every item.</p>
 
-    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;">
+    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;">
       <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:0.05em;">Your Learning Path</p>
       <p style="margin:0 0 8px;font-size:20px;font-weight:800;color:#111827;">${pathTitle}</p>
       ${pathDescription ? `<p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">${pathDescription}</p>` : ''}
@@ -680,7 +683,7 @@ export function learningPathAssignedEmail(data: {
       ${itemsHtml}
     </table>` : ''}
 
-    <div style="margin:20px 0;padding:16px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;">
+    <div style="margin:20px 0;padding:16px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0;">
       <p style="margin:0;font-size:14px;color:#92400e;line-height:1.6;">
         <b>Complete each item in order</b> to earn your individual course certificates along the way.
         Once you finish the entire path, you will receive a <b>Learning Path Certificate</b> to add to your profile.
@@ -737,7 +740,7 @@ export function learningPathCertificateEmail(data: {
   const itemsHtml = items.slice(0, 6).map((item) => `
     <tr>
       <td style="padding:0 0 8px 0;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:10px;overflow:hidden;border:1px solid #d1fae5;background:#f0fdf4;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:0;overflow:hidden;border:1px solid #d1fae5;background:#f0fdf4;">
           <tr>
             ${item.coverImage ? `
             <td width="64" style="padding:0;vertical-align:middle;">
@@ -760,11 +763,11 @@ export function learningPathCertificateEmail(data: {
     <p><b>Hi ${name},</b></p>
     <p style="color:#374151;">This is a major achievement. You have completed every item in your learning path and your certificate is ready.</p>
 
-    <div style="margin:20px 0;padding:24px;background:linear-gradient(135deg,#064e3b,#0f766e);border-radius:12px;text-align:center;">
+    <div style="margin:20px 0;padding:24px;background:linear-gradient(135deg,#064e3b,#0f766e);border-radius:0;text-align:center;">
       <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6ee7b7;text-transform:uppercase;letter-spacing:0.1em;">Learning Path Completed</p>
       <p style="margin:0 0 8px;font-size:22px;font-weight:900;color:#ffffff;line-height:1.2;">${pathTitle}</p>
       ${pathDescription ? `<p style="margin:0 0 16px;font-size:13px;color:#a7f3d0;line-height:1.5;">${pathDescription}</p>` : '<div style="margin-bottom:16px;"></div>'}
-      <a href="${certUrl}" style="display:inline-block;background:#ffffff;color:#064e3b;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:800;font-size:14px;">🎓 View Your Certificate</a>
+      <a href="${certUrl}" style="display:inline-block;background:#ffffff;color:#064e3b;padding:12px 28px;border-radius:0;text-decoration:none;font-weight:800;font-size:14px;">🎓 View Your Certificate</a>
     </div>
 
     ${items.length > 0 ? `
@@ -773,7 +776,7 @@ export function learningPathCertificateEmail(data: {
       ${itemsHtml}
     </table>` : ''}
 
-    <div style="margin:20px 0;padding:16px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;">
+    <div style="margin:20px 0;padding:16px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;">
       <p style="margin:0;font-size:14px;color:#15803d;line-height:1.6;">
         Add this certificate to your LinkedIn profile and CV to showcase the skills you have built.
         Every credential you earn makes your profile stronger.
@@ -784,6 +787,109 @@ export function learningPathCertificateEmail(data: {
 
     <br>
     <p><b>Congratulations,</b></p>
+  `;
+
+  return shell(content, branding);
+}
+
+// -- 14. Course completed -- next up in learning path ---
+export function courseCompletedNextUpEmail(data: {
+  name: string;
+  pathTitle: string;
+  completedTitle: string;
+  completedNumber: number;
+  totalItems: number;
+  nextTitle: string;
+  nextUrl: string;
+  nextCoverImage?: string | null;
+  nextIsVE?: boolean;
+  nextDescription?: string | null;
+  branding?: EmailBranding;
+}) {
+  const { name, pathTitle, completedTitle, completedNumber, totalItems, nextTitle, nextUrl, nextCoverImage, nextIsVE, nextDescription, branding } = data;
+  const emoji = nextIsVE ? '💼' : '📘';
+
+  const content = `
+    <p><b>Hi ${name},</b></p>
+    <p style="color:#374151;">You have completed item ${completedNumber} of ${totalItems} in <b>${pathTitle}</b>. Keep the momentum going!</p>
+
+    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;">
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:0.05em;">Just Completed ✓</p>
+      <p style="margin:0;font-size:15px;font-weight:700;color:#111827;">${completedTitle}</p>
+    </div>
+
+    <p style="font-size:15px;font-weight:700;color:#111;margin:24px 0 12px;">Up next</p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:transparent;margin-bottom:20px;">
+      <tr>
+        ${nextCoverImage
+          ? `<td width="72" style="padding:0;vertical-align:top;"><img src="${nextCoverImage}" width="72" height="72" style="display:block;width:72px;height:72px;object-fit:cover;border-radius:4px;" /></td>`
+          : `<td width="72" bgcolor="#1e3a5f" style="padding:0;vertical-align:top;text-align:center;height:72px;border-radius:4px;"><span style="font-size:24px;line-height:72px;">${emoji}</span></td>`}
+        <td style="padding:10px 14px;vertical-align:middle;">
+          <p style="margin:0 0 3px;font-size:13px;font-weight:700;color:#111827;line-height:1.35;font-family:Arial,sans-serif;">${nextTitle}</p>
+          ${nextDescription
+            ? `<p style="margin:0;font-size:12px;color:#6b7280;line-height:1.4;font-family:Arial,sans-serif;">${nextDescription}</p>`
+            : `<p style="margin:0;font-size:11px;font-weight:600;color:#6366f1;text-transform:uppercase;letter-spacing:0.05em;font-family:Arial,sans-serif;">${nextIsVE ? 'Virtual Experience' : 'Course'}</p>`}
+        </td>
+        <td width="36" style="padding:0 12px;text-align:center;vertical-align:middle;">
+          <span style="font-size:18px;color:#9ca3af;font-family:Arial,sans-serif;"></span>
+        </td>
+      </tr>
+    </table>
+
+    ${cta('Start Now', nextUrl)}
+
+    <br>
+    <p><b>Keep going,</b></p>
+  `;
+
+  return shell(content, branding);
+}
+
+// -- 15. Assignment Graded ---
+export function assignmentGradedEmail(data: {
+  name: string;
+  assignmentTitle: string;
+  score: number | null;
+  passed: boolean;
+  feedback?: string | null;
+  studentUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { name, assignmentTitle, score, passed, feedback, studentUrl, branding } = data;
+
+  const scoreHtml = score != null
+    ? `<p style="font-size:32px;font-weight:900;margin:8px 0;color:${passed ? '#10b981' : '#ef4444'};">${score}<span style="font-size:16px;font-weight:600;color:#6b7280;">/100</span></p>`
+    : '';
+
+  const feedbackHtml = feedback
+    ? `<div style="margin-top:20px;padding:16px;border-radius:0;background:${passed ? '#f0fdf4' : '#fff1f2'};border:1px solid ${passed ? '#bbf7d0' : '#fecdd3'};">
+        <p style="margin:0 0 6px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:${passed ? '#059669' : '#e11d48'};">Instructor Feedback</p>
+        <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">${feedback}</p>
+       </div>`
+    : '';
+
+  const content = `
+    <p><b>Hi ${name},</b></p>
+    <p style="color:#555;">Your assignment <b>${assignmentTitle}</b> has been graded.</p>
+
+    <div style="margin:20px 0;padding:20px;border-radius:0;background:#f9fafb;border:1px solid #e5e7eb;text-align:center;">
+      ${scoreHtml}
+      <span style="display:inline-block;padding:4px 14px;border-radius:0;font-size:12px;font-weight:700;background:${passed ? '#dcfce7' : '#fee2e2'};color:${passed ? '#15803d' : '#dc2626'};">
+        ${passed ? 'PASSED' : 'FAILED'}
+      </span>
+    </div>
+
+    ${feedbackHtml}
+
+    ${passed
+      ? `<p style="color:#555;margin-top:20px;">Great work! Log in to view your full results.</p>`
+      : `<p style="color:#555;margin-top:20px;">Don't be discouraged -- you can review the feedback and resubmit.</p>`
+    }
+
+    ${cta('View Assignment', studentUrl)}
+
+    <br><p><b>Best regards,</b></p>
   `;
 
   return shell(content, branding);

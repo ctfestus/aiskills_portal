@@ -202,6 +202,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
   const warnings    = result.issues.filter(i => i.severity === 'warning');
   const suggestions = result.issues.filter(i => i.severity === 'suggestion');
 
+  const JB = 'var(--font-mono)';
   const prev = submissions.length > 0 ? submissions[submissions.length - 1] : null;
   const currentTitles = result.issues.map(i => i.title);
   const resolvedIssues = prev ? prev.issueTitles.filter(t => !currentTitles.includes(t)) : [];
@@ -209,7 +210,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
   const scoreDelta     = prev ? +(result.overallScore - prev.overallScore).toFixed(1) : null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" style={{ fontFamily: JB }}>
 
       {/* Diff panel */}
       {prev && (
@@ -323,7 +324,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
                     </span>
                     <p style={{ fontSize: 13, fontWeight: 700, color: text }}>{issue.title}</p>
                     {issue.lines && (
-                      <span style={{ fontSize: 11, fontFamily: 'monospace', padding: '2px 8px',
+                      <span style={{ fontSize: 11, padding: '2px 8px',
                         background: inner, color: muted, borderRadius: 4, marginLeft: 'auto' }}>
                         Line {issue.lines}
                       </span>

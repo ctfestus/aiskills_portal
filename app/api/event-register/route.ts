@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   // Confirm they are a student
   const { data: student } = await supabase
     .from('students')
-    .select('id, email')
+    .select('id, email, full_name')
     .eq('id', user.id)
     .single();
 
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { formId } = body;
+  const { formId, responses: formResponses } = body;
   if (!formId) {
     return NextResponse.json({ error: 'formId is required' }, { status: 400 });
   }
@@ -78,14 +78,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'already_registered' }, { status: 409 });
   }
 
+  // Save custom form field responses if provided
+  if (formResponses && typeof formResponses === 'object' && Object.keys(formResponses).length > 0) {
+    await supabase
+      .from('event_registrations')
+      .update({ responses: formResponses })
+      .eq('event_id', formId)
+      .eq('student_id', student.id);
+  }
+
   // Send confirmation email (fire-and-forget)
   if (process.env.RESEND_API_KEY && student.email) {
     const t       = await getTenantSettings();
     const FROM    = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
     const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
     const subject = `You're registered: ${event.title || 'Event'}`;
+    const displayName = formResponses?.first_name || formResponses?.full_name || student.full_name || student.email;
     const html = confirmationEmail({
-      name:          student.email,
+      name:          displayName,
       eventTitle:    event.title      || '',
       eventDate:     event.event_date ? String(event.event_date) : '',
       eventTime:     event.event_time ? String(event.event_time) : '',

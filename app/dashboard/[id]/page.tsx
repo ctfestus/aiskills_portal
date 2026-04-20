@@ -1907,7 +1907,12 @@ export default function FormDetailPage() {
         responseData = (regData ?? []).map((r: any) => ({
           id: r.id,
           created_at: r.registered_at,
-          data: { name: r.student?.full_name ?? '', email: r.student?.email ?? '' },
+          data: {
+            name: r.student?.full_name ?? '',
+            email: r.student?.email ?? '',
+            registered_at: r.registered_at ?? '',
+            ...(r.responses ?? {}),
+          },
           student: r.student,
         }));
         count = regCount;
@@ -1995,10 +2000,15 @@ export default function FormDetailPage() {
         .eq('event_id', id as string)
         .order('registered_at', { ascending: false })
         .range(from, from + PAGE_SIZE - 1);
-      if (data) setResponses(data.map((r: any) => ({
+      if (data) setResponses((data as any[]).map((r: any) => ({
         id: r.id,
         created_at: r.registered_at,
-        data: { name: r.student?.full_name ?? '', email: r.student?.email ?? '' },
+        data: {
+          name: r.student?.full_name ?? '',
+          email: r.student?.email ?? '',
+          registered_at: r.registered_at ?? '',
+          ...(r.responses ?? {}),
+        },
         student: r.student,
       })));
     } else {

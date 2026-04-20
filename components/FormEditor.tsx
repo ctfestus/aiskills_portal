@@ -85,6 +85,9 @@ interface EventDetails {
   eventType?: 'in-person' | 'virtual';
   meetingLink?: string;
   speakers?: Speaker[];
+  recurrence?: 'once' | 'daily' | 'weekly';
+  recurrenceEndDate?: string;
+  recurrenceDays?: number[];
 }
 
 interface PostSubmission {
@@ -680,7 +683,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
           savedCohortIds.current = loadedCohorts;
         }
       } else {
-        const { data: event } = await supabase.from('events').select('id, title, description, slug, cohort_ids, fields, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, event_date, event_time, timezone, location, event_type, capacity, meeting_link, is_private, speakers').eq('id', formId).maybeSingle();
+        const { data: event } = await supabase.from('events').select('id, title, description, slug, cohort_ids, fields, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, event_date, event_time, timezone, location, event_type, capacity, meeting_link, is_private, speakers, recurrence, recurrence_end_date, recurrence_days').eq('id', formId).maybeSingle();
         if (event) {
           setFormConfig({
             isCourse: false,
@@ -705,6 +708,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
               meetingLink: event.meeting_link ?? '',
               isPrivate: event.is_private ?? false,
               speakers: event.speakers ?? [],
+              recurrence: event.recurrence ?? 'once',
+              recurrenceEndDate: event.recurrence_end_date ?? '',
+              recurrenceDays: event.recurrence_days ?? [],
             },
           });
           setCustomSlug(event.slug || '');
@@ -1390,6 +1396,61 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     <input type="number" min={1} value={formConfig.eventDetails.capacity ?? ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, capacity: e.target.value ? Number(e.target.value) : undefined } })} placeholder="Unlimited" className={inputCls} style={inputStyle} />
                   </div>
                 </div>
+
+                {/* Recurrence */}
+                <div>
+                  <label className={labelCls} style={labelStyle}>Recurrence</label>
+                  <div className="flex gap-1 p-1 rounded-xl" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
+                    {(['once', 'daily', 'weekly'] as const).map(freq => {
+                      const active = (formConfig.eventDetails!.recurrence ?? 'once') === freq;
+                      const labels = { once: 'One-time', daily: 'Daily', weekly: 'Weekly' };
+                      return (
+                        <button key={freq} type="button"
+                          onClick={() => updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrence: freq } })}
+                          className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-all"
+                          style={{ background: active ? FE.segmentActive : 'transparent', color: active ? FE.segmentActiveText : FE.faint, boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : undefined }}>
+                          {labels[freq]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {(formConfig.eventDetails!.recurrence ?? 'once') !== 'once' && (
+                  <div>
+                    <label className={labelCls} style={labelStyle}>End Date</label>
+                    <input type="date"
+                      value={formConfig.eventDetails.recurrenceEndDate || ''}
+                      onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrenceEndDate: e.target.value } })}
+                      className={`${inputCls} [color-scheme:light]`} style={inputStyle} />
+                  </div>
+                )}
+
+                {(formConfig.eventDetails!.recurrence ?? 'once') === 'weekly' && (
+                  <div>
+                    <label className={labelCls} style={labelStyle}>Repeat on</label>
+                    <div className="flex gap-1.5 flex-wrap mt-1">
+                      {[
+                        { day: 1, label: 'Mon' }, { day: 2, label: 'Tue' }, { day: 3, label: 'Wed' },
+                        { day: 4, label: 'Thu' }, { day: 5, label: 'Fri' }, { day: 6, label: 'Sat' }, { day: 0, label: 'Sun' },
+                      ].map(({ day, label }) => {
+                        const selected = (formConfig.eventDetails!.recurrenceDays ?? []).includes(day);
+                        return (
+                          <button key={day} type="button"
+                            onClick={() => {
+                              const days = formConfig.eventDetails!.recurrenceDays ?? [];
+                              const next = selected ? days.filter(d => d !== day) : [...days, day];
+                              updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrenceDays: next } });
+                            }}
+                            className="w-10 h-9 rounded-lg text-xs font-semibold transition-all"
+                            style={{ background: selected ? accentColor : FE.input, color: selected ? FE.ctaText : FE.faint, border: `1px solid ${selected ? accentColor : FE.inputBorder}` }}>
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Location / Meeting link -- conditional on event type */}
                 <div className="mt-2">

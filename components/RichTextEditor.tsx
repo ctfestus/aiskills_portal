@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import { Bold, Italic, Underline, List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote } from 'lucide-react';
+import { Bold, Italic, Underline, List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote, Youtube } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
 interface RichTextEditorProps {
@@ -10,9 +10,10 @@ interface RichTextEditorProps {
   placeholder?: string;
   className?: string;
   bgOverride?: string;
+  fontFamily?: string;
 }
 
-export function RichTextEditor({ value, onChange, placeholder = 'Add a description...', className = '', bgOverride }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, placeholder = 'Add a description...', className = '', bgOverride, fontFamily }: RichTextEditorProps) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const bg        = bgOverride ?? (dark ? '#1a1a1a' : '#F8F6F1');
@@ -25,6 +26,23 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
   // Track whether the change came from inside the editor (to avoid caret reset)
   const isInternalChange = useRef(false);
 
+  const rebuildYtPreviews = useCallback((container: HTMLElement) => {
+    container.querySelectorAll<HTMLElement>('div.yt-embed[title]').forEach(el => {
+      const videoId = el.getAttribute('title') ?? '';
+      if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return;
+      if (el.querySelector('img')) return; // already has preview
+      el.setAttribute('contenteditable', 'false');
+      el.style.cssText = 'width:100%;margin:8px 0;border-radius:8px;overflow:hidden;position:relative;cursor:default;user-select:none;';
+      // Only add img -- no overlay divs (they survive DOMPurify and leak into saved content).
+      // The play button is shown via CSS ::after on .yt-embed (editor stylesheet only).
+      const img = document.createElement('img');
+      img.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+      img.alt = 'YouTube video';
+      img.style.cssText = 'width:100%;aspect-ratio:16/9;object-fit:cover;display:block;';
+      el.appendChild(img);
+    });
+  }, []);
+
   // Sync external value changes into the DOM (only when not typing)
   useEffect(() => {
     if (!editorRef.current) return;
@@ -34,8 +52,9 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
     }
     if (editorRef.current.innerHTML !== value) {
       editorRef.current.innerHTML = value;
+      rebuildYtPreviews(editorRef.current);
     }
-  }, [value]);
+  }, [value, rebuildYtPreviews]);
 
   const exec = useCallback((command: string, val?: string) => {
     editorRef.current?.focus();
@@ -88,6 +107,56 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
     }
   }, [onChange]);
 
+  const handleInsertVideo = useCallback(() => {
+    const url = prompt('Enter YouTube URL:');
+    if (!url) return;
+    const match = url.match(/(?:v=|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
+    if (!match) { alert('Invalid YouTube URL. Paste a standard youtube.com or youtu.be link.'); return; }
+    const videoId = match[1];
+
+    // Use a placeholder div instead of a real iframe.
+    // Browsers silently strip <iframe> from contentEditable even via DOM insertion.
+    // The placeholder is converted to a real <iframe> at display time by renderAnnouncementContent.
+    const wrapper = document.createElement('div');
+    wrapper.className = 'yt-embed';
+    wrapper.title = videoId;
+    wrapper.setAttribute('contenteditable', 'false');
+    wrapper.style.cssText = 'width:100%;margin:8px 0;border-radius:8px;overflow:hidden;position:relative;cursor:default;user-select:none;';
+
+    // Only add img -- no overlay divs (they survive DOMPurify and leak into saved content).
+    // Play button is shown via CSS ::after on .yt-embed (editor stylesheet only).
+    const thumb = document.createElement('img');
+    thumb.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+    thumb.alt = 'YouTube video';
+    thumb.style.cssText = 'width:100%;aspect-ratio:16/9;object-fit:cover;display:block;';
+    wrapper.appendChild(thumb);
+
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+
+    const sel = window.getSelection();
+    let inserted = false;
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      // Only use the selection if it's actually inside the editor
+      if (editor.contains(range.commonAncestorContainer)) {
+        range.collapse(false);
+        range.insertNode(wrapper);
+        range.setStartAfter(wrapper);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        inserted = true;
+      }
+    }
+    if (!inserted) editor.appendChild(wrapper);
+
+    rebuildYtPreviews(editor);
+    isInternalChange.current = true;
+    onChange(editor.innerHTML);
+  }, [onChange, rebuildYtPreviews]);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'b' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); exec('bold'); }
     if (e.key === 'i' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); exec('italic'); }
@@ -129,6 +198,10 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         <ToolbarButton onClick={handleLink} title="Insert link" dark={dark}>
           <LinkIcon className="w-3.5 h-3.5" />
         </ToolbarButton>
+        <div className="w-px h-4 mx-1" style={{ background: toolDiv }} />
+        <ToolbarButton onClick={handleInsertVideo} title="Embed YouTube video" dark={dark}>
+          <Youtube className="w-3.5 h-3.5" />
+        </ToolbarButton>
       </div>
 
       {/* Editable area */}
@@ -140,7 +213,7 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         onKeyDown={handleKeyDown}
         data-placeholder={placeholder}
         className={`px-3 py-2.5 outline-none min-h-[100px] max-h-[300px] overflow-y-auto rich-editor${dark ? ' dark' : ''}`}
-        style={{ color: textColor }}
+        style={{ color: textColor, ...(fontFamily ? { fontFamily } : {}) }}
       />
 
       <style>{`
@@ -164,6 +237,9 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         .rich-editor h3 { font-size: 1.25rem; font-weight: 600; margin: 1rem 0 0.3rem; letter-spacing: -0.01em; }
         .rich-editor h2:first-child, .rich-editor h3:first-child { margin-top: 0; }
         .rich-editor blockquote { border-left: 3px solid #10b981; padding-left: 0.875rem; margin: 0.75rem 0; color: ${dark ? '#a1a1aa' : '#444444'}; font-style: normal; }
+        .rich-editor .yt-embed { width: 100%; margin: 8px 0; border-radius: 8px; overflow: hidden; position: relative; cursor: default; display: block; }
+        .rich-editor .yt-embed img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
+        .rich-editor .yt-embed::after { content: '▶'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 56px; height: 40px; background: rgba(255,0,0,0.88); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; padding-left: 4px; pointer-events: none; box-sizing: border-box; }
       `}</style>
     </div>
   );

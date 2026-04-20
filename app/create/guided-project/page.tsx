@@ -180,6 +180,7 @@ function VirtualExperienceCreatePageInner() {
 
   // Step 1 state
   const [creationMode, setCreationMode] = useState<'ai' | 'data' | 'manual' | null>(null);
+  const [isShortCourse, setIsShortCourse] = useState(false);
   const [industry,    setIndustry]    = useState('fintech');
   const [difficulty,  setDifficulty]  = useState<'beginner'|'intermediate'|'advanced'>('intermediate');
   const [companyName,  setCompanyName]  = useState('');
@@ -244,6 +245,7 @@ function VirtualExperienceCreatePageInner() {
           setDeadlineDays(cfg.deadline_days ? String(cfg.deadline_days) : '');
           setIndustry(cfg.industry || 'fintech');
           setDifficulty(cfg.difficulty || 'intermediate');
+          setIsShortCourse(!!(ve as any).is_short_course);
           if (cfg.dataset?.url) setDatasetUrl(cfg.dataset.url);
           if (cfg.dataset?.filename) setDatasetFilename(cfg.dataset.filename);
           setConfig(cfg as ProjectConfig);
@@ -317,7 +319,7 @@ function VirtualExperienceCreatePageInner() {
   };
 
   const addLesson = (moduleId: string) => {
-    const lesson: Lesson = { id: `les-${uid()}`, title: 'New Lesson', body: '<p>Lesson content here.</p>', requirements: [] };
+    const lesson: Lesson = { id: `les-${uid()}`, title: 'New Mission', body: '<p>Mission content here.</p>', requirements: [] };
     updateModule(moduleId, { lessons: [...(config?.modules.find(m => m.id === moduleId)?.lessons ?? []), lesson] });
   };
 
@@ -327,7 +329,7 @@ function VirtualExperienceCreatePageInner() {
   };
 
   const addModule = () => {
-    const mod: Module = { id: `mod-${uid()}`, title: 'New Module', description: '', lessons: [] };
+    const mod: Module = { id: `mod-${uid()}`, title: 'New Milestone', description: '', lessons: [] };
     setConfig(c => c ? { ...c, modules: [...c.modules, mod] } : c);
     setExpandedModules(prev => new Set([...prev, mod.id]));
   };
@@ -435,12 +437,12 @@ function VirtualExperienceCreatePageInner() {
       learnOutcomes: ['', '', ''],
       modules: [{
         id: `mod-${uid()}`,
-        title: 'Module 1',
+        title: 'Milestone 1',
         description: '',
         lessons: [{
           id: `les-${uid()}`,
-          title: 'Lesson 1',
-          body: '<p>Describe what the student should do in this lesson.</p>',
+          title: 'Mission 1',
+          body: '<p>Describe what the student should do in this mission.</p>',
           requirements: [{
             id: `req-${uid()}`,
             label: '',
@@ -556,6 +558,7 @@ function VirtualExperienceCreatePageInner() {
           cohort_ids: selectedCohorts,
           deadline_days: deadlineDays ? Number(deadlineDays) : null,
           status,
+          is_short_course: isShortCourse,
         }),
       });
 
@@ -669,6 +672,35 @@ function VirtualExperienceCreatePageInner() {
                 </button>
               ))}
             </div>
+
+            {/* Short Course toggle */}
+            <button
+              type="button"
+              onClick={() => setIsShortCourse(v => !v)}
+              className="w-full flex items-center justify-between p-4 rounded-2xl text-left transition-all"
+              style={{
+                border: `2px solid ${isShortCourse ? C.cta : (C as any).modeBorder}`,
+                background: isShortCourse ? `${C.cta}10` : C.card,
+                boxShadow: isShortCourse ? `0 0 0 3px ${C.cta}14` : C.cardShadow,
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${C.cta}18`, color: C.cta }}>
+                  <Star className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[14px] font-bold" style={{ color: isShortCourse ? C.cta : C.text }}>Short Course Mode</p>
+                  <p className="text-[12px]" style={{ color: C.muted }}>Simplified experience -- no company/dataset context. Lessons + questions + AI review only.</p>
+                </div>
+              </div>
+              <div className="flex-shrink-0 ml-3">
+                <div className="w-10 h-6 rounded-full relative transition-colors flex-shrink-0"
+                  style={{ background: isShortCourse ? C.cta : C.divider }}>
+                  <div className="w-4 h-4 rounded-full bg-white absolute top-1 transition-all"
+                    style={{ left: isShortCourse ? '22px' : '4px', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                </div>
+              </div>
+            </button>
 
             {/* Config card: appears when mode selected */}
             {creationMode && (
@@ -887,10 +919,10 @@ function VirtualExperienceCreatePageInner() {
                 {generating && (
                   <div className="text-center space-y-3">
                     <p className="text-[13px] font-medium" style={{ color: C.muted }}>
-                      {datasetCsv.trim() ? 'Analysing your data and generating questions…' : 'Creating company scenario, modules, lessons and dataset…'}
+                      {datasetCsv.trim() ? 'Analysing your data and generating questions…' : 'Creating company scenario, milestones, missions and dataset…'}
                     </p>
                     <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                      {['Company brief', 'Dataset', 'Modules', 'Lessons', 'Questions'].map((s, i) => (
+                      {['Company brief', 'Dataset', 'Milestones', 'Missions', 'Questions'].map((s, i) => (
                         <span key={s} className="text-[12px] px-2.5 py-1 rounded-full animate-pulse font-medium"
                           style={{ background: `${C.cta}18`, color: C.cta, animationDelay: `${i * 0.2}s` }}>{s}</span>
                       ))}
@@ -1094,7 +1126,7 @@ function VirtualExperienceCreatePageInner() {
                     <button onClick={addModule}
                       className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-xl border transition-all hover:opacity-70"
                       style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
-                      <Plus className="w-3 h-3" /> Add Module
+                      <Plus className="w-3 h-3" /> Add Milestone
                     </button>
                   </div>
 
@@ -1110,13 +1142,13 @@ function VirtualExperienceCreatePageInner() {
                           {/* MODULE HEADER */}
                           <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: `${C.cta}12`, borderBottom: `1px solid ${C.cta}28` }}>
                             <div className="flex-shrink-0" title="Drag to reorder module">{moduleDragHandle}</div>
-                            <span className="text-[11px] font-black uppercase tracking-widest flex-shrink-0" style={{ color: C.cta }}>Module {mi + 1}</span>
+                            <span className="text-[11px] font-black uppercase tracking-widest flex-shrink-0" style={{ color: C.cta }}>Milestone {mi + 1}</span>
                             <input
                               value={mod.title}
                               onChange={e => updateModule(mod.id, { title: e.target.value })}
                               className="flex-1 bg-transparent text-[13px] font-bold outline-none min-w-0"
                               style={{ color: C.cta }}
-                              placeholder="Module title…"
+                              placeholder="Milestone title…"
                             />
                             <button onClick={() => removeModule(mod.id)}
                               className="hover:text-red-400 flex-shrink-0 transition-colors"
@@ -1146,13 +1178,13 @@ function VirtualExperienceCreatePageInner() {
                                       {li + 1}
                                     </div>
                                     <span className="text-[10px] font-bold uppercase tracking-widest flex-shrink-0 px-1.5 py-0.5 rounded"
-                                      style={{ background: C.pill, color: C.faint }}>Lesson</span>
+                                      style={{ background: C.pill, color: C.faint }}>Mission</span>
                                     <input
                                       value={les.title}
                                       onChange={e => updateLesson(mod.id, les.id, { title: e.target.value })}
                                       className="flex-1 bg-transparent text-[14px] font-semibold outline-none min-w-0"
                                       style={{ color: C.text }}
-                                      placeholder="Lesson title…"
+                                      placeholder="Mission title…"
                                     />
                                     <div className="flex items-center gap-1.5 flex-shrink-0">
                                       <div className="flex items-center gap-1" style={{ color: C.faint }}>
@@ -1164,7 +1196,7 @@ function VirtualExperienceCreatePageInner() {
                                         style={{ background: expandedModules.has(expandKey) ? `${C.cta}18` : C.pill, color: expandedModules.has(expandKey) ? C.cta : C.muted }}>
                                         {expandedModules.has(expandKey)
                                           ? <><ChevronDown className="w-3 h-3" /> Hide</>
-                                          : <><ChevronRight className="w-3 h-3" /> {reqCount} task{reqCount !== 1 ? 's' : ''}</>}
+                                          : <><ChevronRight className="w-3 h-3" /> {reqCount} deliverable{reqCount !== 1 ? 's' : ''}</>}
                                       </button>
                                       <button onClick={() => removeLesson(mod.id, les.id)}
                                         className="hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
@@ -1181,7 +1213,7 @@ function VirtualExperienceCreatePageInner() {
                                         <RichTextEditor
                                           value={les.body || ''}
                                           onChange={html => updateLesson(mod.id, les.id, { body: html })}
-                                          placeholder="Write the lesson content here. What should the student read, understand, or do?"
+                                          placeholder="Write the mission content here. What should the student read, understand, or do?"
                                         />
                                       </div>
                                       <input style={{ ...inp, fontSize: 13 }} value={les.videoUrl || ''} placeholder="Video URL (optional)"
@@ -1190,7 +1222,7 @@ function VirtualExperienceCreatePageInner() {
                                       {/* Tasks */}
                                       <div className="space-y-2">
                                         <div className="flex items-center gap-2">
-                                          <span className="text-[11px] font-black uppercase tracking-widest" style={{ color: C.muted }}>Tasks</span>
+                                          <span className="text-[11px] font-black uppercase tracking-widest" style={{ color: C.muted }}>Deliverables</span>
                                           <div className="flex-1 h-px" style={{ background: C.divider }}/>
                                         </div>
                                         {les.requirements.map((req, qi) => {
@@ -1199,7 +1231,7 @@ function VirtualExperienceCreatePageInner() {
                                             mcq:    { bg: `${C.cta}18`,              color: C.cta,       label: 'Multiple Choice' },
                                             text:               { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6',   label: 'Short Answer'       },
                                             upload:             { bg: 'rgba(245,158,11,0.12)',   color: '#f59e0b',   label: 'File Upload'         },
-                                            task:               { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6',   label: 'Task (Checkbox)'     },
+                                            task:               { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6',   label: 'Deliverable (Checkbox)' },
                                             dashboard_critique: { bg: 'rgba(16,185,129,0.12)',   color: '#10b981',   label: 'AI Dashboard Critique' },
                                             code_review:        { bg: 'rgba(99,102,241,0.12)',   color: '#6366f1',   label: 'AI Code Review' },
                                             excel_review:       { bg: 'rgba(34,197,94,0.12)',    color: '#22c55e',   label: 'AI Excel Review' },
@@ -1209,7 +1241,7 @@ function VirtualExperienceCreatePageInner() {
                                             <div key={req.id} className="rounded-xl p-3 space-y-2" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
                                               <div className="flex items-center gap-2">
                                                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                                                  style={{ background: tc.bg, color: tc.color }}>Task {qi + 1}</span>
+                                                  style={{ background: tc.bg, color: tc.color }}>Deliverable {qi + 1}</span>
                                                 <select value={req.type}
                                                   onChange={e => updateReq(mod.id, les.id, req.id, {
                                                     type: e.target.value as Requirement['type'],
@@ -1221,7 +1253,7 @@ function VirtualExperienceCreatePageInner() {
                                                   <option value="mcq">Multiple Choice</option>
                                                   <option value="text">Short Answer</option>
                                                   <option value="upload">File Upload</option>
-                                                  <option value="task">Task (Checkbox)</option>
+                                                  <option value="task">Deliverable (Checkbox)</option>
                                                   <option value="dashboard_critique">AI Dashboard Critique</option>
                                                   <option value="code_review">AI Code Review</option>
                                                   <option value="excel_review">AI Excel Review</option>
@@ -1408,7 +1440,7 @@ function VirtualExperienceCreatePageInner() {
                               <button onClick={() => addLesson(mod.id)}
                                 className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-xl border w-full justify-center"
                                 style={{ border: `1px dashed ${C.cardBorder}`, color: C.muted }}>
-                                <Plus className="w-3 h-3" /> Add lesson to {mod.title}
+                                <Plus className="w-3 h-3" /> Add mission to {mod.title}
                               </button>
                             </div>
                           </div>

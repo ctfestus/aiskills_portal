@@ -278,13 +278,9 @@ const TEMPLATES: { key: string; label: string; description: string; icon: React.
       font: 'sans',
       eventDetails: { isEvent: true, date: '', time: '', location: '', timezone: '' },
       fields: [
-        { id: uid(), name: 'first_name', label: 'First Name', type: 'text', placeholder: 'Enter your first name...', required: true },
-        { id: uid(), name: 'last_name', label: 'Last Name', type: 'text', placeholder: 'Enter your last name...', required: true },
+        { id: uid(), name: 'full_name', label: 'Full Name', type: 'text', placeholder: 'Enter your full name...', required: true },
         { id: uid(), name: 'email', label: 'Email Address', type: 'email', placeholder: 'you@example.com', required: true },
-        { id: uid(), name: 'phone', label: 'Mobile Phone', type: 'phone', required: true },
-        { id: uid(), name: 'ticket_type', label: 'Ticket Type', type: 'select', options: ['General Admission', 'VIP', 'Student'], required: true },
-        { id: uid(), name: 'dietary', label: 'Dietary Requirements', type: 'select', options: ['None', 'Vegetarian', 'Vegan', 'Halal', 'Gluten-Free'], required: false },
-        { id: uid(), name: 'tshirt_size', label: 'T-Shirt Size', type: 'select', options: ['XS', 'S', 'M', 'L', 'XL', 'XXL'], required: false },
+        { id: uid(), name: 'phone', label: 'Contact Number', type: 'phone', required: true },
       ],
     },
   },
@@ -348,12 +344,9 @@ const TEMPLATES: { key: string; label: string; description: string; icon: React.
       font: 'sans',
       eventDetails: { isEvent: true, date: '', time: '', location: '', timezone: '' },
       fields: [
-        { id: uid(), name: 'first_name', label: 'First Name', type: 'text', placeholder: 'Enter your first name...', required: true },
-        { id: uid(), name: 'last_name', label: 'Last Name', type: 'text', placeholder: 'Enter your last name...', required: true },
-        { id: uid(), name: 'email', label: 'Email Address', type: 'email', placeholder: 'work@company.com', required: true },
-        { id: uid(), name: 'company', label: 'Company', type: 'company', required: false },
-        { id: uid(), name: 'job_title', label: 'Job Title', type: 'text', placeholder: 'e.g. Marketing Manager', required: false },
-        { id: uid(), name: 'heard_from', label: 'How did you hear about this?', type: 'select', options: ['Social Media', 'Email Newsletter', 'Colleague', 'Search Engine', 'Other'], required: false },
+        { id: uid(), name: 'full_name', label: 'Full Name', type: 'text', placeholder: 'Enter your full name...', required: true },
+        { id: uid(), name: 'email', label: 'Email Address', type: 'email', placeholder: 'you@example.com', required: true },
+        { id: uid(), name: 'phone', label: 'Contact Number', type: 'phone', required: true },
       ],
     },
   },
@@ -1166,12 +1159,11 @@ const [isSaving, setIsSaving] = useState(false);
       const parsed = await res.json();
       if (parsed) {
         const defaultFields: FormField[] = [
-          { id: 'default_first_name', name: 'first_name', label: 'First Name', type: 'text', placeholder: 'Enter your first name...', required: true },
-          { id: 'default_last_name', name: 'last_name', label: 'Last Name', type: 'text', placeholder: 'Enter your last name...', required: true },
+          { id: 'default_full_name', name: 'full_name', label: 'Full Name', type: 'text', placeholder: 'Enter your full name...', required: true },
           { id: 'default_email', name: 'email', label: 'Email Address', type: 'email', placeholder: 'you@example.com', required: true },
-          { id: 'default_phone', name: 'phone', label: 'Mobile Phone', type: 'phone', required: true },
+          { id: 'default_phone', name: 'phone', label: 'Contact Number', type: 'phone', required: true },
         ];
-        const skipKeywords = ['first name', 'last name', 'email', 'phone', 'mobile', 'telephone'];
+        const skipKeywords = ['full name', 'first name', 'last name', 'email', 'phone', 'mobile', 'telephone', 'contact'];
         const aiFields = (parsed.fields || []).filter(
           (f: FormField) => !skipKeywords.some(kw => f.label.toLowerCase().includes(kw) || f.name.toLowerCase().includes(kw))
         ).map((f: FormField) => ({ ...f, required: f.required !== false }));

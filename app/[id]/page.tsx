@@ -196,25 +196,52 @@ const detectPlatform = (url?: string): { name: string; color: string; icon: Reac
   return { name: 'Join Meeting', color: '#555', icon: null };
 };
 
+// Parse a YYYY-MM-DD date string as local time (avoids UTC-midnight timezone shifts)
+const parseLocalDate = (date: string): Date | null => {
+  const parts = date.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return null;
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+};
+
 // Build a Google Calendar URL from event details
-const buildGoogleCalUrl = (title: string, date: string, time: string, location: string, description: string) => {
+const DAY_MAP = ['SU','MO','TU','WE','TH','FR','SA'];
+const buildRRule = (recurrence?: string, endDate?: string, days?: number[]): string | null => {
+  if (!recurrence || recurrence === 'once') return null;
   const pad = (n: number) => String(n).padStart(2, '0');
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return null;
-  const [h = '09', m = '00'] = (time ?? '').split(':');
-  const start = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(+h)}${pad(+m)}00`;
-  const endD = new Date(d); endD.setHours(+h + 2, +m);
+  let rule = `RRULE:FREQ=${recurrence === 'weekly' ? 'WEEKLY' : 'DAILY'}`;
+  if (recurrence === 'weekly' && days?.length) rule += `;BYDAY=${days.map(d => DAY_MAP[d]).join(',')}`;
+  if (endDate) {
+    const ed = parseLocalDate(endDate);
+    if (ed) rule += `;UNTIL=${ed.getFullYear()}${pad(ed.getMonth()+1)}${pad(ed.getDate())}T235959Z`;
+  }
+  return rule;
+};
+
+const buildGoogleCalUrl = (title: string, date: string, time: string, location: string, description: string, recurrence?: string, recurrenceEndDate?: string, recurrenceDays?: number[]) => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const d = parseLocalDate(date);
+  if (!d) return null;
+  const timeParts = (time ?? '').split(':');
+  const h = timeParts[0] ? +timeParts[0] : 9;
+  const m = timeParts[1] ? +timeParts[1] : 0;
+  const start = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(h)}${pad(m)}00`;
+  const endD = new Date(d); endD.setHours(h + 2, m);
   const end = `${endD.getFullYear()}${pad(endD.getMonth()+1)}${pad(endD.getDate())}T${pad(endD.getHours())}${pad(endD.getMinutes())}00`;
   const enc = encodeURIComponent;
-  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${enc(title)}&dates=${start}/${end}&location=${enc(location)}&details=${enc(description)}`;
+  const rrule = buildRRule(recurrence, recurrenceEndDate, recurrenceDays);
+  let url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${enc(title)}&dates=${start}/${end}&location=${enc(location)}&details=${enc(description)}`;
+  if (rrule) url += `&recur=${enc(rrule)}`;
+  return url;
 };
 
 // Build an Outlook Web calendar URL
 const buildOutlookCalUrl = (title: string, date: string, time: string, location: string, description: string) => {
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return null;
-  const [h = '09', m = '00'] = (time ?? '').split(':');
-  d.setHours(+h, +m, 0);
+  const d = parseLocalDate(date);
+  if (!d) return null;
+  const timeParts = (time ?? '').split(':');
+  const h = timeParts[0] ? +timeParts[0] : 9;
+  const m = timeParts[1] ? +timeParts[1] : 0;
+  d.setHours(h, m, 0);
   const end = new Date(d); end.setHours(end.getHours() + 2);
   const fmt = (dt: Date) => dt.toISOString().replace(/\.\d{3}Z$/, '');
   const enc = encodeURIComponent;
@@ -224,33 +251,39 @@ const buildOutlookCalUrl = (title: string, date: string, time: string, location:
 // Build a Yahoo Calendar URL
 const buildYahooCalUrl = (title: string, date: string, time: string, location: string, description: string) => {
   const pad = (n: number) => String(n).padStart(2, '0');
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return null;
-  const [h = '09', m = '00'] = (time ?? '').split(':');
-  const start = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(+h)}${pad(+m)}00`;
-  const endD = new Date(d); endD.setHours(+h + 2, +m);
+  const d = parseLocalDate(date);
+  if (!d) return null;
+  const timeParts = (time ?? '').split(':');
+  const h = timeParts[0] ? +timeParts[0] : 9;
+  const m = timeParts[1] ? +timeParts[1] : 0;
+  const start = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(h)}${pad(m)}00`;
+  const endD = new Date(d); endD.setHours(h + 2, m);
   const end = `${endD.getFullYear()}${pad(endD.getMonth()+1)}${pad(endD.getDate())}T${pad(endD.getHours())}${pad(endD.getMinutes())}00`;
   const enc = encodeURIComponent;
   return `https://calendar.yahoo.com/?v=60&title=${enc(title)}&st=${start}&et=${end}&in_loc=${enc(location)}&desc=${enc(description)}`;
 };
 
 // Build a .ics file blob URL
-const downloadIcs = (title: string, date: string, time: string, location: string, description: string) => {
+const downloadIcs = (title: string, date: string, time: string, location: string, description: string, recurrence?: string, recurrenceEndDate?: string, recurrenceDays?: number[]) => {
   const pad = (n: number) => String(n).padStart(2, '0');
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return;
-  const [h = '09', m = '00'] = (time ?? '').split(':');
+  const d = parseLocalDate(date);
+  if (!d) return;
+  const timeParts = (time ?? '').split(':');
+  const h = timeParts[0] ? +timeParts[0] : 9;
+  const m = timeParts[1] ? +timeParts[1] : 0;
   const fmt = (dt: Date) => `${dt.getFullYear()}${pad(dt.getMonth()+1)}${pad(dt.getDate())}T${pad(dt.getHours())}${pad(dt.getMinutes())}00`;
-  d.setHours(+h, +m);
+  d.setHours(h, m);
   const end = new Date(d); end.setHours(end.getHours() + 2);
-  const ics = [
+  const rrule = buildRRule(recurrence, recurrenceEndDate, recurrenceDays);
+  const lines = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT',
     `SUMMARY:${title}`, `DTSTART:${fmt(d)}`, `DTEND:${fmt(end)}`,
     `LOCATION:${location}`, `DESCRIPTION:${description.replace(/<[^>]*>/g,'')}`,
-    'END:VEVENT', 'END:VCALENDAR'
-  ].join('\r\n');
+    ...(rrule ? [rrule] : []),
+    'END:VEVENT', 'END:VCALENDAR',
+  ];
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+  a.href = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/calendar' }));
   a.download = `${title.replace(/\s+/g,'-')}.ics`;
   a.click();
 };
@@ -317,6 +350,7 @@ export default function PublicFormPage() {
   const [projectInitLesId,    setProjectInitLesId]    = useState('');
   // Course sign-up flow
   const [courseStarted, setCourseStarted] = useState(false);
+  const [retakeKey, setRetakeKey] = useState(0);
   const [prefilledName, setPrefilledName] = useState('');
   const [prefilledEmail, setPrefilledEmail] = useState('');
   const [calPopupOpen, setCalPopupOpen] = useState(false);
@@ -422,12 +456,13 @@ export default function PublicFormPage() {
             .then(({ data: asgn }) => { if (asgn) setRelatedAssignment(asgn); });
         }
 
-        // Auto-resume VE: if user is already authenticated, skip the cover page
+        // Auto-resume VE: only skip cover page if the user already has saved progress
         if (user && (data.config?.isVirtualExperience || data.config?.isGuidedProject)) {
           const { data: { session } } = await supabase.auth.getSession();
           const { data: student } = await supabase.from('students').select('full_name, email').eq('id', user.id).single();
           const name  = student?.full_name || user.user_metadata?.full_name || '';
           const email = student?.email || user.email || '';
+          let hasProgress = false;
           try {
             const r = await fetch(`/api/guided-project-progress?formId=${data.id}&studentId=${user.id}`, {
               headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
@@ -437,13 +472,14 @@ export default function PublicFormPage() {
               setProjectProgress(attempt.progress || {});
               setProjectInitModId(attempt.current_module_id || '');
               setProjectInitLesId(attempt.current_lesson_id || '');
+              hasProgress = true;
             }
           } catch {}
           setProjectStudentName(name);
           setProjectStudentEmail(email);
           setProjectUserId(user.id);
           setProjectSessionToken(session?.access_token ?? '');
-          setProjectStarted(true);
+          if (hasProgress) setProjectStarted(true);
         }
 
         // Pre-fill from logged-in student
@@ -551,7 +587,10 @@ export default function PublicFormPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${eventSession.access_token}`,
         },
-        body: JSON.stringify({ formId: form.id }),
+        body: JSON.stringify({
+          formId: form.id,
+          responses: Object.keys(data).length > 0 ? data : undefined,
+        }),
       });
       if (!regRes.ok) {
         const regJson = await regRes.json().catch(() => ({}));
@@ -767,6 +806,7 @@ export default function PublicFormPage() {
           initialLessonId={projectInitLesId}
           isDark={studentTheme === 'dark'}
           accentColor={indColor}
+          shortCourse={!!form.is_short_course}
         />
       );
     }
@@ -785,6 +825,7 @@ export default function PublicFormPage() {
     const companyInitials = config.company?.split(' ').map((w: string) => w[0]).join('').slice(0,2).toUpperCase() || '??';
     const managerInitials = ((config as any).managerName || 'M').split(' ').map((w: string) => w[0]).join('').slice(0,2).toUpperCase();
     const dataset = (config as any).dataset;
+    const isShortCourse = !!(form as any).is_short_course;
 
     return (
       <div style={{ minHeight: '100vh', background: gp.bg, color: gp.title, fontFamily: 'var(--font-sans), Inter, sans-serif' }}>
@@ -795,8 +836,13 @@ export default function PublicFormPage() {
             <img src={logoUrl || undefined} alt="" style={{ height: 28, width: 'auto' }} />
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: isLight ? 'rgba(255,255,255,0.15)' : `${indColor}18`, color: isLight ? '#fff' : indColor, fontWeight: 700, textTransform: 'capitalize', letterSpacing: '0.02em' }}>{config.industry}</span>
-            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: isLight ? 'rgba(255,255,255,0.1)' : gp.divider, color: isLight ? 'rgba(255,255,255,0.8)' : gp.muted, fontWeight: 600, textTransform: 'capitalize' }}>{config.difficulty}</span>
+            {isShortCourse
+              ? <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: isLight ? 'rgba(255,255,255,0.15)' : `${indColor}18`, color: isLight ? '#fff' : indColor, fontWeight: 700, letterSpacing: '0.02em' }}>Short Course</span>
+              : <>
+                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: isLight ? 'rgba(255,255,255,0.15)' : `${indColor}18`, color: isLight ? '#fff' : indColor, fontWeight: 700, textTransform: 'capitalize', letterSpacing: '0.02em' }}>{config.industry}</span>
+                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: isLight ? 'rgba(255,255,255,0.1)' : gp.divider, color: isLight ? 'rgba(255,255,255,0.8)' : gp.muted, fontWeight: 600, textTransform: 'capitalize' }}>{config.difficulty}</span>
+                </>
+            }
           </div>
         </nav>
 
@@ -810,11 +856,13 @@ export default function PublicFormPage() {
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.3) 55%, transparent 100%)' }} />
           {/* Content */}
           <div style={{ position: 'relative', zIndex: 2, maxWidth: 1140, margin: '0 auto', width: '100%', padding: '32px 16px 36px' }}>
-            {/* Company row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.75)' }}>{config.company}</span>
-              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, background: `${indColor}30`, color: indColor, fontWeight: 700, border: `1px solid ${indColor}40` }}>{config.role}</span>
-            </div>
+            {/* Company row (VE only) */}
+            {!isShortCourse && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.75)' }}>{config.company}</span>
+                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, background: `${indColor}30`, color: indColor, fontWeight: 700, border: `1px solid ${indColor}40` }}>{config.role}</span>
+              </div>
+            )}
             {/* Title */}
             <h1 style={{ fontSize: 'clamp(22px,4.5vw,36px)', fontWeight: 800, color: '#ffffff', lineHeight: 1.2, marginBottom: 10, letterSpacing: '-0.02em' }}>
               {config.title || form.title}
@@ -833,8 +881,8 @@ export default function PublicFormPage() {
           {/* Left column */}
           <div className="order-2 lg:order-1" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-            {/* Manager brief */}
-            {config.background && (
+            {/* Manager brief (VE only) */}
+            {!isShortCourse && config.background && (
               <div style={{ background: gp.card, borderRadius: 14, overflow: 'hidden', border: `1px solid ${gp.border}` }}>
                 {/* Email header */}
                 <div style={{ padding: '14px 20px', background: gp.subtle, borderBottom: `1px solid ${gp.divider}`, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -885,7 +933,7 @@ export default function PublicFormPage() {
                         <span style={{ fontSize: 10, fontWeight: 800, color: indColor }}>{mi + 1}</span>
                       </div>
                       <span style={{ fontSize: 13, fontWeight: 600, color: gp.title, flex: 1 }}>{mod.title}</span>
-                      <span style={{ fontSize: 11, color: gp.muted, fontWeight: 500 }}>{mod.lessons?.length || 0} lesson{mod.lessons?.length !== 1 ? 's' : ''}</span>
+                      <span style={{ fontSize: 11, color: gp.muted, fontWeight: 500 }}>{mod.lessons?.length || 0} mission{mod.lessons?.length !== 1 ? 's' : ''}</span>
                     </div>
                     {/* Lessons */}
                     {(mod.lessons || []).map((les: any, li: number) => (
@@ -893,7 +941,7 @@ export default function PublicFormPage() {
                         <BookOpen style={{ width: 12, height: 12, color: gp.muted, flexShrink: 0 }} />
                         <span style={{ fontSize: 14, color: gp.body, flex: 1, lineHeight: 1.4 }}>{les.title}</span>
                         {les.requirements?.length > 0 && (
-                          <span style={{ fontSize: 11, color: gp.muted, fontWeight: 500, flexShrink: 0 }}>{les.requirements.length} tasks</span>
+                          <span style={{ fontSize: 11, color: gp.muted, fontWeight: 500, flexShrink: 0 }}>{les.requirements.length} deliverable{les.requirements.length !== 1 ? 's' : ''}</span>
                         )}
                       </div>
                     ))}
@@ -933,11 +981,11 @@ export default function PublicFormPage() {
                   style={{ width: '100%', padding: '13px', borderRadius: 10, background: indColor, color: '#fff', fontSize: 14, fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, letterSpacing: '-0.01em' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.9'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}>
-                  Start Virtual Experience <ArrowRight style={{ width: 15, height: 15 }} />
+                  {isShortCourse ? 'Start Course' : 'Start Virtual Experience'} <ArrowRight style={{ width: 15, height: 15 }} />
                 </button>
 
-                {/* Dataset download */}
-                {(dataset?.csvContent || dataset?.url) && (
+                {/* Dataset download (VE only) */}
+                {!isShortCourse && (dataset?.csvContent || dataset?.url) && (
                   <button onClick={() => {
                     if (dataset.csvContent) {
                       const blob = new Blob([dataset.csvContent], { type: 'text/csv' });
@@ -954,16 +1002,18 @@ export default function PublicFormPage() {
               </div>
             </div>
 
-            {/* Difficulty badge */}
-            <div style={{ background: gp.card, borderRadius: 14, padding: '14px 18px', border: `1px solid ${gp.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: `${indColor}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Star style={{ width: 16, height: 16, color: indColor }} />
+            {/* Difficulty badge (VE only) */}
+            {!isShortCourse && (
+              <div style={{ background: gp.card, borderRadius: 14, padding: '14px 18px', border: `1px solid ${gp.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 10, background: `${indColor}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Star style={{ width: 16, height: 16, color: indColor }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 12, color: gp.muted, margin: 0, fontWeight: 500 }}>Difficulty</p>
+                  <p style={{ fontSize: 13, color: gp.title, margin: 0, fontWeight: 700, textTransform: 'capitalize' }}>{config.difficulty}</p>
+                </div>
               </div>
-              <div>
-                <p style={{ fontSize: 12, color: gp.muted, margin: 0, fontWeight: 500 }}>Difficulty</p>
-                <p style={{ fontSize: 13, color: gp.title, margin: 0, fontWeight: 700, textTransform: 'capitalize' }}>{config.difficulty}</p>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -974,159 +1024,149 @@ export default function PublicFormPage() {
   if (config.isCourse) {
     const questions = config.questions || [];
     const lessonCount = questions.filter((q: any) => q.lesson?.title || q.lesson?.body).length;
-    const assessmentCount = questions.length;
-    const totalRewardPoints = config.pointsSystem?.enabled
-      ? assessmentCount * (config.pointsSystem.basePoints || 100)
-      : 0;
 
+    const cp = {
+      bg:      dark ? '#0d0d0d' : '#F5F5F3',
+      card:    dark ? '#161616' : '#ffffff',
+      border:  dark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.09)',
+      divider: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+      title:   dark ? '#f0f0f0' : '#0d0d0d',
+      body:    dark ? '#bbb'    : '#444',
+      muted:   dark ? '#666'    : '#888',
+      subtle:  dark ? '#1c1c1c' : '#f8f8f6',
+    };
 
     return (
-      <div className="ff-pub" style={{ minHeight: '100vh', background: t.page, position: 'relative', transition: 'background 0.3s' }}>
-        <style>{`${googleFontImport} .ff-pub{font-family:${fontFace};}`}</style>
-        {/* Navbar */}
-        <nav style={{ position: 'sticky', top: 0, zIndex: 30, background: t.nav, borderBottom: `1px solid ${t.navBorder}`, backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 56, transition: 'background 0.3s' }}>
+      <div style={{ minHeight: '100vh', background: cp.bg, color: cp.title, fontFamily: 'var(--font-sans), Inter, sans-serif' }}>
+        <style>{googleFontImport}</style>
+
+        {/* Sticky nav */}
+        <nav style={{ position: 'sticky', top: 0, zIndex: 30, backdropFilter: 'blur(14px)', background: dark ? 'rgba(13,13,13,0.88)' : '#0e09dd', borderBottom: `1px solid ${dark ? cp.border : '#0b07b3'}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 56 }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-            <img src={logoUrl || undefined} alt="" style={{ height: 32, width: 'auto' }} />
+            <img src={logoUrl || undefined} alt="" style={{ height: 28, width: 'auto' }} />
           </Link>
-          <button onClick={() => { navigator.clipboard?.writeText(pageUrl); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: t.navText, background: 'none', border: 'none', cursor: 'pointer' }}>
-            {linkCopied ? <Check style={{ width: 16, height: 16, color: '#006128' }}/> : <Copy style={{ width: 16, height: 16 }}/>}
-            {linkCopied ? 'Copied!' : 'Share'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.15)', color: '#fff', fontWeight: 700, letterSpacing: '0.02em' }}>Course</span>
+            {config.difficulty && (
+              <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: dark ? cp.divider : 'rgba(255,255,255,0.1)', color: dark ? cp.muted : 'rgba(255,255,255,0.8)', fontWeight: 600, textTransform: 'capitalize' as const }}>{config.difficulty}</span>
+            )}
+          </div>
         </nav>
 
-        {/* Course Overview */}
-        {!success && !courseStarted && (
-        <main style={{ position: 'relative', zIndex: 10, maxWidth: 860, margin: '0 auto', padding: '40px 24px 60px' }}>
-
-          {/* Hero card */}
-          <div style={{ background: t.card, borderRadius: 28, overflow: 'hidden', boxShadow: t.cardShadow, transition: 'background 0.3s' }}>
-
-            {/* Cover image -- padded rounded rectangle */}
-            {config.coverImage && (
-              <div style={{ padding: '14px 14px 0' }}>
-                <div className="group" style={{ overflow: 'hidden', borderRadius: 18, height: 'clamp(160px, 38vw, 260px)', background: '#0a0a0a', position: 'relative' }}>
-                  <img src={config.coverImage} alt="Cover"
-                    className="transition-transform duration-700 ease-out group-hover:scale-105"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: 0.92 }} />
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.45) 0%, transparent 55%)' }}/>
-                </div>
-              </div>
-            )}
-
-            <div style={{ padding: '28px 32px 32px' }}>
-              {/* Title */}
-              <h1 style={{ fontSize: 'clamp(20px, 4vw, 28px)', fontWeight: 800, color: t.title, marginBottom: 10, lineHeight: 1.25, transition: 'color 0.3s' }}>
-                {config.title}
+        {/* Hero banner */}
+        {!courseStarted && (
+          <div style={{ position: 'relative', width: '100%', minHeight: 420, background: '#0a0a0a', overflow: 'hidden', display: 'flex', alignItems: 'flex-end' }}>
+            {config.coverImage
+              ? <img src={config.coverImage} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', opacity: 0.55 }} />
+              : <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${accentColor}55 0%, #0a0a0a 70%)` }} />
+            }
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.3) 55%, transparent 100%)' }} />
+            <div style={{ position: 'relative', zIndex: 2, maxWidth: 1140, margin: '0 auto', width: '100%', padding: '32px 16px 36px' }}>
+              <h1 style={{ fontSize: 'clamp(22px,4.5vw,36px)', fontWeight: 800, color: '#ffffff', lineHeight: 1.2, marginBottom: 10, letterSpacing: '-0.02em' }}>
+                {config.title || form.title}
               </h1>
+              {config.tagline && (
+                <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.65)', lineHeight: 1.55, maxWidth: 620, margin: 0 }}>{config.tagline}</p>
+              )}
+            </div>
+          </div>
+        )}
 
-              {/* Stats bar */}
-              {(() => {
-                const stats = [
-                  lessonCount > 0 && { icon: <BookOpen style={{ width: 15, height: 15, color: accentColor }}/>, label: lessonCount === 1 ? 'Lesson' : 'Lessons', value: lessonCount },
-                  assessmentCount > 0 && { icon: <FileText style={{ width: 15, height: 15, color: accentColor }}/>, label: assessmentCount === 1 ? 'Assessment' : 'Assessments', value: assessmentCount },
-                  totalRewardPoints > 0 && { icon: <Zap style={{ width: 15, height: 15, color: accentColor }}/>, label: 'Reward Points', value: totalRewardPoints.toLocaleString() },
-                  config.courseTimer && { icon: <Clock style={{ width: 15, height: 15, color: accentColor }}/>, label: 'Time Limit', value: `${config.courseTimer} min` },
-                ].filter(Boolean) as { icon: React.ReactNode; label: string; value: string | number }[];
-                if (!stats.length) return null;
-                return (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 22 }}>
-                    {stats.map((s, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 14px', borderRadius: 12, background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.035)', border: `1px solid ${t.cardBorder}`, flex: '1 0 auto', minWidth: 100 }}>
-                        <div style={{ width: 30, height: 30, borderRadius: 9, background: `${accentColor}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          {s.icon}
+        {/* Main layout */}
+        {!courseStarted && (
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px]"
+            style={{ maxWidth: 1140, margin: '0 auto', padding: '24px 16px 80px', gap: 20, alignItems: 'start' }}>
+
+            {/* Left column */}
+            <div className="order-2 lg:order-1" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+              {/* About */}
+              {config.description && (
+                <div style={{ background: cp.card, borderRadius: 14, overflow: 'hidden', border: `1px solid ${cp.border}` }}>
+                  <div style={{ padding: '14px 20px', background: cp.subtle, borderBottom: `1px solid ${cp.divider}` }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: cp.title, margin: 0 }}>About this course</p>
+                  </div>
+                  <div className="rich-preview" style={{ padding: '20px 24px', fontSize: 14.5, lineHeight: 1.6, color: cp.body }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(config.description) || '' }} />
+                </div>
+              )}
+
+              {/* What you'll learn */}
+              {(config.learnOutcomes || []).length > 0 && (
+                <div style={{ background: cp.card, borderRadius: 14, padding: '22px 24px', border: `1px solid ${cp.border}` }}>
+                  <h2 style={{ fontSize: 14, fontWeight: 700, color: cp.title, marginBottom: 16, letterSpacing: '-0.01em' }}>What you&apos;ll learn</h2>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: '10px 20px' }}>
+                    {(config.learnOutcomes as string[]).map((o: string, i: number) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+                        <div style={{ width: 18, height: 18, borderRadius: 5, background: `${accentColor}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                          <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                            <path d="M1.5 5L3.8 7.5L8.5 2.5" stroke={accentColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
                         </div>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: t.title, lineHeight: 1.2 }}>{s.value}</div>
-                          <div style={{ fontSize: 11, color: t.muted, fontWeight: 500, marginTop: 2 }}>{s.label}</div>
-                        </div>
+                        <span style={{ fontSize: 14, color: cp.body, lineHeight: 1.5 }}>{o}</span>
                       </div>
                     ))}
                   </div>
-                );
-              })()}
-
-              {/* Description */}
-              {config.description && (
-                <div className="rich-preview" style={{ fontSize: 14, lineHeight: 1.7, color: t.body, marginBottom: 24, transition: 'color 0.3s' }}
-                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(config.description) }} />
+                </div>
               )}
 
-              {/* Passmark + CTA row */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, paddingTop: config.description ? 0 : 8 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: t.muted }}>Pass mark</span>
-                  <span style={{ fontSize: 22, fontWeight: 800, color: accentColor }}>{config.passmark ?? 50}%</span>
+              {/* Course outline */}
+              {lessonCount > 0 && (
+                <div style={{ background: cp.card, borderRadius: 14, overflow: 'hidden', border: `1px solid ${cp.border}` }}>
+                  <div style={{ padding: '18px 24px 14px', borderBottom: `1px solid ${cp.divider}` }}>
+                    <h2 style={{ fontSize: 14, fontWeight: 700, color: cp.title, margin: 0, letterSpacing: '-0.01em' }}>Course Outline</h2>
+                  </div>
+                  {questions.filter((q: any) => q.lesson?.title || q.lesson?.body).map((q: any, i: number, arr: any[]) => (
+                    <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 24px', borderBottom: i < arr.length - 1 ? `1px solid ${cp.divider}` : 'none', background: i % 2 === 0 ? 'transparent' : cp.subtle }}>
+                      <div style={{ width: 22, height: 22, borderRadius: 7, background: `${accentColor}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: accentColor }}>{i + 1}</span>
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: cp.title, flex: 1, lineHeight: 1.4 }}>{q.lesson?.title || q.question}</span>
+                    </div>
+                  ))}
                 </div>
-                <button
-                  onClick={() => setCourseStarted(true)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 28px', borderRadius: 16, fontWeight: 700, fontSize: 15, color: 'white', background: accentColor, border: 'none', cursor: 'pointer', letterSpacing: '-0.01em', boxShadow: `0 4px 16px ${accentColor}55`, transition: 'opacity 0.2s, transform 0.15s' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.92'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'; }}
-                >
-                  Start Course <ArrowRight style={{ width: 16, height: 16 }}/>
-                </button>
+              )}
+            </div>
+
+            {/* Right sidebar */}
+            <div className="order-1 lg:order-2 lg:sticky" style={{ top: 72, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ background: cp.card, borderRadius: 14, overflow: 'hidden', border: `1px solid ${cp.border}` }}>
+                {/* Cover thumbnail */}
+                {config.coverImage && (
+                  <div style={{ height: 140, overflow: 'hidden', position: 'relative' }}>
+                    <img src={config.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.35) 0%, transparent 60%)' }} />
+                  </div>
+                )}
+                <div style={{ padding: '20px 20px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {/* Pass mark */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: cp.muted, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Pass mark</span>
+                    <span style={{ fontSize: 16, fontWeight: 800, color: accentColor }}>{config.passmark ?? 50}%</span>
+                  </div>
+                  {/* CTA */}
+                  <button onClick={() => setCourseStarted(true)}
+                    style={{ width: '100%', padding: '13px', borderRadius: 10, background: accentColor, color: '#fff', fontSize: 14, fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, letterSpacing: '-0.01em' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '0.9'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = '1'; }}>
+                    Start Course <ArrowRight style={{ width: 15, height: 15 }} />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-
-          {/* What students will learn -- creator-authored outcomes */}
-          {(config.learnOutcomes || []).length > 0 && (
-            <div style={{ marginTop: 24, background: t.card, borderRadius: 20, overflow: 'hidden', boxShadow: t.cardShadow, transition: 'background 0.3s' }}>
-              {/* Header with accent left border */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 24px 18px' }}>
-                <div style={{ width: 3, height: 18, borderRadius: 99, background: accentColor, flexShrink: 0 }}/>
-                <h2 style={{ fontSize: 14, fontWeight: 700, color: t.title, margin: 0 }}>What you&apos;ll learn</h2>
-              </div>
-              {/* Two-column grid */}
-              <div style={{ padding: '16px 20px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px 16px' }}>
-                {(config.learnOutcomes as string[]).map((outcome: string, i: number) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                    {/* Checkmark icon */}
-                    <div style={{ width: 20, height: 20, borderRadius: 6, background: `${accentColor}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <path d="M1.5 5L3.8 7.5L8.5 2.5" stroke={accentColor} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: t.body, lineHeight: 1.5 }}>{outcome}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Course outline -- lesson titles */}
-          {lessonCount > 0 && (
-            <div style={{ marginTop: 16, background: t.card, borderRadius: 20, overflow: 'hidden', boxShadow: t.cardShadow, transition: 'background 0.3s' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 24px 18px' }}>
-                <div style={{ width: 3, height: 18, borderRadius: 99, background: accentColor, flexShrink: 0 }}/>
-                <h2 style={{ fontSize: 14, fontWeight: 700, color: t.title, margin: 0 }}>Course outline</h2>
-              </div>
-              <div style={{ padding: '8px 0' }}>
-                {questions.filter((q: any) => q.lesson?.title || q.lesson?.body).map((q: any, i: number) => (
-                  <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 24px', borderBottom: i < lessonCount - 1 ? `1px solid ${t.divider}` : 'none' }}>
-                    <div style={{ width: 26, height: 26, borderRadius: 8, background: `${accentColor}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: accentColor }}>{i + 1}</span>
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: t.title, flex: 1, lineHeight: 1.4 }}>
-                      {q.lesson?.title || q.question}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </main>
         )}
 
-
-        {/* CourseTaker -- renders via portal once started */}
+        {/* CourseTaker */}
         {courseStarted && (
           <CourseTaker
+            key={retakeKey}
             config={config}
             isSubmitting={submitting}
             onSubmit={handleSubmit}
             isSuccess={success}
             onReset={() => {}}
+            onRetake={() => { setSuccess(false); setSubmitting(false); setRetakeKey(k => k + 1); }}
             isSharedView={true}
             collectStudentInfo={false}
             initialStudentName={prefilledName}
@@ -1223,7 +1263,7 @@ export default function PublicFormPage() {
                 const isVirtual = ev.eventType === 'virtual' && ev.meetingLink;
                 const calLocation = isVirtual ? ev.meetingLink : (ev.location ?? '');
                 const calDescription = [config.description ?? '', isVirtual ? `Join: ${ev.meetingLink}` : ''].filter(Boolean).join('\n\n');
-                const googleUrl  = buildGoogleCalUrl(config.title, ev.date, ev.time, calLocation, calDescription);
+                const googleUrl  = buildGoogleCalUrl(config.title, ev.date, ev.time, calLocation, calDescription, form.recurrence, form.recurrence_end_date, form.recurrence_days);
                 const outlookUrl = buildOutlookCalUrl(config.title, ev.date, ev.time, calLocation, calDescription);
                 const yahooUrl   = buildYahooCalUrl(config.title, ev.date, ev.time, calLocation, calDescription);
                 const GoogleIcon = () => (
@@ -1290,7 +1330,7 @@ export default function PublicFormPage() {
                                 <OutlookIcon/> Outlook.com
                               </a>
                             )}
-                            <button onClick={() => { downloadIcs(config.title, ev.date, ev.time, calLocation, calDescription); setCalPopupOpen(false); }}
+                            <button onClick={() => { downloadIcs(config.title, ev.date, ev.time, calLocation, calDescription, form.recurrence, form.recurrence_end_date, form.recurrence_days); setCalPopupOpen(false); }}
                               style={{ ...btnBase, background: dark ? '#27272a' : '#f4f4f5', color: dark ? '#a1a1aa' : '#52525b' }}>
                               <Download style={{ width: 18, height: 18, flexShrink: 0 }}/> iCal (Apple / Outlook)
                             </button>
@@ -1384,8 +1424,8 @@ export default function PublicFormPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginBottom: 32 }}>
                   {/* Cover image */}
                   {config.coverImage && (
-                    <div style={{ borderRadius: 18, overflow: 'hidden', background: '#1a1a1a', aspectRatio: '16/7' }}>
-                      <img src={config.coverImage} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
+                    <div style={{ borderRadius: 18, overflow: 'hidden', background: '#1a1a1a', aspectRatio: '16/9' }}>
+                      <img src={config.coverImage} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }}/>
                     </div>
                   )}
 

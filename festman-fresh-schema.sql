@@ -204,6 +204,7 @@ CREATE TABLE public.virtual_experiences (
   manager_name    text,
   manager_title   text        DEFAULT 'Manager',
   dataset         jsonb,
+  is_short_course boolean     NOT NULL DEFAULT false,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
@@ -382,6 +383,7 @@ CREATE TABLE public.learning_paths (
   cohort_ids    uuid[]      NOT NULL DEFAULT '{}',
   status        text        NOT NULL DEFAULT 'draft'
                               CHECK (status IN ('draft','published')),
+  next_path_id  uuid        REFERENCES public.learning_paths(id) ON DELETE SET NULL,
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT check_published_requires_cohort CHECK (
@@ -474,12 +476,13 @@ CREATE TABLE public.certificate_defaults (
 );
 
 -- ── event_registrations ───────────────────────────────────────
--- Final state after migration 039: student_id NOT NULL, no email/data/response_id columns
+-- Final state after migration 039 + 054: student_id NOT NULL, responses jsonb for custom form field answers
 CREATE TABLE public.event_registrations (
   id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id    uuid        NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
   event_id      uuid        NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   registered_at timestamptz NOT NULL DEFAULT now(),
+  responses     jsonb       NOT NULL DEFAULT '{}',
   UNIQUE (student_id, event_id)
 );
 
@@ -580,6 +583,16 @@ GRANT  EXECUTE ON FUNCTION public.get_my_role()            TO authenticated;
 GRANT  EXECUTE ON FUNCTION public.is_admin()               TO authenticated;
 GRANT  EXECUTE ON FUNCTION public.is_instructor_or_admin() TO authenticated;
 
+-- Returns only public profile fields (name + avatar) for staff — safe for students to call.
+CREATE OR REPLACE FUNCTION public.get_staff_profiles(p_ids uuid[])
+RETURNS TABLE(id uuid, full_name text, avatar_url text)
+LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
+  SELECT id, full_name, avatar_url FROM students
+  WHERE id = ANY(p_ids) AND role IN ('admin', 'instructor');
+$$;
+REVOKE EXECUTE ON FUNCTION public.get_staff_profiles(uuid[]) FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.get_staff_profiles(uuid[]) TO authenticated;
+
 
 -- ─────────────────────────────────────────────────────────────
 --  5. ENABLE RLS ON EVERY TABLE
@@ -660,6 +673,30 @@ CREATE TRIGGER trg_assignments_updated_at
   BEFORE UPDATE ON public.assignments FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_assignment_submissions_updated_at
   BEFORE UPDATE ON public.assignment_submissions FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- Prevents students from modifying graded fields (replaces the recursive RLS WITH CHECK).
+-- NOTE: Do NOT put a subquery in the trigger WHEN clause — Postgres forbids it.
+--       The role check lives inside the function body instead.
+DROP TRIGGER IF EXISTS trg_protect_submission_graded_fields ON public.assignment_submissions;
+
+CREATE OR REPLACE FUNCTION public.protect_submission_graded_fields()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF (SELECT role FROM public.students WHERE id = auth.uid()) = 'student' THEN
+    IF NEW.score     IS DISTINCT FROM OLD.score     OR
+       NEW.feedback  IS DISTINCT FROM OLD.feedback  OR
+       NEW.graded_by IS DISTINCT FROM OLD.graded_by OR
+       NEW.graded_at IS DISTINCT FROM OLD.graded_at THEN
+      RAISE EXCEPTION 'Students cannot modify graded fields';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_protect_submission_graded_fields
+  BEFORE UPDATE ON public.assignment_submissions
+  FOR EACH ROW EXECUTE FUNCTION public.protect_submission_graded_fields();
 CREATE TRIGGER trg_communities_updated_at
   BEFORE UPDATE ON public.communities FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_announcements_updated_at
@@ -1136,17 +1173,14 @@ CREATE POLICY "assignment_submissions: student insert"
     )
   );
 
+-- NOTE: Self-referencing subqueries in WITH CHECK cause infinite recursion in Postgres RLS.
+-- Protection of graded fields (score, feedback, graded_by, graded_at) is enforced by
+-- trg_protect_submission_graded_fields instead.
+DROP POLICY IF EXISTS "assignment_submissions: student update" ON public.assignment_submissions;
 CREATE POLICY "assignment_submissions: student update"
   ON public.assignment_submissions FOR UPDATE
   USING  (student_id = (SELECT auth.uid()) AND status IN ('draft','submitted'))
-  WITH CHECK (
-    student_id = (SELECT auth.uid())
-    AND status IN ('draft','submitted')
-    AND score     IS NOT DISTINCT FROM (SELECT score     FROM public.assignment_submissions s WHERE s.id = assignment_submissions.id)
-    AND feedback  IS NOT DISTINCT FROM (SELECT feedback  FROM public.assignment_submissions s WHERE s.id = assignment_submissions.id)
-    AND graded_by IS NOT DISTINCT FROM (SELECT graded_by FROM public.assignment_submissions s WHERE s.id = assignment_submissions.id)
-    AND graded_at IS NOT DISTINCT FROM (SELECT graded_at FROM public.assignment_submissions s WHERE s.id = assignment_submissions.id)
-  );
+  WITH CHECK (student_id = (SELECT auth.uid()) AND status IN ('draft','submitted'));
 
 CREATE POLICY "assignment_submissions: instructor grade"
   ON public.assignment_submissions FOR UPDATE

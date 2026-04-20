@@ -159,6 +159,7 @@ export function CourseTaker({
   onSubmit,
   isSuccess,
   onReset,
+  onRetake,
   isSharedView,
   collectStudentInfo = false,
   formId,
@@ -770,13 +771,13 @@ export function CourseTaker({
     const resultColor = submittedPassed ? '#10b981' : '#f43f5e';
 
     return (
-      <div className={`max-w-2xl mx-auto space-y-3`} style={fontStyle}>
+      <div className={`max-w-2xl mx-auto space-y-3 pt-8 px-4 sm:px-6`} style={fontStyle}>
 
         {/* -- Hero card -- */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`border rounded-xl overflow-hidden ${cardBg}`}
+          className={`rounded-xl overflow-hidden ${cardBg}`}
         >
           {/* Accent top bar */}
           <div className="h-1 w-full" style={{ background: resultColor }} />
@@ -815,7 +816,7 @@ export function CourseTaker({
                 )}
               </div>
 
-              <div className="rounded-xl px-5 sm:px-6 py-5" style={{ background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)', border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
+              <div className="rounded-xl px-5 sm:px-6 py-5" style={{ background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)' }}>
                 {isLessonOnly ? (
                   <div className="flex items-center gap-3 py-2">
                     <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
@@ -878,7 +879,7 @@ export function CourseTaker({
 
             {/* XP + milestones */}
             {pointsEnabled && (
-              <div className={`rounded-xl border ${isDark ? 'border-zinc-800 bg-zinc-800/40' : 'border-zinc-100 bg-zinc-50'} divide-y ${isDark ? 'divide-zinc-800' : 'divide-zinc-100'}`}>
+              <div className={`rounded-xl ${isDark ? 'bg-zinc-800/40' : 'bg-zinc-50'}`}>
 
                 {/* XP row */}
                 <div className="flex items-center justify-between px-4 py-3">
@@ -947,7 +948,7 @@ export function CourseTaker({
           </div>
 
           {/* Footer */}
-          <div className={`px-7 sm:px-8 py-4 flex items-center justify-end border-t ${isDark ? 'border-zinc-800 bg-zinc-900/40' : 'border-zinc-100 bg-zinc-50/60'}`}>
+          <div className={`px-7 sm:px-8 py-4 flex items-center justify-end ${isDark ? 'bg-zinc-900/40' : 'bg-zinc-50/60'}`}>
             {!isSharedView && (
               <button onClick={onReset} className={`text-xs flex items-center gap-1.5 font-medium ${mutedColor} hover:opacity-70 transition-opacity`}>
                 <RotateCcw className="w-3 h-3" /> Back to Editor
@@ -963,7 +964,7 @@ export function CourseTaker({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className={`rounded-2xl overflow-hidden ${isDark ? 'bg-zinc-900/80 border border-zinc-800/60' : 'bg-white border border-zinc-100'}`}
+            className={`rounded-2xl overflow-hidden ${isDark ? 'bg-zinc-900/80' : 'bg-white'}`}
             style={{ boxShadow: isDark ? 'none' : '0 1px 4px rgba(0,0,0,0.06)' }}
           >
             {/* Header */}
@@ -1219,6 +1220,23 @@ export function CourseTaker({
                 </a>
               ))}
             </div>
+          </motion.div>
+        )}
+
+        {/* -- Retake button (failed only) -- */}
+        {!submittedPassed && !isLessonOnly && onRetake && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <button
+              onClick={onRetake}
+              className={`flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl font-semibold text-sm border transition-all hover:opacity-80 active:scale-[0.98]`}
+              style={{ background: 'transparent', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)', color: isDark ? '#a1a1aa' : '#555' }}
+            >
+              <RotateCcw className="w-4 h-4" /> Retake Course
+            </button>
           </motion.div>
         )}
       </div>
@@ -1643,12 +1661,12 @@ export function CourseTaker({
   // -- Quiz questions --
   if (!currentQuestion) return null;
 
-  const handleCheck = () => {
-    if (!isAnswered()) return;
+  const handleCheck = (overrideAnswer?: string) => {
+    if (overrideAnswer == null && !isAnswered()) return;
     if (answers[currentQuestion.id]) return; // already answered -- no re-awarding
     if (scoringLockRef.current) return; // prevent double-fire before state settles
     scoringLockRef.current = true;
-    const userAnswer = getCurrentAnswer();
+    const userAnswer = overrideAnswer ?? getCurrentAnswer();
     let correct = false;
     if (questionType === 'fill_blank') {
       correct = checkFillBlank(userAnswer, currentQuestion.correctAnswer);
@@ -2470,7 +2488,7 @@ export function CourseTaker({
                       <button
                         key={idx}
                         disabled={isChecking}
-                        onClick={() => setSelectedOption(option)}
+                        onClick={() => { setSelectedOption(option); if (showAnswers === 'per_question' && !isChecking && !answers[currentQuestion.id]) handleCheck(option); }}
                         className="relative rounded-2xl overflow-hidden transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed group"
                         style={{ border: `${borderWidth}px solid ${borderColor}` }}
                       >
@@ -2572,7 +2590,7 @@ export function CourseTaker({
                       <button
                         key={idx}
                         disabled={isChecking}
-                        onClick={() => setSelectedOption(option)}
+                        onClick={() => { setSelectedOption(option); if (showAnswers === 'per_question' && !isChecking && !answers[currentQuestion.id]) handleCheck(option); }}
                         style={buttonInlineStyle}
                         className={`w-full text-left px-5 py-4 rounded-2xl ${borderWidth} transition-all duration-150 flex items-center gap-3 ${borderStyle} ${bgStyle} ${optionTextColor}`}
                       >
@@ -2653,17 +2671,19 @@ export function CourseTaker({
                         </button>
                       </>
                     ) : (
-                      <button
-                        onClick={handleCheck}
-                        disabled={!isAnswered()}
-                        className="px-6 sm:px-8 py-[11px] sm:py-[15px] rounded-2xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
-                        style={{
-                          background: isAnswered() ? accent : (isDark ? '#27272a' : '#e4e4e7'),
-                          color: isAnswered() ? 'white' : (isDark ? '#52525b' : '#a1a1aa'),
-                        }}
-                      >
-                        Check Answer
-                      </button>
+                      (questionType === 'fill_blank' || questionType === 'arrange') && (
+                        <button
+                          onClick={() => handleCheck()}
+                          disabled={!isAnswered()}
+                          className="px-6 sm:px-8 py-[11px] sm:py-[15px] rounded-2xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                          style={{
+                            background: isAnswered() ? accent : (isDark ? '#27272a' : '#e4e4e7'),
+                            color: isAnswered() ? 'white' : (isDark ? '#52525b' : '#a1a1aa'),
+                          }}
+                        >
+                          Check Answer
+                        </button>
+                      )
                     )
                   ) : (
                     <>

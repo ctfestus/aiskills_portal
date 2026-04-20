@@ -1,0 +1,20 @@
+Issues
+1. Google calendar do not capture recurring events(repeat on) - recuring option not passed on the calendar correctly.
+2. Event registration details only capture name and emails. All the responses are not captured including the csv.
+3. Event email reminder - No valid recipient found while people have registered. But the blast works.
+4. Event notification reference email as the name of respondent
+5. Email still have -> arrow on the button
+6. The event form card on instructor still shows 0 respondent when there is one.
+7. Redesign the announcement card. No border and push to the left.
+8. Announcement cover image should be the thumbnail and at the top of the announcement and video embedded should be allowed to be places in the text so it appears at the example place admins what to place it instead of the end all the time.
+9. Course taking - on selection of answer option, it should be submitted or evaluated automatically. no submit answer. 
+10. Duplicate the virtual experience for shorts courses. But more with lessons plus the questions and review.
+11. Virtual experience naming - Module 👉 Milestone, Lesson 👉 Mission and Task 👉Deliverable
+12. Virtual experience program page not show. it moves straight to start the program.
+13. Excel review result font - something professional.
+14. Schedule cover image is cropped from the top instead of the bottom or option to reposition.
+15. The learning path, once students complete, they should automatically enrolled in the next courses and should be included in the emails for the learning path completion.
+
+New
+1. Even schedule not in edit
+2. Blast email notification says sent to 2 people while only one person has registered

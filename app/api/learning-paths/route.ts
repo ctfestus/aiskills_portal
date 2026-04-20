@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     const user = await getSessionUser(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { title, description, cover_image, item_ids, cohort_ids, status } = body;
+    const { title, description, cover_image, item_ids, cohort_ids, status, next_path_id } = body;
     if (!title?.trim()) return NextResponse.json({ error: 'title is required' }, { status: 400 });
 
     const { data, error } = await supabase.from('learning_paths').insert({
@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
       item_ids: item_ids ?? [],
       cohort_ids: cohort_ids ?? [],
       status: status ?? 'draft',
+      next_path_id: next_path_id ?? null,
     }).select('id').single();
 
     if (error) { console.error('[learning-paths] create error:', error); return NextResponse.json({ error: 'Failed to create learning path.' }, { status: 500 }); }
@@ -81,19 +82,20 @@ export async function POST(req: NextRequest) {
     const user = await getSessionUser(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { id, title, description, cover_image, item_ids, cohort_ids, status } = body;
+    const { id, title, description, cover_image, item_ids, cohort_ids, status, next_path_id } = body;
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
 
     // Fetch previous state to detect newly published or newly added cohorts
     const { data: prev } = await supabase.from('learning_paths').select('status, cohort_ids').eq('id', id).single();
 
     const updateData: any = { updated_at: new Date().toISOString() };
-    if (title       !== undefined) updateData.title       = title.trim();
-    if (description !== undefined) updateData.description = description;
-    if (cover_image !== undefined) updateData.cover_image = cover_image;
-    if (item_ids    !== undefined) updateData.item_ids    = item_ids;
-    if (cohort_ids  !== undefined) updateData.cohort_ids  = cohort_ids;
-    if (status      !== undefined) updateData.status      = status;
+    if (title        !== undefined) updateData.title        = title.trim();
+    if (description  !== undefined) updateData.description  = description;
+    if (cover_image  !== undefined) updateData.cover_image  = cover_image;
+    if (item_ids     !== undefined) updateData.item_ids     = item_ids;
+    if (cohort_ids   !== undefined) updateData.cohort_ids   = cohort_ids;
+    if (status       !== undefined) updateData.status       = status;
+    if (next_path_id !== undefined) updateData.next_path_id = next_path_id ?? null;
 
     const { error } = await supabase.from('learning_paths')
       .update(updateData)
@@ -186,7 +188,7 @@ export async function POST(req: NextRequest) {
     // courses completed before the learning path feature was deployed.
     const [{ data: courseAttempts }, { data: veAttempts }] = await Promise.all([
       allItemIds.length
-        ? supabase.from('course_attempts').select('course_id').eq('student_id', user.id).not('completed_at', 'is', null).in('course_id', allItemIds)
+        ? supabase.from('course_attempts').select('course_id').eq('student_id', user.id).eq('passed', true).not('completed_at', 'is', null).in('course_id', allItemIds)
         : { data: [] },
       allItemIds.length
         ? supabase.from('guided_project_attempts').select('ve_id').eq('student_id', user.id).not('completed_at', 'is', null).in('ve_id', allItemIds)

@@ -688,7 +688,7 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
         <div className="flex items-center justify-between pt-3 border-t mt-auto" style={{ borderColor: C.divider }}>
           <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: C.faint }}>
             <BarChart3 className="w-3.5 h-3.5"/>
-            {0} {type === 'course' ? 'attempts' : 'responses'}
+            {form._response_count ?? 0} {type === 'course' ? 'attempts' : 'responses'}
           </div>
           <div className="flex items-center gap-2">
             <ShareButton form={form} shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen}/>
@@ -838,7 +838,7 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
             {/* Footer actions */}
             <div className="flex items-center justify-between pt-2 border-t mt-1" style={{ borderColor: C.divider }}>
               <span className="text-xs flex items-center gap-1" style={{ color: C.faint }}>
-                <BarChart3 className="w-3 h-3"/>{0} responses
+                <BarChart3 className="w-3 h-3"/>{form._response_count ?? 0} responses
               </span>
               <div className="flex items-center gap-2">
                 <Link href={`/dashboard/${form.id}`} className="text-xs font-medium hover:opacity-60 transition-opacity" style={{ color: C.green }}>Insights</Link>
@@ -1647,9 +1647,11 @@ function ReportsSection({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
       </div>
 
       {/* Tab content */}
-      {tab === 'progress'    && <CourseProgressTab forms={forms} C={C} />}
-      {tab === 'submissions' && <AssignmentSubmissionsTab C={C} />}
-      {tab === 'logins'      && <StudentLoginsTab C={C} />}
+      <div style={{ fontFamily: 'var(--font-mono)' }}>
+        {tab === 'progress'    && <CourseProgressTab forms={forms} C={C} />}
+        {tab === 'submissions' && <AssignmentSubmissionsTab C={C} />}
+        {tab === 'logins'      && <StudentLoginsTab C={C} />}
+      </div>
     </div>
   );
 }
@@ -2137,6 +2139,16 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       setSubmissions(prev => prev.map(s => s.id === updated.id ? updated : s));
       setGradeSuccess(true);
       setTimeout(() => setGradeSuccess(false), 3000);
+
+      // Fire-and-forget grade notification email
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session) return;
+        fetch('/api/assignments/grade-notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ submissionId: viewingSub.id, assignmentTitle: selected?.title ?? '' }),
+        }).catch(() => {});
+      });
     } catch (err: any) {
       setGradeError(err?.message || 'Failed to save grade.');
     } finally {
@@ -2235,7 +2247,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
 
           <div className="mb-5">
             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.faint }}>Feedback to student</label>
-            <RichTextEditor value={feedback} onChange={setFeedback} placeholder="Write feedback for the student…" bgOverride="#f5f5f5"/>
+            <RichTextEditor value={feedback} onChange={setFeedback} placeholder="Write feedback for the student…" bgOverride="#f5f5f5" fontFamily="var(--font-mono)"/>
           </div>
 
           {gradeError && <p className="text-xs mb-3" style={{ color: '#ef4444' }}>{gradeError}</p>}
@@ -4265,6 +4277,25 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
               <option value="published">Published</option>
             </select>
           </div>
+
+          {/* Next path (auto-enroll chaining) */}
+          <div>
+            <label className="text-xs font-medium mb-1.5 block" style={{ color: C.muted }}>
+              Next Learning Path
+              <span className="ml-1.5 font-normal" style={{ color: C.faint }}>· students auto-enroll here when they complete this path</span>
+            </label>
+            <select
+              value={editing.next_path_id ?? ''}
+              onChange={e => setEditing((p: any) => ({ ...p, next_path_id: e.target.value || null }))}
+              className="rounded-xl px-3 py-2 text-sm focus:outline-none w-full"
+              style={inputStyle}
+            >
+              <option value="">None</option>
+              {paths.filter((p: any) => p.id !== editing.id).map((p: any) => (
+                <option key={p.id} value={p.id}>{p.title}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Cohort assignment */}
@@ -4364,7 +4395,7 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
           <h2 className="text-xl font-bold tracking-tight" style={{ color: C.text }}>Learning Paths</h2>
           <p className="text-xs mt-1" style={{ color: C.faint }}>Group courses and virtual experiences into structured learning journeys.</p>
         </div>
-        <button onClick={() => setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft' })}
+        <button onClick={() => setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft', next_path_id: null })}
           className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity"
           style={{ background: C.cta, color: C.ctaText }}>
           <Plus className="w-4 h-4"/> New Path
@@ -4378,7 +4409,7 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
           </div>
           <p className="font-semibold text-base mb-1" style={{ color: C.text }}>No learning paths yet</p>
           <p className="text-sm mb-6" style={{ color: C.faint }}>Create your first learning path to group courses into a structured journey.</p>
-          <button onClick={() => setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft' })}
+          <button onClick={() => setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft', next_path_id: null })}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold"
             style={{ background: C.cta, color: C.ctaText }}>
             <Plus className="w-4 h-4"/> New Learning Path
@@ -6257,11 +6288,27 @@ export default function DashboardPage() {
         supabase.from('virtual_experiences').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
       ]);
 
+      // Fetch response counts
+      const courseIds = (coursesData ?? []).map((c: any) => c.id);
+      const veIds     = (vesData ?? []).map((v: any) => v.id);
+      const eventIds  = (eventsData ?? []).map((e: any) => e.id);
+      const [{ data: responsesData }, { data: regData }] = await Promise.all([
+        courseIds.length || veIds.length
+          ? supabase.from('responses').select('form_id').in('form_id', [...courseIds, ...veIds])
+          : Promise.resolve({ data: [] }),
+        eventIds.length
+          ? supabase.from('event_registrations').select('event_id').in('event_id', eventIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+      const responseCounts: Record<string, number> = {};
+      for (const r of responsesData ?? []) responseCounts[r.form_id] = (responseCounts[r.form_id] ?? 0) + 1;
+      for (const r of regData ?? [])       responseCounts[r.event_id] = (responseCounts[r.event_id] ?? 0) + 1;
+
       // Build normalized form objects with reconstructed config
       const allRows: any[] = [];
 
       for (const c of coursesData ?? []) {
-        allRows.push({ ...c, content_type: 'course', config: {
+        allRows.push({ ...c, _response_count: responseCounts[c.id] ?? 0, content_type: 'course', config: {
           isCourse: true, title: c.title, description: c.description,
           questions: c.questions ?? [], fields: c.fields ?? [],
           passmark: c.passmark, course_timer: c.course_timer,
@@ -6274,19 +6321,22 @@ export default function DashboardPage() {
         }});
       }
       for (const e of eventsData ?? []) {
-        allRows.push({ ...e, content_type: 'event', config: {
+        allRows.push({ ...e, _response_count: responseCounts[e.id] ?? 0, content_type: 'event', config: {
           title: e.title, description: e.description, fields: e.fields ?? [],
           eventDetails: { isEvent: true, date: e.event_date, time: e.event_time,
             timezone: e.timezone, location: e.location, eventType: e.event_type,
             capacity: e.capacity, meetingLink: e.meeting_link, isPrivate: e.is_private,
-            speakers: e.speakers ?? [] },
+            speakers: e.speakers ?? [],
+            recurrence: e.recurrence ?? 'once',
+            recurrenceEndDate: e.recurrence_end_date ?? '',
+            recurrenceDays: e.recurrence_days ?? [] },
           postSubmission: e.post_submission, coverImage: e.cover_image,
           deadline_days: e.deadline_days, theme: e.theme, mode: e.mode,
           font: e.font, customAccent: e.custom_accent,
         }});
       }
       for (const v of vesData ?? []) {
-        allRows.push({ ...v, content_type: 'virtual_experience', config: {
+        allRows.push({ ...v, _response_count: responseCounts[v.id] ?? 0, content_type: 'virtual_experience', config: {
           isVirtualExperience: true, title: v.title, description: v.description,
           modules: v.modules ?? [], industry: v.industry, difficulty: v.difficulty,
           role: v.role, company: v.company, duration: v.duration, tools: v.tools,

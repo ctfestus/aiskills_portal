@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { editId, title, config, coverImage, cohort_ids, deadline_days, status: bodyStatus } = body;
+  const { editId, title, config, coverImage, cohort_ids, deadline_days, status: bodyStatus, is_short_course } = body;
   const formStatus = bodyStatus === 'draft' ? 'draft' : 'published';
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
   if (!config)        return NextResponse.json({ error: 'Config is required' }, { status: 400 });
@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
     learn_outcomes: config.learnOutcomes ?? [],
     manager_name:   config.managerName   ?? null,
     manager_title:  config.managerTitle  ?? 'Manager',
+    is_short_course: is_short_course ?? false,
     dataset:        null, // set below after optional storage upload
   };
 

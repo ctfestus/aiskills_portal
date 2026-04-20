@@ -292,7 +292,7 @@ async function updateLearningPathProgress(supabase: any, studentId: string, comp
 
     const { data: paths } = await supabase
       .from('learning_paths')
-      .select('id, item_ids, title')
+      .select('id, item_ids, title, next_path_id')
       .eq('status', 'published')
       .contains('item_ids', [completedItemId])
       .contains('cohort_ids', [student.cohort_id]);
@@ -327,6 +327,127 @@ async function updateLearningPathProgress(supabase: any, studentId: string, comp
         .select('id')
         .single();
 
+      // Send "next up" email when a non-final item is completed
+      if (!allDone) {
+        const itemIds: string[] = path.item_ids ?? [];
+        const completedIdx = itemIds.indexOf(completedItemId);
+        const nextItemId = completedIdx >= 0 && completedIdx + 1 < itemIds.length ? itemIds[completedIdx + 1] : null;
+        if (nextItemId) {
+          try {
+            const { data: studentRow } = await supabase.from('students').select('full_name, email').eq('id', studentId).single();
+            if (studentRow?.email) {
+              const [{ data: courses }, { data: ves }] = await Promise.all([
+                supabase.from('courses').select('id, title, slug, cover_image, description').in('id', [completedItemId, nextItemId]),
+                supabase.from('virtual_experiences').select('id, title, slug, cover_image, description').in('id', [completedItemId, nextItemId]),
+              ]);
+              const itemMap: Record<string, any> = {};
+              for (const c of courses ?? []) itemMap[c.id] = { ...c, isVE: false };
+              for (const v of ves   ?? []) itemMap[v.id] = { ...v, isVE: true };
+              const completedItem = itemMap[completedItemId];
+              const nextItem      = itemMap[nextItemId];
+              if (completedItem && nextItem) {
+                const { getTenantSettings } = await import('@/lib/get-tenant-settings');
+                const { Resend } = await import('resend');
+                const { courseCompletedNextUpEmail } = await import('@/lib/email-templates');
+                const resend = new Resend(process.env.RESEND_API_KEY);
+                const t = await getTenantSettings();
+                const FROM = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+                const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+                const nextUrl = nextItem.isVE
+                  ? `${t.appUrl}/student?section=virtual_experiences`
+                  : `${t.appUrl}/${nextItem.slug || nextItemId}?go=1`;
+                await resend.emails.send({
+                  from: FROM,
+                  to: studentRow.email,
+                  subject: `You completed "${completedItem.title}" -- next up in ${path.title}`,
+                  html: courseCompletedNextUpEmail({
+                    name:             studentRow.full_name ?? 'there',
+                    pathTitle:        path.title,
+                    completedTitle:   completedItem.title,
+                    completedNumber:  completedIdx + 1,
+                    totalItems:       itemIds.length,
+                    nextTitle:        nextItem.title,
+                    nextUrl,
+                    nextCoverImage:    nextItem.cover_image ?? null,
+                    nextIsVE:         nextItem.isVE,
+                    nextDescription:  nextItem.description ?? null,
+                    branding,
+                  }),
+                });
+              }
+            }
+          } catch (err) {
+            console.error('[updateLearningPathProgress] next-up email failed', err);
+          }
+        }
+      }
+
+      // Auto-enroll student's cohort into next path when this path is completed
+      if (allDone && path.next_path_id) {
+        try {
+          const { data: nextPath } = await supabase
+            .from('learning_paths')
+            .select('id, cohort_ids, title, description, item_ids')
+            .eq('id', path.next_path_id)
+            .single();
+          if (nextPath) {
+            const existingCohorts: string[] = nextPath.cohort_ids ?? [];
+            if (!existingCohorts.includes(student.cohort_id)) {
+              const updatedCohorts = [...existingCohorts, student.cohort_id];
+              await supabase.from('learning_paths')
+                .update({ cohort_ids: updatedCohorts })
+                .eq('id', nextPath.id);
+              // Notify the student about their new enrollment
+              const { data: studentRow } = await supabase.from('students').select('full_name, email').eq('id', studentId).single();
+              if (studentRow?.email) {
+                try {
+                  const { getTenantSettings } = await import('@/lib/get-tenant-settings');
+                  const { Resend } = await import('resend');
+                  const { learningPathAssignedEmail } = await import('@/lib/email-templates');
+                  const resend = new Resend(process.env.RESEND_API_KEY);
+                  const t = await getTenantSettings();
+                  const FROM = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+                  const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+                  const itemIds: string[] = nextPath.item_ids ?? [];
+                  const [{ data: courseItems }, { data: veItems }] = itemIds.length
+                    ? await Promise.all([
+                        supabase.from('courses').select('id, title, cover_image, description').in('id', itemIds),
+                        supabase.from('virtual_experiences').select('id, title, cover_image, description').in('id', itemIds),
+                      ])
+                    : [{ data: [] }, { data: [] }];
+                  const itemMap: Record<string, any> = {};
+                  for (const c of courseItems ?? []) itemMap[c.id] = { ...c, isVE: false };
+                  for (const v of veItems ?? []) itemMap[v.id] = { ...v, isVE: true };
+                  const items = itemIds.map((id: string) => ({
+                    title: itemMap[id]?.title ?? 'Untitled',
+                    coverImage:   itemMap[id]?.cover_image ?? null,
+                    isVE:         itemMap[id]?.isVE ?? false,
+                    description:  itemMap[id]?.description ?? undefined,
+                  }));
+                  await resend.emails.send({
+                    from: FROM,
+                    to: studentRow.email,
+                    subject: `You've been enrolled in a new learning path: ${nextPath.title}`,
+                    html: learningPathAssignedEmail({
+                      name: studentRow.full_name ?? 'there',
+                      pathTitle: nextPath.title,
+                      pathDescription: nextPath.description ?? undefined,
+                      dashboardUrl: `${t.appUrl}/student?section=courses`,
+                      items,
+                      branding,
+                    }),
+                  });
+                } catch (emailErr) {
+                  console.error('[updateLearningPathProgress] next-path email failed', emailErr);
+                }
+              }
+            }
+          }
+        } catch (nextErr) {
+          console.error('[updateLearningPathProgress] next-path auto-enroll failed', nextErr);
+        }
+      }
+
       if (allDone && !prog?.cert_id) {
         const { data: studentRow } = await supabase.from('students').select('full_name, email').eq('id', studentId).single();
         const studentName = studentRow?.full_name ?? 'Student';
@@ -356,10 +477,10 @@ async function updateLearningPathProgress(supabase: any, studentId: string, comp
               // Fetch items from both courses and virtual_experiences tables
               const [{ data: courseItems }, { data: veItems }] = await Promise.all([
                 itemIds.length
-                  ? supabase.from('courses').select('id, title, cover_image').in('id', itemIds)
+                  ? supabase.from('courses').select('id, title, cover_image, description').in('id', itemIds)
                   : { data: [] },
                 itemIds.length
-                  ? supabase.from('virtual_experiences').select('id, title, cover_image').in('id', itemIds)
+                  ? supabase.from('virtual_experiences').select('id, title, cover_image, description').in('id', itemIds)
                   : { data: [] },
               ]);
 
@@ -371,9 +492,9 @@ async function updateLearningPathProgress(supabase: any, studentId: string, comp
                 const item = itemMap[id];
                 return {
                   title:      item?.title      ?? 'Untitled',
-                  coverImage: item?.cover_image ?? null,
-                  isVE:       item?.isVE        ?? false,
-                  description: null,
+                  coverImage:  item?.cover_image  ?? null,
+                  isVE:        item?.isVE         ?? false,
+                  description: item?.description  ?? null,
                 };
               });
 

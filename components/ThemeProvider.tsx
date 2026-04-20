@@ -13,10 +13,15 @@ export function useTheme() {
 }
 
 export default function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === 'undefined') return 'light';
-    return (localStorage.getItem('ff-theme') as Theme) === 'dark' ? 'dark' : 'light';
-  });
+  // Always start with 'light' so server and initial client render match.
+  // Read localStorage in useEffect (after hydration) to avoid mismatch.
+  const [theme, setTheme] = useState<Theme>('light');
+
+  useEffect(() => {
+    const saved = (localStorage.getItem('ff-theme') as Theme) === 'dark' ? 'dark' : 'light';
+    setTheme(saved);
+    document.documentElement.setAttribute('data-theme', saved);
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
