@@ -1,12 +1,13 @@
 ﻿'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/components/ThemeProvider';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Loader2, Save, Check, Plus, Trash2, Image as ImageIcon, Sun, Moon,
   X, MapPin, ArrowUpRight, ChevronDown, ChevronUp, Sparkles,
   Building2, GripVertical, BookOpen, Pencil, Monitor, Smartphone, RotateCcw, ExternalLink, Video, Search,
+  HelpCircle, CalendarDays, ClipboardList, Share2, CheckCircle2, Zap, Settings,
 } from 'lucide-react';
 import { ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import dynamic from 'next/dynamic';
@@ -339,14 +340,14 @@ const mergeEventFields = (existingFields: FormField[] = [], generatedFields: any
 
 // --- Design tokens (light / dark) ---
 const FE_LIGHT = {
-  page: '#ffffff', card: '#ffffff', cardBorder: 'rgba(0,0,0,0.07)', cardShadow: '0 1px 3px rgba(0,0,0,0.04)',
-  input: '#f5f6f7', inputBorder: '#e2e4e8',
-  text: '#111', muted: '#555', faint: '#999',
-  section: '#f8f9fa', sectionBorder: 'rgba(0,0,0,0.06)',
-  divider: 'rgba(0,0,0,0.06)', pill: '#f5f6f7',
-  toggleOff: '#e5e7eb',
-  segmentBg: '#f3f4f6', segmentActive: '#fff', segmentActiveText: '#111',
-  groupBg: '#f8f9fa', groupBorder: 'rgba(0,0,0,0.06)',
+  page: '#f1f3f5', card: '#ffffff', cardBorder: 'rgba(0,0,0,0.08)', cardShadow: '0 1px 4px rgba(0,0,0,0.06)',
+  input: '#ffffff', inputBorder: '#d1d5db',
+  text: '#111827', muted: '#4b5563', faint: '#9ca3af',
+  section: '#ffffff', sectionBorder: 'rgba(0,0,0,0.07)',
+  divider: 'rgba(0,0,0,0.07)', pill: '#eef0f3',
+  toggleOff: '#d1d5db',
+  segmentBg: '#eef0f3', segmentActive: '#ffffff', segmentActiveText: '#111827',
+  groupBg: '#f7f8fa', groupBorder: 'rgba(0,0,0,0.07)',
   cta: '#006128', ctaText: 'white',
 };
 const FE_DARK = {
@@ -553,14 +554,8 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const [isSaving, setIsSaving] = useState(false);
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [previewKey, setPreviewKey] = useState(0);
-  const [sidebarWidth, setSidebarWidth] = useState(500);
-  const [mobileView, setMobileView] = useState(false);
-  const [resizing, setResizing] = useState(false);
-  const isDragging = useRef(false);
-  const dragStartX = useRef(0);
-  const dragStartWidth = useRef(0);
   const [customSlug, setCustomSlug] = useState('');
+  const [activeSection, setActiveSection] = useState<string>('info');
 
   // Add-field state
   const [newFieldLabel, setNewFieldLabel] = useState('');
@@ -608,6 +603,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
+  const [closedLessons, setClosedLessons] = useState<Set<string>>(new Set());
   const [availableForms, setAvailableForms] = useState<{ id: string; title: string; slug: string }[]>([]);
   const [cohorts, setCohorts]               = useState<{ id: string; name: string }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
@@ -619,36 +615,6 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const [speakerDraft, setSpeakerDraft] = useState({ name: '', title: '', bio: '', avatar_url: '', linkedin_url: '' });
   const [speakerImgUploading, setSpeakerImgUploading] = useState(false);
   const [speakerCropSrc, setSpeakerCropSrc] = useState<string | null>(null);
-
-  // Sidebar resize drag
-  useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current) return;
-      const delta = e.clientX - dragStartX.current;
-      setSidebarWidth(Math.max(280, Math.min(820, dragStartWidth.current + delta)));
-    };
-    const onMouseUp = () => {
-      isDragging.current = false;
-      setResizing(false);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-    return () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-  }, []);
-
-  const onDividerMouseDown = useCallback((e: React.MouseEvent) => {
-    isDragging.current = true;
-    dragStartX.current = e.clientX;
-    dragStartWidth.current = sidebarWidth;
-    setResizing(true);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  }, [sidebarWidth]);
 
   // Load form on mount
   useEffect(() => {
@@ -1020,7 +986,6 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
       savedCohortIds.current = [...selectedCohortIds];
 
       setSaved(true);
-      setPreviewKey(k => k + 1);
       setTimeout(() => setSaved(false), 2000);
       onSaved?.(formId);
     } catch (e: any) {
@@ -1123,6 +1088,16 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
         id, isSection: true, sectionTitle: 'New Section', sectionDescription: '', question: '', options: [], correctAnswer: '',
       } as CourseQuestion],
     });
+  };
+
+  const insertSectionAt = (afterIndex: number) => {
+    if (!formConfig) return;
+    const id = Math.random().toString(36).substring(7);
+    const qs = [...(formConfig.questions || [])];
+    qs.splice(afterIndex + 1, 0, {
+      id, isSection: true, sectionTitle: 'New Section', sectionDescription: '', question: '', options: [], correctAnswer: '',
+    } as CourseQuestion);
+    updateConfig({ questions: qs });
   };
 
   const handleQuestionImageUpload = async (qId: string, e: React.ChangeEvent<HTMLInputElement>, optionIdx?: number) => {
@@ -1242,24 +1217,77 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
 
   return (
     <div className="flex" style={{ minHeight: 'calc(100vh - 96px)', background: FE.page, color: FE.text }}>
-      {/* Drag overlay -- blocks iframe from capturing mouse events during resize */}
-      {resizing && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 9999, cursor: 'col-resize' }}
-          onMouseUp={() => {
-            isDragging.current = false;
-            setResizing(false);
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
-          }}
-        />
-      )}
-      {/* Left Editor Panel */}
-      <aside className="w-full flex-shrink-0 flex flex-col" style={{ width: sidebarWidth, background: FE.card, height: 'calc(100vh - 96px)', position: 'sticky', top: '96px' }}>
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
-          <div className="px-5 py-4 space-y-0">
+      {/* -- Left Nav Sidebar -- */}
+      <nav className="w-52 flex-shrink-0 overflow-y-auto" style={{ background: FE.card, borderRight: `1px solid ${FE.divider}`, height: 'calc(100vh - 96px)', position: 'sticky', top: '96px' }}>
+        <div className="py-2">
+          {([
+            { label: 'Content', items: [
+              { id: 'info', label: 'Basic Info', icon: BookOpen },
+              { id: 'cover', label: 'Cover Image', icon: ImageIcon },
+              ...(contentType === 'course' ? [{ id: 'curriculum', label: 'Questions & Lessons', icon: HelpCircle }] : []),
+              ...(contentType === 'event' ? [{ id: 'fields', label: 'Registration Fields', icon: ClipboardList }] : []),
+            ]},
+            ...(contentType === 'event' ? [{ label: 'Event', items: [
+              { id: 'event_details', label: 'Event Details', icon: CalendarDays },
+              { id: 'speakers', label: 'Speakers', icon: BookOpen },
+              { id: 'visibility', label: 'Visibility', icon: Share2 },
+              { id: 'cohorts', label: 'Cohorts', icon: Building2 },
+            ]}] : []),
+            { label: 'Settings', items: [
+              ...(contentType === 'course' ? [{ id: 'course_settings', label: 'Course Settings', icon: Settings }] : []),
+              { id: 'appearance', label: 'Appearance', icon: Sun },
+              ...(contentType === 'course' ? [{ id: 'points', label: 'Points & Rewards', icon: Zap }] : []),
+            ]},
+            { label: 'Publishing', items: [
+              ...(contentType === 'course' ? [{ id: 'cohorts', label: 'Cohorts', icon: Building2 }] : []),
+              { id: 'share', label: 'Share URL', icon: Share2 },
+              { id: 'submission', label: 'After Submission', icon: CheckCircle2 },
+            ]},
+          ] as { label: string; items: { id: string; label: string; icon: React.ElementType }[] }[]).map(group => (
+            <div key={group.label} className="mb-1">
+              <p className="px-4 pt-3 pb-1.5 text-[10px] font-semibold tracking-widest uppercase" style={{ color: FE.faint }}>{group.label}</p>
+              {group.items.map(item => {
+                const isActive = activeSection === item.id;
+                const Icon = item.icon;
+                return (
+                  <button key={item.id} type="button" onClick={() => setActiveSection(item.id)}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-all"
+                    style={isActive ? { background: `${accentColor}12`, color: accentColor, borderRight: `2px solid ${accentColor}` } : { color: FE.muted }}
+                  >
+                    <Icon className="w-4 h-4 flex-shrink-0" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </nav>
 
-            <EditorSection title="Content">
+      {/* -- Content Area -- */}
+      <div className="flex-1 flex flex-col" style={{ minHeight: 'calc(100vh - 96px)' }}>
+        {/* Save bar */}
+        <div className="flex items-center justify-between px-8 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${FE.divider}`, background: FE.card }}>
+          <span className="text-xs" style={{ color: FE.faint }}>
+            {saved ? '✓ All changes saved' : 'Unsaved changes'}
+          </span>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-60 hover:opacity-90"
+            style={{ background: accentColor, color: 'white' }}
+          >
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+            {saved ? 'Saved!' : 'Save Changes'}
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar" style={{ background: FE.page }}>
+          <div className="max-w-2xl mx-auto px-8 py-8">
+          <div className="rounded-2xl p-6 space-y-5" style={{ background: FE.card, border: `1px solid ${FE.cardBorder}`, boxShadow: FE.cardShadow }}>
+
+            {activeSection === 'info' && (
+              <div className="space-y-5">
               <div>
                 <label className={labelCls} style={labelStyle}>Form Title</label>
                 <input type="text" value={formConfig.title} onChange={e => updateConfig({ title: e.target.value })} className={inputCls} style={inputStyle} />
@@ -1287,10 +1315,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   </p>
                 )}
               </div>
-            </EditorSection>
+              </div>
+            )}
 
-            {formConfig.eventDetails?.isEvent && (
-              <EditorSection title="Event Details">
+            {activeSection === 'event_details' && formConfig.eventDetails?.isEvent && (
+              <div className="space-y-5">
                 <div className="mb-3 rounded-xl p-3 space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -1466,11 +1495,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     </>
                   )}
                 </div>
-              </EditorSection>
+              </div>
             )}
 
-            {formConfig.eventDetails?.isEvent && (
-              <EditorSection title="Visibility">
+            {activeSection === 'visibility' && formConfig.eventDetails?.isEvent && (
+              <div className="space-y-5">
                 <button
                   type="button"
                   onClick={() => updateConfig({ eventDetails: { ...formConfig.eventDetails!, isPrivate: !formConfig.eventDetails!.isPrivate } })}
@@ -1501,10 +1530,10 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     />
                   </div>
                 </button>
-              </EditorSection>
+              </div>
             )}
 
-            {formConfig.eventDetails?.isEvent && (() => {
+            {activeSection === 'speakers' && formConfig.eventDetails?.isEvent && (() => {
               const speakers: Speaker[] = formConfig.eventDetails!.speakers ?? [];
               const updateSpeakers = (next: Speaker[]) =>
                 updateConfig({ eventDetails: { ...formConfig.eventDetails!, speakers: next } });
@@ -1544,7 +1573,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
               const isEditing = speakerEditId !== null;
 
               return (
-                <EditorSection title="Speakers" defaultOpen={speakers.length > 0}>
+                <div className="space-y-5">
                   {/* Crop modal */}
                   {speakerCropSrc && (
                     <ImageCropModal
@@ -1714,12 +1743,12 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                       </div>
                     </div>
                   )}
-                </EditorSection>
+                </div>
               );
             })()}
 
-            {(formConfig?.isCourse || formConfig?.eventDetails?.isEvent) && (
-              <EditorSection title="Assign to Cohorts" defaultOpen={false}>
+            {activeSection === 'cohorts' && (formConfig?.isCourse || formConfig?.eventDetails?.isEvent) && (
+              <div className="space-y-5">
                 {cohorts.length === 0 ? (
                   <p className="text-xs" style={{ color: FE.faint }}>No cohorts found. Create cohorts from the admin dashboard first.</p>
                 ) : (
@@ -1738,10 +1767,26 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     ))}
                   </div>
                 )}
-              </EditorSection>
+                {selectedCohortIds.length > 0 && (
+                  <div className="pt-2 border-t" style={{ borderColor: FE.inputBorder }}>
+                    <label className="block text-xs font-semibold mb-1.5" style={{ color: FE.muted }}>Deadline (days from assignment)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number" min={1} max={365} placeholder="--"
+                        value={formConfig.deadline_days ?? ''}
+                        onChange={e => updateConfig({ deadline_days: e.target.value ? Number(e.target.value) : null })}
+                        className="w-20 bg-transparent px-2 py-1.5 text-sm outline-none rounded-lg text-center"
+                        style={{ border: `1px solid ${FE.inputBorder}`, color: FE.text, background: FE.input }}
+                      />
+                      <span className="text-xs" style={{ color: FE.faint }}>days · leave blank for no deadline</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
-            <EditorSection title="Share URL" defaultOpen={false}>
+            {activeSection === 'share' && (
+              <div className="space-y-5">
               <div>
                 <label className={labelCls} style={labelStyle}>Custom slug (optional)</label>
                 <div className="flex items-center rounded-lg overflow-hidden transition-colors" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
@@ -1749,9 +1794,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   <input type="text" value={customSlug} onChange={e => setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder="my-form" className="w-full bg-transparent px-3 py-2 text-sm outline-none placeholder:text-zinc-400" style={{ color: FE.text }} />
                 </div>
               </div>
-            </EditorSection>
+              </div>
+            )}
 
-            <EditorSection title="Cover Image" defaultOpen={false}>
+            {activeSection === 'cover' && (
+              <div className="space-y-5">
               {formConfig.coverImage ? (
                 <div className="relative w-full h-28 rounded-xl overflow-hidden group" style={{ border: `1px solid ${FE.cardBorder}` }}>
                   <img src={formConfig.coverImage} alt="Cover" className="w-full h-full object-cover" />
@@ -1770,9 +1817,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   </div>
                 </label>
               )}
-            </EditorSection>
+              </div>
+            )}
 
-            <EditorSection title="Appearance">
+            {activeSection === 'appearance' && (
+              <div className="space-y-5">
               <div>
                 <label className={labelCls} style={labelStyle}>Mode</label>
                 <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
@@ -1852,11 +1901,97 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   </div>
                 </div>
               </div>
-            </EditorSection>
+              </div>
+            )}
 
-            {/* Fields / Questions */}
-            <EditorSection title={formConfig.isCourse ? 'Questions' : 'Fields'}>
-              {formConfig.isCourse ? (
+            {/* Course settings */}
+            {activeSection === 'course_settings' && formConfig.isCourse && (
+              <div className="space-y-5">
+                  {/* Show answers setting */}
+                  <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
+                    <label className={labelCls} style={labelStyle}>Show correct answers</label>
+                    <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
+                      {([
+                        { value: 'per_question', label: 'Per question' },
+                        { value: 'after_quiz', label: 'After course' },
+                        { value: 'none', label: 'Never' },
+                      ] as const).map(({ value, label }) => (
+                        <button key={value} type="button" onClick={() => updateConfig({ showAnswers: value })}
+                          className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all"
+                          style={{ background: (formConfig.showAnswers ?? 'per_question') === value ? FE.segmentActive : 'transparent', color: (formConfig.showAnswers ?? 'per_question') === value ? FE.segmentActiveText : FE.faint }}
+                        >{label}</button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] leading-relaxed" style={{ color: FE.faint }}>
+                      {(formConfig.showAnswers ?? 'per_question') === 'per_question' && 'Students see correct/incorrect after each question.'}
+                      {formConfig.showAnswers === 'after_quiz' && 'Students see all answers after submitting.'}
+                      {formConfig.showAnswers === 'none' && 'Students only see their final score.'}
+                    </p>
+                  </div>
+                  {/* Lesson timing */}
+                  <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
+                    <label className={labelCls} style={labelStyle}>Lesson timing</label>
+                    <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
+                      {([{ value: 'before', label: 'Before question' }, { value: 'after', label: 'After answer' }] as const).map(({ value, label }) => (
+                        <button key={value} type="button" onClick={() => updateConfig({ lessonTiming: value })}
+                          className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all"
+                          style={{ background: (formConfig.lessonTiming ?? 'after') === value ? FE.segmentActive : 'transparent', color: (formConfig.lessonTiming ?? 'after') === value ? FE.segmentActiveText : FE.faint }}
+                        >{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Pass mark */}
+                  <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
+                    <div className="flex items-center justify-between">
+                      <label className={`${labelCls} mb-0`} style={labelStyle}>Pass mark</label>
+                      <span className="text-xs font-semibold" style={{ color: accentColor }}>{formConfig.passmark ?? 50}%</span>
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {[50, 60, 70, 80].map(pct => (
+                        <button key={pct} type="button" onClick={() => updateConfig({ passmark: pct })}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                          style={(formConfig.passmark ?? 50) === pct ? { background: accentColor, color: 'white' } : { background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}
+                        >{pct}%</button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Timer */}
+                  <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
+                    <div className="flex items-center justify-between">
+                      <label className={`${labelCls} mb-0`} style={labelStyle}>Time limit</label>
+                      <span className="text-xs font-semibold" style={{ color: FE.muted }}>{formConfig.courseTimer ? `${formConfig.courseTimer} min` : 'None'}</span>
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {[0, 5, 10, 15, 20, 30, 45, 60].map(t => (
+                        <button key={t} type="button" onClick={() => updateConfig({ courseTimer: t || undefined })}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                          style={(formConfig.courseTimer ?? 0) === t ? { background: accentColor, color: 'white' } : { background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}
+                        >{t === 0 ? 'None' : `${t}m`}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Max attempts */}
+                  <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
+                    <div className="flex items-center justify-between">
+                      <label className={`${labelCls} mb-0`} style={labelStyle}>Max attempts</label>
+                      <span className="text-xs font-semibold" style={{ color: FE.muted }}>{formConfig.maxAttempts ? formConfig.maxAttempts : 'Unlimited'}</span>
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {[0, 1, 2, 3, 5].map(n => (
+                        <button key={n} type="button" onClick={() => updateConfig({ maxAttempts: n || undefined })}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                          style={(formConfig.maxAttempts ?? 0) === n ? { background: accentColor, color: 'white' } : { background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}
+                        >{n === 0 ? '∞' : n}</button>
+                      ))}
+                    </div>
+                    <p className="text-[10px]" style={{ color: FE.faint }}>Tracked per email address via submission records.</p>
+                  </div>
+              </div>
+            )}
+
+            {/* Curriculum section */}
+            {activeSection === 'curriculum' && formConfig.isCourse && (
+              <div className="space-y-5">
                 <div className="space-y-3">
                   <div className="p-3 rounded-xl space-y-3" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
                     <div className="flex items-start justify-between gap-3">
@@ -1938,150 +2073,31 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     )}
                   </div>
 
-                  {/* Show answers setting */}
-                  <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
-                    <label className={labelCls} style={labelStyle}>Show correct answers</label>
-                    <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
-                      {([
-                        { value: 'per_question', label: 'Per question' },
-                        { value: 'after_quiz', label: 'After course' },
-                        { value: 'none', label: 'Never' },
-                      ] as const).map(({ value, label }) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => updateConfig({ showAnswers: value })}
-                          className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all"
-                          style={{ background: (formConfig.showAnswers ?? 'per_question') === value ? FE.segmentActive : 'transparent', color: (formConfig.showAnswers ?? 'per_question') === value ? FE.segmentActiveText : FE.faint, boxShadow: (formConfig.showAnswers ?? 'per_question') === value ? '0 1px 3px rgba(0,0,0,0.08)' : undefined }}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[10px] leading-relaxed" style={{ color: FE.faint }}>
-                      {(formConfig.showAnswers ?? 'per_question') === 'per_question' && 'Students see correct/incorrect after each question.'}
-                      {formConfig.showAnswers === 'after_quiz' && 'Students see all answers after submitting.'}
-                      {formConfig.showAnswers === 'none' && 'Students only see their final score.'}
-                    </p>
-                  </div>
-
-                  {/* Lesson timing */}
-                  <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
-                    <label className={labelCls} style={labelStyle}>Lesson timing</label>
-                    <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
-                      {([
-                        { value: 'before', label: 'Before question' },
-                        { value: 'after', label: 'After answer' },
-                      ] as const).map(({ value, label }) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => updateConfig({ lessonTiming: value })}
-                          className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all"
-                          style={{ background: (formConfig.lessonTiming ?? 'after') === value ? FE.segmentActive : 'transparent', color: (formConfig.lessonTiming ?? 'after') === value ? FE.segmentActiveText : FE.faint, boxShadow: (formConfig.lessonTiming ?? 'after') === value ? '0 1px 3px rgba(0,0,0,0.08)' : undefined }}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[10px] leading-relaxed" style={{ color: FE.faint }}>
-                      {(formConfig.lessonTiming ?? 'after') === 'before'
-                        ? 'Lesson opens automatically before each question. Students read first, then answer.'
-                        : 'Lesson is offered after answering. "Why?" if wrong, "Review Lesson" if right.'}
-                    </p>
-                  </div>
-
-                  {/* Pass mark */}
-                  <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
-                    <div className="flex items-center justify-between">
-                      <label className={labelCls} style={{ ...labelStyle, marginBottom: 0 }}>Pass mark</label>
-                      <span className="text-xs font-semibold" style={{ color: accentColor }}>{formConfig.passmark ?? 50}%</span>
-                    </div>
-                    <div className="flex gap-1.5 flex-wrap">
-                      {[50, 60, 70, 80].map(pct => (
-                        <button
-                          key={pct}
-                          type="button"
-                          onClick={() => updateConfig({ passmark: pct })}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                          style={(formConfig.passmark ?? 50) === pct ? { background: accentColor, color: 'white' } : { background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}
-                        >
-                          {pct}%
-                        </button>
-                      ))}
-                      <input
-                        type="number"
-                        min="1"
-                        max="100"
-                        placeholder="Custom"
-                        value={![50, 60, 70, 80].includes(formConfig.passmark ?? 50) ? (formConfig.passmark ?? '') : ''}
-                        onChange={e => {
-                          const v = parseInt(e.target.value);
-                          if (!isNaN(v) && v >= 1 && v <= 100) updateConfig({ passmark: v });
-                        }}
-                        className={`${inputCls} w-20 py-1.5`}
-                        style={inputStyle}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Timer */}
-                  <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
-                    <div className="flex items-center justify-between">
-                      <label className={labelCls} style={{ ...labelStyle, marginBottom: 0 }}>Time limit</label>
-                      <span className="text-xs font-semibold" style={{ color: FE.muted }}>
-                        {formConfig.courseTimer ? `${formConfig.courseTimer} min` : 'None'}
-                      </span>
-                    </div>
-                    <div className="flex gap-1.5 flex-wrap">
-                      {[0, 5, 10, 15, 20, 30, 45, 60].map(t => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => updateConfig({ courseTimer: t || undefined })}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                          style={(formConfig.courseTimer ?? 0) === t ? { background: accentColor, color: 'white' } : { background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}
-                        >
-                          {t === 0 ? 'None' : `${t}m`}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Max attempts */}
-                  <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
-                    <div className="flex items-center justify-between">
-                      <label className={labelCls} style={{ ...labelStyle, marginBottom: 0 }}>Max attempts</label>
-                      <span className="text-xs font-semibold" style={{ color: FE.muted }}>
-                        {formConfig.maxAttempts ? formConfig.maxAttempts : 'Unlimited'}
-                      </span>
-                    </div>
-                    <div className="flex gap-1.5 flex-wrap">
-                      {[0, 1, 2, 3, 5].map(n => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => updateConfig({ maxAttempts: n || undefined })}
-                          className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                          style={(formConfig.maxAttempts ?? 0) === n ? { background: accentColor, color: 'white' } : { background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}
-                        >
-                          {n === 0 ? '∞' : n}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[10px]" style={{ color: FE.faint }}>Tracked per email address via submission records.</p>
-                  </div>
-
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleQuestionDragStart} onDragEnd={handleQuestionDragEnd}>
                     <SortableContext items={(formConfig.questions ?? []).map(q => q.id)} strategy={verticalListSortingStrategy}>
                   {formConfig.questions?.map((q, qIdx) => {
                     const qType: QuestionType = q.type ?? 'multiple_choice';
                     const isExpanded = expandedQuestions.has(q.id);
 
+                    const insertDivider = (
+                      <div key={`insert-${q.id}`} className="group relative flex items-center justify-center h-3 my-0.5">
+                        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px transition-colors" style={{ background: FE.divider }} />
+                        <button
+                          type="button"
+                          onClick={() => insertSectionAt(qIdx)}
+                          className="relative hidden group-hover:flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full font-medium transition-all hover:opacity-90"
+                          style={{ background: accentColor, color: 'white', zIndex: 1 }}
+                        >
+                          <Plus className="w-2.5 h-2.5" /> Section
+                        </button>
+                      </div>
+                    );
+
                     // -- Section divider card --
                     if (q.isSection) {
                       return (
-                        <SortableQuestionShell key={q.id} id={q.id}>
+                        <React.Fragment key={q.id}>
+                        <SortableQuestionShell id={q.id}>
                           {({ dragHandle }) => (
                           <div className="rounded-xl overflow-hidden" style={{ background: FE.card, border: `1px solid ${accentColor}40`, borderLeft: `3px solid ${accentColor}` }}>
                             <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: isExpanded ? `1px solid ${FE.divider}` : 'none' }}>
@@ -2120,18 +2136,23 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                           </div>
                           )}
                         </SortableQuestionShell>
+                        {insertDivider}
+                        </React.Fragment>
                       );
                     }
 
                     return (
-                      <SortableQuestionShell key={q.id} id={q.id}>
+                      <React.Fragment key={q.id}>
+                      <SortableQuestionShell id={q.id}>
                         {({ dragHandle }) => (
                       <div className="rounded-xl overflow-hidden" style={{ background: FE.card, border: `1px solid ${FE.cardBorder}` }}>
                         <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: isExpanded ? `1px solid ${FE.divider}` : 'none' }}>
                           {dragHandle}
                           <button type="button" onClick={() => toggleQuestion(q.id)} className="flex-1 text-left min-w-0">
                             <span className="text-xs font-medium truncate block" style={{ color: FE.faint }}>
-                              {q.lessonOnly ? '📖' : `Q${qIdx + 1}`}{q.question ? ` · ${q.question}` : ''}
+                              {q.lessonOnly
+                                ? (q.lesson?.title || 'Untitled lesson')
+                                : `Q${qIdx + 1}${q.question ? ` · ${q.question}` : ''}`}
                             </span>
                           </button>
                           <div className="flex items-center gap-1.5">
@@ -2420,11 +2441,19 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
 
                           {/* Lesson section */}
                           <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${FE.cardBorder}` }}>
+                            {(() => {
+                              const lessonOpen = !!(q.lesson && !closedLessons.has(q.id));
+                              return (<>
                             <button
                               type="button"
-                              onClick={() => handleUpdateQuestion(q.id, {
-                                lesson: q.lesson ? undefined : { title: '', body: '', imageUrl: '', videoUrl: '' }
-                              })}
+                              onClick={() => {
+                                if (lessonOpen) {
+                                  setClosedLessons(prev => new Set([...prev, q.id]));
+                                } else {
+                                  setClosedLessons(prev => { const next = new Set(prev); next.delete(q.id); return next; });
+                                  if (!q.lesson) handleUpdateQuestion(q.id, { lesson: { title: '', body: '', imageUrl: '', videoUrl: '' } });
+                                }
+                              }}
                               className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium transition-colors hover:opacity-70"
                               style={{ color: FE.muted }}
                             >
@@ -2432,9 +2461,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                 <BookOpen className="w-3.5 h-3.5" />
                                 Lesson <span style={{ color: FE.faint }}>(optional)</span>
                               </span>
-                              {q.lesson ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              {lessonOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                             </button>
-                            {q.lesson && (
+                            {lessonOpen && q.lesson && (
                               <div className="px-3 py-3 space-y-2" style={{ borderTop: `1px solid ${FE.divider}` }}>
                                 <input
                                   type="text"
@@ -2506,13 +2535,29 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                     <Video className="w-3.5 h-3.5"/> Bunny
                                   </button>
                                 </div>
+                                {(() => {
+                                  const vurl = q.lesson.videoUrl || '';
+                                  const ytMatch = vurl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+                                  const embedUrl = ytMatch
+                                    ? `https://www.youtube.com/embed/${ytMatch[1]}`
+                                    : (vurl.includes('iframe.mediadelivery.net') || vurl.includes('/embed/')) ? vurl : null;
+                                  return embedUrl ? (
+                                    <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${FE.cardBorder}` }}>
+                                      <iframe src={embedUrl} className="w-full aspect-video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                                    </div>
+                                  ) : null;
+                                })()}
                               </div>
                             )}
+                            </>);
+                            })()}
                           </div>
                         </div>}
                       </div>
                         )}
                       </SortableQuestionShell>
+                      {insertDivider}
+                      </React.Fragment>
                     );
                   })}
                     </SortableContext>
@@ -2547,8 +2592,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     </button>
                   </div>
                 </div>
-              ) : (
-                <div className="space-y-2">
+              </div>
+            )}
+
+            {activeSection === 'fields' && !formConfig.isCourse && (
+              <div className="space-y-2">
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                     <SortableContext items={formConfig.fields.map(f => f.id)} strategy={verticalListSortingStrategy}>
                       <div className="space-y-2">
@@ -2640,11 +2688,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     </button>
                   </div>
                 </div>
-              )}
-            </EditorSection>
+            )}
 
-            {formConfig.isCourse && (
-            <EditorSection title="Points & Rewards" defaultOpen={false}>
+            {activeSection === 'points' && formConfig.isCourse && (
               <div className="space-y-3">
                 {/* Enable toggle */}
                 <div className="flex items-center justify-between">
@@ -2838,10 +2884,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   </>
                 )}
               </div>
-            </EditorSection>
             )}
 
-            <EditorSection title="After Submission" defaultOpen={false}>
+            {activeSection === 'submission' && (
               <div className="space-y-3">
                 {/* Type selector */}
                 <div>
@@ -2972,131 +3017,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   </div>
                 )}
               </div>
-            </EditorSection>
-
-          </div>
-        </div>
-
-        {/* Save button -- pinned to bottom of left panel */}
-        <div className="px-5 py-3" style={{ borderTop: `1px solid ${FE.divider}` }}>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-60 hover:opacity-90"
-            style={{ background: accentColor, color: 'white' }}
-          >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-            {saved ? 'Saved!' : 'Save Changes'}
-          </button>
-        </div>
-      </aside>
-
-      {/* Drag-to-resize divider */}
-      <div
-        className="hidden md:flex flex-shrink-0 items-center justify-center group cursor-col-resize"
-        style={{ width: 8, background: 'transparent', zIndex: 20, position: 'relative' }}
-        onMouseDown={onDividerMouseDown}
-      >
-        <div
-          className="h-full transition-all duration-150 group-hover:opacity-100"
-          style={{ width: 2, background: FE.divider, opacity: 0.5 }}
-        />
-        {/* Grip dots */}
-        <div className="absolute flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          {[0,1,2].map(i => (
-            <div key={i} style={{ width: 3, height: 3, borderRadius: '50%', background: FE.faint }} />
-          ))}
-        </div>
-      </div>
-
-      {/* Right Preview Panel -- live iframe of the actual public page */}
-      <div className="hidden md:flex flex-1 flex-col" style={{ borderLeft: `1px solid ${FE.divider}`, minWidth: 0 }}>
-        {/* Toolbar */}
-        <div className="flex items-center justify-between px-3 py-2 flex-shrink-0 gap-3" style={{ borderBottom: `1px solid ${FE.divider}`, background: FE.card }}>
-          {/* Left -- viewport toggle */}
-          <div className="flex items-center gap-1 p-0.5 rounded-lg" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
-            {([
-              { key: false, Icon: Monitor, label: 'Desktop' },
-              { key: true,  Icon: Smartphone, label: 'Mobile' },
-            ] as const).map(({ key, Icon, label }) => (
-              <button
-                key={String(key)}
-                type="button"
-                title={label}
-                onClick={() => setMobileView(key)}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all"
-                style={{
-                  background: mobileView === key ? FE.card : 'transparent',
-                  color: mobileView === key ? FE.text : FE.faint,
-                  boxShadow: mobileView === key ? '0 1px 3px rgba(0,0,0,0.15)' : 'none',
-                }}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">{label}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Right -- actions */}
-          <div className="flex items-center gap-1.5">
-            {saved && (
-              <span className="text-xs font-medium" style={{ color: accentColor }}>✓ Updated</span>
             )}
-            <button
-              type="button"
-              onClick={() => setPreviewKey(k => k + 1)}
-              title="Reload preview"
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-opacity hover:opacity-70"
-              style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
-            >
-              <RotateCcw className="w-3 h-3" />
-            </button>
-            <a
-              href={`/${customSlug || formId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Open in new tab"
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-opacity hover:opacity-70"
-              style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
-            >
-              <ExternalLink className="w-3 h-3" />
-            </a>
+
+          </div>
           </div>
         </div>
-        {/* Iframe -- desktop or mobile view */}
-        {mobileView ? (
-          <div className="flex-1 flex items-start justify-center overflow-auto py-8" style={{ background: FE.page, minHeight: 0 }}>
-            <div style={{
-              width: 390, flexShrink: 0, borderRadius: 44, overflow: 'hidden',
-              boxShadow: '0 0 0 10px #1a1a1a, 0 0 0 11px #333, 0 24px 64px rgba(0,0,0,0.45)',
-              background: '#000',
-            }}>
-              {/* Notch bar */}
-              <div style={{ height: 28, background: '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ width: 80, height: 10, borderRadius: 999, background: '#111' }} />
-              </div>
-              <iframe
-                key={`${previewKey}-mobile`}
-                src={`/${customSlug || formId}`}
-                title="Mobile preview"
-                style={{ width: 390, height: 780, border: 0, display: 'block' }}
-              />
-              {/* Home bar */}
-              <div style={{ height: 24, background: '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ width: 100, height: 4, borderRadius: 999, background: '#333' }} />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <iframe
-            key={previewKey}
-            src={`/${customSlug || formId}`}
-            title="Live preview"
-            className="flex-1 w-full border-0 block"
-            style={{ minHeight: 0 }}
-          />
-        )}
       </div>
       <GeneratingOverlay visible={!!aiLoadingLabel} label={aiLoadingLabel} failed={aiFailed} />
       <AnimatePresence>

@@ -894,3 +894,26 @@ export function assignmentGradedEmail(data: {
 
   return shell(content, branding);
 }
+
+// -- Cohort Invitation ---
+export function cohortInviteEmail(data: {
+  cohortName: string;
+  signupUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { cohortName, signupUrl, branding } = data;
+  const appName = branding?.appName || 'the platform';
+
+  const content = `
+    <p><b>Hi there,</b></p>
+    <p>You have been invited to join <b>${cohortName}</b> on ${appName}.</p>
+    <p>Click the button below to create your account and get started.</p>
+
+    ${cta('Accept Invitation', signupUrl)}
+
+    <p style="color:#888;font-size:13px;">If you weren't expecting this invitation, you can safely ignore this email.</p>
+    <br><p><b>Best regards,</b></p>
+  `;
+
+  return shell(content, branding);
+}

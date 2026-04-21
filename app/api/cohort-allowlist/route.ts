@@ -5,7 +5,12 @@
  * DELETE                  -- admin-auth, remove an email entry by id
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { Resend } from 'resend';
 import { adminClient } from '@/lib/admin-client';
+import { cohortInviteEmail } from '@/lib/email-templates';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 async function getAuthUser(req: NextRequest) {
   const header = req.headers.get('authorization');
@@ -104,7 +109,38 @@ export async function POST(req: NextRequest) {
   }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ inserted: data ?? [] });
+
+  // Fire-and-forget invitation emails
+  const inserted: { email: string }[] = data ?? [];
+  if (inserted.length > 0) {
+    (async () => {
+      try {
+        const [{ data: cohort }, t] = await Promise.all([
+          adminClient().from('cohorts').select('name').eq('id', cohortId).maybeSingle(),
+          getTenantSettings(),
+        ]);
+        const cohortName = cohort?.name ?? 'your cohort';
+        const signupUrl  = process.env.APP_URL || t.appUrl || '';
+        const FROM       = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+        const branding   = { appName: t.appName, appUrl: signupUrl, logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl };
+
+        await Promise.all(
+          inserted.map(({ email }) =>
+            resend.emails.send({
+              from: FROM,
+              to: email,
+              subject: `You've been invited to join ${t.appName || cohortName}`,
+              html: cohortInviteEmail({ cohortName, signupUrl, branding }),
+            })
+          )
+        );
+      } catch {
+        // non-blocking -- ignore email errors
+      }
+    })();
+  }
+
+  return NextResponse.json({ inserted });
 }
 
 export async function DELETE(req: NextRequest) {

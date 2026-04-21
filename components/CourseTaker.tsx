@@ -160,6 +160,7 @@ export function CourseTaker({
   isSuccess,
   onReset,
   onRetake,
+  onClose,
   isSharedView,
   collectStudentInfo = false,
   formId,
@@ -2220,7 +2221,7 @@ export function CourseTaker({
               <div className="flex items-center gap-1">
                 {!inlineMode && (
                   <button
-                    onClick={() => window.history.back()}
+                    onClick={() => onClose ? onClose() : window.history.back()}
                     className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
                     title="Exit course"
                   >

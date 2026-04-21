@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
@@ -11,7 +11,7 @@ import {
   LayoutDashboard, Save, X, MapPin,
   ArrowUpRight, ChevronDown, ChevronUp,
   Building2, Share2, GripVertical,
-  CalendarDays, HelpCircle, ClipboardList, Video, BookOpen, Search,
+  CalendarDays, HelpCircle, ClipboardList, Video, BookOpen, Search, Zap, Settings,
 } from 'lucide-react';
 import { AnimatedField, ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import dynamic from 'next/dynamic';
@@ -430,13 +430,13 @@ const mergeEventFields = (existingFields: FormField[] = [], generatedFields: any
 
 // --- Design tokens ---
 const LIGHT_C = {
-  page: '#ffffff', nav: 'rgba(255,255,255,0.97)', navBorder: 'rgba(0,0,0,0.06)',
-  card: '#ffffff', cardBorder: 'rgba(0,0,0,0.07)', cardShadow: '0 1px 3px rgba(0,0,0,0.04)',
+  page: '#f1f3f5', nav: 'rgba(255,255,255,0.97)', navBorder: 'rgba(0,0,0,0.07)',
+  card: '#ffffff', cardBorder: 'rgba(0,0,0,0.08)', cardShadow: '0 1px 4px rgba(0,0,0,0.06)',
   green: '#006128', lime: '#ADEE66', cta: '#006128', ctaText: 'white',
-  text: '#111', muted: '#555', faint: '#999', toggleOff: '#e5e7eb',
-  divider: 'rgba(0,0,0,0.06)', pill: '#f5f6f7', input: '#f5f6f7', inputBorder: '#e2e4e8',
-  segmentActive: '#fff', segmentActiveText: '#111',
-  groupBg: '#f8f9fa', groupBorder: 'rgba(0,0,0,0.06)',
+  text: '#111827', muted: '#4b5563', faint: '#9ca3af', toggleOff: '#d1d5db',
+  divider: 'rgba(0,0,0,0.07)', pill: '#eef0f3', input: '#ffffff', inputBorder: '#d1d5db',
+  segmentActive: '#ffffff', segmentActiveText: '#111827',
+  groupBg: '#f7f8fa', groupBorder: 'rgba(0,0,0,0.07)',
 };
 const DARK_C = {
   page: '#111111', nav: 'rgba(17,17,17,0.90)', navBorder: 'rgba(255,255,255,0.07)',
@@ -893,6 +893,7 @@ const [isSaving, setIsSaving] = useState(false);
   const [busyQuestionId, setBusyQuestionId] = useState<string | null>(null);
   const [lessonPrompts, setLessonPrompts] = useState<Record<string, string>>({});
   const [lessonPromptModal, setLessonPromptModal] = useState<{ q: CourseQuestion } | null>(null);
+  const [closedLessons, setClosedLessons] = useState<Set<string>>(new Set());
   // Bunny video picker
   const [bunnyPickerOpen, setBunnyPickerOpen] = useState(false);
   const [bunnyPickerQId, setBunnyPickerQId] = useState<string | null>(null);
@@ -904,6 +905,7 @@ const [isSaving, setIsSaving] = useState(false);
   const [bunnyError, setBunnyError] = useState('');
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<string>('info');
   const [availableForms, setAvailableForms] = useState<{ id: string; title: string; slug: string }[]>([]);
   const [cohorts, setCohorts] = useState<{ id: string; name: string }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
@@ -1498,6 +1500,16 @@ const [isSaving, setIsSaving] = useState(false);
     });
   };
 
+  const insertSectionAt = (afterIndex: number) => {
+    if (!formConfig) return;
+    const id = Math.random().toString(36).substring(7);
+    const qs = [...(formConfig.questions || [])];
+    qs.splice(afterIndex + 1, 0, {
+      id, isSection: true, sectionTitle: 'New Section', sectionDescription: '', question: '', options: [], correctAnswer: '',
+    } as CourseQuestion);
+    updateConfig({ questions: qs });
+  };
+
   const handleQuestionImageUpload = async (qId: string, e: React.ChangeEvent<HTMLInputElement>, optionIdx?: number) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1777,11 +1789,75 @@ const [isSaving, setIsSaving] = useState(false);
       </header>
 
       <div className="relative z-10 flex flex-1 overflow-hidden">
-        {/* -- Left Editor Panel -- */}
-        <aside className="w-full md:w-[400px] flex-shrink-0 overflow-y-auto custom-scrollbar" style={{ background: C.card, borderRight: `1px solid ${C.cardBorder}` }}>
-          <div className="px-5 py-4 space-y-0">
+        {/* -- Left Nav Sidebar -- */}
+        <nav className="w-52 flex-shrink-0 overflow-y-auto" style={{ background: C.card, borderRight: `1px solid ${C.cardBorder}` }}>
+          <div className="py-2">
+            {([
+              { label: 'Content', items: [
+                { id: 'info', label: 'Basic Info', icon: BookOpen },
+                { id: 'cover', label: 'Cover Image', icon: ImageIcon },
+                ...(!formConfig.isCourse && !formConfig.eventDetails?.isEvent ? [{ id: 'fields', label: 'Form Fields', icon: ClipboardList }] : []),
+                ...(formConfig.isCourse ? [{ id: 'curriculum', label: 'Questions & Lessons', icon: HelpCircle }] : []),
+                ...(formConfig.eventDetails?.isEvent ? [{ id: 'fields', label: 'Registration Fields', icon: ClipboardList }] : []),
+              ]},
+              ...(formConfig.eventDetails?.isEvent ? [{ label: 'Event', items: [
+                { id: 'event_details', label: 'Event Details', icon: CalendarDays },
+                { id: 'visibility', label: 'Visibility', icon: Share2 },
+              ]}] : []),
+              { label: 'Settings', items: [
+                ...(formConfig.isCourse ? [{ id: 'course_settings', label: 'Course Settings', icon: Settings }] : []),
+                { id: 'appearance', label: 'Appearance', icon: Sun },
+                ...(formConfig.isCourse ? [{ id: 'points', label: 'Points & Rewards', icon: Zap }] : []),
+              ]},
+              { label: 'Publishing', items: [
+                ...((formConfig.isCourse || formConfig.eventDetails?.isEvent) ? [{ id: 'cohorts', label: 'Cohorts', icon: Building2 }] : []),
+                { id: 'share', label: 'Share URL', icon: Share2 },
+                { id: 'submission', label: 'After Submission', icon: CheckCircle2 },
+              ]},
+            ] as { label: string; items: { id: string; label: string; icon: React.ElementType }[] }[]).map(group => (
+              <div key={group.label} className="mb-1">
+                <p className="px-4 pt-3 pb-1.5 text-[10px] font-semibold tracking-widest uppercase" style={{ color: C.faint }}>{group.label}</p>
+                {group.items.map(item => {
+                  const isActive = activeSection === item.id;
+                  const Icon = item.icon;
+                  return (
+                    <button key={item.id} type="button" onClick={() => setActiveSection(item.id)}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-all"
+                      style={isActive ? { background: `${accentColor}12`, color: accentColor, borderRight: `2px solid ${accentColor}` } : { color: C.muted }}
+                    >
+                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </nav>
 
-            <EditorSection title="Content">
+        {/* -- Content Area -- */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar" style={{ background: C.page }}>
+          {/* Published URL banner */}
+          {savedFormId && formStatus === 'published' && (
+            <div className="flex items-center gap-3 px-8 py-2.5 text-xs" style={{ background: `${accentColor}10`, borderBottom: `1px solid ${accentColor}20` }}>
+              <span className="flex items-center gap-1.5 font-medium flex-shrink-0" style={{ color: accentColor }}>
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse inline-block" style={{ background: accentColor }} />
+                Live
+              </span>
+              <code className="flex-1 truncate" style={{ color: C.muted }}>
+                {typeof window !== 'undefined' ? window.location.origin : ''}/{customSlug || savedFormId}
+              </code>
+              <button type="button" onClick={() => handleShare()} className="flex items-center gap-1 px-2.5 py-1 rounded-lg transition-opacity hover:opacity-80 flex-shrink-0" style={{ background: accentColor, color: '#fff' }}>
+                {copied ? <Check className="w-3 h-3" /> : <Share2 className="w-3 h-3" />}
+                <span>{copied ? 'Copied!' : 'Copy link'}</span>
+              </button>
+            </div>
+          )}
+          <div className="max-w-2xl mx-auto px-8 py-8">
+          <div className="rounded-2xl p-6 space-y-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+
+            {activeSection === 'info' && (
+              <div className="space-y-5">
               <div>
                 <label className={labelCls} style={labelStyle}>Form Title</label>
                 <input type="text" value={formConfig.title} onChange={e => updateConfig({ title: e.target.value })} className={inputCls} style={inputStyle} />
@@ -1860,10 +1936,11 @@ const [isSaving, setIsSaving] = useState(false);
                   </div>
                 </div>
               )}
-            </EditorSection>
+              </div>
+            )}
 
-            {formConfig.eventDetails?.isEvent && (
-              <EditorSection title="Event Details">
+            {activeSection === 'event_details' && formConfig.eventDetails?.isEvent && (
+              <div className="space-y-5">
                 <div className="mb-3 rounded-xl p-3 space-y-2" style={{ background: C.groupBg, border: `1px solid ${C.groupBorder}` }}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -2041,11 +2118,11 @@ const [isSaving, setIsSaving] = useState(false);
                     </>
                   )}
                 </div>
-              </EditorSection>
+              </div>
             )}
 
-            {formConfig.eventDetails?.isEvent && (
-              <EditorSection title="Visibility">
+            {activeSection === 'visibility' && formConfig.eventDetails?.isEvent && (
+              <div className="space-y-5">
                 <button
                   type="button"
                   onClick={() => updateConfig({ eventDetails: { ...formConfig.eventDetails!, isPrivate: !formConfig.eventDetails!.isPrivate } })}
@@ -2076,11 +2153,11 @@ const [isSaving, setIsSaving] = useState(false);
                     />
                   </div>
                 </button>
-              </EditorSection>
+              </div>
             )}
 
-            {(formConfig.isCourse || formConfig.eventDetails?.isEvent) && (
-              <EditorSection title="Assign to Cohorts" defaultOpen={true}>
+            {activeSection === 'cohorts' && (formConfig.isCourse || formConfig.eventDetails?.isEvent) && (
+              <div className="space-y-5">
                 <div className="space-y-2">
                   {cohorts.length === 0 && (
                     <p className="text-xs py-2" style={{ color: C.faint }}>No cohorts yet. Create one in the dashboard.</p>
@@ -2120,10 +2197,11 @@ const [isSaving, setIsSaving] = useState(false);
                     </div>
                   )}
                 </div>
-              </EditorSection>
+              </div>
             )}
 
-            <EditorSection title="Share URL" defaultOpen={false}>
+            {activeSection === 'share' && (
+              <div className="space-y-5">
               <div>
                 <label className={labelCls} style={labelStyle}>Custom slug (optional)</label>
                 <div className="flex items-center rounded-lg overflow-hidden" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
@@ -2131,9 +2209,11 @@ const [isSaving, setIsSaving] = useState(false);
                   <input type="text" value={customSlug} onChange={e => setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder="my-form" className="w-full bg-transparent px-3 py-2 text-sm outline-none" style={{ color: C.text }} />
                 </div>
               </div>
-            </EditorSection>
+              </div>
+            )}
 
-            <EditorSection title="Cover Image" defaultOpen={false}>
+            {activeSection === 'cover' && (
+              <div className="space-y-5">
               {formConfig.coverImage ? (
                 <div className="relative w-full h-28 rounded-xl overflow-hidden group" style={{ border: `1px solid ${C.cardBorder}` }}>
                   <img src={formConfig.coverImage} alt="Cover" className="w-full h-full object-cover" />
@@ -2152,9 +2232,11 @@ const [isSaving, setIsSaving] = useState(false);
                   </div>
                 </label>
               )}
-            </EditorSection>
+              </div>
+            )}
 
-            <EditorSection title="Appearance">
+            {activeSection === 'appearance' && (
+              <div className="space-y-5">
               <div>
                 <label className={labelCls} style={labelStyle}>Mode</label>
                 <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
@@ -2236,93 +2318,12 @@ const [isSaving, setIsSaving] = useState(false);
                   </div>
                 </div>
               </div>
-            </EditorSection>
+              </div>
+            )}
 
-            {/* Fields / Questions */}
-            <EditorSection title={formConfig.isCourse ? 'Questions' : 'Fields'}>
-              {formConfig.isCourse ? (
-                <div className="space-y-3">
-                  <div className="p-3 rounded-xl space-y-3" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <label className={labelCls} style={{ ...labelStyle, marginBottom: 0 }}>AI Course Builder</label>
-                        <p className="text-[10px] mt-1 leading-relaxed" style={{ color: C.faint }}>
-                          Generate questions and learning outcomes from a topic, then refine each question with AI.
-                        </p>
-                      </div>
-                      <div className="px-2 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ background: `${accentColor}18`, color: accentColor }}>
-                        AI
-                      </div>
-                    </div>
-
-                    <input
-                      type="text"
-                      value={aiTopic}
-                      onChange={e => setAiTopic(e.target.value)}
-                      className={inputCls}
-                      style={inputStyle}
-                      placeholder="e.g. Intro to digital marketing for beginners"
-                    />
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className={labelCls} style={labelStyle}>Question type</label>
-                        <select
-                          value={aiQuestionType}
-                          onChange={e => setAiQuestionType(e.target.value as 'multiple_choice' | 'fill_blank' | 'arrange')}
-                          className={`${inputCls} py-1.5`}
-                          style={inputStyle}
-                        >
-                          <option value="multiple_choice">Multiple Choice</option>
-                          <option value="fill_blank">Fill in the Blank</option>
-                          <option value="arrange">Arrange / Order</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className={labelCls} style={labelStyle}>Question count</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="20"
-                          value={aiQuestionCount}
-                          onChange={e => setAiQuestionCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
-                          className={`${inputCls} py-1.5`}
-                          style={inputStyle}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <button
-                          type="button"
-                          onClick={generateQuestions}
-                          disabled={!!aiLoadingLabel}
-                          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          style={{ background: accentColor, color: C.ctaText }}
-                        >
-                          {aiLoadingLabel === 'Generating questions...' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                          Generate Questions
-                        </button>
-                      </div>
-                      <div className="flex-1">
-                        <button
-                          type="button"
-                          onClick={generateOutcomes}
-                          disabled={!!aiLoadingLabel}
-                          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          style={{ background: C.pill, color: C.text, border: `1px solid ${C.inputBorder}` }}
-                        >
-                          {aiLoadingLabel === 'Generating learning outcomes...' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BookOpen className="w-3.5 h-3.5" />}
-                          Generate Outcomes
-                        </button>
-                      </div>
-                    </div>
-
-                    {aiError && <p className="text-[11px]" style={{ color: '#ef4444' }}>{aiError}</p>}
-                    {!aiError && aiSuccess && <p className="text-[11px]" style={{ color: '#10b981' }}>{aiSuccess}</p>}
-                  </div>
-
+            {/* Course settings section */}
+            {activeSection === 'course_settings' && formConfig.isCourse && (
+              <div className="space-y-5">
                   {/* Show answers setting */}
                   <div className="p-3 rounded-xl space-y-2" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
                     <label className={labelCls} style={labelStyle}>Show correct answers</label>
@@ -2456,14 +2457,115 @@ const [isSaving, setIsSaving] = useState(false);
                     </div>
                     <p className="text-[10px]" style={{ color: C.faint }}>Tracked per email address via submission records.</p>
                   </div>
+              </div>
+            )}
+
+            {/* Curriculum / Fields section */}
+            {(activeSection === 'curriculum' && formConfig.isCourse) && (
+              <div className="space-y-5">
+                <div className="space-y-3">
+                  <div className="p-3 rounded-xl space-y-3" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <label className={labelCls} style={{ ...labelStyle, marginBottom: 0 }}>AI Course Builder</label>
+                        <p className="text-[10px] mt-1 leading-relaxed" style={{ color: C.faint }}>
+                          Generate questions and learning outcomes from a topic, then refine each question with AI.
+                        </p>
+                      </div>
+                      <div className="px-2 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ background: `${accentColor}18`, color: accentColor }}>
+                        AI
+                      </div>
+                    </div>
+
+                    <input
+                      type="text"
+                      value={aiTopic}
+                      onChange={e => setAiTopic(e.target.value)}
+                      className={inputCls}
+                      style={inputStyle}
+                      placeholder="e.g. Intro to digital marketing for beginners"
+                    />
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className={labelCls} style={labelStyle}>Question type</label>
+                        <select
+                          value={aiQuestionType}
+                          onChange={e => setAiQuestionType(e.target.value as 'multiple_choice' | 'fill_blank' | 'arrange')}
+                          className={`${inputCls} py-1.5`}
+                          style={inputStyle}
+                        >
+                          <option value="multiple_choice">Multiple Choice</option>
+                          <option value="fill_blank">Fill in the Blank</option>
+                          <option value="arrange">Arrange / Order</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelCls} style={labelStyle}>Question count</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={aiQuestionCount}
+                          onChange={e => setAiQuestionCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                          className={`${inputCls} py-1.5`}
+                          style={inputStyle}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <button
+                          type="button"
+                          onClick={generateQuestions}
+                          disabled={!!aiLoadingLabel}
+                          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{ background: accentColor, color: C.ctaText }}
+                        >
+                          {aiLoadingLabel === 'Generating questions...' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                          Generate Questions
+                        </button>
+                      </div>
+                      <div className="flex-1">
+                        <button
+                          type="button"
+                          onClick={generateOutcomes}
+                          disabled={!!aiLoadingLabel}
+                          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{ background: C.pill, color: C.text, border: `1px solid ${C.inputBorder}` }}
+                        >
+                          {aiLoadingLabel === 'Generating learning outcomes...' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BookOpen className="w-3.5 h-3.5" />}
+                          Generate Outcomes
+                        </button>
+                      </div>
+                    </div>
+
+                    {aiError && <p className="text-[11px]" style={{ color: '#ef4444' }}>{aiError}</p>}
+                    {!aiError && aiSuccess && <p className="text-[11px]" style={{ color: '#10b981' }}>{aiSuccess}</p>}
+                  </div>
 
                   {formConfig.questions?.map((q, qIdx) => {
                     const qType: QuestionType = q.type ?? 'multiple_choice';
+                    const insertDivider = (
+                      <div key={`insert-${q.id}`} className="group relative flex items-center justify-center h-3 my-0.5">
+                        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px transition-colors" style={{ background: C.divider }} />
+                        <button
+                          type="button"
+                          onClick={() => insertSectionAt(qIdx)}
+                          className="relative hidden group-hover:flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full font-medium transition-all hover:opacity-90"
+                          style={{ background: accentColor, color: C.ctaText, zIndex: 1 }}
+                        >
+                          <Plus className="w-2.5 h-2.5" /> Section
+                        </button>
+                      </div>
+                    );
 
                     // -- Section divider card --
                     if (q.isSection) {
                       return (
-                        <div key={q.id} className="rounded-xl overflow-hidden" style={{ background: C.card, border: `1px solid ${accentColor}40`, borderLeft: `3px solid ${accentColor}` }}>
+                        <React.Fragment key={q.id}>
+                        <div className="rounded-xl overflow-hidden" style={{ background: C.card, border: `1px solid ${accentColor}40`, borderLeft: `3px solid ${accentColor}` }}>
                           <div className="flex items-center justify-between px-3.5 py-2.5" style={{ borderBottom: `1px solid ${C.divider}` }}>
                             <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentColor }}>Section</span>
                             <button type="button" onClick={() => updateConfig({ questions: formConfig.questions?.filter(qq => qq.id !== q.id) })}
@@ -2488,14 +2590,22 @@ const [isSaving, setIsSaving] = useState(false);
                             />
                           </div>
                         </div>
+                        {insertDivider}
+                        </React.Fragment>
                       );
                     }
 
                     return (
-                    <div key={q.id} className="rounded-xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                    <React.Fragment key={q.id}>
+                    <div className="rounded-xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
                       {/* Header */}
                       <div className="flex items-center justify-between px-3.5 py-2.5" style={{ borderBottom: `1px solid ${C.divider}` }}>
-                        <span className="text-xs font-medium" style={{ color: C.faint }}>Q{qIdx + 1}</span>
+                        <span className="text-xs font-medium flex items-center gap-1.5 min-w-0" style={{ color: C.faint }}>
+                          {q.lessonOnly
+                            ? (<span className="truncate">{q.lesson?.title || 'Untitled lesson'}</span>)
+                            : (<>Q{qIdx + 1}{q.question ? <span className="truncate" style={{ color: C.muted }}> · {q.question}</span> : null}</>)
+                          }
+                        </span>
                         <div className="flex items-center gap-1.5">
                           {/* Type selector */}
                           <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
@@ -2789,11 +2899,19 @@ const [isSaving, setIsSaving] = useState(false);
 
                         {/* Lesson section */}
                         <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+                          {(() => {
+                            const lessonOpen = !!(q.lesson && !closedLessons.has(q.id));
+                            return (<>
                           <button
                             type="button"
-                            onClick={() => handleUpdateQuestion(q.id, {
-                              lesson: q.lesson ? undefined : { title: '', body: '', imageUrl: '', videoUrl: '' }
-                            })}
+                            onClick={() => {
+                              if (lessonOpen) {
+                                setClosedLessons(prev => new Set([...prev, q.id]));
+                              } else {
+                                setClosedLessons(prev => { const next = new Set(prev); next.delete(q.id); return next; });
+                                if (!q.lesson) handleUpdateQuestion(q.id, { lesson: { title: '', body: '', imageUrl: '', videoUrl: '' } });
+                              }
+                            }}
                             className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium transition-colors hover:opacity-70"
                             style={{ color: C.muted }}
                           >
@@ -2801,9 +2919,9 @@ const [isSaving, setIsSaving] = useState(false);
                               <BookOpen className="w-3.5 h-3.5" />
                               Lesson <span style={{ color: C.faint }}>(optional)</span>
                             </span>
-                            {q.lesson ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            {lessonOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                           </button>
-                          {q.lesson && (
+                          {lessonOpen && q.lesson && (
                             <div className="px-3 py-3 space-y-2" style={{ borderTop: `1px solid ${C.divider}` }}>
                               <input
                                 type="text"
@@ -2874,11 +2992,27 @@ const [isSaving, setIsSaving] = useState(false);
                                   <Video className="w-3.5 h-3.5"/> Bunny
                                 </button>
                               </div>
+                              {(() => {
+                                const vurl = q.lesson.videoUrl || '';
+                                const ytMatch = vurl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+                                const embedUrl = ytMatch
+                                  ? `https://www.youtube.com/embed/${ytMatch[1]}`
+                                  : (vurl.includes('iframe.mediadelivery.net') || vurl.includes('/embed/')) ? vurl : null;
+                                return embedUrl ? (
+                                  <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+                                    <iframe src={embedUrl} className="w-full aspect-video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                                  </div>
+                                ) : null;
+                              })()}
                             </div>
                           )}
+                          </>);
+                          })()}
                         </div>
                       </div>
                     </div>
+                    {insertDivider}
+                    </React.Fragment>
                     );
                   })}
                   {(!formConfig.questions || formConfig.questions.length === 0) && <p className="text-xs text-center py-3" style={{ color: C.faint }}>No questions yet.</p>}
@@ -2900,7 +3034,11 @@ const [isSaving, setIsSaving] = useState(false);
                     </button>
                   </div>
                 </div>
-              ) : (
+              </div>
+            )}
+
+            {activeSection === 'fields' && !formConfig.isCourse && (
+              <div className="space-y-5">
                 <div className="space-y-2">
                   {/* Field cards -- drag to reorder */}
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -2997,11 +3135,11 @@ const [isSaving, setIsSaving] = useState(false);
                     </button>
                   </div>
                 </div>
-              )}
-            </EditorSection>
+              </div>
+            )}
 
-            {formConfig.isCourse && (
-            <EditorSection title="Points & Rewards" defaultOpen={false}>
+            {activeSection === 'points' && formConfig.isCourse && (
+              <div className="space-y-5">
               <div className="space-y-3">
                 {/* Enable toggle */}
                 <div className="flex items-center justify-between">
@@ -3184,10 +3322,11 @@ const [isSaving, setIsSaving] = useState(false);
                   </>
                 )}
               </div>
-            </EditorSection>
+              </div>
             )}
 
-            <EditorSection title="After Submission" defaultOpen={false}>
+            {activeSection === 'submission' && (
+              <div className="space-y-5">
               <div className="space-y-3">
                 {/* Type selector */}
                 <div>
@@ -3319,142 +3458,10 @@ const [isSaving, setIsSaving] = useState(false);
                   </div>
                 )}
               </div>
-            </EditorSection>
-
-          </div>
-        </aside>
-
-        {/* -- Right Preview Panel -- */}
-        <div className="hidden md:block flex-1 overflow-y-auto" style={{ background: C.page }}>
-          <div className="px-8 py-4" style={{ borderBottom: `1px solid ${C.cardBorder}`, background: C.nav }}>
-            <form onSubmit={handleGenerate} className="flex items-center gap-3 max-w-2xl mx-auto">
-              <input
-                type="text"
-                value={prompt}
-                onChange={e => setPrompt(e.target.value)}
-                placeholder="Refine your form… e.g. add a company field"
-                className="flex-1 rounded-lg px-4 py-2 text-sm outline-none transition-colors placeholder:text-[#bbb]"
-                style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.text }}
-                disabled={isGenerating}
-              />
-              <button type="submit" disabled={isGenerating || !prompt.trim()} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-80" style={{ background: C.cta, color: C.ctaText }}>
-                {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                {isGenerating ? 'Generating…' : 'Regenerate'}
-              </button>
-            </form>
-          </div>
-
-          {/* Share bar -- appears after publishing */}
-          <AnimatePresence>
-            {savedFormId && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="px-8 py-3"
-                style={{ borderBottom: `1px solid ${C.cardBorder}`, background: `${accentColor}14` }}
-              >
-                <div className="max-w-2xl mx-auto flex items-center gap-3 flex-wrap">
-                  {/* Published indicator + URL */}
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="flex items-center gap-1.5 text-xs font-medium flex-shrink-0" style={{ color: accentColor }}>
-                      <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: accentColor }} />
-                      Published
-                    </span>
-                    <span className="text-xs flex-shrink-0" style={{ color: C.faint }}>·</span>
-                    <code className="text-xs truncate" style={{ color: C.muted }}>
-                      {typeof window !== 'undefined' ? window.location.origin : ''}/{customSlug || savedFormId}
-                    </code>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {/* Copy link */}
-                    <button
-                      type="button"
-                      onClick={() => handleShare()}
-                      disabled={isSaving}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-opacity hover:opacity-80"
-                      style={{ background: accentColor, color: C.ctaText }}
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
-                      {copied ? 'Copied!' : 'Copy link'}
-                    </button>
-
-                    {/* Social share buttons */}
-                    {[
-                      {
-                        id: 'twitter', label: 'X',
-                        href: () => `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${formConfig.title}\n${formConfig.description.replace(/<[^>]*>/g, '')}`)}&url=${encodeURIComponent(`${window.location.origin}/${customSlug || savedFormId}`)}`,
-                      },
-                      {
-                        id: 'linkedin', label: 'LinkedIn',
-                        href: () => `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${window.location.origin}/${customSlug || savedFormId}`)}`,
-                      },
-                      {
-                        id: 'facebook', label: 'Facebook',
-                        href: () => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/${customSlug || savedFormId}`)}`,
-                      },
-                      {
-                        id: 'whatsapp', label: 'WhatsApp',
-                        href: () => `https://wa.me/?text=${encodeURIComponent(`${formConfig.title}\n${formConfig.description.replace(/<[^>]*>/g, '')}\n\n${window.location.origin}/${customSlug || savedFormId}`)}`,
-                      },
-                    ].map(({ id, label, href }) => (
-                      <a
-                        key={id}
-                        href={href()}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={`Share on ${label}`}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg transition-opacity hover:opacity-70"
-                        style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}
-                      >
-                        {id === 'whatsapp' ? (
-                          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="#25D366">
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                          </svg>
-                        ) : (
-                          <SocialIcon id={id} size={14} />
-                        )}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <div className={savedFormId ? '' : 'px-8 py-12'}>
-            {savedFormId ? (
-              /* Live iframe after publish -- always accurate */
-              <iframe
-                key={previewKey}
-                src={`/${customSlug || savedFormId}`}
-                title="Live preview"
-                style={{ display: 'block', width: '100%', height: 'calc(100vh - 120px)', border: 'none' }}
-              />
-            ) : formConfig.eventDetails?.isEvent ? (
-              /* Event placeholder -- full preview available in the editor after publishing */
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '64px 32px', textAlign: 'center', opacity: 0.5 }}>
-                <CalendarDays style={{ width: 36, height: 36, color: C.muted }} />
-                <p style={{ fontSize: 14, fontWeight: 600, color: C.text, margin: 0 }}>Event preview</p>
-                <p style={{ fontSize: 12, color: C.faint, margin: 0, maxWidth: 260, lineHeight: 1.6 }}>
-                  Publish your event to open the full live preview in the editor, including speakers, design, and mode.
-                </p>
               </div>
-            ) : (
-              /* FormPreview for regular forms before publishing */
-              <AnimatePresence mode="wait">
-                <FormPreview
-                  key={formConfig.title}
-                  config={formConfig}
-                  isSubmitting={isSubmitting}
-                  onSubmit={handleSubmitForm}
-                  isSuccess={isSuccess}
-                  onReset={() => setIsSuccess(false)}
-                  isSharedView={false}
-                />
-              </AnimatePresence>
             )}
+
+          </div>
           </div>
         </div>
       </div>

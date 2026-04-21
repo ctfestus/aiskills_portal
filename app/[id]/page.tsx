@@ -1166,6 +1166,7 @@ export default function PublicFormPage() {
             onSubmit={handleSubmit}
             isSuccess={success}
             onReset={() => {}}
+            onClose={() => setCourseStarted(false)}
             onRetake={() => { setSuccess(false); setSubmitting(false); setRetakeKey(k => k + 1); }}
             isSharedView={true}
             collectStudentInfo={false}
