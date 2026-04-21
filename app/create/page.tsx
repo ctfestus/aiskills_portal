@@ -1615,7 +1615,6 @@ const [isSaving, setIsSaving] = useState(false);
         <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-4 sm:py-5 backdrop-blur-sm" style={{ borderBottom: `1px solid ${theme === 'dark' ? C.navBorder : '#0b07b3'}`, background: theme === 'dark' ? C.nav : '#0e09dd' }}>
           <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
             <img src={logoUrl || undefined} alt="" className="h-7 w-auto" />
-            <span className="text-sm font-semibold tracking-tight" style={{ color: theme === 'dark' ? C.text : 'white' }}>AI Skills Africa</span>
           </Link>
           {user ? (
             <Link href="/dashboard" className="flex items-center gap-2 text-sm transition-colors hover:opacity-60" style={{ color: theme === 'dark' ? C.muted : 'rgba(255,255,255,0.8)' }}>
@@ -1733,8 +1732,7 @@ const [isSaving, setIsSaving] = useState(false);
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-70 transition-opacity">
               <img src={logoUrl || undefined} alt="" className="h-6 w-auto" />
-              <span className="text-sm font-semibold tracking-tight" style={{ color: theme === 'dark' ? C.text : 'white' }}>AI Skills Africa</span>
-            </Link>
+              </Link>
             <div className="w-px h-4" style={{ background: theme === 'dark' ? C.divider : 'rgba(255,255,255,0.2)' }} />
             <Link href="/dashboard" className="flex items-center gap-1.5 text-xs transition-colors hover:opacity-60" style={{ color: theme === 'dark' ? C.muted : 'rgba(255,255,255,0.8)' }}>
               <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard

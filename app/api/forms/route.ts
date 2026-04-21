@@ -424,6 +424,9 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to delete.' }, { status: 500 });
   }
 
+  // Clean up cohort_assignments (no FK cascade)
+  await supabase.from('cohort_assignments').delete().eq('content_id', formId);
+
   // Also clean up event responses (no cascade from events table)
   if (found.table === 'events') {
     await supabase.from('responses').delete().eq('form_id', formId);
