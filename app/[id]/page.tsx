@@ -351,6 +351,7 @@ export default function PublicFormPage() {
   // Course sign-up flow
   const [courseStarted, setCourseStarted] = useState(false);
   const [retakeKey, setRetakeKey] = useState(0);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [prefilledName, setPrefilledName] = useState('');
   const [prefilledEmail, setPrefilledEmail] = useState('');
   const [calPopupOpen, setCalPopupOpen] = useState(false);
@@ -1111,21 +1112,66 @@ export default function PublicFormPage() {
               )}
 
               {/* Course outline */}
-              {lessonCount > 0 && (
-                <div style={{ background: cp.card, borderRadius: 14, overflow: 'hidden', border: `1px solid ${cp.border}` }}>
-                  <div style={{ padding: '18px 24px 14px', borderBottom: `1px solid ${cp.divider}` }}>
-                    <h2 style={{ fontSize: 14, fontWeight: 700, color: cp.title, margin: 0, letterSpacing: '-0.01em' }}>Course Outline</h2>
-                  </div>
-                  {questions.filter((q: any) => q.lesson?.title || q.lesson?.body).map((q: any, i: number, arr: any[]) => (
-                    <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 24px', borderBottom: i < arr.length - 1 ? `1px solid ${cp.divider}` : 'none', background: i % 2 === 0 ? 'transparent' : cp.subtle }}>
-                      <div style={{ width: 22, height: 22, borderRadius: 7, background: `${accentColor}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <span style={{ fontSize: 10, fontWeight: 800, color: accentColor }}>{i + 1}</span>
-                      </div>
-                      <span style={{ fontSize: 13, fontWeight: 500, color: cp.title, flex: 1, lineHeight: 1.4 }}>{q.lesson?.title || q.question}</span>
+              {lessonCount > 0 && (() => {
+                // Group questions into sections
+                const sectionGroups: { id: string; title: string; items: any[] }[] = [];
+                let cur: { id: string; title: string; items: any[] } | null = null;
+                questions.forEach((q: any) => {
+                  if (q.isSection) {
+                    if (cur) sectionGroups.push(cur);
+                    cur = { id: q.id, title: q.sectionTitle || 'Section', items: [] };
+                  } else if (q.lesson?.title || q.lesson?.body) {
+                    if (!cur) cur = { id: '__default__', title: '', items: [] };
+                    cur.items.push(q);
+                  }
+                });
+                if (cur && (cur as any).items.length > 0) sectionGroups.push(cur as any);
+                const hasSections = sectionGroups.some(g => g.id !== '__default__');
+
+                return (
+                  <div style={{ background: cp.card, borderRadius: 14, overflow: 'hidden', border: `1px solid ${cp.border}` }}>
+                    <div style={{ padding: '18px 24px 14px', borderBottom: `1px solid ${cp.divider}` }}>
+                      <h2 style={{ fontSize: 14, fontWeight: 700, color: cp.title, margin: 0, letterSpacing: '-0.01em' }}>Course Outline</h2>
                     </div>
-                  ))}
-                </div>
-              )}
+                    {hasSections ? sectionGroups.map((group, gi) => {
+                      const isCollapsed = collapsedSections.has(group.id);
+                      const toggleSection = () => setCollapsedSections(prev => {
+                        const s = new Set(prev); s.has(group.id) ? s.delete(group.id) : s.add(group.id); return s;
+                      });
+                      return (
+                        <div key={group.id} style={{ borderBottom: gi < sectionGroups.length - 1 ? `1px solid ${cp.divider}` : 'none' }}>
+                          {group.id !== '__default__' && (
+                            <button onClick={toggleSection} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 24px', background: cp.subtle, border: 'none', cursor: 'pointer', gap: 10 }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: accentColor, textTransform: 'uppercase' as const, letterSpacing: '0.06em', textAlign: 'left' as const }}>{group.title}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                <span style={{ fontSize: 11, color: cp.muted, fontWeight: 500 }}>{group.items.length} lesson{group.items.length !== 1 ? 's' : ''}</span>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={cp.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                                  <path d="M6 9l6 6 6-6"/>
+                                </svg>
+                              </div>
+                            </button>
+                          )}
+                          {!isCollapsed && group.items.map((q: any, i: number) => (
+                            <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 24px', borderTop: `1px solid ${cp.divider}`, background: 'transparent' }}>
+                              <div style={{ width: 22, height: 22, borderRadius: 7, background: `${accentColor}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <span style={{ fontSize: 10, fontWeight: 800, color: accentColor }}>{i + 1}</span>
+                              </div>
+                              <span style={{ fontSize: 13, fontWeight: 500, color: cp.title, flex: 1, lineHeight: 1.4 }}>{q.lesson?.title || q.question}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }) : questions.filter((q: any) => q.lesson?.title || q.lesson?.body).map((q: any, i: number, arr: any[]) => (
+                      <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 24px', borderBottom: i < arr.length - 1 ? `1px solid ${cp.divider}` : 'none', background: i % 2 === 0 ? 'transparent' : cp.subtle }}>
+                        <div style={{ width: 22, height: 22, borderRadius: 7, background: `${accentColor}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <span style={{ fontSize: 10, fontWeight: 800, color: accentColor }}>{i + 1}</span>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: cp.title, flex: 1, lineHeight: 1.4 }}>{q.lesson?.title || q.question}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Right sidebar */}
@@ -1139,10 +1185,21 @@ export default function PublicFormPage() {
                   </div>
                 )}
                 <div style={{ padding: '20px 20px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  {/* Pass mark */}
+                  {/* Pass mark / XP */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: cp.muted, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Pass mark</span>
-                    <span style={{ fontSize: 16, fontWeight: 800, color: accentColor }}>{config.passmark ?? 50}%</span>
+                    {config.points_enabled ? (
+                      <>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: cp.muted, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Total XP</span>
+                        <span style={{ fontSize: 16, fontWeight: 800, color: accentColor }}>
+                          {questions.filter((q: any) => !q.isSection).length * (config.pointsSystem?.basePoints ?? config.points_base ?? 100)} XP
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: cp.muted, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Pass mark</span>
+                        <span style={{ fontSize: 16, fontWeight: 800, color: accentColor }}>{config.passmark ?? 50}%</span>
+                      </>
+                    )}
                   </div>
                   {/* CTA */}
                   <button onClick={() => setCourseStarted(true)}
