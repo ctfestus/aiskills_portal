@@ -43,6 +43,8 @@ export async function GET(request: NextRequest) {
     }
 
     await db.from('students').update({ cohort_id: cohortId }).eq('id', user.id);
+
+    await db.from('cohort_allowed_emails').delete().eq('email', user.email.toLowerCase());
   }
 
   return NextResponse.redirect(new URL('/onboarding', request.url));

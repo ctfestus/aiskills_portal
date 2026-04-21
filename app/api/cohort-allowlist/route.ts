@@ -81,13 +81,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'cohortId and emails[] are required' }, { status: 400 });
   }
 
-  const rows = emails
+  const normalised = emails
     .map((e: string) => e.toLowerCase().trim())
-    .filter((e: string) => e.includes('@'))
+    .filter((e: string) => e.includes('@'));
+
+  if (normalised.length === 0) {
+    return NextResponse.json({ error: 'No valid emails provided' }, { status: 400 });
+  }
+
+  // Single bulk query -- exclude emails already registered as students
+  const { data: existing } = await adminClient()
+    .from('students')
+    .select('email')
+    .in('email', normalised);
+  const registeredSet = new Set((existing ?? []).map((s: { email: string }) => s.email));
+  const skipped = normalised.filter(e => registeredSet.has(e));
+
+  const rows = normalised
+    .filter(e => !registeredSet.has(e))
     .map((email: string) => ({ cohort_id: cohortId, email, added_by: user.id }));
 
   if (rows.length === 0) {
-    return NextResponse.json({ error: 'No valid emails provided' }, { status: 400 });
+    return NextResponse.json({
+      error: skipped.length
+        ? `All emails are already registered students: ${skipped.join(', ')}`
+        : 'No valid emails provided',
+    }, { status: 400 });
   }
 
   let data: any, error: any;
@@ -140,7 +159,7 @@ export async function POST(req: NextRequest) {
     })();
   }
 
-  return NextResponse.json({ inserted });
+  return NextResponse.json({ inserted, skipped });
 }
 
 export async function DELETE(req: NextRequest) {

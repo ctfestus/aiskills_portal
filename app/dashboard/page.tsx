@@ -2975,11 +2975,22 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCohort?.id]);
 
+  // Re-load emails after session refresh (handles the race on page reload where
+  // the access token is expired and getSession() returns null until the refresh completes)
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session && selectedCohort?.id) loadAllowedEmails(selectedCohort.id);
+    });
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCohort?.id]);
+
   const loadAllowedEmails = async (cohortId: string) => {
     setEmailLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setEmailLoading(false); return; } // session mid-refresh; onAuthStateChange will retry
     const res = await fetch(`/api/cohort-allowlist?cohortId=${cohortId}`, {
-      headers: { Authorization: `Bearer ${session?.access_token}` },
+      headers: { Authorization: `Bearer ${session.access_token}` },
     });
     const json = await res.json();
     setAllowedEmails(json.emails ?? []);
@@ -3004,7 +3015,12 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
     if (json.error) { showToast(false, json.error); }
     else {
       setEmailInput('');
-      showToast(true, `${json.inserted?.length ?? parsed.length} email(s) added`);
+      const added   = json.inserted?.length ?? 0;
+      const skipped = json.skipped?.length  ?? 0;
+      const msg = skipped
+        ? `${added} added -- ${skipped} skipped (already registered)`
+        : `${added} email(s) added`;
+      showToast(true, msg);
       loadAllowedEmails(selectedCohort.id);
     }
     setEmailSaving(false);
@@ -3051,7 +3067,12 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
       const json = await res.json();
       if (json.error) { showToast(false, json.error); }
       else {
-        showToast(true, `${emails.length} email(s) imported from file`);
+        const added   = json.inserted?.length ?? 0;
+        const skipped = json.skipped?.length  ?? 0;
+        const msg = skipped
+          ? `${added} imported -- ${skipped} skipped (already registered)`
+          : `${added} email(s) imported from file`;
+        showToast(true, msg);
         loadAllowedEmails(selectedCohort.id);
       }
     } catch (err: any) {
