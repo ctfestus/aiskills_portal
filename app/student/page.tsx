@@ -3141,9 +3141,10 @@ function ScheduleSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   const past     = events.filter(e => e.startDate && e.startDate < now && (!e.endDate || e.endDate < now));
 
   const ScheduleCard = ({ item, index }: { item: any; index: number }) => {
-    const isPast  = item.endDate ? item.endDate < now : (item.startDate ? item.startDate < now : false);
-    const isToday = item.startDate ? item.startDate.toDateString() === now.toDateString() : false;
-    const isSoon  = item.startDate ? (!isPast && item.startDate.getTime() - now.getTime() < 48 * 3600 * 1000) : false;
+    const isPast     = item.endDate ? item.endDate < now : (item.startDate ? item.startDate < now : false);
+    const isOngoing  = !isPast && item.startDate && item.startDate < now && item.endDate && item.endDate >= now;
+    const isToday    = !isOngoing && item.startDate ? item.startDate.toDateString() === now.toDateString() : false;
+    const isSoon     = item.startDate ? (!isPast && !isOngoing && item.startDate > now && item.startDate.getTime() - now.getTime() < 48 * 3600 * 1000) : false;
     const startFmt = item.startDate?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const endFmt   = item.endDate?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const dateRange = endFmt && endFmt !== startFmt ? `${startFmt} -> ${endFmt}` : startFmt ?? 'Date TBA';
@@ -3154,7 +3155,7 @@ function ScheduleSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
         transition={{ delay: index * 0.06, duration: 0.35 }}
         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
         <div className="relative rounded-2xl p-4 flex gap-4 transition-shadow"
-          style={{ background: C.card, border: `1px solid ${isToday ? C.green + '50' : C.cardBorder}`, boxShadow: C.cardShadow }}
+          style={{ background: C.card, border: `1px solid ${isOngoing || isToday ? C.green + '50' : C.cardBorder}`, boxShadow: C.cardShadow }}
           onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
           onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
 
@@ -3183,10 +3184,13 @@ function ScheduleSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
           <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
             {/* Status badges */}
             <div className="flex items-center gap-1.5 flex-wrap">
+              {isOngoing && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: `${C.green}15`, color: C.green }}>In progress</span>
+              )}
               {isToday && (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: `${C.green}15`, color: C.green }}>Today</span>
               )}
-              {isSoon && !isToday && (
+              {isSoon && (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#fff7ed', color: '#ea580c' }}>Starting soon</span>
               )}
               {isPast && (
