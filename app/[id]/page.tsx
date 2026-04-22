@@ -1249,10 +1249,6 @@ export default function PublicFormPage() {
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
           <img src={logoUrl || undefined} alt="" style={{ height: 32, width: 'auto' }} />
         </Link>
-        <button onClick={() => { navigator.clipboard?.writeText(pageUrl); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: t.navText, background: 'none', border: 'none', cursor: 'pointer' }}>
-          {linkCopied ? <Check style={{ width: 16, height: 16, color: '#006128' }}/> : <Copy style={{ width: 16, height: 16 }}/>}
-          {linkCopied ? 'Copied!' : 'Share'}
-        </button>
       </nav>
 
       <main style={{ position: 'relative', zIndex: 10, maxWidth: 860, margin: '0 auto', padding: '32px 24px 0' }}>
@@ -1579,22 +1575,6 @@ export default function PublicFormPage() {
                     );
                   })()}
 
-                  {/* Social sharing -- always last */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: t.muted, marginRight: 4 }}>Share</span>
-                    <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(pageUrl)}`} target="_blank" rel="noopener noreferrer" style={fShareBtn} title="Share on LinkedIn">
-                      <svg viewBox="0 0 24 24" style={{ width: 15, height: 15 }}><rect width="24" height="24" rx="4" fill="#0A66C2"/><path fill="white" d="M7.75 9.5h-2.5v8h2.5v-8zm-1.25-4a1.25 1.25 0 100 2.5 1.25 1.25 0 000-2.5zm10 4c-1.2 0-2 .6-2.4 1.2V9.5h-2.5v8h2.5v-4.2c0-1.1.6-1.8 1.6-1.8s1.4.7 1.4 1.8v4.2h2.5v-4.8c0-2.4-1.3-3.2-3.1-3.2z"/></svg>
-                    </a>
-                    <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}`} target="_blank" rel="noopener noreferrer" style={fShareBtn} title="Share on Facebook">
-                      <svg viewBox="0 0 24 24" style={{ width: 15, height: 15 }}><rect width="24" height="24" rx="4" fill="#1877F2"/><path fill="white" d="M13.5 12.5h2l.5-2.5h-2.5V8.5c0-.7.3-1 1-1H16V5.1A10 10 0 0014 5c-2 0-3.5 1.2-3.5 3.3V10H8.5v2.5H10.5V19h3v-6.5z"/></svg>
-                    </a>
-                    <a href={`https://wa.me/?text=${encodeURIComponent(config.title + ' ' + pageUrl)}`} target="_blank" rel="noopener noreferrer" style={fShareBtn} title="Share on WhatsApp">
-                      <svg viewBox="0 0 24 24" style={{ width: 15, height: 15 }}><rect width="24" height="24" rx="4" fill="#25D366"/><path fill="white" d="M12 4a8 8 0 00-6.93 11.97L4 20l4.17-1.06A8 8 0 1012 4zm4.08 10.85c-.17.48-1 .92-1.38.97-.35.05-.8.07-1.28-.08a11.6 11.6 0 01-1.16-.43 9.1 9.1 0 01-3.54-3.13c-.43-.58-.7-1.26-.7-1.94 0-.68.22-1.27.63-1.72.14-.16.3-.24.46-.24l.33.01c.1 0 .24-.04.38.29l.58 1.41c.05.12.08.26.01.38l-.22.37-.3.3c-.1.1-.2.2-.09.4.12.2.53.87 1.15 1.41a5.3 5.3 0 001.63 1.01c.2.1.31.08.43-.05l.52-.6c.12-.16.23-.12.38-.07l1.36.64c.16.08.27.12.3.19.04.3-.06.76-.23 1.04z"/></svg>
-                    </a>
-                    <button onClick={() => { navigator.clipboard?.writeText(pageUrl); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }} style={fShareBtn} title="Copy link">
-                      {linkCopied ? <Check style={{ width: 14, height: 14, color: '#10b981' }}/> : <Copy style={{ width: 14, height: 14, color: t.body }}/>}
-                    </button>
-                  </div>
                 </div>
               );
             })()}
@@ -1883,22 +1863,6 @@ export default function PublicFormPage() {
                     </div>
                   </div>
 
-                  {/* Social sharing -- always last */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 8, marginBottom: 32 }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: t.muted, marginRight: 4 }}>Share</span>
-                    <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(pageUrl)}`} target="_blank" rel="noopener noreferrer" style={shareBtnStyle} title="Share on LinkedIn">
-                      <svg viewBox="0 0 24 24" style={{ width: 15, height: 15 }}><rect width="24" height="24" rx="4" fill="#0A66C2"/><path fill="white" d="M7.75 9.5h-2.5v8h2.5v-8zm-1.25-4a1.25 1.25 0 100 2.5 1.25 1.25 0 000-2.5zm10 4c-1.2 0-2 .6-2.4 1.2V9.5h-2.5v8h2.5v-4.2c0-1.1.6-1.8 1.6-1.8s1.4.7 1.4 1.8v4.2h2.5v-4.8c0-2.4-1.3-3.2-3.1-3.2z"/></svg>
-                    </a>
-                    <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}`} target="_blank" rel="noopener noreferrer" style={shareBtnStyle} title="Share on Facebook">
-                      <svg viewBox="0 0 24 24" style={{ width: 15, height: 15 }}><rect width="24" height="24" rx="4" fill="#1877F2"/><path fill="white" d="M13.5 12.5h2l.5-2.5h-2.5V8.5c0-.7.3-1 1-1H16V5.1A10 10 0 0014 5c-2 0-3.5 1.2-3.5 3.3V10H8.5v2.5H10.5V19h3v-6.5z"/></svg>
-                    </a>
-                    <a href={`https://wa.me/?text=${encodeURIComponent(config.title + ' ' + pageUrl)}`} target="_blank" rel="noopener noreferrer" style={shareBtnStyle} title="Share on WhatsApp">
-                      <svg viewBox="0 0 24 24" style={{ width: 15, height: 15 }}><rect width="24" height="24" rx="4" fill="#25D366"/><path fill="white" d="M12 4a8 8 0 00-6.93 11.97L4 20l4.17-1.06A8 8 0 1012 4zm4.08 10.85c-.17.48-1 .92-1.38.97-.35.05-.8.07-1.28-.08a11.6 11.6 0 01-1.16-.43 9.1 9.1 0 01-3.54-3.13c-.43-.58-.7-1.26-.7-1.94 0-.68.22-1.27.63-1.72.14-.16.3-.24.46-.24l.33.01c.1 0 .24-.04.38.29l.58 1.41c.05.12.08.26.01.38l-.22.37-.3.3c-.1.1-.2.2-.09.4.12.2.53.87 1.15 1.41a5.3 5.3 0 001.63 1.01c.2.1.31.08.43-.05l.52-.6c.12-.16.23-.12.38-.07l1.36.64c.16.08.27.12.3.19.04.3-.06.76-.23 1.04z"/></svg>
-                    </a>
-                    <button onClick={() => { navigator.clipboard?.writeText(pageUrl); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }} style={shareBtnStyle} title="Copy link">
-                      {linkCopied ? <Check style={{ width: 14, height: 14, color: '#10b981' }}/> : <Copy style={{ width: 14, height: 14, color: t.body }}/>}
-                    </button>
-                  </div>
                 </>
               );
             })()}
