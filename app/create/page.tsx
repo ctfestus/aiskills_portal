@@ -2980,7 +2980,7 @@ const [isSaving, setIsSaving] = useState(false);
                                   onChange={e => handleUpdateQuestion(q.id, { lesson: { ...q.lesson, videoUrl: e.target.value } })}
                                   className={`${inputCls} flex-1`}
                                   style={inputStyle}
-                                  placeholder="YouTube, Vimeo or Bunny URL..."
+                                  placeholder="YouTube, Vimeo, Bunny or Canva URL..."
                                 />
                                 <button
                                   type="button"
@@ -2997,7 +2997,9 @@ const [isSaving, setIsSaving] = useState(false);
                                 const ytMatch = vurl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
                                 const embedUrl = ytMatch
                                   ? `https://www.youtube.com/embed/${ytMatch[1]}`
-                                  : (vurl.includes('iframe.mediadelivery.net') || vurl.includes('/embed/')) ? vurl : null;
+                                  : (vurl.includes('iframe.mediadelivery.net') || vurl.includes('/embed/')) ? vurl
+                                  : vurl.includes('canva.com/design/') ? (vurl.includes('?') ? vurl : `${vurl}?embed`)
+                                  : null;
                                 return embedUrl ? (
                                   <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
                                     <iframe src={embedUrl} className="w-full aspect-video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />

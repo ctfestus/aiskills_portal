@@ -82,6 +82,7 @@ function getEmbedUrl(url: string): string | null {
   const vimeo = url.match(/vimeo\.com\/(\d+)/);
   if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
   if (url.includes('iframe.mediadelivery.net') || url.includes('video.bunnycdn.com')) return url;
+  if (url.includes('canva.com/design/')) return url.includes('?') ? url : `${url}?embed`;
   return null;
 }
 
@@ -267,7 +268,7 @@ export default function AssignmentExperiencePlayer({
               {/* Video */}
               {embedUrl && (
                 <div className="px-6 pt-5">
-                  <div className="rounded-xl overflow-hidden" style={{ aspectRatio: '16/9', background: '#000' }}>
+                  <div className="rounded-xl overflow-hidden" style={embedUrl.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9', background: '#000' }}>
                     <iframe src={embedUrl} className="w-full h-full" allowFullScreen allow="autoplay; fullscreen"/>
                   </div>
                 </div>

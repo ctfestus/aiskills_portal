@@ -1863,8 +1863,8 @@ export function CourseTaker({
     if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
     const vimeo = url.match(/vimeo\.com\/(\d+)/);
     if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
-    // Bunny.net embed URL
     if (url.includes('iframe.mediadelivery.net/embed/') || url.includes('player.mediadelivery.net/embed/') || url.includes('video.bunnycdn.com/')) return url;
+    if (url.includes('canva.com/design/')) return url.includes('?') ? url : `${url}?embed`;
     return null;
   };
 
@@ -2059,7 +2059,7 @@ export function CourseTaker({
           <div className="overflow-y-auto flex-1 overscroll-contain">
             <div className="max-w-2xl mx-auto px-5 sm:px-8 pt-2 pb-5 sm:pt-3 sm:pb-7 space-y-5 sm:space-y-6">
               {embedUrl && (
-                <div className="rounded-xl overflow-hidden shadow-md" style={{ aspectRatio: '16/9' }}>
+                <div className="rounded-xl overflow-hidden shadow-md" style={embedUrl.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9' }}>
                   <iframe
                     src={embedUrl}
                     className="w-full h-full border-0"
