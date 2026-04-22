@@ -1064,8 +1064,13 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
 
   const now = Date.now();
   const _todayMidnight = new Date(); _todayMidnight.setHours(0, 0, 0, 0);
-  const upcoming = allEvents.filter(e => !e.startsAt || e.startsAt >= _todayMidnight);
-  const past = allEvents.filter(e => e.startsAt && e.startsAt < _todayMidnight);
+  const isEventPast = (e: any) => {
+    if (!e.startsAt || e.startsAt >= _todayMidnight) return false;
+    const recEnd = e.recurrenceEndDate ? new Date(e.recurrenceEndDate) : null;
+    return !recEnd || recEnd < _todayMidnight;
+  };
+  const upcoming = allEvents.filter(e => !isEventPast(e));
+  const past = allEvents.filter(e => isEventPast(e));
 
   if (loading) return (
     <div className="space-y-3">
@@ -1252,7 +1257,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   return (
     <div>
       {orderedEvents.map((item, i) => {
-        const isPastItem = item.startsAt ? item.startsAt < _todayMidnight : undefined;
+        const isPastItem = isEventPast(item);
         return (
           <EventCard
             key={item.id}

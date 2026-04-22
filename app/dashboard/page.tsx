@@ -724,7 +724,10 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
   const ev = form.config?.eventDetails ?? {};
   const dateObj = ev.date ? new Date(ev.date) : null;
   const _today = new Date(); _today.setHours(0, 0, 0, 0);
-  const isPast = dateObj ? dateObj < _today : false;
+  const _recurrenceEnd = ev.recurrenceEndDate ? new Date(ev.recurrenceEndDate) : null;
+  const isPast = dateObj
+    ? dateObj < _today && (!_recurrenceEnd || _recurrenceEnd < _today)
+    : false;
   const isPrivate = !!ev.isPrivate;
   const isVirtual = (ev.eventType || '').toLowerCase() === 'virtual';
   const [coverError, setCoverError] = useState(false);
