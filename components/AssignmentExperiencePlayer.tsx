@@ -103,7 +103,7 @@ export default function AssignmentExperiencePlayer({
   const [done,          setDone]          = useState(false);
   const [expandedMods,  setExpandedMods]  = useState<Set<string>>(new Set([modules[0]?.id]));
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const authHeader = sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
+  const authHeader = sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {} as Record<string, string>;
 
   // totals
   const totalReqs = modules.reduce((a, m) => a + m.lessons.reduce((b, l) => b + l.requirements.length, 0), 0);
