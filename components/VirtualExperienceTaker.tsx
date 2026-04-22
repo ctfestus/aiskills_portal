@@ -725,7 +725,7 @@ export default function VirtualExperienceTaker({
                 {/* Video: above body, padded + rounded */}
                 {embedUrl && (
                   <div className="px-4 sm:px-8 pt-5 sm:pt-7 pb-2">
-                    <div className="rounded-lg overflow-hidden" style={embedUrl.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9', background: '#000' }}>
+                    <div className="rounded-lg overflow-hidden" style={embedUrl.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9' }}>
                       <iframe src={embedUrl} className="w-full h-full border-0"
                         allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
                         allowFullScreen />

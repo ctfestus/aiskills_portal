@@ -2624,7 +2624,7 @@ export function CourseTaker({
           const hasLesson = (currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl) && (config as any).lessonTiming !== 'before';
 
           return (
-            <div className="flex-shrink-0 px-5 sm:px-8 py-4" style={{ background: barBg, borderTop: isChecking ? 'none' : `1px solid ${barBorder}` }}>
+            <div className="flex-shrink-0 px-5 sm:px-8 py-4" style={{ background: barBg, borderTop: isChecking ? 'none' : `1px solid ${barBorder}`, borderRadius: isChecking ? '12px 12px 0 0' : undefined }}>
               {/* Explanation strip above bar buttons */}
               {isChecking && currentQuestion?.explanation && (
                 <div className={`mb-3 px-[10px] py-2 text-sm leading-relaxed ${isDark ? 'text-white' : 'text-zinc-900'}`}>
