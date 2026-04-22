@@ -1063,8 +1063,9 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   });
 
   const now = Date.now();
-  const upcoming = allEvents.filter(e => !e.startsAt || e.startsAt.getTime() >= now);
-  const past = allEvents.filter(e => e.startsAt && e.startsAt.getTime() < now);
+  const _todayMidnight = new Date(); _todayMidnight.setHours(0, 0, 0, 0);
+  const upcoming = allEvents.filter(e => !e.startsAt || e.startsAt >= _todayMidnight);
+  const past = allEvents.filter(e => e.startsAt && e.startsAt < _todayMidnight);
 
   if (loading) return (
     <div className="space-y-3">
@@ -1251,7 +1252,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   return (
     <div>
       {orderedEvents.map((item, i) => {
-        const isPastItem = item.startsAt ? item.startsAt.getTime() < now : undefined;
+        const isPastItem = item.startsAt ? item.startsAt < _todayMidnight : undefined;
         return (
           <EventCard
             key={item.id}
@@ -3131,11 +3132,11 @@ function ScheduleSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   );
 
   const now = new Date();
-  const upcoming = events.filter(e => !e.startDate || e.startDate >= now);
-  const past     = events.filter(e => e.startDate && e.startDate < now);
+  const upcoming = events.filter(e => !e.startDate || e.startDate >= now || (e.endDate && e.endDate >= now));
+  const past     = events.filter(e => e.startDate && e.startDate < now && (!e.endDate || e.endDate < now));
 
   const ScheduleCard = ({ item, index }: { item: any; index: number }) => {
-    const isPast  = item.startDate ? item.startDate < now : false;
+    const isPast  = item.endDate ? item.endDate < now : (item.startDate ? item.startDate < now : false);
     const isToday = item.startDate ? item.startDate.toDateString() === now.toDateString() : false;
     const isSoon  = item.startDate ? (!isPast && item.startDate.getTime() - now.getTime() < 48 * 3600 * 1000) : false;
     const startFmt = item.startDate?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });

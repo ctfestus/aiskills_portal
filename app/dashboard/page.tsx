@@ -723,7 +723,8 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
   const C = useC();
   const ev = form.config?.eventDetails ?? {};
   const dateObj = ev.date ? new Date(ev.date) : null;
-  const isPast = dateObj ? dateObj < new Date() : false;
+  const _today = new Date(); _today.setHours(0, 0, 0, 0);
+  const isPast = dateObj ? dateObj < _today : false;
   const isPrivate = !!ev.isPrivate;
   const isVirtual = (ev.eventType || '').toLowerCase() === 'virtual';
   const [coverError, setCoverError] = useState(false);

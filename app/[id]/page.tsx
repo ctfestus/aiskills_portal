@@ -1601,7 +1601,8 @@ export default function PublicFormPage() {
 
             {config.eventDetails?.isEvent && (() => {
               const ev = config.eventDetails;
-              const isPast = ev.date ? new Date(ev.date) < new Date() : false;
+              const _today = new Date(); _today.setHours(0, 0, 0, 0);
+              const isPast = ev.date ? new Date(ev.date) < _today : false;
               const mapsUrl = ev.location ? `https://maps.google.com/?q=${encodeURIComponent(ev.location)}` : null;
               const isVirtual = ev.eventType === 'virtual' && ev.meetingLink;
               const evBtnBg = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
