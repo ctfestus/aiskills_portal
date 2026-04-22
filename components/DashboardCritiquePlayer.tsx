@@ -389,9 +389,9 @@ const CATEGORY_ICONS: Record<string, React.ReactElement> = {
 };
 
 function scoreBarColor(score: number) {
-  if (score >= 8) return '#22c55e';
-  if (score >= 6) return '#f59e0b';
-  if (score >= 4) return '#f59e0b';
+  if (score >= 80) return '#22c55e';
+  if (score >= 60) return '#f59e0b';
+  if (score >= 40) return '#f59e0b';
   return '#ef4444';
 }
 
@@ -416,11 +416,11 @@ function AuditReport({ audit, accentColor, isDark }: { audit: Audit; accentColor
           <span style={{ fontSize: 72, fontWeight: 900, lineHeight: 1, color: '#ffffff', letterSpacing: '-0.03em' }}>
             {audit.overallScore.toFixed(1)}
           </span>
-          <span className="mb-2 text-[15px] font-semibold" style={{ color: 'rgba(255,255,255,0.4)' }}>/10</span>
+          <span className="mb-2 text-[15px] font-semibold" style={{ color: 'rgba(255,255,255,0.4)' }}>/100</span>
         </div>
         <div className="h-1 rounded-full overflow-hidden mb-5" style={{ background: 'rgba(255,255,255,0.12)' }}>
           <div className="h-full rounded-full" style={{
-            width: `${audit.overallScore * 10}%`,
+            width: `${audit.overallScore}%`,
             background: '#ADEE66',
           }} />
         </div>
@@ -479,7 +479,7 @@ function AuditReport({ audit, accentColor, isDark }: { audit: Audit; accentColor
           const barColor = scoreBarColor(cat.score);
           const icon     = CATEGORY_ICONS[cat.name] ?? CATEGORY_ICONS['Data Clarity'];
           const rec      = cat.gaps[0] ?? cat.strengths[0] ?? cat.summary;
-          const status   = cat.score >= 8 ? 'Excellent' : cat.score >= 6 ? 'Good' : cat.score >= 4 ? 'Needs Work' : 'Critical';
+          const status   = cat.score >= 80 ? 'Excellent' : cat.score >= 60 ? 'Good' : cat.score >= 40 ? 'Needs Work' : 'Critical';
           return (
             <div key={cat.name} className="flex flex-col"
               style={{ background: card, borderRadius: 20, boxShadow: shadow }}>
@@ -498,10 +498,10 @@ function AuditReport({ audit, accentColor, isDark }: { audit: Audit; accentColor
                   <span style={{ fontSize: 36, fontWeight: 900, lineHeight: 1, color: text, letterSpacing: '-0.02em' }}>
                     {cat.score}
                   </span>
-                  <span className="mb-1 text-[13px] font-medium" style={{ color: dim }}>/10</span>
+                  <span className="mb-1 text-[13px] font-medium" style={{ color: dim }}>/100</span>
                 </div>
                 <div className="h-1 rounded-full overflow-hidden mb-5" style={{ background: dim }}>
-                  <div className="h-full rounded-full" style={{ width: `${cat.score * 10}%`, background: barColor }} />
+                  <div className="h-full rounded-full" style={{ width: `${cat.score}%`, background: barColor }} />
                 </div>
               </div>
               <div className="flex-1" style={{ padding: '0 22px 18px' }}>

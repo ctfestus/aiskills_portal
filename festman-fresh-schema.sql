@@ -224,6 +224,9 @@ CREATE TABLE public.assignments (
   cover_image             text,
   status                  text        NOT NULL DEFAULT 'draft'
                                         CHECK (status IN ('draft','published','closed')),
+  type                    text        NOT NULL DEFAULT 'standard'
+                                        CHECK (type IN ('standard','code_review','excel_review','dashboard_critique','virtual_experience')),
+  config                  jsonb,
   created_at              timestamptz NOT NULL DEFAULT now(),
   updated_at              timestamptz NOT NULL DEFAULT now()
 );

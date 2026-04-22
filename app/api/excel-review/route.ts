@@ -165,7 +165,7 @@ For each issue provide:
 - detail: 1-2 sentences explaining the problem
 - fix: the exact corrected formula or change to make
 
-Score three categories 0-10:
+Score three categories 0-100:
 - "Formula Correctness": are the formulas logically and syntactically correct?
 - "Formula Choice": are the right functions being used for each task?
 - "Value Accuracy": do the computed values match the expected outputs?

@@ -143,15 +143,13 @@ export async function POST(req: NextRequest) {
         const FROM       = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
         const branding   = { appName: t.appName, appUrl: signupUrl, logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl };
 
-        await Promise.all(
-          inserted.map(({ email }) =>
-            resend.emails.send({
-              from: FROM,
-              to: email,
-              subject: `You've been invited to join ${t.appName || cohortName}`,
-              html: cohortInviteEmail({ cohortName, signupUrl, branding }),
-            })
-          )
+        await resend.batch.send(
+          inserted.map(({ email }) => ({
+            from: FROM,
+            to: email,
+            subject: `You've been invited to join ${t.appName || cohortName}`,
+            html: cohortInviteEmail({ cohortName, signupUrl, branding }),
+          }))
         );
       } catch {
         // non-blocking -- ignore email errors

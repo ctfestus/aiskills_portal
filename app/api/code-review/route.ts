@@ -114,7 +114,7 @@ Identify every issue in the code. For each issue provide:
 NEVER flag issues that don't exist. NEVER be vague. Each issue must have a specific, implementable fix.
 
 HOLISTIC AUDIT -- 4 CATEGORIES
-Score each category 0-10. Be honest -- 8+ must be genuinely earned.
+Score each category 0-100. Be honest -- 80+ must be genuinely earned.
 
 CATEGORY 1: "Correctness & Logic" -- Does the code produce the right output? Are edge cases handled? Are there logic errors or incorrect assumptions?
 CATEGORY 2: "Code Quality & Readability" -- Are names descriptive? Is structure clear? Is it easy for another developer to read?

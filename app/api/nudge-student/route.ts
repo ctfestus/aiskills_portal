@@ -82,7 +82,11 @@ export async function POST(req: NextRequest) {
   });
 
   try {
-    await resend.emails.send({ from: FROM, to: studentEmail, subject, html });
+    const { error: sendError } = await resend.emails.send({ from: FROM, to: studentEmail, subject, html });
+    if (sendError) {
+      console.error('[nudge-student] Resend error:', sendError);
+      return NextResponse.json({ error: 'Failed to send nudge. Please try again.' }, { status: 500 });
+    }
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error('[nudge-student]', err);

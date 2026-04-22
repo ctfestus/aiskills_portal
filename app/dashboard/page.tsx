@@ -2206,12 +2206,102 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
             </span>
           </div>
 
-          {viewingSub.response_text ? (
-            <div className="rounded-xl p-4 mb-3" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
-              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#888' }}>Response</p>
-              <div className="rich-content text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(viewingSub.response_text) }}/>
-            </div>
-          ) : (
+          {viewingSub.response_text ? (() => {
+            const subAssignType = selected?.type ?? 'standard';
+            if (['code_review', 'excel_review', 'dashboard_critique'].includes(subAssignType)) {
+              try {
+                const parsed = JSON.parse(viewingSub.response_text);
+
+                if (subAssignType === 'code_review' || subAssignType === 'excel_review') {
+                  const issueTitles: string[] = parsed.issueTitles ?? (parsed.issues ?? []).map((i: any) => i.title);
+                  const topRecs: string[] = parsed.topRecommendations ?? [];
+                  const submittedDate = viewingSub.submitted_at ?? viewingSub.updated_at;
+                  return (
+                    <div className="rounded-xl overflow-hidden mb-3" style={{ border: '1px solid rgba(0,0,0,0.08)' }}>
+                      <div className="px-4 py-3 flex items-center justify-between" style={{ background: '#0f172a' }}>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                            AI {subAssignType === 'code_review' ? 'Code' : 'Excel'} Review
+                          </p>
+                          {submittedDate && <p className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>{new Date(submittedDate).toLocaleDateString()}</p>}
+                          {parsed.executiveSummary && <p className="text-xs mt-1 max-w-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{parsed.executiveSummary}</p>}
+                        </div>
+                        <div className="flex items-baseline gap-1 flex-shrink-0 ml-4">
+                          <span className="font-black" style={{ fontSize: 44, color: '#fff', lineHeight: 1 }}>{parsed.overallScore?.toFixed(1)}</span>
+                          <span className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>/100</span>
+                        </div>
+                      </div>
+                      {issueTitles.length > 0 && (
+                        <div className="px-4 py-3" style={{ borderTop: '1px solid rgba(0,0,0,0.07)', background: '#fafafa' }}>
+                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: '#888' }}>Issues Found</p>
+                          <div className="space-y-1">
+                            {issueTitles.map((t, i) => (
+                              <div key={i} className="flex items-start gap-2 text-sm" style={{ color: '#333' }}>
+                                <span style={{ color: '#ef4444', flexShrink: 0 }}>•</span>
+                                <span>{t}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {topRecs.length > 0 && (
+                        <div className="px-4 py-3" style={{ borderTop: '1px solid rgba(0,0,0,0.07)', background: '#fafafa' }}>
+                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: '#888' }}>Top Recommendations</p>
+                          <div className="space-y-1.5">
+                            {topRecs.map((r, i) => (
+                              <div key={i} className="flex items-start gap-2 text-sm" style={{ color: '#333' }}>
+                                <span className="font-bold flex-shrink-0" style={{ color: '#16a34a' }}>{i + 1}.</span>
+                                <span>{r}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (subAssignType === 'dashboard_critique' && parsed.audit) {
+                  const audit = parsed.audit as { overallScore: number; executiveSummary: string; categories: { name: string; score: number }[] };
+                  return (
+                    <div className="rounded-xl overflow-hidden mb-3" style={{ border: '1px solid rgba(0,0,0,0.08)' }}>
+                      <div className="px-4 py-3 flex items-start justify-between gap-4" style={{ background: '#0f172a' }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>Dashboard Critique</p>
+                          {audit.executiveSummary && <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{audit.executiveSummary}</p>}
+                        </div>
+                        <div className="flex items-baseline gap-1 flex-shrink-0">
+                          <span className="font-black" style={{ fontSize: 44, color: '#fff', lineHeight: 1 }}>{audit.overallScore.toFixed(1)}</span>
+                          <span className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>/10</span>
+                        </div>
+                      </div>
+                      {audit.categories?.length > 0 && (
+                        <div className="px-4 py-3 space-y-2" style={{ background: '#fafafa' }}>
+                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: '#888' }}>Category Scores</p>
+                          {audit.categories.map((cat, i) => (
+                            <div key={i} className="flex items-center justify-between text-sm">
+                              <span style={{ color: '#333' }}>{cat.name}</span>
+                              <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                                style={{ background: cat.score >= 7 ? '#dcfce7' : cat.score >= 5 ? '#fef9c3' : '#fee2e2', color: cat.score >= 7 ? '#16a34a' : cat.score >= 5 ? '#ca8a04' : '#dc2626' }}>
+                                {cat.score}/10
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+              } catch {}
+            }
+
+            return (
+              <div className="rounded-xl p-4 mb-3" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#888' }}>Response</p>
+                <div className="rich-content text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(viewingSub.response_text) }}/>
+              </div>
+            );
+          })() : (
             <p className="text-sm mb-3" style={{ color: C.faint }}>No written response.</p>
           )}
 
@@ -3791,7 +3881,7 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
     setNudging(nudgeKey);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      await fetch('/api/nudge-student', {
+      const res = await fetch('/api/nudge-student', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({
@@ -3801,7 +3891,14 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
           status:       row.status,
         }),
       });
-      setNudged(prev => new Set([...prev, nudgeKey]));
+      if (res.ok) {
+        setNudged(prev => new Set([...prev, nudgeKey]));
+      } else {
+        const json = await res.json().catch(() => ({}));
+        alert(json.error || 'Failed to send nudge. Please try again.');
+      }
+    } catch {
+      alert('Failed to send nudge. Please check your connection.');
     } finally {
       setNudging(null);
     }

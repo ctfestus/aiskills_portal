@@ -34,6 +34,7 @@ interface ReviewResult {
 export interface LeanSubmission {
   submittedAt: string;
   overallScore: number;
+  executiveSummary: string;
   issueTitles: string[];
   topRecommendations: string[];
 }
@@ -44,6 +45,7 @@ interface Props {
   accentColor: string;
   completed: boolean;
   submissions?: LeanSubmission[];
+  savedSummary?: LeanSubmission;
   rubric?: string[];
   schema?: string;
   minScore?: number;
@@ -61,12 +63,12 @@ function severityLabel(s: LineIssue['severity']) {
   return 'Suggestion';
 }
 function scoreColor(n: number) {
-  if (n >= 8) return '#22c55e';
-  if (n >= 6) return '#f59e0b';
+  if (n >= 80) return '#22c55e';
+  if (n >= 60) return '#f59e0b';
   return '#ef4444';
 }
 
-export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed, submissions = [], rubric, schema, minScore, onComplete }: Props) {
+export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed, submissions = [], savedSummary, rubric, schema, minScore, onComplete }: Props) {
   const [code, setCode]         = useState('');
   const [language, setLanguage] = useState('Python');
   const [dialect, setDialect]   = useState('PostgreSQL');
@@ -108,6 +110,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
       const lean: LeanSubmission = {
         submittedAt: new Date().toISOString(),
         overallScore: json.overallScore,
+        executiveSummary: json.executiveSummary ?? '',
         issueTitles: (json.issues ?? []).map((i: LineIssue) => i.title),
         topRecommendations: json.topRecommendations ?? [],
       };
@@ -122,6 +125,53 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
 
   function reset() { setCode(''); setResult(null); setError(''); }
 
+  // Returning student -- show saved summary card
+  if (!result && completed && savedSummary) {
+    return (
+      <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${border}` }}>
+        <div className="px-5 py-4 flex items-start justify-between gap-4" style={{ background: '#0f172a' }}>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>AI Code Review</p>
+            <p className="text-xs mb-2" style={{ color: 'rgba(255,255,255,0.4)' }}>{new Date(savedSummary.submittedAt).toLocaleDateString()}</p>
+            {savedSummary.executiveSummary && (
+              <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.6)' }}>{savedSummary.executiveSummary}</p>
+            )}
+          </div>
+          <div className="flex items-baseline gap-1 flex-shrink-0">
+            <span style={{ fontSize: 40, fontWeight: 900, lineHeight: 1, color: '#fff' }}>{savedSummary.overallScore.toFixed(1)}</span>
+            <span className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>/100</span>
+          </div>
+        </div>
+        {savedSummary.issueTitles.length > 0 && (
+          <div className="px-5 py-3" style={{ borderTop: `1px solid ${border}`, background: card }}>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: muted }}>Issues Found</p>
+            <div className="space-y-1">
+              {savedSummary.issueTitles.map((t, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs" style={{ color: text }}>
+                  <span style={{ color: '#ef4444', flexShrink: 0 }}>•</span>
+                  <span>{t}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {savedSummary.topRecommendations.length > 0 && (
+          <div className="px-5 py-3" style={{ borderTop: `1px solid ${border}`, background: card }}>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: muted }}>Top Recommendations</p>
+            <div className="space-y-1.5">
+              {savedSummary.topRecommendations.map((r, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs" style={{ color: text }}>
+                  <span className="font-bold flex-shrink-0" style={{ color: '#22c55e' }}>{i + 1}.</span>
+                  <span>{r}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // Input state
   if (!result) {
     const lastAttempt = submissions.length > 0 ? submissions[submissions.length - 1] : null;
@@ -130,7 +180,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
         {lastAttempt && (
           <div className="flex items-center justify-between px-4 py-2.5 rounded-lg" style={{ background: inner, border: `1px solid ${border}` }}>
             <span style={{ fontSize: 12, color: muted }}>
-              Attempt {submissions.length} · Last score: <span style={{ fontWeight: 700, color: scoreColor(lastAttempt.overallScore) }}>{lastAttempt.overallScore.toFixed(1)}/10</span>
+              Attempt {submissions.length} · Last score: <span style={{ fontWeight: 700, color: scoreColor(lastAttempt.overallScore) }}>{lastAttempt.overallScore.toFixed(1)}/100</span>
             </span>
             <span style={{ fontSize: 11, color: muted }}>{new Date(lastAttempt.submittedAt).toLocaleDateString()}</span>
           </div>
@@ -266,10 +316,10 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
                 <span style={{ fontSize: 56, fontWeight: 900, lineHeight: 1, color: '#fff', letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums' }}>
                   {result.overallScore.toFixed(1)}
                 </span>
-                <span style={{ fontSize: 18, fontWeight: 400, color: 'rgba(255,255,255,0.25)' }}>/10</span>
+                <span style={{ fontSize: 18, fontWeight: 400, color: 'rgba(255,255,255,0.25)' }}>/100</span>
               </div>
               <div style={{ width: 200, height: 2, background: 'rgba(255,255,255,0.08)', borderRadius: 0, overflow: 'hidden', marginBottom: 16 }}>
-                <div style={{ height: '100%', width: `${result.overallScore * 10}%`, background: '#ADEE66' }} />
+                <div style={{ height: '100%', width: `${result.overallScore}%`, background: '#ADEE66' }} />
               </div>
               <p style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(255,255,255,0.55)', maxWidth: 480 }}>{result.executiveSummary}</p>
             </div>
@@ -392,17 +442,17 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
             style={{ padding: '16px 20px', borderBottom: i < result.categories.length - 1 ? `1px solid ${border}` : 'none' }}>
             <div style={{ width: 36, flexShrink: 0, textAlign: 'center' }}>
               <span style={{ fontSize: 22, fontWeight: 900, color: scoreColor(cat.score), lineHeight: 1, display: 'block', fontVariantNumeric: 'tabular-nums' }}>{cat.score}</span>
-              <span style={{ fontSize: 9, color: muted }}>/10</span>
+              <span style={{ fontSize: 9, color: muted }}>/100</span>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="flex items-center justify-between mb-1.5">
                 <p style={{ fontSize: 13, fontWeight: 700, color: text }}>{cat.name}</p>
                 <span style={{ fontSize: 10, fontWeight: 700, color: scoreColor(cat.score), textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  {cat.score >= 8 ? 'Excellent' : cat.score >= 6 ? 'Good' : cat.score >= 4 ? 'Needs Work' : 'Critical'}
+                  {cat.score >= 80 ? 'Excellent' : cat.score >= 60 ? 'Good' : cat.score >= 40 ? 'Needs Work' : 'Critical'}
                 </span>
               </div>
               <div style={{ height: 2, background: border, overflow: 'hidden', marginBottom: 8 }}>
-                <div style={{ height: '100%', width: `${cat.score * 10}%`, background: scoreColor(cat.score) }} />
+                <div style={{ height: '100%', width: `${cat.score}%`, background: scoreColor(cat.score) }} />
               </div>
               <p style={{ fontSize: 12, color: muted, lineHeight: 1.5 }}>{cat.summary}</p>
             </div>
@@ -439,7 +489,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
           </div>
           <div>
             <p style={{ fontSize: 12, fontWeight: 700, color: '#ef4444', marginBottom: 2 }}>
-              Score too low · {result.overallScore.toFixed(1)}/10 · Minimum required: {minScore}/10
+              Score too low · {result.overallScore.toFixed(1)}/100 · Minimum required: {minScore}/100
             </p>
             <p style={{ fontSize: 12, color: '#ef4444', opacity: 0.8 }}>Review the feedback above, fix your code, and resubmit.</p>
           </div>

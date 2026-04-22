@@ -14,6 +14,7 @@ import {
   Copy, Check, Layers, Repeat,
 } from 'lucide-react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import NotificationBell from '@/components/NotificationBell';
 import { useTheme } from '@/components/ThemeProvider';
@@ -1272,7 +1273,12 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   );
 }
 // --- Assignments section ---
-function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; userId: string; C: typeof LIGHT_C; onBack: () => void }) {
+const CodeReviewPlayer      = dynamic(() => import('@/components/CodeReviewPlayer'),       { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
+const ExcelReviewPlayer     = dynamic(() => import('@/components/ExcelReviewPlayer'),      { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
+const DashboardCritiquePlayer = dynamic(() => import('@/components/DashboardCritiquePlayer'), { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
+const AssignmentExperiencePlayer = dynamic(() => import('@/components/AssignmentExperiencePlayer'), { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
+
+function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, onBack }: { assignment: any; userId: string; studentName: string; studentEmail: string; C: typeof LIGHT_C; onBack: () => void }) {
   type ReadyFile = { name: string; url: string; status: 'uploading' | 'done' | 'error'; error?: string };
   const [submission, setSubmission] = useState<any>(null);
   const [savedFiles, setSavedFiles] = useState<any[]>([]);
@@ -1285,6 +1291,16 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [loadingSub, setLoadingSub] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // VE-specific state
+  const [veForm, setVeForm]           = useState<any>(null);
+  const [veProgress, setVeProgress]   = useState<any>(null);
+  const [sessionToken, setSessionToken] = useState('');
+  const [veLoading, setVeLoading]     = useState(false);
+
+  const assignmentType = assignment.type ?? 'standard';
+  const isAiType = ['code_review', 'excel_review', 'dashboard_critique'].includes(assignmentType);
+  const isVeType = assignmentType === 'virtual_experience';
 
   useEffect(() => {
     const load = async () => {
@@ -1303,9 +1319,53 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
       }
       setResources(res ?? []);
       setLoadingSub(false);
+
+      // Load VE data if this is a virtual_experience assignment
+      if (isVeType && assignment.config?.ve_form_id) {
+        setVeLoading(true);
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token ?? '';
+          setSessionToken(token);
+          const { data: veData } = await supabase
+            .from('virtual_experiences')
+            .select('id, title, slug, modules, company, role, industry, tagline, cover_image, manager_name, manager_title, dataset, background')
+            .eq('id', assignment.config.ve_form_id)
+            .single();
+          if (veData) {
+            setVeForm({
+              id: veData.id,
+              slug: veData.slug,
+              config: {
+                isVirtualExperience: true as const,
+                title: veData.title,
+                company: veData.company,
+                role: veData.role,
+                industry: veData.industry,
+                modules: veData.modules ?? [],
+                tagline: veData.tagline,
+                coverImage: veData.cover_image,
+                managerName: veData.manager_name,
+                managerTitle: veData.manager_title,
+                dataset: veData.dataset,
+                background: veData.background,
+              },
+            });
+          }
+          const res = await fetch(`/api/guided-project-progress?formId=${assignment.config.ve_form_id}&studentId=${userId}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (res.ok) {
+            const json = await res.json();
+            if (json.attempt?.progress) setVeProgress(json.attempt.progress);
+          }
+        } finally {
+          setVeLoading(false);
+        }
+      }
     };
     load();
-  }, [assignment.id, userId]);
+  }, [assignment.id, userId, isVeType, assignment.config?.ve_form_id]);
 
   const ALLOWED_TYPES = new Set([
     'application/pdf',
@@ -1431,6 +1491,22 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function autoSubmit(aiScore: number | null, summaryText: string) {
+    const score = aiScore != null ? Math.round(aiScore) : null;
+    const payload: any = {
+      assignment_id: assignment.id,
+      student_id: userId,
+      response_text: summaryText,
+      status: 'submitted',
+      submitted_at: new Date().toISOString(),
+    };
+    if (score != null) payload.score = score;
+    const { data, error } = await supabase.from('assignment_submissions')
+      .upsert(payload, { onConflict: 'student_id,assignment_id' })
+      .select().single();
+    if (!error && data) setSubmission(data);
   }
 
   const isGraded = submission?.status === 'graded';
@@ -1584,7 +1660,119 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
         )}
       </div>
 
-      {/* Submission panel */}
+      {/* AI / VE tools -- rendered outside the card, full-width */}
+      {!loadingSub && isAiType && (
+        <div className="mb-4">
+          {/* Graded state shown above the player */}
+          {isGraded && (
+            <div className="rounded-2xl p-5 mb-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+              {(() => {
+                const passed = submission.score != null && submission.score >= 85;
+                const failed = submission.score != null && submission.score < 85;
+                return (
+                  <>
+                    <div className="flex items-center gap-3 flex-wrap mb-2">
+                      <StatusBadge status="graded"/>
+                      {submission.score != null && <span className="text-sm font-semibold" style={{ color: passed ? '#10b981' : '#ef4444' }}>Score: {submission.score}</span>}
+                      {passed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>Passed</span>}
+                      {failed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.10)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}>Failed</span>}
+                    </div>
+                    {submission.feedback && (
+                      <div className="rounded-xl p-4" style={{ background: passed ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.07)', border: `1px solid ${passed ? 'rgba(16,185,129,0.22)' : 'rgba(239,68,68,0.22)'}` }}>
+                        <p className="text-xs font-semibold mb-1" style={{ color: passed ? '#10b981' : '#ef4444' }}>Instructor Feedback</p>
+                        <div className="rich-content text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(submission.feedback) }}/>
+                      </div>
+                    )}
+                    {failed && (
+                      <button onClick={handleResubmit} disabled={submitting}
+                        className="mt-3 w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
+                        style={{ background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1.5px solid rgba(239,68,68,0.25)' }}>
+                        {submitting ? <Loader2 className="w-4 h-4 animate-spin"/> : <RefreshCw className="w-4 h-4"/>}
+                        Resubmit Assignment
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {assignmentType === 'code_review' && (
+            <CodeReviewPlayer
+              reqId={assignment.id}
+              isDark={false}
+              accentColor={C.green}
+              completed={isGraded || isSubmitted}
+              savedSummary={(() => { try { return submission?.response_text ? JSON.parse(submission.response_text) : undefined; } catch { return undefined; } })()}
+              rubric={assignment.config?.rubric}
+              schema={assignment.config?.schema}
+              minScore={assignment.config?.minScore}
+              onComplete={(result: any, lean: any) => autoSubmit(result.overallScore, JSON.stringify(lean))}
+            />
+          )}
+          {assignmentType === 'excel_review' && (
+            <ExcelReviewPlayer
+              reqId={assignment.id}
+              isDark={false}
+              accentColor={C.green}
+              completed={isGraded || isSubmitted}
+              savedSummary={(() => { try { return submission?.response_text ? JSON.parse(submission.response_text) : undefined; } catch { return undefined; } })()}
+              rubric={assignment.config?.rubric}
+              context={assignment.config?.context}
+              minScore={assignment.config?.minScore}
+              onComplete={(result: any, lean: any) => autoSubmit(result.overallScore, JSON.stringify(lean))}
+            />
+          )}
+          {assignmentType === 'dashboard_critique' && (
+            <DashboardCritiquePlayer
+              reqId={assignment.id}
+              isDark={false}
+              accentColor={C.green}
+              completed={isGraded || isSubmitted}
+              savedResult={(() => { try { return submission?.response_text ? JSON.parse(submission.response_text) : undefined; } catch { return undefined; } })()}
+              rubric={assignment.config?.rubric}
+              onComplete={(result: any) => autoSubmit(result.audit?.overallScore ?? null, JSON.stringify(result))}
+            />
+          )}
+        </div>
+      )}
+
+      {/* VE player */}
+      {!loadingSub && isVeType && (
+        <div className="mb-4">
+          {isGraded && (
+            <div className="rounded-2xl p-5 mb-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+              <div className="flex items-center gap-3">
+                <StatusBadge status="graded"/>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>Completed</span>
+              </div>
+              {submission.feedback && (
+                <div className="mt-3 rounded-xl p-4" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.22)' }}>
+                  <p className="text-xs font-semibold mb-1" style={{ color: '#10b981' }}>Instructor Feedback</p>
+                  <div className="rich-content text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(submission.feedback) }}/>
+                </div>
+              )}
+            </div>
+          )}
+          {veLoading && <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.faint }}/></div>}
+          {!veLoading && !veForm && <p className="text-sm text-center py-6" style={{ color: C.faint }}>Virtual Experience not found.</p>}
+          {!veLoading && veForm && (
+            <AssignmentExperiencePlayer
+              formId={veForm.id}
+              config={veForm.config}
+              userId={userId}
+              studentName={studentName}
+              studentEmail={studentEmail}
+              sessionToken={sessionToken}
+              initialProgress={veProgress}
+              onComplete={() => autoSubmit(null, 'Virtual experience completed.')}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Submission panel -- standard type only */}
+      {assignmentType === 'standard' && (
       <div className="rounded-2xl p-6" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
         <h3 className="text-sm font-bold mb-4" style={{ color: C.text }}>Your Submission</h3>
 
@@ -1765,11 +1953,12 @@ function AssignmentDetail({ assignment, userId, C, onBack }: { assignment: any; 
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
 
-function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
+function AssignmentsSection({ userId, studentName, studentEmail, C }: { userId: string; studentName: string; studentEmail: string; C: typeof LIGHT_C }) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<any>(null);
@@ -1782,7 +1971,7 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
       if (!student?.cohort_id) { setLoading(false); return; }
       const [{ data: assignments }, { data: subs }] = await Promise.all([
         supabase.from('assignments')
-          .select('id, title, scenario, brief, tasks, requirements, cover_image, status, created_at, related_course')
+          .select('id, title, scenario, brief, tasks, requirements, cover_image, status, created_at, related_course, type, config')
           .contains('cohort_ids', [student.cohort_id])
           .eq('status', 'published')
           .order('created_at', { ascending: false }),
@@ -1816,7 +2005,7 @@ function AssignmentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }
     load();
   }, [userId, refreshKey]);
 
-  if (selected) return <AssignmentDetail assignment={selected} userId={userId} C={C} onBack={() => { setSelected(null); setRefreshKey(k => k + 1); }}/>;
+  if (selected) return <AssignmentDetail assignment={selected} userId={userId} studentName={studentName} studentEmail={studentEmail} C={C} onBack={() => { setSelected(null); setRefreshKey(k => k + 1); }}/>;
 
   const skCard = (
     <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
@@ -4478,7 +4667,7 @@ export default function StudentDashboard() {
               <EventsSection userId={user.id} C={C}/>
             )}
             {activeSection === 'assignments' && user && (
-              <AssignmentsSection userId={user.id} C={C}/>
+              <AssignmentsSection userId={user.id} studentName={userName} studentEmail={user.email ?? ''} C={C}/>
             )}
             {activeSection === 'community' && user && (
               <CommunitySection userId={user.id} C={C}/>

@@ -209,22 +209,22 @@ After completing element-level analysis, evaluate the ENTIRE dashboard against t
 
 CATEGORY 1 -- "Layout & Structure"
 Covers: (1) Layout & Visual Hierarchy, (8) White Space, (10) Consistency
-Score out of 10: penalise for cluttered layouts, inconsistent card sizes, poor reading flow, insufficient padding, mixed font styles.
+Score out of 100: penalise for cluttered layouts, inconsistent card sizes, poor reading flow, insufficient padding, mixed font styles.
 
 CATEGORY 2 -- "Visual Design"
 Covers: (4) Color Usage, (3) Chart Type Selection, (6) Axes & Scales
-Score out of 10: penalise for rainbow colour palettes, 3D charts, truncated axes, inaccessible contrast, incorrect chart type for data type.
+Score out of 100: penalise for rainbow colour palettes, 3D charts, truncated axes, inaccessible contrast, incorrect chart type for data type.
 
 CATEGORY 3 -- "Data Clarity"
 Covers: (2) Titles & Labels, (5) Data Labeling, (7) Tables & Numbers
-Score out of 10: penalise for missing units, ambiguous titles, overcrowded labels, left-aligned numbers in tables, raw numbers without K/M/B formatting.
+Score out of 100: penalise for missing units, ambiguous titles, overcrowded labels, left-aligned numbers in tables, raw numbers without K/M/B formatting.
 
 CATEGORY 4 -- "Insight & Storytelling"
 Covers: (9) Callouts & Highlights, (11) Positive Reinforcement, and overall decision-support quality
-Score out of 10: penalise for descriptive-only titles (no insight), missing benchmarks or targets on KPIs, no callout annotations, no clear narrative flow.
+Score out of 100: penalise for descriptive-only titles (no insight), missing benchmarks or targets on KPIs, no callout annotations, no clear narrative flow.
 
 For each category provide:
-- score (0-10, be honest -- a score of 8+ must be genuinely earned)
+- score (0-100, be honest -- a score of 80+ must be genuinely earned)
 - summary (2-3 sentences, McKinsey-level directness -- what the score reflects)
 - strengths (1-3 specific things working well in this category)
 - gaps (1-3 specific failures that pulled the score down; empty [] only if truly flawless)
