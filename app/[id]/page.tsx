@@ -1602,7 +1602,7 @@ export default function PublicFormPage() {
             {config.eventDetails?.isEvent && (() => {
               const ev = config.eventDetails;
               const _today = new Date(); _today.setHours(0, 0, 0, 0);
-              const _recurrenceEnd = ev.recurrenceEndDate ? new Date(ev.recurrenceEndDate) : null;
+              const _recurrenceEnd = form.recurrence_end_date ? new Date(form.recurrence_end_date) : null;
               const isPast = ev.date
                 ? new Date(ev.date) < _today && (!_recurrenceEnd || _recurrenceEnd < _today)
                 : false;
