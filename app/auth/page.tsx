@@ -21,6 +21,9 @@ export default function AuthPage() {
     if (params.get('error') === 'not_allowed') {
       setMessage('You do not have access to this portal. Contact your Learning Advisor.');
     }
+    if (params.get('mode') === 'signup') {
+      setIsLogin(false);
+    }
   }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -30,7 +33,7 @@ export default function AuthPage() {
     try {
       if (isForgot) {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth/reset-password`,
+          redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
         });
         if (error) throw error;
         setMessage('Check your email for the password reset link.');

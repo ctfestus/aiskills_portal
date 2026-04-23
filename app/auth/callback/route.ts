@@ -6,6 +6,13 @@ import { adminClient } from '@/lib/admin-client';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
+  const type = searchParams.get('type');
+
+  // Password reset: forward the code to the reset page without consuming it here
+  if (type === 'recovery' && code) {
+    return NextResponse.redirect(new URL(`/auth/reset-password?code=${encodeURIComponent(code)}`, request.url));
+  }
+
   const cookieStore = await cookies();
 
   const supabase = createServerClient(

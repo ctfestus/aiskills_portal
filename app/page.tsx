@@ -282,7 +282,7 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
           {user ? <NavProfileMenu user={user} profile={profile} /> : (
             <>
               <Link href="/auth" className="text-sm font-medium hidden sm:block transition-opacity hover:opacity-60" style={{ color: nav_text }}>Log in</Link>
-              <Link href="/auth" className="px-5 py-2.5 rounded-full text-sm font-bold transition-all hover:opacity-90" style={{ background: nav_text, color: nav_bg }}>
+              <Link href="/auth?mode=signup" className="px-5 py-2.5 rounded-full text-sm font-bold transition-all hover:opacity-90" style={{ background: nav_text, color: nav_bg }}>
                 Get started
               </Link>
             </>
@@ -1033,7 +1033,7 @@ export default function LandingPage() {
               <Link href="/auth" className="text-sm font-medium text-white/75 hover:text-white transition-colors hidden sm:block">
                 Sign in
               </Link>
-              <Link href="/auth"
+              <Link href="/auth?mode=signup"
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:opacity-90 bg-white"
                 style={{ color: primaryColor }}
               >
