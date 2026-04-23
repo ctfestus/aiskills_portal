@@ -32,8 +32,12 @@ export default function AuthPage() {
     setMessage('');
     try {
       if (isForgot) {
+        // Mark recovery intent so the callback knows to redirect to reset-password
+        // instead of running the new-signup allowlist flow.
+        document.cookie = 'sb-reset-intent=1; path=/; max-age=3600; SameSite=Lax';
+        const origin = window.location.origin.replace('://www.', '://');
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin.replace('://www.', '://')}/auth/reset-password`,
+          redirectTo: `${origin}/auth/callback`,
         });
         if (error) throw error;
         setMessage('Check your email for the password reset link.');

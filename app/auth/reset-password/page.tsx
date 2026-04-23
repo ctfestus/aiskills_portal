@@ -2,12 +2,9 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import ResetPasswordForm from './ResetPasswordForm';
 
-export default async function ResetPasswordPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ code?: string }>;
-}) {
-  const { code } = await searchParams;
+// Code exchange happens in /auth/callback (Route Handler) so it can write cookies.
+// By the time the user reaches this page the session cookie is already set.
+export default async function ResetPasswordPage() {
   const cookieStore = await cookies();
 
   const supabase = createServerClient(
@@ -24,16 +21,8 @@ export default async function ResetPasswordPage({
     }
   );
 
-  if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) {
-      return <ResetPasswordForm error="Invalid or expired reset link. Please request a new one." />;
-    }
-    return <ResetPasswordForm />;
-  }
-
-  // No code -- check for an existing recovery session (implicit flow or already exchanged)
   const { data: { user } } = await supabase.auth.getUser();
+
   if (!user) {
     return <ResetPasswordForm error="Invalid or expired reset link. Please request a new one." />;
   }

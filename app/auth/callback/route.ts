@@ -8,10 +8,9 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
   const type = searchParams.get('type');
 
-  // Password reset: forward the code to the reset page without consuming it here
-  if (type === 'recovery' && code) {
-    return NextResponse.redirect(new URL(`/auth/reset-password?code=${encodeURIComponent(code)}`, request.url));
-  }
+  const isRecovery =
+    type === 'recovery' ||
+    request.cookies.get('sb-reset-intent')?.value === '1';
 
   const cookieStore = await cookies();
 
@@ -28,6 +27,15 @@ export async function GET(request: NextRequest) {
     }
   );
 
+  // Password reset: exchange code here (Route Handler can set cookies),
+  // then redirect to the reset form -- no code in the URL.
+  if (isRecovery && code) {
+    await supabase.auth.exchangeCodeForSession(code);
+    const response = NextResponse.redirect(new URL('/auth/reset-password', request.url));
+    response.cookies.delete('sb-reset-intent');
+    return response;
+  }
+
   if (code) {
     await supabase.auth.exchangeCodeForSession(code);
   }
@@ -40,6 +48,13 @@ export async function GET(request: NextRequest) {
     if (!user.email) {
       await db.auth.admin.deleteUser(user.id);
       return NextResponse.redirect(new URL('/auth?error=not_allowed', request.url));
+    }
+
+    // Safety net: if the user is already enrolled, treat this as recovery
+    // (avoids running new-signup allowlist check on existing students).
+    const { data: existing } = await db.from('students').select('id').eq('id', user.id).maybeSingle();
+    if (existing) {
+      return NextResponse.redirect(new URL('/auth/reset-password', request.url));
     }
 
     const { data: cohortId } = await db.rpc('check_email_allowlist', { p_email: user.email });

@@ -14,12 +14,11 @@ function generateNonce(): string {
 }
 
 export async function middleware(req: NextRequest) {
-  // If a recovery code lands on the root (Supabase fell back to the site URL),
-  // forward it to the reset-password page. Supabase PKCE redirects add ?code=
-  // without a type param, so we can only safely do this for the root path.
+  // Fallback: if a code lands on the root (Supabase fell back to the site URL),
+  // send it to the callback Route Handler so it can exchange the code properly.
   const recoveryCode = req.nextUrl.searchParams.get('code');
   if (recoveryCode && req.nextUrl.pathname === '/') {
-    const dest = new URL('/auth/reset-password', req.url);
+    const dest = new URL('/auth/callback', req.url);
     dest.searchParams.set('code', recoveryCode);
     return NextResponse.redirect(dest);
   }
