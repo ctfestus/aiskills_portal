@@ -37,15 +37,15 @@ export async function middleware(req: NextRequest) {
     // Production: nonce-only -- no unsafe-inline, no unsafe-eval.
     // Development: add unsafe-eval for HMR/webpack dev runtime.
     isDev
-      ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval'`
-      : `script-src 'self' 'nonce-${nonce}'`,
+      ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://challenges.cloudflare.com`
+      : `script-src 'self' 'nonce-${nonce}' https://challenges.cloudflare.com`,
 
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src https: data: blob:",
-    `connect-src 'self' ${supabaseUrl} https://*.supabase.co https://api.resend.com wss://*.supabase.co`,
+    `connect-src 'self' ${supabaseUrl} https://*.supabase.co https://api.resend.com wss://*.supabase.co https://challenges.cloudflare.com`,
     "media-src 'self' blob:",
-    "frame-src 'self' https://www.youtube.com https://player.vimeo.com https://iframe.mediadelivery.net https://player.mediadelivery.net https://video.bunnycdn.com https://www.canva.com",
+    "frame-src 'self' https://www.youtube.com https://player.vimeo.com https://iframe.mediadelivery.net https://player.mediadelivery.net https://video.bunnycdn.com https://www.canva.com https://challenges.cloudflare.com",
     "base-uri 'self'",
     "form-action 'self'",
     ...(isAppRoute ? ["frame-ancestors 'none'"] : []),

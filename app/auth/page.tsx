@@ -1,20 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/components/TenantProvider';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!;
+
 export default function AuthPage() {
   const { logoUrl } = useTenant();
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [isLogin, setIsLogin]   = useState(true);
-  const [isForgot, setIsForgot] = useState(false);
-  const [loading, setLoading]   = useState(false);
-  const [message, setMessage]   = useState('');
-  const [showPass, setShowPass] = useState(false);
+  const [email, setEmail]             = useState('');
+  const [password, setPassword]       = useState('');
+  const [isLogin, setIsLogin]         = useState(true);
+  const [isForgot, setIsForgot]       = useState(false);
+  const [loading, setLoading]         = useState(false);
+  const [message, setMessage]         = useState('');
+  const [showPass, setShowPass]       = useState(false);
+  const [captchaToken, setCaptchaToken] = useState('');
+  const turnstileRef = useRef<TurnstileInstance>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -26,25 +31,38 @@ export default function AuthPage() {
     }
   }, []);
 
+  const resetCaptcha = () => {
+    turnstileRef.current?.reset();
+    setCaptchaToken('');
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!captchaToken) {
+      setMessage('Please complete the CAPTCHA.');
+      return;
+    }
     setLoading(true);
     setMessage('');
     try {
       if (isForgot) {
-        // Mark recovery intent so the callback knows to redirect to reset-password
-        // instead of running the new-signup allowlist flow.
         document.cookie = 'sb-reset-intent=1; path=/; max-age=3600; SameSite=Lax';
         const origin = window.location.origin.replace('://www.', '://');
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${origin}/auth/callback`,
-        });
+          options: { captchaToken },
+        } as any);
         if (error) throw error;
         setMessage('Check your email for the password reset link.');
+        resetCaptcha();
         return;
       }
       if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+          options: { captchaToken },
+        });
         if (error) throw error;
         const { data: student } = await supabase
           .from('students')
@@ -55,7 +73,6 @@ export default function AuthPage() {
         else if (student.role === 'student') window.location.href = '/student';
         else window.location.href = '/dashboard';
       } else {
-        // Check allowlist before creating account
         const res = await fetch(`/api/cohort-allowlist?email=${encodeURIComponent(email)}`);
         const { allowed } = await res.json();
         if (!allowed) {
@@ -64,13 +81,18 @@ export default function AuthPage() {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            captchaToken,
+          },
         });
         if (error) throw error;
         setMessage('Check your email for the confirmation link.');
+        resetCaptcha();
       }
     } catch (err: any) {
       setMessage(err.message || 'Something went wrong. Please try again.');
+      resetCaptcha();
     } finally {
       setLoading(false);
     }
@@ -90,11 +112,7 @@ export default function AuthPage() {
       >
         {/* Logo */}
         <div className="mb-10">
-          <img
-            src={logoUrl || undefined}
-            alt=""
-            className="h-8 w-auto"
-          />
+          <img src={logoUrl || undefined} alt="" className="h-8 w-auto" />
         </div>
 
         {/* Heading */}
@@ -123,9 +141,7 @@ export default function AuthPage() {
         {/* Form */}
         <form onSubmit={handleAuth} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-white/50 mb-1.5">
-              Email
-            </label>
+            <label className="block text-xs font-medium text-white/50 mb-1.5">Email</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-white/30 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -142,13 +158,11 @@ export default function AuthPage() {
           {!isForgot && (
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-medium text-white/50">
-                  Password
-                </label>
+                <label className="block text-xs font-medium text-white/50">Password</label>
                 {isLogin && (
                   <button
                     type="button"
-                    onClick={() => { setIsForgot(true); setMessage(''); }}
+                    onClick={() => { setIsForgot(true); setMessage(''); resetCaptcha(); }}
                     className="text-xs text-white/40 hover:text-[#ADEE66] transition-colors"
                   >
                     Forgot password?
@@ -176,6 +190,15 @@ export default function AuthPage() {
             </div>
           )}
 
+          <Turnstile
+            ref={turnstileRef}
+            siteKey={TURNSTILE_SITE_KEY}
+            onSuccess={setCaptchaToken}
+            onExpire={resetCaptcha}
+            onError={resetCaptcha}
+            options={{ theme: 'dark', size: 'flexible' }}
+          />
+
           <AnimatePresence>
             {message && (
               <motion.p
@@ -195,7 +218,7 @@ export default function AuthPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !captchaToken}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all mt-1 disabled:opacity-60 hover:brightness-110 active:scale-[0.99]"
             style={{ background: '#ADEE66', color: '#0f0d6e' }}
           >
@@ -211,7 +234,7 @@ export default function AuthPage() {
             <>
               Remember your password?{' '}
               <button
-                onClick={() => { setIsForgot(false); setMessage(''); }}
+                onClick={() => { setIsForgot(false); setMessage(''); resetCaptcha(); }}
                 className="font-semibold text-[#ADEE66] hover:underline transition-colors"
               >
                 Sign in
@@ -221,7 +244,7 @@ export default function AuthPage() {
             <>
               Don&apos;t have an account?{' '}
               <button
-                onClick={() => { setIsLogin(false); setMessage(''); }}
+                onClick={() => { setIsLogin(false); setMessage(''); resetCaptcha(); }}
                 className="font-semibold text-[#ADEE66] hover:underline transition-colors"
               >
                 Sign up
@@ -231,7 +254,7 @@ export default function AuthPage() {
             <>
               Already have an account?{' '}
               <button
-                onClick={() => { setIsLogin(true); setMessage(''); }}
+                onClick={() => { setIsLogin(true); setMessage(''); resetCaptcha(); }}
                 className="font-semibold text-[#ADEE66] hover:underline transition-colors"
               >
                 Sign in
