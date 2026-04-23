@@ -14,15 +14,13 @@ function generateNonce(): string {
 }
 
 export async function middleware(req: NextRequest) {
-  // Recovery links land on the root because the Supabase Redirect URLs allowlist
-  // only has the site URL. Intercept any page receiving ?type=recovery&code=xxx
-  // and forward it to the callback handler that knows how to deal with it.
+  // If a recovery code lands on the root (Supabase fell back to the site URL),
+  // forward it to the reset-password page. Supabase PKCE redirects add ?code=
+  // without a type param, so we can only safely do this for the root path.
   const recoveryCode = req.nextUrl.searchParams.get('code');
-  const recoveryType = req.nextUrl.searchParams.get('type');
-  if (recoveryType === 'recovery' && recoveryCode && req.nextUrl.pathname !== '/auth/callback') {
-    const dest = new URL('/auth/callback', req.url);
+  if (recoveryCode && req.nextUrl.pathname === '/') {
+    const dest = new URL('/auth/reset-password', req.url);
     dest.searchParams.set('code', recoveryCode);
-    dest.searchParams.set('type', 'recovery');
     return NextResponse.redirect(dest);
   }
 
