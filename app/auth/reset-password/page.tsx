@@ -18,7 +18,15 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get('code');
-    if (!code) { setMessage('Invalid or expired reset link. Please request a new one.'); return; }
+    if (!code) {
+      // Implicit flow: Supabase already established a recovery session from the
+      // hash fragment before redirecting here -- just check it exists.
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) setReady(true);
+        else setMessage('Invalid or expired reset link. Please request a new one.');
+      });
+      return;
+    }
     supabase.auth.exchangeCodeForSession(code)
       .then(({ error }) => {
         if (error) setMessage('Invalid or expired reset link. Please request a new one.');
@@ -41,6 +49,7 @@ export default function ResetPasswordPage() {
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+      await supabase.auth.signOut();
       setDone(true);
       setTimeout(() => { window.location.href = '/auth'; }, 2500);
     } catch (err: any) {

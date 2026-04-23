@@ -14,6 +14,18 @@ function generateNonce(): string {
 }
 
 export async function middleware(req: NextRequest) {
+  // Recovery links land on the root because the Supabase Redirect URLs allowlist
+  // only has the site URL. Intercept any page receiving ?type=recovery&code=xxx
+  // and forward it to the callback handler that knows how to deal with it.
+  const recoveryCode = req.nextUrl.searchParams.get('code');
+  const recoveryType = req.nextUrl.searchParams.get('type');
+  if (recoveryType === 'recovery' && recoveryCode && req.nextUrl.pathname !== '/auth/callback') {
+    const dest = new URL('/auth/callback', req.url);
+    dest.searchParams.set('code', recoveryCode);
+    dest.searchParams.set('type', 'recovery');
+    return NextResponse.redirect(dest);
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://*.supabase.co';
   const isAppRoute  = APP_ROUTE.test(req.nextUrl.pathname);
 

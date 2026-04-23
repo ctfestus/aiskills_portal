@@ -934,6 +934,18 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
+    // Redirect to password reset if Supabase fires a PASSWORD_RECOVERY event
+    // (happens when the recovery email link uses implicit flow and the hash
+    // fragment lands on this page instead of /auth/callback).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        window.location.href = '/auth/reset-password';
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const u = session?.user ?? null;
       setUser(u);
