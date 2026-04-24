@@ -561,7 +561,7 @@ export default function VirtualExperienceTaker({
               className="w-full flex items-center gap-2 text-xs font-semibold py-2 px-3 rounded-xl transition-all hover:opacity-80"
               style={{ background: `${accentColor}18`, color: accentColor }}>
               <Download className="w-3.5 h-3.5" />
-              <span className="truncate">{config.dataset.filename}</span>
+              <span className="truncate">{config.dataset.filename || 'Download file'}</span>
             </button>
             <p className="text-[11px] mt-1.5 px-1" style={{ color: muted }}>{config.dataset.description}</p>
           </div>
