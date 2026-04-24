@@ -46,10 +46,7 @@ export default function AuthPage() {
     setMessage('');
     try {
       if (isForgot) {
-        document.cookie = 'sb-reset-intent=1; path=/; max-age=3600; SameSite=Lax';
-        const origin = window.location.origin.replace('://www.', '://');
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${origin}/auth/callback`,
           captchaToken,
         });
         if (error) throw error;

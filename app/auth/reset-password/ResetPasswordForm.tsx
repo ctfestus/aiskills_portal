@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/components/TenantProvider';
 import { motion } from 'motion/react';
 import { Loader2, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 
-export default function ResetPasswordForm({ code }: { code?: string }) {
+export default function ResetPasswordForm({ error }: { error?: string }) {
   const { logoUrl } = useTenant();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
@@ -14,43 +14,6 @@ export default function ResetPasswordForm({ code }: { code?: string }) {
   const [loading, setLoading]   = useState(false);
   const [message, setMessage]   = useState('');
   const [done, setDone]         = useState(false);
-  const [ready, setReady]       = useState(false);
-  const [error, setError]       = useState('');
-
-  useEffect(() => {
-    if (!code) {
-      setError('Invalid or expired reset link. Please request a new one.');
-      return;
-    }
-
-    let resolved = false;
-
-    const markReady = () => {
-      resolved = true;
-      setReady(true);
-    };
-
-    // Set up listener BEFORE exchanging so we never miss PASSWORD_RECOVERY.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session) {
-        markReady();
-      }
-    });
-
-    // If detectSessionInUrl already exchanged the code, the session exists now.
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && !resolved) markReady();
-    });
-
-    // Exchange the code client-side so GoTrue marks the session with PASSWORD_RECOVERY AMR.
-    // If detectSessionInUrl already consumed the code, this will fail silently -- the
-    // onAuthStateChange / getSession paths above will have already set ready=true.
-    supabase.auth.exchangeCodeForSession(code).catch(() => {
-      if (!resolved) setError('Invalid or expired reset link. Please request a new one.');
-    });
-
-    return () => subscription.unsubscribe();
-  }, [code]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,10 +60,6 @@ export default function ResetPasswordForm({ code }: { code?: string }) {
         ) : done ? (
           <div className="text-xs px-3 py-2.5 rounded-lg border bg-emerald-500/15 text-emerald-300 border-emerald-500/20">
             Password updated! Redirecting you to sign in…
-          </div>
-        ) : !ready ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-5 h-5 animate-spin text-white/40" />
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">

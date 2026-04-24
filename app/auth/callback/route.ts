@@ -6,11 +6,6 @@ import { adminClient } from '@/lib/admin-client';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
-  const type = searchParams.get('type');
-
-  const isRecovery =
-    type === 'recovery' ||
-    request.cookies.get('sb-reset-intent')?.value === '1';
 
   const cookieStore = await cookies();
 
@@ -27,17 +22,6 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  // Password reset: forward the code to the client-side reset form.
-  // Server-side exchange doesn't set PASSWORD_RECOVERY AMR so updateUser({ password }) fails.
-  // The client will call exchangeCodeForSession and receive the PASSWORD_RECOVERY event.
-  if (isRecovery && code) {
-    const dest = new URL('/auth/reset-password', request.url);
-    dest.searchParams.set('code', code);
-    const response = NextResponse.redirect(dest);
-    response.cookies.delete('sb-reset-intent');
-    return response;
-  }
-
   if (code) {
     await supabase.auth.exchangeCodeForSession(code);
   }
@@ -52,11 +36,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/auth?error=not_allowed', request.url));
     }
 
-    // Safety net: if the user is already enrolled, treat this as recovery
-    // (avoids running new-signup allowlist check on existing students).
+    // Safety net: existing students skip the allowlist check.
     const { data: existing } = await db.from('students').select('id').eq('id', user.id).maybeSingle();
     if (existing) {
-      return NextResponse.redirect(new URL('/auth/reset-password', request.url));
+      return NextResponse.redirect(new URL('/student', request.url));
     }
 
     const { data: cohortId } = await db.rpc('check_email_allowlist', { p_email: user.email });
@@ -67,7 +50,6 @@ export async function GET(request: NextRequest) {
     }
 
     await db.from('students').update({ cohort_id: cohortId }).eq('id', user.id);
-
     await db.from('cohort_allowed_emails').delete().eq('email', user.email.toLowerCase());
   }
 
