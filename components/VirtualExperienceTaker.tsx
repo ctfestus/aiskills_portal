@@ -156,7 +156,7 @@ export default function VirtualExperienceTaker({
     () => sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {} as Record<string, string>,
     [sessionToken],
   );
-  const bg      = isDark ? '#0f0f0f' : '#f5f5f0';
+  const bg      = isDark ? '#0f0f0f' : '#F2F5FA';
   const surface = isDark ? '#1a1a1a' : '#ffffff';
   const border  = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
   const text     = isDark ? '#f0f0f0' : '#111';
@@ -523,7 +523,7 @@ export default function VirtualExperienceTaker({
       {/* Sidebar: absolute overlay on mobile, in-flow on sm+ */}
       <aside className="absolute inset-y-0 left-0 z-40 sm:relative sm:inset-auto flex-shrink-0 flex flex-col border-r transition-all duration-300"
         style={{
-          width: sidebarOpen ? 280 : 0, minWidth: sidebarOpen ? 280 : 0,
+          width: sidebarOpen ? 'min(100vw, 280px)' : 0, minWidth: sidebarOpen ? 'min(100vw, 280px)' : 0,
           background: surface, borderColor: border,
           overflow: sidebarOpen ? 'auto' : 'hidden',
         }}>
@@ -660,14 +660,13 @@ export default function VirtualExperienceTaker({
               <Menu className="w-5 h-5" />
             </button>
           )}
-          <div className="flex items-center gap-1.5 text-xs min-w-0" style={{ color: navMuted }}>
-            <span className="truncate">{currentMod?.title}</span>
-            <ChevronRight className="w-3 h-3 flex-shrink-0" />
+          <div className="flex items-center gap-1.5 text-xs min-w-0 flex-1" style={{ color: navMuted }}>
+            <span className="hidden sm:inline truncate">{currentMod?.title}</span>
+            <ChevronRight className="hidden sm:block w-3 h-3 flex-shrink-0" />
             <span className="truncate font-medium" style={{ color: navText }}>{currentLes?.title}</span>
           </div>
-          <div className="ml-auto flex items-center gap-3 flex-shrink-0">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: navMuted }} />}
-            {/* Dataset download in top bar (mobile) */}
             {config.dataset && (
               <button onClick={downloadDataset} title={`Download ${config.dataset.filename}`}
                 className="sm:hidden flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg"
@@ -675,7 +674,7 @@ export default function VirtualExperienceTaker({
                 <Download className="w-3.5 h-3.5" />
               </button>
             )}
-            <span className="text-xs" style={{ color: navMuted }}>{overallPct}% complete</span>
+            <span className="text-xs tabular-nums" style={{ color: navMuted }}>{overallPct}%</span>
           </div>
         </div>
 
@@ -690,8 +689,8 @@ export default function VirtualExperienceTaker({
         )}
 
         {/* Lesson content: subtle grey background, single white card */}
-        <div ref={mainScrollRef} className="flex-1 overflow-y-auto" style={{ background: isDark ? '#141414' : '#F2F2F0' }}>
-          <div className="max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 space-y-4">
+        <div ref={mainScrollRef} className="flex-1 overflow-y-auto" style={{ background: isDark ? '#141414' : '#F2F5FA' }}>
+          <div className="max-w-4xl mx-auto w-full px-2 sm:px-4 py-4 sm:py-8 space-y-4">
           {!currentLes && modules.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <BookOpen className="w-10 h-10 mb-3 opacity-20" style={{ color: muted }} />
@@ -711,12 +710,11 @@ export default function VirtualExperienceTaker({
               <div className="rounded-xl overflow-hidden"
                 style={{
                   background: isDark ? '#1e1e1e' : '#ffffff',
-                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.10)'}`,
                 }}>
 
                 {/* Lesson header inside card */}
                 <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-5"
-                  style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
+                  style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#F2F5FA'}` }}>
                   <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>{currentMod?.title}</p>
                   <h1 className="text-xl font-bold leading-snug" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{currentLes.title}</h1>
                 </div>
@@ -772,7 +770,7 @@ export default function VirtualExperienceTaker({
 
                       if (isMcq) {
                         return (
-                          <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-3">
+                          <div key={req.id} style={rowStyle} className="px-3 sm:px-8 py-4 sm:py-5 space-y-3">
                             {/* Question header */}
                             <div className="flex items-start gap-2">
                               <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   CheckCircle2, XCircle, Loader2, ChevronRight, RotateCcw,
   Clock, EyeOff, AlertTriangle, ShieldAlert, GripVertical,
-  ChevronLeft, BookOpen, X, ExternalLink, ArrowRight, MoreHorizontal,
+  ChevronLeft, BookOpen, X, ExternalLink, ArrowRight, MoreHorizontal, List, Zap,
 } from 'lucide-react';
 import { AnimatedField } from '@/components/AnimatedField';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -219,6 +219,13 @@ export function CourseTaker({
   const [floatingPoints, setFloatingPoints] = useState<{ id: number; text: string; x: number; y: number } | null>(null);
   const [displayedPoints, setDisplayedPoints] = useState(0);
 
+  // Chapters drawer
+  const [showChapters, setShowChapters] = useState(false);
+
+  // Sidebar (persistent panel, non-inline mode only)
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [collapsedSections, setCollapsedSections] = useState<Set<number>>(new Set());
+
   // 3-dot menu + XP badge
   const [showMenu, setShowMenu] = useState(false);
   const [xpNotify, setXpNotify] = useState(false);
@@ -226,8 +233,6 @@ export function CourseTaker({
 
   // Anti-cheat state
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
-  const [isObscured, setIsObscured] = useState(false);
-  const [violations, setViolations] = useState(0);
   const [attemptError, setAttemptError] = useState('');
   const [checkingAttempts, setCheckingAttempts] = useState(!!initialStudentName);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -271,6 +276,22 @@ export function CourseTaker({
     return n;
   }, [questions, currentQuestionIndex]);
   const totalSections = useMemo(() => questions.filter((q: any) => q.isSection).length, [questions]);
+
+  // Group questions into sections for the chapters drawer
+  const chapters = useMemo(() => {
+    const groups: { sectionTitle: string; sectionIdx: number | null; slides: { q: CourseQuestion; idx: number }[] }[] = [];
+    let cur: typeof groups[0] = { sectionTitle: 'Introduction', sectionIdx: null, slides: [] };
+    questions.forEach((q: CourseQuestion, idx: number) => {
+      if ((q as any).isSection) {
+        if (cur.sectionIdx !== null || cur.slides.length) groups.push(cur);
+        cur = { sectionTitle: (q as any).sectionTitle || 'New Section', sectionIdx: idx, slides: [] };
+      } else {
+        cur.slides.push({ q, idx });
+      }
+    });
+    if (cur.sectionIdx !== null || cur.slides.length) groups.push(cur);
+    return groups;
+  }, [questions]);
   const showAnswers: ShowAnswers = config.showAnswers ?? 'per_question';
   const passmark = config.passmark ?? 50;
   const courseTimerMins: number = config.courseTimer ?? 0;
@@ -413,51 +434,6 @@ export function CourseTaker({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // -- Tab / window / mouse detection --
-  useEffect(() => {
-    if (phase !== 'course') return;
-
-    const obscure = () => {
-      if (lessonOpenRef.current) return; // student is viewing lesson -- not cheating
-      setIsObscured(true);
-      setViolations(v => v + 1);
-    };
-    const reveal = () => setIsObscured(false);
-
-    const onVisibility = () => { if (document.hidden) obscure(); else reveal(); };
-    const onBlur = () => obscure();
-    const onFocus = () => reveal();
-
-    const onMouseLeave = (e: MouseEvent) => {
-      if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
-        obscure();
-      }
-    };
-    const onMouseEnter = () => reveal();
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'PrintScreen') {
-        obscure();
-        setTimeout(reveal, 2000);
-      }
-    };
-
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('blur', onBlur);
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('mouseleave', onMouseLeave);
-    document.addEventListener('mouseenter', onMouseEnter);
-    document.addEventListener('keydown', onKeyDown);
-
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('blur', onBlur);
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('mouseleave', onMouseLeave);
-      document.removeEventListener('mouseenter', onMouseEnter);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [phase]);
 
   // -- Prevent copy / right-click on quiz content --
   const noSelect: React.CSSProperties = { userSelect: 'none', WebkitUserSelect: 'none' };
@@ -941,11 +917,6 @@ export function CourseTaker({
               </div>
             )}
 
-            {violations > 0 && (
-              <p className="text-xs text-amber-500/80 text-center">
-                ⚠ {violations} focus violation{violations > 1 ? 's' : ''} recorded
-              </p>
-            )}
           </div>
 
           {/* Footer */}
@@ -1092,8 +1063,8 @@ export function CourseTaker({
                 href={postSubmission.buttonUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl font-semibold text-white text-sm transition-all hover:opacity-90 active:scale-[0.98]"
-                style={{ background: accent }}
+                className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl font-semibold text-sm transition-all hover:opacity-90 active:scale-[0.98]"
+                style={{ background: accent, color: 'white' }}
               >
                 {postSubmission.buttonLabel || 'Continue'}
                 <ExternalLink className="w-4 h-4" />
@@ -1455,8 +1426,8 @@ export function CourseTaker({
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <a href={`/certificate/${existingCertId}`} target="_blank" rel="noreferrer"
-                    className="px-4 py-2 rounded-xl text-sm font-bold text-white flex items-center gap-1.5 transition-all active:scale-[0.98] hover:opacity-90 whitespace-nowrap"
-                    style={{ background: accent }}>
+                    className="px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-all active:scale-[0.98] hover:opacity-90 whitespace-nowrap"
+                    style={{ background: accent, color: 'white' }}>
                     🎓 View Certificate
                   </a>
                   <button onClick={() => { setExistingCertId(null); setPhase('course'); }}
@@ -1485,7 +1456,7 @@ export function CourseTaker({
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <button onClick={handleResume} className="py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] hover:opacity-90" style={{ background: accent }}>
+                  <button onClick={handleResume} className="py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] hover:opacity-90" style={{ background: accent, color: 'white' }}>
                     Continue <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                   <button onClick={handleStartFresh} className={`py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] ${isDark ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60' : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/60'}`}>
@@ -1498,7 +1469,7 @@ export function CourseTaker({
             <button
               onClick={handleStartCourse}
               disabled={!studentName.trim() || !studentEmail.trim() || checkingAttempts || !!attemptError}
-              className="w-full py-3.5 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-sm"
+              className="w-full py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-sm"
               style={{ background: accent }}
             >
               {checkingAttempts ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Continue <ChevronRight className="w-4 h-4" /></>}
@@ -1585,7 +1556,7 @@ export function CourseTaker({
           <button
             onClick={(e) => onSubmit(e, { name: studentName, email: studentEmail, score, total: totalQuestions, percentage, passed, answers, points: totalPoints, streak, studentToken: sessionTokenRef.current })}
             disabled={isSubmitting}
-            className="w-full py-3.5 rounded-xl font-semibold text-white transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
+            className="w-full py-3.5 rounded-xl font-semibold transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm"
             style={{ background: accent }}
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : totalQuestions === 0 ? 'Complete Course' : 'Submit & See Results'}
@@ -1733,7 +1704,9 @@ export function CourseTaker({
     if (currentQuestionIndex < totalSlides - 1) {
       const nextIndex = currentQuestionIndex + 1;
       if (currentQuestion?.lessonOnly) {
-        saveProgress(answers, nextIndex, score, totalPoints, streak, hintsUsed);
+        const newAnswers = { ...answers, [currentQuestion.id]: 'viewed' };
+        setAnswers(newAnswers);
+        saveProgress(newAnswers, nextIndex, score, totalPoints, streak, hintsUsed);
       }
       setCurrentQuestionIndex(nextIndex);
       setSelectedOption(null);
@@ -1884,6 +1857,7 @@ export function CourseTaker({
     })();
 
     return (
+      <>
       <div className="relative flex flex-col min-h-screen overflow-hidden" style={{ fontFamily: fontStyle.fontFamily }}>
 
         {/* Full-bleed background -- cover image with overlay, or gradient fallback */}
@@ -1909,6 +1883,28 @@ export function CourseTaker({
 
         {/* Content */}
         <div className="relative z-10 flex flex-col min-h-screen items-center justify-center px-6 py-16">
+          <div className="absolute top-4 left-4 flex items-center gap-2">
+            {currentQuestionIndex > 0 && (
+              <button
+                onClick={handleBack}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:brightness-110"
+                style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.2)' }}
+                title="Previous"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                Back
+              </button>
+            )}
+            <button
+              onClick={() => setShowChapters(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:brightness-110"
+              style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.2)' }}
+              title="Course contents"
+            >
+              <List className="w-3.5 h-3.5" />
+              Contents
+            </button>
+          </div>
           <motion.div
             key={`section-${currentQuestionIndex}`}
             initial={{ opacity: 0, y: 32 }}
@@ -2002,107 +1998,72 @@ export function CourseTaker({
           })}
         </div>
       </div>
-    );
-  }
 
-  // -- Lesson-only slide --
-  if (currentQuestion.lessonOnly) {
-    const lesson = currentQuestion.lesson || {};
-    const embedUrl = lesson.videoUrl ? getVideoEmbedUrl(lesson.videoUrl) : null;
-    const isLast = currentQuestionIndex >= totalSlides - 1;
-
-    const lessonSlide = (
-      <>
-        {/* Backdrop -- fully opaque to hide page content behind */}
-        <div className="fixed inset-0 z-[9990]" style={{ background: isDark ? '#000000' : '#1f1bc3' }} />
-
-        {/* Bottom sheet */}
-        <motion.div
-          key={currentQuestionIndex}
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          exit={{ y: '100%' }}
-          transition={{ type: 'spring', damping: 32, stiffness: 320 }}
-          className="fixed bottom-0 left-0 right-0 z-[9991] rounded-t-3xl flex flex-col overflow-hidden"
-          style={{
-            background: isDark ? '#18181b' : '#ffffff',
-            color: isDark ? '#ffffff' : '#18181b',
-            maxHeight: '90vh',
-            ...fontStyle,
-          }}
-        >
-          {/* Drag handle */}
-          <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
-            <div className={`w-10 h-1 rounded-full ${isDark ? 'bg-zinc-700' : 'bg-zinc-300'}`} />
-          </div>
-
-          {/* Header */}
-          <div className="flex items-start justify-between px-5 sm:px-8 pt-4 sm:pt-5 pb-3 sm:pb-4 flex-shrink-0">
-            <div>
-              <p className={`text-[11px] font-semibold tracking-widest uppercase mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Lesson</p>
-              <h3 className={`text-lg sm:text-xl font-bold leading-snug ${isDark ? 'text-white' : 'text-zinc-900'}`}>
-                {lesson.title || 'Theory'}
-              </h3>
-            </div>
-            {currentQuestionIndex > 0 && (
-              <button
-                onClick={handleBack}
-                className={`mt-1 p-2 rounded-lg transition-colors flex-shrink-0 ${isDark ? 'text-zinc-500 hover:text-white hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100'}`}
-                title="Previous"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Scrollable content */}
-          <div className="overflow-y-auto flex-1 overscroll-contain">
-            <div className="max-w-2xl mx-auto px-5 sm:px-8 pt-2 pb-5 sm:pt-3 sm:pb-7 space-y-5 sm:space-y-6">
-              {embedUrl && (
-                <div className="rounded-xl overflow-hidden shadow-md" style={embedUrl.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9' }}>
-                  <iframe
-                    src={embedUrl}
-                    className="w-full h-full border-0"
-                    allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
-                    allowFullScreen
-                  />
-                </div>
-              )}
-
-              {lesson.imageUrl && (
-                <div className="rounded-xl overflow-hidden shadow-sm">
-                  <img src={lesson.imageUrl} alt="Lesson illustration" className="w-full object-cover" />
-                </div>
-              )}
-
-              {lesson.body && (
-                <div
-                  className={`prose prose-base sm:prose-lg max-w-none ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
-                    ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.65] prose-headings:text-white prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-300 prose-blockquote:not-italic'
-                    : 'prose-p:text-zinc-700 prose-p:leading-[1.65] prose-headings:text-zinc-900 prose-strong:text-zinc-900 prose-li:text-zinc-700 prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-700 prose-blockquote:not-italic'
-                  }`}
-                  style={{ color: isDark ? '#d4d4d8' : '#3f3f46', ...fontStyle }}
-                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(lesson.body) }}
-                />
-              )}
-
-              <button
-                onClick={handleNext}
-                className="w-full py-4 rounded-xl text-[15px] font-semibold text-white transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-                style={{ background: accent }}
-              >
-                {isLast ? 'Finish Course' : 'Continue'}
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </motion.div>
+      {/* Chapters drawer (section divider context) */}
+      <AnimatePresence>
+        {showChapters && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 z-[9998] bg-black/60"
+              onClick={() => setShowChapters(false)}
+            />
+            <motion.div
+              initial={{ x: -310 }} animate={{ x: 0 }} exit={{ x: -310 }}
+              transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
+              className="fixed left-0 top-0 bottom-0 z-[9999] flex flex-col"
+              style={{ width: 300, background: '#111', borderRight: '1px solid rgba(255,255,255,0.1)', boxShadow: '4px 0 32px rgba(0,0,0,0.5)' }}
+            >
+              <div className="flex items-center justify-between px-4 py-3.5 border-b border-zinc-800 flex-shrink-0">
+                <p className="text-sm font-bold text-white">Course Contents</p>
+                <button onClick={() => setShowChapters(false)} className="p-1 rounded-lg text-zinc-500 hover:text-zinc-300 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto py-2">
+                {chapters.map((group, gi) => (
+                  <div key={gi}>
+                    <div className="px-4 pt-4 pb-1.5">
+                      <button
+                        onClick={() => { if (group.sectionIdx !== null) { setDirection(group.sectionIdx > currentQuestionIndex ? 1 : -1); setCurrentQuestionIndex(group.sectionIdx); setShowChapters(false); } }}
+                        disabled={group.sectionIdx === null}
+                        className="text-left w-full"
+                      >
+                        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>{group.sectionTitle}</span>
+                      </button>
+                    </div>
+                    {group.slides.map(({ q, idx }) => {
+                      const answered = !!answers[q.id];
+                      const isCurrent = idx === currentQuestionIndex;
+                      return (
+                        <button key={q.id}
+                          onClick={() => { setDirection(idx > currentQuestionIndex ? 1 : -1); setCurrentQuestionIndex(idx); setShowChapters(false); }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:opacity-80"
+                          style={{ background: isCurrent ? 'rgba(255,255,255,0.07)' : 'transparent' }}
+                        >
+                          <span className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold"
+                            style={{ background: isCurrent ? accent : answered ? `${accent}25` : '#2a2a2a', color: isCurrent ? '#fff' : answered ? accent : '#555' }}>
+                            {answered ? '✓' : (q as any).lessonOnly ? '◉' : idx + 1}
+                          </span>
+                          <span className="flex-1 text-[13px] leading-snug line-clamp-2" style={{ color: isCurrent ? '#fff' : '#999' }}>
+                            {(q as any).lessonOnly ? ((q as any).lesson?.title || 'Lesson') : q.question}
+                          </span>
+                          {isCurrent && <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: accent }} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
       </>
     );
-
-    if (typeof document === 'undefined') return null;
-    return createPortal(lessonSlide, document.body);
   }
+
 
   // -- Unanswered questions confirmation modal --
   if (finishPending) {
@@ -2153,7 +2114,7 @@ export function CourseTaker({
             </button>
             <button
               onClick={() => setFinishPending(null)}
-              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-80"
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
               style={{ background: accent }}
             >
               Keep answering
@@ -2175,57 +2136,254 @@ export function CourseTaker({
         style={{ width: '100vw', height: '100vh' }}
       />
 
-      {/* -- Obscure overlay -- */}
-      <AnimatePresence>
-        {isObscured && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center gap-6"
-            onClick={() => setIsObscured(false)}
-          >
-            <EyeOff className="w-12 h-12 text-zinc-600" />
-            <div className="text-center space-y-2">
-              <h2 className="text-white text-xl font-semibold">Course Paused</h2>
-              <p className="text-zinc-400 text-sm">You left the course window. Click to return.</p>
-              {violations > 1 && (
-                <p className="text-amber-400 text-xs mt-2">
-                  ⚠ {violations} focus violation{violations > 1 ? 's' : ''} recorded
-                </p>
-              )}
-            </div>
-            <button
-              className="px-6 py-2.5 bg-white text-black rounded-xl font-semibold text-sm hover:bg-zinc-100 transition-colors"
-              onClick={() => setIsObscured(false)}
-            >
-              Return to Course
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      {/* -- Quiz UI -- full screen overlay (or inline in editor) -- */}
+      {/* -- Main container (split layout for full-screen, single column for inline) -- */}
       <div
-        className={`${inlineMode ? 'relative flex flex-col rounded-xl overflow-hidden min-h-[500px]' : 'fixed inset-0 z-[200] overflow-y-auto flex flex-col'} ${isDark ? 'bg-black' : 'bg-white'}`}
+        className={inlineMode
+          ? `relative flex flex-col rounded-xl overflow-hidden min-h-[500px] ${isDark ? 'bg-black' : 'bg-white'}`
+          : 'fixed inset-0 z-[200] overflow-hidden flex'
+        }
         style={{ ...noSelect, color: isDark ? '#ffffff' : '#18181b', ...fontStyle }}
         onCopy={blockCopy}
         onCut={blockCopy}
         onContextMenu={blockMenu}
       >
-        {/* Progress + controls -- pinned at top */}
-        <div className={`flex-shrink-0 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 ${isDark ? 'border-b border-zinc-800/60' : 'border-b border-zinc-200'}`}>
-          <div className="max-w-6xl mx-auto">
-            <div className="flex justify-between items-center mb-2">
-              {/* Left: X close + back arrow */}
+
+        {/* -- SIDEBAR (non-inline only) -- */}
+        {!inlineMode && (
+          <>
+            {/* Mobile backdrop */}
+            {sidebarOpen && (
+              <div
+                className="fixed inset-0 bg-black/60 z-30 sm:hidden"
+                onClick={() => setSidebarOpen(false)}
+              />
+            )}
+
+            <aside
+              className="absolute inset-y-0 left-0 z-40 sm:relative sm:inset-auto flex-shrink-0 flex flex-col border-r transition-all duration-300"
+              style={{
+                width: sidebarOpen ? 'min(100vw, 288px)' : 0,
+                minWidth: sidebarOpen ? 'min(100vw, 288px)' : 0,
+                background: isDark ? '#141416' : '#ffffff',
+                borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)',
+                overflow: sidebarOpen ? undefined : 'hidden',
+              }}
+            >
+              {/* Sidebar header */}
+              <div
+                className="px-4 py-3 border-b flex items-center gap-2 flex-shrink-0"
+                style={{ borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)' }}
+              >
+                {/* Exit course */}
+                <button
+                  onClick={() => onClose ? onClose() : window.history.back()}
+                  className="flex-shrink-0 p-1.5 rounded-lg hover:opacity-60 transition-opacity"
+                  style={{ color: isDark ? '#555' : '#aaa' }}
+                  title="Exit course"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-bold truncate" style={{ color: isDark ? '#f0f0f0' : '#111' }}>
+                    {(config as any).title || 'Course'}
+                  </p>
+                </div>
+                {/* Collapse sidebar */}
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="flex-shrink-0 p-1.5 rounded-lg hover:opacity-60 transition-opacity"
+                  style={{ color: isDark ? '#555' : '#aaa' }}
+                  title="Close panel"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Overall progress */}
+              <div
+                className="px-4 py-3 border-b flex-shrink-0"
+                style={{ borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)' }}
+              >
+                <div className="flex justify-between text-[12px] mb-1.5" style={{ color: isDark ? '#555' : '#999' }}>
+                  <span>Progress</span>
+                  <span style={{ color: accent }}>{Math.round(progressPct)}%</span>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${progressPct}%`, background: accent }}
+                  />
+                </div>
+                {pointsEnabled && totalPoints > 0 && (
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <span className="text-[12px]" style={{ color: isDark ? '#555' : '#999' }}>XP</span>
+                    <span className="text-[13px] font-bold tabular-nums" style={{ color: isDark ? '#facc15' : accent }}>
+                      {displayedPoints.toLocaleString()}
+                    </span>
+                    {streak >= 2 && <span className="text-[12px] text-orange-400">🔥 {streak}</span>}
+                  </div>
+                )}
+              </div>
+
+              {/* Questions / chapters list */}
+              <nav className="flex-1 py-3 overflow-y-auto">
+                <div className="px-3">
+                  {chapters.map((group, gi) => {
+                    const totalGroupSlides = group.slides.length;
+                    const isCollapsed = collapsedSections.has(gi);
+                    const toggleCollapse = () => setCollapsedSections(prev => {
+                      const next = new Set(prev);
+                      next.has(gi) ? next.delete(gi) : next.add(gi);
+                      return next;
+                    });
+                    return (
+                      <div key={gi} className="mb-1">
+                        {/* Section label */}
+                        <button
+                          onClick={toggleCollapse}
+                          className="w-full flex items-start justify-between gap-1 px-2 pt-4 pb-3 hover:opacity-70 transition-opacity text-left"
+                        >
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[10px] font-semibold mb-0.5"
+                              style={{ color: isDark ? '#444' : '#aaa' }}>
+                              Module {gi + 1}
+                            </span>
+                            <span className="text-[13px] font-bold leading-tight"
+                              style={{ color: group.sectionIdx !== null ? (isDark ? '#f0f0f0' : '#111') : isDark ? '#3a3a3a' : '#ddd' }}>
+                              {group.sectionTitle}
+                            </span>
+                          </div>
+                          <ChevronRight
+                            className="w-3.5 h-3.5 flex-shrink-0 mt-1 transition-transform duration-200"
+                            style={{
+                              color: isDark ? '#555' : '#aaa',
+                              transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
+                            }}
+                          />
+                        </button>
+
+                        {/* Slides */}
+                        {!isCollapsed && group.slides.map(({ q, idx }, si) => {
+                          const isAnsweredQ = !!answers[q.id];
+                          const isCurrent = idx === currentQuestionIndex;
+                          const isLastItem = si === totalGroupSlides - 1 && gi === chapters.length - 1;
+
+                          return (
+                            <button
+                              key={q.id}
+                              onClick={() => {
+                                setDirection(idx > currentQuestionIndex ? 1 : -1);
+                                setCurrentQuestionIndex(idx);
+                                if (typeof window !== 'undefined' && window.innerWidth < 640) setSidebarOpen(false);
+                              }}
+                              className="w-full flex items-start gap-2.5 text-left transition-all hover:opacity-80"
+                            >
+                              {/* Circle + connector line */}
+                              <div className="flex flex-col items-center flex-shrink-0">
+                                <div
+                                  className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200"
+                                  style={{
+                                    background: isCurrent
+                                      ? accent
+                                      : isAnsweredQ
+                                        ? `${accent}22`
+                                        : isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                                    border: `2px solid ${isCurrent ? accent : isAnsweredQ ? `${accent}50` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                                  }}
+                                >
+                                  {isCurrent ? (
+                                    <div className="w-2 h-2 rounded-full bg-white" />
+                                  ) : isAnsweredQ ? (
+                                    <CheckCircle2 className="w-3.5 h-3.5" style={{ color: accent }} />
+                                  ) : (q as any).lessonOnly ? (
+                                    <BookOpen className="w-3 h-3" style={{ color: isDark ? '#444' : '#bbb' }} />
+                                  ) : (
+                                    <span className="text-[11px] font-medium" style={{ color: isDark ? '#444' : '#ccc' }}>
+                                      {idx + 1}
+                                    </span>
+                                  )}
+                                </div>
+                                {!isLastItem && (
+                                  <div style={{
+                                    width: 0,
+                                    minHeight: 18,
+                                    flex: 1,
+                                    borderLeft: `1.5px dashed ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'}`,
+                                    marginTop: 3,
+                                    marginBottom: 3,
+                                  }} />
+                                )}
+                              </div>
+
+                              {/* Text */}
+                              <div className="flex-1 min-w-0 pt-0.5" style={{ paddingBottom: isLastItem ? 8 : 20 }}>
+                                {(q as any).lessonOnly ? (
+                                  <p className="text-[12.5px] font-semibold leading-snug line-clamp-2"
+                                    style={{ color: isCurrent ? (isDark ? '#f0f0f0' : '#111') : isDark ? '#777' : '#888' }}>
+                                    {(q as any).lesson?.title || 'Lesson Content'}
+                                  </p>
+                                ) : (
+                                  <>
+                                    <p className="text-[12.5px] font-semibold leading-snug"
+                                      style={{ color: isCurrent ? (isDark ? '#f0f0f0' : '#111') : isDark ? '#777' : '#888' }}>
+                                      Test Your Knowledge
+                                    </p>
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                      <span className="text-[11px] font-medium" style={{ color: isDark ? '#555' : '#bbb' }}>
+                                        {q.type === 'fill_blank' ? 'Fill in the blank'
+                                          : q.type === 'arrange' ? 'Arrange in order'
+                                          : q.type === 'code' ? 'Code snippet'
+                                          : q.type === 'image' ? 'Image choice'
+                                          : 'Multiple choice'}
+                                      </span>
+                                      <span style={{ color: isDark ? '#333' : '#ddd' }}>·</span>
+                                      <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold"
+                                        style={{ color: isCurrent ? accent : isDark ? '#555' : '#bbb' }}>
+                                        <Zap className="w-3 h-3" />
+                                        XP
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </nav>
+            </aside>
+          </>
+        )}
+
+        {/* -- MAIN CONTENT COLUMN -- */}
+        <div
+          className={inlineMode ? 'flex-1 flex flex-col' : 'flex-1 overflow-hidden flex flex-col'}
+          style={{ background: isDark ? '#0f0f10' : '#F2F5FA' }}
+        >
+
+          {/* Progress + controls bar */}
+          <div
+            className="flex-shrink-0 px-3 sm:px-6 pt-3 sm:pt-5 pb-2 sm:pb-3"
+            style={{
+              background: isDark ? '#111113' : '#ffffff',
+              borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+            }}
+          >
+            <div className="flex justify-between items-center mb-3">
+              {/* Left controls */}
               <div className="flex items-center gap-1">
-                {!inlineMode && (
+                {/* Show hamburger only when sidebar is closed (non-inline), or always for inline mode */}
+                {(inlineMode || !sidebarOpen) && (
                   <button
-                    onClick={() => onClose ? onClose() : window.history.back()}
+                    onClick={() => inlineMode ? setShowChapters(v => !v) : setSidebarOpen(v => !v)}
                     className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
-                    title="Exit course"
+                    title="Course contents"
                   >
-                    <X className="w-4 h-4" />
+                    <List className="w-4 h-4" />
                   </button>
                 )}
                 {currentQuestionIndex > 0 && (
@@ -2239,7 +2397,7 @@ export function CourseTaker({
                 )}
               </div>
 
-              {/* Right: timer + 3-dot menu */}
+              {/* Right controls */}
               <div className="flex items-center gap-2">
                 {timeLeft !== null && (
                   <span className={`flex items-center gap-1 text-xs font-semibold tabular-nums ${timerWarning ? 'text-rose-400' : mutedColor}`}>
@@ -2284,8 +2442,8 @@ export function CourseTaker({
                             <span className="text-xs font-semibold" style={{ color: accent }}>{currentQuestionIndex + 1} of {totalSlides}</span>
                           </div>
                           <div className="flex justify-between items-center">
-                            <span className={`text-xs ${mutedColor}`}>Total lessons</span>
-                            <span className={`text-xs font-semibold`} style={{ color: isDark ? '#fff' : '#18181b' }}>{totalSlides}</span>
+                            <span className={`text-xs ${mutedColor}`}>Total slides</span>
+                            <span className="text-xs font-semibold" style={{ color: isDark ? '#fff' : '#18181b' }}>{totalSlides}</span>
                           </div>
                           {pointsEnabled && (
                             <div className="flex justify-between items-center">
@@ -2304,415 +2462,541 @@ export function CourseTaker({
               </div>
             </div>
 
-            {/* Streak toast -- sits on the progress bar */}
+            {/* Streak toast + Progress bar */}
             <div className="relative">
-            <AnimatePresence>
-              {streakToast && (
-                <motion.div
-                  key="streak-toast"
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none"
-                >
-                  <span className="flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-semibold text-white shadow-sm"
-                    style={{ background: '#10b981' }}>
-                    🔥 {streakToast.replace(/^🔥\s*/, '')}
-                  </span>
-                </motion.div>
-              )}
-            </AnimatePresence>
+              <AnimatePresence>
+                {streakToast && (
+                  <motion.div
+                    key="streak-toast"
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none"
+                  >
+                    <span className="flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-semibold text-white shadow-sm"
+                      style={{ background: '#10b981' }}>
+                      🔥 {streakToast.replace(/^🔥\s*/, '')}
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-            {/* Progress bar */}
-            <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
-              <motion.div
-                className="h-full rounded-full"
-                style={{ background: timerWarning ? '#f43f5e' : accent }}
-                animate={{ width: `${progressPct}%` }}
-                transition={{ duration: 0.4, ease: 'easeOut' }}
-              />
-            </div>
-            {timeLeft !== null && courseTimerMins > 0 && (
-              <div className={`h-0.5 mt-1 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
+              {/* Progress bar */}
+              <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
                 <motion.div
                   className="h-full rounded-full"
                   style={{ background: timerWarning ? '#f43f5e' : accent }}
-                  animate={{ width: `${(timeLeft / (courseTimerMins * 60)) * 100}%` }}
-                  transition={{ duration: 0.9, ease: 'linear' }}
+                  animate={{ width: `${progressPct}%` }}
+                  transition={{ duration: 0.4, ease: 'easeOut' }}
                 />
               </div>
-            )}
-            </div>{/* end progress bar wrapper */}
+              {timeLeft !== null && courseTimerMins > 0 && (
+                <div className={`h-0.5 mt-1 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ background: timerWarning ? '#f43f5e' : accent }}
+                    animate={{ width: `${(timeLeft / (courseTimerMins * 60)) * 100}%` }}
+                    transition={{ duration: 0.9, ease: 'linear' }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Question content -- no card, directly on page */}
-        <div
-          className={`flex-1 overflow-y-auto px-5 sm:px-24 lg:px-40 pt-2 sm:pt-3 pb-4 sm:pb-6 w-full ${isDark ? 'course-scroll' : 'course-scroll course-scroll-light'}`}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-        >
-          <AnimatePresence mode="wait" custom={direction}>
-            <motion.div
-              key={currentQuestionIndex}
-              custom={direction}
-              variants={{
-                enter: (d: number) => ({ opacity: 0, x: d * 40 }),
-                center: { opacity: 1, x: 0 },
-                exit: (d: number) => ({ opacity: 0, x: d * -40 }),
-              }}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ duration: 0.2 }}
-            >
-              <div className="flex items-center gap-2 mb-5">
-                {questionType !== 'multiple_choice' && questionType !== 'image' && (
-                  <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border ${isDark ? 'border-zinc-700 text-zinc-500' : 'border-zinc-200 text-zinc-400'}`}>
-                    {questionType === 'fill_blank' ? 'Fill in the blank' : questionType === 'arrange' ? 'Arrange in order' : questionType === 'code' ? 'Code Snippet' : ''}
-                  </span>
-                )}
-                {/* Feature 3: hint button */}
-                {currentQuestion.hint && !hintsUsed.has(currentQuestion.id) && !isChecking && (
-                  <button
-                    onClick={() => {
-                      setHintVisible(true);
-                      setHintsUsed(prev => new Set(prev).add(currentQuestion.id));
-                    }}
-                    className={`text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors ${isDark ? 'border-amber-500/40 text-amber-400 hover:bg-amber-500/10' : 'border-amber-400/50 text-amber-600 hover:bg-amber-50'}`}
-                  >
-                    💡 Hint
-                  </button>
-                )}
-              </div>
-              {/* Hint display */}
-              {hintVisible && currentQuestion.hint && (
+          {/* Question content - scrollable */}
+          <div
+            className={`flex-1 overflow-y-auto px-2 sm:px-4 pt-4 sm:pt-8 pb-4 sm:pb-6 w-full ${isDark ? 'course-scroll' : 'course-scroll course-scroll-light'}`}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+            <div className="max-w-4xl mx-auto w-full">
+              <AnimatePresence mode="wait" custom={direction}>
                 <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`mb-4 px-4 py-3 rounded-xl border text-sm ${isDark ? 'bg-amber-500/10 border-amber-500/20 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700'}`}
+                  key={currentQuestionIndex}
+                  custom={direction}
+                  variants={{
+                    enter: (d: number) => ({ opacity: 0, x: d * 40 }),
+                    center: { opacity: 1, x: 0 },
+                    exit: (d: number) => ({ opacity: 0, x: d * -40 }),
+                  }}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: 0.2 }}
                 >
-                  💡 {currentQuestion.hint}
-                  <span className={`ml-2 text-[10px] opacity-60`}>(score ×0.9 if correct)</span>
-                </motion.div>
-              )}
-
-              <h2 className={`text-xl sm:text-2xl font-semibold leading-snug mb-6 sm:mb-8 ${textColor}`}>
-                {currentQuestion.question}
-              </h2>
-
-              {/* -- Fill in the blank -- */}
-              {questionType === 'fill_blank' && (
-                <div>
-                  <AnimatedField theme={config.theme || 'forest'} mode={config.mode || 'dark'}>
-                    <input
-                      type="text"
-                      value={fillBlankAnswer}
-                      onChange={e => { if (!isChecking) setFillBlankAnswer(e.target.value); }}
-                      onKeyDown={e => { if (e.key === 'Enter' && !isChecking && fillBlankAnswer.trim()) handleCheck(); }}
-                      placeholder="Type your answer here..."
-                      disabled={isChecking}
-                      className={`w-full bg-transparent border-none outline-none px-4 py-3 text-sm ${isDark ? 'text-white placeholder:text-zinc-600' : 'text-zinc-900 placeholder:text-zinc-400'} disabled:opacity-60`}
-                    />
-                  </AnimatedField>
-                  {isChecking && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`mt-3 px-4 py-3 rounded-xl border text-sm flex items-center gap-2 ${isCorrect ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}
-                    >
-                      {isCorrect ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <XCircle className="w-4 h-4 flex-shrink-0" />}
-                      <span>
-                        {isCorrect ? 'Correct!' : (
-                          <>Incorrect. Accepted: <span className="font-semibold">{currentQuestion.correctAnswer.split('|').map((s: string) => s.trim()).join(' / ')}</span></>
-                        )}
-                      </span>
-                    </motion.div>
-                  )}
-                </div>
-              )}
-
-              {/* -- Arrange in order -- */}
-              {questionType === 'arrange' && (
-                <div>
-                  <p className={`text-xs mb-3 ${mutedColor}`}>Drag to reorder. Put items in the correct sequence.</p>
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                    <SortableContext items={arrangeOrder} strategy={verticalListSortingStrategy}>
-                      <div className="space-y-2">
-                        {arrangeOrder.map((item, idx) => (
-                          <SortableItem
-                            key={item}
-                            id={item}
-                            label={item}
-                            idx={idx}
-                            accent={accent}
-                            isDark={isDark}
-                            isChecking={isChecking}
-                          />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
-                  {isChecking && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`mt-3 px-4 py-3 rounded-xl border text-sm ${isCorrect ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}
-                    >
-                      {isCorrect ? (
-                        <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Correct order!</span>
-                      ) : (
-                        <div className="space-y-1">
-                          <span className="flex items-center gap-2"><XCircle className="w-4 h-4" /> Incorrect order.</span>
-                          <p className="text-xs opacity-80">Correct: {currentQuestion.options.join(' -> ')}</p>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </div>
-              )}
-
-              {/* -- Image options (each option is an image) -- */}
-              {questionType === 'image' && (
-                <div className="grid grid-cols-2 gap-4">
-                  {currentQuestion.options.map((option: string, idx: number) => {
-                    const imgSrc = (currentQuestion.optionImages || [])[idx] || '';
-                    const isSelected = selectedOption === option;
-                    const showCorrect = isChecking && option === currentQuestion.correctAnswer;
-                    const showWrong = isChecking && isSelected && !isCorrect;
-
-                    const borderColor = showCorrect ? '#10b981' : showWrong ? '#f43f5e' : isSelected ? accent : (isDark ? '#3f3f46' : '#e4e4e7');
-                    const borderWidth = (showCorrect || showWrong || isSelected) ? 3 : 2;
-
+                  {/* -- Lesson-only slide: render as unified card like VirtualExperienceTaker -- */}
+                  {currentQuestion.lessonOnly ? (() => {
+                    const lesson = currentQuestion.lesson || {} as any;
+                    const embedUrl = lesson.videoUrl ? getVideoEmbedUrl(lesson.videoUrl) : null;
+                    const isLast = currentQuestionIndex >= totalSlides - 1;
                     return (
-                      <button
-                        key={idx}
-                        disabled={isChecking}
-                        onClick={() => { setSelectedOption(option); if (showAnswers === 'per_question' && !isChecking && !answers[currentQuestion.id]) handleCheck(option); }}
-                        className="relative rounded-2xl overflow-hidden transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed group"
-                        style={{ border: `${borderWidth}px solid ${borderColor}` }}
-                      >
-                        {imgSrc ? (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img src={imgSrc} alt={`Option ${idx + 1}`} className="w-full h-52 object-cover group-hover:scale-105 transition-transform duration-300" />
-                        ) : (
-                          <div className={`w-full h-52 flex items-center justify-center text-sm ${isDark ? 'bg-zinc-800 text-zinc-600' : 'bg-zinc-100 text-zinc-400'}`}>
-                            No image
-                          </div>
-                        )}
-                        {/* Gradient overlay at bottom */}
-                        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
-                        {/* Label bar */}
-                        <div className="absolute bottom-0 inset-x-0 px-3 py-2.5 flex items-center justify-between">
-                          <span
-                            className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 shadow"
-                            style={{ background: showCorrect ? '#10b981' : showWrong ? '#f43f5e' : isSelected ? accent : 'rgba(0,0,0,0.5)' }}
-                          >
-                            {String.fromCharCode(65 + idx)}
-                          </span>
-                          <span className="flex-shrink-0">
-                            {showCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-                            {showWrong && <XCircle className="w-4 h-4 text-rose-400" />}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* -- Code snippet (shown above options for code type) -- */}
-              {questionType === 'code' && currentQuestion.codeSnippet && (
-                <div className="mb-8 rounded-2xl overflow-hidden border border-zinc-700/60 shadow-lg">
-                  {/* Language badge */}
-                  <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-700/60" style={{ background: '#111827' }}>
-                    <span className="text-[11px] font-mono font-semibold text-zinc-400 uppercase tracking-wider">
-                      {currentQuestion.codeLanguage || 'javascript'}
-                    </span>
-                    <div className="flex gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-                    </div>
-                  </div>
-                  <SyntaxHighlighter
-                    language={currentQuestion.codeLanguage || 'javascript'}
-                    style={atomOneDark}
-                    customStyle={{ margin: 0, borderRadius: 0, fontSize: '14px', lineHeight: '1.7', padding: '20px 24px', background: '#0d1117' }}
-                    showLineNumbers
-                  >
-                    {currentQuestion.codeSnippet}
-                  </SyntaxHighlighter>
-                </div>
-              )}
-
-              {/* -- Multiple choice (also renders for code type) -- */}
-              {(questionType === 'multiple_choice' || questionType === 'code') && (
-                <div className="space-y-2.5">
-                  {currentQuestion.options.map((option: string, idx: number) => {
-                    const isSelected = selectedOption === option;
-                    const showCorrect = isChecking && option === currentQuestion.correctAnswer;
-                    const showWrong = isChecking && isSelected && !isCorrect;
-
-                    let borderStyle = '';
-                    let bgStyle = '';
-                    let buttonInlineStyle: React.CSSProperties = {};
-                    // Number colour -- plain text, no circle
-                    const numColor: React.CSSProperties = showCorrect
-                      ? { color: '#10b981' }
-                      : showWrong
-                        ? { color: '#f43f5e' }
-                        : isSelected
-                          ? { color: accent }
-                          : { color: isDark ? '#52525b' : '#a1a1aa' };
-
-                    // border thickness: slightly visible by default, thick when active
-                    const borderWidth = (showCorrect || showWrong || isSelected) ? 'border-2' : 'border-[1.5px]';
-                    const optionTextColor = (isSelected || showCorrect || showWrong)
-                      ? (isDark ? 'text-white' : 'text-zinc-900')
-                      : (isDark ? 'text-zinc-400' : 'text-zinc-500');
-
-                    if (showCorrect) {
-                      borderStyle = 'border-emerald-500';
-                      bgStyle = 'bg-emerald-500/10';
-                    } else if (showWrong) {
-                      borderStyle = 'border-rose-500';
-                      bgStyle = 'bg-rose-500/10';
-                    } else if (isSelected) {
-                      borderStyle = 'border-transparent';
-                      buttonInlineStyle = { borderColor: accent, backgroundColor: `${accent}18` };
-                    } else {
-                      borderStyle = isDark ? 'border-zinc-700/60 hover:border-zinc-600' : 'border-zinc-200 hover:border-zinc-300';
-                      bgStyle = isDark ? 'hover:bg-zinc-800/40' : 'hover:bg-zinc-50';
-                    }
-
-                    return (
-                      <button
-                        key={idx}
-                        disabled={isChecking}
-                        onClick={() => { setSelectedOption(option); if (showAnswers === 'per_question' && !isChecking && !answers[currentQuestion.id]) handleCheck(option); }}
-                        style={buttonInlineStyle}
-                        className={`w-full text-left px-5 py-4 rounded-2xl ${borderWidth} transition-all duration-150 flex items-center gap-3 ${borderStyle} ${bgStyle} ${optionTextColor}`}
-                      >
-                        <span className="flex-1 text-base font-medium leading-snug">{option}</span>
-                        <span className="flex-shrink-0 flex items-center gap-2">
-                          {showCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                          {showWrong && <XCircle className="w-4 h-4 text-rose-500" />}
-                          <span className="text-sm font-semibold tabular-nums" style={numColor}>{idx + 1}</span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
-
-        </div>
-
-        {/* -- Sticky bottom action bar -- */}
-        {(() => {
-          const barBg = isChecking
-            ? (isCorrect
-                ? (isDark ? '#0a2e1a' : '#f0fdf4')
-                : (isDark ? '#2d0f0f' : '#fff1f1'))
-            : (isDark ? '#111113' : '#ffffff');
-          const barBorder = isChecking
-            ? (isCorrect ? (isDark ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.3)') : (isDark ? 'rgba(244,63,94,0.3)' : 'rgba(244,63,94,0.25)'))
-            : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)');
-          const hasLesson = (currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl) && (config as any).lessonTiming !== 'before';
-
-          return (
-            <div className="flex-shrink-0 px-5 sm:px-8 py-4" style={{ background: barBg, borderTop: isChecking ? 'none' : `1px solid ${barBorder}`, borderRadius: isChecking ? '12px 12px 0 0' : undefined }}>
-              {/* Explanation strip above bar buttons */}
-              {isChecking && currentQuestion?.explanation && (
-                <div className={`mb-3 px-[10px] py-2 text-sm leading-relaxed ${isDark ? 'text-white' : 'text-zinc-900'}`}>
-                  <span className="font-semibold text-[11px] uppercase tracking-wider opacity-50 mr-2">Explanation</span>
-                  {currentQuestion.explanation}
-                </div>
-              )}
-              <div className="flex items-center justify-between gap-2 sm:gap-4">
-                {/* Left: feedback badge OR skip link */}
-                {isChecking ? (
-                  <div className={`flex items-center gap-2 px-4 sm:px-6 py-[9px] sm:py-[13px] rounded-2xl font-semibold text-base flex-shrink-0 bg-white border-[3px] ${isCorrect ? 'border-emerald-500 text-emerald-600' : 'border-rose-500 text-rose-600'}`}>
-                    {isCorrect ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-rose-500" />}
-                    {isCorrect ? 'Correct!' : 'Incorrect!'}
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleSkip}
-                    className={`text-sm font-medium transition-colors flex-shrink-0 ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
-                  >
-                    Skip
-                  </button>
-                )}
-
-                {/* Right: action buttons */}
-                <div className="flex items-center gap-2 sm:gap-3">
-                  {showAnswers === 'per_question' ? (
-                    isChecking ? (
-                      <>
-                        {hasLesson && (
-                          <button
-                            onClick={() => setLessonOpen(true)}
-                            className={`px-3 sm:px-5 py-[11px] sm:py-[15px] rounded-2xl text-sm font-semibold transition-all active:scale-95 ${isCorrect ? (isDark ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-emerald-50 text-emerald-600') : (isDark ? 'bg-rose-500/15 text-rose-400 hover:bg-rose-500/25' : 'bg-rose-50 text-rose-600')}`}
-                          >
-                            <BookOpen className="w-4 h-4 inline mr-1 sm:mr-1.5 -mt-0.5" />
-                            {isCorrect ? 'Review Lesson' : 'Why?'}
-                          </button>
-                        )}
-                        <button
-                          onClick={handleNext}
-                          className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-[11px] sm:py-[15px] rounded-2xl font-semibold text-white text-sm transition-all active:scale-95"
-                          style={{ background: isCorrect ? '#10b981' : '#f43f5e' }}
-                        >
-                          {currentQuestionIndex < totalSlides - 1 ? 'Continue' : 'Finish'}
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </>
-                    ) : (
-                      (questionType === 'fill_blank' || questionType === 'arrange') && (
-                        <button
-                          onClick={() => handleCheck()}
-                          disabled={!isAnswered()}
-                          className="px-6 sm:px-8 py-[11px] sm:py-[15px] rounded-2xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
-                          style={{
-                            background: isAnswered() ? accent : (isDark ? '#27272a' : '#e4e4e7'),
-                            color: isAnswered() ? 'white' : (isDark ? '#52525b' : '#a1a1aa'),
-                          }}
-                        >
-                          Check Answer
-                        </button>
-                      )
-                    )
-                  ) : (
-                    <>
-                      {relatedAssignment && currentQuestionIndex === totalQuestions - 1 && (
-                        <p className="text-xs hidden sm:block" style={{ color: isDark ? '#a1a1aa' : '#52525b' }}>
-                          Complete to unlock <span className="font-semibold" style={{ color: accent }}>{relatedAssignment.title}</span>
-                        </p>
-                      )}
-                      <button
-                        onClick={handleNextDirect}
-                        disabled={!isAnswered() && questionType !== 'arrange'}
-                        className="flex items-center gap-1.5 px-6 py-2.5 rounded-full font-semibold text-sm transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed shadow-sm"
+                      <div
+                        className="rounded-xl overflow-hidden"
                         style={{
-                          background: (isAnswered() || questionType === 'arrange') ? accent : (isDark ? '#27272a' : '#e4e4e7'),
-                          color: (isAnswered() || questionType === 'arrange') ? 'white' : (isDark ? '#52525b' : '#a1a1aa'),
+                          background: isDark ? '#1e1e1e' : '#ffffff',
                         }}
                       >
-                        {currentQuestionIndex < totalSlides - 1 ? 'Continue' : 'Finish Course'}
-                        <ChevronRight className="w-4 h-4" />
+                        {/* Lesson header */}
+                        <div
+                          className="px-4 sm:px-8 pt-5 sm:pt-8 pb-4 sm:pb-5"
+                          style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#F2F5FA'}` }}
+                        >
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: accent }}>Lesson</p>
+                          <h1 className="text-xl font-bold leading-snug" style={{ color: isDark ? '#f0f0f0' : '#111' }}>
+                            {lesson.title || 'Lesson Content'}
+                          </h1>
+                        </div>
+
+                        {/* Video */}
+                        {embedUrl && (
+                          <div className="px-3 sm:px-8 pt-4 sm:pt-7 pb-2">
+                            <div className="rounded-lg overflow-hidden" style={embedUrl.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9' }}>
+                              <iframe
+                                src={embedUrl}
+                                className="w-full h-full border-0"
+                                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
+                                allowFullScreen
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Image */}
+                        {lesson.imageUrl && (
+                          <div className="px-3 sm:px-8 pt-4 pb-2">
+                            <div className="rounded-lg overflow-hidden">
+                              <img src={lesson.imageUrl} alt="Lesson illustration" className="w-full object-cover" />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Body */}
+                        {lesson.body && (
+                          <div className="px-4 sm:px-8 pt-4 sm:pt-6 pb-5 sm:pb-6">
+                            <div
+                              className={`prose prose-sm max-w-none [font-size:14.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
+                                ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
+                                : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
+                              }`}
+                              style={{ color: isDark ? '#d4d4d8' : '#3f3f46', ...fontStyle }}
+                              dangerouslySetInnerHTML={{ __html: sanitizeRichText(lesson.body) }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Continue button inside card */}
+                        <div className="px-4 sm:px-8 pb-5 sm:pb-7 pt-2">
+                          <button
+                            onClick={handleNext}
+                            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-xl text-[14px] font-semibold transition-all active:scale-[0.98]"
+                            style={{ background: accent, color: 'white' }}
+                          >
+                            {isLast ? 'Finish Course' : 'Continue'}
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })() : <div
+                    className="rounded-xl overflow-hidden"
+                    style={{
+                      background: isDark ? '#1e1e1e' : '#ffffff',
+                    }}
+                  >
+                  <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-5 sm:pb-8">
+                  <div className="flex items-center gap-2 mb-5">
+                    {questionType !== 'multiple_choice' && questionType !== 'image' && (
+                      <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border ${isDark ? 'border-zinc-700 text-zinc-500' : 'border-zinc-200 text-zinc-400'}`}>
+                        {questionType === 'fill_blank' ? 'Fill in the blank' : questionType === 'arrange' ? 'Arrange in order' : questionType === 'code' ? 'Code Snippet' : ''}
+                      </span>
+                    )}
+                    {/* Hint button */}
+                    {currentQuestion.hint && !hintsUsed.has(currentQuestion.id) && !isChecking && (
+                      <button
+                        onClick={() => {
+                          setHintVisible(true);
+                          setHintsUsed(prev => new Set(prev).add(currentQuestion.id));
+                        }}
+                        className={`text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors ${isDark ? 'border-amber-500/40 text-amber-400 hover:bg-amber-500/10' : 'border-amber-400/50 text-amber-600 hover:bg-amber-50'}`}
+                      >
+                        💡 Hint
                       </button>
-                    </>
+                    )}
+                  </div>
+
+                  {/* Hint display */}
+                  {hintVisible && currentQuestion.hint && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`mb-4 px-4 py-3 rounded-xl border text-sm ${isDark ? 'bg-amber-500/10 border-amber-500/20 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-700'}`}
+                    >
+                      💡 {currentQuestion.hint}
+                      <span className={`ml-2 text-[10px] opacity-60`}>(score ×0.9 if correct)</span>
+                    </motion.div>
                   )}
-                </div>
-              </div>
+
+                  <h2 className={`text-lg sm:text-2xl font-semibold leading-snug mb-5 sm:mb-8 ${textColor}`}>
+                    {currentQuestion.question}
+                  </h2>
+
+                  {/* -- Fill in the blank -- */}
+                  {questionType === 'fill_blank' && (
+                    <div>
+                      <AnimatedField theme={config.theme || 'forest'} mode={config.mode || 'dark'}>
+                        <input
+                          type="text"
+                          value={fillBlankAnswer}
+                          onChange={e => { if (!isChecking) setFillBlankAnswer(e.target.value); }}
+                          onKeyDown={e => { if (e.key === 'Enter' && !isChecking && fillBlankAnswer.trim()) handleCheck(); }}
+                          placeholder="Type your answer here..."
+                          disabled={isChecking}
+                          className={`w-full bg-transparent border-none outline-none px-4 py-3 text-sm ${isDark ? 'text-white placeholder:text-zinc-600' : 'text-zinc-900 placeholder:text-zinc-400'} disabled:opacity-60`}
+                        />
+                      </AnimatedField>
+                      {isChecking && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`mt-3 px-4 py-3 rounded-xl border text-sm flex items-center gap-2 ${isCorrect ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}
+                        >
+                          {isCorrect ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <XCircle className="w-4 h-4 flex-shrink-0" />}
+                          <span>
+                            {isCorrect ? 'Correct!' : (
+                              <>Incorrect. Accepted: <span className="font-semibold">{currentQuestion.correctAnswer.split('|').map((s: string) => s.trim()).join(' / ')}</span></>
+                            )}
+                          </span>
+                        </motion.div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* -- Arrange in order -- */}
+                  {questionType === 'arrange' && (
+                    <div>
+                      <p className={`text-xs mb-3 ${mutedColor}`}>Drag to reorder. Put items in the correct sequence.</p>
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                        <SortableContext items={arrangeOrder} strategy={verticalListSortingStrategy}>
+                          <div className="space-y-2">
+                            {arrangeOrder.map((item, idx) => (
+                              <SortableItem
+                                key={item}
+                                id={item}
+                                label={item}
+                                idx={idx}
+                                accent={accent}
+                                isDark={isDark}
+                                isChecking={isChecking}
+                              />
+                            ))}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+                      {isChecking && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`mt-3 px-4 py-3 rounded-xl border text-sm ${isCorrect ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}
+                        >
+                          {isCorrect ? (
+                            <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Correct order!</span>
+                          ) : (
+                            <div className="space-y-1">
+                              <span className="flex items-center gap-2"><XCircle className="w-4 h-4" /> Incorrect order.</span>
+                              <p className="text-xs opacity-80">Correct: {currentQuestion.options.join(' -> ')}</p>
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* -- Image options -- */}
+                  {questionType === 'image' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      {currentQuestion.options.map((option: string, idx: number) => {
+                        const imgSrc = (currentQuestion.optionImages || [])[idx] || '';
+                        const isSelected = selectedOption === option;
+                        const showCorrect = isChecking && option === currentQuestion.correctAnswer;
+                        const showWrong = isChecking && isSelected && !isCorrect;
+                        const borderColor = showCorrect ? '#10b981' : showWrong ? '#f43f5e' : isSelected ? accent : (isDark ? '#3f3f46' : '#e4e4e7');
+                        const borderWidth = (showCorrect || showWrong || isSelected) ? 3 : 2;
+                        return (
+                          <button
+                            key={idx}
+                            disabled={isChecking}
+                            onClick={() => { setSelectedOption(option); if (showAnswers === 'per_question' && !isChecking && !answers[currentQuestion.id]) handleCheck(option); }}
+                            className="relative rounded-2xl overflow-hidden transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed group"
+                            style={{ border: `${borderWidth}px solid ${borderColor}` }}
+                          >
+                            {imgSrc ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img src={imgSrc} alt={`Option ${idx + 1}`} className="w-full h-52 object-cover group-hover:scale-105 transition-transform duration-300" />
+                            ) : (
+                              <div className={`w-full h-52 flex items-center justify-center text-sm ${isDark ? 'bg-zinc-800 text-zinc-600' : 'bg-zinc-100 text-zinc-400'}`}>No image</div>
+                            )}
+                            <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
+                            <div className="absolute bottom-0 inset-x-0 px-3 py-2.5 flex items-center justify-between">
+                              <span
+                                className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 shadow"
+                                style={{ background: showCorrect ? '#10b981' : showWrong ? '#f43f5e' : isSelected ? accent : 'rgba(0,0,0,0.5)' }}
+                              >
+                                {String.fromCharCode(65 + idx)}
+                              </span>
+                              <span className="flex-shrink-0">
+                                {showCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+                                {showWrong && <XCircle className="w-4 h-4 text-rose-400" />}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* -- Code snippet -- */}
+                  {questionType === 'code' && currentQuestion.codeSnippet && (
+                    <div className="mb-8 rounded-2xl overflow-hidden border border-zinc-700/60 shadow-lg">
+                      <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-700/60" style={{ background: '#111827' }}>
+                        <span className="text-[11px] font-mono font-semibold text-zinc-400 uppercase tracking-wider">
+                          {currentQuestion.codeLanguage || 'javascript'}
+                        </span>
+                        <div className="flex gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
+                        </div>
+                      </div>
+                      <SyntaxHighlighter
+                        language={currentQuestion.codeLanguage || 'javascript'}
+                        style={atomOneDark}
+                        customStyle={{ margin: 0, borderRadius: 0, fontSize: '14px', lineHeight: '1.7', padding: '20px 24px', background: '#0d1117' }}
+                        showLineNumbers
+                      >
+                        {currentQuestion.codeSnippet}
+                      </SyntaxHighlighter>
+                    </div>
+                  )}
+
+                  {/* -- Multiple choice (also renders for code type) -- */}
+                  {(questionType === 'multiple_choice' || questionType === 'code') && (
+                    <div className="space-y-2.5">
+                      {currentQuestion.options.map((option: string, idx: number) => {
+                        const isSelected = selectedOption === option;
+                        const showCorrect = isChecking && option === currentQuestion.correctAnswer;
+                        const showWrong = isChecking && isSelected && !isCorrect;
+                        let borderStyle = '';
+                        let bgStyle = '';
+                        let buttonInlineStyle: React.CSSProperties = {};
+                        const numColor: React.CSSProperties = showCorrect
+                          ? { color: '#10b981' }
+                          : showWrong
+                            ? { color: '#f43f5e' }
+                            : isSelected
+                              ? { color: accent }
+                              : { color: isDark ? '#52525b' : '#a1a1aa' };
+                        const borderWidth = (showCorrect || showWrong || isSelected) ? 'border-2' : 'border-[1.5px]';
+                        const optionTextColor = (isSelected || showCorrect || showWrong)
+                          ? (isDark ? 'text-white' : 'text-zinc-900')
+                          : (isDark ? 'text-zinc-400' : 'text-zinc-500');
+                        if (showCorrect) {
+                          borderStyle = 'border-emerald-500';
+                          bgStyle = 'bg-emerald-500/10';
+                        } else if (showWrong) {
+                          borderStyle = 'border-rose-500';
+                          bgStyle = '';
+                          buttonInlineStyle = { backgroundColor: isDark ? '#662525' : '#fff1f1' };
+                        } else if (isSelected) {
+                          borderStyle = 'border-transparent';
+                          buttonInlineStyle = { borderColor: accent, backgroundColor: `${accent}18` };
+                        } else {
+                          borderStyle = isDark ? 'border-zinc-700/60 hover:border-zinc-600' : 'border-zinc-200 hover:border-zinc-300';
+                          bgStyle = isDark ? 'hover:bg-zinc-800/40' : 'hover:bg-zinc-50';
+                        }
+                        return (
+                          <button
+                            key={idx}
+                            disabled={isChecking}
+                            onClick={() => { setSelectedOption(option); if (showAnswers === 'per_question' && !isChecking && !answers[currentQuestion.id]) handleCheck(option); }}
+                            style={buttonInlineStyle}
+                            className={`w-full text-left px-5 py-4 rounded-2xl ${borderWidth} transition-all duration-150 flex items-center gap-3 ${borderStyle} ${bgStyle} ${optionTextColor}`}
+                          >
+                            <span className="flex-1 text-base font-medium leading-snug">{option}</span>
+                            <span className="flex-shrink-0 flex items-center gap-2">
+                              {showCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                              {showWrong && <XCircle className="w-4 h-4 text-rose-500" />}
+                              <span className="text-sm font-semibold tabular-nums" style={numColor}>{idx + 1}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  </div>{/* end inner padding */}
+
+                  {/* -- Card footer: action bar -- */}
+                  {(() => {
+                    const hasLesson = (currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl) && (config as any).lessonTiming !== 'before';
+                    const footerBg = isChecking
+                      ? (isCorrect ? (isDark ? '#0a2e1a' : '#f0fdf4') : (isDark ? '#662525' : '#fff1f1'))
+                      : (isDark ? '#1e1e1e' : '#ffffff');
+                    return (
+                      <div className="px-4 sm:px-8 py-3 sm:py-4" style={{ background: footerBg }}>
+                        {isChecking && currentQuestion?.explanation && (
+                          <div className={`mb-3 text-sm leading-relaxed ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                            <span className="font-semibold text-[11px] uppercase tracking-wider opacity-50 mr-2">Explanation</span>
+                            {currentQuestion.explanation}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-2 sm:gap-4">
+                          {isChecking ? (
+                            <div
+                              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm flex-shrink-0 border-2 ${isCorrect ? 'border-emerald-500' : 'border-rose-500'}`}
+                              style={{
+                                background: isCorrect
+                                  ? '#ffffff'
+                                  : (isDark ? '#1e1e1e' : '#fff1f1'),
+                                color: isCorrect
+                                  ? (isDark ? '#34d399' : '#059669')
+                                  : (isDark ? '#fca5a5' : '#dc2626'),
+                              }}>
+                              {isCorrect ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                              {isCorrect ? 'Correct!' : 'Incorrect!'}
+                            </div>
+                          ) : (
+                            <button onClick={handleSkip}
+                              className={`text-sm font-medium transition-colors flex-shrink-0 ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}>
+                              Skip
+                            </button>
+                          )}
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            {showAnswers === 'per_question' ? (
+                              isChecking ? (
+                                <>
+                                  {hasLesson && (
+                                    <button onClick={() => setLessonOpen(true)}
+                                      className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 ${isCorrect ? (isDark ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-emerald-50 text-emerald-600') : (isDark ? 'bg-rose-500/15 text-rose-400 hover:bg-rose-500/25' : 'bg-rose-50 text-rose-600')}`}>
+                                      <BookOpen className="w-4 h-4 inline mr-1.5 -mt-0.5" />
+                                      {isCorrect ? 'Review Lesson' : 'Why?'}
+                                    </button>
+                                  )}
+                                  <button onClick={handleNext}
+                                    className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95"
+                                    style={{ background: isCorrect ? '#10b981' : '#DB585A', color: 'white' }}>
+                                    {currentQuestionIndex < totalSlides - 1 ? 'Continue' : 'Finish'}
+                                    <ChevronRight className="w-4 h-4" />
+                                  </button>
+                                </>
+                              ) : (
+                                (questionType === 'fill_blank' || questionType === 'arrange') && (
+                                  <button onClick={() => handleCheck()} disabled={!isAnswered()}
+                                    className="px-6 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    style={{ background: isAnswered() ? accent : (isDark ? '#27272a' : '#e4e4e7'), color: isAnswered() ? 'white' : (isDark ? '#52525b' : '#a1a1aa') }}>
+                                    Check Answer
+                                  </button>
+                                )
+                              )
+                            ) : (
+                              <>
+                                {relatedAssignment && currentQuestionIndex === totalQuestions - 1 && (
+                                  <p className="text-xs hidden sm:block" style={{ color: isDark ? '#a1a1aa' : '#52525b' }}>
+                                    Complete to unlock <span className="font-semibold" style={{ color: accent }}>{relatedAssignment.title}</span>
+                                  </p>
+                                )}
+                                <button onClick={handleNextDirect} disabled={!isAnswered() && questionType !== 'arrange'}
+                                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  style={{ background: (isAnswered() || questionType === 'arrange') ? accent : (isDark ? '#3f3f46' : '#d4d4d8'), color: 'white' }}>
+                                  {currentQuestionIndex < totalSlides - 1 ? 'Continue' : 'Finish Course'}
+                                  <ChevronRight className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  </div>}
+                </motion.div>
+              </AnimatePresence>
             </div>
-          );
-        })()}
-      </div>
+          </div>
+        </div>{/* end main column */}
+      </div>{/* end main container */}
+
+      {/* Chapters drawer - inline mode only (full-screen mode uses persistent sidebar) */}
+      {inlineMode && (
+        <AnimatePresence>
+          {showChapters && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="fixed inset-0 z-[300] bg-black/50"
+                onClick={() => setShowChapters(false)}
+              />
+              <motion.div
+                initial={{ x: -310 }}
+                animate={{ x: 0 }}
+                exit={{ x: -310 }}
+                transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
+                className="fixed left-0 top-0 bottom-0 z-[301] flex flex-col"
+                style={{
+                  width: 300,
+                  background: isDark ? '#111' : '#fff',
+                  borderRight: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
+                  boxShadow: '4px 0 32px rgba(0,0,0,0.35)',
+                }}
+              >
+                <div className={`flex items-center justify-between px-4 py-3.5 border-b flex-shrink-0 ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
+                  <p className="text-sm font-bold" style={{ color: isDark ? '#fff' : '#111' }}>Course Contents</p>
+                  <button onClick={() => setShowChapters(false)} className={`p-1 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}>
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto py-2">
+                  {chapters.map((group, gi) => (
+                    <div key={gi}>
+                      <div className="px-4 pt-4 pb-1.5">
+                        <button
+                          onClick={() => { if (group.sectionIdx !== null) { setDirection(group.sectionIdx > currentQuestionIndex ? 1 : -1); setCurrentQuestionIndex(group.sectionIdx); setShowChapters(false); } }}
+                          disabled={group.sectionIdx === null}
+                          className="text-left w-full"
+                        >
+                          <span className="text-[10px] font-bold uppercase tracking-wide leading-tight" style={{ color: accent }}>{group.sectionTitle}</span>
+                        </button>
+                      </div>
+                      {group.slides.map(({ q, idx }) => {
+                        const answered = !!answers[q.id];
+                        const isCurrent = idx === currentQuestionIndex;
+                        return (
+                          <button key={q.id}
+                            onClick={() => { setDirection(idx > currentQuestionIndex ? 1 : -1); setCurrentQuestionIndex(idx); setShowChapters(false); }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:opacity-80"
+                            style={{ background: isCurrent ? (isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)') : 'transparent' }}
+                          >
+                            <span className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold"
+                              style={{ background: isCurrent ? accent : answered ? `${accent}25` : isDark ? '#2a2a2a' : '#f0f0f0', color: isCurrent ? '#fff' : answered ? accent : isDark ? '#555' : '#aaa' }}>
+                              {answered ? '✓' : (q as any).lessonOnly ? '◉' : idx + 1}
+                            </span>
+                            <span className="flex-1 text-[13px] leading-snug line-clamp-2" style={{ color: isCurrent ? (isDark ? '#fff' : '#111') : isDark ? '#999' : '#555' }}>
+                              {(q as any).lessonOnly ? ((q as any).lesson?.title || 'Lesson') : q.question}
+                            </span>
+                            {isCurrent && <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: accent }} />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+      )}
 
       {/* Lesson sheet */}
       <AnimatePresence>
@@ -2762,7 +3046,6 @@ export function CourseTaker({
               {/* scrollable content */}
               <div className="overflow-y-auto flex-1 overscroll-contain">
                 <div className="max-w-2xl mx-auto px-5 sm:px-8 pt-2 pb-5 sm:pt-3 sm:pb-7 space-y-5 sm:space-y-6">
-                  {/* video embed */}
                   {currentQuestion.lesson.videoUrl && getVideoEmbedUrl(currentQuestion.lesson.videoUrl) && (
                     <div className="rounded-xl overflow-hidden shadow-md" style={{ aspectRatio: '16/9' }}>
                       <iframe
@@ -2773,19 +3056,11 @@ export function CourseTaker({
                       />
                     </div>
                   )}
-
-                  {/* image */}
                   {currentQuestion.lesson.imageUrl && (
                     <div className="rounded-xl overflow-hidden shadow-sm">
-                      <img
-                        src={currentQuestion.lesson.imageUrl}
-                        alt="Lesson illustration"
-                        className="w-full object-cover"
-                      />
+                      <img src={currentQuestion.lesson.imageUrl} alt="Lesson illustration" className="w-full object-cover" />
                     </div>
                   )}
-
-                  {/* body text */}
                   {currentQuestion.lesson.body && (
                     <div
                       className={`prose prose-base sm:prose-lg max-w-none ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
@@ -2796,21 +3071,19 @@ export function CourseTaker({
                       dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentQuestion.lesson.body) }}
                     />
                   )}
-
-                  {/* bottom action button */}
                   {(config as any).lessonTiming === 'before' && !isChecking ? (
                     <button
                       onClick={() => setLessonOpen(false)}
-                      className="w-full py-4 rounded-xl text-[15px] font-semibold text-white transition-all active:scale-[0.98]"
-                      style={{ background: accent }}
+                      className="w-full py-4 rounded-xl text-[15px] font-semibold transition-all active:scale-[0.98]"
+                      style={{ background: accent, color: 'white' }}
                     >
                       Start Question
                     </button>
                   ) : isChecking ? (
                     <button
                       onClick={() => { setLessonOpen(false); handleNext(); }}
-                      className="w-full py-4 rounded-xl text-[15px] font-semibold text-white transition-all active:scale-[0.98]"
-                      style={{ background: isCorrect ? '#10b981' : '#f43f5e' }}
+                      className="w-full py-4 rounded-xl text-[15px] font-semibold transition-all active:scale-[0.98]"
+                      style={{ background: isCorrect ? '#10b981' : '#DB585A', color: 'white' }}
                     >
                       Continue
                     </button>

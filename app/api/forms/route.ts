@@ -135,8 +135,8 @@ export async function POST(req: NextRequest) {
           passmark:       config.passmark        ?? 50,
           course_timer:   config.courseTimer     ?? null,
           learn_outcomes: config.learnOutcomes   ?? [],
-          points_enabled: config.pointsSystem?.enabled   ?? true,
-          points_base:    config.pointsSystem?.basePoints ?? 50,
+          points_enabled: config.pointsSystem?.enabled   ?? config.pointsEnabled   ?? true,
+          points_base:    config.pointsSystem?.basePoints ?? config.pointsBase      ?? 50,
           post_submission: config.postSubmission ?? null,
         })
         .select('id, slug, status')
@@ -221,7 +221,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { id, title, description, config, slug: preferredSlug, cohort_ids, status: bodyStatus } = body;
+  const { id, title, description, config, slug: preferredSlug, cohort_ids, deadline_days, status: bodyStatus } = body;
   if (!id || !config) return NextResponse.json({ error: 'id and config are required' }, { status: 400 });
 
   const found = await findContentById(supabase, id);
@@ -239,7 +239,7 @@ export async function PUT(req: NextRequest) {
     status:        formStatus,
     cohort_ids:    cohort_ids ?? found.row.cohort_ids ?? [],
     cover_image:   config.coverImage ?? null,
-    deadline_days: config.deadline_days ? Number(config.deadline_days) : null,
+    deadline_days: deadline_days != null ? Number(deadline_days) : (config.deadline_days != null ? Number(config.deadline_days) : null),
     theme:         config.theme ?? null,
     mode:          config.mode ?? null,
     font:          config.font ?? null,
