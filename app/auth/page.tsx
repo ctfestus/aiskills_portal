@@ -50,8 +50,8 @@ export default function AuthPage() {
         const origin = window.location.origin.replace('://www.', '://');
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${origin}/auth/callback`,
-          options: { captchaToken },
-        } as any);
+          captchaToken,
+        });
         if (error) throw error;
         setMessage('Check your email for the password reset link.');
         resetCaptcha();
