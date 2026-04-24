@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
+import { useState, useEffect } from 'react'; // useRef -- CAPTCHA SUSPENDED
+// CAPTCHA SUSPENDED -- import { Turnstile, type TurnstileInstance } from '@marsidev/react-turnstile';
 import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/components/TenantProvider';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!;
+// CAPTCHA SUSPENDED -- const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!;
 
 export default function AuthPage() {
   const { logoUrl } = useTenant();
@@ -18,8 +18,8 @@ export default function AuthPage() {
   const [loading, setLoading]         = useState(false);
   const [message, setMessage]         = useState('');
   const [showPass, setShowPass]       = useState(false);
-  const [captchaToken, setCaptchaToken] = useState('');
-  const turnstileRef = useRef<TurnstileInstance>(null);
+  // CAPTCHA SUSPENDED -- const [captchaToken, setCaptchaToken] = useState('');
+  // CAPTCHA SUSPENDED -- const turnstileRef = useRef<TurnstileInstance>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -31,34 +31,23 @@ export default function AuthPage() {
     }
   }, []);
 
-  const resetCaptcha = () => {
-    turnstileRef.current?.reset();
-    setCaptchaToken('');
-  };
+  // CAPTCHA SUSPENDED -- const resetCaptcha = () => { turnstileRef.current?.reset(); setCaptchaToken(''); };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!captchaToken) {
-      setMessage('Please complete the CAPTCHA.');
-      return;
-    }
     setLoading(true);
     setMessage('');
     try {
       if (isForgot) {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          captchaToken,
-        });
+        const { error } = await supabase.auth.resetPasswordForEmail(email);
         if (error) throw error;
         setMessage('Check your email for the password reset link.');
-        resetCaptcha();
         return;
       }
       if (isLogin) {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
-          options: { captchaToken },
         });
         if (error) throw error;
         const { data: student } = await supabase
@@ -80,16 +69,13 @@ export default function AuthPage() {
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/auth/callback`,
-            captchaToken,
           },
         });
         if (error) throw error;
         setMessage('Check your email for the confirmation link.');
-        resetCaptcha();
       }
     } catch (err: any) {
       setMessage(err.message || 'Something went wrong. Please try again.');
-      resetCaptcha();
     } finally {
       setLoading(false);
     }
@@ -187,14 +173,7 @@ export default function AuthPage() {
             </div>
           )}
 
-          <Turnstile
-            ref={turnstileRef}
-            siteKey={TURNSTILE_SITE_KEY}
-            onSuccess={setCaptchaToken}
-            onExpire={resetCaptcha}
-            onError={resetCaptcha}
-            options={{ theme: 'dark', size: 'flexible' }}
-          />
+          {/* CAPTCHA SUSPENDED <Turnstile ref={turnstileRef} siteKey={TURNSTILE_SITE_KEY} onSuccess={setCaptchaToken} onExpire={resetCaptcha} onError={resetCaptcha} options={{ theme: 'dark', size: 'flexible' }} /> */}
 
           <AnimatePresence>
             {message && (
@@ -215,7 +194,7 @@ export default function AuthPage() {
 
           <button
             type="submit"
-            disabled={loading || !captchaToken}
+            disabled={loading}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all mt-1 disabled:opacity-60 hover:brightness-110 active:scale-[0.99]"
             style={{ background: '#ADEE66', color: '#0f0d6e' }}
           >
