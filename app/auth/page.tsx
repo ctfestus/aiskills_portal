@@ -145,7 +145,7 @@ export default function AuthPage() {
                 {isLogin && (
                   <button
                     type="button"
-                    onClick={() => { setIsForgot(true); setMessage(''); resetCaptcha(); }}
+                    onClick={() => { setIsForgot(true); setMessage(''); }}
                     className="text-xs text-white/40 hover:text-[#ADEE66] transition-colors"
                   >
                     Forgot password?
@@ -210,7 +210,7 @@ export default function AuthPage() {
             <>
               Remember your password?{' '}
               <button
-                onClick={() => { setIsForgot(false); setMessage(''); resetCaptcha(); }}
+                onClick={() => { setIsForgot(false); setMessage(''); }}
                 className="font-semibold text-[#ADEE66] hover:underline transition-colors"
               >
                 Sign in
@@ -220,7 +220,7 @@ export default function AuthPage() {
             <>
               Don&apos;t have an account?{' '}
               <button
-                onClick={() => { setIsLogin(false); setMessage(''); resetCaptcha(); }}
+                onClick={() => { setIsLogin(false); setMessage(''); }}
                 className="font-semibold text-[#ADEE66] hover:underline transition-colors"
               >
                 Sign up
@@ -230,7 +230,7 @@ export default function AuthPage() {
             <>
               Already have an account?{' '}
               <button
-                onClick={() => { setIsLogin(true); setMessage(''); resetCaptcha(); }}
+                onClick={() => { setIsLogin(true); setMessage(''); }}
                 className="font-semibold text-[#ADEE66] hover:underline transition-colors"
               >
                 Sign in
