@@ -27,11 +27,13 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  // Password reset: exchange code here (Route Handler can set cookies),
-  // then redirect to the reset form -- no code in the URL.
+  // Password reset: forward the code to the client-side reset form.
+  // Server-side exchange doesn't set PASSWORD_RECOVERY AMR so updateUser({ password }) fails.
+  // The client will call exchangeCodeForSession and receive the PASSWORD_RECOVERY event.
   if (isRecovery && code) {
-    await supabase.auth.exchangeCodeForSession(code);
-    const response = NextResponse.redirect(new URL('/auth/reset-password', request.url));
+    const dest = new URL('/auth/reset-password', request.url);
+    dest.searchParams.set('code', code);
+    const response = NextResponse.redirect(dest);
     response.cookies.delete('sb-reset-intent');
     return response;
   }
