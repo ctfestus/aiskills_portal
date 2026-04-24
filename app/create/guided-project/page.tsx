@@ -183,6 +183,8 @@ function VirtualExperienceCreatePageInner() {
   const [creationMode, setCreationMode] = useState<'ai' | 'data' | 'manual' | null>(null);
   const [isShortCourse, setIsShortCourse] = useState(false);
   const [industry,    setIndustry]    = useState('fintech');
+  const [customIndustry, setCustomIndustry] = useState('');
+  const effectiveIndustry = industry === 'other' ? (customIndustry.trim() || 'other') : industry;
   const [difficulty,  setDifficulty]  = useState<'beginner'|'intermediate'|'advanced'>('intermediate');
   const [companyName,  setCompanyName]  = useState('');
   const [scenario,     setScenario]     = useState('');
@@ -412,8 +414,8 @@ function VirtualExperienceCreatePageInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify(useDataMode
-          ? { action: 'generate-from-data', industry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }
-          : { action: 'generate', industry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt }
+          ? { action: 'generate-from-data', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }
+          : { action: 'generate', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt }
         ),
       });
       const json = await res.json();
@@ -429,7 +431,7 @@ function VirtualExperienceCreatePageInner() {
         }
       }
       setConfig(json.config);
-      setTitle(json.config.company ? `${json.config.company} - ${industry.charAt(0).toUpperCase()+industry.slice(1)} Project` : 'Virtual Experience');
+      setTitle(json.config.company ? `${json.config.company} - ${effectiveIndustry.charAt(0).toUpperCase()+effectiveIndustry.slice(1)} Project` : 'Virtual Experience');
       setCoverImage(json.config.coverImage || '');
       setExpandedModules(new Set((json.config.modules || []).map((m: Module) => m.id)));
       setStep(2);
@@ -449,12 +451,12 @@ function VirtualExperienceCreatePageInner() {
       const res = await fetch('/api/ai-guided-project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ action: 'generate-from-data', industry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }),
+        body: JSON.stringify({ action: 'generate-from-data', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
       setConfig(json.config);
-      setTitle(json.config.company ? `${json.config.company} - ${industry.charAt(0).toUpperCase()+industry.slice(1)} Project` : 'Virtual Experience');
+      setTitle(json.config.company ? `${json.config.company} - ${effectiveIndustry.charAt(0).toUpperCase()+effectiveIndustry.slice(1)} Project` : 'Virtual Experience');
       setCoverImage(json.config.coverImage || '');
       setExpandedModules(new Set((json.config.modules || []).map((m: Module) => m.id)));
       setStep(2);
@@ -475,7 +477,7 @@ function VirtualExperienceCreatePageInner() {
         : undefined;
     const blankConfig: any = {
       isVirtualExperience: true,
-      industry,
+      industry: effectiveIndustry,
       difficulty,
       role: roleHint || 'Data Analyst',
       company: '',
@@ -773,7 +775,33 @@ function VirtualExperienceCreatePageInner() {
                           {industry === ind.id && <Check className="w-3 h-3 ml-auto flex-shrink-0" style={{ color: C.cta }}/>}
                         </button>
                       ))}
+                      {/* Other / custom industry */}
+                      <button onClick={() => setIndustry('other')}
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-all"
+                        style={{
+                          border: `1.5px solid ${industry === 'other' ? C.cta : C.cardBorder}`,
+                          background: industry === 'other' ? `${C.cta}12` : 'transparent',
+                        }}>
+                        <span className="text-base">✏️</span>
+                        <span className="text-[13px] font-semibold" style={{ color: industry === 'other' ? C.cta : C.text }}>Other</span>
+                        {industry === 'other' && <Check className="w-3 h-3 ml-auto flex-shrink-0" style={{ color: C.cta }}/>}
+                      </button>
                     </div>
+                    {industry === 'other' && (
+                      <input
+                        type="text"
+                        value={customIndustry}
+                        onChange={e => setCustomIndustry(e.target.value)}
+                        placeholder="e.g. Logistics, Agriculture, Real Estate…"
+                        className="w-full px-3 py-2.5 rounded-xl text-sm outline-none transition-all"
+                        style={{
+                          border: `1.5px solid ${C.cta}`,
+                          background: C.input,
+                          color: C.text,
+                        }}
+                        autoFocus
+                      />
+                    )}
                   </div>
 
                   {/* Experience Level */}
