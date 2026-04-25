@@ -477,7 +477,7 @@ export function deadlineReminderEmail(data: {
   branding?: EmailBranding;
 }) {
   const { name, contentTitle, contentType, formUrl, daysLeft, branding } = data;
-  const typeLabel = contentType === 'course' ? 'course' : 'virtual experience';
+  const typeLabel = contentType === 'course' ? 'course' : contentType === 'assignment' ? 'assignment' : 'virtual experience';
   const urgency = daysLeft <= 0 ? 'Your deadline has passed'
     : daysLeft === 1 ? 'You have 1 day left'
     : `You have ${daysLeft} days left`;

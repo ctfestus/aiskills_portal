@@ -2095,6 +2095,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   const [assignments, setAssignments]       = useState<any[]>([]);
   const [loading, setLoading]               = useState(true);
   const [deletingId, setDeletingId]         = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId]   = useState<string | null>(null);
   const [selected, setSelected]             = useState<any>(null);
   const [activeTab, setActiveTab]           = useState<'details' | 'responses'>('details');
   const [submissions, setSubmissions]       = useState<any[]>([]);
@@ -2158,6 +2159,31 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     } finally {
       setGrading(false);
     }
+  }
+
+  async function duplicateAssignment(a: any) {
+    setDuplicatingId(a.id);
+    const { id, created_at, updated_at, ...rest } = a;
+    const { data, error } = await supabase
+      .from('assignments')
+      .insert({ ...rest, title: `Copy of ${a.title}`, status: 'draft', cohort_ids: [], deadline_date: null })
+      .select('*')
+      .single();
+    if (error) { setDuplicatingId(null); window.alert(error.message); return; }
+
+    // Copy resources
+    const { data: resources } = await supabase
+      .from('assignment_resources')
+      .select('name, url, resource_type')
+      .eq('assignment_id', a.id);
+    if (resources?.length) {
+      await supabase.from('assignment_resources').insert(
+        resources.map(r => ({ ...r, assignment_id: data.id }))
+      );
+    }
+
+    setDuplicatingId(null);
+    setAssignments(prev => [data, ...prev]);
   }
 
   async function deleteAssignment(id: string) {
@@ -2583,6 +2609,11 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                 style={{ background: C.pill, color: C.muted, textDecoration: 'none' }}>
                 <Edit2 className="w-3 h-3"/> Edit
               </Link>
+              <button onClick={e => { e.stopPropagation(); duplicateAssignment(a); }} disabled={duplicatingId === a.id}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold hover:opacity-80"
+                style={{ background: C.pill, color: C.muted, cursor: duplicatingId === a.id ? 'not-allowed' : 'pointer', opacity: duplicatingId === a.id ? 0.5 : 1 }}>
+                {duplicatingId === a.id ? <Loader2 className="w-3 h-3 animate-spin"/> : <Copy className="w-3 h-3"/>}
+              </button>
               <button onClick={e => { e.stopPropagation(); deleteAssignment(a.id); }} disabled={deletingId === a.id}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
                 style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}`, cursor: deletingId === a.id ? 'not-allowed' : 'pointer', opacity: deletingId === a.id ? 0.5 : 1 }}>

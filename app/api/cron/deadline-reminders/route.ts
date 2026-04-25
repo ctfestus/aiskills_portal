@@ -166,17 +166,89 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // -- 6. Assignment deadlines (deadline_date, direct cohort_ids) ---
+  const windowStart = new Date(now - 86400000).toISOString().slice(0, 10);        // 1 day ago
+  const windowEnd   = new Date(now + REMINDER_DAYS_BEFORE * 86400000).toISOString().slice(0, 10); // N days ahead
+
+  const { data: asmRows } = await supabase
+    .from('assignments')
+    .select('id, title, slug, cohort_ids, deadline_date')
+    .eq('status', 'published')
+    .not('deadline_date', 'is', null)
+    .gte('deadline_date', windowStart)
+    .lte('deadline_date', windowEnd);
+
+  if (asmRows?.length) {
+    const allCohortIds = [...new Set((asmRows as any[]).flatMap((a: any) => a.cohort_ids ?? []))];
+    const asmContentIds = (asmRows as any[]).map((a: any) => a.id);
+
+    const [{ data: asmStudents }, { data: asmSubs }, { data: asmNudges }] = await Promise.all([
+      supabase.from('students').select('id, email, full_name, cohort_id').in('cohort_id', allCohortIds),
+      supabase.from('assignment_submissions').select('student_id, assignment_id')
+        .in('assignment_id', asmContentIds)
+        .in('status', ['submitted', 'graded']),
+      supabase.from('sent_nudges').select('student_id, form_id')
+        .eq('nudge_type', 'deadline_reminder')
+        .in('form_id', asmContentIds)
+        .gte('sent_at', since1Day),
+    ]);
+
+    const submittedSet = new Set((asmSubs ?? []).map((s: any) => `${s.student_id}|${s.assignment_id}`));
+    const asmNudgedSet = new Set((asmNudges ?? []).map((n: any) => `${n.student_id}|${n.form_id}`));
+    const studentMap   = new Map((asmStudents ?? []).map((s: any) => [s.id, s]));
+    const studentsByCohort2 = new Map<string, any[]>();
+    for (const s of asmStudents ?? []) {
+      if (!studentsByCohort2.has(s.cohort_id)) studentsByCohort2.set(s.cohort_id, []);
+      studentsByCohort2.get(s.cohort_id)!.push(s);
+    }
+
+    for (const asm of asmRows as any[]) {
+      const dl       = new Date(asm.deadline_date).getTime();
+      const daysLeft = Math.ceil((dl - now) / 86400000);
+      const slug     = asm.slug ?? asm.id;
+
+      for (const cohortId of (asm.cohort_ids ?? [])) {
+        for (const student of studentsByCohort2.get(cohortId) ?? []) {
+          const email = (student.email ?? '').trim().toLowerCase();
+          if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+          if (submittedSet.has(`${student.id}|${asm.id}`)) { skipped++; continue; }
+          if (asmNudgedSet.has(`${student.id}|${asm.id}`)) { skipped++; continue; }
+
+          const subject = daysLeft <= 0
+            ? `⚠ Assignment deadline passed: ${asm.title}`
+            : daysLeft === 1
+              ? `Last chance! Assignment due tomorrow: ${asm.title}`
+              : `Reminder: ${daysLeft} days left to submit "${asm.title}"`;
+
+          emailBatch.push({
+            from: FROM, to: email, subject,
+            html: deadlineReminderEmail({
+              name:         student.full_name || 'there',
+              contentTitle: asm.title,
+              contentType:  'assignment',
+              formUrl:      `${t.appUrl}/student#assignments`,
+              daysLeft,
+              branding,
+            }),
+          });
+
+          nudgeRecords.push({ student_id: student.id, form_id: asm.id, nudge_type: 'deadline_reminder' });
+        }
+      }
+    }
+  }
+
   if (!emailBatch.length) {
     return NextResponse.json({ ok: true, sent: 0, skipped });
   }
 
-  // -- 6. Send in batches of 100 ---
+  // -- 7. Send in batches of 100 ---
   const sentKeySet = new Set<string>();
   const batches = chunk(emailBatch, BATCH_SIZE);
   let sent = 0;
 
   for (let i = 0; i < batches.length; i++) {
-    const batch      = batches[i];
+    const batch       = batches[i];
     const batchNudges = nudgeRecords.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
     try {
       await resend.batch.send(batch);
@@ -187,7 +259,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // -- 7. Bulk insert nudge records ---
+  // -- 8. Bulk insert nudge records ---
   if (sentKeySet.size) {
     const toInsert = nudgeRecords.filter(n => sentKeySet.has(`${n.student_id}|${n.form_id}`));
     if (toInsert.length) await supabase.from('sent_nudges').insert(toInsert);
