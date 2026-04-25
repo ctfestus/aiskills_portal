@@ -108,25 +108,25 @@ export async function GET(
   if (student.cohort_id) {
     const { data: cohortStudents } = await supabase
       .from('students')
-      .select('email')
+      .select('id')
       .eq('cohort_id', student.cohort_id)
       .eq('role', 'student')
       .eq('status', 'active');
 
-    const emails = (cohortStudents ?? []).map((s: any) => s.email);
-    cohortSize = emails.length;
+    const studentIds = (cohortStudents ?? []).map((s: any) => s.id);
+    cohortSize = studentIds.length;
 
-    if (emails.length > 0) {
+    if (studentIds.length > 0) {
       const { data: xpRows } = await supabase
         .from('student_xp')
-        .select('student_email, total_xp')
-        .in('student_email', emails);
+        .select('student_id, total_xp')
+        .in('student_id', studentIds);
 
       const xpMap: Record<string, number> = {};
-      for (const x of xpRows ?? []) xpMap[x.student_email] = x.total_xp;
+      for (const x of xpRows ?? []) xpMap[x.student_id] = x.total_xp;
 
-      myXp = xpMap[student.email] ?? 0;
-      leaderboardRank = emails.filter((e: string) => (xpMap[e] ?? 0) > myXp).length + 1;
+      myXp = xpMap[student.id] ?? 0;
+      leaderboardRank = studentIds.filter((id: string) => (xpMap[id] ?? 0) > myXp).length + 1;
     }
   }
 
