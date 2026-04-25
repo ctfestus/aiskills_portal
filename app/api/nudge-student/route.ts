@@ -87,6 +87,13 @@ export async function POST(req: NextRequest) {
       console.error('[nudge-student] Resend error:', sendError);
       return NextResponse.json({ error: 'Failed to send nudge. Please try again.' }, { status: 500 });
     }
+
+    // Record the nudge so the dashboard can reflect it
+    const { data: studentRow } = await supabase.from('students').select('id').eq('email', studentEmail).maybeSingle();
+    if (studentRow?.id) {
+      await supabase.from('sent_nudges').insert({ student_id: studentRow.id, form_id: formId, nudge_type: 'manual' });
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error('[nudge-student]', err);

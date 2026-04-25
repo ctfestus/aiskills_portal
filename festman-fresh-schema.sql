@@ -495,6 +495,7 @@ CREATE TABLE public.event_registrations (
 CREATE TABLE public.sent_nudges (
   id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id uuid        NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  form_id    uuid,
   nudge_type text        NOT NULL,
   sent_at    timestamptz NOT NULL DEFAULT now()
 );

@@ -3945,6 +3945,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
   const [activityEvents, setActivityEvents] = useState<any[]>([]);
   const [gaps, setGaps]                     = useState<any[]>([]);
   const [assignmentStats, setAssignmentStats] = useState<{ total: number; submitted: number; graded: number } | null>(null);
+  const [assignmentItems, setAssignmentItems] = useState<any[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -3957,7 +3958,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
         .from('students').select('cohort_id').eq('id', user.id).single();
       const cohort = student?.cohort_id ?? null;
 
-      const [courseRes, veRes, attemptsRes, gpAttRes, cohortAssignCrsRes, cohortAssignVeRes, certsData, lbData, actData, gapsData, asmRes] =
+      const [courseRes, veRes, attemptsRes, gpAttRes, cohortAssignCrsRes, cohortAssignVeRes, certsData, lbData, actData, gapsData, assignmentsRes, asmSubsRes] =
         await Promise.all([
           cohort
             ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes').contains('cohort_ids', [cohort]).eq('status', 'published')
@@ -3996,9 +3997,13 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
             ? fetch('/api/vector/gaps', { headers: { Authorization: `Bearer ${token}` } })
                 .then(r => r.json()).catch(() => ({ gaps: [] }))
             : Promise.resolve({ gaps: [] }),
-          // Assignment submissions for this student
+          // Assignments assigned to this cohort
+          cohort
+            ? supabase.from('assignments').select('id, title, deadline_date').contains('cohort_ids', [cohort]).eq('status', 'published')
+            : Promise.resolve({ data: [] as any[] }),
+          // This student's submissions
           supabase.from('assignment_submissions')
-            .select('id, status')
+            .select('assignment_id, status')
             .eq('student_id', user.id),
         ]);
 
@@ -4051,6 +4056,14 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
       const rankings: any[] = (lbData as any)?.rankings ?? [];
       const myEntry = rankings.find((r: any) => r.isMe);
 
+      // Include assignment deadlines in the deadline map
+      const asmRows  = (assignmentsRes as any)?.data ?? [];
+      const subRows  = (asmSubsRes as any)?.data ?? [];
+      const subMap   = new Map(subRows.map((s: any) => [s.assignment_id, s.status]));
+      for (const a of asmRows) {
+        if (a.deadline_date) dlMap[a.id] = new Date(a.deadline_date);
+      }
+
       setCourses(allLearning);
       setCourseAttempts(caMap);
       setGpAttempts(gpMap);
@@ -4060,12 +4073,14 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
       setTotalInCohort(rankings.length);
       setActivityEvents(recentAct);
       setGaps((gapsData as any)?.gaps ?? []);
-      const asmRows = (asmRes as any)?.data ?? [];
       setAssignmentStats({
         total:     asmRows.length,
-        submitted: asmRows.filter((a: any) => ['submitted', 'graded'].includes(a.status)).length,
-        graded:    asmRows.filter((a: any) => a.status === 'graded').length,
+        submitted: subRows.filter((s: any) => ['submitted', 'graded'].includes(s.status)).length,
+        graded:    subRows.filter((s: any) => s.status === 'graded').length,
       });
+
+      // Store assignments in state so deadlines panel can render them
+      setAssignmentItems(asmRows.map((a: any) => ({ ...a, _subStatus: subMap.get(a.id) ?? null })));
       setLoading(false);
     };
     load();
@@ -4119,20 +4134,37 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
     .slice(0, 3);
 
   // Deadlines in the next 14 days (excluding already-completed)
-  const upcomingDeadlines = Object.entries(deadlines)
-    .map(([formId, dl]) => {
-      if (!dl) return null;
-      const form = courses.find(f => f.id === formId);
-      if (!form) return null;
-      const proj = isProjForm(form);
-      const a    = proj ? gpAttempts[formId] : courseAttempts[formId];
-      if (isEffectivelyDone(form, a, proj)) return null;
-      const daysLeft = Math.ceil((dl.getTime() - now) / 86400000);
-      if (daysLeft > 14) return null;
-      return { form, deadline: dl, daysLeft };
-    })
-    .filter(Boolean)
-    .sort((a: any, b: any) => a.daysLeft - b.daysLeft) as Array<{ form: any; deadline: Date; daysLeft: number }>;
+  const upcomingDeadlines: Array<{ title: string; daysLeft: number; type: 'course' | 'project' | 'assignment' }> = [
+    // Courses + VEs
+    ...Object.entries(deadlines)
+      .filter(([formId]) => courses.some(f => f.id === formId))
+      .map(([formId, dl]) => {
+        if (!dl) return null;
+        const form = courses.find(f => f.id === formId);
+        if (!form) return null;
+        const proj = isProjForm(form);
+        const a    = proj ? gpAttempts[formId] : courseAttempts[formId];
+        if (isEffectivelyDone(form, a, proj)) return null;
+        const daysLeft = Math.ceil((dl.getTime() - now) / 86400000);
+        if (daysLeft > 14) return null;
+        return { title: form.title, daysLeft, type: proj ? 'project' : 'course' } as const;
+      })
+      .filter(Boolean) as any[],
+    // Assignments
+    ...assignmentItems
+      .filter(a => {
+        if (!a.deadline_date) return false;
+        if (a._subStatus === 'submitted' || a._subStatus === 'graded') return false;
+        const dl = new Date(a.deadline_date);
+        const daysLeft = Math.ceil((dl.getTime() - now) / 86400000);
+        return daysLeft <= 14;
+      })
+      .map(a => ({
+        title: a.title,
+        daysLeft: Math.ceil((new Date(a.deadline_date).getTime() - now) / 86400000),
+        type: 'assignment' as const,
+      })),
+  ].sort((a: any, b: any) => a.daysLeft - b.daysLeft);
 
   if (loading) return (
     <div className="space-y-6">
@@ -4311,22 +4343,21 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
           ) : (
             <div className="rounded-2xl overflow-hidden"
               style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-              {upcomingDeadlines.map(({ form, daysLeft }, idx) => {
+              {upcomingDeadlines.map(({ title, daysLeft, type }, idx) => {
                 const col = daysLeft < 0 ? '#ef4444' : daysLeft <= 3 ? '#f59e0b' : daysLeft <= 7 ? '#f97316' : '#16a34a';
                 const lbl = daysLeft < 0 ? 'Overdue' : daysLeft === 0 ? 'Due today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft} days`;
-                const proj = isProjForm(form);
+                const Icon = type === 'assignment' ? ClipboardList : type === 'project' ? Briefcase : BookOpen;
+                const typeLabel = type === 'assignment' ? 'Assignment' : type === 'project' ? 'Project' : 'Course';
                 return (
-                  <div key={form.id} className="flex items-center gap-4 px-5 py-4"
+                  <div key={`${type}-${title}-${idx}`} className="flex items-center gap-4 px-5 py-4"
                     style={{ borderBottom: idx < upcomingDeadlines.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                       style={{ background: `${col}15` }}>
-                      {proj
-                        ? <Briefcase className="w-4 h-4" style={{ color: col }}/>
-                        : <BookOpen  className="w-4 h-4" style={{ color: col }}/>}
+                      <Icon className="w-4 h-4" style={{ color: col }}/>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{form.title}</p>
-                      <p className="text-xs mt-0.5" style={{ color: C.muted }}>{proj ? 'Project' : 'Course'}</p>
+                      <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{title}</p>
+                      <p className="text-xs mt-0.5" style={{ color: C.muted }}>{typeLabel}</p>
                     </div>
                     <span className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0"
                       style={{ background: `${col}15`, color: col }}>{lbl}</span>
