@@ -256,7 +256,15 @@ function VirtualExperienceCreatePageInner() {
           setCoverImage(cfg.coverImage || '');
           setSelectedCohorts(ve.cohort_ids || []);
           setDeadlineDays(cfg.deadline_days ? String(cfg.deadline_days) : '');
-          setIndustry(cfg.industry || 'fintech');
+          const knownIndustry = INDUSTRIES.find(i => i.id === cfg.industry);
+          if (knownIndustry) {
+            setIndustry(cfg.industry);
+          } else if (cfg.industry) {
+            setIndustry('other');
+            setCustomIndustry(cfg.industry);
+          } else {
+            setIndustry('fintech');
+          }
           setDifficulty(cfg.difficulty || 'intermediate');
           setIsShortCourse(!!(ve as any).is_short_course);
           if (cfg.dataset?.url) setDatasetUrl(cfg.dataset.url);
@@ -1111,7 +1119,7 @@ function VirtualExperienceCreatePageInner() {
                       <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: `${C.cta}0e`, border: `1px solid ${C.cta}28` }}>
                         <span className="text-base">📊</span>
                         <div>
-                          <p className="text-[12px] font-bold" style={{ color: C.cta }}>{dataset.filename}</p>
+                          <p className="text-[12px] font-bold" style={{ color: C.cta }}>{dataset.filename || 'Linked Dataset'}</p>
                           {dataset.description && <p className="text-[11px] mt-0.5" style={{ color: C.muted }}>{dataset.description}</p>}
                         </div>
                       </div>
@@ -1543,6 +1551,54 @@ function VirtualExperienceCreatePageInner() {
 
               {/* RIGHT col-span-2 */}
               <div className="lg:col-span-2 space-y-4 lg:sticky lg:top-20">
+
+                {/* Industry card */}
+                <div style={card} className="p-5 space-y-3">
+                  <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Industry</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {INDUSTRIES.map(ind => (
+                      <button key={ind.id} onClick={() => { setIndustry(ind.id); setConfig(c => c ? { ...c, industry: ind.id } : c); }}
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-all"
+                        style={{ border: `1.5px solid ${industry === ind.id ? C.cta : C.cardBorder}`, background: industry === ind.id ? `${C.cta}12` : 'transparent' }}>
+                        <span className="text-base">{ind.emoji}</span>
+                        <span className="text-[12px] font-semibold" style={{ color: industry === ind.id ? C.cta : C.text }}>{ind.label}</span>
+                        {industry === ind.id && <Check className="w-3 h-3 ml-auto flex-shrink-0" style={{ color: C.cta }} />}
+                      </button>
+                    ))}
+                    <button onClick={() => setIndustry('other')}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-all"
+                      style={{ border: `1.5px solid ${industry === 'other' ? C.cta : C.cardBorder}`, background: industry === 'other' ? `${C.cta}12` : 'transparent' }}>
+                      <span className="text-base">✏️</span>
+                      <span className="text-[12px] font-semibold" style={{ color: industry === 'other' ? C.cta : C.text }}>Other</span>
+                      {industry === 'other' && <Check className="w-3 h-3 ml-auto flex-shrink-0" style={{ color: C.cta }} />}
+                    </button>
+                  </div>
+                  {industry === 'other' && (
+                    <input
+                      type="text"
+                      value={customIndustry}
+                      onChange={e => {
+                        setCustomIndustry(e.target.value);
+                        setConfig(c => c ? { ...c, industry: e.target.value } : c);
+                      }}
+                      placeholder="e.g. Logistics, Agriculture, Real Estate…"
+                      style={{ ...inp, fontSize: 13 }}
+                      autoFocus
+                    />
+                  )}
+                </div>
+
+                {/* Duration card */}
+                <div style={card} className="p-5 space-y-3">
+                  <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Duration</p>
+                  <input
+                    value={config.duration || ''}
+                    onChange={e => setConfig(c => c ? { ...c, duration: e.target.value } : c)}
+                    style={{ ...inp, fontSize: 13 }}
+                    placeholder="e.g. 4-6 hours, 2 weeks, 3 days…"
+                  />
+                  <p className="text-[11px]" style={{ color: C.faint }}>Shown to students as an estimate of how long this experience takes to complete.</p>
+                </div>
 
                 {/* Cover image card */}
                 <div style={card} className="p-5 space-y-3">
