@@ -1971,7 +1971,7 @@ function AssignmentsSection({ userId, studentName, studentEmail, C }: { userId: 
       if (!student?.cohort_id) { setLoading(false); return; }
       const [{ data: assignments }, { data: subs }] = await Promise.all([
         supabase.from('assignments')
-          .select('id, title, scenario, brief, tasks, requirements, cover_image, status, created_at, related_course, type, config')
+          .select('id, title, scenario, brief, tasks, requirements, cover_image, status, created_at, deadline_date, related_course, type, config')
           .contains('cohort_ids', [student.cohort_id])
           .eq('status', 'published')
           .order('created_at', { ascending: false }),
@@ -2019,7 +2019,22 @@ function AssignmentsSection({ userId, studentName, studentEmail, C }: { userId: 
     <EmptyState icon={ClipboardList} title="No assignments" body="You do not have any assignments assigned yet."/>
   );
 
-  const AssignmentCard = ({ item, i }: { item: any; i: number }) => (
+  const AssignmentCard = ({ item, i }: { item: any; i: number }) => {
+    const isSubmitted = item._sub && item._sub.status !== 'draft';
+    const nowMs = Date.now();
+    const daysLeft = (item.deadline_date && !isSubmitted)
+      ? Math.ceil((new Date(item.deadline_date).getTime() - nowMs) / 86400000)
+      : null;
+    const deadlineLabel = daysLeft === null ? null
+      : daysLeft < 0  ? 'Overdue'
+      : daysLeft === 0 ? 'Due today'
+      : `${daysLeft}d left`;
+    const deadlineColor = daysLeft === null ? null
+      : daysLeft < 0  ? '#ef4444'
+      : daysLeft <= 3 ? '#f59e0b'
+      : '#6b7280';
+
+    return (
     <motion.button key={item.id} onClick={() => setSelected(item)}
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
       className="text-left rounded-2xl overflow-hidden group"
@@ -2052,7 +2067,13 @@ function AssignmentsSection({ userId, studentName, studentEmail, C }: { userId: 
         )}
       </div>
       <div className="px-3 py-2.5">
-        <h3 className="text-sm font-semibold leading-snug mb-2" style={{ color: C.text }}>{item.title}</h3>
+        <h3 className="text-sm font-semibold leading-snug mb-1" style={{ color: C.text }}>{item.title}</h3>
+        {deadlineLabel && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2"
+            style={{ background: `${deadlineColor ?? '#6b7280'}18`, color: deadlineColor ?? '#6b7280' }}>
+            ⏰ {deadlineLabel}
+          </span>
+        )}
         <div className="flex items-center justify-between">
           {!item._sub
             ? <span className="text-[11px] font-medium" style={{ color: C.muted }}>Not Submitted</span>
@@ -2068,6 +2089,7 @@ function AssignmentsSection({ userId, studentName, studentEmail, C }: { userId: 
       </div>
     </motion.button>
   );
+  };
 
   // Group by course
   const grouped: Record<string, any[]> = {};

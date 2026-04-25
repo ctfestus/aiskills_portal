@@ -228,7 +228,7 @@ CREATE TABLE public.assignments (
   type                    text        NOT NULL DEFAULT 'standard'
                                         CHECK (type IN ('standard','code_review','excel_review','dashboard_critique','virtual_experience')),
   config                  jsonb,
-  deadline_days           integer,
+  deadline_date           date,
   created_at              timestamptz NOT NULL DEFAULT now(),
   updated_at              timestamptz NOT NULL DEFAULT now()
 );

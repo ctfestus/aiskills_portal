@@ -106,7 +106,7 @@ export default function CreateAssignmentPage() {
   const [resources, setResources]                 = useState<Resource[]>([]);
   const [cohorts, setCohorts]                     = useState<{ id: string; name: string }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
-  const [deadlineDays, setDeadlineDays]           = useState('');
+  const [deadlineDate, setDeadlineDate]           = useState('');
   const [coverUploading, setCoverUploading]       = useState(false);
   const [resourceUploading, setResourceUploading] = useState<Record<string, boolean>>({});
   const coverRef = useRef<HTMLInputElement>(null);
@@ -152,7 +152,7 @@ export default function CreateAssignmentPage() {
           setRelatedCourse(data.related_course ?? '');
           setCoverImage(data.cover_image ?? '');
           setStatus(data.status ?? 'draft');
-          if (data.deadline_days != null) setDeadlineDays(String(data.deadline_days));
+          if (data.deadline_date) setDeadlineDate(data.deadline_date);
           if (data.cohort_ids?.length) setSelectedCohortIds(data.cohort_ids);
           if (data.type) setAssignmentType(data.type);
           if (data.config) {
@@ -214,7 +214,7 @@ export default function CreateAssignmentPage() {
         cover_image:              coverImage.trim() || null,
         status,
         cohort_ids:               selectedCohortIds,
-        deadline_days:            deadlineDays ? Number(deadlineDays) : null,
+        deadline_date:            deadlineDate || null,
         type:                     assignmentType,
         config:                   buildConfig(),
       };
@@ -557,14 +557,22 @@ export default function CreateAssignmentPage() {
             </div>
 
             <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle(C)}>Deadline <span style={{ fontSize: 12, fontWeight: 400, color: C.faint }}>(days after assignment)</span></label>
-              <input
-                type="number" min={1} max={365} value={deadlineDays}
-                onChange={e => setDeadlineDays(e.target.value)}
-                placeholder="e.g. 7"
-                style={{ ...inputStyle(C), width: 120 }}
-              />
-              <p style={hintStyle(C)}>Students will see a due date this many days after the assignment is released to their cohort.</p>
+              <label style={labelStyle(C)}>Deadline <span style={{ fontSize: 12, fontWeight: 400, color: C.faint }}>(optional)</span></label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="date"
+                  value={deadlineDate}
+                  onChange={e => setDeadlineDate(e.target.value)}
+                  style={{ ...inputStyle(C), width: 'auto' }}
+                />
+                {deadlineDate && (
+                  <button type="button" onClick={() => setDeadlineDate('')}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.faint, cursor: 'pointer', flexShrink: 0 }}>
+                    <X style={{ width: 13, height: 13 }}/>
+                  </button>
+                )}
+              </div>
+              <p style={hintStyle(C)}>Students will see a countdown on their assignment card until this date.</p>
             </div>
 
             {assignmentType === 'standard' && (
