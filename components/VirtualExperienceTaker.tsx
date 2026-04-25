@@ -210,6 +210,7 @@ export default function VirtualExperienceTaker({
 
   const currentLesPct  = currentLes ? lessonProgress(currentLes, progress) : 0;
   const allCurrentDone = currentLesPct === 100;
+  const remainingCount = currentLes ? currentLes.requirements.filter(r => !progress[r.id]?.completed).length : 0;
 
   // Load existing review / completion state
   useEffect(() => {
@@ -748,14 +749,32 @@ export default function VirtualExperienceTaker({
                 {currentLes.requirements.length > 0 && (
                   <>
                     {/* Divider + label */}
-                    <div className="flex items-center justify-between px-4 sm:px-8 py-4"
-                      style={{ borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
-                      <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? '#666' : '#999' }}>Questions</span>
-                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-                        style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: isDark ? '#777' : '#777' }}>
-                        {currentLes.requirements.filter(r => progress[r.id]?.completed).length} / {currentLes.requirements.length} done
-                      </span>
-                    </div>
+                    {(() => {
+                      const reqs = currentLes.requirements;
+                      const allTask = reqs.every(r => r.type === 'task');
+                      const allMcq  = reqs.every(r => r.type === 'mcq');
+                      const sectionLabel = allTask ? 'Tasks' : allMcq ? 'Questions' : 'Tasks & Questions';
+                      const doneCount = reqs.filter(r => progress[r.id]?.completed).length;
+                      return (
+                        <div className="px-4 sm:px-8 pt-4 pb-3 space-y-2"
+                          style={{ borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: isDark ? '#666' : '#999' }}>{sectionLabel}</span>
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                              style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: isDark ? '#777' : '#777' }}>
+                              {doneCount} / {reqs.length} done
+                            </span>
+                          </div>
+                          {!allCurrentDone && !reviewMode && (
+                            <p className="text-[12.5px] font-semibold" style={{ color: accentColor }}>
+                              {doneCount === 0
+                                ? `Complete all ${reqs.length} ${sectionLabel.toLowerCase()} below to unlock the next step`
+                                : `${reqs.length - doneCount} remaining -- mark them as done to continue`}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {currentLes.requirements.map((req, qi) => {
                       const done           = !!progress[req.id]?.completed;
@@ -764,8 +783,9 @@ export default function VirtualExperienceTaker({
 
                       const rowStyle: React.CSSProperties = {
                         borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+                        borderLeft: done ? `3px solid ${accentColor}` : `3px solid ${accentColor}30`,
                         background: done ? (isDark ? `${accentColor}08` : `${accentColor}05`) : 'transparent',
-                        transition: 'background 0.2s',
+                        transition: 'background 0.2s, border-left-color 0.2s',
                       };
 
                       if (isMcq) {
@@ -1121,13 +1141,15 @@ export default function VirtualExperienceTaker({
                               <div className="flex-shrink-0 mt-0.5">
                                 {done
                                   ? <CheckCircle2 className="w-4 h-4" style={{ color: accentColor }} />
-                                  : <Circle className="w-4 h-4" style={{ color: isDark ? '#555' : '#ccc' }} />}
+                                  : <Circle className="w-5 h-5" style={{ color: accentColor, opacity: 0.5 }} />}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <span className="text-[14.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</span>
                                 {req.description && <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
+                                {!done && !reviewMode && (
+                                  <p className="text-[11.5px] mt-1 font-semibold" style={{ color: accentColor, opacity: 0.75 }}>Click to mark as done</p>
+                                )}
                               </div>
-                              {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
                             </button>
                           </div>
                         );
@@ -1139,7 +1161,7 @@ export default function VirtualExperienceTaker({
                             <button onClick={() => toggleReq(req.id)} className="flex-shrink-0 mt-0.5">
                               {done
                                 ? <CheckCircle2 className="w-4 h-4" style={{ color: accentColor }} />
-                                : <Circle className="w-4 h-4" style={{ color: isDark ? '#555' : '#ccc' }} />}
+                                : <Circle className="w-5 h-5" style={{ color: accentColor, opacity: 0.5 }} />}
                             </button>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -1148,6 +1170,11 @@ export default function VirtualExperienceTaker({
                                 <span className="text-[14.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</span>
                               </div>
                               <p className="text-[12.5px] leading-snug" style={{ color: isDark ? '#888' : '#555' }}>{req.description}</p>
+                              {!done && !reviewMode && (
+                                <p className="text-[11.5px] mt-1.5 font-semibold" style={{ color: accentColor, opacity: 0.75 }}>
+                                  Add your notes, then click the circle to mark as done
+                                </p>
+                              )}
                             </div>
                           </div>
                           <div className="pl-0 sm:pl-7">
@@ -1221,6 +1248,15 @@ export default function VirtualExperienceTaker({
               })()}
 
               {/* Navigation */}
+              {!reviewMode && !allCurrentDone && hasNext && (
+                <div className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl"
+                  style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}30` }}>
+                  <Circle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentColor }} />
+                  <p className="text-[12.5px] font-semibold" style={{ color: accentColor }}>
+                    {remainingCount === 1 ? '1 item remaining' : `${remainingCount} items remaining`} -- complete {remainingCount === 1 ? 'it' : 'them'} to move forward
+                  </p>
+                </div>
+              )}
               <div className="flex items-center justify-between pt-2 pb-16 gap-2">
                 <button onClick={goPrev} disabled={!hasPrev}
                   className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-medium border transition-all hover:opacity-70 disabled:opacity-30 flex-shrink-0"
