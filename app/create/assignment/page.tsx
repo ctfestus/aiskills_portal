@@ -106,6 +106,7 @@ export default function CreateAssignmentPage() {
   const [resources, setResources]                 = useState<Resource[]>([]);
   const [cohorts, setCohorts]                     = useState<{ id: string; name: string }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
+  const [deadlineDays, setDeadlineDays]           = useState('');
   const [coverUploading, setCoverUploading]       = useState(false);
   const [resourceUploading, setResourceUploading] = useState<Record<string, boolean>>({});
   const coverRef = useRef<HTMLInputElement>(null);
@@ -151,6 +152,7 @@ export default function CreateAssignmentPage() {
           setRelatedCourse(data.related_course ?? '');
           setCoverImage(data.cover_image ?? '');
           setStatus(data.status ?? 'draft');
+          if (data.deadline_days != null) setDeadlineDays(String(data.deadline_days));
           if (data.cohort_ids?.length) setSelectedCohortIds(data.cohort_ids);
           if (data.type) setAssignmentType(data.type);
           if (data.config) {
@@ -212,6 +214,7 @@ export default function CreateAssignmentPage() {
         cover_image:              coverImage.trim() || null,
         status,
         cohort_ids:               selectedCohortIds,
+        deadline_days:            deadlineDays ? Number(deadlineDays) : null,
         type:                     assignmentType,
         config:                   buildConfig(),
       };
@@ -551,6 +554,17 @@ export default function CreateAssignmentPage() {
                 <option value="">-- None --</option>
                 {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
               </select>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={labelStyle(C)}>Deadline <span style={{ fontSize: 12, fontWeight: 400, color: C.faint }}>(days after assignment)</span></label>
+              <input
+                type="number" min={1} max={365} value={deadlineDays}
+                onChange={e => setDeadlineDays(e.target.value)}
+                placeholder="e.g. 7"
+                style={{ ...inputStyle(C), width: 120 }}
+              />
+              <p style={hintStyle(C)}>Students will see a due date this many days after the assignment is released to their cohort.</p>
             </div>
 
             {assignmentType === 'standard' && (

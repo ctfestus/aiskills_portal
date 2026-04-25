@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
     company:        config.company       ?? null,
     duration:       config.duration      ?? null,
     tools:          config.tools         ?? [],
+    tool_logos:     config.toolLogos     ?? {},
     tagline:        config.tagline       ?? null,
     background:     config.background    ?? null,
     learn_outcomes: config.learnOutcomes ?? [],

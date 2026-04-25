@@ -91,6 +91,7 @@ interface ProjectConfig {
   company: string;
   duration: string;
   tools: string[];
+  toolLogos?: Record<string, string>;
   tagline: string;
   description: string;
   background: string;
@@ -222,6 +223,8 @@ function VirtualExperienceCreatePageInner() {
   const [showImprove, setShowImprove] = useState(false);
 
   const coverRef = useRef<HTMLInputElement>(null);
+  const toolLogoRef = useRef<HTMLInputElement>(null);
+  const [uploadingToolLogo, setUploadingToolLogo] = useState<string | null>(null); // tool name being uploaded
 
   // Bunny video picker
   const [bunnyPickerOpen,    setBunnyPickerOpen]    = useState(false);
@@ -248,7 +251,7 @@ function VirtualExperienceCreatePageInner() {
           const cfg: any = {
             isVirtualExperience: true, modules: ve.modules ?? [], industry: ve.industry,
             difficulty: ve.difficulty, role: ve.role, company: ve.company, duration: ve.duration,
-            tools: ve.tools, tagline: ve.tagline, background: ve.background,
+            tools: ve.tools, toolLogos: ve.tool_logos ?? {}, tagline: ve.tagline, background: ve.background,
             learnOutcomes: ve.learn_outcomes, managerName: ve.manager_name, managerTitle: ve.manager_title,
             dataset: ve.dataset, coverImage: ve.cover_image, deadline_days: ve.deadline_days,
           };
@@ -578,6 +581,21 @@ function VirtualExperienceCreatePageInner() {
       alert('Upload failed: ' + e.message);
     } finally {
       setUploadingCover(false);
+    }
+  };
+
+  const handleToolLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>, toolName: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingToolLogo(toolName);
+    try {
+      const publicUrl = await uploadToCloudinary(file, 'tool-logos');
+      setConfig(c => c ? { ...c, toolLogos: { ...(c.toolLogos || {}), [toolName]: publicUrl } } : c);
+    } catch (err: any) {
+      alert('Upload failed: ' + err.message);
+    } finally {
+      setUploadingToolLogo(null);
+      e.target.value = '';
     }
   };
 
@@ -1106,10 +1124,19 @@ function VirtualExperienceCreatePageInner() {
                     {(config.tools || []).length > 0 && (
                       <div>
                         <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Skills you will use</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {(config.tools || []).map(t => (
-                            <span key={t} className="text-[12px] px-2.5 py-1 rounded-lg font-medium" style={{ background: C.pill, color: C.text }}>{t}</span>
-                          ))}
+                        <div className="flex flex-wrap gap-2">
+                          {(config.tools || []).map(t => {
+                            const logo = (config.toolLogos || {})[t];
+                            return (
+                              <div key={t} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                                {logo
+                                  ? <img src={logo} alt={t} className="w-4 h-4 rounded object-contain flex-shrink-0" />
+                                  : <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center text-[9px] font-bold" style={{ background: `${C.cta}20`, color: C.cta }}>{t[0]}</div>
+                                }
+                                <span className="text-[12px] font-medium" style={{ color: C.text }}>{t}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -1599,6 +1626,69 @@ function VirtualExperienceCreatePageInner() {
                   />
                   <p className="text-[11px]" style={{ color: C.faint }}>Shown to students as an estimate of how long this experience takes to complete.</p>
                 </div>
+
+                {/* Tool Logos card */}
+                {(config.tools || []).length > 0 && (
+                  <div style={card} className="p-5 space-y-3">
+                    <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Tool Logos</p>
+                    <p className="text-[11px]" style={{ color: C.faint }}>Upload or paste a logo URL for each tool. Shown to students on the experience page.</p>
+                    <div className="space-y-2">
+                      {(config.tools || []).map(t => {
+                        const logo = (config.toolLogos || {})[t];
+                        return (
+                          <div key={t} className="flex items-center gap-2">
+                            {/* Logo preview */}
+                            <div className="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden"
+                              style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                              {logo
+                                ? <img src={logo} alt={t} className="w-full h-full object-contain p-0.5" />
+                                : <span className="text-[10px] font-bold" style={{ color: C.muted }}>{t[0]}</span>
+                              }
+                            </div>
+                            {/* Tool name */}
+                            <span className="text-[13px] font-medium flex-1 min-w-0 truncate" style={{ color: C.text }}>{t}</span>
+                            {/* URL input */}
+                            <input
+                              value={logo || ''}
+                              onChange={e => setConfig(c => c ? { ...c, toolLogos: { ...(c.toolLogos || {}), [t]: e.target.value } } : c)}
+                              placeholder="Paste URL or upload"
+                              style={{ ...inp, fontSize: 12, padding: '6px 10px', width: 'auto', flex: 1 }}
+                            />
+                            {/* Upload button */}
+                            <button
+                              onClick={() => { (toolLogoRef.current as any)._toolName = t; toolLogoRef.current?.click(); }}
+                              disabled={uploadingToolLogo === t}
+                              className="flex items-center justify-center w-8 h-8 rounded-lg border flex-shrink-0 transition-all hover:opacity-70"
+                              style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
+                              {uploadingToolLogo === t ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                            </button>
+                            {/* Remove logo */}
+                            {logo && (
+                              <button onClick={() => setConfig(c => {
+                                if (!c) return c;
+                                const logos = { ...(c.toolLogos || {}) };
+                                delete logos[t];
+                                return { ...c, toolLogos: logos };
+                              })} style={{ color: C.faint }} className="hover:text-red-400 transition-colors flex-shrink-0">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <input
+                      ref={toolLogoRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => {
+                        const name = (e.target as any)._toolName as string;
+                        if (name) handleToolLogoUpload(e, name);
+                      }}
+                    />
+                  </div>
+                )}
 
                 {/* Cover image card */}
                 <div style={card} className="p-5 space-y-3">

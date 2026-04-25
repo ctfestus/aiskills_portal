@@ -425,7 +425,7 @@ export default function PublicFormPage() {
           title: ve.title, description: ve.description,
           isVirtualExperience: true, modules: ve.modules ?? [],
           industry: ve.industry, difficulty: ve.difficulty, role: ve.role, company: ve.company,
-          duration: ve.duration, tools: ve.tools, tagline: ve.tagline, background: ve.background,
+          duration: ve.duration, tools: ve.tools, toolLogos: ve.tool_logos ?? {}, tagline: ve.tagline, background: ve.background,
           learnOutcomes: ve.learn_outcomes, managerName: ve.manager_name, managerTitle: ve.manager_title,
           dataset: ve.dataset, coverImage: ve.cover_image, deadline_days: ve.deadline_days,
           theme: ve.theme, mode: ve.mode, font: ve.font, customAccent: ve.custom_accent,
@@ -969,10 +969,16 @@ export default function PublicFormPage() {
                 {config.tools?.length > 0 && (
                   <div>
                     <p style={{ fontSize: 11, fontWeight: 600, color: gp.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 7 }}>Tools</p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                      {config.tools.map((t: string) => (
-                        <span key={t} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, background: gp.subtle, color: gp.body, fontWeight: 600, border: `1px solid ${gp.divider}` }}>{t}</span>
-                      ))}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {config.tools.map((t: string) => {
+                        const logo = (config.toolLogos || {})[t];
+                        return (
+                          <span key={t} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '4px 10px', borderRadius: 6, background: gp.subtle, color: gp.body, fontWeight: 600, border: `1px solid ${gp.divider}` }}>
+                            {logo && <img src={logo} alt={t} style={{ width: 14, height: 14, objectFit: 'contain', borderRadius: 2, flexShrink: 0 }} />}
+                            {t}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

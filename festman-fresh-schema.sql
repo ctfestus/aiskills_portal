@@ -198,6 +198,7 @@ CREATE TABLE public.virtual_experiences (
   company         text,
   duration        text,
   tools           text[]      DEFAULT '{}',
+  tool_logos      jsonb       DEFAULT '{}',
   tagline         text,
   background      text,
   learn_outcomes  text[]      DEFAULT '{}',
@@ -227,6 +228,7 @@ CREATE TABLE public.assignments (
   type                    text        NOT NULL DEFAULT 'standard'
                                         CHECK (type IN ('standard','code_review','excel_review','dashboard_critique','virtual_experience')),
   config                  jsonb,
+  deadline_days           integer,
   created_at              timestamptz NOT NULL DEFAULT now(),
   updated_at              timestamptz NOT NULL DEFAULT now()
 );
