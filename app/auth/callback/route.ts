@@ -36,9 +36,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/auth?error=not_allowed', request.url));
     }
 
-    // Safety net: existing students skip the allowlist check.
-    const { data: existing } = await db.from('students').select('id').eq('id', user.id).maybeSingle();
-    if (existing) {
+    const { data: existing } = await db.from('students').select('id, cohort_id').eq('id', user.id).maybeSingle();
+
+    // Only skip allowlist if cohort is already assigned.
+    if (existing?.cohort_id) {
       return NextResponse.redirect(new URL('/student', request.url));
     }
 
