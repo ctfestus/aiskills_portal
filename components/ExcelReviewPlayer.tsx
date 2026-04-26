@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { Loader2, CheckCircle2, Zap, RotateCcw, FileSpreadsheet, Upload } from 'lucide-react';
+import { Loader2, CheckCircle2, Zap, RotateCcw, FileSpreadsheet, Upload, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { downloadReviewPdf } from '@/lib/downloadReviewPdf';
 
 interface RubricGrade { criterion: string; passed: boolean; comment: string; }
 interface SheetIssue {
@@ -71,7 +72,8 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
   const [result, setResult]     = useState<ReviewResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError]       = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef  = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   const bg     = isDark ? '#0f0f0f' : '#f8fafc';
   const card   = isDark ? '#1a1a1a' : '#ffffff';
@@ -133,6 +135,15 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
   }
 
   function reset() { setFile(null); setResult(null); setError(''); }
+
+  async function downloadPdf() {
+    if (!resultsRef.current) return;
+    try {
+      await downloadReviewPdf(resultsRef.current, `excel-review-${Date.now()}.pdf`);
+    } catch (err: any) {
+      setError(err?.message ?? 'PDF export failed. Please try again.');
+    }
+  }
 
   // Returning student -- show saved summary card
   if (!result && completed && savedSummary) {
@@ -245,7 +256,7 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
   const JB = 'var(--font-mono)';
 
   return (
-    <div className="space-y-4" style={{ fontFamily: JB }}>
+    <div ref={resultsRef} className="space-y-4" style={{ fontFamily: JB }}>
 
       {/* Diff panel */}
       {prev && (
@@ -304,11 +315,18 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
               </div>
               <p style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(255,255,255,0.55)', maxWidth: 480 }}>{result.executiveSummary}</p>
             </div>
-            <button onClick={reset}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold flex-shrink-0"
-              style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
-              <RotateCcw className="w-3 h-3" /> Reset
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button onClick={downloadPdf}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
+                style={{ background: 'rgba(173,238,102,0.12)', color: '#ADEE66', borderRadius: 6, border: '1px solid rgba(173,238,102,0.2)' }}>
+                <Download className="w-3 h-3" /> PDF
+              </button>
+              <button onClick={reset}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
+                style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                <RotateCcw className="w-3 h-3" /> Reset
+              </button>
+            </div>
           </div>
         </div>
 

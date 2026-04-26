@@ -34,13 +34,14 @@ export async function GET(
   // 2. Optional JSONB columns (gracefully default if migrations not run yet)
   const { data: extra } = await supabase
     .from('students')
-    .select('education, work_experience, skills')
+    .select('education, work_experience, skills, portfolio_items')
     .eq('id', student.id)
     .maybeSingle();
 
   const education       = extra?.education       ?? [];
   const work_experience = extra?.work_experience ?? [];
   const skills          = extra?.skills          ?? [];
+  const portfolio_items = extra?.portfolio_items ?? [];
 
   // 3. Certificates (by student_id, non-revoked)
   const { data: certsRaw } = await supabase
@@ -143,8 +144,9 @@ export async function GET(
       role:           student.role,
       memberSince:    student.created_at,
       education,
-      workExperience: work_experience,
+      workExperience:  work_experience,
       skills,
+      portfolioItems:  portfolio_items,
     },
     certificates,
     virtualExpCerts,

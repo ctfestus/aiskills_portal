@@ -72,6 +72,73 @@ const SOCIALS: Record<string, { Icon: any; color: string; darkColor: string; lab
   website:   { Icon: Globe,     color: '#475569', darkColor: '#94a3b8', label: 'Website' },
 };
 
+/* --- Portfolio helpers --- */
+function normalizeEmbedUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('canva.com')) {
+      let href = url;
+      if (href.includes('/preview')) href = href.replace('/preview', '/view');
+      if (!href.includes('embed')) href += (href.includes('?') ? '&' : '?') + 'embed';
+      return href;
+    }
+  } catch {}
+  return url;
+}
+
+function PortfolioCard({ item, t, isDark }: { item: any; t: typeof LIGHT; isDark: boolean }) {
+  const embedUrl = normalizeEmbedUrl(item.url);
+  const tools: string[] = Array.isArray(item.tools) && item.tools.length > 0
+    ? item.tools
+    : item.tool ? [item.tool] : [];
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${t.cardBorder}`, background: t.card }}>
+      <div className="px-5 py-4" style={{ borderBottom: `1px solid ${t.divider}` }}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            {tools.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-1.5">
+                {tools.map(tool => (
+                  <span key={tool} className="inline-block text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded"
+                    style={{ background: t.accentSoft, color: t.accent }}>{tool}</span>
+                ))}
+              </div>
+            )}
+            <p className="text-sm font-semibold leading-snug" style={{ color: t.text }}>{item.title}</p>
+          </div>
+          <a href={item.url} target="_blank" rel="noreferrer"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 transition-opacity hover:opacity-70"
+            style={{ background: t.pill, color: t.muted }}>
+            <ExternalLink className="w-3.5 h-3.5" /> Open
+          </a>
+        </div>
+        {item.description && (
+          <p className="text-[15px] mt-2.5 leading-relaxed text-justify" style={{ color: t.sub }}>
+            {item.description.slice(0, 200)}
+          </p>
+        )}
+      </div>
+      <div className="relative" style={{ height: 340, overflow: 'hidden', background: isDark ? '#0a0a0a' : '#f1f5f9' }}>
+        {item.thumbnail_url
+          ? <img src={item.thumbnail_url} alt={item.title}
+              className="w-full h-full object-cover object-top" />
+          : <iframe
+              src={embedUrl}
+              title={item.title}
+              loading="lazy"
+              allowFullScreen
+              className="border-0"
+              style={{ width: 'calc(100% + 20px)', height: 680, pointerEvents: 'none' }}
+            />
+        }
+        <div className="absolute bottom-0 left-0 right-0 pointer-events-none"
+          style={{ height: 120, background: `linear-gradient(to bottom, transparent, ${t.card})` }} />
+        <a href={item.url} target="_blank" rel="noreferrer" className="absolute inset-0" aria-label={`Open ${item.title} in full view`} />
+      </div>
+    </div>
+  );
+}
+
 /* --- Section wrapper --- */
 function Card({ children, t, delay = 0 }: { children: React.ReactNode; t: typeof LIGHT; delay?: number }) {
   return (
@@ -261,6 +328,7 @@ export default function StudentPublicProfile() {
   );
 
   const { profile, certificates, virtualExpCerts, pathCerts } = data;
+  const portfolioItems  = (profile.portfolioItems ?? []) as any[];
   const initials        = (profile.fullName || username || '?').slice(0, 2).toUpperCase();
   const socialEntries   = Object.entries(profile.socialLinks ?? {}).filter(([, v]) => v);
   const hasWork         = profile.workExperience?.length > 0;
@@ -269,6 +337,7 @@ export default function StudentPublicProfile() {
   const hasVirtualExp   = (virtualExpCerts ?? []).length > 0;
   const hasPathCerts    = (pathCerts ?? []).length > 0;
   const hasSkills       = (profile.skills ?? []).length > 0;
+  const hasPortfolio    = portfolioItems.length > 0;
 
   return (
     <div className="min-h-screen" style={{ background: t.page }}>
@@ -313,11 +382,13 @@ export default function StudentPublicProfile() {
           <div style={{ position: 'relative' }}>
             {/* Cover image */}
             <div style={{ height: 180, overflow: 'hidden', borderRadius: '12px 12px 0 0' }}>
-              <img
-                src={emailBannerUrl || logoUrl}
-                alt="Cover"
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              />
+              {(emailBannerUrl || logoUrl) && (
+                <img
+                  src={emailBannerUrl || logoUrl}
+                  alt="Cover"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              )}
               <div style={{ position: 'absolute', inset: 0,
                 background: 'linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.22) 100%)' }}/>
             </div>
@@ -414,6 +485,18 @@ export default function StudentPublicProfile() {
           </div>
         </motion.div>
 
+        {/* -- Portfolio -- */}
+        {hasPortfolio && (
+          <Card t={t} delay={0.06}>
+            <SectionHeader title="Portfolio" count={portfolioItems.length} t={t}/>
+            <div className="px-6 pb-6 space-y-4">
+              {portfolioItems.map((item: any) => (
+                <PortfolioCard key={item.id} item={item} t={t} isDark={isDark}/>
+              ))}
+            </div>
+          </Card>
+        )}
+
         {/* -- Work Experience -- */}
         {hasWork && (
           <Card t={t} delay={0.08}>
@@ -488,7 +571,7 @@ export default function StudentPublicProfile() {
         )}
 
         {/* -- Empty -- */}
-        {!hasWork && !hasEdu && !hasCerts && !hasVirtualExp && !hasPathCerts && !hasSkills && (
+        {!hasPortfolio && !hasWork && !hasEdu && !hasCerts && !hasVirtualExp && !hasPathCerts && !hasSkills && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
             className="flex flex-col items-center justify-center py-24 gap-2 text-center rounded-2xl"
             style={{ background: t.card, border: `1px solid ${t.cardBorder}` }}>

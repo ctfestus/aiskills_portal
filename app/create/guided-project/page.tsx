@@ -68,6 +68,7 @@ interface Requirement {
   schema?: string;
   context?: string;
   minScore?: number;
+  aiReview?: boolean;
 }
 interface Lesson {
   id: string;
@@ -1429,8 +1430,28 @@ function VirtualExperienceCreatePageInner() {
                                                   <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: 'rgba(139,92,246,0.06)', color: C.muted }}>
                                                     <FileText className="w-3 h-3 flex-shrink-0" />Students will type a written response
                                                   </div>
-                                                  <input value={req.expectedAnswer || ''} onChange={e => updateReq(mod.id, les.id, req.id, { expectedAnswer: e.target.value })}
-                                                    style={{ ...inp, fontSize: 12 }} placeholder="Expected / model answer (shown to student after submission)…" />
+                                                  {/* AI Review toggle */}
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => updateReq(mod.id, les.id, req.id, { aiReview: !req.aiReview, expectedAnswer: undefined })}
+                                                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+                                                    style={{
+                                                      background: req.aiReview ? 'rgba(0,185,92,0.12)' : 'rgba(0,0,0,0.04)',
+                                                      color: req.aiReview ? '#00b95c' : C.muted,
+                                                      border: `1px solid ${req.aiReview ? '#00b95c40' : 'transparent'}`,
+                                                    }}>
+                                                    <span style={{ width: 26, height: 14, borderRadius: 7, background: req.aiReview ? '#00b95c' : '#ccc', display: 'inline-flex', alignItems: 'center', padding: '0 2px', transition: 'background 0.2s', flexShrink: 0 }}>
+                                                      <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#fff', marginLeft: req.aiReview ? 'auto' : 0, transition: 'margin 0.2s', display: 'block' }} />
+                                                    </span>
+                                                    AI Review {req.aiReview ? 'on -- Gemini will grade student answers' : 'off -- using exact match'}
+                                                  </button>
+                                                  {req.aiReview ? (
+                                                    <input value={req.context || ''} onChange={e => updateReq(mod.id, les.id, req.id, { context: e.target.value })}
+                                                      style={{ ...inp, fontSize: 12 }} placeholder="Rubric / grading guidance for AI (e.g. 'Award points for mentioning X and Y…')…" />
+                                                  ) : (
+                                                    <input value={req.expectedAnswer || ''} onChange={e => updateReq(mod.id, les.id, req.id, { expectedAnswer: e.target.value })}
+                                                      style={{ ...inp, fontSize: 12 }} placeholder="Expected answer for exact match (optional -- leave blank to accept any response)…" />
+                                                  )}
                                                 </div>
                                               )}
                                               {req.type === 'task' && (

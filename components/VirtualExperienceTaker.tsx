@@ -25,6 +25,7 @@ interface Requirement {
   schema?: string;
   context?: string;
   minScore?: number;
+  aiReview?: boolean;
 }
 interface Lesson {
   id: string;
@@ -187,6 +188,8 @@ export default function VirtualExperienceTaker({
   const [certLoading,  setCertLoading]  = useState(false);
   const [certError,    setCertError]    = useState<string | null>(null);
   const [uploadingReq, setUploadingReq] = useState<string | null>(null);
+  const [aiReviewing,  setAiReviewing]  = useState<Record<string, boolean>>({});
+  const [aiFeedback,   setAiFeedback]   = useState<Record<string, { passed: boolean; feedback: string; score: number } | null>>({});
   const saveTimeout  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mainScrollRef = useRef<HTMLDivElement>(null);
 
@@ -769,7 +772,7 @@ export default function VirtualExperienceTaker({
                             <p className="text-[12.5px] font-semibold" style={{ color: accentColor }}>
                               {doneCount === 0
                                 ? `Complete all ${reqs.length} ${sectionLabel.toLowerCase()} below to unlock the next step`
-                                : `${reqs.length - doneCount} remaining -- mark them as done to continue`}
+                                : `${reqs.length - doneCount} remaining. Mark them as done to continue.`}
                             </p>
                           )}
                         </div>
@@ -1040,12 +1043,187 @@ export default function VirtualExperienceTaker({
 
                       // Short Answer / Text question
                       if (req.type === 'text') {
-                        const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
-                        // submitted = student has clicked Submit (progress.notes set); done = correct + completed
-                        const submitted = !!progress[req.id]?.notes;
-                        const isCorrect = submitted && req.expectedAnswer
+                        const noteVal   = noteValues[req.id] ?? (progress[req.id]?.notes || '');
+                        const reviewing = !!aiReviewing[req.id];
+                        const feedback  = aiFeedback[req.id];
+
+                        if (req.aiReview) {
+                          // --- AI Review path ---
+                          const handleSubmitAi = async () => {
+                            if (!noteVal.trim() || reviewing || done) return;
+                            setAiReviewing(prev => ({ ...prev, [req.id]: true }));
+                            setAiFeedback(prev => ({ ...prev, [req.id]: null }));
+                            try {
+                              const res = await fetch('/api/ve-answer-review', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', ...authHeader },
+                                body: JSON.stringify({
+                                  question: req.label,
+                                  description: req.description,
+                                  studentAnswer: noteVal,
+                                  context: req.context,
+                                  rubric: req.rubric,
+                                  expectedAnswer: req.expectedAnswer,
+                                  projectContext: {
+                                    company:     config.company    || null,
+                                    role:        config.role       || null,
+                                    industry:    config.industry   || null,
+                                    moduleTitle: currentMod?.title || null,
+                                    lessonTitle: currentLes?.title || null,
+                                  },
+                                }),
+                              });
+                              const json = await res.json();
+                              if (!res.ok) {
+                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed: false, feedback: json.error || 'Review failed. Please try again.', score: 0 } }));
+                              } else {
+                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed: json.passed, feedback: json.feedback, score: json.score } }));
+                              }
+                              // Always mark complete regardless of API outcome - feedback is informational, not a gate
+                              setProgress(prev => {
+                                const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } };
+                                saveProgress(next, currentModId, currentLesId);
+                                return next;
+                              });
+                            } catch {
+                              setAiFeedback(prev => ({ ...prev, [req.id]: { passed: false, feedback: 'Network error. Please try again.', score: 0 } }));
+                              // Mark complete on network failures too so students are never hard-blocked
+                              setProgress(prev => {
+                                const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } };
+                                saveProgress(next, currentModId, currentLesId);
+                                return next;
+                              });
+                            } finally {
+                              setAiReviewing(prev => ({ ...prev, [req.id]: false }));
+                            }
+                          };
+
+                          return (
+                            <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-2.5">
+                              <div className="flex items-start gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
+                                  style={{ background: 'rgba(0,185,92,0.12)', color: '#00b95c' }}>AI Review</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[14.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
+                                  {req.description && <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
+                                </div>
+                                {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
+                              </div>
+                              <textarea
+                                value={noteVal}
+                                onChange={e => {
+                                  if (e.target.value.length > 500) return;
+                                  setNoteValues(prev => ({ ...prev, [req.id]: e.target.value }));
+                                  if (feedback && !done) setAiFeedback(prev => ({ ...prev, [req.id]: null }));
+                                }}
+                                disabled={done && !reviewMode}
+                                placeholder="Type your answer here (500 characters max)..."
+                                rows={4}
+                                className="w-full text-[14.5px] rounded-lg p-3 outline-none resize-none"
+                                style={{
+                                  background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
+                                  color: isDark ? '#f0f0f0' : '#111',
+                                  border: `1px solid ${done ? accentColor : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                  lineHeight: 1.6,
+                                  opacity: done && !reviewMode ? 0.7 : 1,
+                                }}
+                              />
+                              {!done && (
+                                <p className="text-[11px] text-right" style={{ color: noteVal.length >= 480 ? '#ef4444' : isDark ? '#555' : '#aaa' }}>
+                                  {noteVal.length} / 500
+                                </p>
+                              )}
+                              {!done && (
+                                <button
+                                  onClick={handleSubmitAi}
+                                  disabled={noteVal.trim().length === 0 || reviewing}
+                                  className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                  style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}>
+                                  {reviewing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                  {reviewing ? 'AI is reviewing...' : 'Submit for AI Review'}
+                                </button>
+                              )}
+                              {/* AI feedback panel */}
+                              {feedback && (
+                                <div className="rounded-xl p-4 space-y-2"
+                                  style={{
+                                    background: feedback.passed ? 'rgba(16,185,129,0.07)' : 'rgba(245,158,11,0.07)',
+                                    border: `1px solid ${feedback.passed ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}`,
+                                  }}>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      {feedback.passed
+                                        ? <CheckCircle2 className="w-4 h-4" style={{ color: '#10b981' }} />
+                                        : <Circle className="w-4 h-4" style={{ color: '#f59e0b' }} />}
+                                      <span className="text-[13px] font-bold" style={{ color: feedback.passed ? '#10b981' : '#f59e0b' }}>
+                                        {feedback.passed ? 'Passed' : 'Not quite there yet'}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[12px] font-bold tabular-nums px-2 py-0.5 rounded-full"
+                                        style={{ background: feedback.passed ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: feedback.passed ? '#10b981' : '#f59e0b' }}>
+                                        {feedback.score}/100
+                                      </span>
+                                      <button
+                                        onClick={async () => {
+                                          const { jsPDF } = await import('jspdf');
+                                          const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+                                          const margin = 48;
+                                          const pageW  = doc.internal.pageSize.getWidth();
+                                          const maxW   = pageW - margin * 2;
+                                          let y = margin;
+
+                                          const addText = (text: string, size: number, bold: boolean, color: [number, number, number], gap: number) => {
+                                            doc.setFontSize(size);
+                                            doc.setFont('helvetica', bold ? 'bold' : 'normal');
+                                            doc.setTextColor(...color);
+                                            const lines = doc.splitTextToSize(text, maxW);
+                                            doc.text(lines, margin, y);
+                                            y += lines.length * (size * 1.4) + gap;
+                                          };
+
+                                          const ve   = [config.company, config.role].filter(Boolean).join(' - ');
+                                          const task = req.label || req.description || 'Task';
+
+                                          if (ve) addText(ve, 10, false, [120, 120, 120], 4);
+                                          addText('AI Review Feedback', 18, true, [17, 24, 39], 20);
+                                          addText(task, 13, true, [55, 65, 81], 6);
+                                          if (currentLes?.title) addText(currentLes.title, 10, false, [120, 120, 120], 16);
+
+                                          addText('Your Answer', 11, true, [100, 100, 100], 6);
+                                          addText(noteVal, 12, false, [55, 65, 81], 20);
+
+                                          addText(`Score: ${feedback.score}/100  |  ${feedback.passed ? 'Passed' : 'Not yet passed'}`, 11, true, feedback.passed ? [16, 185, 129] : [245, 158, 11], 8);
+                                          addText(feedback.feedback, 12, false, [55, 65, 81], 0);
+
+                                          const slug = (task).replace(/\s+/g, '-').toLowerCase().slice(0, 40);
+                                          doc.save(`ai-review-${slug}.pdf`);
+                                        }}
+                                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-all hover:opacity-80"
+                                        style={{ background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)', color: isDark ? '#aaa' : '#666' }}>
+                                        <Download className="w-3 h-3" /> PDF
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <p className="text-[13px] leading-relaxed" style={{ color: isDark ? '#ccc' : '#444' }}>{feedback.feedback}</p>
+                                </div>
+                              )}
+                              {done && !feedback && (
+                                <div className="rounded-lg p-3 flex items-center gap-2"
+                                  style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' }}>
+                                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: '#10b981' }} />
+                                  <p className="text-[13px] font-semibold" style={{ color: '#10b981' }}>Answer accepted. Well done!</p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        // --- Exact match path (original behaviour) ---
+                        const submitted   = !!progress[req.id]?.notes;
+                        const isCorrect   = submitted && req.expectedAnswer
                           ? isAnswerCorrect(progress[req.id]?.notes || '', req.expectedAnswer)
-                          : submitted && !req.expectedAnswer; // no expected answer = accept any
+                          : submitted && !req.expectedAnswer;
                         const wrongAnswer = submitted && req.expectedAnswer && !isCorrect;
                         return (
                           <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-2.5">
@@ -1062,7 +1240,6 @@ export default function VirtualExperienceTaker({
                               value={noteVal}
                               onChange={e => {
                                 setNoteValues(prev => ({ ...prev, [req.id]: e.target.value }));
-                                // if they edit after a wrong attempt, reset so Submit re-evaluates
                                 if (submitted && !done) {
                                   setProgress(prev => {
                                     const next = { ...prev, [req.id]: { ...prev[req.id], notes: '', completed: false } };
@@ -1094,18 +1271,14 @@ export default function VirtualExperienceTaker({
                                     ? isAnswerCorrect(noteVal, req.expectedAnswer)
                                     : true;
                                   setProgress(prev => {
-                                    const next = {
-                                      ...prev,
-                                      [req.id]: { ...prev[req.id], notes: noteVal, completed: correct },
-                                    };
+                                    const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: correct } };
                                     saveProgress(next, currentModId, currentLesId);
                                     return next;
                                   });
                                 }}
                                 disabled={noteVal.trim().length === 0}
                                 className="px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}
-                              >
+                                style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}>
                                 Submit Answer
                               </button>
                             )}
@@ -1253,7 +1426,7 @@ export default function VirtualExperienceTaker({
                   style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}30` }}>
                   <Circle className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentColor }} />
                   <p className="text-[12.5px] font-semibold" style={{ color: accentColor }}>
-                    {remainingCount === 1 ? '1 item remaining' : `${remainingCount} items remaining`} -- complete {remainingCount === 1 ? 'it' : 'them'} to move forward
+                    {remainingCount === 1 ? '1 item remaining.' : `${remainingCount} items remaining.`} Complete {remainingCount === 1 ? 'it' : 'them'} to move forward.
                   </p>
                 </div>
               )}

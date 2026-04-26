@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useRef, useCallback } from 'react';
-import { Loader2, UploadIcon, Eye, EyeOff, RotateCcw, CheckCircle2, Zap } from 'lucide-react';
+import { Loader2, UploadIcon, Eye, EyeOff, RotateCcw, CheckCircle2, Zap, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { downloadReviewPdf } from '@/lib/downloadReviewPdf';
 
 interface Bounds { x: number; y: number; w: number; h: number; }
 interface CritiqueElement {
@@ -77,6 +78,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
   const inputRef   = useRef<HTMLInputElement>(null);
   const imgRef     = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   const processFile = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) { setError('Please upload an image file (PNG or JPG).'); return; }
@@ -114,7 +116,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
       }
     };
     reader.readAsDataURL(file);
-  }, [onComplete]);
+  }, [onComplete, rubric]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -129,6 +131,15 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
     setError('');
     setHoveredId(null);
   };
+
+  async function downloadPdf() {
+    if (!resultsRef.current) return;
+    try {
+      await downloadReviewPdf(resultsRef.current, `dashboard-critique-${Date.now()}.pdf`);
+    } catch (err: any) {
+      setError(err?.message ?? 'PDF export failed. Please try again.');
+    }
+  }
 
   const hovered = hoveredId ? result?.elements.find(el => el.id === hoveredId) : null;
   const typeColor = hovered ? (TYPE_COLORS[hovered.elementType] ?? TYPE_COLORS.OTHER) : accentColor;
@@ -187,7 +198,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
 
   // Interactive result state
   return (
-    <div className="space-y-3">
+    <div ref={resultsRef} className="space-y-3">
       {/* Toolbar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -205,6 +216,15 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
             {zonesVisible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
             {zonesVisible ? 'Zones Visible' : 'Zones Hidden'}
           </button>
+          {result && (
+            <button
+              onClick={downloadPdf}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+              style={{ background: `${accentColor}15`, color: accentColor }}
+            >
+              <Download className="w-3 h-3" /> PDF
+            </button>
+          )}
           <button
             onClick={reset}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"

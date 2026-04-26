@@ -262,6 +262,19 @@ type WorkEntry = {
   current: boolean;
   description?: string;
 };
+type PortfolioItem = {
+  id: string;
+  title: string;
+  tools: string[];
+  url: string;
+  thumbnail_url: string;
+  description: string;
+};
+const PORTFOLIO_TOOLS = [
+  'Excel', 'SQL', 'Power BI', 'Python', 'Tableau', 'Canva',
+  'Jupyter', 'R', 'Generative AI', 'Google Sheets', 'Looker Studio',
+  'SPSS', 'SAS', 'Matplotlib', 'Pandas', 'scikit-learn', 'Other',
+];
 
 const YEARS = Array.from({ length: new Date().getFullYear() - 1969 }, (_, i) => String(new Date().getFullYear() - i));
 const DEGREES = ['High School', 'Diploma', 'Associate', "Bachelor's", "Master's", 'MBA', 'PhD', 'Certificate', 'Other'];
@@ -340,6 +353,8 @@ export default function SettingsPage() {
   const [workExperience, setWorkExperience] = useState<WorkEntry[]>([]);
   const [skills, setSkills]               = useState<string[]>([]);
   const [skillInput, setSkillInput]       = useState('');
+  const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
+  const [thumbUploading, setThumbUploading] = useState<string | null>(null);
   const avatarRef = useRef<HTMLInputElement>(null);
 
   const [accessToken, setAccessToken]   = useState<string | null>(null);
@@ -366,7 +381,7 @@ export default function SettingsPage() {
       setAccessToken(session.access_token);
       const [{ data: { user } }, { data: studentProfile }] = await Promise.all([
         supabase.auth.getUser(),
-        supabase.from('students').select('full_name, bio, avatar_url, country, city, social_links, username, education, work_experience, skills').eq('id', session.user.id).single(),
+        supabase.from('students').select('full_name, bio, avatar_url, country, city, social_links, username, education, work_experience, skills, portfolio_items').eq('id', session.user.id).single(),
       ]);
       if (!user) { window.location.href = '/auth'; return; }
       setUser(user);
@@ -381,6 +396,11 @@ export default function SettingsPage() {
         setEducation(studentProfile.education ?? []);
         setWorkExperience(studentProfile.work_experience ?? []);
         setSkills(studentProfile.skills ?? []);
+        setPortfolioItems((studentProfile.portfolio_items ?? []).map((p: any) => ({
+          ...p,
+          tools:         Array.isArray(p.tools) ? p.tools : p.tool ? [p.tool] : [],
+          thumbnail_url: p.thumbnail_url ?? '',
+        })));
       }
 
       setLoading(false);
@@ -444,9 +464,10 @@ export default function SettingsPage() {
         country:         country.trim() || null,
         city:            city.trim() || null,
         social_links:    socialLinks,
-        education:       education,
-        work_experience: workExperience,
-        skills:          skills,
+        education:        education,
+        work_experience:  workExperience,
+        skills:           skills,
+        portfolio_items:  portfolioItems.filter(p => p.title.trim() && p.url.startsWith('https://')),
       }).eq('id', user.id),
       supabase.auth.updateUser({ data: { full_name: name.trim() || null } }),
     ]);
@@ -898,6 +919,132 @@ export default function SettingsPage() {
             </div>
           );
         })()}
+
+        {/* Portfolio */}
+        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Portfolio</h2>
+              <p className="text-xs mt-1" style={{ color: C.faint }}>Embed Canva, Power BI, Tableau, Jupyter, and more. Paste the public share URL.</p>
+            </div>
+            {portfolioItems.length < 5 && (
+              <button
+                onClick={() => setPortfolioItems(prev => [...prev, { id: crypto.randomUUID(), title: '', tools: [], url: '', thumbnail_url: '', description: '' }])}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80 flex-shrink-0"
+                style={{ background: C.lime, color: C.green }}>
+                + Add
+              </button>
+            )}
+          </div>
+          {portfolioItems.length === 0 && (
+            <p className="text-xs py-2" style={{ color: C.faint }}>No portfolio items added yet. Up to 5 items.</p>
+          )}
+          <div className="space-y-3">
+            {portfolioItems.map((item, i) => (
+              <EntryCard key={item.id} onDelete={() => {
+                if (item.thumbnail_url) deleteFromCloudinary(item.thumbnail_url).catch(() => {});
+                setPortfolioItems(prev => prev.filter((_, j) => j !== i));
+              }}>
+                <FieldRow label="Title">
+                  <input
+                    value={item.title}
+                    onChange={e => setPortfolioItems(prev => prev.map((x, j) => j === i ? { ...x, title: sanitizePlainText(e.target.value) } : x))}
+                    placeholder="e.g. Sales Dashboard"
+                    className="w-full rounded-xl px-3 py-2.5 text-sm border focus:outline-none"
+                    style={{ background: C.card, border: `1px solid ${C.cardBorder}`, color: C.text }}
+                  />
+                </FieldRow>
+                <FieldRow label="Tools used">
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {PORTFOLIO_TOOLS.map(tool => {
+                      const active = (item.tools ?? []).includes(tool);
+                      return (
+                        <button key={tool} type="button"
+                          onClick={() => setPortfolioItems(prev => prev.map((x, j) => j === i
+                            ? { ...x, tools: active ? x.tools.filter(t => t !== tool) : [...x.tools, tool] }
+                            : x))}
+                          className="px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
+                          style={{
+                            background: active ? C.lime + '33' : C.pill,
+                            color:      active ? C.green : C.muted,
+                            border:     `1px solid ${active ? C.lime + '88' : C.cardBorder}`,
+                          }}>
+                          {tool}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </FieldRow>
+                <FieldRow label="Embed URL">
+                  <input
+                    value={item.url}
+                    onChange={e => setPortfolioItems(prev => prev.map((x, j) => j === i ? { ...x, url: e.target.value.trim() } : x))}
+                    placeholder="https://www.canva.com/design/... or Power BI / Tableau / Jupyter URL"
+                    className="w-full rounded-xl px-3 py-2.5 text-sm border focus:outline-none"
+                    style={{ background: C.card, border: `1px solid ${C.cardBorder}`, color: C.text }}
+                  />
+                  {item.url && !item.url.startsWith('https://') && (
+                    <p className="text-xs mt-1 text-red-400">URL must start with https://</p>
+                  )}
+                </FieldRow>
+                <FieldRow label="Thumbnail (optional)">
+                  <div className="flex items-center gap-3">
+                    {item.thumbnail_url
+                      ? <img src={item.thumbnail_url} alt="Thumbnail"
+                          className="w-20 h-14 rounded-lg object-cover flex-shrink-0"
+                          style={{ border: `1px solid ${C.cardBorder}` }}/>
+                      : <div className="w-20 h-14 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                          <ImageIcon className="w-5 h-5" style={{ color: C.faint }}/>
+                        </div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="file" accept="image/*" className="hidden" onChange={async e => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          if (f.size > 8 * 1024 * 1024) { alert('Image must be 8 MB or smaller.'); return; }
+                          setThumbUploading(item.id);
+                          const url = await uploadToStorage(f, 'portfolio-thumbnails', item.thumbnail_url || undefined);
+                          if (url) setPortfolioItems(prev => prev.map((x, j) => j === i ? { ...x, thumbnail_url: url } : x));
+                          setThumbUploading(null);
+                          e.target.value = '';
+                        }}/>
+                        <span className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
+                          style={{ background: C.lime, color: C.green }}>
+                          {thumbUploading === item.id ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Upload className="w-3.5 h-3.5"/>}
+                          {thumbUploading === item.id ? 'Uploading...' : item.thumbnail_url ? 'Replace' : 'Upload'}
+                        </span>
+                      </label>
+                      {item.thumbnail_url && (
+                        <button onClick={() => setPortfolioItems(prev => prev.map((x, j) => j === i ? { ...x, thumbnail_url: '' } : x))}
+                          className="mt-1.5 text-xs transition-opacity hover:opacity-70"
+                          style={{ color: '#ef4444' }}>
+                          Remove
+                        </button>
+                      )}
+                      <p className="text-xs mt-1" style={{ color: C.faint }}>Used as cover when the embed cannot be previewed.</p>
+                    </div>
+                  </div>
+                </FieldRow>
+                <FieldRow label="Description (optional)">
+                  <textarea
+                    value={item.description}
+                    onChange={e => setPortfolioItems(prev => prev.map((x, j) => j === i ? { ...x, description: sanitizePlainText(e.target.value).slice(0, 200) } : x))}
+                    placeholder="Brief description of this work"
+                    rows={3}
+                    maxLength={200}
+                    className="w-full rounded-xl px-3 py-2.5 text-sm border focus:outline-none resize-none"
+                    style={{ background: C.card, border: `1px solid ${C.cardBorder}`, color: C.text }}
+                  />
+                  <p className="text-right text-[11px] mt-0.5" style={{ color: item.description.length >= 180 ? '#ef4444' : C.faint }}>
+                    {item.description.length}/200
+                  </p>
+                </FieldRow>
+              </EntryCard>
+            ))}
+          </div>
+        </div>
 
         {/* Account */}
         <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>

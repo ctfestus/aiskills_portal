@@ -83,6 +83,7 @@ CREATE TABLE public.students (
   education          jsonb       DEFAULT '[]'::jsonb,
   work_experience    jsonb       DEFAULT '[]'::jsonb,
   skills             jsonb       DEFAULT '[]'::jsonb,
+  portfolio_items    jsonb       DEFAULT '[]'::jsonb,
   last_login_at      timestamptz,
   created_at         timestamptz NOT NULL DEFAULT now(),
   updated_at         timestamptz NOT NULL DEFAULT now()
