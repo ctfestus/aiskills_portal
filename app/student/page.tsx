@@ -4475,7 +4475,7 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<SectionId>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(true);
 
   // Live activity ticker (persists across all tabs)
   const [activeTicker,       setActiveTicker]       = useState<{ name: string; title: string } | null>(null);
@@ -4664,7 +4664,7 @@ export default function StudentDashboard() {
                     <button key={item.id}
                       onClick={() => { goSection(item.id); setSidebarOpen(false); }}
                       title={navCollapsed ? item.label : undefined}
-                      className="w-full flex items-center gap-3 rounded-xl text-sm font-medium transition-all text-left"
+                      className="w-full flex items-center gap-3 rounded-xl text-xs font-medium transition-all text-left"
                       style={{
                         padding: navCollapsed ? '10px 0' : '10px 12px',
                         justifyContent: navCollapsed ? 'center' : 'flex-start',
@@ -4684,7 +4684,7 @@ export default function StudentDashboard() {
               <div className="px-2 pb-3 pt-2 border-t space-y-0.5" style={{ borderColor: C.divider }}>
                 {!navCollapsed && (
                   <Link href="/settings"
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all"
                     style={{ color: theme === 'dark' ? '#A2AFBC' : 'white' }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = theme === 'dark' ? C.lime : '#ff9933'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>

@@ -34,9 +34,9 @@ const LIGHT_C = {
   cardBorder:  'rgba(0,0,0,0.08)',
   cardShadow:  '0 1px 3px rgba(0,0,0,0.06)',
   hoverShadow: '0 8px 24px rgba(0,0,0,0.10)',
-  green:       '#006128',
-  lime:        '#ADEE66',
-  cta:         '#006128',
+  green:       '#0e09dd',
+  lime:        '#e0e0f5',
+  cta:         '#0e09dd',
   ctaText:     'white',
   text:        '#111',
   muted:       '#555',
@@ -45,7 +45,7 @@ const LIGHT_C = {
   pill:        '#F4F4F4',
   input:       '#F7F7F7',
   skeleton:    '#EBEBEB',
-  thumbBg:     '#e8f5ee',
+  thumbBg:     '#e6e5fb',
   overlayBtn:  'rgba(255,255,255,0.92)',
   overlayText: '#111',
   pastOverlay: 'rgba(255,255,255,0.45)',
@@ -64,10 +64,10 @@ const DARK_C = {
   cardBorder:  'rgba(255,255,255,0.07)',
   cardShadow:  '0 1px 4px rgba(0,0,0,0.40)',
   hoverShadow: '0 8px 24px rgba(0,0,0,0.50)',
-  green:       '#ADEE66',
-  lime:        '#ADEE66',
-  cta:         '#ADEE66',
-  ctaText:     '#111',
+  green:       '#3E93FF',
+  lime:        'rgba(62,147,255,0.15)',
+  cta:         '#3E93FF',
+  ctaText:     'white',
   text:        '#f0f0f0',
   muted:       '#aaa',
   faint:       '#555',
@@ -75,7 +75,7 @@ const DARK_C = {
   pill:        '#242424',
   input:       '#1a1a1a',
   skeleton:    '#2a2a2a',
-  thumbBg:     '#1a2a1e',
+  thumbBg:     '#16152a',
   overlayBtn:  'rgba(0,0,0,0.65)',
   overlayText: '#f0f0f0',
   pastOverlay: 'rgba(0,0,0,0.45)',
@@ -95,6 +95,105 @@ const SHARE_PLATFORMS = [
   { id: 'facebook', label: 'Facebook',   icon: <svg viewBox="0 0 24 24" fill="#1877F2" className="w-4 h-4"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>, href: (u:string) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}` },
   { id: 'whatsapp', label: 'WhatsApp',   icon: <svg viewBox="0 0 24 24" fill="#25D366" className="w-4 h-4"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>, href: (u:string,t:string,d:string) => `https://wa.me/?text=${encodeURIComponent(`${t}\n${d}\n\n${u}`)}` },
 ];
+
+// --- Export / Import helpers ---
+function downloadJSON(data: any, name: string) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${(name || 'export').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportContent(form: any) {
+  downloadJSON({
+    exportVersion: 1,
+    type: form.content_type,
+    title: form.title,
+    exportedAt: new Date().toISOString(),
+    config: form.config,
+  }, form.title);
+}
+
+async function exportAssignment(a: any) {
+  const { data: resources } = await supabase
+    .from('assignment_resources')
+    .select('name, url, resource_type')
+    .eq('assignment_id', a.id);
+  downloadJSON({
+    exportVersion: 1,
+    type: 'assignment',
+    title: a.title,
+    exportedAt: new Date().toISOString(),
+    data: {
+      title: a.title,
+      scenario: a.scenario ?? null,
+      brief: a.brief ?? null,
+      tasks: a.tasks ?? null,
+      requirements: a.requirements ?? null,
+      submission_instructions: a.submission_instructions ?? null,
+      cover_image: a.cover_image ?? null,
+      type: a.type ?? null,
+      config: a.config ?? null,
+    },
+    resources: (resources ?? []).map((r: any) => ({ name: r.name, url: r.url, resource_type: r.resource_type })),
+  }, a.title);
+}
+
+function ImportButton({ types, onImported, C }: {
+  types: string[];
+  onImported: (result: { id: string; type: string }) => void;
+  C: typeof LIGHT_C;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState('');
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true); setImportError('');
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text);
+      if (payload.exportVersion !== 1) throw new Error('Unrecognised export file.');
+      if (!types.includes(payload.type)) throw new Error(`File is a "${payload.type}", expected ${types.join(' or ')}.`);
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/content-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      onImported(result);
+    } catch (err: any) {
+      setImportError(err.message || 'Import failed.');
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="relative">
+      <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFile} />
+      <button onClick={() => { setImportError(''); fileRef.current?.click(); }} disabled={importing}
+        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
+        style={{ background: C.pill, color: C.muted }}>
+        <Upload className="w-3.5 h-3.5" /> {importing ? 'Importing...' : 'Import'}
+      </button>
+      {importError && (
+        <p className="absolute top-full left-0 mt-1 text-xs px-2.5 py-1.5 rounded-xl z-10 whitespace-nowrap"
+          style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}` }}>
+          {importError}
+        </p>
+      )}
+    </div>
+  );
+}
 
 // --- ProfileMenu ---
 function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; onSignOut: () => void }) {
@@ -298,10 +397,10 @@ function getFormType(form: any): 'course' | 'event' | 'form' | 'virtual_experien
 
 function getTypeMeta(C: typeof LIGHT_C) {
   return {
-    course:         { label: 'Course',         Icon: BookOpen,     badgeBg: '#006128',    badgeText: '#ADEE66'       },
-    event:          { label: 'Event',          Icon: CalendarDays, badgeBg: '#ADEE66',    badgeText: '#006128'       },
+    course:         { label: 'Course',         Icon: BookOpen,     badgeBg: '#0e09dd',    badgeText: '#ffffff'       },
+    event:          { label: 'Event',          Icon: CalendarDays, badgeBg: '#00a4ef',    badgeText: '#ffffff'       },
     form:           { label: 'Form',           Icon: AlignLeft,    badgeBg: C.formBadgeBg, badgeText: C.formBadgeText },
-    virtual_experience: { label: 'Virtual Experience', Icon: Briefcase,    badgeBg: '#312e81',    badgeText: '#c7d2fe'       },
+    virtual_experience: { label: 'Virtual Experience', Icon: Briefcase,    badgeBg: '#ff9933',    badgeText: '#111111'       },
   };
 }
 
@@ -692,6 +791,11 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
           </div>
           <div className="flex items-center gap-2">
             <ShareButton form={form} shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen}/>
+            <button onClick={() => exportContent(form)} title="Export"
+              className="p-1.5 rounded-lg transition-colors hover:opacity-70"
+              style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+              <Download className="w-3.5 h-3.5"/>
+            </button>
             <a href={`/${form.slug || form.id}`} target="_blank" rel="noreferrer"
               className="p-1.5 rounded-lg transition-colors hover:opacity-70"
               style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }} title="View live">
@@ -847,6 +951,11 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
               <div className="flex items-center gap-2">
                 <Link href={`/dashboard/${form.id}`} className="text-xs font-medium hover:opacity-60 transition-opacity" style={{ color: C.green }}>Insights</Link>
                 <ShareButton form={form} shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen}/>
+                <button onClick={() => exportContent(form)} title="Export"
+                  className="p-1 rounded-md hover:opacity-60 transition-opacity"
+                  style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+                  <Download className="w-3.5 h-3.5"/>
+                </button>
                 <a href={`/${form.slug || form.id}`} target="_blank" rel="noreferrer"
                   className="p-1 rounded-md hover:opacity-60 transition-opacity"
                   style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
@@ -1758,11 +1867,18 @@ function VirtualExperiencesManageSection({ C, forms, setFormToDelete, onDuplicat
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-base font-semibold" style={{ color: C.text }}>{gpForms.length} Virtual Experience{gpForms.length !== 1 ? 's' : ''}</p>
-        <Link href="/create/guided-project"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity"
-          style={{ background: C.cta, color: C.ctaText }}>
-          <Plus className="w-4 h-4" /> New
-        </Link>
+        <div className="flex items-center gap-2">
+          <ImportButton
+            types={['virtual_experience']}
+            C={C}
+            onImported={r => { window.location.href = `/create/guided-project?id=${r.id}`; }}
+          />
+          <Link href="/create/guided-project"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity"
+            style={{ background: C.cta, color: C.ctaText }}>
+            <Plus className="w-4 h-4" /> New
+          </Link>
+        </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {gpForms.map(form => {
@@ -1803,6 +1919,11 @@ function VirtualExperiencesManageSection({ C, forms, setFormToDelete, onDuplicat
                     {duplicatingId === form.id
                       ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                  <button onClick={() => exportContent(form)}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
+                    style={{ background: C.pill, color: C.muted }} title="Export">
+                    <Download className="w-3.5 h-3.5" />
                   </button>
                   <button onClick={() => setFormToDelete(form.id)}
                     className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
@@ -2573,9 +2694,16 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     <div>
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-base font-semibold" style={{ color: C.text }}>Assignments <span className="text-sm font-normal ml-1" style={{ color: C.faint }}>({assignments.length})</span></h2>
-        <Link href="/create/assignment" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80" style={{ background: C.cta, color: C.ctaText }}>
-          <Plus className="w-4 h-4"/> New
-        </Link>
+        <div className="flex items-center gap-2">
+          <ImportButton
+            types={['assignment']}
+            C={C}
+            onImported={r => { window.location.href = `/create/assignment?edit=${r.id}`; }}
+          />
+          <Link href="/create/assignment" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80" style={{ background: C.cta, color: C.ctaText }}>
+            <Plus className="w-4 h-4"/> New
+          </Link>
+        </div>
       </div>
       <div className="space-y-3">
         {assignments.map((a, i) => (
@@ -2613,6 +2741,11 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold hover:opacity-80"
                 style={{ background: C.pill, color: C.muted, cursor: duplicatingId === a.id ? 'not-allowed' : 'pointer', opacity: duplicatingId === a.id ? 0.5 : 1 }}>
                 {duplicatingId === a.id ? <Loader2 className="w-3 h-3 animate-spin"/> : <Copy className="w-3 h-3"/>}
+              </button>
+              <button onClick={e => { e.stopPropagation(); exportAssignment(a); }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold hover:opacity-80"
+                style={{ background: C.pill, color: C.muted }}>
+                <Download className="w-3 h-3"/>
               </button>
               <button onClick={e => { e.stopPropagation(); deleteAssignment(a.id); }} disabled={deletingId === a.id}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold"
@@ -6375,6 +6508,7 @@ const _cache: { forms: any[] | null; profile: any | null; user: any | null } = {
 // --- Dashboard ---
 export default function DashboardPage() {
   const C = useC();
+  const router = useRouter();
   const { toggle: toggleTheme, theme } = useTheme();
   const { logoUrl } = useTenant();
   const [forms, setForms]           = useState<any[]>(_cache.forms ?? []);
@@ -6662,7 +6796,7 @@ export default function DashboardPage() {
                   <span className="flex-1 truncate">{item.label}</span>
                   {count !== null && count > 0 && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center"
-                      style={{ background: isActive ? C.green : C.pill, color: isActive ? C.lime : C.faint }}>
+                      style={{ background: isActive ? C.green : C.pill, color: isActive ? C.ctaText : C.faint }}>
                       {count}
                     </span>
                   )}
@@ -6708,12 +6842,19 @@ export default function DashboardPage() {
                 )}
               </div>
               {(activeSection === 'courses' || activeSection === 'events') && (
-                <Link
-                  href={activeSection === 'courses' ? '/create?type=course' : '/create?type=event'}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
-                  style={{ background: C.cta, color: C.ctaText }}>
-                  <Plus className="w-4 h-4"/> New {activeSection === 'courses' ? 'Course' : 'Event'}
-                </Link>
+                <div className="flex items-center gap-2">
+                  <ImportButton
+                    types={activeSection === 'courses' ? ['course'] : ['event']}
+                    C={C}
+                    onImported={r => router.push(`/dashboard/${r.id}`)}
+                  />
+                  <Link
+                    href={activeSection === 'courses' ? '/create?type=course' : '/create?type=event'}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+                    style={{ background: C.cta, color: C.ctaText }}>
+                    <Plus className="w-4 h-4"/> New {activeSection === 'courses' ? 'Course' : 'Event'}
+                  </Link>
+                </div>
               )}
             </div>
 
