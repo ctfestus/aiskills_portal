@@ -1100,6 +1100,26 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     updateConfig({ questions: qs });
   };
 
+  const insertQuestionAt = (afterIndex: number) => {
+    if (!formConfig) return;
+    const id = Math.random().toString(36).substring(7);
+    const defaults: Record<QuestionType, Partial<CourseQuestion>> = {
+      multiple_choice: { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A' },
+      fill_blank:      { options: [], correctAnswer: '' },
+      arrange:         { options: ['Step 1', 'Step 2', 'Step 3', 'Step 4'], correctAnswer: 'Step 1|||Step 2|||Step 3|||Step 4' },
+      image:           { options: ['0', '1', '2', '3'], correctAnswer: '0', optionImages: ['', '', '', ''] },
+      code:            { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A', codeSnippet: '', codeLanguage: 'javascript' },
+    };
+    const qs = [...(formConfig.questions || [])];
+    qs.splice(afterIndex + 1, 0, {
+      id,
+      type: newQuestionType,
+      question: 'New Question',
+      ...defaults[newQuestionType],
+    } as CourseQuestion);
+    updateConfig({ questions: qs });
+  };
+
   const handleQuestionImageUpload = async (qId: string, e: React.ChangeEvent<HTMLInputElement>, optionIdx?: number) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -2080,13 +2100,21 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     const isExpanded = expandedQuestions.has(q.id);
 
                     const insertDivider = (
-                      <div key={`insert-${q.id}`} className="group relative flex items-center justify-center h-3 my-0.5">
+                      <div key={`insert-${q.id}`} className="group relative flex items-center justify-center gap-1.5 h-5 my-0.5">
                         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px transition-colors" style={{ background: FE.divider }} />
+                        <button
+                          type="button"
+                          onClick={() => insertQuestionAt(qIdx)}
+                          className="relative hidden group-hover:flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full font-medium transition-all hover:opacity-90"
+                          style={{ background: accentColor, color: 'white', zIndex: 1 }}
+                        >
+                          <Plus className="w-2.5 h-2.5" /> Question
+                        </button>
                         <button
                           type="button"
                           onClick={() => insertSectionAt(qIdx)}
                           className="relative hidden group-hover:flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full font-medium transition-all hover:opacity-90"
-                          style={{ background: accentColor, color: 'white', zIndex: 1 }}
+                          style={{ background: FE.pill, color: FE.muted, border: `1px solid ${FE.cardBorder}`, zIndex: 1 }}
                         >
                           <Plus className="w-2.5 h-2.5" /> Section
                         </button>
