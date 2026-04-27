@@ -45,7 +45,8 @@ interface Props {
   savedResult?: CritiqueResult;
   savedImageUrl?: string;
   rubric?: string[];
-  onComplete: (result: CritiqueResult, imageDataUrl: string) => void;
+  minScore?: number;
+  onComplete: (result: CritiqueResult, imageDataUrl: string, passed: boolean) => void;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -66,7 +67,7 @@ const TYPE_COLORS: Record<string, string> = {
   OTHER:          '#94a3b8',
 };
 
-export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, completed, savedResult, savedImageUrl, rubric, onComplete }: Props) {
+export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, completed, savedResult, savedImageUrl, rubric, minScore, onComplete }: Props) {
   const [imageDataUrl, setImageDataUrl] = useState<string>(savedImageUrl ?? '');
   const [result, setResult]             = useState<CritiqueResult | null>(savedResult ?? null);
   const [analyzing, setAnalyzing]       = useState(false);
@@ -108,7 +109,9 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
         const json = await res.json();
         if (json.error) throw new Error(json.error);
         setResult(json);
-        onComplete(json, dataUrl);
+        const score = (json as CritiqueResult).audit?.overallScore ?? 100;
+        const passed = !minScore || score >= minScore;
+        onComplete(json, dataUrl, passed);
       } catch (err: any) {
         setError(err.message || 'Analysis failed. Please try again.');
       } finally {
@@ -149,6 +152,18 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
   const border = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
   const text = isDark ? '#f0f0f0' : '#111';
   const muted = isDark ? '#888' : '#666';
+
+  // Already completed but saved data not available (e.g. after page reload) -- show locked state
+  if (completed && !imageDataUrl && !result) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}25` }}>
+        <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+        <p className="text-sm font-medium" style={{ color: accentColor }}>
+          Dashboard critique already submitted for this question.
+        </p>
+      </div>
+    );
+  }
 
   // Upload state
   if (!imageDataUrl) {
@@ -362,16 +377,34 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
         );
       })()}
 
-      {/* Completion badge */}
-      {result && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
-          style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}30` }}>
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
-          <p className="text-xs font-medium" style={{ color: accentColor }}>
-            {result.elements.length} elements analysed · hover each zone to explore the feedback
-          </p>
-        </div>
-      )}
+      {/* Completion / gate */}
+      {result && (() => {
+        const score = result.audit?.overallScore ?? 100;
+        const failed = !!minScore && score < minScore;
+        return failed ? (
+          <div className="flex items-start gap-3 px-4 py-3" style={{ background: 'rgba(239,68,68,0.08)', borderLeft: '2px solid #ef4444' }}>
+            <div style={{ flexShrink: 0, marginTop: 1 }}>
+              <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%' }} />
+              </div>
+            </div>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 700, color: '#ef4444', marginBottom: 2 }}>
+                Score {score.toFixed(1)}/100 · Below the {minScore}/100 minimum -- no point awarded
+              </p>
+              <p style={{ fontSize: 12, color: '#ef4444', opacity: 0.8 }}>You can continue or try again with a revised dashboard.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
+            style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}30` }}>
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+            <p className="text-xs font-medium" style={{ color: accentColor }}>
+              {result.elements.length} elements analysed · hover each zone to explore the feedback
+            </p>
+          </div>
+        );
+      })()}
       {error && <p className="text-xs text-red-400 font-medium">{error}</p>}
 
       {/* Holistic Audit Report */}

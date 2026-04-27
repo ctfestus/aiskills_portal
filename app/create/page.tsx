@@ -48,7 +48,7 @@ interface FormField {
   description?: string;
 }
 
-type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code';
+type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique';
 
 interface CourseQuestion {
   id: string;
@@ -71,6 +71,12 @@ interface CourseQuestion {
     imageUrl?: string;
     videoUrl?: string;
   };
+  // AI review fields (code_review | excel_review | dashboard_critique)
+  rubric?: string[];
+  schema?: string;
+  context?: string;
+  minScore?: number;
+  reviewLanguage?: string;
 }
 
 interface Speaker {
@@ -1474,11 +1480,14 @@ const [isSaving, setIsSaving] = useState(false);
     if (!formConfig) return;
     const id = Math.random().toString(36).substring(7);
     const defaults: Record<QuestionType, Partial<CourseQuestion>> = {
-      multiple_choice: { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A' },
-      fill_blank:      { options: [], correctAnswer: '' },
-      arrange:         { options: ['Step 1', 'Step 2', 'Step 3', 'Step 4'], correctAnswer: 'Step 1|||Step 2|||Step 3|||Step 4' },
-      image:           { options: ['0', '1', '2', '3'], correctAnswer: '0', optionImages: ['', '', '', ''] },
-      code:            { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A', codeSnippet: '', codeLanguage: 'javascript' },
+      multiple_choice:     { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A' },
+      fill_blank:          { options: [], correctAnswer: '' },
+      arrange:             { options: ['Step 1', 'Step 2', 'Step 3', 'Step 4'], correctAnswer: 'Step 1|||Step 2|||Step 3|||Step 4' },
+      image:               { options: ['0', '1', '2', '3'], correctAnswer: '0', optionImages: ['', '', '', ''] },
+      code:                { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A', codeSnippet: '', codeLanguage: 'javascript' },
+      code_review:         { options: [], correctAnswer: '', rubric: ['Code runs without errors', 'Follows naming conventions', 'Logic is correct'], reviewLanguage: 'javascript', minScore: 70 },
+      excel_review:        { options: [], correctAnswer: '', rubric: ['Correct formulas used', 'Data is accurate', 'Formatting is clean'], context: '', minScore: 70 },
+      dashboard_critique:  { options: [], correctAnswer: '', rubric: ['Visuals are appropriate', 'Insights are accurate', 'Layout is clear'], context: '', minScore: 70 },
     };
     updateConfig({
       questions: [...(formConfig.questions || []), {
@@ -1514,11 +1523,14 @@ const [isSaving, setIsSaving] = useState(false);
     if (!formConfig) return;
     const id = Math.random().toString(36).substring(7);
     const defaults: Record<QuestionType, Partial<CourseQuestion>> = {
-      multiple_choice: { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A' },
-      fill_blank:      { options: [], correctAnswer: '' },
-      arrange:         { options: ['Step 1', 'Step 2', 'Step 3', 'Step 4'], correctAnswer: 'Step 1|||Step 2|||Step 3|||Step 4' },
-      image:           { options: ['0', '1', '2', '3'], correctAnswer: '0', optionImages: ['', '', '', ''] },
-      code:            { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A', codeSnippet: '', codeLanguage: 'javascript' },
+      multiple_choice:     { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A' },
+      fill_blank:          { options: [], correctAnswer: '' },
+      arrange:             { options: ['Step 1', 'Step 2', 'Step 3', 'Step 4'], correctAnswer: 'Step 1|||Step 2|||Step 3|||Step 4' },
+      image:               { options: ['0', '1', '2', '3'], correctAnswer: '0', optionImages: ['', '', '', ''] },
+      code:                { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A', codeSnippet: '', codeLanguage: 'javascript' },
+      code_review:         { options: [], correctAnswer: '', rubric: ['Code runs without errors', 'Follows naming conventions', 'Logic is correct'], reviewLanguage: 'javascript', minScore: 70 },
+      excel_review:        { options: [], correctAnswer: '', rubric: ['Correct formulas used', 'Data is accurate', 'Formatting is clean'], context: '', minScore: 70 },
+      dashboard_critique:  { options: [], correctAnswer: '', rubric: ['Visuals are appropriate', 'Insights are accurate', 'Layout is clear'], context: '', minScore: 70 },
     };
     const qs = [...(formConfig.questions || [])];
     qs.splice(afterIndex + 1, 0, {
@@ -1873,8 +1885,8 @@ const [isSaving, setIsSaving] = useState(false);
               </button>
             </div>
           )}
-          <div className="max-w-2xl mx-auto px-8 py-8">
-          <div className="rounded-2xl p-6 space-y-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+          <div className="max-w-3xl mx-auto px-4 py-8">
+          <div className="rounded-2xl p-5 space-y-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
 
             {activeSection === 'info' && (
               <div className="space-y-5">
@@ -2636,27 +2648,30 @@ const [isSaving, setIsSaving] = useState(false);
                         </span>
                         <div className="flex items-center gap-1.5">
                           {/* Type selector */}
-                          <div className="flex gap-0.5 p-0.5 rounded-lg" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
-                            {([
-                              { v: 'multiple_choice', l: 'MC' },
-                              { v: 'fill_blank', l: 'Fill' },
-                              { v: 'arrange', l: 'Order' },
-                              { v: 'image', l: 'Image' },
-                              { v: 'code', l: 'Code' },
-                            ] as const).map(({ v, l }) => (
-                              <button
-                                key={v}
-                                type="button"
-                                onClick={() => handleUpdateQuestion(q.id, {
-                                  type: v,
-                                  ...(v === 'fill_blank' ? { options: [] } : {}),
-                                  ...(v === 'arrange' && qType !== 'arrange' ? { correctAnswer: q.options.join('|||') } : {}),
-                                })}
-                                className="px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all"
-                                style={{ background: qType === v ? accentColor : 'transparent', color: qType === v ? C.ctaText : C.faint }}
-                              >{l}</button>
-                            ))}
-                          </div>
+                          <select
+                            value={qType}
+                            onChange={e => {
+                              const v = e.target.value as QuestionType;
+                              const isReview = ['code_review', 'excel_review', 'dashboard_critique'].includes(v);
+                              handleUpdateQuestion(q.id, {
+                                type: v,
+                                ...(isReview ? { options: [], correctAnswer: '' } : {}),
+                                ...(!isReview && v === 'fill_blank' ? { options: [] } : {}),
+                                ...(!isReview && v === 'arrange' && qType !== 'arrange' ? { correctAnswer: q.options.join('|||') } : {}),
+                              });
+                            }}
+                            className="text-[11px] font-semibold rounded-lg px-2 py-1 outline-none cursor-pointer"
+                            style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.muted }}
+                          >
+                            <option value="multiple_choice">Multiple Choice</option>
+                            <option value="fill_blank">Fill in the Blank</option>
+                            <option value="arrange">Arrange / Order</option>
+                            <option value="image">Image Question</option>
+                            <option value="code">Code Snippet</option>
+                            <option value="code_review">AI Code Review</option>
+                            <option value="excel_review">AI Excel Review</option>
+                            <option value="dashboard_critique">AI Dashboard Critique</option>
+                          </select>
                           <button
                             type="button"
                             onClick={() => handleUpdateQuestion(q.id, {
@@ -2698,7 +2713,7 @@ const [isSaving, setIsSaving] = useState(false);
                           >
                             {busyQuestionId === q.id && aiLoadingLabel === 'Generating lesson...' ? 'Generating…' : 'AI Lesson'}
                           </button>
-                          {!q.lessonOnly && (<>
+                          {!q.lessonOnly && !(['code_review', 'excel_review', 'dashboard_critique'] as const).includes(qType as any) && (<>
                           <button
                             type="button"
                             onClick={() => generateQuestionAsset(q, 'generate_hint')}
@@ -2721,13 +2736,15 @@ const [isSaving, setIsSaving] = useState(false);
                         </div>
                         {!q.lessonOnly && (<>
 
-                        {/* Question text */}
+                        {/* Question text -- hidden for review types; they use the project brief field inside the config panel */}
+                        {!(['code_review', 'excel_review', 'dashboard_critique'] as const).includes(qType as any) && (
                         <div>
                           <label className={labelCls} style={labelStyle}>Question</label>
                           <input type="text" value={q.question} onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })} className={inputCls} style={inputStyle}
                             placeholder={qType === 'fill_blank' ? 'e.g. The capital of France is ___' : 'Enter your question...'} />
                           {qType === 'fill_blank' && <p className="text-[10px] mt-1" style={{ color: C.faint }}>Tip: use ___ to mark where the blank is.</p>}
                         </div>
+                        )}
 
                         {/* Code snippet section */}
                         {qType === 'code' && (
@@ -2900,7 +2917,127 @@ const [isSaving, setIsSaving] = useState(false);
                           </div>
                         )}
 
-                        {/* Hint input */}
+                        {/* AI Review config */}
+                        {(['code_review', 'excel_review', 'dashboard_critique'] as const).includes(qType as any) && (
+                          <div className="space-y-3 rounded-xl p-3" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
+                            <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentColor }}>
+                              {qType === 'code_review' ? 'Code Review' : qType === 'excel_review' ? 'Excel Review' : 'Dashboard Critique'} Config
+                            </p>
+
+                            {/* Project prompt / brief */}
+                            <div>
+                              <label className={labelCls} style={labelStyle}>Project brief / prompt</label>
+                              <textarea
+                                value={q.question}
+                                onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })}
+                                className={`${inputCls} min-h-[72px] resize-y`}
+                                style={inputStyle}
+                                placeholder="Describe the project the student must complete..."
+                              />
+                            </div>
+
+                            {/* Language (code_review only) */}
+                            {qType === 'code_review' && (
+                              <div>
+                                <label className={labelCls} style={labelStyle}>Language</label>
+                                <select
+                                  value={q.reviewLanguage || 'javascript'}
+                                  onChange={e => handleUpdateQuestion(q.id, { reviewLanguage: e.target.value })}
+                                  className={`${inputCls} py-1.5`}
+                                  style={inputStyle}
+                                >
+                                  {['javascript', 'python', 'typescript', 'java', 'c', 'cpp', 'go', 'rust', 'sql', 'r'].map(lang => (
+                                    <option key={lang} value={lang}>{lang}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+
+                            {/* Schema (code_review only) */}
+                            {qType === 'code_review' && (
+                              <div>
+                                <label className={labelCls} style={labelStyle}>Expected output / schema <span style={{ color: C.faint }}>(optional)</span></label>
+                                <textarea
+                                  value={q.schema || ''}
+                                  onChange={e => handleUpdateQuestion(q.id, { schema: e.target.value })}
+                                  className={`${inputCls} min-h-[60px] resize-y font-mono text-xs`}
+                                  style={inputStyle}
+                                  placeholder="Describe or paste the expected output..."
+                                />
+                              </div>
+                            )}
+
+                            {/* Context (excel_review / dashboard_critique) */}
+                            {(qType === 'excel_review' || qType === 'dashboard_critique') && (
+                              <div>
+                                <label className={labelCls} style={labelStyle}>Dataset / context <span style={{ color: C.faint }}>(optional)</span></label>
+                                <textarea
+                                  value={q.context || ''}
+                                  onChange={e => handleUpdateQuestion(q.id, { context: e.target.value })}
+                                  className={`${inputCls} min-h-[60px] resize-y`}
+                                  style={inputStyle}
+                                  placeholder="Describe the dataset or context the student works with..."
+                                />
+                              </div>
+                            )}
+
+                            {/* Rubric */}
+                            <div>
+                              <label className={labelCls} style={labelStyle}>Rubric criteria</label>
+                              <div className="space-y-1.5">
+                                {(q.rubric || []).map((criterion, cIdx) => (
+                                  <div key={cIdx} className="flex items-center gap-2">
+                                    <input
+                                      type="text"
+                                      value={criterion}
+                                      onChange={e => {
+                                        const next = [...(q.rubric || [])];
+                                        next[cIdx] = e.target.value;
+                                        handleUpdateQuestion(q.id, { rubric: next });
+                                      }}
+                                      className={`${inputCls} py-1.5 flex-1`}
+                                      style={inputStyle}
+                                      placeholder={`Criterion ${cIdx + 1}`}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateQuestion(q.id, { rubric: (q.rubric || []).filter((_, i) => i !== cIdx) })}
+                                      className="transition-colors flex-shrink-0 hover:text-red-400"
+                                      style={{ color: C.faint }}
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateQuestion(q.id, { rubric: [...(q.rubric || []), ''] })}
+                                  className="text-xs transition-colors flex items-center gap-1 mt-1 hover:opacity-60"
+                                  style={{ color: C.muted }}
+                                >
+                                  <Plus className="w-3 h-3" /> Add criterion
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Min score */}
+                            <div>
+                              <label className={labelCls} style={labelStyle}>Minimum passing score (%)</label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={q.minScore ?? 70}
+                                onChange={e => handleUpdateQuestion(q.id, { minScore: Number(e.target.value) })}
+                                className={`${inputCls} w-24`}
+                                style={inputStyle}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Hint and explanation -- not shown for AI review types */}
+                        {!(['code_review', 'excel_review', 'dashboard_critique'] as const).includes(qType as any) && (<>
                         <div>
                           <label className={labelCls} style={labelStyle}>Hint <span style={{ color: C.faint }}>(optional)</span></label>
                           <input
@@ -2923,6 +3060,7 @@ const [isSaving, setIsSaving] = useState(false);
                             placeholder="Explain why this answer is correct..."
                           />
                         </div>
+                        </>)}
                         </>)}
 
                         {/* Lesson section */}
@@ -3055,6 +3193,9 @@ const [isSaving, setIsSaving] = useState(false);
                       <option value="arrange">Arrange / Order</option>
                       <option value="image">Image Question</option>
                       <option value="code">Code Snippet</option>
+                      <option value="code_review">AI Code Review</option>
+                      <option value="excel_review">AI Excel Review</option>
+                      <option value="dashboard_critique">AI Dashboard Critique</option>
                     </select>
                     <button type="button" onClick={handleAddQuestion} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all flex-shrink-0 hover:opacity-80" style={{ background: accentColor, color: C.ctaText }}>
                       <Plus className="w-3.5 h-3.5" /> Add

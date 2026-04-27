@@ -145,6 +145,18 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
     }
   }
 
+  // Already completed but summary not available (e.g. after page reload) -- show locked state
+  if (!result && completed && !savedSummary) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}25` }}>
+        <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+        <p className="text-sm font-medium" style={{ color: accentColor }}>
+          Excel review already submitted for this question.
+        </p>
+      </div>
+    );
+  }
+
   // Returning student -- show saved summary card
   if (!result && completed && savedSummary) {
     return (
@@ -483,7 +495,7 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
             <p style={{ fontSize: 12, fontWeight: 700, color: '#ef4444', marginBottom: 2 }}>
               Score too low · {result.overallScore.toFixed(1)}/100 · Minimum required: {minScore}/100
             </p>
-            <p style={{ fontSize: 12, color: '#ef4444', opacity: 0.8 }}>Review the feedback above, fix your spreadsheet, and resubmit.</p>
+            <p style={{ fontSize: 12, color: '#ef4444', opacity: 0.8 }}>You can continue or try again with an improved spreadsheet -- no point awarded until the minimum is reached.</p>
           </div>
         </div>
       ) : (

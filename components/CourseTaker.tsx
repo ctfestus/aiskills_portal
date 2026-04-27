@@ -31,9 +31,14 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
+import CodeReviewPlayer, { LeanSubmission } from '@/components/CodeReviewPlayer';
+import ExcelReviewPlayer, { ExcelLeanSubmission } from '@/components/ExcelReviewPlayer';
 
 type ShowAnswers = 'per_question' | 'after_quiz' | 'none';
-type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code';
+type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique';
+
+const REVIEW_TYPES: QuestionType[] = ['code_review', 'excel_review', 'dashboard_critique'];
 
 interface CourseQuestion {
   id: string;
@@ -56,6 +61,12 @@ interface CourseQuestion {
     imageUrl?: string;
     videoUrl?: string;
   };
+  // AI review fields
+  rubric?: string[];
+  schema?: string;
+  context?: string;
+  minScore?: number;
+  reviewLanguage?: string;
 }
 
 
@@ -192,6 +203,10 @@ export function CourseTaker({
 
   // Feature 2: skip & return
   const [skippedQuestions, setSkippedQuestions] = useState<Set<string>>(new Set());
+  // AI review questions -- tracks which have been completed
+  const [reviewCompleted, setReviewCompleted] = useState<Set<string>>(new Set());
+  // Stores lean summaries/results for completed review questions (in-session only)
+  const [reviewSummaries, setReviewSummaries] = useState<Record<string, any>>({});
 
   // Feature 3: hint system
   const [hintsUsed, setHintsUsed] = useState<Set<string>>(new Set());
@@ -344,9 +359,19 @@ export function CourseTaker({
   useEffect(() => {
     if (!currentQuestion) return;
     const prevAnswer = answers[currentQuestion.id];
-    if (prevAnswer) {
-      // Question already answered -- restore locked state, no re-answering allowed
-      const qType = currentQuestion.type ?? 'multiple_choice';
+    const qType = currentQuestion.type ?? 'multiple_choice';
+    if (REVIEW_TYPES.includes(qType)) {
+      // Review questions don't use isChecking -- just track completion
+      setIsChecking(false);
+      setIsCorrect(null);
+      setHintVisible(false);
+      setSelectedOption(null);
+      setFillBlankAnswer('');
+      if (prevAnswer) {
+        setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
+      }
+    } else if (prevAnswer) {
+      // Normal question already answered -- restore locked state, no re-answering allowed
       const wasCorrect = isAnswerCorrect(currentQuestion, prevAnswer);
       setIsChecking(true);
       setIsCorrect(wasCorrect);
@@ -369,7 +394,7 @@ export function CourseTaker({
       setIsCorrect(null);
       setHintVisible(false);
       setQuestionStartTime(Date.now());
-      if ((currentQuestion.type ?? 'multiple_choice') === 'arrange') {
+      if (qType === 'arrange') {
         setArrangeOrder(shuffle(currentQuestion.options));
       }
     }
@@ -633,6 +658,7 @@ export function CourseTaker({
   };
 
   const isAnswered = () => {
+    if (REVIEW_TYPES.includes(questionType)) return reviewCompleted.has(currentQuestion.id);
     if (questionType === 'fill_blank') return fillBlankAnswer.trim().length > 0;
     if (questionType === 'arrange') return arrangeOrder.length > 0;
     return selectedOption !== null; // covers multiple_choice, image, code
@@ -652,6 +678,7 @@ export function CourseTaker({
 
   const isAnswerCorrect = (q: any, answer: string) => {
     const qType: QuestionType = q.type ?? 'multiple_choice';
+    if (REVIEW_TYPES.includes(qType)) return answer === 'completed';
     if (qType === 'fill_blank') return checkFillBlank(answer, q.correctAnswer);
     if (qType === 'arrange') return answer === q.correctAnswer;
     return answer === q.correctAnswer;
@@ -2607,12 +2634,19 @@ export function CourseTaker({
                   <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-5 sm:pb-8">
                   <div className="flex items-center gap-2 mb-5">
                     {questionType !== 'multiple_choice' && questionType !== 'image' && (
-                      <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border ${isDark ? 'border-zinc-700 text-zinc-500' : 'border-zinc-200 text-zinc-400'}`}>
-                        {questionType === 'fill_blank' ? 'Fill in the blank' : questionType === 'arrange' ? 'Arrange in order' : questionType === 'code' ? 'Code Snippet' : ''}
+                      <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border ${REVIEW_TYPES.includes(questionType) ? '' : (isDark ? 'border-zinc-700 text-zinc-500' : 'border-zinc-200 text-zinc-400')}`}
+                        style={REVIEW_TYPES.includes(questionType) ? { background: `${accent}18`, color: accent, border: `1px solid ${accent}40` } : {}}>
+                        {questionType === 'fill_blank' ? 'Fill in the blank'
+                          : questionType === 'arrange' ? 'Arrange in order'
+                          : questionType === 'code' ? 'Code Snippet'
+                          : questionType === 'code_review' ? 'AI Code Review'
+                          : questionType === 'excel_review' ? 'AI Excel Review'
+                          : questionType === 'dashboard_critique' ? 'AI Dashboard Critique'
+                          : ''}
                       </span>
                     )}
-                    {/* Hint button */}
-                    {currentQuestion.hint && !hintsUsed.has(currentQuestion.id) && !isChecking && (
+                    {/* Hint button -- hidden for review types */}
+                    {currentQuestion.hint && !hintsUsed.has(currentQuestion.id) && !isChecking && !REVIEW_TYPES.includes(questionType) && (
                       <button
                         onClick={() => {
                           setHintVisible(true);
@@ -2755,6 +2789,77 @@ export function CourseTaker({
                     </div>
                   )}
 
+                  {/* -- AI Review players -- */}
+                  {questionType === 'code_review' && (
+                    <CodeReviewPlayer
+                      reqId={currentQuestion.id}
+                      isDark={isDark}
+                      accentColor={accent}
+                      completed={reviewCompleted.has(currentQuestion.id)}
+                      submissions={[]}
+                      savedSummary={reviewSummaries[currentQuestion.id]}
+                      rubric={currentQuestion.rubric}
+                      schema={currentQuestion.schema}
+                      minScore={currentQuestion.minScore}
+                      reviewLanguage={currentQuestion.reviewLanguage}
+                      onComplete={(_, lean, passed) => {
+                        const alreadyDone = reviewCompleted.has(currentQuestion.id);
+                        setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
+                        setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: lean }));
+                        const answer = passed ? 'completed' : 'failed';
+                        const newAnswers = { ...answers, [currentQuestion.id]: answer };
+                        if (!alreadyDone && passed && !reviewMode) setScore(s => s + 1);
+                        setAnswers(newAnswers);
+                        saveProgress(newAnswers, currentQuestionIndex + 1, score + (!alreadyDone && passed ? 1 : 0), totalPoints, streak, hintsUsed);
+                      }}
+                    />
+                  )}
+                  {questionType === 'excel_review' && (
+                    <ExcelReviewPlayer
+                      reqId={currentQuestion.id}
+                      isDark={isDark}
+                      accentColor={accent}
+                      completed={reviewCompleted.has(currentQuestion.id)}
+                      submissions={[]}
+                      savedSummary={reviewSummaries[currentQuestion.id]}
+                      context={currentQuestion.context}
+                      rubric={currentQuestion.rubric}
+                      minScore={currentQuestion.minScore}
+                      onComplete={(_, lean, passed) => {
+                        const alreadyDone = reviewCompleted.has(currentQuestion.id);
+                        setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
+                        setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: lean }));
+                        const answer = passed ? 'completed' : 'failed';
+                        const newAnswers = { ...answers, [currentQuestion.id]: answer };
+                        if (!alreadyDone && passed && !reviewMode) setScore(s => s + 1);
+                        setAnswers(newAnswers);
+                        saveProgress(newAnswers, currentQuestionIndex + 1, score + (!alreadyDone && passed ? 1 : 0), totalPoints, streak, hintsUsed);
+                      }}
+                    />
+                  )}
+                  {questionType === 'dashboard_critique' && (
+                    <DashboardCritiquePlayer
+                      reqId={currentQuestion.id}
+                      isDark={isDark}
+                      accentColor={accent}
+                      completed={reviewCompleted.has(currentQuestion.id)}
+                      savedResult={reviewSummaries[currentQuestion.id]?.result}
+                      savedImageUrl={reviewSummaries[currentQuestion.id]?.imageUrl}
+                      rubric={currentQuestion.rubric}
+                      minScore={currentQuestion.minScore}
+                      onComplete={(result, imageDataUrl, passed) => {
+                        const alreadyDone = reviewCompleted.has(currentQuestion.id);
+                        setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
+                        setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: { result, imageUrl: imageDataUrl } }));
+                        const answer = passed ? 'completed' : 'failed';
+                        const newAnswers = { ...answers, [currentQuestion.id]: answer };
+                        if (!alreadyDone && passed && !reviewMode) setScore(s => s + 1);
+                        setAnswers(newAnswers);
+                        saveProgress(newAnswers, currentQuestionIndex + 1, score + (!alreadyDone && passed ? 1 : 0), totalPoints, streak, hintsUsed);
+                      }}
+                    />
+                  )}
+
                   {/* -- Code snippet -- */}
                   {questionType === 'code' && currentQuestion.codeSnippet && (
                     <div className="mb-8 rounded-2xl overflow-hidden border border-zinc-700/60 shadow-lg">
@@ -2837,6 +2942,24 @@ export function CourseTaker({
 
                   {/* -- Card footer: action bar -- */}
                   {(() => {
+                    // Review type footer: just a Continue button enabled once the review is submitted
+                    if (REVIEW_TYPES.includes(questionType)) {
+                      const done = reviewCompleted.has(currentQuestion.id);
+                      return (
+                        <div className="px-4 sm:px-8 py-3 sm:py-4 flex justify-end" style={{ background: isDark ? '#1e1e1e' : '#ffffff' }}>
+                          <button
+                            onClick={handleNext}
+                            disabled={!done}
+                            className="flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                            style={{ background: done ? accent : (isDark ? '#3f3f46' : '#d4d4d8'), color: 'white' }}
+                          >
+                            {currentQuestionIndex < totalSlides - 1 ? 'Continue' : 'Finish Course'}
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    }
+
                     const hasLesson = (currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl) && (config as any).lessonTiming !== 'before';
                     const footerBg = isChecking
                       ? (isCorrect ? (isDark ? '#0a2e1a' : '#f0fdf4') : (isDark ? '#662525' : '#fff1f1'))

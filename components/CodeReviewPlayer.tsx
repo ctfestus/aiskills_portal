@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Loader2, CheckCircle2, Zap, RotateCcw, Code2, Download } from 'lucide-react';
+import { Loader2, CheckCircle2, Zap, RotateCcw, Code2, Download, Upload, FileCode, Lock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { downloadReviewPdf } from '@/lib/downloadReviewPdf';
 
@@ -50,6 +50,7 @@ interface Props {
   rubric?: string[];
   schema?: string;
   minScore?: number;
+  reviewLanguage?: string;
   onComplete: (result: ReviewResult, lean: LeanSubmission, passed: boolean) => void;
 }
 
@@ -69,14 +70,22 @@ function scoreColor(n: number) {
   return '#ef4444';
 }
 
-export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed, submissions = [], savedSummary, rubric, schema, minScore, onComplete }: Props) {
+export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed, submissions = [], savedSummary, rubric, schema, minScore, reviewLanguage, onComplete }: Props) {
+  // Normalize authored language to match the LANGUAGES display array
+  const lockedLanguage = reviewLanguage
+    ? (LANGUAGES.find(l => l.toLowerCase() === reviewLanguage.toLowerCase()) ?? null)
+    : null;
+
   const [code, setCode]         = useState('');
-  const [language, setLanguage] = useState('Python');
+  const [language, setLanguage] = useState(lockedLanguage ?? 'Python');
   const [dialect, setDialect]   = useState('PostgreSQL');
   const [result, setResult]     = useState<ReviewResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError]       = useState('');
+  const [inputMode, setInputMode] = useState<'paste' | 'upload'>('paste');
+  const [uploadedFileName, setUploadedFileName] = useState('');
   const resultsRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const bg     = isDark ? '#0f0f0f' : '#f8fafc';
   const card   = isDark ? '#1a1a1a' : '#ffffff';
@@ -87,7 +96,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
   const inner  = isDark ? '#222' : '#f3f4f6';
 
   async function handleSubmit() {
-    if (!code.trim()) { setError('Please paste your code before submitting.'); return; }
+    if (!code.trim()) { setError(inputMode === 'upload' ? 'Please upload a file before submitting.' : 'Please paste your code before submitting.'); return; }
     setError('');
     setAnalyzing(true);
     try {
@@ -125,7 +134,22 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
     }
   }
 
-  function reset() { setCode(''); setResult(null); setError(''); }
+  function reset() { setCode(''); setResult(null); setError(''); setUploadedFileName(''); }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const text = ev.target?.result as string;
+      setCode(text ?? '');
+      setUploadedFileName(file.name);
+      setError('');
+    };
+    reader.onerror = () => setError('Could not read file. Please try again.');
+    reader.readAsText(file);
+    e.target.value = '';
+  }
 
   async function downloadPdf() {
     if (!resultsRef.current) return;
@@ -134,6 +158,18 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
     } catch (err: any) {
       setError(err?.message ?? 'PDF export failed. Please try again.');
     }
+  }
+
+  // Already completed this session but summary not available (e.g. after page reload) -- show locked state
+  if (!result && completed && !savedSummary) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}25` }}>
+        <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+        <p className="text-sm font-medium" style={{ color: accentColor }}>
+          Code review already submitted for this question.
+        </p>
+      </div>
+    );
   }
 
   // Returning student -- show saved summary card
@@ -196,16 +232,28 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
             <span style={{ fontSize: 11, color: muted }}>{new Date(lastAttempt.submittedAt).toLocaleDateString()}</span>
           </div>
         )}
-        {/* Language selector */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {LANGUAGES.map(lang => (
-            <button key={lang} onClick={() => setLanguage(lang)}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-              style={{ background: language === lang ? accentColor : inner, color: language === lang ? '#fff' : muted }}>
-              {lang}
-            </button>
-          ))}
-        </div>
+        {/* Language selector -- locked when instructor specified a language */}
+        {lockedLanguage ? (
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+              style={{ background: accentColor, color: '#fff' }}>
+              {lockedLanguage}
+            </span>
+            <span className="flex items-center gap-1 text-xs" style={{ color: muted }}>
+              <Lock className="w-3 h-3" /> Language set by instructor
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 flex-wrap">
+            {LANGUAGES.map(lang => (
+              <button key={lang} onClick={() => setLanguage(lang)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                style={{ background: language === lang ? accentColor : inner, color: language === lang ? '#fff' : muted }}>
+                {lang}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* SQL dialect selector */}
         {language === 'SQL' && (
@@ -226,23 +274,78 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
           </div>
         )}
 
-        {/* Code textarea */}
+        {/* Code input -- paste or upload */}
         <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
-          <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ background: inner, borderColor: border }}>
-            <Code2 className="w-3.5 h-3.5" style={{ color: muted }} />
-            <span className="text-xs font-semibold" style={{ color: muted }}>
-              {language}{language === 'SQL' ? ` · ${dialect}` : ''}
-            </span>
+          <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ background: inner, borderColor: border }}>
+            <div className="flex items-center gap-2">
+              <Code2 className="w-3.5 h-3.5" style={{ color: muted }} />
+              <span className="text-xs font-semibold" style={{ color: muted }}>
+                {language}{language === 'SQL' ? ` · ${dialect}` : ''}
+              </span>
+            </div>
+            <div className="flex items-center gap-1" style={{ background: isDark ? '#0a0a0a' : '#e5e7eb', borderRadius: 6, padding: 3 }}>
+              {(['paste', 'upload'] as const).map(mode => (
+                <button key={mode} onClick={() => setInputMode(mode)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold transition-colors"
+                  style={{
+                    borderRadius: 4,
+                    background: inputMode === mode ? (isDark ? '#1e1e1e' : '#fff') : 'transparent',
+                    color: inputMode === mode ? text : muted,
+                    boxShadow: inputMode === mode ? '0 1px 2px rgba(0,0,0,0.12)' : 'none',
+                  }}>
+                  {mode === 'paste' ? <><Code2 className="w-3 h-3" />Paste</> : <><Upload className="w-3 h-3" />Upload</>}
+                </button>
+              ))}
+            </div>
           </div>
-          <textarea
-            value={code}
-            onChange={e => setCode(e.target.value)}
-            placeholder={`Paste your ${language} code here…`}
-            rows={14}
-            spellCheck={false}
-            className="w-full resize-none outline-none text-[13px] font-mono px-4 py-3"
-            style={{ background: input, color: text, lineHeight: 1.7 }}
-          />
+
+          {inputMode === 'paste' ? (
+            <textarea
+              value={code}
+              onChange={e => setCode(e.target.value)}
+              placeholder={`Paste your ${language} code here…`}
+              rows={14}
+              spellCheck={false}
+              className="w-full resize-none outline-none text-[13px] font-mono px-4 py-3"
+              style={{ background: input, color: text, lineHeight: 1.7 }}
+            />
+          ) : (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors"
+              style={{ minHeight: 200, background: input, padding: '32px 24px' }}
+            >
+              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange}
+                accept=".py,.js,.ts,.jsx,.tsx,.sql,.r,.R,.java,.cs,.c,.cpp,.go,.rs,.rb,.php,.swift,.kt,.scala,.txt" />
+              {uploadedFileName ? (
+                <>
+                  <div style={{ width: 44, height: 44, borderRadius: 10, background: `${accentColor}18`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <FileCode className="w-5 h-5" style={{ color: accentColor }} />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold" style={{ color: text }}>{uploadedFileName}</p>
+                    <p className="text-xs mt-1" style={{ color: muted }}>
+                      {code.split('\n').length} lines loaded -- click to replace
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ width: 44, height: 44, borderRadius: 10, background: isDark ? '#1e1e1e' : '#f3f4f6',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px dashed ${border}` }}>
+                    <Upload className="w-5 h-5" style={{ color: muted }} />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold" style={{ color: text }}>Click to upload your file</p>
+                    <p className="text-xs mt-1" style={{ color: muted }}>
+                      .py .js .ts .sql .r .java .cs and more
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {error && <p className="text-xs text-red-400 font-medium">{error}</p>}
@@ -509,7 +612,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
             <p style={{ fontSize: 12, fontWeight: 700, color: '#ef4444', marginBottom: 2 }}>
               Score too low · {result.overallScore.toFixed(1)}/100 · Minimum required: {minScore}/100
             </p>
-            <p style={{ fontSize: 12, color: '#ef4444', opacity: 0.8 }}>Review the feedback above, fix your code, and resubmit.</p>
+            <p style={{ fontSize: 12, color: '#ef4444', opacity: 0.8 }}>You can continue or try again with improved code -- no point awarded until the minimum is reached.</p>
           </div>
         </div>
       ) : (

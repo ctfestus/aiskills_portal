@@ -199,6 +199,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  try {
   const authHeader = req.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -310,6 +311,10 @@ export async function PUT(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    console.error('[api/forms] PUT unhandled error:', e?.message, e?.stack);
+    return NextResponse.json({ error: e?.message || 'Internal server error' }, { status: 500 });
+  }
 }
 
 export async function PATCH(req: NextRequest) {
