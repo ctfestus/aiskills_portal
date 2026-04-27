@@ -3,6 +3,7 @@ export const tenant = {
   orgName:         process.env.NEXT_PUBLIC_ORG_NAME          ?? '',
   appUrl:          process.env.NEXT_PUBLIC_APP_URL           ?? '',
   logoUrl:         process.env.NEXT_PUBLIC_LOGO_URL          ?? '',
+  logoDarkUrl:     process.env.NEXT_PUBLIC_LOGO_DARK_URL     ?? '',
   teamName:        process.env.NEXT_PUBLIC_TEAM_NAME         ?? '',
   senderName:      process.env.NEXT_PUBLIC_SENDER_NAME       ?? '',
   supportEmail:    process.env.NEXT_PUBLIC_SUPPORT_EMAIL     ?? '',

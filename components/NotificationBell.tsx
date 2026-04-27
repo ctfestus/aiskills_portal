@@ -12,6 +12,7 @@ interface Notification {
   type: 'response' | 'registration' | 'course_pass' | 'course_fail';
   title: string;
   body: string | null;
+  link: string | null;
   read: boolean;
   created_at: string;
 }
@@ -52,7 +53,7 @@ export default function NotificationBell({ color }: { color?: string } = {}) {
       .select('*')
       .eq('user_id', uid)
       .order('created_at', { ascending: false })
-      .limit(30);
+      .limit(4);
     if (data) setNotifs(data as Notification[]);
   }, []);
 
@@ -79,7 +80,7 @@ export default function NotificationBell({ color }: { color?: string } = {}) {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
         (payload) => {
-          setNotifs(prev => [payload.new as Notification, ...prev].slice(0, 30));
+          setNotifs(prev => [payload.new as Notification, ...prev].slice(0, 4));
         }
       )
       .subscribe();
@@ -173,7 +174,7 @@ export default function NotificationBell({ color }: { color?: string } = {}) {
               notifs.map(n => (
                 <Link
                   key={n.id}
-                  href={n.form_id ? `/dashboard/${n.form_id}?tab=responses` : '/dashboard'}
+                  href={n.link ?? (n.form_id ? `/dashboard/${n.form_id}?tab=responses` : '/dashboard')}
                   onClick={() => setOpen(false)}
                   className={`flex items-start gap-3 px-4 py-3.5 transition-colors cursor-pointer ${itemBg} ${!n.read ? unreadBg : ''}`}
                 >

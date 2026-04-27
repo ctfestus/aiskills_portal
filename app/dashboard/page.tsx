@@ -11,7 +11,7 @@ import {
   ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
   Users, Megaphone, Trophy, Menu, CheckCircle2, XCircle,
   UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
-  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw, Palette, Mail, Video,
+  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw, Palette, Mail, Video, PlayCircle,
 } from 'lucide-react';
 import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS, TextPositions, defaultTextPositions } from '@/components/CertificateTemplate';
 import Link from 'next/link';
@@ -27,13 +27,13 @@ import { TEMPLATES as SITE_TEMPLATES } from '@/lib/site-templates';
 
 // --- Design tokens ---
 const LIGHT_C = {
-  page:        'white',
-  nav:         'rgba(255,255,255,0.95)',
+  page:        '#F2F5FA',
+  nav:         'rgba(255,255,255,0.98)',
   navBorder:   'rgba(0,0,0,0.07)',
   card:        'white',
-  cardBorder:  'rgba(0,0,0,0.08)',
-  cardShadow:  '0 1px 3px rgba(0,0,0,0.06)',
-  hoverShadow: '0 8px 24px rgba(0,0,0,0.10)',
+  cardBorder:  'rgba(0,0,0,0.07)',
+  cardShadow:  '0 2px 12px rgba(0,0,0,0.08)',
+  hoverShadow: '0 8px 28px rgba(0,0,0,0.14)',
   green:       '#0e09dd',
   lime:        '#e0e0f5',
   cta:         '#0e09dd',
@@ -57,30 +57,30 @@ const LIGHT_C = {
   signOutHover:'rgba(239,68,68,0.08)',
 };
 const DARK_C = {
-  page:        '#111111',
-  nav:         'rgba(17,17,17,0.90)',
+  page:        '#17181E',
+  nav:         '#1E1F26',
   navBorder:   'rgba(255,255,255,0.07)',
-  card:        '#1c1c1c',
+  card:        '#1E1F26',
   cardBorder:  'rgba(255,255,255,0.07)',
-  cardShadow:  '0 1px 4px rgba(0,0,0,0.40)',
-  hoverShadow: '0 8px 24px rgba(0,0,0,0.50)',
+  cardShadow:  '0 4px 20px rgba(0,0,0,0.45)',
+  hoverShadow: '0 12px 36px rgba(0,0,0,0.60)',
   green:       '#3E93FF',
   lime:        'rgba(62,147,255,0.15)',
   cta:         '#3E93FF',
   ctaText:     'white',
-  text:        '#f0f0f0',
-  muted:       '#aaa',
-  faint:       '#555',
+  text:        '#A8B5C2',
+  muted:       '#A8B5C2',
+  faint:       '#6b7a89',
   divider:     'rgba(255,255,255,0.07)',
-  pill:        '#242424',
-  input:       '#1a1a1a',
-  skeleton:    '#2a2a2a',
+  pill:        '#2a2b34',
+  input:       '#2a2b34',
+  skeleton:    '#2a2b34',
   thumbBg:     '#16152a',
   overlayBtn:  'rgba(0,0,0,0.65)',
-  overlayText: '#f0f0f0',
+  overlayText: '#A8B5C2',
   pastOverlay: 'rgba(0,0,0,0.45)',
-  formBadgeBg: '#2a2a2a',
-  formBadgeText: '#aaa',
+  formBadgeBg: '#2a2b34',
+  formBadgeText: '#A8B5C2',
   deleteBg:    'rgba(239,68,68,0.12)',
   deleteText:  '#f87171',
   deleteBorder:'rgba(239,68,68,0.25)',
@@ -273,7 +273,7 @@ function ImportButton({ types, onImported, onBulkDone, C }: {
       <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFile} />
       <button onClick={() => { setState({ status: 'idle' }); fileRef.current?.click(); }} disabled={busy}
         className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
-        style={{ background: C.pill, color: state.status === 'done' ? C.green : C.muted }}>
+        style={{ background: C.card, color: state.status === 'done' ? C.green : C.muted }}>
         <Upload className="w-3.5 h-3.5" /> {label}
       </button>
       {state.status === 'error' && (
@@ -320,7 +320,7 @@ function PushButton({ type, id, C }: { type: string; id: string; C: typeof LIGHT
     <div className="relative group/push">
       <button onClick={push} disabled={state === 'pushing'}
         className="p-1.5 rounded-lg transition-all hover:opacity-70 disabled:opacity-40"
-        style={{ background: C.pill, color, border: `1px solid ${C.cardBorder}` }}
+        style={{ background: C.pill, color }}
         title="Push to other platform">
         <Send className="w-3.5 h-3.5" />
       </button>
@@ -370,7 +370,7 @@ function PushAllButton({ items, C }: { items: { type: string; id: string }[]; C:
   return (
     <button onClick={pushAll} disabled={busy || !items.length}
       className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
-      style={{ background: C.pill, color: state.status === 'done' ? C.green : C.muted }}>
+      style={{ background: C.card, color: state.status === 'done' ? C.green : C.muted }}>
       <Send className="w-3.5 h-3.5" /> {label}
     </button>
   );
@@ -558,7 +558,7 @@ function ShareButton({ form, shareMenuOpen, setShareMenuOpen }: { form: any; sha
     <div>
       <button ref={btnRef} onClick={handleClick}
         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-colors text-xs font-medium"
-        style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+        style={{ background: C.pill, color: C.muted }}>
         <Share2 className="w-3 h-3"/> Share
       </button>
       <AnimatePresence>
@@ -912,28 +912,23 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
       initial={{ opacity: 0, y: 24, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ delay: index * 0.06, duration: 0.4, ease: [0.22,1,0.36,1] }}
-      className="group flex flex-col rounded-2xl overflow-hidden"
-      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, transition: 'box-shadow 0.25s, transform 0.25s' }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = C.hoverShadow; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = C.cardShadow; e.currentTarget.style.transform = 'translateY(0)'; }}
+      className="group flex flex-col rounded-3xl p-3 gap-3"
+      style={{ background: C.card, transition: 'transform 0.25s' }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
     >
       {/* Thumbnail */}
       <div role="button" tabIndex={0}
         onClick={() => router.push(`/dashboard/${form.id}`)}
         onKeyDown={e => e.key === 'Enter' && router.push(`/dashboard/${form.id}`)}
-        className="relative h-44 w-full overflow-hidden cursor-pointer border-b"
-        style={{ background: C.thumbBg, borderColor: C.cardBorder }}>
+        className="relative h-44 w-full overflow-hidden cursor-pointer rounded-2xl flex-shrink-0"
+        style={{ background: C.thumbBg }}>
         {(form.config?.coverImage && !coverError)
           ? <img src={form.config.coverImage} alt={form.title} onError={() => setCoverError(true)} className="block w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"/>
           : <div className="w-full h-full flex items-center justify-center group-hover:scale-105 transition-transform duration-700 ease-out">
               <meta.Icon className="w-10 h-10 opacity-20" style={{ color: C.green }}/>
             </div>
         }
-        {/* Type badge */}
-        <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold backdrop-blur-sm"
-          style={{ background: meta.badgeBg, color: meta.badgeText }}>
-          <meta.Icon className="w-3 h-3"/> {meta.label}
-        </div>
         {/* Hover actions */}
         <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <Link href={`/dashboard/${form.id}?tab=settings`} onClick={e => e.stopPropagation()}
@@ -950,7 +945,7 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
       </div>
 
       {/* Content */}
-      <div className="p-5 flex-1 flex flex-col">
+      <div className="px-3 pb-3 flex-1 flex flex-col">
         <Link href={`/dashboard/${form.id}`} className="block">
           <h3 className="text-sm font-semibold truncate mb-1 hover:opacity-70 transition-opacity" style={{ color: C.text }}>{form.title}</h3>
         </Link>
@@ -966,15 +961,18 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
 
 
         <div className="flex items-center justify-between pt-3 border-t mt-auto" style={{ borderColor: C.divider }}>
-          <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: C.faint }}>
-            <BarChart3 className="w-3.5 h-3.5"/>
-            {form._response_count ?? 0} {type === 'course' ? 'attempts' : 'responses'}
-          </div>
+          {type !== 'course' && (
+            <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: C.faint }}>
+              <BarChart3 className="w-3.5 h-3.5"/>
+              {form._response_count ?? 0} responses
+            </div>
+          )}
+          {type === 'course' && <div/>}
           <div className="flex items-center gap-2">
             <ShareButton form={form} shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen}/>
             <button onClick={() => exportContent(form)} title="Export"
               className="p-1.5 rounded-lg transition-colors hover:opacity-70"
-              style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+              style={{ background: C.pill, color: C.muted }}>
               <Download className="w-3.5 h-3.5"/>
             </button>
             {SYNC_ENABLED && form.content_type === 'course' && (
@@ -982,7 +980,7 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
             )}
             <a href={`/${form.slug || form.id}`} target="_blank" rel="noreferrer"
               className="p-1.5 rounded-lg transition-colors hover:opacity-70"
-              style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }} title="View live">
+              style={{ background: C.pill, color: C.muted }} title="View live">
               <ExternalLink className="w-3.5 h-3.5"/>
             </a>
           </div>
@@ -1137,12 +1135,12 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
                 <ShareButton form={form} shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen}/>
                 <button onClick={() => exportContent(form)} title="Export"
                   className="p-1 rounded-md hover:opacity-60 transition-opacity"
-                  style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+                  style={{ background: C.pill, color: C.muted }}>
                   <Download className="w-3.5 h-3.5"/>
                 </button>
                 <a href={`/${form.slug || form.id}`} target="_blank" rel="noreferrer"
                   className="p-1 rounded-md hover:opacity-60 transition-opacity"
-                  style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+                  style={{ background: C.pill, color: C.muted }}>
                   <ExternalLink className="w-3.5 h-3.5"/>
                 </a>
               </div>
@@ -1156,14 +1154,14 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
 
 // --- Sidebar navigation ---
 const NAV_ITEMS = [
-  { id: 'courses',       label: 'Courses',       Icon: BookOpen,      adminOnly: false },
+  { id: 'courses',       label: 'Courses',       Icon: Video,         adminOnly: false },
   { id: 'assignments',   label: 'Assignments',    Icon: ClipboardList, adminOnly: false },
   { id: 'events',        label: 'Events',         Icon: CalendarDays,  adminOnly: false },
   { id: 'community',     label: 'Community',      Icon: Users,         adminOnly: false },
   { id: 'announcements', label: 'Announcements',  Icon: Megaphone,     adminOnly: false },
   { id: 'virtual_experiences',  label: 'Virtual Experiences',  Icon: Briefcase,   adminOnly: false },
   { id: 'schedule',         label: 'Schedule',         Icon: CalendarDays, adminOnly: false },
-  { id: 'recordings',      label: 'Recordings',       Icon: Video,        adminOnly: false },
+  { id: 'recordings',      label: 'Recordings',       Icon: PlayCircle,   adminOnly: false },
   { id: 'reports',       label: 'Reports',        Icon: BarChart3,     adminOnly: false },
   { id: 'learning_paths', label: 'Learning Paths',  Icon: BookOpen,      adminOnly: false },
   { id: 'certificates',  label: 'Certificates',   Icon: Award,         adminOnly: false },
@@ -1177,6 +1175,13 @@ const NAV_ITEMS = [
 type SectionId = typeof NAV_ITEMS[number]['id'];
 
 const COMING_SOON: SectionId[] = [];
+
+const NAV_GROUPS: { label: string; items: SectionId[] }[] = [
+  { label: 'Content',    items: ['courses', 'assignments', 'virtual_experiences', 'learning_paths'] },
+  { label: 'Engagement', items: ['events', 'community', 'announcements', 'schedule', 'recordings'] },
+  { label: 'Insights',   items: ['reports', 'tracking', 'leaderboard', 'certificates'] },
+  { label: 'Admin',      items: ['cohorts', 'payments', 'branding', 'site'] },
+];
 
 // --- Coming Soon placeholder ---
 function ComingSoon({ id, C }: { id: SectionId; C: typeof LIGHT_C }) {
@@ -2084,7 +2089,7 @@ function VirtualExperiencesManageSection({ C, forms, setFormToDelete, onDuplicat
           const color = GP_IND_COLORS[cfg.industry] || '#6366f1';
           const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
           return (
-            <div key={form.id} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+            <div key={form.id} className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
               {cfg.coverImage
                 ? <img src={cfg.coverImage} alt="" className="w-full h-28 object-cover" />
                 : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${color}18` }}>
@@ -2922,9 +2927,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
         {assignments.map((a, i) => (
           <motion.div key={a.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
             className="flex items-center gap-4 p-4 rounded-2xl cursor-pointer group"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}
-            onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
-            onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
+            style={{ background: C.card }}>
             {/* Cover / letter */}
             <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center text-xl font-black"
               style={{ background: C.thumbBg, color: C.green }}>
@@ -4891,10 +4894,7 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight" style={{ color: C.text }}>Learning Paths</h2>
-          <p className="text-xs mt-1" style={{ color: C.faint }}>Group courses and virtual experiences into structured learning journeys.</p>
-        </div>
+        <p className="text-sm" style={{ color: C.faint }}>Group courses and virtual experiences into structured learning journeys.</p>
         <button onClick={() => setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft', next_path_id: null })}
           className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity"
           style={{ background: C.cta, color: C.ctaText }}>
@@ -4920,7 +4920,7 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
           {paths.map((path: any) => {
             const assignedCohortNames = (path.cohort_ids ?? []).map((id: string) => cohorts.find((c: any) => c.id === id)?.name).filter(Boolean);
             return (
-              <div key={path.id} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+              <div key={path.id} className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
                 {path.cover_image
                   ? <img src={path.cover_image} alt="" className="w-full h-28 object-cover"/>
                   : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${C.green}12` }}>
@@ -5495,6 +5495,7 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
     orgName:         '',
     appUrl:          '',
     logoUrl:         '',
+    logoDarkUrl:     '',
     faviconUrl:      '',
     emailBannerUrl:  '',
     brandColor:      '',
@@ -5516,10 +5517,12 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
   const [logoUploading, setLogoUploading]               = useState(false);
+  const [logoDarkUploading, setLogoDarkUploading]       = useState(false);
   const [faviconUploading, setFaviconUploading]         = useState(false);
   const [emailBannerUploading, setEmailBannerUploading] = useState(false);
   const [msg, setMsg]                 = useState<{ ok: boolean; text: string } | null>(null);
   const logoInputRef                  = useRef<HTMLInputElement>(null);
+  const logoDarkInputRef              = useRef<HTMLInputElement>(null);
   const faviconInputRef               = useRef<HTMLInputElement>(null);
   const emailBannerInputRef           = useRef<HTMLInputElement>(null);
 
@@ -5535,6 +5538,7 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
           orgName:         data.org_name         ?? '',
           appUrl:          data.app_url          ?? '',
           logoUrl:         data.logo_url         ?? '',
+          logoDarkUrl:     data.logo_dark_url    ?? '',
           faviconUrl:      data.favicon_url      ?? '',
           emailBannerUrl:  data.email_banner_url ?? '',
           brandColor:      data.brand_color      ?? '',
@@ -5592,6 +5596,20 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
       setTimeout(() => setMsg(null), 4000);
     } finally {
       setLogoUploading(false);
+    }
+  };
+
+  const handleLogoDarkUpload = async (file: File) => {
+    setLogoDarkUploading(true);
+    try {
+      const raw = await uploadToCloudinary(file, 'branding', 'branding/logo-dark');
+      const url = raw.replace('/upload/f_auto,q_auto/', '/upload/');
+      setForm(prev => ({ ...prev, logoDarkUrl: url }));
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message ?? 'Dark logo upload failed' });
+      setTimeout(() => setMsg(null), 4000);
+    } finally {
+      setLogoDarkUploading(false);
     }
   };
 
@@ -5685,6 +5703,37 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
             </button>
           </div>
           <p className="text-[11px]" style={{ color: C.faint }}>Uploaded to Cloudinary. PNG, SVG or JPG recommended.</p>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-xs font-semibold" style={{ color: C.muted }}>Logo (Dark Mode)</label>
+          <input ref={logoDarkInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoDarkUpload(f); e.target.value = ''; }} />
+          <div className="flex items-center gap-3">
+            {form.logoDarkUrl ? (
+              <img src={form.logoDarkUrl} alt="Dark logo preview" className="h-10 w-auto max-w-[120px] rounded-lg object-contain"
+                style={{ background: '#1E1F26', border: `1px solid ${C.cardBorder}`, padding: 4 }} />
+            ) : (
+              <div className="h-10 w-16 rounded-lg flex items-center justify-center"
+                style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                <span className="text-[10px]" style={{ color: C.faint }}>No logo</span>
+              </div>
+            )}
+            <button type="button" onClick={() => logoDarkInputRef.current?.click()} disabled={logoDarkUploading}
+              className="px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80 disabled:opacity-50 flex items-center gap-1.5"
+              style={{ background: C.pill, border: `1px solid ${C.cardBorder}`, color: C.text }}>
+              {logoDarkUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Upload className="w-3.5 h-3.5"/>}
+              {logoDarkUploading ? 'Uploading…' : form.logoDarkUrl ? 'Replace' : 'Upload Dark Logo'}
+            </button>
+            {form.logoDarkUrl && (
+              <button type="button" onClick={() => setForm(prev => ({ ...prev, logoDarkUrl: '' }))}
+                className="px-3 py-2 rounded-xl text-xs transition-opacity hover:opacity-80"
+                style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}` }}>
+                Remove
+              </button>
+            )}
+          </div>
+          <p className="text-[11px]" style={{ color: C.faint }}>Optional. Used in place of the main logo when dark mode is active. If not set, the main logo is used.</p>
         </div>
 
         <div className="space-y-1">
@@ -6632,11 +6681,23 @@ function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
 }
 
 // --- Section content router ---
+const COURSES_PAGE_SIZE = 12;
+
+function getPageNums(current: number, total: number): (number | null)[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  if (current <= 4) return [1, 2, 3, 4, 5, null, total];
+  if (current >= total - 3) return [1, null, total - 4, total - 3, total - 2, total - 1, total];
+  return [1, null, current - 1, current, current + 1, null, total];
+}
+
 function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFormToDelete, onDuplicated, C }: {
   section: SectionId; forms: any[]; shareMenuOpen: string | null;
   setShareMenuOpen: (id: string | null) => void; setFormToDelete: (id: string) => void;
   onDuplicated: (newForm: any) => void; C: typeof LIGHT_C;
 }) {
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [section]);
+
   if (COMING_SOON.includes(section)) return <ComingSoon id={section} C={C} />;
   if (section === 'branding')     return <BrandingSection C={C} />;
   if (section === 'site')         return <SiteSettingsSection C={C} />;
@@ -6678,7 +6739,7 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
     const href = section === 'courses' ? '/create?type=course' : '/create?type=event';
     const label = section === 'courses' ? 'course' : 'event';
     return (
-      <div className="text-center py-24 rounded-3xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+      <div className="text-center py-24 rounded-3xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
         <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: C.lime }}>
           {section === 'courses' ? <BookOpen className="w-7 h-7" style={{ color: C.green }}/> : <CalendarDays className="w-7 h-7" style={{ color: C.green }}/>}
         </div>
@@ -6706,12 +6767,55 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
     );
   }
 
+  const totalPages = Math.ceil(filtered.length / COURSES_PAGE_SIZE);
+  const paged = filtered.slice((page - 1) * COURSES_PAGE_SIZE, page * COURSES_PAGE_SIZE);
+  const pageNums = getPageNums(page, totalPages);
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-      {filtered.map((form, idx) => (
-        <FormCard key={form.id} form={form} index={idx}
-          shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen} setFormToDelete={setFormToDelete}/>
-      ))}
+    <div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {paged.map((form, idx) => (
+          <FormCard key={form.id} form={form} index={(page - 1) * COURSES_PAGE_SIZE + idx}
+            shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen} setFormToDelete={setFormToDelete}/>
+        ))}
+      </div>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-1.5 mt-10">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-30 transition-all hover:opacity-80"
+            style={{ background: C.card, color: C.muted, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}
+          >
+            Previous
+          </button>
+          {pageNums.map((pg, i) =>
+            pg === null
+              ? <span key={`ellipsis-${i}`} className="w-9 text-center text-sm" style={{ color: C.faint }}>...</span>
+              : <button
+                  key={pg}
+                  onClick={() => setPage(pg)}
+                  className="w-9 h-9 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
+                  style={{
+                    background: page === pg ? C.cta : C.card,
+                    color: page === pg ? C.ctaText : C.muted,
+                    border: `1px solid ${page === pg ? C.cta : C.cardBorder}`,
+                    boxShadow: page === pg ? 'none' : C.cardShadow,
+                  }}
+                >
+                  {pg}
+                </button>
+          )}
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-30 transition-all hover:opacity-80"
+            style={{ background: C.card, color: C.muted, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -6724,7 +6828,7 @@ export default function DashboardPage() {
   const C = useC();
   const router = useRouter();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl } = useTenant();
+  const { logoUrl, logoDarkUrl } = useTenant();
   const [forms, setForms]           = useState<any[]>(_cache.forms ?? []);
   const [loading, setLoading]       = useState(_cache.forms === null);
   const [user, setUser]             = useState<any>(_cache.user ?? null);
@@ -6922,35 +7026,28 @@ export default function DashboardPage() {
   const courseCount = forms.filter(f => getFormType(f) === 'course').length;
   const eventCount  = forms.filter(f => getFormType(f) === 'event').length;
 
-  const sectionCount = (id: SectionId) => {
-    if (id === 'courses') return courseCount;
-    if (id === 'events')  return eventCount;
-    if (id === 'reports') return forms.length;
-    return null;
-  };
-
   return (
     <div className="min-h-screen flex flex-col" style={{ background: C.page }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'); *{font-family:'Inter',sans-serif;}`}</style>
 
       {/* -- Navbar -- */}
       <nav className="sticky top-0 z-30 border-b h-14 flex items-center justify-between px-4 md:px-6 backdrop-blur-md flex-shrink-0"
-        style={{ background: theme === 'dark' ? C.nav : '#0e09dd', borderColor: theme === 'dark' ? C.navBorder : '#0b07b3' }}>
+        style={{ background: C.nav, borderColor: C.navBorder }}>
         <div className="flex items-center gap-3">
           {/* Mobile sidebar toggle */}
           <button onClick={() => setSidebarOpen(o => !o)}
-            className="md:hidden p-2 rounded-xl transition-colors" style={{ color: theme === 'dark' ? C.faint : 'white' }}>
+            className="md:hidden p-2 rounded-xl transition-colors" style={{ color: C.faint }}>
             <Menu className="w-5 h-5"/>
           </button>
           <Link href="/dashboard" className="flex items-center gap-2">
-            <img src={logoUrl || undefined} alt="" className="h-8 w-auto" />
+            <img src={(theme === 'dark' ? logoDarkUrl || logoUrl : logoUrl) || undefined} alt="" className="h-8 w-auto" />
           </Link>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={toggleTheme} className="p-2 rounded-xl transition-colors flex-shrink-0" style={{ color: theme === 'dark' ? C.faint : 'white' }}>
+          <button onClick={toggleTheme} className="p-2 rounded-xl transition-colors flex-shrink-0" style={{ color: C.faint }}>
             {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
-          <NotificationBell color={theme === 'dark' ? undefined : 'white'}/>
+          <NotificationBell/>
           <ProfileMenu user={user} profile={profile} onSignOut={handleSignOut}/>
         </div>
       </nav>
@@ -6969,13 +7066,13 @@ export default function DashboardPage() {
 
         {/* -- Sidebar -- */}
         <aside
-          className={`fixed md:sticky top-14 z-20 md:z-10 h-[calc(100vh-56px)] flex-shrink-0 flex flex-col border-r overflow-y-auto transition-transform duration-300
+          className={`fixed md:sticky top-14 z-20 md:z-10 h-[calc(100vh-56px)] flex-shrink-0 flex flex-col transition-transform duration-300
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
-          style={{ width: 220, background: C.nav, borderColor: C.navBorder }}>
+          style={{ width: 248, background: C.nav }}>
 
           {/* User info */}
-          <div className="px-4 pt-5 pb-4 border-b" style={{ borderColor: C.divider }}>
-            <div className="flex items-center gap-2.5">
+          <div className="px-5 pt-5 pb-4 border-b" style={{ borderColor: C.divider }}>
+            <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold flex-shrink-0"
                 style={{ background: C.lime, color: C.green }}>
                 {profile?.avatar_url
@@ -6984,61 +7081,73 @@ export default function DashboardPage() {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{profile?.full_name || profile?.name || user?.email?.split('@')[0]}</p>
-                <p className="text-[11px] truncate" style={{ color: C.faint, textTransform: 'capitalize' }}>{profile?.role || 'Instructor'}</p>
+                <p className="text-[11px] truncate capitalize" style={{ color: C.faint }}>{profile?.role || 'Instructor'}</p>
               </div>
             </div>
           </div>
 
-          {/* Nav items */}
-          <nav className="flex-1 px-3 py-4 space-y-0.5">
-            {NAV_ITEMS.filter(item => !item.adminOnly || profile?.role === 'admin').map(item => {
-              const isActive = activeSection === item.id;
-              const count    = sectionCount(item.id);
-              const isSoon   = COMING_SOON.includes(item.id);
+          {/* Nav groups */}
+          <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+            {NAV_GROUPS.map(group => {
+              const visibleItems = group.items
+                .map(id => NAV_ITEMS.find(n => n.id === id)!)
+                .filter(item => item && (!item.adminOnly || profile?.role === 'admin'));
+              if (!visibleItems.length) return null;
               return (
-                <button key={item.id}
-                  onClick={() => { goSection(item.id); setSidebarOpen(false); }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left"
-                  style={{
-                    background: isActive ? C.lime : 'transparent',
-                    color: isActive ? C.green : C.muted,
-                  }}
-                  onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = C.pill; }}
-                  onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                >
-                  <item.Icon className="w-4 h-4 flex-shrink-0"/>
-                  <span className="flex-1 truncate">{item.label}</span>
-                  {count !== null && count > 0 && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center"
-                      style={{ background: isActive ? C.green : C.pill, color: isActive ? C.ctaText : C.faint }}>
-                      {count}
-                    </span>
-                  )}
-                  {isSoon && (
-                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
-                      style={{ background: 'rgba(124,58,237,0.12)', color: '#7c3aed' }}>
-                      Soon
-                    </span>
-                  )}
-                </button>
+                <div key={group.label}>
+                  <p className="px-3 mb-2 text-[10px] font-semibold tracking-widest uppercase"
+                    style={{ color: C.faint }}>{group.label}</p>
+                  <div className="space-y-0.5">
+                    {visibleItems.map(item => {
+                      const isActive = activeSection === item.id;
+                      const isSoon = COMING_SOON.includes(item.id);
+                      return (
+                        <button key={item.id}
+                          onClick={() => { goSection(item.id); setSidebarOpen(false); }}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors text-left"
+                          style={{ color: isActive ? C.green : C.muted }}
+                          onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.text; }}
+                          onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.muted; }}
+                        >
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
+                            style={{ background: isActive ? `${C.green}18` : C.pill }}>
+                            <item.Icon className="w-4 h-4"
+                              style={{ color: isActive ? C.green : theme === 'dark' ? 'rgba(255,255,255,0.35)' : '#9ca3af' }}/>
+                          </div>
+                          <span className="flex-1 truncate font-normal">{item.label}</span>
+                          {isSoon && (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
+                              style={{ background: 'rgba(124,58,237,0.12)', color: '#7c3aed' }}>
+                              Soon
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </nav>
 
           {/* Sidebar footer */}
-          <div className="px-3 pb-4 pt-2 border-t space-y-0.5" style={{ borderColor: C.divider }}>
+          <div className="px-3 pb-4 pt-2 border-t" style={{ borderColor: C.divider }}>
             <Link href="/settings"
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
+              className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-normal transition-colors"
               style={{ color: C.muted }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.pill; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-              <Settings className="w-4 h-4 flex-shrink-0" style={{ color: C.faint }}/> Settings
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = C.text; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = C.muted; }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: C.pill }}>
+                <Settings className="w-4 h-4" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.35)' : '#9ca3af' }}/>
+              </div>
+              Settings
             </Link>
           </div>
         </aside>
 
         {/* -- Main content -- */}
-        <main className="flex-1 min-w-0 px-5 md:px-8 py-7">
+        <main className="flex-1 min-w-0 px-6 md:px-10 py-8">
           <motion.div
             key={activeSection}
             initial={{ opacity: 0, y: 8 }}
@@ -7046,11 +7155,11 @@ export default function DashboardPage() {
             transition={{ duration: 0.2 }}
           >
             {/* Section header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-8">
               <div>
-                <h1 className="text-xl font-bold tracking-tight" style={{ color: C.text }}>{activeItem.label}</h1>
+                <h1 className="text-2xl font-bold tracking-tight" style={{ color: C.text }}>{activeItem.label}</h1>
                 {(activeSection === 'courses' || activeSection === 'events') && (
-                  <p className="text-xs mt-0.5" style={{ color: C.faint }}>
+                  <p className="text-sm mt-1" style={{ color: C.faint }}>
                     {activeSection === 'courses' ? `${courseCount} course${courseCount !== 1 ? 's' : ''}` : `${eventCount} event${eventCount !== 1 ? 's' : ''}`}
                   </p>
                 )}
@@ -7061,7 +7170,7 @@ export default function DashboardPage() {
                     <button
                       onClick={() => exportAllInSection(forms, 'course', 'courses_bulk')}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80"
-                      style={{ background: C.pill, color: C.muted }}>
+                      style={{ background: C.card, color: C.muted }}>
                       <Download className="w-3.5 h-3.5" /> Export All
                     </button>
                   )}

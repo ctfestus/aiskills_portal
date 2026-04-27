@@ -2354,7 +2354,7 @@ export function CourseTaker({
                                   <>
                                     <p className="text-[12.5px] font-semibold leading-snug"
                                       style={{ color: isCurrent ? (isDark ? '#f0f0f0' : '#111') : isDark ? '#777' : '#888' }}>
-                                      Test Your Knowledge
+                                      {REVIEW_TYPES.includes(q.type as QuestionType) ? 'Project' : 'Test Your Knowledge'}
                                     </p>
                                     <div className="flex items-center gap-1.5 mt-1">
                                       <span className="text-[11px] font-medium" style={{ color: isDark ? '#555' : '#bbb' }}>
@@ -2362,6 +2362,9 @@ export function CourseTaker({
                                           : q.type === 'arrange' ? 'Arrange in order'
                                           : q.type === 'code' ? 'Code snippet'
                                           : q.type === 'image' ? 'Image choice'
+                                          : q.type === 'code_review' ? 'AI Code Review'
+                                          : q.type === 'excel_review' ? 'AI Excel Review'
+                                          : q.type === 'dashboard_critique' ? 'AI Dashboard Review'
                                           : 'Multiple choice'}
                                       </span>
                                       <span style={{ color: isDark ? '#333' : '#ddd' }}>·</span>
@@ -2787,6 +2790,37 @@ export function CourseTaker({
                         );
                       })}
                     </div>
+                  )}
+
+                  {/* -- Lesson content for review questions -- */}
+                  {REVIEW_TYPES.includes(questionType) && currentQuestion.lesson && (currentQuestion.lesson.body || currentQuestion.lesson.videoUrl || currentQuestion.lesson.imageUrl) && (
+                    <>
+                      {currentQuestion.lesson.videoUrl && getVideoEmbedUrl(currentQuestion.lesson.videoUrl) && (
+                        <div className="mb-4 rounded-lg overflow-hidden" style={getVideoEmbedUrl(currentQuestion.lesson.videoUrl)!.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9' }}>
+                          <iframe
+                            src={getVideoEmbedUrl(currentQuestion.lesson.videoUrl)!}
+                            className="w-full h-full border-0"
+                            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
+                            allowFullScreen
+                          />
+                        </div>
+                      )}
+                      {currentQuestion.lesson.imageUrl && (
+                        <div className="mb-4 rounded-lg overflow-hidden">
+                          <img src={currentQuestion.lesson.imageUrl} alt="Lesson illustration" className="w-full object-cover" />
+                        </div>
+                      )}
+                      {currentQuestion.lesson.body && (
+                        <div
+                          className={`mb-6 prose prose-sm max-w-none [font-size:14.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
+                            ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
+                            : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
+                          }`}
+                          style={{ color: isDark ? '#d4d4d8' : '#3f3f46', ...fontStyle }}
+                          dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentQuestion.lesson.body) }}
+                        />
+                      )}
+                    </>
                   )}
 
                   {/* -- AI Review players -- */}

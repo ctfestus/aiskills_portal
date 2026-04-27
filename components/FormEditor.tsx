@@ -2243,11 +2243,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
 
                         {isExpanded && <div className="p-3.5 space-y-3">
                           <div className="flex flex-wrap gap-2">
-                            {!q.lessonOnly && (<>
+                            {!q.lessonOnly && ['multiple_choice', 'code'].includes(qType) && (<>
                             <button
                               type="button"
                               onClick={() => generateQuestionAsset(q, 'generate_distractors')}
-                              disabled={!!aiLoadingLabel || !['multiple_choice', 'code'].includes(qType)}
+                              disabled={!!aiLoadingLabel}
                               className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40"
                               style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
                             >

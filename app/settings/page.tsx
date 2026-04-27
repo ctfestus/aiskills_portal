@@ -333,7 +333,7 @@ function SelectField({ value, onChange, options, placeholder }: { value: string;
 export default function SettingsPage() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl } = useTenant();
+  const { logoUrl, logoDarkUrl } = useTenant();
   const router = useRouter();
   const [user, setUser]       = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -512,24 +512,24 @@ export default function SettingsPage() {
 
       {/* Navbar */}
       <nav className="sticky top-0 z-20 border-b px-6 md:px-10 h-14 flex items-center justify-between"
-        style={{ background: '#06069d', borderColor: 'rgba(255,255,255,0.12)' }}>
+        style={{ background: C.nav, borderColor: C.navBorder }}>
         <div className="flex items-center gap-3">
-          <button onClick={() => router.back()} className="p-1.5 rounded-lg transition-opacity hover:opacity-70" style={{ color: 'rgba(255,255,255,0.8)' }}>
+          <button onClick={() => router.back()} className="p-1.5 rounded-lg transition-opacity hover:opacity-70" style={{ color: C.muted }}>
             <ArrowLeft className="w-5 h-5"/>
           </button>
           <img
-            src={logoUrl || undefined}
+            src={(theme === 'dark' ? logoDarkUrl || logoUrl : logoUrl) || undefined}
             alt=""
             className="h-7 w-auto"
           />
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={toggleTheme} className="p-2 rounded-xl transition-opacity hover:opacity-70" title="Toggle theme" style={{ color: 'rgba(255,255,255,0.8)' }}>
+          <button onClick={toggleTheme} className="p-2 rounded-xl transition-opacity hover:opacity-70" title="Toggle theme" style={{ color: C.muted }}>
             {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
           <button onClick={handleSave} disabled={saving}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-60 hover:opacity-90"
-            style={{ background: saved ? '#16a34a' : 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.25)' }}>
+            style={{ background: saved ? '#16a34a' : C.pill, color: saved ? 'white' : C.text, border: `1px solid ${saved ? 'transparent' : C.inputBorder}` }}>
             {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : saved ? <Check className="w-4 h-4"/> : null}
             {saving ? 'Saving…' : saved ? 'Saved!' : 'Save changes'}
           </button>

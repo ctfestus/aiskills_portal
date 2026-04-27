@@ -20,6 +20,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           orgName:      d.org_name      || tenant.orgName,
           appUrl:       d.app_url       || tenant.appUrl,
           logoUrl:      d.logo_url      || tenant.logoUrl,
+          logoDarkUrl:  d.logo_dark_url || tenant.logoDarkUrl,
           teamName:     d.team_name     || tenant.teamName,
           senderName:   d.sender_name   || tenant.senderName,
           supportEmail: d.support_email || tenant.supportEmail,

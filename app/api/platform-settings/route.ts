@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
   if (body.orgName        !== undefined) record.org_name        = body.orgName.trim()        || null;
   if (body.appUrl         !== undefined) record.app_url         = safeUrl(body.appUrl);
   if (body.logoUrl        !== undefined) record.logo_url        = safeUrl(body.logoUrl);
+  if (body.logoDarkUrl    !== undefined) record.logo_dark_url   = safeUrl(body.logoDarkUrl);
   if (body.brandColor     !== undefined) record.brand_color     = body.brandColor.trim()     || null;
   if (body.senderName     !== undefined) record.sender_name     = body.senderName.trim()     || null;
   if (body.teamName       !== undefined) record.team_name       = body.teamName.trim()       || null;

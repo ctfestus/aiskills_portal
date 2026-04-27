@@ -289,7 +289,7 @@ const downloadIcs = (title: string, date: string, time: string, location: string
 };
 
 export default function PublicFormPage() {
-  const { logoUrl } = useTenant();
+  const { logoUrl, logoDarkUrl } = useTenant();
   const { id } = useParams();
   const [form, setForm] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -832,16 +832,16 @@ export default function PublicFormPage() {
       <div style={{ minHeight: '100vh', background: gp.bg, color: gp.title, fontFamily: 'var(--font-sans), Inter, sans-serif' }}>
 
         {/* -- Sticky nav -- */}
-        <nav style={{ position: 'sticky', top: 0, zIndex: 30, backdropFilter: 'blur(14px)', background: isLight ? '#0e09dd' : 'rgba(13,13,13,0.88)', borderBottom: `1px solid ${isLight ? '#0b07b3' : gp.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 56 }}>
+        <nav style={{ position: 'sticky', top: 0, zIndex: 30, backdropFilter: 'blur(14px)', background: isLight ? 'rgba(255,255,255,0.98)' : 'rgba(13,13,13,0.88)', borderBottom: `1px solid ${isLight ? 'rgba(0,0,0,0.07)' : gp.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 56 }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-            <img src={logoUrl || undefined} alt="" style={{ height: 28, width: 'auto' }} />
+            <img src={(isLight ? logoUrl : logoDarkUrl || logoUrl) || undefined} alt="" style={{ height: 28, width: 'auto' }} />
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {isShortCourse
-              ? <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: isLight ? 'rgba(255,255,255,0.15)' : `${indColor}18`, color: isLight ? '#fff' : indColor, fontWeight: 700, letterSpacing: '0.02em' }}>Short Course</span>
+              ? <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: `${indColor}18`, color: indColor, fontWeight: 700, letterSpacing: '0.02em' }}>Short Course</span>
               : <>
-                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: isLight ? 'rgba(255,255,255,0.15)' : `${indColor}18`, color: isLight ? '#fff' : indColor, fontWeight: 700, textTransform: 'capitalize', letterSpacing: '0.02em' }}>{config.industry}</span>
-                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: isLight ? 'rgba(255,255,255,0.1)' : gp.divider, color: isLight ? 'rgba(255,255,255,0.8)' : gp.muted, fontWeight: 600, textTransform: 'capitalize' }}>{config.difficulty}</span>
+                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: `${indColor}18`, color: indColor, fontWeight: 700, textTransform: 'capitalize', letterSpacing: '0.02em' }}>{config.industry}</span>
+                  <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: gp.divider, color: gp.muted, fontWeight: 600, textTransform: 'capitalize' }}>{config.difficulty}</span>
                 </>
             }
           </div>
@@ -1048,14 +1048,14 @@ export default function PublicFormPage() {
         <style>{googleFontImport}</style>
 
         {/* Sticky nav */}
-        <nav style={{ position: 'sticky', top: 0, zIndex: 30, backdropFilter: 'blur(14px)', background: dark ? 'rgba(13,13,13,0.88)' : '#0e09dd', borderBottom: `1px solid ${dark ? cp.border : '#0b07b3'}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 56 }}>
+        <nav style={{ position: 'sticky', top: 0, zIndex: 30, backdropFilter: 'blur(14px)', background: dark ? 'rgba(13,13,13,0.88)' : 'rgba(255,255,255,0.98)', borderBottom: `1px solid ${dark ? cp.border : 'rgba(0,0,0,0.07)'}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 56 }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-            <img src={logoUrl || undefined} alt="" style={{ height: 28, width: 'auto' }} />
+            <img src={(!dark ? logoUrl : logoDarkUrl || logoUrl) || undefined} alt="" style={{ height: 28, width: 'auto' }} />
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.15)', color: '#fff', fontWeight: 700, letterSpacing: '0.02em' }}>Course</span>
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: cp.divider, color: cp.muted, fontWeight: 700, letterSpacing: '0.02em' }}>Course</span>
             {config.difficulty && (
-              <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: dark ? cp.divider : 'rgba(255,255,255,0.1)', color: dark ? cp.muted : 'rgba(255,255,255,0.8)', fontWeight: 600, textTransform: 'capitalize' as const }}>{config.difficulty}</span>
+              <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 999, background: cp.divider, color: cp.muted, fontWeight: 600, textTransform: 'capitalize' as const }}>{config.difficulty}</span>
             )}
           </div>
         </nav>

@@ -846,7 +846,7 @@ function SortableFieldCard({ f, isExpanded, toggleExpand, onRemove, onUpdate, in
 export default function Page() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl } = useTenant();
+  const { logoUrl, logoDarkUrl } = useTenant();
   const router = useRouter();
   const inputStyle = { background: C.input, border: `1px solid ${C.inputBorder}`, color: C.text };
   const labelStyle = { color: C.faint };
@@ -1656,16 +1656,16 @@ const [isSaving, setIsSaving] = useState(false);
   if (!formConfig) {
     return (
       <main className="min-h-screen flex flex-col" style={{ background: C.page, color: C.text }}>
-        <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-4 sm:py-5 backdrop-blur-sm" style={{ borderBottom: `1px solid ${theme === 'dark' ? C.navBorder : '#0b07b3'}`, background: theme === 'dark' ? C.nav : '#0e09dd' }}>
+        <nav className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-4 sm:py-5 backdrop-blur-sm" style={{ borderBottom: `1px solid ${C.navBorder}`, background: C.nav }}>
           <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-            <img src={logoUrl || undefined} alt="" className="h-7 w-auto" />
+            <img src={(theme === 'dark' ? logoDarkUrl || logoUrl : logoUrl) || undefined} alt="" className="h-7 w-auto" />
           </Link>
           {user ? (
-            <Link href="/dashboard" className="flex items-center gap-2 text-sm transition-colors hover:opacity-60" style={{ color: theme === 'dark' ? C.muted : 'rgba(255,255,255,0.8)' }}>
+            <Link href="/dashboard" className="flex items-center gap-2 text-sm transition-colors hover:opacity-60" style={{ color: C.muted }}>
               <LayoutDashboard className="w-4 h-4" /> Dashboard
             </Link>
           ) : (
-            <Link href="/auth" className="text-sm transition-colors hover:opacity-60" style={{ color: theme === 'dark' ? C.muted : 'rgba(255,255,255,0.8)' }}>Sign in</Link>
+            <Link href="/auth" className="text-sm transition-colors hover:opacity-60" style={{ color: C.muted }}>Sign in</Link>
           )}
         </nav>
 
@@ -1771,24 +1771,24 @@ const [isSaving, setIsSaving] = useState(false);
   return (
     <main className="min-h-screen flex flex-col" style={{ background: C.page }}>
       {/* -- Editor header: Logo + Dashboard link + Save -- */}
-      <header className="sticky top-0 z-30 backdrop-blur-md" style={{ background: theme === 'dark' ? C.nav : '#0e09dd', borderBottom: `1px solid ${theme === 'dark' ? C.navBorder : '#0b07b3'}` }}>
+      <header className="sticky top-0 z-30 backdrop-blur-md" style={{ background: C.nav, borderBottom: `1px solid ${C.navBorder}` }}>
         <div className="flex items-center justify-between px-4 sm:px-6 py-3">
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-70 transition-opacity">
-              <img src={logoUrl || undefined} alt="" className="h-6 w-auto" />
+              <img src={(theme === 'dark' ? logoDarkUrl || logoUrl : logoUrl) || undefined} alt="" className="h-6 w-auto" />
               </Link>
-            <div className="w-px h-4" style={{ background: theme === 'dark' ? C.divider : 'rgba(255,255,255,0.2)' }} />
-            <Link href="/dashboard" className="flex items-center gap-1.5 text-xs transition-colors hover:opacity-60" style={{ color: theme === 'dark' ? C.muted : 'rgba(255,255,255,0.8)' }}>
+            <div className="w-px h-4" style={{ background: C.divider }} />
+            <Link href="/dashboard" className="flex items-center gap-1.5 text-xs transition-colors hover:opacity-60" style={{ color: C.muted }}>
               <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
             </Link>
             {savedFormId && formConfig?.title && (
               <>
-                <span className="text-xs" style={{ color: theme === 'dark' ? C.faint : 'rgba(255,255,255,0.5)' }}>/</span>
-                <span className="text-xs truncate max-w-[180px]" style={{ color: theme === 'dark' ? C.muted : 'rgba(255,255,255,0.8)' }}>{formConfig.title}</span>
+                <span className="text-xs" style={{ color: C.faint }}>/</span>
+                <span className="text-xs truncate max-w-[180px]" style={{ color: C.muted }}>{formConfig.title}</span>
               </>
             )}
           </div>
-          <button onClick={toggleTheme} type="button" className="p-2 rounded-lg transition-colors ff-hover" title="Toggle theme" style={{ color: theme === 'dark' ? C.faint : 'white' }}>
+          <button onClick={toggleTheme} type="button" className="p-2 rounded-lg transition-colors ff-hover" title="Toggle theme" style={{ color: C.faint }}>
             {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
           <div className="flex items-center gap-2">
@@ -2693,11 +2693,11 @@ const [isSaving, setIsSaving] = useState(false);
 
                       <div className="p-3.5 space-y-3">
                         <div className="flex flex-wrap gap-2">
-                          {!q.lessonOnly && (<>
+                          {!q.lessonOnly && ['multiple_choice', 'code'].includes(qType) && (<>
                           <button
                             type="button"
                             onClick={() => generateQuestionAsset(q, 'generate_distractors')}
-                            disabled={!!aiLoadingLabel || !['multiple_choice', 'code'].includes(qType)}
+                            disabled={!!aiLoadingLabel}
                             className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                             style={{ background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.text }}
                           >

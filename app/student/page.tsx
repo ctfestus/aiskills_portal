@@ -11,7 +11,7 @@ import {
   GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
   Play, FileText, BarChart3, Bell, Plus, ArrowLeft, Upload, Video,
   ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase, Search, LayoutDashboard,
-  Copy, Check, Layers, Repeat,
+  Copy, Check, Layers, Repeat, Film,
 } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -24,15 +24,15 @@ import { RichTextEditor } from '@/components/RichTextEditor';
 
 // --- Design tokens ---
 const LIGHT_C = {
-  page:        '#F4F5F7',
-  nav:         'rgba(255,255,255,0.95)',
+  page:        '#F2F5FA',
+  nav:         'rgba(255,255,255,0.98)',
   navBorder:   'rgba(0,0,0,0.07)',
   card:        'white',
-  cardBorder:  'rgba(0,0,0,0.08)',
-  cardShadow:  '0 1px 3px rgba(0,0,0,0.06)',
-  hoverShadow: '0 8px 24px rgba(0,0,0,0.10)',
+  cardBorder:  'rgba(0,0,0,0.07)',
+  cardShadow:  '0 2px 12px rgba(0,0,0,0.08)',
+  hoverShadow: '0 8px 28px rgba(0,0,0,0.14)',
   green:       '#0e09dd',
-  lime:        '#e0e0f5', // very light blue tint
+  lime:        '#e0e0f5',
   cta:         '#0e09dd',
   ctaText:     'white',
   text:        '#111',
@@ -42,29 +42,29 @@ const LIGHT_C = {
   pill:        '#F4F4F4',
   input:       '#F7F7F7',
   skeleton:    '#EBEBEB',
-  thumbBg:     '#e6e5fb', // slight blue bg
+  thumbBg:     '#e6e5fb',
   overlayBtn:  'rgba(255,255,255,0.92)',
   signOutHover:'rgba(239,68,68,0.08)',
 };
 const DARK_C = {
-  page:        '#111111',
-  nav:         'rgba(17,17,17,0.90)',
+  page:        '#17181E',
+  nav:         '#1E1F26',
   navBorder:   'rgba(255,255,255,0.07)',
-  card:        '#1c1c1c',
+  card:        '#1E1F26',
   cardBorder:  'rgba(255,255,255,0.07)',
-  cardShadow:  '0 1px 4px rgba(0,0,0,0.40)',
-  hoverShadow: '0 8px 24px rgba(0,0,0,0.50)',
+  cardShadow:  '0 4px 20px rgba(0,0,0,0.45)',
+  hoverShadow: '0 12px 36px rgba(0,0,0,0.60)',
   green:       '#3E93FF',
-  lime:        'rgba(62, 147, 255, 0.15)',
+  lime:        'rgba(62,147,255,0.15)',
   cta:         '#3E93FF',
   ctaText:     'white',
-  text:        '#f0f0f0',
-  muted:       '#aaa',
-  faint:       '#555',
+  text:        '#A8B5C2',
+  muted:       '#A8B5C2',
+  faint:       '#6b7a89',
   divider:     'rgba(255,255,255,0.07)',
-  pill:        '#242424',
-  input:       '#1a1a1a',
-  skeleton:    '#2a2a2a',
+  pill:        '#2a2b34',
+  input:       '#2a2b34',
+  skeleton:    '#2a2b34',
   thumbBg:     '#16152a',
   overlayBtn:  'rgba(0,0,0,0.65)',
   signOutHover:'rgba(239,68,68,0.10)',
@@ -110,7 +110,7 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
           <motion.div initial={{ opacity: 0, scale: 0.95, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -4 }} transition={{ duration: 0.15 }}
             className="profile-menu absolute right-0 top-full mt-2 w-56 rounded-2xl overflow-hidden z-50"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
+            style={{ background: C.card, boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
             <div className="px-4 py-3.5 border-b" style={{ borderColor: C.divider }}>
               <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{name}</p>
               {username ? <p className="text-xs mt-0.5" style={{ color: C.faint }}>@{username}</p>
@@ -162,7 +162,7 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
 // --- Nav items ---
 const NAV_ITEMS = [
   { id: 'overview',          label: 'Overview',            Icon: LayoutDashboard },
-  { id: 'courses',           label: 'My Courses',          Icon: BookOpen        },
+  { id: 'courses',           label: 'My Courses',          Icon: Film            },
   { id: 'learning_paths',    label: 'Learning Paths',      Icon: Layers          },
   { id: 'virtual_experiences', label: 'Virtual Experiences', Icon: Briefcase     },
   { id: 'events',            label: 'Live Events',          Icon: CalendarDays    },
@@ -175,6 +175,13 @@ const NAV_ITEMS = [
   { id: 'certificates',      label: 'Certificates',        Icon: Award           },
 ] as const;
 type SectionId = typeof NAV_ITEMS[number]['id'];
+
+const NAV_GROUPS: { label: string; items: SectionId[] }[] = [
+  { label: 'Learn',       items: ['overview', 'courses', 'learning_paths', 'virtual_experiences'] },
+  { label: 'Activities',  items: ['events', 'assignments', 'schedule', 'recordings'] },
+  { label: 'Community',   items: ['community', 'announcements'] },
+  { label: 'Achievements', items: ['leaderboard', 'certificates'] },
+];
 
 // --- Empty state ---
 function EmptyState({ icon: Icon, title, body, action }: { icon: any; title: string; body: string; action?: React.ReactNode }) {
@@ -263,7 +270,7 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
     <motion.div
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       className="rounded-2xl overflow-hidden"
-      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}
+      style={{ background: C.card }}
     >
       {/* Cover -- clicking opens the detail pane */}
       <div className="relative h-36 overflow-hidden cursor-pointer group" style={{ background: C.thumbBg }} onClick={onDetails}>
@@ -528,7 +535,7 @@ function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
   if (loading) return (
     <div className="space-y-3">
       {[0,1].map(i => (
-        <div key={i} className="rounded-2xl h-24 animate-pulse" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}/>
+        <div key={i} className="rounded-2xl h-24 animate-pulse" style={{ background: C.card }}/>
       ))}
     </div>
   );
@@ -555,7 +562,7 @@ function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
         const isExpanded     = expanded === path.id;
 
         return (
-          <div key={path.id} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+          <div key={path.id} className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
             {/* Header row */}
             <div className="flex items-center gap-4 p-4 cursor-pointer" onClick={() => setExpanded(isExpanded ? null : path.id)}>
               {path.cover_image
@@ -631,7 +638,7 @@ function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
 
 // --- Courses section ---
 function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
-  const { logoUrl, emailBannerUrl } = useTenant();
+  const { logoUrl, logoDarkUrl, emailBannerUrl } = useTenant();
   const [courses,   setCourses]   = useState<any[]>([]);
   const [deadlines, setDeadlines] = useState<Record<string, Date | null>>({});
   const [loading,   setLoading]   = useState(true);
@@ -795,7 +802,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
 
   if (loading) return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-      {[0,1,2].map(i => <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}><Sk h={144} r={0}/><div className="p-4 space-y-3"><Sk h={16}/><Sk h={12} w="60%"/><Sk h={6}/></div></div>)}
+      {[0,1,2].map(i => <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card }}><Sk h={144} r={0}/><div className="p-4 space-y-3"><Sk h={16}/><Sk h={12} w="60%"/><Sk h={6}/></div></div>)}
     </div>
   );
 
@@ -924,7 +931,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
                   return (
                     <a key={r.formId} href={href}
                       className="rounded-2xl overflow-hidden no-underline flex flex-col transition-all hover:opacity-90"
-                      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, cursor: 'pointer' }}>
+                      style={{ background: C.card, cursor: 'pointer' }}>
                       <div className="w-full h-36 flex items-center justify-center overflow-hidden flex-shrink-0"
                         style={{ background: `${C.green}12` }}>
                         {r.coverImage
@@ -1130,7 +1137,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
         className="flex-1"
       >
         <div className="rounded-2xl overflow-hidden flex flex-col sm:flex-row sm:gap-4 sm:p-4"
-          style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+          style={{ background: C.card }}>
           {/* Cover image -- full-width banner on mobile, 165x165 fixed square on sm+ */}
           <div className="w-full h-40 flex-shrink-0 sm:w-[165px] sm:h-[165px] sm:rounded-2xl overflow-hidden"
             style={{ background: C.thumbBg }}>
@@ -1533,7 +1540,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
       )}
 
       {/* Assignment brief */}
-      <div className="rounded-2xl mb-4 overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      <div className="rounded-2xl mb-4 overflow-hidden" style={{ background: C.card }}>
         {/* Cover image */}
         {assignment.cover_image && (
           <div className="px-4 pt-4">
@@ -1665,7 +1672,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
         <div className="mb-4">
           {/* Graded state shown above the player */}
           {isGraded && (
-            <div className="rounded-2xl p-5 mb-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+            <div className="rounded-2xl p-5 mb-4" style={{ background: C.card }}>
               {(() => {
                 const passed = submission.score != null && submission.score >= 85;
                 const failed = submission.score != null && submission.score < 85;
@@ -1741,7 +1748,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
       {!loadingSub && isVeType && (
         <div className="mb-4">
           {isGraded && (
-            <div className="rounded-2xl p-5 mb-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+            <div className="rounded-2xl p-5 mb-4" style={{ background: C.card }}>
               <div className="flex items-center gap-3">
                 <StatusBadge status="graded"/>
                 <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>Completed</span>
@@ -1773,7 +1780,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
 
       {/* Submission panel -- standard type only */}
       {assignmentType === 'standard' && (
-      <div className="rounded-2xl p-6" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      <div className="rounded-2xl p-6" style={{ background: C.card }}>
         <h3 className="text-sm font-bold mb-4" style={{ color: C.text }}>Your Submission</h3>
 
         {loadingSub ? (
@@ -1781,7 +1788,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
         ) : isGraded ? (
           <div>
             {submission.response_text && (
-              <div className="rounded-xl p-4 mb-4" style={{ background: C.input, border: `1px solid ${C.cardBorder}` }}>
+              <div className="rounded-xl p-4 mb-4" style={{ background: C.input }}>
                 <div className="rich-content text-sm" style={{ color: C.text }} dangerouslySetInnerHTML={{ __html: sanitizeRichText(submission.response_text) }}/>
               </div>
             )}
@@ -1888,7 +1895,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
                     <input
                       type="url" value={link} onChange={e => setLinks(prev => prev.map((l, idx) => idx === i ? e.target.value : l))}
                       placeholder="https://github.com/your-repo"
-                      style={{ flex: 1, padding: '8px 12px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.text, fontSize: 13, outline: 'none' }}
+                      style={{ flex: 1, padding: '8px 12px', borderRadius: 10, background: C.input, color: C.text, fontSize: 13, outline: 'none' }}
                     />
                     {links.length > 1 && (
                       <button onClick={() => removeLink(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint }}>
@@ -2008,7 +2015,7 @@ function AssignmentsSection({ userId, studentName, studentEmail, C }: { userId: 
   if (selected) return <AssignmentDetail assignment={selected} userId={userId} studentName={studentName} studentEmail={studentEmail} C={C} onBack={() => { setSelected(null); setRefreshKey(k => k + 1); }}/>;
 
   const skCard = (
-    <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
       <Sk h={140} r={0}/><div className="p-4 space-y-2"><Sk h={15} w="70%"/><Sk h={11} w="50%"/></div>
     </div>
   );
@@ -2038,7 +2045,7 @@ function AssignmentsSection({ userId, studentName, studentEmail, C }: { userId: 
     <motion.button key={item.id} onClick={() => setSelected(item)}
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
       className="text-left rounded-2xl overflow-hidden group"
-      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, cursor: 'pointer' }}
+      style={{ background: C.card, cursor: 'pointer' }}
       onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
       onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
       <div className="relative h-40 overflow-hidden" style={{ background: C.thumbBg }}>
@@ -2146,7 +2153,7 @@ function CommunitySection({ userId, C }: { userId: string; C: typeof LIGHT_C }) 
   if (loading) return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {[0,1,2,3].map(i => (
-        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
           <Sk h={140} r={0}/><div className="p-4 space-y-2"><Sk h={15} w="70%"/><Sk h={11} w="50%"/></div>
         </div>
       ))}
@@ -2162,7 +2169,7 @@ function CommunitySection({ userId, C }: { userId: string; C: typeof LIGHT_C }) 
       {communities.map((com, i) => (
         <motion.div key={com.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
           className="rounded-2xl overflow-hidden group"
-          style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+          style={{ background: C.card }}>
           <div className="relative h-36 overflow-hidden" style={{ background: C.thumbBg }}>
             {com.cover_image
               ? <img src={com.cover_image} alt={com.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
@@ -2244,7 +2251,7 @@ function AnnouncementPost({ ann, userId, myReactions, C }: {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="rounded-2xl overflow-hidden px-5 pt-4 pb-0"
-      style={{ background: C.card, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+      style={{ background: C.card }}>
 
       {/* Poster profile row */}
       <div className="flex items-center gap-3 mb-3">
@@ -2416,7 +2423,7 @@ function AnnouncementsSection({ C }: { C: typeof LIGHT_C }) {
   if (loading) return (
     <div className="space-y-4 max-w-2xl mx-auto">
       {[0,1,2].map(i => (
-        <div key={i} className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+        <div key={i} className="rounded-2xl p-5" style={{ background: C.card }}>
           <div className="flex gap-3 mb-4"><Sk w={40} h={40} r={99}/><div className="flex-1 space-y-2"><Sk h={14} w="40%"/><Sk h={11} w="25%"/></div></div>
           <Sk h={15} w="75%"/>
           <Sk h={11}/><Sk h={11} w="85%"/><Sk h={11} w="60%"/>
@@ -2457,7 +2464,7 @@ function ProjectDetail({ project, C, onBack }: { project: any; C: typeof LIGHT_C
         style={{ color: C.muted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
         <ArrowLeft className="w-4 h-4"/> Back to projects
       </button>
-      <div className="rounded-2xl p-6" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      <div className="rounded-2xl p-6" style={{ background: C.card }}>
         {project._course_title && (
           <p className="text-[11px] font-semibold mb-1 flex items-center gap-1" style={{ color: C.green }}>
             <BookOpen className="w-3 h-3"/> {project._course_title}
@@ -2555,7 +2562,7 @@ function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
     <motion.div
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       className="rounded-2xl overflow-hidden flex flex-col"
-      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      style={{ background: C.card }}>
       {/* Cover */}
       <div className="relative h-36 overflow-hidden cursor-pointer group flex-shrink-0"
         style={{ background: `${color}14` }} onClick={onDetails}>
@@ -2928,7 +2935,7 @@ function VirtualExperiencesSection({ userId, userEmail, C }: { userId: string; u
   if (loading) return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
       {[0,1,2].map(i => (
-        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
           <Sk h={144} r={0}/><div className="p-4 space-y-3"><Sk h={16}/><Sk h={12} w="60%"/><Sk h={6}/></div>
         </div>
       ))}
@@ -3011,7 +3018,7 @@ function ScheduleDetail({ schedule, C, onBack }: { schedule: any; C: typeof LIGH
       </button>
 
       {/* Hero */}
-      <div className="rounded-3xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      <div className="rounded-3xl overflow-hidden" style={{ background: C.card }}>
         <div className="relative" style={{ height: schedule.coverImage ? 220 : 0 }}>
           {schedule.coverImage && (
             <img src={schedule.coverImage} alt={schedule.title} className="w-full h-full object-cover"/>
@@ -3087,7 +3094,7 @@ function ScheduleDetail({ schedule, C, onBack }: { schedule: any; C: typeof LIGH
                         className="flex items-center gap-3 rounded-2xl p-3.5 group"
                         style={{ background: C.page, border: `1px solid ${C.divider}`, textDecoration: 'none' }}>
                         <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                          style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                          style={{ background: C.card }}>
                           <FileText className="w-4 h-4" style={{ color: C.green }}/>
                         </div>
                         <div className="flex-1 min-w-0">
@@ -3158,7 +3165,7 @@ function RecordingsSection({ userId, C }: { userId: string; C: typeof LIGHT_C })
   if (loading) return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
       {[0,1,2,3,4,5].map(i => (
-        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
           <Sk h={160} r={0}/><div className="p-3 space-y-2"><Sk h={13} w="70%"/><Sk h={10} w="45%"/></div>
         </div>
       ))}
@@ -3182,7 +3189,7 @@ function RecordingsSection({ userId, C }: { userId: string; C: typeof LIGHT_C })
         {/* Back + title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
           <button onClick={() => setSelected(null)}
-            style={{ width: 34, height: 34, borderRadius: 10, border: `1px solid ${C.cardBorder}`,
+            style={{ width: 34, height: 34, borderRadius: 10,
               background: C.card, display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', flexShrink: 0 }}>
             <ArrowLeft size={15} style={{ color: C.text }}/>
@@ -3234,8 +3241,8 @@ function RecordingsSection({ userId, C }: { userId: string; C: typeof LIGHT_C })
                 <motion.a key={entry.id} href={entry.url} target="_blank" rel="noopener noreferrer"
                   initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
                   style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
-                    borderRadius: 16, background: C.card, border: `1px solid ${C.cardBorder}`,
-                    textDecoration: 'none', boxShadow: C.cardShadow, transition: 'transform 0.15s, box-shadow 0.15s' }}
+                    borderRadius: 16, background: C.card,
+                    textDecoration: 'none', transition: 'transform 0.15s, box-shadow 0.15s' }}
                   className="hover:scale-[1.01]">
                   {/* Play button */}
                   <div style={{ width: 40, height: 40, borderRadius: 12, background: C.green,
@@ -3264,8 +3271,8 @@ function RecordingsSection({ userId, C }: { userId: string; C: typeof LIGHT_C })
         <motion.button key={rec.id} onClick={() => openRecording(rec)}
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
           className="text-left w-full"
-          style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 16,
-            overflow: 'hidden', boxShadow: C.cardShadow, cursor: 'pointer' }}>
+          style={{ background: C.card, borderRadius: 16,
+            overflow: 'hidden', cursor: 'pointer' }}>
           {/* Cover */}
           <div style={{ height: 160, background: C.pill, position: 'relative', overflow: 'hidden' }}>
             {rec.cover_image
@@ -3334,7 +3341,7 @@ function ScheduleSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   if (loading) return (
     <div className="space-y-3">
       {[0, 1, 2].map(i => (
-        <div key={i} className="rounded-2xl p-4 flex gap-3" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+        <div key={i} className="rounded-2xl p-4 flex gap-3" style={{ background: C.card }}>
           <Sk w={72} h={72} r={16}/><div className="flex-1 space-y-2 pt-1"><Sk h={14} w="60%"/><Sk h={11} w="40%"/><Sk h={11} w="30%"/></div>
         </div>
       ))}
@@ -3366,9 +3373,7 @@ function ScheduleSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
         transition={{ delay: index * 0.06, duration: 0.35 }}
         style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
         <div className="relative rounded-2xl p-4 flex gap-4 transition-shadow"
-          style={{ background: C.card, border: `1px solid ${isOngoing || isToday ? C.green + '50' : C.cardBorder}`, boxShadow: C.cardShadow }}
-          onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
-          onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
+          style={{ background: C.card }}>
 
           {/* Cover thumbnail */}
           <div className="w-[72px] h-[72px] rounded-2xl overflow-hidden flex-shrink-0"
@@ -3516,7 +3521,7 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
       <div className="rounded-2xl p-6 h-36" style={{ background: 'linear-gradient(135deg, #1a1f8c, #3b45d4)' }}>
         <Sk h={20} w="40%"/>
       </div>
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+      <div className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
         {[...Array(6)].map((_, i) => (
           <div key={i} className="px-5 py-4" style={{ borderBottom: i < 5 ? `1px solid ${C.divider}` : 'none', opacity: 1 - i * 0.12 }}>
             <div className="flex items-center gap-4 mb-2.5">
@@ -3587,14 +3592,14 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
           onClick={() => setRefreshKey(k => k + 1)}
           disabled={loading}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all disabled:opacity-50"
-          style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+          style={{ background: C.pill, color: C.muted }}>
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`}/>
           Refresh
         </button>
       </div>
 
       {/* -- Rankings table -- */}
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      <div className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
 
         {/* Cohort header */}
         <div className="flex items-center justify-between px-5 py-3.5"
@@ -3721,7 +3726,7 @@ function CertificatesSection({ userId, userEmail, userName, C }: { userId: strin
   if (loading) return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
       {[0,1,2].map(i => (
-        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
           <Sk h={120} r={0}/><div className="p-5 space-y-2"><Sk h={16} w="60%"/><Sk h={12} w="80%"/></div>
         </div>
       ))}
@@ -3744,7 +3749,7 @@ function CertificatesSection({ userId, userEmail, userName, C }: { userId: strin
         {certs.map((cert, i) => (
           <motion.div key={cert.id} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.06 }}
             className="rounded-2xl overflow-hidden group"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}
+            style={{ background: C.card }}
             onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
             onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
             {/* Cover image or gradient banner */}
@@ -3809,7 +3814,7 @@ function ContinueLearningCard({ form, attempt, isProject, deadline, C }: {
 
   return (
     <div className="rounded-2xl overflow-hidden"
-      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      style={{ background: C.card }}>
       <div className="h-28 overflow-hidden relative" style={{ background: C.thumbBg }}>
         {form.config?.coverImage && !imgErr
           ? <img src={form.config.coverImage} alt="" onError={() => setImgErr(true)} className="w-full h-full object-cover"/>
@@ -3882,7 +3887,7 @@ function ShareProfileCard({ username, C }: { username?: string; C: typeof LIGHT_
   if (username) {
     return (
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl px-5 py-4"
-        style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        style={{ background: C.card }}>
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: C.lime }}>
             <User className="w-4 h-4" style={{ color: C.green }}/>
@@ -3911,7 +3916,7 @@ function ShareProfileCard({ username, C }: { username?: string; C: typeof LIGHT_
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl px-5 py-4"
-      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      style={{ background: C.card }}>
       <div className="flex items-center gap-3 flex-1 min-w-0">
         <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: C.lime }}>
           <User className="w-4 h-4" style={{ color: C.green }}/>
@@ -4171,13 +4176,13 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
       <div><Sk h={28} w="38%" r={8}/><div className="mt-1.5"><Sk h={14} w="52%" r={6}/></div></div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[0,1,2,3].map(i => (
-          <div key={i} className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <div key={i} className="rounded-2xl p-5" style={{ background: C.card }}>
             <Sk h={40} w={40} r={12}/><div className="mt-3"><Sk h={26} w="40%"/></div><div className="mt-1.5"><Sk h={12} w="58%"/></div>
           </div>
         ))}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[0,1,2].map(i => <div key={i} className="rounded-2xl h-52" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}/>)}
+        {[0,1,2].map(i => <div key={i} className="rounded-2xl h-52" style={{ background: C.card }}/>)}
       </div>
     </div>
   );
@@ -4216,7 +4221,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
 
         return (
           <div className="rounded-2xl overflow-hidden"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+            style={{ background: C.card }}>
             <div className="flex items-center gap-4 p-4">
               {/* Cover image -- fixed small thumbnail */}
               <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 relative"
@@ -4270,7 +4275,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
         ] as const).map(({ icon: Icon, color, bg, value, label, nav }) => (
           <button key={label} onClick={() => onNavigate(nav as SectionId)}
             className="rounded-2xl p-5 flex items-center gap-4 text-left hover:opacity-90 transition-opacity w-full"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+            style={{ background: C.card }}>
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: bg }}>
               <Icon className="w-5 h-5" style={{ color }}/>
             </div>
@@ -4303,7 +4308,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
               return (
                 <a key={gap.course.formId} href={href}
                   className="rounded-2xl overflow-hidden no-underline flex flex-col transition-all hover:opacity-90"
-                  style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                  style={{ background: C.card }}>
                   <div className="w-full h-28 flex items-center justify-center overflow-hidden flex-shrink-0 relative"
                     style={{ background: `${C.green}10` }}>
                     {safeCover
@@ -4335,14 +4340,14 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
           <h2 className="text-base font-bold" style={{ color: C.text }}>Upcoming Deadlines</h2>
           {upcomingDeadlines.length === 0 ? (
             <div className="rounded-2xl p-8 flex flex-col items-center gap-2"
-              style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+              style={{ background: C.card }}>
               <CheckCircle className="w-8 h-8 opacity-30" style={{ color: '#16a34a' }}/>
               <p className="text-sm font-semibold" style={{ color: C.text }}>All clear!</p>
               <p className="text-xs" style={{ color: C.faint }}>No deadlines in the next 14 days.</p>
             </div>
           ) : (
             <div className="rounded-2xl overflow-hidden"
-              style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+              style={{ background: C.card }}>
               {upcomingDeadlines.map(({ title, daysLeft, type }, idx) => {
                 const col = daysLeft < 0 ? '#ef4444' : daysLeft <= 3 ? '#f59e0b' : daysLeft <= 7 ? '#f97316' : '#16a34a';
                 const lbl = daysLeft < 0 ? 'Overdue' : daysLeft === 0 ? 'Due today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft} days`;
@@ -4376,12 +4381,12 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
             <h2 className="text-base font-bold" style={{ color: C.text }}>Live Activity</h2>
             {activityEvents.length === 0 ? (
               <div className="rounded-2xl p-5 text-center"
-                style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                style={{ background: C.card }}>
                 <p className="text-xs" style={{ color: C.faint }}>No recent cohort activity in the last 30 minutes.</p>
               </div>
             ) : (
               <div className="rounded-2xl overflow-hidden"
-                style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                style={{ background: C.card }}>
                 {activityEvents.map((e: any, idx: number) => (
                   <div key={`${e.ts}:${String(e.name)}`} className="flex items-center gap-3 px-4 py-3"
                     style={{ borderBottom: idx < activityEvents.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
@@ -4414,7 +4419,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
               const pct       = total > 0 ? Math.round((completed / total) * 100) : 0;
               return (
                 <button onClick={() => onNavigate('courses')} className="rounded-2xl p-4 flex items-center gap-4 text-left hover:opacity-90 transition-opacity w-full"
-                  style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                  style={{ background: C.card }}>
                   <div className="relative flex-shrink-0 flex items-center justify-center" style={{ width: 72, height: 72 }}>
                     <DonutChart total={total} done={completed} color="#09c86c" size={72}/>
                     <span className="absolute text-xs font-black" style={{ color: C.text }}>{pct}%</span>
@@ -4425,7 +4430,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
                     <div className="flex items-center gap-1.5 mt-1.5">
                       <div className="w-2 h-2 rounded-full" style={{ background: '#09c86c' }}/>
                       <span className="text-[10px]" style={{ color: C.faint }}>Completed</span>
-                      <div className="w-2 h-2 rounded-full ml-2" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}/>
+                      <div className="w-2 h-2 rounded-full ml-2" style={{ background: C.pill }}/>
                       <span className="text-[10px]" style={{ color: C.faint }}>Remaining</span>
                     </div>
                   </div>
@@ -4436,7 +4441,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
             {/* Assignments donut */}
             {assignmentStats && (
               <button onClick={() => onNavigate('assignments')} className="rounded-2xl p-4 flex items-center gap-4 text-left hover:opacity-90 transition-opacity w-full"
-                style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                style={{ background: C.card }}>
                 <div className="relative flex-shrink-0 flex items-center justify-center" style={{ width: 72, height: 72 }}>
                   <DonutChart total={assignmentStats.total} done={assignmentStats.submitted} color="#09c86c" size={72}/>
                   <span className="absolute text-xs font-black" style={{ color: C.text }}>
@@ -4449,7 +4454,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
                   <div className="flex items-center gap-1.5 mt-1.5">
                     <div className="w-2 h-2 rounded-full" style={{ background: '#09c86c' }}/>
                     <span className="text-[10px]" style={{ color: C.faint }}>Submitted</span>
-                    <div className="w-2 h-2 rounded-full ml-2" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}/>
+                    <div className="w-2 h-2 rounded-full ml-2" style={{ background: C.pill }}/>
                     <span className="text-[10px]" style={{ color: C.faint }}>Pending</span>
                   </div>
                 </div>
@@ -4468,7 +4473,7 @@ export default function StudentDashboard() {
   const [mounted, setMounted] = useState(false);
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl } = useTenant();
+  const { logoUrl, logoDarkUrl } = useTenant();
   const router = useRouter();
   const [user, setUser]       = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -4597,27 +4602,27 @@ export default function StudentDashboard() {
     <div className="min-h-screen" style={{ background: C.page }}>
       {/* -- Top nav -- */}
       <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3 border-b backdrop-blur-md"
-        style={{ background: theme === 'dark' ? C.nav : '#06069d', borderColor: theme === 'dark' ? C.navBorder : '#06069d' }}>
+        style={{ background: C.nav, borderColor: C.navBorder }}>
         <div className="flex items-center gap-3">
           {/* Mobile menu toggle */}
           <button onClick={() => setSidebarOpen(o => !o)}
             className="p-2 rounded-xl lg:hidden transition-all hover:opacity-70"
-            style={{ background: theme === 'dark' ? C.pill : 'rgba(255,255,255,0.15)' }}>
-            <Menu className="w-4 h-4" style={{ color: theme === 'dark' ? C.text : 'white' }}/>
+            style={{ background: C.pill }}>
+            <Menu className="w-4 h-4" style={{ color: C.text }}/>
           </button>
           {/* Logo / brand */}
           <Link href="/" className="flex items-center block">
-            <img src={logoUrl || undefined} alt="Logo" className="h-8 w-auto" />
+            <img src={(theme === 'dark' ? logoDarkUrl || logoUrl : logoUrl) || undefined} alt="Logo" className="h-8 w-auto" />
           </Link>
         </div>
         <div className="flex items-center gap-2">
-          <NotificationBell color={theme === 'dark' ? undefined : 'white'}/>
+          <NotificationBell/>
           <button onClick={toggleTheme}
             className="p-2 rounded-xl transition-all hover:opacity-70"
-            style={{ background: theme === 'dark' ? C.pill : 'rgba(255,255,255,0.15)' }}>
+            style={{ background: C.pill }}>
             {theme === 'dark'
               ? <Sun className="w-4 h-4" style={{ color: C.text }}/>
-              : <Moon className="w-4 h-4" style={{ color: 'white' }}/>}
+              : <Moon className="w-4 h-4" style={{ color: C.text }}/>}
           </button>
           {user && <ProfileMenu user={user} profile={profile} onSignOut={signOut}/>}
         </div>
@@ -4641,8 +4646,8 @@ export default function StudentDashboard() {
               initial={false}
               animate={{ width: navCollapsed ? 56 : 220 }}
               transition={{ duration: 0.2, ease: 'easeInOut' }}
-              className={`fixed lg:static inset-y-0 left-0 z-40 lg:z-auto flex flex-col border-r overflow-hidden transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
-              style={{ background: theme === 'dark' ? '#1E1F26' : '#1f1bc3', borderColor: C.navBorder, top: 57, color: 'white' }}>
+              className={`fixed lg:static inset-y-0 left-0 z-40 lg:z-auto flex flex-col overflow-hidden transition-transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+              style={{ background: C.nav, top: 57 }}>
               {/* Nav items + collapse toggle share the same scroll area */}
               <nav className="flex-1 px-2 pt-1 pb-2 space-y-0.5 overflow-y-auto overflow-x-hidden sidebar-nav">
                 {/* Collapse toggle as first row -- desktop only */}
@@ -4651,31 +4656,46 @@ export default function StudentDashboard() {
                     onClick={() => setNavCollapsed(o => !o)}
                     className="p-1.5 rounded-lg transition-all"
                     style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = theme === 'dark' ? C.lime : '#ff9933'; }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.pill; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                     {navCollapsed
-                      ? <ChevronRight className="w-4 h-4" style={{ color: theme === 'dark' ? '#A2AFBC' : 'rgba(255,255,255,0.8)' }}/>
-                      : <ChevronLeft className="w-4 h-4" style={{ color: theme === 'dark' ? '#A2AFBC' : 'rgba(255,255,255,0.8)' }}/>}
+                      ? <ChevronRight className="w-4 h-4" style={{ color: C.faint }}/>
+                      : <ChevronLeft className="w-4 h-4" style={{ color: C.faint }}/>}
                   </button>
                 </div>
-                {NAV_ITEMS.map(item => {
-                  const isActive = activeSection === item.id;
+                {NAV_GROUPS.map(group => {
+                  const groupItems = group.items.map(id => NAV_ITEMS.find(n => n.id === id)!).filter(Boolean);
                   return (
-                    <button key={item.id}
-                      onClick={() => { goSection(item.id); setSidebarOpen(false); }}
-                      title={navCollapsed ? item.label : undefined}
-                      className="w-full flex items-center gap-3 rounded-xl text-xs font-medium transition-all text-left"
-                      style={{
-                        padding: navCollapsed ? '10px 0' : '10px 12px',
-                        justifyContent: navCollapsed ? 'center' : 'flex-start',
-                        background: isActive ? (theme === 'dark' ? C.green : '#ff9933') : 'transparent',
-                        color: isActive ? 'white' : (theme === 'dark' ? '#A2AFBC' : 'white'),
-                      }}
-                      onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = theme === 'dark' ? C.lime : '#ff9933'; }}
-                      onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                      <item.Icon className="w-4 h-4 flex-shrink-0" style={{ color: isActive ? 'white' : (theme === 'dark' ? '#A2AFBC' : 'white') }}/>
-                      {!navCollapsed && <span className="truncate">{item.label}</span>}
-                    </button>
+                    <div key={group.label} className={navCollapsed ? '' : 'mb-3'}>
+                      {!navCollapsed && (
+                        <p className="px-3 mb-1 text-[11px] font-semibold tracking-widest uppercase"
+                          style={{ color: C.faint }}>
+                          {group.label}
+                        </p>
+                      )}
+                      {groupItems.map(item => {
+                        const isActive = activeSection === item.id;
+                        return (
+                          <button key={item.id}
+                            onClick={() => { goSection(item.id); setSidebarOpen(false); }}
+                            title={navCollapsed ? item.label : undefined}
+                            className="w-full flex items-center gap-3 rounded-xl text-sm font-normal transition-all text-left"
+                            style={{
+                              padding: navCollapsed ? '10px 0' : '8px 12px',
+                              justifyContent: navCollapsed ? 'center' : 'flex-start',
+                              color: isActive ? C.green : C.muted,
+                            }}
+                            onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.text; }}
+                            onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.muted; }}>
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
+                              style={{ background: isActive ? `${C.green}18` : C.pill }}>
+                              <item.Icon className="w-4 h-4" style={{ color: isActive ? C.green : theme === 'dark' ? 'rgba(255,255,255,0.35)' : '#9ca3af' }}/>
+                            </div>
+                            {!navCollapsed && <span className="truncate">{item.label}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
                   );
                 })}
               </nav>
@@ -4684,11 +4704,11 @@ export default function StudentDashboard() {
               <div className="px-2 pb-3 pt-2 border-t space-y-0.5" style={{ borderColor: C.divider }}>
                 {!navCollapsed && (
                   <Link href="/settings"
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all"
-                    style={{ color: theme === 'dark' ? '#A2AFBC' : 'white' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = theme === 'dark' ? C.lime : '#ff9933'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                    <Settings className="w-4 h-4 flex-shrink-0" style={{ color: theme === 'dark' ? '#A2AFBC' : 'rgba(255,255,255,0.8)' }}/> Settings
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-normal transition-all"
+                    style={{ color: C.muted }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = C.text; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = C.muted; }}>
+                    <Settings className="w-4 h-4 flex-shrink-0" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.35)' : '#9ca3af' }}/> Settings
                   </Link>
                 )}
               </div>
@@ -4756,7 +4776,7 @@ export default function StudentDashboard() {
             exit={{ opacity: 0, y: 20, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 380, damping: 28 }}
             className="fixed bottom-6 left-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl max-w-[260px]"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}
+            style={{ background: C.card, boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}
           >
             <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
               style={{ background: `${C.green}18` }}>

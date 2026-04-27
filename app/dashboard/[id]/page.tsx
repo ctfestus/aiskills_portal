@@ -1864,7 +1864,7 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
 
 // -- Main Page ---
 export default function FormDetailPage() {
-  const { logoUrl } = useTenant();
+  const { logoUrl, logoDarkUrl } = useTenant();
   const { id } = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -2077,8 +2077,8 @@ export default function FormDetailPage() {
     : `/${form?.slug || id}`;
 
   const bg       = isLight ? '#ffffff' : '#111111';
-  const navBg    = isLight ? '#0e09dd' : 'rgba(0,0,0,0.80)';
-  const navBord  = isLight ? '#0b07b3' : 'rgba(39,39,42,0.6)';
+  const navBg    = isLight ? 'rgba(255,255,255,0.98)' : 'rgba(0,0,0,0.80)';
+  const navBord  = isLight ? 'rgba(0,0,0,0.07)' : 'rgba(39,39,42,0.6)';
   const textPrim = isLight ? '#111' : '#fff';
   const textMut  = isLight ? '#555' : '#71717a';
   const btnBg    = isLight ? '#f5f6f7' : '#27272a';
@@ -2086,10 +2086,10 @@ export default function FormDetailPage() {
   const green    = '#006128';
   const lime     = '#ADEE66';
 
-  const hdrTextPrim = isLight ? '#ffffff' : textPrim;
-  const hdrTextMut  = isLight ? 'rgba(255,255,255,0.8)' : textMut;
-  const hdrBtnBg    = isLight ? 'rgba(255,255,255,0.15)' : btnBg;
-  const hdrBtnBord  = isLight ? 'transparent' : btnBord;
+  const hdrTextPrim = textPrim;
+  const hdrTextMut  = textMut;
+  const hdrBtnBg    = btnBg;
+  const hdrBtnBord  = btnBord;
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center" style={{ background: bg }}><Loader2 className="w-8 h-8 animate-spin" style={{ color: green }} /></div>;
@@ -2118,11 +2118,9 @@ export default function FormDetailPage() {
 
           {/* Logo + Breadcrumb */}
           <div className="flex items-center gap-2.5 min-w-0">
-            {isLight && (
-              <Link href="/dashboard" className="flex items-center gap-1.5 hover:opacity-70 transition-opacity flex-shrink-0">
-                <img src={logoUrl || undefined} alt="" className="h-6 w-auto" />
-              </Link>
-            )}
+            <Link href="/dashboard" className="flex items-center gap-1.5 hover:opacity-70 transition-opacity flex-shrink-0">
+              <img src={(isLight ? logoUrl : logoDarkUrl || logoUrl) || undefined} alt="" className="h-6 w-auto" />
+            </Link>
             <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border flex-shrink-0 ${isLight ? lightBadge[type] : meta.badge}`}>
               <meta.Icon className="w-3 h-3" />
               {meta.label}
