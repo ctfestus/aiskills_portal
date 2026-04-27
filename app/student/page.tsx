@@ -1129,10 +1129,10 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
         transition={{ delay: index * 0.07, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
         className="flex-1"
       >
-        <div className="rounded-2xl p-4 flex gap-4"
+        <div className="rounded-2xl overflow-hidden flex flex-col sm:flex-row sm:gap-4 sm:p-4"
           style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-          {/* Cover image -- 165×165 rounded square, card padding = whitespace */}
-          <div className="w-[165px] h-[165px] rounded-2xl overflow-hidden flex-shrink-0"
+          {/* Cover image -- full-width banner on mobile, 165x165 fixed square on sm+ */}
+          <div className="w-full h-40 flex-shrink-0 sm:w-[165px] sm:h-[165px] sm:rounded-2xl overflow-hidden"
             style={{ background: C.thumbBg }}>
             {showImage
               ? <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover"
@@ -1144,7 +1144,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
           </div>
 
           {/* Text content */}
-          <div className="flex-1 min-w-0 flex flex-col gap-2 justify-center">
+          <div className="flex-1 min-w-0 flex flex-col gap-2 justify-center p-4 sm:p-0">
             {/* Row 1: Date·Time pill + Mode pill */}
             <div className="flex items-center gap-2 flex-wrap">
               {(dateLabel || timeLabel) && (
