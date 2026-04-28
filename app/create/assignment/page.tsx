@@ -13,20 +13,48 @@ import { sanitizeRichText, sanitizePlainText } from '@/lib/sanitize';
 
 // --- Design tokens ---
 const LIGHT_C = {
-  page: '#EEEAE3', card: 'white', cardBorder: 'rgba(0,0,0,0.07)',
-  cardShadow: '0 1px 4px rgba(0,0,0,0.06)', green: '#006128', lime: '#ADEE66',
-  cta: '#006128', ctaText: 'white', text: '#111', muted: '#555', faint: '#888',
-  divider: 'rgba(0,0,0,0.07)', input: '#F8F6F1', pill: '#F4F1EB',
-  nav: 'rgba(238,234,227,0.92)', navBorder: 'rgba(0,0,0,0.07)',
-  errorBg: '#fef2f2', errorText: '#ef4444', errorBorder: '#fecaca',
+  page:        '#F2F5FA',
+  nav:         'rgba(255,255,255,0.98)',
+  navBorder:   'rgba(0,0,0,0.07)',
+  card:        'white',
+  cardBorder:  'rgba(0,0,0,0.07)',
+  cardShadow:  'none',
+  hoverShadow: 'none',
+  green:       '#0e09dd',
+  lime:        '#e0e0f5',
+  cta:         '#0e09dd',
+  ctaText:     'white',
+  text:        '#111',
+  muted:       '#555',
+  faint:       '#888',
+  divider:     'rgba(0,0,0,0.07)',
+  pill:        '#F4F4F4',
+  input:       '#F7F7F7',
+  errorBg:     '#fef2f2',
+  errorText:   '#ef4444',
+  errorBorder: '#fecaca',
 };
 const DARK_C = {
-  page: '#111111', card: '#1c1c1c', cardBorder: 'rgba(255,255,255,0.07)',
-  cardShadow: '0 1px 4px rgba(0,0,0,0.40)', green: '#ADEE66', lime: '#ADEE66',
-  cta: '#ADEE66', ctaText: '#111', text: '#f0f0f0', muted: '#aaa', faint: '#555',
-  divider: 'rgba(255,255,255,0.07)', input: '#1a1a1a', pill: '#242424',
-  nav: 'rgba(17,17,17,0.90)', navBorder: 'rgba(255,255,255,0.07)',
-  errorBg: 'rgba(239,68,68,0.12)', errorText: '#f87171', errorBorder: 'rgba(239,68,68,0.25)',
+  page:        '#17181E',
+  nav:         '#1E1F26',
+  navBorder:   'rgba(255,255,255,0.07)',
+  card:        '#1E1F26',
+  cardBorder:  'rgba(255,255,255,0.07)',
+  cardShadow:  'none',
+  hoverShadow: 'none',
+  green:       '#3E93FF',
+  lime:        'rgba(62,147,255,0.15)',
+  cta:         '#3E93FF',
+  ctaText:     'white',
+  text:        '#A8B5C2',
+  muted:       '#A8B5C2',
+  faint:       '#6b7a89',
+  divider:     'rgba(255,255,255,0.07)',
+  pill:        '#2a2b34',
+  input:       '#2a2b34',
+  errorBg:     'rgba(239,68,68,0.12)',
+  errorText:   '#f87171',
+  errorBorder: 'rgba(239,68,68,0.25)',
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
@@ -106,6 +134,7 @@ export default function CreateAssignmentPage() {
   const [resources, setResources]                 = useState<Resource[]>([]);
   const [cohorts, setCohorts]                     = useState<{ id: string; name: string }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
+  const [originalCohortIds, setOriginalCohortIds] = useState<string[]>([]);
   const [deadlineDate, setDeadlineDate]           = useState('');
   const [coverUploading, setCoverUploading]       = useState(false);
   const [resourceUploading, setResourceUploading] = useState<Record<string, boolean>>({});
@@ -153,7 +182,10 @@ export default function CreateAssignmentPage() {
           setCoverImage(data.cover_image ?? '');
           setStatus(data.status ?? 'draft');
           if (data.deadline_date) setDeadlineDate(data.deadline_date);
-          if (data.cohort_ids?.length) setSelectedCohortIds(data.cohort_ids);
+          if (data.cohort_ids?.length) {
+            setSelectedCohortIds(data.cohort_ids);
+            setOriginalCohortIds(data.cohort_ids);
+          }
           if (data.type) setAssignmentType(data.type);
           if (data.config) {
             const cfg = data.config;
@@ -240,6 +272,20 @@ export default function CreateAssignmentPage() {
         if (resourcesError) throw resourcesError;
       }
 
+      // Send email to newly assigned cohorts (fire-and-forget)
+      if (status === 'published' && selectedCohortIds.length > 0) {
+        const cohortsToNotify = editId
+          ? selectedCohortIds.filter(id => !originalCohortIds.includes(id))
+          : selectedCohortIds;
+        if (cohortsToNotify.length > 0) {
+          fetch('/api/assignments/notify-cohorts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ assignmentId, cohortIds: cohortsToNotify }),
+          }).catch(() => {});
+        }
+      }
+
       router.push('/dashboard#assignments');
     } catch (err: any) {
       setError(err?.message || 'Something went wrong. Please try again.');
@@ -316,7 +362,7 @@ export default function CreateAssignmentPage() {
           )}
 
           {/* -- Assignment Type --- */}
-          <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
+          <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16, marginTop: 0 }}>Assignment Type</h2>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {ASSIGNMENT_TYPES.map(t => {
@@ -344,7 +390,7 @@ export default function CreateAssignmentPage() {
 
           {/* -- Type-specific Config --- */}
           {assignmentType !== 'standard' && (
-            <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
+            <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>
                 {assignmentType === 'virtual_experience' ? 'Virtual Experience' : 'AI Review Settings'}
               </h2>
@@ -419,7 +465,7 @@ export default function CreateAssignmentPage() {
           )}
 
           {/* -- Section: Details --- */}
-          <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
+          <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>Details</h2>
 
             <div style={{ marginBottom: 16 }}>
@@ -468,7 +514,7 @@ export default function CreateAssignmentPage() {
 
           {/* -- Section: Content (hidden for VE type) --- */}
           {showContentFields && (
-            <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
+            <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4, marginTop: 0 }}>Content</h2>
               {assignmentType !== 'standard' && (
                 <p style={{ ...hintStyle(C), marginBottom: 16 }}>This text is shown to students as a briefing before they interact with the {ASSIGNMENT_TYPES.find(t => t.value === assignmentType)?.label} tool.</p>
@@ -489,7 +535,7 @@ export default function CreateAssignmentPage() {
           )}
 
           {/* -- Section: Resources --- */}
-          <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
+          <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0 }}>Resources</h2>
               <button type="button" onClick={addResource}
@@ -544,7 +590,7 @@ export default function CreateAssignmentPage() {
           </section>
 
           {/* -- Section: Settings --- */}
-          <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24 }}>
+          <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24 }}>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>Settings</h2>
 
             <div style={{ marginBottom: 16 }}>
@@ -585,7 +631,7 @@ export default function CreateAssignmentPage() {
 
           {/* -- Cohorts --- */}
           {cohorts.length > 0 && (
-            <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginTop: 20 }}>
+            <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginTop: 20 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16, marginTop: 0 }}>Assign to Cohorts</h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {cohorts.map(c => (

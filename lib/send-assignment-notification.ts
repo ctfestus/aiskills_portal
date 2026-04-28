@@ -10,6 +10,7 @@ const TYPE_LABELS: Record<string, string> = {
   event: 'event',
   virtual_experience: 'virtual experience',
   announcement: 'announcement',
+  assignment: 'assignment',
 };
 
 const TYPE_MESSAGES: Record<string, string> = {
@@ -17,6 +18,7 @@ const TYPE_MESSAGES: Record<string, string> = {
   event: 'You have been registered for an upcoming event. Mark your calendar.',
   virtual_experience: 'You have been assigned a new virtual experience. Jump in and get started.',
   announcement: 'A new announcement has been posted for you.',
+  assignment: 'You have been assigned a new assignment. Log in to view the details and submit your work.',
 };
 
 const TYPE_CTA: Record<string, string> = {
@@ -24,6 +26,7 @@ const TYPE_CTA: Record<string, string> = {
   event: 'View Event',
   virtual_experience: 'View Virtual Experience',
   announcement: 'View Announcement',
+  assignment: 'View Assignment',
 };
 
 /**
@@ -35,11 +38,13 @@ export async function sendAssignmentNotifications({
   title,
   slug,
   contentType,
+  formUrl: formUrlOverride,
 }: {
   cohortIds: string[];
   title: string;
-  slug: string;
+  slug?: string;
   contentType: string;
+  formUrl?: string;
 }): Promise<void> {
   if (!process.env.RESEND_API_KEY) return;
   if (!cohortIds.length) return;
@@ -60,7 +65,9 @@ export async function sendAssignmentNotifications({
     const typeLabel   = TYPE_LABELS[contentType]   ?? contentType.replace(/_/g, ' ');
     const typeMessage = TYPE_MESSAGES[contentType] ?? 'You have been assigned new content.';
     const ctaLabel    = TYPE_CTA[contentType]      ?? 'View';
-    const formUrl     = `${t.appUrl}/${slug}`;
+    const formUrl     = formUrlOverride != null
+      ? (formUrlOverride.startsWith('http') ? formUrlOverride : `${t.appUrl}${formUrlOverride}`)
+      : `${t.appUrl}/${slug}`;
     const subject     = `You've been assigned: ${title}`;
 
     // Deduplicate by email

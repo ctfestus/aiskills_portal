@@ -43,18 +43,42 @@ import { useTenant } from '@/components/TenantProvider';
 const PEXELS_KEY = process.env.NEXT_PUBLIC_PEXELS_API_KEY ?? '';
 
 const LIGHT_C = {
-  page: '#F4F5F7', nav: 'rgba(238,234,227,0.92)', navBorder: 'rgba(0,0,0,0.07)',
-  card: 'white', cardBorder: 'rgba(0,0,0,0.07)', cardShadow: '0 1px 4px rgba(0,0,0,0.06)',
-  green: '#006128', lime: '#ADEE66', cta: '#006128', ctaText: 'white',
-  text: '#111', muted: '#555', faint: '#888',
-  divider: 'rgba(0,0,0,0.07)', pill: '#F4F1EB', input: '#F8F6F1', inputBorder: 'rgba(0,0,0,0.09)',
+  page:        '#F2F5FA',
+  nav:         'rgba(255,255,255,0.98)',
+  navBorder:   'rgba(0,0,0,0.07)',
+  card:        'white',
+  cardBorder:  'rgba(0,0,0,0.07)',
+  cardShadow:  'none',
+  green:       '#0e09dd',
+  lime:        '#e0e0f5',
+  cta:         '#0e09dd',
+  ctaText:     'white',
+  text:        '#111',
+  muted:       '#555',
+  faint:       '#888',
+  divider:     'rgba(0,0,0,0.07)',
+  pill:        '#F4F4F4',
+  input:       '#F7F7F7',
+  inputBorder: 'rgba(0,0,0,0.07)',
 };
 const DARK_C = {
-  page: '#111111', nav: 'rgba(17,17,17,0.90)', navBorder: 'rgba(255,255,255,0.07)',
-  card: '#1c1c1c', cardBorder: 'rgba(255,255,255,0.07)', cardShadow: '0 1px 4px rgba(0,0,0,0.40)',
-  green: '#ADEE66', lime: '#ADEE66', cta: '#ADEE66', ctaText: '#111',
-  text: '#f0f0f0', muted: '#aaa', faint: '#555',
-  divider: 'rgba(255,255,255,0.07)', pill: '#242424', input: '#1a1a1a', inputBorder: 'rgba(255,255,255,0.09)',
+  page:        '#17181E',
+  nav:         '#1E1F26',
+  navBorder:   'rgba(255,255,255,0.07)',
+  card:        '#1E1F26',
+  cardBorder:  'rgba(255,255,255,0.07)',
+  cardShadow:  'none',
+  green:       '#3E93FF',
+  lime:        'rgba(62,147,255,0.15)',
+  cta:         '#3E93FF',
+  ctaText:     'white',
+  text:        '#A8B5C2',
+  muted:       '#A8B5C2',
+  faint:       '#6b7a89',
+  divider:     'rgba(255,255,255,0.07)',
+  pill:        '#2a2b34',
+  input:       '#2a2b34',
+  inputBorder: 'rgba(255,255,255,0.07)',
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
@@ -552,7 +576,7 @@ export default function SettingsPage() {
         {/* Share Profile card -- shown when username is set */}
         {username && (
           <div className="rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+            style={{ background: C.card, boxShadow: C.cardShadow }}>
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{ background: C.cta + '18' }}>
@@ -588,7 +612,7 @@ export default function SettingsPage() {
         )}
 
         {/* Avatar */}
-        <div className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        <div className="rounded-2xl p-5" style={{ background: C.card, boxShadow: C.cardShadow }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: C.faint }}>Profile Photo</h2>
           <div className="flex items-center gap-4">
             <div className="relative w-16 h-16 rounded-full cursor-pointer group flex-shrink-0" onClick={() => avatarRef.current?.click()}>
@@ -619,7 +643,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Basic Info */}
-        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, boxShadow: C.cardShadow }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Basic Info</h2>
           <div className="space-y-3">
             <div>
@@ -679,7 +703,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Social Links */}
-        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, boxShadow: C.cardShadow }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Social Links</h2>
           <div className="space-y-3">
             {SOCIAL_FIELDS.map(({ key, label, icon: Icon, placeholder }) => (
@@ -701,7 +725,7 @@ export default function SettingsPage() {
 
 
         {/* Education */}
-        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, boxShadow: C.cardShadow }}>
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Education</h2>
             <button
@@ -757,7 +781,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Work Experience */}
-        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, boxShadow: C.cardShadow }}>
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Work Experience</h2>
             <button
@@ -846,7 +870,7 @@ export default function SettingsPage() {
           };
 
           return (
-            <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+            <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, boxShadow: C.cardShadow }}>
               <div>
                 <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Skills</h2>
                 <p className="text-xs mt-1" style={{ color: C.faint }}>We recommend adding your top 5 skills used in your role.</p>
@@ -882,7 +906,7 @@ export default function SettingsPage() {
                 />
                 {skillInput && (suggestions.length > 0 || canAddCustom) && (
                   <div className="absolute z-20 left-0 right-0 mt-1 rounded-xl overflow-hidden"
-                    style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                    style={{ background: C.card, boxShadow: C.cardShadow }}>
                     {suggestions.map(s => (
                       <button key={s} onMouseDown={e => { e.preventDefault(); addSkill(s); }}
                         className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:opacity-70"
@@ -921,7 +945,7 @@ export default function SettingsPage() {
         })()}
 
         {/* Portfolio */}
-        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, boxShadow: C.cardShadow }}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Portfolio</h2>
@@ -1047,7 +1071,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Account */}
-        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, boxShadow: C.cardShadow }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Account</h2>
 
           {/* Email */}

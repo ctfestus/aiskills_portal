@@ -46,6 +46,8 @@ interface Props {
   savedImageUrl?: string;
   rubric?: string[];
   minScore?: number;
+  reviewsUsed?: number;
+  maxReviews?: number;
   onComplete: (result: CritiqueResult, imageDataUrl: string, passed: boolean) => void;
 }
 
@@ -67,7 +69,9 @@ const TYPE_COLORS: Record<string, string> = {
   OTHER:          '#94a3b8',
 };
 
-export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, completed, savedResult, savedImageUrl, rubric, minScore, onComplete }: Props) {
+export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, completed, savedResult, savedImageUrl, rubric, minScore, reviewsUsed = 0, maxReviews, onComplete }: Props) {
+  const atLimit = maxReviews !== undefined && reviewsUsed >= maxReviews;
+  const shouldLock = maxReviews === undefined || atLimit || reviewsUsed === 0;
   const [imageDataUrl, setImageDataUrl] = useState<string>(savedImageUrl ?? '');
   const [result, setResult]             = useState<CritiqueResult | null>(savedResult ?? null);
   const [analyzing, setAnalyzing]       = useState(false);
@@ -154,7 +158,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
   const muted = isDark ? '#888' : '#666';
 
   // Already completed but saved data not available (e.g. after page reload) -- show locked state
-  if (completed && !imageDataUrl && !result) {
+  if (completed && !imageDataUrl && !result && shouldLock) {
     return (
       <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}25` }}>
         <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
@@ -167,6 +171,17 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
 
   // Upload state
   if (!imageDataUrl) {
+    if (atLimit) {
+      return (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}>
+          <Eye className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: muted }} />
+          <div>
+            <p className="text-sm font-semibold" style={{ color: text }}>Review limit reached</p>
+            <p className="text-xs mt-0.5" style={{ color: muted }}>You have used all {maxReviews} allowed review attempts for this question.</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div
         onDrop={handleDrop}
@@ -240,13 +255,15 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
               <Download className="w-3 h-3" /> PDF
             </button>
           )}
-          <button
-            onClick={reset}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-            style={{ background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', color: muted }}
-          >
-            <RotateCcw className="w-3 h-3" /> Reset
-          </button>
+          {!atLimit && (
+            <button
+              onClick={reset}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+              style={{ background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', color: muted }}
+            >
+              <RotateCcw className="w-3 h-3" /> Reset
+            </button>
+          )}
         </div>
       </div>
 

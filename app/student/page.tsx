@@ -9,14 +9,13 @@ import {
   Settings, User, Sun, Moon, Menu, X,
   CheckCircle, Clock, AlertCircle, AlertTriangle, Star, ExternalLink,
   GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
-  Play, FileText, BarChart3, Bell, Plus, ArrowLeft, Upload, Video,
+  Play, FileText, BarChart3, Plus, ArrowLeft, Upload, Video,
   ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase, Search, LayoutDashboard,
   Copy, Check, Layers, Repeat, Film,
 } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import NotificationBell from '@/components/NotificationBell';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
 import { sanitizeRichText, renderAnnouncementContent } from '@/lib/sanitize';
@@ -2388,7 +2387,8 @@ function AnnouncementsSection({ C }: { C: typeof LIGHT_C }) {
       const { data: anns } = await supabase
         .from('announcements')
         .select('id, title, content, cover_image, youtube_url, is_pinned, published_at, author_id')
-        .contains('cohort_ids', [student.cohort_id])
+        .or(`cohort_ids.cs.{${student.cohort_id}},cohort_ids.eq.{}`)
+        .lte('published_at', new Date().toISOString())
         .order('is_pinned', { ascending: false })
         .order('published_at', { ascending: false })
         .limit(50);
@@ -4619,7 +4619,6 @@ export default function StudentDashboard() {
           </Link>
         </div>
         <div className="flex items-center gap-2">
-          <NotificationBell/>
           <button onClick={toggleTheme}
             className="p-2 rounded-xl transition-all hover:opacity-70"
             style={{ background: C.pill }}>

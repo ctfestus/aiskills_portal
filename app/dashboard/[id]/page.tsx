@@ -10,7 +10,6 @@ import {
   AlignLeft, HelpCircle, CalendarDays, Share2, Mail, Send, Bell,
   Award, Upload, Trash2, RefreshCw, Link as LinkIcon, Sun, Moon, Sparkles, X,
 } from 'lucide-react';
-import NotificationBell from '@/components/NotificationBell';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
@@ -2145,7 +2144,6 @@ export default function FormDetailPage() {
             <button onClick={toggleTheme} className="p-2 rounded-lg transition-colors ff-hover" title="Toggle theme" style={{ color: hdrTextMut }}>
               {isLight ? <Moon className="w-4 h-4"/> : <Sun className="w-4 h-4"/>}
             </button>
-            <NotificationBell color={isLight ? 'white' : undefined} />
           </div>
         </div>
 

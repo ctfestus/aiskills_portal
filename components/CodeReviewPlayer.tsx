@@ -51,6 +51,7 @@ interface Props {
   schema?: string;
   minScore?: number;
   reviewLanguage?: string;
+  maxReviews?: number;
   onComplete: (result: ReviewResult, lean: LeanSubmission, passed: boolean) => void;
 }
 
@@ -70,7 +71,11 @@ function scoreColor(n: number) {
   return '#ef4444';
 }
 
-export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed, submissions = [], savedSummary, rubric, schema, minScore, reviewLanguage, onComplete }: Props) {
+export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed, submissions = [], savedSummary, rubric, schema, minScore, reviewLanguage, maxReviews, onComplete }: Props) {
+  const atLimit = maxReviews !== undefined && submissions.length >= maxReviews;
+  // Lock the "already completed" views only when: no per-question limit (VE/assignment), at limit,
+  // or state was lost on page reload (submissions empty but marked completed).
+  const shouldLock = maxReviews === undefined || atLimit || submissions.length === 0;
   // Normalize authored language to match the LANGUAGES display array
   const lockedLanguage = reviewLanguage
     ? (LANGUAGES.find(l => l.toLowerCase() === reviewLanguage.toLowerCase()) ?? null)
@@ -161,7 +166,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
   }
 
   // Already completed this session but summary not available (e.g. after page reload) -- show locked state
-  if (!result && completed && !savedSummary) {
+  if (!result && completed && !savedSummary && shouldLock) {
     return (
       <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}25` }}>
         <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
@@ -173,7 +178,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
   }
 
   // Returning student -- show saved summary card
-  if (!result && completed && savedSummary) {
+  if (!result && completed && savedSummary && shouldLock) {
     return (
       <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${border}` }}>
         <div className="px-5 py-4 flex items-start justify-between gap-4" style={{ background: '#0f172a' }}>
@@ -221,6 +226,17 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
 
   // Input state
   if (!result) {
+    if (atLimit) {
+      return (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', border: `1px solid ${border}` }}>
+          <Lock className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: muted }} />
+          <div>
+            <p className="text-sm font-semibold" style={{ color: text }}>Review limit reached</p>
+            <p className="text-xs mt-0.5" style={{ color: muted }}>You have used all {maxReviews} allowed review attempts for this question.</p>
+          </div>
+        </div>
+      );
+    }
     const lastAttempt = submissions.length > 0 ? submissions[submissions.length - 1] : null;
     return (
       <div className="space-y-3">
@@ -443,11 +459,13 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
                 style={{ background: 'rgba(173,238,102,0.12)', color: '#ADEE66', borderRadius: 6, border: '1px solid rgba(173,238,102,0.2)' }}>
                 <Download className="w-3 h-3" /> PDF
               </button>
-              <button onClick={reset}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-                style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
-                <RotateCcw className="w-3 h-3" /> Reset
-              </button>
+              {!atLimit && (
+                <button onClick={reset}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
+                  style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <RotateCcw className="w-3 h-3" /> Reset
+                </button>
+              )}
             </div>
           </div>
         </div>

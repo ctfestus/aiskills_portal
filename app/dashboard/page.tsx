@@ -16,7 +16,6 @@ import {
 import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS, TextPositions, defaultTextPositions } from '@/components/CertificateTemplate';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import NotificationBell from '@/components/NotificationBell';
 import { Star } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
@@ -7047,7 +7046,6 @@ export default function DashboardPage() {
           <button onClick={toggleTheme} className="p-2 rounded-xl transition-colors flex-shrink-0" style={{ color: C.faint }}>
             {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
-          <NotificationBell/>
           <ProfileMenu user={user} profile={profile} onSignOut={handleSignOut}/>
         </div>
       </nav>

@@ -209,6 +209,9 @@ export function CourseTaker({
   const [reviewCompleted, setReviewCompleted] = useState<Set<string>>(new Set());
   // Stores lean summaries/results for completed review questions (in-session only)
   const [reviewSummaries, setReviewSummaries] = useState<Record<string, any>>({});
+  // Submission history per review question (for 2-review limit)
+  const [reviewSubmissions, setReviewSubmissions] = useState<Record<string, any[]>>({});
+  const [reviewDashCounts, setReviewDashCounts] = useState<Record<string, number>>({});
 
   // Feature 3: hint system
   const [hintsUsed, setHintsUsed] = useState<Set<string>>(new Set());
@@ -2790,16 +2793,18 @@ export function CourseTaker({
                       isDark={isDark}
                       accentColor={accent}
                       completed={reviewCompleted.has(currentQuestion.id)}
-                      submissions={[]}
+                      submissions={reviewSubmissions[currentQuestion.id] ?? []}
                       savedSummary={reviewSummaries[currentQuestion.id]}
                       rubric={currentQuestion.rubric}
                       schema={currentQuestion.schema}
                       minScore={currentQuestion.minScore}
                       reviewLanguage={currentQuestion.reviewLanguage}
+                      maxReviews={2}
                       onComplete={(_, lean, passed) => {
                         const alreadyDone = reviewCompleted.has(currentQuestion.id);
                         setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
                         setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: lean }));
+                        setReviewSubmissions(prev => ({ ...prev, [currentQuestion.id]: [...(prev[currentQuestion.id] ?? []), lean] }));
                         const answer = passed ? 'completed' : 'failed';
                         const newAnswers = { ...answers, [currentQuestion.id]: answer };
                         if (!alreadyDone && passed && !reviewMode) setScore(s => s + 1);
@@ -2814,15 +2819,17 @@ export function CourseTaker({
                       isDark={isDark}
                       accentColor={accent}
                       completed={reviewCompleted.has(currentQuestion.id)}
-                      submissions={[]}
+                      submissions={reviewSubmissions[currentQuestion.id] ?? []}
                       savedSummary={reviewSummaries[currentQuestion.id]}
                       context={currentQuestion.context}
                       rubric={currentQuestion.rubric}
                       minScore={currentQuestion.minScore}
+                      maxReviews={2}
                       onComplete={(_, lean, passed) => {
                         const alreadyDone = reviewCompleted.has(currentQuestion.id);
                         setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
                         setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: lean }));
+                        setReviewSubmissions(prev => ({ ...prev, [currentQuestion.id]: [...(prev[currentQuestion.id] ?? []), lean] }));
                         const answer = passed ? 'completed' : 'failed';
                         const newAnswers = { ...answers, [currentQuestion.id]: answer };
                         if (!alreadyDone && passed && !reviewMode) setScore(s => s + 1);
@@ -2841,10 +2848,13 @@ export function CourseTaker({
                       savedImageUrl={reviewSummaries[currentQuestion.id]?.imageUrl}
                       rubric={currentQuestion.rubric}
                       minScore={currentQuestion.minScore}
+                      reviewsUsed={reviewDashCounts[currentQuestion.id] ?? 0}
+                      maxReviews={2}
                       onComplete={(result, imageDataUrl, passed) => {
                         const alreadyDone = reviewCompleted.has(currentQuestion.id);
                         setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
                         setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: { result, imageUrl: imageDataUrl } }));
+                        setReviewDashCounts(prev => ({ ...prev, [currentQuestion.id]: (prev[currentQuestion.id] ?? 0) + 1 }));
                         const answer = passed ? 'completed' : 'failed';
                         const newAnswers = { ...answers, [currentQuestion.id]: answer };
                         if (!alreadyDone && passed && !reviewMode) setScore(s => s + 1);
