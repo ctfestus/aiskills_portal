@@ -58,6 +58,7 @@ interface Props {
   studentEmail: string;
   sessionToken: string;
   initialProgress?: Progress;
+  isDark?: boolean;
   onComplete: () => void;
 }
 
@@ -91,10 +92,24 @@ function normalize(s: string) { return s.toLowerCase().replace(/\s+/g, ' ').trim
 // -- Component ---
 
 export default function AssignmentExperiencePlayer({
-  formId, config, userId, studentName, studentEmail, sessionToken, initialProgress = {}, onComplete,
+  formId, config, userId, studentName, studentEmail, sessionToken, initialProgress = {}, isDark = false, onComplete,
 }: Props) {
   const accent = '#0e09dd';
   const modules = config.modules || [];
+
+  // Theme tokens
+  const bg       = isDark ? '#1E1F26' : 'white';
+  const border   = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)';
+  const shadow   = isDark ? 'none' : '0 1px 3px rgba(0,0,0,0.06)';
+  const text     = isDark ? '#f0f0f0' : '#111';
+  const muted    = isDark ? '#aaa' : '#555';
+  const faint    = isDark ? '#666' : '#999';
+  const subtle   = isDark ? '#2a2b34' : '#fafafa';
+  const barBg    = isDark ? 'rgba(255,255,255,0.08)' : '#eee';
+  const divider  = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+  const optionBg = isDark ? '#2a2b34' : 'white';
+  const prevBtnBg   = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+  const prevBtnText = isDark ? '#ccc' : '#333';
 
   const [progress,      setProgress]      = useState<Progress>(initialProgress ?? {});
   const [activeModule,  setActiveModule]  = useState(modules[0]?.id ?? '');
@@ -172,7 +187,7 @@ export default function AssignmentExperiencePlayer({
       <div className="rounded-2xl p-8 text-center" style={{ background: 'rgba(14,9,221,0.06)', border: '1px solid rgba(14,9,221,0.2)' }}>
         <CheckCircle className="w-10 h-10 mx-auto mb-3" style={{ color: accent }}/>
         <p className="text-base font-bold mb-1" style={{ color: accent }}>Experience Complete!</p>
-        <p className="text-sm" style={{ color: '#666' }}>All missions finished. Your assignment has been submitted.</p>
+        <p className="text-sm" style={{ color: muted }}>All missions finished. Your assignment has been submitted.</p>
       </div>
     );
   }
@@ -180,28 +195,28 @@ export default function AssignmentExperiencePlayer({
   return (
     <div className="space-y-4">
       {/* Progress bar */}
-      <div className="rounded-2xl p-4" style={{ background: 'white', border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+      <div className="rounded-2xl p-4" style={{ background: bg, border: `1px solid ${border}`, boxShadow: shadow }}>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold" style={{ color: '#555' }}>Overall Progress</span>
+          <span className="text-xs font-semibold" style={{ color: muted }}>Overall Progress</span>
           <div className="flex items-center gap-2">
-            {saving && <span className="text-[11px]" style={{ color: '#aaa' }}>Saving…</span>}
+            {saving && <span className="text-[11px]" style={{ color: faint }}>Saving...</span>}
             <span className="text-xs font-bold" style={{ color: accent }}>{overallPct}%</span>
           </div>
         </div>
-        <div className="h-2 rounded-full overflow-hidden" style={{ background: '#eee' }}>
+        <div className="h-2 rounded-full overflow-hidden" style={{ background: barBg }}>
           <div className="h-full rounded-full transition-all duration-500" style={{ width: `${overallPct}%`, background: accent }}/>
         </div>
-        <p className="text-[11px] mt-1.5" style={{ color: '#999' }}>{doneReqs} of {totalReqs} tasks complete</p>
+        <p className="text-[11px] mt-1.5" style={{ color: faint }}>{doneReqs} of {totalReqs} tasks complete</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4">
         {/* Sidebar -- module/lesson accordion */}
-        <div className="rounded-2xl overflow-hidden" style={{ background: 'white', border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', alignSelf: 'start' }}>
+        <div className="rounded-2xl overflow-hidden" style={{ background: bg, border: `1px solid ${border}`, boxShadow: shadow, alignSelf: 'start' }}>
           {modules.map((mod, mi) => {
             const expanded = expandedMods.has(mod.id);
             const modDone  = mod.lessons.every(l => lessonPct(l, progress) === 100);
             return (
-              <div key={mod.id} style={{ borderBottom: mi < modules.length - 1 ? '1px solid rgba(0,0,0,0.07)' : 'none' }}>
+              <div key={mod.id} style={{ borderBottom: mi < modules.length - 1 ? `1px solid ${divider}` : 'none' }}>
                 {/* Module header */}
                 <button
                   className="w-full flex items-center gap-3 px-4 py-3 text-left"
@@ -213,16 +228,16 @@ export default function AssignmentExperiencePlayer({
                   })}
                 >
                   <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ background: modDone ? `${accent}15` : 'rgba(0,0,0,0.05)' }}>
-                    {modDone ? <CheckCircle2 style={{ width: 14, height: 14, color: accent }}/> : <span className="text-[9px] font-bold" style={{ color: '#aaa' }}>{mi + 1}</span>}
+                    style={{ background: modDone ? `${accent}15` : isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }}>
+                    {modDone ? <CheckCircle2 style={{ width: 14, height: 14, color: accent }}/> : <span className="text-[9px] font-bold" style={{ color: faint }}>{mi + 1}</span>}
                   </div>
-                  <span className="flex-1 text-[13px] font-semibold leading-snug" style={{ color: '#111' }}>{mod.title}</span>
-                  {expanded ? <ChevronUp style={{ width: 14, height: 14, color: '#aaa' }}/> : <ChevronDown style={{ width: 14, height: 14, color: '#aaa' }}/>}
+                  <span className="flex-1 text-[13px] font-semibold leading-snug" style={{ color: text }}>{mod.title}</span>
+                  {expanded ? <ChevronUp style={{ width: 14, height: 14, color: faint }}/> : <ChevronDown style={{ width: 14, height: 14, color: faint }}/>}
                 </button>
 
                 {/* Lessons */}
                 {expanded && (
-                  <div style={{ borderTop: '1px solid rgba(0,0,0,0.05)' }}>
+                  <div style={{ borderTop: `1px solid ${divider}` }}>
                     {mod.lessons.map((les, li) => {
                       const locked  = lessonLocked(les, mod.id);
                       const pct     = lessonPct(les, progress);
@@ -236,12 +251,12 @@ export default function AssignmentExperiencePlayer({
                         >
                           <div className="w-4 h-4 flex-shrink-0 flex items-center justify-center">
                             {locked
-                              ? <Lock style={{ width: 11, height: 11, color: '#ccc' }}/>
+                              ? <Lock style={{ width: 11, height: 11, color: faint }}/>
                               : pct === 100
                               ? <CheckCircle2 style={{ width: 13, height: 13, color: accent }}/>
-                              : <Circle style={{ width: 13, height: 13, color: '#ccc' }}/>}
+                              : <Circle style={{ width: 13, height: 13, color: isDark ? '#555' : '#ccc' }}/>}
                           </div>
-                          <span className="flex-1 text-[12.5px] leading-snug truncate" style={{ color: locked ? '#bbb' : isActive ? accent : '#333', fontWeight: isActive ? 600 : 400 }}>{les.title}</span>
+                          <span className="flex-1 text-[12.5px] leading-snug truncate" style={{ color: locked ? faint : isActive ? accent : muted, fontWeight: isActive ? 600 : 400 }}>{les.title}</span>
                           {!locked && pct > 0 && pct < 100 && (
                             <span className="text-[10px] font-bold flex-shrink-0" style={{ color: accent }}>{pct}%</span>
                           )}
@@ -258,11 +273,11 @@ export default function AssignmentExperiencePlayer({
         {/* Main content */}
         <div className="space-y-4">
           {currentLes ? (
-            <div className="rounded-2xl overflow-hidden" style={{ background: 'white', border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+            <div className="rounded-2xl overflow-hidden" style={{ background: bg, border: `1px solid ${border}`, boxShadow: shadow }}>
               {/* Lesson title */}
-              <div className="px-6 py-5 border-b" style={{ borderColor: 'rgba(0,0,0,0.07)' }}>
+              <div className="px-6 py-5 border-b" style={{ borderColor: divider }}>
                 <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: accent }}>{currentMod?.title}</p>
-                <h2 className="text-base font-bold" style={{ color: '#111' }}>{currentLes.title}</h2>
+                <h2 className="text-base font-bold" style={{ color: text }}>{currentLes.title}</h2>
               </div>
 
               {/* Video */}
@@ -277,16 +292,16 @@ export default function AssignmentExperiencePlayer({
               {/* Body */}
               {currentLes.body && (
                 <div className="px-6 py-5">
-                  <div className="rich-content text-sm leading-relaxed" style={{ color: '#333' }}
+                  <div className="rich-content text-sm leading-relaxed" style={{ color: isDark ? '#ccc' : '#333' }}
                     dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentLes.body) }}/>
                 </div>
               )}
 
               {/* Requirements */}
               {currentLes.requirements.length > 0 && (
-                <div style={{ borderTop: '1px solid rgba(0,0,0,0.07)' }}>
+                <div style={{ borderTop: `1px solid ${divider}` }}>
                   <div className="px-6 py-4">
-                    <p className="text-[11px] font-bold uppercase tracking-widest mb-4" style={{ color: '#aaa' }}>Tasks</p>
+                    <p className="text-[11px] font-bold uppercase tracking-widest mb-4" style={{ color: faint }}>Tasks</p>
                     <div className="space-y-6">
                       {currentLes.requirements.map(req => {
                         const prog    = progress[req.id];
@@ -303,8 +318,8 @@ export default function AssignmentExperiencePlayer({
                                 <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
                                   style={{ background: `${accent}12`, color: accent }}>MCQ</span>
                                 <div>
-                                  <p className="text-sm font-semibold" style={{ color: '#111' }}>{req.label}</p>
-                                  {req.description && <p className="text-xs mt-0.5" style={{ color: '#666' }}>{req.description}</p>}
+                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
+                                  {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
                                 </div>
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5 ml-auto" style={{ color: accent }}/>}
                               </div>
@@ -317,9 +332,9 @@ export default function AssignmentExperiencePlayer({
                                     <button key={`${req.id}-opt-${oi}`} disabled={isDone}
                                       className="w-full text-left px-4 py-3 rounded-xl text-sm transition-all"
                                       style={{
-                                        border: `1.5px solid ${showResult && isSelected ? (isCorrect ? '#10b981' : '#ef4444') : isSelected ? accent : 'rgba(0,0,0,0.1)'}`,
-                                        background: showResult && isSelected ? (isCorrect ? 'rgba(16,185,129,0.07)' : 'rgba(239,68,68,0.06)') : isSelected ? `${accent}08` : 'white',
-                                        color: showResult && isSelected ? (isCorrect ? '#10b981' : '#ef4444') : '#111',
+                                        border: `1.5px solid ${showResult && isSelected ? (isCorrect ? '#10b981' : '#ef4444') : isSelected ? accent : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                                        background: showResult && isSelected ? (isCorrect ? 'rgba(16,185,129,0.07)' : 'rgba(239,68,68,0.06)') : isSelected ? `${accent}08` : optionBg,
+                                        color: showResult && isSelected ? (isCorrect ? '#10b981' : '#ef4444') : text,
                                         cursor: isDone ? 'default' : 'pointer',
                                       }}
                                       onClick={() => {
@@ -345,20 +360,20 @@ export default function AssignmentExperiencePlayer({
                             <div key={req.id} className="space-y-2">
                               <div className="flex items-start gap-2">
                                 <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
-                                  style={{ background: 'rgba(0,0,0,0.05)', color: '#666' }}>Answer</span>
+                                  style={{ background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)', color: muted }}>Answer</span>
                                 <div className="flex-1">
-                                  <p className="text-sm font-semibold" style={{ color: '#111' }}>{req.label}</p>
-                                  {req.description && <p className="text-xs mt-0.5" style={{ color: '#666' }}>{req.description}</p>}
+                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
+                                  {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
                                 </div>
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
                               </div>
                               <textarea
                                 value={val}
                                 onChange={e => updateProgress(req.id, { notes: e.target.value, completed: !!e.target.value.trim() })}
-                                placeholder="Type your answer here…"
+                                placeholder="Type your answer here..."
                                 rows={4}
                                 className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
-                                style={{ border: `1px solid ${isDone ? `${accent}40` : 'rgba(0,0,0,0.1)'}`, background: isDone ? `${accent}05` : '#fafafa', color: '#111' }}
+                                style={{ border: `1px solid ${isDone ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDone ? `${accent}05` : subtle, color: text }}
                               />
                             </div>
                           );
@@ -375,30 +390,30 @@ export default function AssignmentExperiencePlayer({
                                 <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
                                   style={{ background: 'rgba(14,9,221,0.08)', color: accent }}>Upload</span>
                                 <div className="flex-1">
-                                  <p className="text-sm font-semibold" style={{ color: '#111' }}>{req.label}</p>
-                                  {req.description && <p className="text-xs mt-0.5" style={{ color: '#666' }}>{req.description}</p>}
+                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
+                                  {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
                                 </div>
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
                               </div>
                               <label className="flex flex-col items-center gap-2 rounded-xl py-6 cursor-pointer transition-all"
-                                style={{ border: `1.5px dashed ${fileUrl ? `${accent}60` : 'rgba(0,0,0,0.15)'}`, background: fileUrl ? `${accent}04` : '#fafafa' }}>
+                                style={{ border: `1.5px dashed ${fileUrl ? `${accent}60` : isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'}`, background: fileUrl ? `${accent}04` : subtle }}>
                                 {uploading
                                   ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: accent }}/>
                                   : fileUrl
                                   ? <CheckCircle2 className="w-5 h-5" style={{ color: accent }}/>
-                                  : <UploadIcon className="w-5 h-5" style={{ color: '#bbb' }}/>}
-                                <p className="text-xs font-medium text-center" style={{ color: fileUrl ? accent : '#888' }}>
-                                  {uploading ? 'Uploading…' : fileUrl ? 'Uploaded. Click to replace.' : 'Click to upload your file'}
+                                  : <UploadIcon className="w-5 h-5" style={{ color: faint }}/>}
+                                <p className="text-xs font-medium text-center" style={{ color: fileUrl ? accent : muted }}>
+                                  {uploading ? 'Uploading...' : fileUrl ? 'Uploaded. Click to replace.' : 'Click to upload your file'}
                                 </p>
                                 {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[11px] underline" style={{ color: accent }}>View file</a>}
                                 <input type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(req.id, f); }}/>
                               </label>
                               <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
-                                style={{ border: `1px solid ${linkUrl ? `${accent}40` : 'rgba(0,0,0,0.1)'}`, background: '#fafafa' }}>
-                                <LinkIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#aaa' }}/>
-                                <input type="url" value={linkUrl} placeholder="Or paste a link…"
+                                style={{ border: `1px solid ${linkUrl ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: subtle }}>
+                                <LinkIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: faint }}/>
+                                <input type="url" value={linkUrl} placeholder="Or paste a link..."
                                   className="flex-1 bg-transparent text-sm outline-none"
-                                  style={{ color: '#111' }}
+                                  style={{ color: text }}
                                   onChange={e => updateProgress(req.id, { linkUrl: e.target.value, completed: !!e.target.value.trim() })}/>
                               </div>
                             </div>
@@ -411,14 +426,14 @@ export default function AssignmentExperiencePlayer({
                             <div key={req.id} className="flex items-start gap-3">
                               <button
                                 className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center mt-0.5 transition-all"
-                                style={{ background: isDone ? accent : 'transparent', border: `1.5px solid ${isDone ? accent : '#ccc'}`, cursor: 'pointer' }}
+                                style={{ background: isDone ? accent : 'transparent', border: `1.5px solid ${isDone ? accent : isDark ? '#555' : '#ccc'}`, cursor: 'pointer' }}
                                 onClick={() => updateProgress(req.id, { completed: !isDone })}
                               >
                                 {isDone && <CheckCircle2 style={{ width: 12, height: 12, color: 'white' }}/>}
                               </button>
                               <div className="flex-1">
-                                <p className="text-sm font-semibold" style={{ color: '#111' }}>{req.label}</p>
-                                {req.description && <p className="text-xs mt-0.5" style={{ color: '#666' }}>{req.description}</p>}
+                                <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
+                                {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
                               </div>
                             </div>
                           );
@@ -433,14 +448,14 @@ export default function AssignmentExperiencePlayer({
                                 <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
                                   style={{ background: `${accent}12`, color: accent }}>AI Critique</span>
                                 <div className="flex-1">
-                                  <p className="text-sm font-semibold" style={{ color: '#111' }}>{req.label}</p>
-                                  {req.description && <p className="text-xs mt-0.5" style={{ color: '#666' }}>{req.description}</p>}
+                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
+                                  {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
                                 </div>
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
                               </div>
                               <DashboardCritiquePlayer
                                 reqId={req.id}
-                                isDark={false}
+                                isDark={isDark}
                                 accentColor={accent}
                                 completed={isDone}
                                 savedResult={saved?.notes ? (() => { try { return JSON.parse(saved.notes!); } catch { return undefined; } })() : undefined}
@@ -461,14 +476,14 @@ export default function AssignmentExperiencePlayer({
                                 <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
                                   style={{ background: `${accent}12`, color: accent }}>AI Code Review</span>
                                 <div className="flex-1">
-                                  <p className="text-sm font-semibold" style={{ color: '#111' }}>{req.label}</p>
-                                  {req.description && <p className="text-xs mt-0.5" style={{ color: '#666' }}>{req.description}</p>}
+                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
+                                  {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
                                 </div>
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
                               </div>
                               <CodeReviewPlayer
                                 reqId={req.id}
-                                isDark={false}
+                                isDark={isDark}
                                 accentColor={accent}
                                 completed={isDone}
                                 submissions={submissions}
@@ -493,14 +508,14 @@ export default function AssignmentExperiencePlayer({
                                 <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
                                   style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>AI Excel Review</span>
                                 <div className="flex-1">
-                                  <p className="text-sm font-semibold" style={{ color: '#111' }}>{req.label}</p>
-                                  {req.description && <p className="text-xs mt-0.5" style={{ color: '#666' }}>{req.description}</p>}
+                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
+                                  {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
                                 </div>
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
                               </div>
                               <ExcelReviewPlayer
                                 reqId={req.id}
-                                isDark={false}
+                                isDark={isDark}
                                 accentColor={accent}
                                 completed={isDone}
                                 submissions={submissions}
@@ -523,12 +538,12 @@ export default function AssignmentExperiencePlayer({
               )}
 
               {/* Prev / Next navigation */}
-              <div className="px-6 py-4 flex items-center justify-between" style={{ borderTop: '1px solid rgba(0,0,0,0.07)' }}>
+              <div className="px-6 py-4 flex items-center justify-between" style={{ borderTop: `1px solid ${divider}` }}>
                 <button
                   disabled={!prevEntry}
                   onClick={() => prevEntry && navigate(prevEntry.modId, prevEntry.lesson.id)}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all disabled:opacity-30"
-                  style={{ background: 'rgba(0,0,0,0.05)', color: '#333', border: 'none', cursor: prevEntry ? 'pointer' : 'not-allowed' }}>
+                  style={{ background: prevBtnBg, color: prevBtnText, border: 'none', cursor: prevEntry ? 'pointer' : 'not-allowed' }}>
                   <ChevronLeft className="w-4 h-4"/> Previous
                 </button>
                 {nextEntry ? (
@@ -551,8 +566,8 @@ export default function AssignmentExperiencePlayer({
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl p-8 text-center" style={{ background: 'white', border: '1px solid rgba(0,0,0,0.08)' }}>
-              <p className="text-sm" style={{ color: '#888' }}>Select a lesson from the sidebar to begin.</p>
+            <div className="rounded-2xl p-8 text-center" style={{ background: bg, border: `1px solid ${border}` }}>
+              <p className="text-sm" style={{ color: faint }}>Select a lesson from the sidebar to begin.</p>
             </div>
           )}
         </div>

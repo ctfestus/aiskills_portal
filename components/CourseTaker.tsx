@@ -182,6 +182,8 @@ export function CourseTaker({
   initialStudentName = '',
   initialStudentEmail = '',
   relatedAssignment = null,
+  logoUrl = '',
+  logoDarkUrl = '',
 }: any) {
   const [phase, setPhase] = useState<'info' | 'course' | 'complete'>(
     collectStudentInfo || !!initialStudentName ? 'info' : 'course'
@@ -2163,18 +2165,121 @@ export function CourseTaker({
         style={{ width: '100vw', height: '100vh' }}
       />
 
+      {/* -- Streak toast -- */}
+      <AnimatePresence>
+        {streakToast && (
+          <motion.div
+            key="streak-toast"
+            initial={{ opacity: 0, y: -16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-14 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none"
+          >
+            <span className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[12px] font-semibold text-white shadow-lg"
+              style={{ background: '#10b981' }}>
+              🔥 {streakToast.replace(/^🔥\s*/, '')}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
 
       {/* -- Main container (split layout for full-screen, single column for inline) -- */}
       <div
         className={inlineMode
           ? `relative flex flex-col rounded-xl overflow-hidden min-h-[500px] ${isDark ? 'bg-black' : 'bg-white'}`
-          : 'fixed inset-0 z-[200] overflow-hidden flex'
+          : 'fixed inset-0 z-[200] overflow-hidden flex flex-col'
         }
         style={{ ...noSelect, color: isDark ? '#ffffff' : '#18181b', ...fontStyle }}
         onCopy={blockCopy}
         onCut={blockCopy}
         onContextMenu={blockMenu}
       >
+
+        {/* Nav bar -- full width */}
+        <div
+          className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-2"
+          style={{
+            background: isDark ? '#111113' : '#ffffff',
+            borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+            minHeight: 44,
+          }}
+        >
+          {/* Left: logo */}
+          <div className="flex items-center flex-shrink-0">
+            {(isDark ? (logoDarkUrl || logoUrl) : logoUrl) && (
+              <a href="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
+                <img src={(isDark ? (logoDarkUrl || logoUrl) : logoUrl) || undefined} alt="" style={{ height: 24, width: 'auto', objectFit: 'contain' }} />
+              </a>
+            )}
+          </div>
+          {/* Right: controls */}
+          <div className="flex items-center gap-1">
+          {timeLeft !== null && (
+            <span className={`flex items-center gap-1 text-xs font-semibold tabular-nums mr-2 ${timerWarning ? 'text-rose-400' : mutedColor}`}>
+              <Clock className="w-3 h-3" />
+              {formatTime(timeLeft)}
+            </span>
+          )}
+          {reviewMode && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full mr-2"
+              style={{ background: isDark ? 'rgba(99,102,241,0.2)' : '#ede9fe', color: isDark ? '#a5b4fc' : '#6d28d9' }}>
+              Review Mode
+            </span>
+          )}
+          <div ref={menuRef} className="relative">
+            <button
+              onClick={() => setShowMenu(v => !v)}
+              className={`relative p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
+              title="Course info"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+              {xpNotify && (
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              )}
+            </button>
+            <AnimatePresence>
+              {showMenu && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                  transition={{ duration: 0.12 }}
+                  className={`absolute right-0 top-9 z-50 w-52 rounded-xl shadow-xl border overflow-hidden ${isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-white border-zinc-200'}`}
+                  onMouseLeave={() => setShowMenu(false)}
+                >
+                  <div className={`px-4 py-3 border-b ${isDark ? 'border-zinc-800' : 'border-zinc-100'}`}>
+                    <p className={`text-[10px] font-semibold uppercase tracking-widest ${mutedColor}`}>Course Progress</p>
+                  </div>
+                  <div className="px-4 py-3 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className={`text-xs ${mutedColor}`}>Current</span>
+                      <span className="text-xs font-semibold" style={{ color: accent }}>{currentQuestionIndex + 1} of {totalSlides}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className={`text-xs ${mutedColor}`}>Total slides</span>
+                      <span className="text-xs font-semibold" style={{ color: isDark ? '#fff' : '#18181b' }}>{totalSlides}</span>
+                    </div>
+                    {pointsEnabled && (
+                      <div className="flex justify-between items-center">
+                        <span className={`text-xs ${mutedColor}`}>XP earned</span>
+                        <span className="text-xs font-bold tabular-nums flex items-center gap-1" style={{ color: isDark ? '#facc15' : '#10b981' }}>
+                          ⭐ {displayedPoints.toLocaleString()}
+                          {streak >= 2 && <span className="text-orange-400">🔥{streak}</span>}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          </div>
+        </div>
+
+        {/* Body row: sidebar + content */}
+        <div className="relative flex flex-1 overflow-hidden">
 
         {/* -- SIDEBAR (non-inline only) -- */}
         {!inlineMode && (
@@ -2190,42 +2295,35 @@ export function CourseTaker({
             <aside
               className="absolute inset-y-0 left-0 z-40 sm:relative sm:inset-auto flex-shrink-0 flex flex-col border-r transition-all duration-300"
               style={{
-                width: sidebarOpen ? 'min(100vw, 288px)' : 0,
-                minWidth: sidebarOpen ? 'min(100vw, 288px)' : 0,
+                width: sidebarOpen ? 'min(100vw, 288px)' : 44,
+                minWidth: sidebarOpen ? 'min(100vw, 288px)' : 44,
                 background: isDark ? '#141416' : '#ffffff',
                 borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)',
-                overflow: sidebarOpen ? undefined : 'hidden',
+                overflow: 'hidden',
               }}
             >
-              {/* Sidebar header */}
-              <div
-                className="px-4 py-3 border-b flex items-center gap-2 flex-shrink-0"
-                style={{ borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)' }}
-              >
-                {/* Exit course */}
+              {/* Toggle button -- always visible, centered when collapsed */}
+              <div className={`${sidebarOpen ? 'px-3' : 'flex justify-center'} pt-3 pb-1 flex-shrink-0`}>
                 <button
-                  onClick={() => onClose ? onClose() : window.history.back()}
-                  className="flex-shrink-0 p-1.5 rounded-lg hover:opacity-60 transition-opacity"
-                  style={{ color: isDark ? '#555' : '#aaa' }}
-                  title="Exit course"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-bold truncate" style={{ color: isDark ? '#f0f0f0' : '#111' }}>
-                    {(config as any).title || 'Course'}
-                  </p>
-                </div>
-                {/* Collapse sidebar */}
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="flex-shrink-0 p-1.5 rounded-lg hover:opacity-60 transition-opacity"
-                  style={{ color: isDark ? '#555' : '#aaa' }}
-                  title="Close panel"
+                  onClick={() => setSidebarOpen(v => !v)}
+                  className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
+                  title="Toggle panel"
                 >
                   <List className="w-4 h-4" />
                 </button>
               </div>
+
+              {sidebarOpen && (<>
+              {/* Course title */}
+              {config.title && (
+                <div
+                  className="px-3 pt-2 pb-1 flex-shrink-0"
+                >
+                  <p className="text-xs font-bold truncate" style={{ color: isDark ? '#e4e4e7' : '#111' }}>
+                    {config.title}
+                  </p>
+                </div>
+              )}
 
               {/* Overall progress */}
               <div
@@ -2385,6 +2483,7 @@ export function CourseTaker({
                   })}
                 </div>
               </nav>
+              </>)}
             </aside>
           </>
         )}
@@ -2394,145 +2493,6 @@ export function CourseTaker({
           className={inlineMode ? 'flex-1 flex flex-col' : 'flex-1 overflow-hidden flex flex-col'}
           style={{ background: isDark ? '#0f0f10' : '#F2F5FA' }}
         >
-
-          {/* Progress + controls bar */}
-          <div
-            className="flex-shrink-0 px-3 sm:px-6 pt-3 sm:pt-5 pb-2 sm:pb-3"
-            style={{
-              background: isDark ? '#111113' : '#ffffff',
-              borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
-            }}
-          >
-            <div className="flex justify-between items-center mb-3">
-              {/* Left controls */}
-              <div className="flex items-center gap-1">
-                {/* Show hamburger only when sidebar is closed (non-inline), or always for inline mode */}
-                {(inlineMode || !sidebarOpen) && (
-                  <button
-                    onClick={() => inlineMode ? setShowChapters(v => !v) : setSidebarOpen(v => !v)}
-                    className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
-                    title="Course contents"
-                  >
-                    <List className="w-4 h-4" />
-                  </button>
-                )}
-                {currentQuestionIndex > 0 && (
-                  <button
-                    onClick={handleBack}
-                    className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
-                    title="Previous question"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-
-              {/* Right controls */}
-              <div className="flex items-center gap-2">
-                {timeLeft !== null && (
-                  <span className={`flex items-center gap-1 text-xs font-semibold tabular-nums ${timerWarning ? 'text-rose-400' : mutedColor}`}>
-                    <Clock className="w-3 h-3" />
-                    {formatTime(timeLeft)}
-                  </span>
-                )}
-                {reviewMode && (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                    style={{ background: isDark ? 'rgba(99,102,241,0.2)' : '#ede9fe', color: isDark ? '#a5b4fc' : '#6d28d9' }}>
-                    Review Mode
-                  </span>
-                )}
-                {/* 3-dot menu */}
-                <div ref={menuRef} className="relative">
-                  <button
-                    onClick={() => setShowMenu(v => !v)}
-                    className={`relative p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
-                    title="Course info"
-                  >
-                    <MoreHorizontal className="w-4 h-4" />
-                    {xpNotify && (
-                      <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                    )}
-                  </button>
-                  <AnimatePresence>
-                    {showMenu && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                        transition={{ duration: 0.12 }}
-                        className={`absolute right-0 top-9 z-50 w-52 rounded-xl shadow-xl border overflow-hidden ${isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-white border-zinc-200'}`}
-                        onMouseLeave={() => setShowMenu(false)}
-                      >
-                        <div className={`px-4 py-3 border-b ${isDark ? 'border-zinc-800' : 'border-zinc-100'}`}>
-                          <p className={`text-[10px] font-semibold uppercase tracking-widest ${mutedColor}`}>Course Progress</p>
-                        </div>
-                        <div className="px-4 py-3 space-y-3">
-                          <div className="flex justify-between items-center">
-                            <span className={`text-xs ${mutedColor}`}>Current</span>
-                            <span className="text-xs font-semibold" style={{ color: accent }}>{currentQuestionIndex + 1} of {totalSlides}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className={`text-xs ${mutedColor}`}>Total slides</span>
-                            <span className="text-xs font-semibold" style={{ color: isDark ? '#fff' : '#18181b' }}>{totalSlides}</span>
-                          </div>
-                          {pointsEnabled && (
-                            <div className="flex justify-between items-center">
-                              <span className={`text-xs ${mutedColor}`}>XP earned</span>
-                              <span className="text-xs font-bold tabular-nums flex items-center gap-1" style={{ color: isDark ? '#facc15' : '#10b981' }}>
-                                ⭐ {displayedPoints.toLocaleString()}
-                                {streak >= 2 && <span className="text-orange-400">🔥{streak}</span>}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-            </div>
-
-            {/* Streak toast + Progress bar */}
-            <div className="relative">
-              <AnimatePresence>
-                {streakToast && (
-                  <motion.div
-                    key="streak-toast"
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none"
-                  >
-                    <span className="flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-semibold text-white shadow-sm"
-                      style={{ background: '#10b981' }}>
-                      🔥 {streakToast.replace(/^🔥\s*/, '')}
-                    </span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Progress bar */}
-              <div className={`h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
-                <motion.div
-                  className="h-full rounded-full"
-                  style={{ background: timerWarning ? '#f43f5e' : accent }}
-                  animate={{ width: `${progressPct}%` }}
-                  transition={{ duration: 0.4, ease: 'easeOut' }}
-                />
-              </div>
-              {timeLeft !== null && courseTimerMins > 0 && (
-                <div className={`h-0.5 mt-1 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
-                  <motion.div
-                    className="h-full rounded-full"
-                    style={{ background: timerWarning ? '#f43f5e' : accent }}
-                    animate={{ width: `${(timeLeft / (courseTimerMins * 60)) * 100}%` }}
-                    transition={{ duration: 0.9, ease: 'linear' }}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
 
           {/* Question content - scrollable */}
           <div
@@ -3080,6 +3040,7 @@ export function CourseTaker({
             </div>
           </div>
         </div>{/* end main column */}
+        </div>{/* end body row */}
       </div>{/* end main container */}
 
       {/* Chapters drawer - inline mode only (full-screen mode uses persistent sidebar) */}

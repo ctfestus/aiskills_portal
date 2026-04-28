@@ -533,7 +533,7 @@ CREATE TABLE public.meeting_integrations (
 CREATE TABLE public.notifications (
   id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id    uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  form_id    uuid        REFERENCES public.forms(id) ON DELETE CASCADE,
+  form_id    uuid,
   type       text        NOT NULL,
   title      text        NOT NULL,
   body       text,
@@ -1877,46 +1877,67 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.trim_notifications(uuid) FROM PUBLIC;
 
 
--- 1. Instructor: new response / course submission / event registration
+-- 1. Instructor: new response / course submission / VE / event / assignment
 CREATE OR REPLACE FUNCTION public.create_response_notification()
 RETURNS TRIGGER AS $$
 DECLARE
-  v_owner_id   uuid;
-  v_form_title text;
-  v_is_course  boolean;
-  v_is_event   boolean;
-  v_type       text;
-  v_title      text;
-  v_body       text;
-  v_name       text;
-  v_pct        text;
+  v_owner_id    uuid;
+  v_form_title  text;
+  v_content_type text;
+  v_type        text;
+  v_title       text;
+  v_body        text;
+  v_name        text;
+  v_pct         text;
 BEGIN
-  SELECT user_id,
-         config->>'title',
-         COALESCE((config->>'isCourse')::boolean, false),
-         COALESCE((config->'eventDetails'->>'isEvent')::boolean, false)
-  INTO v_owner_id, v_form_title, v_is_course, v_is_event
-  FROM public.forms
-  WHERE id = NEW.form_id;
+  SELECT user_id, title INTO v_owner_id, v_form_title
+  FROM public.courses WHERE id = NEW.form_id;
+  IF v_owner_id IS NOT NULL THEN v_content_type := 'course'; END IF;
+
+  IF v_owner_id IS NULL THEN
+    SELECT user_id, title INTO v_owner_id, v_form_title
+    FROM public.virtual_experiences WHERE id = NEW.form_id;
+    IF v_owner_id IS NOT NULL THEN v_content_type := 've'; END IF;
+  END IF;
+
+  IF v_owner_id IS NULL THEN
+    SELECT user_id, title INTO v_owner_id, v_form_title
+    FROM public.events WHERE id = NEW.form_id;
+    IF v_owner_id IS NOT NULL THEN v_content_type := 'event'; END IF;
+  END IF;
+
+  IF v_owner_id IS NULL THEN
+    SELECT user_id, title INTO v_owner_id, v_form_title
+    FROM public.assignments WHERE id = NEW.form_id;
+    IF v_owner_id IS NOT NULL THEN v_content_type := 'assignment'; END IF;
+  END IF;
 
   IF v_owner_id IS NULL THEN RETURN NEW; END IF;
 
   v_name := COALESCE(NEW.data->>'name', NEW.data->>'full_name', 'Someone');
   v_pct  := COALESCE(NEW.data->>'percentage', '');
 
-  IF v_is_course THEN
+  IF v_content_type = 'course' THEN
     IF COALESCE((NEW.data->>'passed')::boolean, false) THEN
       v_type  := 'course_pass';
       v_title := v_name || ' passed your course';
-      v_body  := v_form_title || CASE WHEN v_pct <> '' THEN ' -- ' || v_pct || '%' ELSE '' END;
+      v_body  := v_form_title || CASE WHEN v_pct <> '' THEN ' - ' || v_pct || '%' ELSE '' END;
     ELSE
       v_type  := 'course_fail';
       v_title := v_name || ' completed your course';
-      v_body  := v_form_title || CASE WHEN v_pct <> '' THEN ' -- ' || v_pct || '%' ELSE '' END;
+      v_body  := v_form_title || CASE WHEN v_pct <> '' THEN ' - ' || v_pct || '%' ELSE '' END;
     END IF;
-  ELSIF v_is_event THEN
+  ELSIF v_content_type = 've' THEN
+    v_type  := 'course_pass';
+    v_title := v_name || ' completed your virtual experience';
+    v_body  := v_form_title;
+  ELSIF v_content_type = 'event' THEN
     v_type  := 'registration';
     v_title := v_name || ' registered for your event';
+    v_body  := v_form_title;
+  ELSIF v_content_type = 'assignment' THEN
+    v_type  := 'response';
+    v_title := v_name || ' submitted an assignment';
     v_body  := v_form_title;
   ELSE
     v_type  := 'response';
@@ -1928,6 +1949,8 @@ BEGIN
   VALUES (v_owner_id, NEW.form_id, v_type, v_title, v_body);
 
   PERFORM public.trim_notifications(v_owner_id);
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
   RETURN NEW;
 END;
 $$

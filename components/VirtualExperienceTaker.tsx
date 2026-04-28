@@ -83,6 +83,8 @@ interface Props {
   isDark?: boolean;
   accentColor?: string;
   shortCourse?: boolean;
+  logoUrl?: string;
+  logoDarkUrl?: string;
 }
 
 // Helpers
@@ -152,6 +154,7 @@ export default function VirtualExperienceTaker({
   formId, formSlug, config, studentName, studentEmail, userId, sessionToken,
   initialProgress = {}, initialModuleId, initialLessonId,
   isDark = true, accentColor = '#00b95c', shortCourse = false,
+  logoUrl = '', logoDarkUrl = '',
 }: Props) {
   const authHeader = useMemo(
     () => sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {} as Record<string, string>,
@@ -164,10 +167,10 @@ export default function VirtualExperienceTaker({
   const muted    = isDark ? '#888' : '#666';
   const subtle   = isDark ? '#262626' : '#f0f0ec';
 
-  const navSurface = isDark ? surface : '#0e09dd';
-  const navText    = isDark ? text : '#ffffff';
-  const navMuted   = isDark ? muted : 'rgba(255,255,255,0.8)';
-  const navBorder  = isDark ? border : '#0b07b3';
+  const navSurface = isDark ? surface : '#ffffff';
+  const navText    = isDark ? text : '#111';
+  const navMuted   = isDark ? muted : '#666';
+  const navBorder  = isDark ? border : 'rgba(0,0,0,0.08)';
 
   const modules = config.modules || [];
   const flat    = allLessons(modules);
@@ -517,7 +520,36 @@ export default function VirtualExperienceTaker({
 
   // Main layout
   return (
-    <div className="relative flex h-screen overflow-hidden font-sans" style={{ background: bg, color: text }}>
+    <div className="relative flex flex-col h-screen overflow-hidden font-sans" style={{ background: bg, color: text }}>
+
+      {/* Full-width nav bar */}
+      <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 py-2 border-b"
+        style={{ background: navSurface, borderColor: navBorder, minHeight: 44 }}>
+        {/* Left: logo */}
+        <div className="flex items-center flex-shrink-0">
+          {(isDark ? (logoDarkUrl || logoUrl) : logoUrl) && (
+            <a href="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
+              <img src={(isDark ? (logoDarkUrl || logoUrl) : logoUrl) || undefined} alt="" style={{ height: 24, width: 'auto', objectFit: 'contain' }} />
+            </a>
+          )}
+        </div>
+        <div className="flex-1" />
+        {/* Right: controls */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+          {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: navMuted }} />}
+          {config.dataset && (
+            <button onClick={downloadDataset} title={`Download ${config.dataset.filename}`}
+              className="sm:hidden flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg"
+              style={{ background: isDark ? `${accentColor}18` : 'rgba(255,255,255,0.15)', color: isDark ? accentColor : '#fff' }}>
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <span className="text-xs tabular-nums" style={{ color: navMuted }}>{overallPct}%</span>
+        </div>
+      </div>
+
+      {/* Body row */}
+      <div className="relative flex flex-1 overflow-hidden">
 
       {/* Mobile backdrop: tap to close sidebar */}
       {sidebarOpen && (
@@ -527,27 +559,26 @@ export default function VirtualExperienceTaker({
       {/* Sidebar: absolute overlay on mobile, in-flow on sm+ */}
       <aside className="absolute inset-y-0 left-0 z-40 sm:relative sm:inset-auto flex-shrink-0 flex flex-col border-r transition-all duration-300"
         style={{
-          width: sidebarOpen ? 'min(100vw, 280px)' : 0, minWidth: sidebarOpen ? 'min(100vw, 280px)' : 0,
+          width: sidebarOpen ? 'min(100vw, 280px)' : 44, minWidth: sidebarOpen ? 'min(100vw, 280px)' : 44,
           background: surface, borderColor: border,
-          overflow: sidebarOpen ? 'auto' : 'hidden',
+          overflow: 'hidden',
         }}>
 
-        {/* Company / title header */}
-        <div className="px-4 py-4 border-b flex items-center gap-3 flex-shrink-0" style={{ borderColor: border }}>
-          <div className="min-w-0 flex-1">
-            {shortCourse
-              ? <p className="text-xs font-bold truncate" style={{ color: text }}>{config.title || 'Short Course'}</p>
-              : <>
-                  <p className="text-xs font-bold truncate" style={{ color: text }}>{config.company}</p>
-                  <p className="text-[11px] truncate" style={{ color: muted }}>{config.role}</p>
-                </>
-            }
-          </div>
-          <button onClick={() => setSidebarOpen(false)} style={{ color: muted }} className="flex-shrink-0 hover:opacity-60">
-            <X className="w-4 h-4" />
+        {/* Toggle + title header */}
+        <div className={`flex items-center pt-3 pb-2 border-b flex-shrink-0 ${sidebarOpen ? 'gap-2 px-3' : 'justify-center'}`} style={{ borderColor: border }}>
+          <button onClick={() => setSidebarOpen(v => !v)} style={{ color: muted }} className="flex-shrink-0 hover:opacity-60 p-1">
+            <Menu className="w-4 h-4" />
           </button>
+          {sidebarOpen && (
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold truncate" style={{ color: text }}>
+                {config.title || config.company || 'Virtual Experience'}
+              </p>
+            </div>
+          )}
         </div>
 
+        {sidebarOpen && (<>
         {/* Overall progress */}
         <div className="px-4 py-3 border-b flex-shrink-0" style={{ borderColor: border }}>
           <div className="flex justify-between text-xs mb-1.5" style={{ color: muted }}>
@@ -652,36 +683,11 @@ export default function VirtualExperienceTaker({
             })}
           </div>
         </nav>
+        </>)}
       </aside>
 
       {/* Main content */}
       <main className="flex-1 overflow-hidden flex flex-col">
-        {/* Top bar */}
-        <div className="sticky top-0 z-10 flex items-center gap-3 px-4 sm:px-6 py-3 border-b flex-shrink-0"
-          style={{ background: navSurface, borderColor: navBorder }}>
-          {!sidebarOpen && (
-            <button onClick={() => setSidebarOpen(true)} style={{ color: navMuted }} className="hover:opacity-60">
-              <Menu className="w-5 h-5" />
-            </button>
-          )}
-          <div className="flex items-center gap-1.5 text-xs min-w-0 flex-1" style={{ color: navMuted }}>
-            <span className="hidden sm:inline truncate">{currentMod?.title}</span>
-            <ChevronRight className="hidden sm:block w-3 h-3 flex-shrink-0" />
-            <span className="truncate font-medium" style={{ color: navText }}>{currentLes?.title}</span>
-          </div>
-          <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: navMuted }} />}
-            {config.dataset && (
-              <button onClick={downloadDataset} title={`Download ${config.dataset.filename}`}
-                className="sm:hidden flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg"
-                style={{ background: isDark ? `${accentColor}18` : 'rgba(255,255,255,0.15)', color: isDark ? accentColor : '#fff' }}>
-                <Download className="w-3.5 h-3.5" />
-              </button>
-            )}
-            <span className="text-xs tabular-nums" style={{ color: navMuted }}>{overallPct}%</span>
-          </div>
-        </div>
-
         {/* Review mode banner */}
         {reviewMode && (
           <div className="flex items-center justify-between px-4 py-2 text-xs font-semibold flex-shrink-0"
@@ -1478,6 +1484,7 @@ export default function VirtualExperienceTaker({
           </div>
         </div>
       </main>
+      </div>
     </div>
   );
 }

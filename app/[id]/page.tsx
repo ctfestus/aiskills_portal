@@ -808,6 +808,8 @@ export default function PublicFormPage() {
           isDark={studentTheme === 'dark'}
           accentColor={indColor}
           shortCourse={!!form.is_short_course}
+          logoUrl={logoUrl}
+          logoDarkUrl={logoDarkUrl}
         />
       );
     }
@@ -1240,6 +1242,8 @@ export default function PublicFormPage() {
             relatedForms={relatedForms}
             certificateId={certificateId}
             relatedAssignment={relatedAssignment}
+            logoUrl={logoUrl}
+            logoDarkUrl={logoDarkUrl}
           />
         )}
 

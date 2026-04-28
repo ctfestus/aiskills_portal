@@ -1287,6 +1287,8 @@ const AssignmentExperiencePlayer = dynamic(() => import('@/components/Assignment
 
 function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, onBack }: { assignment: any; userId: string; studentName: string; studentEmail: string; C: typeof LIGHT_C; onBack: () => void }) {
   type ReadyFile = { name: string; url: string; status: 'uploading' | 'done' | 'error'; error?: string };
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const [submission, setSubmission] = useState<any>(null);
   const [savedFiles, setSavedFiles] = useState<any[]>([]);
   const [resources, setResources] = useState<any[]>([]);
@@ -1707,7 +1709,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
           {assignmentType === 'code_review' && (
             <CodeReviewPlayer
               reqId={assignment.id}
-              isDark={false}
+              isDark={isDark}
               accentColor={C.green}
               completed={isGraded || isSubmitted}
               savedSummary={(() => { try { return submission?.response_text ? JSON.parse(submission.response_text) : undefined; } catch { return undefined; } })()}
@@ -1720,7 +1722,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
           {assignmentType === 'excel_review' && (
             <ExcelReviewPlayer
               reqId={assignment.id}
-              isDark={false}
+              isDark={isDark}
               accentColor={C.green}
               completed={isGraded || isSubmitted}
               savedSummary={(() => { try { return submission?.response_text ? JSON.parse(submission.response_text) : undefined; } catch { return undefined; } })()}
@@ -1733,7 +1735,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
           {assignmentType === 'dashboard_critique' && (
             <DashboardCritiquePlayer
               reqId={assignment.id}
-              isDark={false}
+              isDark={isDark}
               accentColor={C.green}
               completed={isGraded || isSubmitted}
               savedResult={(() => { try { return submission?.response_text ? JSON.parse(submission.response_text) : undefined; } catch { return undefined; } })()}
@@ -1772,6 +1774,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               studentEmail={studentEmail}
               sessionToken={sessionToken}
               initialProgress={veProgress}
+              isDark={isDark}
               onComplete={() => autoSubmit(null, 'Virtual experience completed.')}
             />
           )}

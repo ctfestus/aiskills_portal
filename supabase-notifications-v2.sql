@@ -3,13 +3,23 @@
 -- Run this in Supabase SQL Editor
 -- ============================================================
 
+-- ── Create table if it does not exist yet ────────────────────
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  form_id    uuid,
+  type       text        NOT NULL,
+  title      text        NOT NULL,
+  body       text,
+  link       text,
+  read       boolean     DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Add link column if table already existed without it
 ALTER TABLE public.notifications ADD COLUMN IF NOT EXISTS link text;
 
 -- ── Helper: keep only the 4 most recent notifications per user ──
--- Retains the latest 4 rows for p_user_id and deletes the rest.
--- SECURITY DEFINER so it can bypass RLS when called by other triggers.
--- REVOKE from PUBLIC so no external role can invoke it directly.
-
 CREATE OR REPLACE FUNCTION public.trim_notifications(p_user_id uuid)
 RETURNS void
 LANGUAGE plpgsql
@@ -25,6 +35,8 @@ BEGIN
       ORDER BY created_at DESC
       LIMIT 4
     );
+EXCEPTION WHEN OTHERS THEN
+  NULL;
 END;
 $$;
 
@@ -36,42 +48,67 @@ REVOKE EXECUTE ON FUNCTION public.trim_notifications(uuid) FROM PUBLIC;
 CREATE OR REPLACE FUNCTION public.create_response_notification()
 RETURNS TRIGGER AS $$
 DECLARE
-  v_owner_id   uuid;
-  v_form_title text;
-  v_is_course  boolean;
-  v_is_event   boolean;
-  v_type       text;
-  v_title      text;
-  v_body       text;
-  v_name       text;
-  v_pct        text;
+  v_owner_id    uuid;
+  v_form_title  text;
+  v_content_type text;  -- 'course' | 've' | 'event' | 'assignment' | 'other'
+  v_type        text;
+  v_title       text;
+  v_body        text;
+  v_name        text;
+  v_pct         text;
 BEGIN
-  SELECT user_id,
-         config->>'title',
-         COALESCE((config->>'isCourse')::boolean, false),
-         COALESCE((config->'eventDetails'->>'isEvent')::boolean, false)
-  INTO v_owner_id, v_form_title, v_is_course, v_is_event
-  FROM public.forms
-  WHERE id = NEW.form_id;
+  -- Check courses
+  SELECT user_id, title INTO v_owner_id, v_form_title
+  FROM public.courses WHERE id = NEW.form_id;
+  IF v_owner_id IS NOT NULL THEN v_content_type := 'course'; END IF;
+
+  -- Check virtual_experiences
+  IF v_owner_id IS NULL THEN
+    SELECT user_id, title INTO v_owner_id, v_form_title
+    FROM public.virtual_experiences WHERE id = NEW.form_id;
+    IF v_owner_id IS NOT NULL THEN v_content_type := 've'; END IF;
+  END IF;
+
+  -- Check events
+  IF v_owner_id IS NULL THEN
+    SELECT user_id, title INTO v_owner_id, v_form_title
+    FROM public.events WHERE id = NEW.form_id;
+    IF v_owner_id IS NOT NULL THEN v_content_type := 'event'; END IF;
+  END IF;
+
+  -- Check assignments
+  IF v_owner_id IS NULL THEN
+    SELECT user_id, title INTO v_owner_id, v_form_title
+    FROM public.assignments WHERE id = NEW.form_id;
+    IF v_owner_id IS NOT NULL THEN v_content_type := 'assignment'; END IF;
+  END IF;
 
   IF v_owner_id IS NULL THEN RETURN NEW; END IF;
 
   v_name := COALESCE(NEW.data->>'name', NEW.data->>'full_name', 'Someone');
   v_pct  := COALESCE(NEW.data->>'percentage', '');
 
-  IF v_is_course THEN
+  IF v_content_type = 'course' THEN
     IF COALESCE((NEW.data->>'passed')::boolean, false) THEN
       v_type  := 'course_pass';
       v_title := v_name || ' passed your course';
-      v_body  := v_form_title || CASE WHEN v_pct <> '' THEN ' — ' || v_pct || '%' ELSE '' END;
+      v_body  := v_form_title || CASE WHEN v_pct <> '' THEN ' - ' || v_pct || '%' ELSE '' END;
     ELSE
       v_type  := 'course_fail';
       v_title := v_name || ' completed your course';
-      v_body  := v_form_title || CASE WHEN v_pct <> '' THEN ' — ' || v_pct || '%' ELSE '' END;
+      v_body  := v_form_title || CASE WHEN v_pct <> '' THEN ' - ' || v_pct || '%' ELSE '' END;
     END IF;
-  ELSIF v_is_event THEN
+  ELSIF v_content_type = 've' THEN
+    v_type  := 'course_pass';
+    v_title := v_name || ' completed your virtual experience';
+    v_body  := v_form_title;
+  ELSIF v_content_type = 'event' THEN
     v_type  := 'registration';
     v_title := v_name || ' registered for your event';
+    v_body  := v_form_title;
+  ELSIF v_content_type = 'assignment' THEN
+    v_type  := 'response';
+    v_title := v_name || ' submitted an assignment';
     v_body  := v_form_title;
   ELSE
     v_type  := 'response';
@@ -83,6 +120,8 @@ BEGIN
   VALUES (v_owner_id, NEW.form_id, v_type, v_title, v_body);
 
   PERFORM public.trim_notifications(v_owner_id);
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
   RETURN NEW;
 END;
 $$
@@ -118,6 +157,8 @@ BEGIN
   END LOOP;
 
   RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NEW;
 END;
 $$
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
@@ -142,13 +183,15 @@ BEGIN
 
     v_title := 'Your assignment has been graded';
     v_body  := COALESCE(v_asgn, 'Assignment')
-               || CASE WHEN NEW.score IS NOT NULL THEN ' — Score: ' || NEW.score::text ELSE '' END;
+               || CASE WHEN NEW.score IS NOT NULL THEN ' - Score: ' || NEW.score::text ELSE '' END;
 
     INSERT INTO public.notifications (user_id, form_id, type, title, body, link)
     VALUES (NEW.student_id, NULL, 'response', v_title, v_body, '/student#assignments');
     PERFORM public.trim_notifications(NEW.student_id);
   END IF;
 
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
   RETURN NEW;
 END;
 $$
@@ -177,7 +220,7 @@ BEGIN
       v_body  := CASE WHEN NEW.score IS NOT NULL THEN 'Score: ' || NEW.score::text || '%' ELSE 'Certificate available.' END;
     ELSE
       v_title := 'Course completed';
-      v_body  := COALESCE(v_course, 'Course') || CASE WHEN NEW.score IS NOT NULL THEN ' — Score: ' || NEW.score::text || '%' ELSE '' END;
+      v_body  := COALESCE(v_course, 'Course') || CASE WHEN NEW.score IS NOT NULL THEN ' - Score: ' || NEW.score::text || '%' ELSE '' END;
     END IF;
 
     INSERT INTO public.notifications (user_id, form_id, type, title, body, link)
@@ -190,6 +233,8 @@ BEGIN
   END IF;
 
   RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NEW;
 END;
 $$
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
@@ -200,23 +245,18 @@ CREATE TRIGGER on_course_completed
   FOR EACH ROW EXECUTE FUNCTION public.notify_student_on_course_complete();
 
 
--- ── 5. Student: new course assigned to their cohort ──
+-- ── 5. Student: new course or VE assigned to their cohort ──
 
 CREATE OR REPLACE FUNCTION public.notify_students_on_content_assign()
 RETURNS TRIGGER AS $$
 DECLARE
-  v_student    record;
-  v_title      text;
-  v_body       text;
+  v_student     record;
+  v_title       text;
+  v_body        text;
   v_new_cohorts uuid[];
 BEGIN
-  -- Only notify for published content
   IF NEW.status <> 'published' THEN RETURN NEW; END IF;
 
-  -- On INSERT: notify all cohorts.
-  -- On UPDATE where status just became published: notify all cohorts (cohorts
-  --   may have been set while still in draft, so the diff would be empty).
-  -- On UPDATE where status was already published: notify only newly added cohorts.
   IF TG_OP = 'INSERT' OR (OLD.status IS DISTINCT FROM 'published' AND NEW.status = 'published') THEN
     v_new_cohorts := NEW.cohort_ids;
   ELSE
@@ -247,6 +287,8 @@ BEGIN
   END LOOP;
 
   RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NEW;
 END;
 $$
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
@@ -270,11 +312,8 @@ DECLARE
   v_student     record;
   v_new_cohorts uuid[];
 BEGIN
-  -- Only notify for published assignments
   IF NEW.status <> 'published' THEN RETURN NEW; END IF;
 
-  -- INSERT or draft→published: notify all cohorts.
-  -- Already-published update: notify only newly added cohorts.
   IF TG_OP = 'INSERT' OR (OLD.status IS DISTINCT FROM 'published' AND NEW.status = 'published') THEN
     v_new_cohorts := NEW.cohort_ids;
   ELSE
@@ -301,6 +340,8 @@ BEGIN
     PERFORM public.trim_notifications(v_student.id);
   END LOOP;
 
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
   RETURN NEW;
 END;
 $$
