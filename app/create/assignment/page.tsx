@@ -138,8 +138,10 @@ export default function CreateAssignmentPage() {
   const [deadlineDate, setDeadlineDate]           = useState('');
   const [coverUploading, setCoverUploading]       = useState(false);
   const [resourceUploading, setResourceUploading] = useState<Record<string, boolean>>({});
+  const [extracting, setExtracting]               = useState<string | null>(null); // label of file being processed
   const coverRef = useRef<HTMLInputElement>(null);
   const resourceFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const rubricFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const toggleCohort = (id: string) =>
     setSelectedCohortIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
@@ -193,6 +195,7 @@ export default function CreateAssignmentPage() {
             if (cfg.minScore != null) setMinScore(cfg.minScore);
             if (cfg.schema) setSchema(cfg.schema);
             if (cfg.context) setContext(cfg.context);
+            if (cfg.referenceImageUrl) setReferenceImageUrl(cfg.referenceImageUrl);
             if (cfg.ve_form_id) setVeFormId(cfg.ve_form_id);
           }
         }
@@ -219,6 +222,40 @@ export default function CreateAssignmentPage() {
   function removeResource(id: string) { setResources(prev => prev.filter(r => r.id !== id)); }
   function updateResource(id: string, field: keyof Resource, value: string) {
     setResources(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+  }
+
+  async function handleExtractRubric(label: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setExtracting(label);
+    setError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.replace('/auth'); return; }
+
+      const form = new FormData();
+      form.append('file', file);
+      form.append('label', label);
+
+      const res = await fetch('/api/extract-rubric', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: form,
+      });
+      const json = await res.json();
+      if (!res.ok) { setError(json.error || 'Extraction failed.'); return; }
+
+      const incoming: string[] = json.criteria ?? [];
+      setRubricText(prev => {
+        const existing = prev.trim();
+        return existing ? `${existing}\n${incoming.join('\n')}` : incoming.join('\n');
+      });
+    } catch {
+      setError('Failed to extract rubric. Please try again.');
+    } finally {
+      setExtracting(null);
+      e.target.value = '';
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -413,6 +450,37 @@ export default function CreateAssignmentPage() {
                   {/* Rubric */}
                   <div style={{ marginBottom: 16 }}>
                     <label style={labelStyle(C)}>Grading Rubric</label>
+
+                    {/* Extract from reference solution */}
+                    <div style={{ marginBottom: 10 }}>
+                      <input
+                        type="file"
+                        accept=".xlsx,.xls,.pdf,.csv,.txt,.png,.jpg,.jpeg,.docx"
+                        style={{ display: 'none' }}
+                        ref={el => { rubricFileRefs.current['reference_solution'] = el; }}
+                        onChange={e => handleExtractRubric('reference_solution', e)}
+                      />
+                      <button
+                        type="button"
+                        disabled={!!extracting}
+                        onClick={() => rubricFileRefs.current['reference_solution']?.click()}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 6,
+                          padding: '7px 12px', borderRadius: 8,
+                          border: `1px solid ${C.cardBorder}`,
+                          background: C.input, color: C.muted,
+                          fontSize: 12, fontWeight: 600, cursor: extracting ? 'not-allowed' : 'pointer',
+                          opacity: extracting ? 0.5 : 1, transition: 'opacity 0.15s',
+                        }}
+                      >
+                        {extracting === 'reference_solution'
+                          ? <><Loader2 style={{ width: 13, height: 13 }} className="animate-spin"/> Extracting...</>
+                          : <><Upload style={{ width: 13, height: 13 }}/> Upload Reference Solution</>
+                        }
+                      </button>
+                    </div>
+                    <p style={{ ...hintStyle(C), marginBottom: 8 }}>Upload the completed reference file and AI will extract rubric criteria automatically.</p>
+
                     <textarea
                       value={rubricText}
                       onChange={e => setRubricText(e.target.value)}
@@ -447,7 +515,7 @@ export default function CreateAssignmentPage() {
                     </div>
                   )}
 
-                  {/* Context (excel_review only) */}
+                  {/* Context (excel_review) */}
                   {assignmentType === 'excel_review' && (
                     <div>
                       <label style={labelStyle(C)}>Business Context <span style={{ fontSize: 12, fontWeight: 400, color: C.faint }}>(optional)</span></label>
@@ -459,6 +527,7 @@ export default function CreateAssignmentPage() {
                       />
                     </div>
                   )}
+
                 </>
               )}
             </section>

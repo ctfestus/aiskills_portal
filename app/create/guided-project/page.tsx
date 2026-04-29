@@ -116,19 +116,48 @@ const INDUSTRIES = [
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
-function RubricBuilder({ criteria, onChange, C, inp }: {
+
+function RubricBuilder({ criteria, onChange, C, inp, sessionToken }: {
   criteria: string[];
   onChange: (rubric: string[]) => void;
   C: typeof LIGHT_C;
   inp: React.CSSProperties;
+  sessionToken?: string;
 }) {
   const [draft, setDraft] = useState('');
+  const [extracting, setExtracting] = useState<string | null>(null);
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
   const add = () => {
     const val = draft.trim();
     if (!val) return;
     onChange([...criteria, val]);
     setDraft('');
   };
+
+  const handleFile = async (label: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !sessionToken) return;
+    setExtracting(label);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('label', label);
+      const res = await fetch('/api/extract-rubric', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${sessionToken}` },
+        body: form,
+      });
+      const json = await res.json();
+      if (res.ok && json.criteria?.length) {
+        onChange([...criteria, ...json.criteria]);
+      }
+    } finally {
+      setExtracting(null);
+      e.target.value = '';
+    }
+  };
+
   return (
     <div className="rounded-xl p-3 space-y-2" style={{ background: C.input, border: `1px solid ${C.cardBorder}` }}>
       <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: '#6366f1' }}>
@@ -137,6 +166,23 @@ function RubricBuilder({ criteria, onChange, C, inp }: {
           · optional · AI grades each criterion as Pass / Fail
         </span>
       </p>
+      {sessionToken && (
+        <div>
+          <input type="file" accept=".xlsx,.xls,.pdf,.csv,.txt,.png,.jpg,.jpeg,.docx"
+            style={{ display: 'none' }}
+            ref={el => { fileRefs.current['reference_solution'] = el; }}
+            onChange={e => handleFile('reference_solution', e)}
+          />
+          <button type="button" disabled={!!extracting}
+            onClick={() => fileRefs.current['reference_solution']?.click()}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-opacity"
+            style={{ background: C.card, color: C.muted, border: `1px solid ${C.cardBorder}`, opacity: extracting ? 0.5 : 1, cursor: extracting ? 'not-allowed' : 'pointer' }}>
+            {extracting === 'reference_solution'
+              ? <><Loader2 className="w-3 h-3 animate-spin"/> Extracting...</>
+              : <><Upload className="w-3 h-3"/> Upload Reference Solution</>}
+          </button>
+        </div>
+      )}
       {criteria.map((crit, ci) => (
         <div key={ci} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
           style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
@@ -236,12 +282,14 @@ function VirtualExperienceCreatePageInner() {
   const [bunnyLoading,       setBunnyLoading]       = useState(false);
   const [bunnySearch,        setBunnySearch]        = useState('');
   const [bunnyError,         setBunnyError]         = useState('');
+  const [sessionToken,       setSessionToken]       = useState('');
 
   // Load cohorts + existing project if editing
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push('/auth'); return; }
+      setSessionToken(session.access_token);
 
       const { data: cohortData } = await supabase.from('cohorts').select('id, name').order('name');
       setCohorts(cohortData ?? []);
@@ -1470,6 +1518,7 @@ function VirtualExperienceCreatePageInner() {
                                                     onChange={rubric => updateReq(mod.id, les.id, req.id, { rubric })}
                                                     C={C}
                                                     inp={inp}
+                                                    sessionToken={sessionToken}
                                                   />
                                                 </div>
                                               )}
@@ -1508,6 +1557,7 @@ function VirtualExperienceCreatePageInner() {
                                                     onChange={rubric => updateReq(mod.id, les.id, req.id, { rubric })}
                                                     C={C}
                                                     inp={inp}
+                                                    sessionToken={sessionToken}
                                                   />
                                                 </div>
                                               )}
@@ -1546,6 +1596,7 @@ function VirtualExperienceCreatePageInner() {
                                                     onChange={rubric => updateReq(mod.id, les.id, req.id, { rubric })}
                                                     C={C}
                                                     inp={inp}
+                                                    sessionToken={sessionToken}
                                                   />
                                                 </div>
                                               )}

@@ -13,6 +13,7 @@ import {
 import { ImageCropModal } from '@/components/ImageCropModal';
 import { sanitizePlainText } from '@/lib/sanitize';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/uploadToCloudinary';
+import { getToolIcon } from '@/lib/tool-icons';
 
 const INDUSTRIES = [
   'Accounting & Finance', 'Advertising & Marketing', 'Aerospace & Defence',
@@ -295,27 +296,16 @@ type PortfolioItem = {
   description: string;
 };
 const PORTFOLIO_TOOLS = [
-  'Excel', 'SQL', 'Power BI', 'Python', 'Tableau', 'Canva',
-  'Jupyter', 'R', 'Generative AI', 'Google Sheets', 'Looker Studio',
-  'SPSS', 'SAS', 'Matplotlib', 'Pandas', 'scikit-learn', 'Other',
+  'Claude', 'Excel', 'SQL', 'Power BI', 'Python', 'Tableau',
+  'Perplexity AI', 'Zapier', 'Databricks', 'AWS', 'Azure',
 ];
 
 const YEARS = Array.from({ length: new Date().getFullYear() - 1969 }, (_, i) => String(new Date().getFullYear() - i));
 const DEGREES = ['High School', 'Diploma', 'Associate', "Bachelor's", "Master's", 'MBA', 'PhD', 'Certificate', 'Other'];
 
 const SKILLS_LIST = [
-  'Python', 'SQL', 'Power BI', 'Tableau', 'Excel', 'R', 'SPSS',
-  'Machine Learning', 'Deep Learning', 'Natural Language Processing',
-  'Generative AI', 'ChatGPT', 'Prompt Engineering', 'LLMs',
-  'Data Analysis', 'Data Visualization', 'Data Engineering', 'Data Cleaning',
-  'Statistics', 'A/B Testing', 'Predictive Modeling', 'Time Series Analysis',
-  'Microsoft Azure', 'Google Cloud', 'AWS', 'Big Data', 'Spark', 'Hadoop',
-  'JavaScript', 'TypeScript', 'React', 'Node.js', 'HTML/CSS',
-  'Coding', 'Git', 'APIs', 'Web Scraping',
-  'Project Management', 'Agile', 'Scrum', 'Leadership',
-  'Communication', 'Problem Solving', 'Critical Thinking',
-  'Digital Marketing', 'SEO', 'Content Strategy', 'Social Media',
-  'Business Intelligence', 'Financial Modeling', 'Research',
+  'Claude', 'Excel', 'SQL', 'Power BI', 'Python', 'Tableau',
+  'Perplexity AI', 'Zapier', 'Databricks', 'AWS', 'Azure',
 ];
 
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -881,7 +871,8 @@ export default function SettingsPage() {
                 <div className="flex flex-wrap gap-2">
                   {skills.map(skill => (
                     <span key={skill} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
-                      style={{ background: C.lime + '33', color: C.green, border: `1px solid ${C.lime}88` }}>
+                      style={{ background: C.lime, color: C.text }}>
+                      {getToolIcon(skill) && <img src={getToolIcon(skill)} alt="" style={{ width: 13, height: 13, objectFit: 'contain', flexShrink: 0 }}/>}
                       {skill}
                       <button onClick={() => setSkills(prev => prev.filter(s => s !== skill))}
                         className="hover:opacity-60 transition-opacity leading-none">
@@ -932,9 +923,9 @@ export default function SettingsPage() {
                   <div className="flex flex-wrap gap-2">
                     {SKILLS_LIST.filter(s => !skills.includes(s)).slice(0, 12).map(s => (
                       <button key={s} onClick={() => addSkill(s)}
-                        className="px-3 py-1.5 rounded-full text-xs font-medium transition-opacity hover:opacity-70"
-                        style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
-                        + {s}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-opacity hover:opacity-70"
+                        style={{ background: C.input, color: C.muted }}>
+                        + {getToolIcon(s) && <img src={getToolIcon(s)} alt="" style={{ width: 14, height: 14, objectFit: 'contain', flexShrink: 0 }}/>}{s}
                       </button>
                     ))}
                   </div>
@@ -987,12 +978,12 @@ export default function SettingsPage() {
                           onClick={() => setPortfolioItems(prev => prev.map((x, j) => j === i
                             ? { ...x, tools: active ? x.tools.filter(t => t !== tool) : [...x.tools, tool] }
                             : x))}
-                          className="px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
                           style={{
-                            background: active ? C.lime + '33' : C.pill,
-                            color:      active ? C.green : C.muted,
-                            border:     `1px solid ${active ? C.lime + '88' : C.cardBorder}`,
+                            background: active ? C.lime : C.card,
+                            color:      active ? C.text : C.muted,
                           }}>
+                          {getToolIcon(tool) && <img src={getToolIcon(tool)} alt="" style={{ width: 16, height: 16, objectFit: 'contain', flexShrink: 0 }}/>}
                           {tool}
                         </button>
                       );

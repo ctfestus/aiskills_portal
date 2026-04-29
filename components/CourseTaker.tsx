@@ -465,10 +465,7 @@ export function CourseTaker({
   }, [phase]);
 
 
-  // -- Prevent copy / right-click on quiz content --
-  const noSelect: React.CSSProperties = { userSelect: 'none', WebkitUserSelect: 'none' };
-  const blockCopy = (e: React.ClipboardEvent) => e.preventDefault();
-  const blockMenu = (e: React.MouseEvent) => e.preventDefault();
+
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
@@ -2194,10 +2191,7 @@ export function CourseTaker({
           ? `relative flex flex-col rounded-xl overflow-hidden min-h-[500px] ${isDark ? 'bg-black' : 'bg-white'}`
           : 'fixed inset-0 z-[200] overflow-hidden flex flex-col'
         }
-        style={{ ...noSelect, color: isDark ? '#ffffff' : '#18181b', ...fontStyle }}
-        onCopy={blockCopy}
-        onCut={blockCopy}
-        onContextMenu={blockMenu}
+        style={{ color: isDark ? '#ffffff' : '#18181b', ...fontStyle }}
       >
 
         {/* Nav bar -- full width */}
@@ -2213,7 +2207,7 @@ export function CourseTaker({
           <div className="flex items-center flex-shrink-0">
             {(isDark ? (logoDarkUrl || logoUrl) : logoUrl) && (
               <a href="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
-                <img src={(isDark ? (logoDarkUrl || logoUrl) : logoUrl) || undefined} alt="" style={{ height: 24, width: 'auto', objectFit: 'contain' }} />
+                <img src={(isDark ? (logoDarkUrl || logoUrl) : logoUrl) || undefined} alt="" style={{ height: 30, width: 'auto', objectFit: 'contain' }} />
               </a>
             )}
           </div>
@@ -2322,7 +2316,7 @@ export function CourseTaker({
                 <div
                   className="px-3 pt-2 pb-1 flex-shrink-0"
                 >
-                  <p className="text-xs font-bold truncate" style={{ color: isDark ? '#e4e4e7' : '#111' }}>
+                  <p className="text-base font-bold leading-snug" style={{ color: isDark ? '#e4e4e7' : '#111' }}>
                     {config.title}
                   </p>
                 </div>
@@ -2466,7 +2460,7 @@ export function CourseTaker({
                                           : q.type === 'code_review' ? 'AI Code Review'
                                           : q.type === 'excel_review' ? 'AI Excel Review'
                                           : q.type === 'dashboard_critique' ? 'AI Dashboard Review'
-                                          : 'Multiple choice'}
+                                                          : 'Multiple choice'}
                                       </span>
                                       <span style={{ color: isDark ? '#333' : '#ddd' }}>·</span>
                                       <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold"
@@ -2568,7 +2562,7 @@ export function CourseTaker({
                         {lesson.body && (
                           <div className="px-4 sm:px-8 pt-4 sm:pt-6 pb-5 sm:pb-6">
                             <div
-                              className={`prose prose-sm max-w-none [font-size:14.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
+                              className={`prose prose-sm max-w-none [font-size:15.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
                                 ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
                                 : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
                               }`}
@@ -2775,7 +2769,7 @@ export function CourseTaker({
                       )}
                       {currentQuestion.lesson.body && (
                         <div
-                          className={`mb-6 prose prose-sm max-w-none [font-size:14.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
+                          className={`mb-6 prose prose-sm max-w-none [font-size:15.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
                             ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
                             : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
                           }`}

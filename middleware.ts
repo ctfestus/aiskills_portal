@@ -75,7 +75,7 @@ export async function middleware(req: NextRequest) {
     },
   );
 
-  await supabase.auth.getUser();
+  try { await supabase.auth.getUser(); } catch { /* session refresh failed -- continue */ }
 
   res.headers.set('Content-Security-Policy', nonce ? csp : '');
   return res;

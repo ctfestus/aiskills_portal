@@ -7,7 +7,7 @@ import {
   Loader2, Save, Check, Plus, Trash2, Image as ImageIcon, Sun, Moon,
   X, MapPin, ArrowUpRight, ChevronDown, ChevronUp, Sparkles,
   Building2, GripVertical, BookOpen, Pencil, Monitor, Smartphone, RotateCcw, ExternalLink, Video, Search,
-  HelpCircle, CalendarDays, ClipboardList, Share2, CheckCircle2, Zap, Settings,
+  HelpCircle, CalendarDays, ClipboardList, Share2, CheckCircle2, Zap, Settings, Upload,
 } from 'lucide-react';
 import { ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import dynamic from 'next/dynamic';
@@ -603,6 +603,8 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     toastTimer.current = setTimeout(() => setToast(null), 5000);
   };
   const [busyQuestionId, setBusyQuestionId] = useState<string | null>(null);
+  const [extractingRubric, setExtractingRubric] = useState<string | null>(null);
+  const rubricFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [lessonPrompts, setLessonPrompts] = useState<Record<string, string>>({});
   const [lessonPromptModal, setLessonPromptModal] = useState<{ q: CourseQuestion } | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -1165,6 +1167,37 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const handleUpdateQuestion = (id: string, updates: Partial<CourseQuestion>) => {
     if (!formConfig) return;
     updateConfig({ questions: formConfig.questions?.map(q => q.id === id ? { ...q, ...updates } : q) || [] });
+  };
+
+  const handleExtractRubric = async (questionId: string, label: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const key = `${questionId}:${label}`;
+    setExtractingRubric(key);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const form = new FormData();
+      form.append('file', file);
+      form.append('label', label);
+      const res = await fetch('/api/extract-rubric', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: form,
+      });
+      const json = await res.json();
+      if (!res.ok) { showToast(json.error || 'Extraction failed.', 'error'); return; }
+      const incoming: string[] = json.criteria ?? [];
+      if (!formConfig) return;
+      const q = formConfig.questions?.find(q => q.id === questionId);
+      handleUpdateQuestion(questionId, { rubric: [...(q?.rubric ?? []), ...incoming] });
+      showToast(`${incoming.length} criteria extracted`, 'success');
+    } catch {
+      showToast('Failed to extract rubric. Please try again.', 'error');
+    } finally {
+      setExtractingRubric(null);
+      e.target.value = '';
+    }
   };
 
   const openBunnyPicker = async (qId: string, search = '', collection = '') => {
@@ -2219,7 +2252,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               <option value="code_review">AI Code Review</option>
                               <option value="excel_review">AI Excel Review</option>
                               <option value="dashboard_critique">AI Dashboard Critique</option>
-                            </select>
+                                    </select>
                             <button
                               type="button"
                               onClick={() => handleUpdateQuestion(q.id, {
@@ -2521,8 +2554,27 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                 </div>
                               )}
 
+
                               <div>
                                 <label className={labelCls} style={labelStyle}>Rubric criteria</label>
+                                <div className="mb-2">
+                                  {(() => { const key = `${q.id}:reference_solution`; const busy = extractingRubric === key; return (
+                                    <>
+                                      <input type="file" accept=".xlsx,.xls,.pdf,.csv,.txt,.png,.jpg,.jpeg,.docx"
+                                        style={{ display: 'none' }}
+                                        ref={el => { rubricFileRefs.current[key] = el; }}
+                                        onChange={e => handleExtractRubric(q.id, 'reference_solution', e)}
+                                      />
+                                      <button type="button" disabled={!!extractingRubric}
+                                        onClick={() => rubricFileRefs.current[key]?.click()}
+                                        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity"
+                                        style={{ background: FE.pill, color: FE.muted, opacity: extractingRubric && !busy ? 0.5 : 1, cursor: extractingRubric ? 'not-allowed' : 'pointer' }}>
+                                        {busy ? <><Loader2 className="w-3 h-3 animate-spin"/> Extracting...</> : <><Upload className="w-3 h-3"/> Upload Reference Solution</>}
+                                      </button>
+                                    </>
+                                  ); })()}
+                                </div>
+                                <p className="text-xs mb-2" style={{ color: FE.faint }}>Upload the completed reference file to auto-extract rubric criteria.</p>
                                 <div className="space-y-1.5">
                                   {(q.rubric || []).map((criterion, cIdx) => (
                                     <div key={cIdx} className="flex items-center gap-2">

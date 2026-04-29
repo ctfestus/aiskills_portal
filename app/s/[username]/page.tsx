@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
+import { getToolIcon } from '@/lib/tool-icons';
 
 /* --- Tokens --- */
 const LIGHT = {
@@ -99,11 +100,15 @@ function PortfolioCard({ item, t, isDark, onOpen }: { item: any; t: typeof LIGHT
           <div style={{ minWidth: 0 }}>
             {tools.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
-                {tools.map(tool => (
-                  <span key={tool} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 4, background: t.accentSoft, color: t.accent }}>
-                    {tool}
-                  </span>
-                ))}
+                {tools.map(tool => {
+                  const icon = getToolIcon(tool);
+                  return (
+                    <span key={tool} style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 100, background: t.pill, color: t.sub, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      {icon && <img src={icon} alt="" style={{ width: 14, height: 14, objectFit: 'contain', flexShrink: 0 }}/>}
+                      {tool}
+                    </span>
+                  );
+                })}
               </div>
             )}
             <p style={{ fontSize: 15, fontWeight: 600, color: t.text, margin: 0 }}>{item.title}</p>
@@ -170,7 +175,8 @@ function ProjectModal({ item, profile, t, isDark, onClose }: { item: any; profil
             {tools.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                 {tools.map(tool => (
-                  <span key={tool} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 4, background: t.accentSoft, color: t.accent }}>
+                  <span key={tool} style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 100, background: t.pill, color: t.sub, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    {(() => { const icon = getToolIcon(tool); return icon ? <img src={icon} alt="" style={{ width: 14, height: 14, objectFit: 'contain', flexShrink: 0 }}/> : null; })()}
                     {tool}
                   </span>
                 ))}
@@ -515,12 +521,16 @@ export default function StudentPublicProfile() {
               <div className="hidden lg:block rounded-2xl p-5" style={{ background: t.card }}>
                 <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: t.faint }}>Skills</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {(profile.skills as string[]).map((skill: string) => (
-                    <span key={skill} className="px-3 py-1 rounded-full text-xs font-medium"
-                      style={{ background: t.pill, color: t.sub }}>
-                      {skill}
-                    </span>
-                  ))}
+                  {(profile.skills as string[]).map((skill: string) => {
+                    const icon = getToolIcon(skill);
+                    return (
+                      <span key={skill} className="px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5"
+                        style={{ background: t.pill, color: t.sub }}>
+                        {icon && <img src={icon} alt="" style={{ width: 14, height: 14, objectFit: 'contain', flexShrink: 0 }}/>}
+                        {skill}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -542,12 +552,16 @@ export default function StudentPublicProfile() {
                   <div>
                     <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: t.faint }}>Skills</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {(profile.skills as string[]).map((skill: string) => (
-                        <span key={skill} className="px-3 py-1 rounded-full text-xs font-medium"
-                          style={{ background: t.pill, color: t.sub }}>
-                          {skill}
-                        </span>
-                      ))}
+                      {(profile.skills as string[]).map((skill: string) => {
+                        const icon = getToolIcon(skill);
+                        return (
+                          <span key={skill} className="px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5"
+                            style={{ background: t.pill, color: t.sub }}>
+                            {icon && <img src={icon} alt="" style={{ width: 14, height: 14, objectFit: 'contain', flexShrink: 0 }}/>}
+                            {skill}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
