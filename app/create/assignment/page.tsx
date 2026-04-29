@@ -195,7 +195,6 @@ export default function CreateAssignmentPage() {
             if (cfg.minScore != null) setMinScore(cfg.minScore);
             if (cfg.schema) setSchema(cfg.schema);
             if (cfg.context) setContext(cfg.context);
-            if (cfg.referenceImageUrl) setReferenceImageUrl(cfg.referenceImageUrl);
             if (cfg.ve_form_id) setVeFormId(cfg.ve_form_id);
           }
         }
