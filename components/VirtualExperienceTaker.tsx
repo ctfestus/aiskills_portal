@@ -5,6 +5,7 @@ import {
   CheckCircle2, Circle, ChevronRight, ChevronLeft,
   Menu, X, Loader2, Trophy, BookOpen, Lock, Download, Award, Star, Clock,
   Link as LinkIcon, Upload as UploadIcon,
+  ArrowLeftToLine, ArrowRightFromLine,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -181,7 +182,9 @@ export default function VirtualExperienceTaker({
   const [progress,     setProgress]     = useState<Progress>(initialProgress);
   const [currentModId, setCurrentModId] = useState(startModule);
   const [currentLesId, setCurrentLesId] = useState(startLesson);
-  const [sidebarOpen,  setSidebarOpen]  = useState(true);
+  const [sidebarOpen,  setSidebarOpen]  = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 640 : true
+  );
   const [noteValues,   setNoteValues]   = useState<Record<string, string>>({});
   const [saving,       setSaving]       = useState(false);
   const [completed,    setCompleted]    = useState(false);
@@ -556,24 +559,57 @@ export default function VirtualExperienceTaker({
         <div className="fixed inset-0 bg-black/50 z-30 sm:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
+      {/* Mobile open button -- tab flush from left edge of content when sidebar is closed */}
+      {!sidebarOpen && (
+        <div className="absolute top-4 left-0 z-50 sm:hidden group">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="px-2.5 py-2 rounded-r-lg hover:opacity-80 transition-opacity"
+            style={{ color: muted, background: surface, ...(isDark ? {} : { border: `1px solid ${border}`, borderLeft: 'none' }) }}
+          >
+            <ArrowRightFromLine className="w-4 h-4" strokeWidth={2.5} />
+          </button>
+          <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white">
+            Open course outline
+          </span>
+        </div>
+      )}
+
       {/* Sidebar: absolute overlay on mobile, in-flow on sm+ */}
-      <aside className="absolute inset-y-0 left-0 z-40 sm:relative sm:inset-auto flex-shrink-0 flex flex-col border-r transition-all duration-300"
+      <aside className={`absolute inset-y-0 left-0 z-40 sm:relative sm:inset-auto flex-shrink-0 flex flex-col border-r transition-all duration-300 ${!sidebarOpen ? '-translate-x-full sm:translate-x-0' : 'translate-x-0'}`}
         style={{
           width: sidebarOpen ? 'min(100vw, 280px)' : 44, minWidth: sidebarOpen ? 'min(100vw, 280px)' : 44,
           background: surface, borderColor: border,
-          overflow: 'hidden',
+          overflow: sidebarOpen ? 'hidden' : 'visible',
         }}>
 
         {/* Toggle + title header */}
-        <div className={`flex items-center pt-3 pb-2 border-b flex-shrink-0 ${sidebarOpen ? 'gap-2 px-3' : 'justify-center'}`} style={{ borderColor: border }}>
-          <button onClick={() => setSidebarOpen(v => !v)} style={{ color: muted }} className="flex-shrink-0 hover:opacity-60 p-1">
-            <Menu className="w-4 h-4" />
-          </button>
-          {sidebarOpen && (
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold truncate" style={{ color: text }}>
-                {config.title || config.company || 'Virtual Experience'}
-              </p>
+        <div className={`flex items-center pt-3 pb-2 border-b flex-shrink-0 ${sidebarOpen ? 'px-3' : 'justify-center'}`} style={{ borderColor: border }}>
+          {sidebarOpen ? (
+            <>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold truncate" style={{ color: text }}>
+                  {config.title || config.company || 'Virtual Experience'}
+                </p>
+              </div>
+              <div className="relative group ml-2 flex-shrink-0">
+                <button onClick={() => setSidebarOpen(false)} style={{ color: muted }} className="hover:opacity-60 p-1">
+                  <ArrowLeftToLine className="w-4 h-4" strokeWidth={2.5} />
+                </button>
+                {/* Tooltip below: aside has overflow:hidden so left direction is clipped */}
+                <span className="pointer-events-none absolute top-full mt-1 right-0 z-50 px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white">
+                  Collapse outline
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="relative group hidden sm:flex">
+              <button onClick={() => setSidebarOpen(true)} style={{ color: muted }} className="hover:opacity-60 p-1">
+                <ArrowRightFromLine className="w-4 h-4" strokeWidth={2.5} />
+              </button>
+              <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white">
+                Expand outline
+              </span>
             </div>
           )}
         </div>

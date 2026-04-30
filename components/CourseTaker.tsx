@@ -7,6 +7,7 @@ import {
   CheckCircle2, XCircle, Loader2, ChevronRight, RotateCcw,
   Clock, EyeOff, AlertTriangle, ShieldAlert, GripVertical,
   ChevronLeft, BookOpen, X, ExternalLink, ArrowRight, MoreHorizontal, List, Zap,
+  ArrowLeftToLine, ArrowRightFromLine,
 } from 'lucide-react';
 import { AnimatedField } from '@/components/AnimatedField';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -242,8 +243,10 @@ export function CourseTaker({
   // Chapters drawer
   const [showChapters, setShowChapters] = useState(false);
 
-  // Sidebar (persistent panel, non-inline mode only)
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Sidebar (persistent panel, non-inline mode only) -- closed by default on mobile
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 640 : true
+  );
   const [collapsedSections, setCollapsedSections] = useState<Set<number>>(new Set());
 
   // 3-dot menu + XP badge
@@ -2289,25 +2292,47 @@ export function CourseTaker({
               />
             )}
 
+            {/* Mobile open button -- tab anchored to left edge of content when sidebar is closed */}
+            {!sidebarOpen && (
+              <div className="absolute top-4 left-0 z-50 sm:hidden group">
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className={`px-2.5 py-2 rounded-r-lg transition-colors ${isDark ? 'text-zinc-400 hover:text-zinc-200 bg-zinc-800' : 'text-zinc-500 hover:text-zinc-700 bg-white shadow-sm border-t border-r border-b border-zinc-200'}`}
+                >
+                  <ArrowRightFromLine className="w-4 h-4" strokeWidth={2.5} />
+                </button>
+                <span className={`pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity ${isDark ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-900 text-white'}`}>
+                  Open course outline
+                </span>
+              </div>
+            )}
+
             <aside
-              className="absolute inset-y-0 left-0 z-40 sm:relative sm:inset-auto flex-shrink-0 flex flex-col border-r transition-all duration-300"
+              className={`absolute inset-y-0 left-0 z-40 sm:relative sm:inset-auto flex-shrink-0 flex flex-col border-r transition-all duration-300 ${!sidebarOpen ? '-translate-x-full sm:translate-x-0' : 'translate-x-0'}`}
               style={{
                 width: sidebarOpen ? 'min(100vw, 288px)' : 44,
                 minWidth: sidebarOpen ? 'min(100vw, 288px)' : 44,
                 background: isDark ? '#141416' : '#ffffff',
                 borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)',
-                overflow: 'hidden',
+                overflow: sidebarOpen ? 'hidden' : 'visible',
               }}
             >
-              {/* Toggle button -- always visible, centered when collapsed */}
-              <div className={`${sidebarOpen ? 'px-3' : 'flex justify-center'} pt-3 pb-1 flex-shrink-0`}>
-                <button
-                  onClick={() => setSidebarOpen(v => !v)}
-                  className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
-                  title="Toggle panel"
-                >
-                  <List className="w-4 h-4" />
-                </button>
+              {/* Close/expand toggle -- right-aligned when open, centered when collapsed (desktop only) */}
+              <div className={`flex justify-end ${sidebarOpen ? 'px-3' : 'hidden sm:flex justify-center'} pt-3 pb-1 flex-shrink-0`}>
+                <div className="relative group">
+                  <button
+                    onClick={() => setSidebarOpen(v => !v)}
+                    className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'}`}
+                  >
+                    {sidebarOpen
+                      ? <ArrowLeftToLine className="w-4 h-4" strokeWidth={2.5} />
+                      : <ArrowRightFromLine className="w-4 h-4" strokeWidth={2.5} />}
+                  </button>
+                  {/* Tooltip below when open (aside has overflow:hidden, left side is clipped). Tooltip to the right when collapsed (44px rail, no space on left). */}
+                  <span className={`pointer-events-none absolute px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 ${isDark ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-900 text-white'} ${sidebarOpen ? 'top-full mt-1 right-0' : 'left-full ml-2 top-1/2 -translate-y-1/2'}`}>
+                    {sidebarOpen ? 'Collapse outline' : 'Expand outline'}
+                  </span>
+                </div>
               </div>
 
               {sidebarOpen && (<>
@@ -2593,18 +2618,6 @@ export function CourseTaker({
                   >
                   <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-5 sm:pb-8">
                   <div className="flex items-center gap-2 mb-5">
-                    {questionType !== 'multiple_choice' && questionType !== 'image' && (
-                      <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border ${REVIEW_TYPES.includes(questionType) ? '' : (isDark ? 'border-zinc-700 text-zinc-500' : 'border-zinc-200 text-zinc-400')}`}
-                        style={REVIEW_TYPES.includes(questionType) ? { background: `${accent}18`, color: accent, border: `1px solid ${accent}40` } : {}}>
-                        {questionType === 'fill_blank' ? 'Fill in the blank'
-                          : questionType === 'arrange' ? 'Arrange in order'
-                          : questionType === 'code' ? 'Code Snippet'
-                          : questionType === 'code_review' ? 'AI Code Review'
-                          : questionType === 'excel_review' ? 'AI Excel Review'
-                          : questionType === 'dashboard_critique' ? 'AI Dashboard Critique'
-                          : ''}
-                      </span>
-                    )}
                     {/* Hint button -- hidden for review types */}
                     {currentQuestion.hint && !hintsUsed.has(currentQuestion.id) && !isChecking && !REVIEW_TYPES.includes(questionType) && (
                       <button

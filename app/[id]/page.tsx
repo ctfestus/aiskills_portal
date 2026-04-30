@@ -1257,7 +1257,7 @@ export default function PublicFormPage() {
       {/* Navbar */}
       <nav style={{ position: 'sticky', top: 0, zIndex: 30, background: t.nav, borderBottom: `1px solid ${t.navBorder}`, backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', height: 56, transition: 'background 0.3s' }}>
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-          <img src={logoUrl || undefined} alt="" style={{ height: 32, width: 'auto' }} />
+          <img src={logoDarkUrl || logoUrl || undefined} alt="" style={{ height: 32, width: 'auto' }} />
         </Link>
       </nav>
 
