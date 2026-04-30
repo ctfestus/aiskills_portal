@@ -1,11 +1,11 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
+import { generateJSON, generateVisionJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import ExcelJS from 'exceljs';
 
 export const dynamic = 'force-dynamic';
 
-const MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 function adminClient() {
@@ -58,9 +58,6 @@ export async function POST(req: NextRequest) {
   const auth = await authenticate(req);
   if (auth instanceof NextResponse) return auth;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: 'AI service not configured' }, { status: 500 });
-
   let form: FormData;
   try { form = await req.formData(); } catch {
     return NextResponse.json({ error: 'Invalid form data' }, { status: 400 });
@@ -77,58 +74,43 @@ export async function POST(req: NextRequest) {
 
   const docDescription = 'a completed reference solution file';
 
-  const ai = new GoogleGenAI({ apiKey });
-
-  let parts: any[];
-
   const isExcel = mime.includes('spreadsheet') || mime.includes('excel') ||
     file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
   const isText = mime.startsWith('text/') || file.name.endsWith('.csv') || file.name.endsWith('.txt');
 
-  if (isExcel) {
-    const text = await extractExcelText(buffer);
-    parts = [
-      {
-        text: `You are an expert assessment designer. The instructor has uploaded ${docDescription} (an Excel/spreadsheet file). Analyse the content below and extract clear, specific, measurable rubric criteria that an AI reviewer can use to grade student submissions. Extract as many criteria as the file warrants -- one criterion per distinct requirement, skill, or standard present in the file. Return each as a concise action-oriented statement.\n\nFile content:\n${text}`,
-      },
-    ];
-  } else if (isText) {
-    const text = new TextDecoder().decode(buffer);
-    parts = [
-      {
-        text: `You are an expert assessment designer. The instructor has uploaded ${docDescription}. Analyse the content below and extract clear, specific, measurable rubric criteria that an AI reviewer can use to grade student submissions. Extract as many criteria as the file warrants -- one criterion per distinct requirement, skill, or standard present in the file. Return each as a concise action-oriented statement.\n\nFile content:\n${text}`,
-      },
-    ];
-  } else {
-    // PDF, images, Word -- send as inline base64 data
-    const base64 = Buffer.from(buffer).toString('base64');
-    const isImage = mime.startsWith('image/');
-    const imageInstruction = isImage
-      ? `This is a completed dashboard screenshot. Extract rubric criteria based on what you observe visually: chart type choices, KPI placement and formatting, layout and hierarchy, colour usage, labelling clarity, axis correctness, insight callouts, and overall readability. Each criterion should be something a student dashboard can be objectively graded against.`
-      : `Analyse the file and extract clear, specific, measurable rubric criteria that an AI reviewer can use to grade student submissions.`;
-    parts = [
-      {
-        text: `You are an expert assessment designer. The instructor has uploaded ${docDescription}. ${imageInstruction} Extract as many criteria as the file warrants -- one criterion per distinct requirement, skill, or standard present. Return each as a concise action-oriented statement.`,
-      },
-      {
-        inlineData: { mimeType: mime, data: base64 },
-      },
-    ];
-  }
-
   try {
-    const result = await ai.models.generateContent({
-      model: MODEL,
-      contents: [{ role: 'user', parts }],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema,
-        temperature: 0.3,
-      },
-    });
+    let parsed: any;
 
-    const raw = result.text ?? '{}';
-    const parsed = JSON.parse(raw);
+    if (isExcel) {
+      const text = await extractExcelText(buffer);
+      const prompt = `You are an expert assessment designer. The instructor has uploaded ${docDescription} (an Excel/spreadsheet file). Analyse the content below and extract clear, specific, measurable rubric criteria that an AI reviewer can use to grade student submissions. Extract as many criteria as the file warrants -- one criterion per distinct requirement, skill, or standard present in the file. Return each as a concise action-oriented statement.\n\nFile content:\n${text}`;
+      parsed = await generateJSON(prompt, responseSchema, { temperature: 0.3 });
+    } else if (isText) {
+      const text = new TextDecoder().decode(buffer);
+      const prompt = `You are an expert assessment designer. The instructor has uploaded ${docDescription}. Analyse the content below and extract clear, specific, measurable rubric criteria that an AI reviewer can use to grade student submissions. Extract as many criteria as the file warrants -- one criterion per distinct requirement, skill, or standard present in the file. Return each as a concise action-oriented statement.\n\nFile content:\n${text}`;
+      parsed = await generateJSON(prompt, responseSchema, { temperature: 0.3 });
+    } else {
+      const base64 = Buffer.from(buffer).toString('base64');
+      const isImage = mime.startsWith('image/');
+      const imageInstruction = isImage
+        ? `This is a completed dashboard screenshot. Extract rubric criteria based on what you observe visually: chart type choices, KPI placement and formatting, layout and hierarchy, colour usage, labelling clarity, axis correctness, insight callouts, and overall readability. Each criterion should be something a student dashboard can be objectively graded against.`
+        : `Analyse the file and extract clear, specific, measurable rubric criteria that an AI reviewer can use to grade student submissions.`;
+      const prompt = `You are an expert assessment designer. The instructor has uploaded ${docDescription}. ${imageInstruction} Extract as many criteria as the file warrants -- one criterion per distinct requirement, skill, or standard present. Return each as a concise action-oriented statement.`;
+      if (isImage) {
+        parsed = await generateVisionJSON(prompt, { data: base64, mimeType: mime }, responseSchema, { temperature: 0.3 });
+      } else {
+        // PDFs and Word docs: Gemini handles them natively. OpenAI has no viable fallback for binary document types.
+        try {
+          parsed = await generateVisionJSON(prompt, { data: base64, mimeType: mime }, responseSchema, { temperature: 0.3 });
+        } catch {
+          return NextResponse.json(
+            { error: 'Could not extract rubric from this file. If the AI service is unavailable, try uploading an image screenshot instead.' },
+            { status: 422 },
+          );
+        }
+      }
+    }
+
     const criteria: string[] = (parsed.criteria ?? []).map((c: string) => c.trim()).filter(Boolean);
 
     return NextResponse.json({ criteria });

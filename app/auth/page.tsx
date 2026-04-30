@@ -10,7 +10,7 @@ import { Loader2, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 // CAPTCHA SUSPENDED -- const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!;
 
 export default function AuthPage() {
-  const { logoUrl } = useTenant();
+  const { logoUrl, logoDarkUrl } = useTenant();
   const [email, setEmail]             = useState('');
   const [password, setPassword]       = useState('');
   const [isLogin, setIsLogin]         = useState(true);
@@ -95,7 +95,7 @@ export default function AuthPage() {
       >
         {/* Logo */}
         <div className="mb-10">
-          <img src={logoUrl || undefined} alt="" className="h-8 w-auto" />
+          <img src={logoDarkUrl || logoUrl || undefined} alt="" className="h-8 w-auto" />
         </div>
 
         {/* Heading */}

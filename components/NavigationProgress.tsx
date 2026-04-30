@@ -17,7 +17,6 @@ export default function NavigationProgress() {
     // navigation event and cannot be deferred; the synchronous call is intentional.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setWidth(0);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVisible(true);
 
     let w = 0;

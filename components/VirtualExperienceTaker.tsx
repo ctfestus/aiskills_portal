@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import Link from 'next/link';
 import {
   CheckCircle2, Circle, ChevronRight, ChevronLeft,
   Menu, X, Loader2, Trophy, BookOpen, Lock, Download, Award, Star, Clock,
@@ -230,7 +231,7 @@ export default function VirtualExperienceTaker({
         if (attempt?.completed_at) setCompleted(true);
       })
       .catch(() => {});
-  }, [formId, studentEmail, authHeader]);
+  }, [formId, studentEmail, authHeader, userId]);
 
   // Save progress (debounced 800ms): skipped in review mode
   const saveProgress = useCallback((prog: Progress, modId: string, lesId: string, completedAt?: string) => {
@@ -531,9 +532,9 @@ export default function VirtualExperienceTaker({
         {/* Left: logo */}
         <div className="flex items-center flex-shrink-0">
           {(isDark ? (logoDarkUrl || logoUrl) : logoUrl) && (
-            <a href="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
+            <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
               <img src={(isDark ? (logoDarkUrl || logoUrl) : logoUrl) || undefined} alt="" style={{ height: 24, width: 'auto', objectFit: 'contain' }} />
-            </a>
+            </Link>
           )}
         </div>
         <div className="flex-1" />

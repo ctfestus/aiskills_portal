@@ -9,4 +9,7 @@ const __dirname = path.dirname(__filename);
 export default defineConfig([{
     extends: [...next],
     ignores: ['.claude/**'],
+    rules: {
+        '@next/next/no-img-element': 'off',
+    },
 }]);

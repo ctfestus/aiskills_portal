@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -278,7 +279,7 @@ export function CourseTaker({
   const [existingCertId, setExistingCertId] = useState<string | null>(null);
   const [finishPending, setFinishPending] = useState<any[] | null>(null); // unanswered questions blocking finish
   const [streakToast, setStreakToast] = useState<string | null>(null);
-  const questions = config.questions || [];
+  const questions = useMemo(() => config.questions || [], [config.questions]);
   const learningOutcomes: string[] = config.learnOutcomes || [];
   const currentQuestion = questions[currentQuestionIndex];
   const totalQuestions = questions.filter((q: any) => !q.lessonOnly && !q.isSection).length;
@@ -2209,9 +2210,9 @@ export function CourseTaker({
           {/* Left: logo */}
           <div className="flex items-center flex-shrink-0">
             {(isDark ? (logoDarkUrl || logoUrl) : logoUrl) && (
-              <a href="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
+              <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
                 <img src={(isDark ? (logoDarkUrl || logoUrl) : logoUrl) || undefined} alt="" style={{ height: 30, width: 'auto', objectFit: 'contain' }} />
-              </a>
+              </Link>
             )}
           </div>
           {/* Right: controls */}
@@ -2738,7 +2739,6 @@ export function CourseTaker({
                             style={{ border: `${borderWidth}px solid ${borderColor}` }}
                           >
                             {imgSrc ? (
-                              /* eslint-disable-next-line @next/next/no-img-element */
                               <img src={imgSrc} alt={`Option ${idx + 1}`} className="w-full h-52 object-cover group-hover:scale-105 transition-transform duration-300" />
                             ) : (
                               <div className={`w-full h-52 flex items-center justify-center text-sm ${isDark ? 'bg-zinc-800 text-zinc-600' : 'bg-zinc-100 text-zinc-400'}`}>No image</div>

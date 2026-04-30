@@ -1,6 +1,6 @@
-﻿import { GoogleGenAI, Type } from '@google/genai';
+﻿import { Type } from '@google/genai';
+import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
-import { GEMINI_MODEL } from '@/lib/ai';
 import { createClient } from '@supabase/supabase-js';
 import { getRedis } from '@/lib/redis';
 
@@ -64,17 +64,6 @@ async function checkRateLimit(userId: string): Promise<NextResponse | null> {
   }
   return null;
 }
-
-const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('API key not configured');
-  return new GoogleGenAI({ apiKey });
-};
-
-const parse = (text: string) => {
-  const raw = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  return JSON.parse(raw);
-};
 
 const getYouTubeApiKey = () => process.env.YOUTUBE_API_KEY || process.env.GOOGLE_API_KEY || '';
 
@@ -260,8 +249,6 @@ export async function POST(req: NextRequest) {
   const clamp = (val: unknown, max: number): string => String(val ?? '').slice(0, max);
 
   try {
-    const ai = getAI();
-
     // -- Generate a batch of questions from a topic ---
     if (action === 'generate_questions') {
       const topic = clamp(body.topic, 200);
@@ -269,36 +256,32 @@ export async function POST(req: NextRequest) {
       const type = clamp(body.type, 30) || 'multiple_choice';
       const customPrompt = clamp(body.customPrompt, 800);
       const customInstruction = customPrompt ? ` Additional instructions: ${customPrompt}` : '';
-      const res = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: `Generate ${count} course quiz questions about: "${topic}". Question type: ${type}. For multiple_choice, provide 4 options and mark the correct one. For fill_blank, use ___ in the question text. For arrange, provide items in the correct order.${customInstruction}`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              questions: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING, description: 'unique short random id like q_abc123' },
-                    type: { type: Type.STRING, description: 'multiple_choice, fill_blank, or arrange' },
-                    question: { type: Type.STRING },
-                    options: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'For MC: 4 options. For arrange: items in correct order. For fill_blank: empty array.' },
-                    correctAnswer: { type: Type.STRING, description: 'For MC: exact text of correct option. For fill_blank: the answer word(s). For arrange: options joined with |||' },
-                    explanation: { type: Type.STRING, description: 'Brief explanation of why the answer is correct' },
-                    hint: { type: Type.STRING, description: 'A subtle hint that nudges toward the answer without giving it away' },
-                  },
-                  required: ['id', 'question', 'options', 'correctAnswer'],
+      const result = await generateJSON(
+        `Generate ${count} course quiz questions about: "${topic}". Question type: ${type}. For multiple_choice, provide 4 options and mark the correct one. For fill_blank, use ___ in the question text. For arrange, provide items in the correct order.${customInstruction}`,
+        {
+          type: Type.OBJECT,
+          properties: {
+            questions: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING, description: 'unique short random id like q_abc123' },
+                  type: { type: Type.STRING, description: 'multiple_choice, fill_blank, or arrange' },
+                  question: { type: Type.STRING },
+                  options: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'For MC: 4 options. For arrange: items in correct order. For fill_blank: empty array.' },
+                  correctAnswer: { type: Type.STRING, description: 'For MC: exact text of correct option. For fill_blank: the answer word(s). For arrange: options joined with |||' },
+                  explanation: { type: Type.STRING, description: 'Brief explanation of why the answer is correct' },
+                  hint: { type: Type.STRING, description: 'A subtle hint that nudges toward the answer without giving it away' },
                 },
+                required: ['id', 'question', 'options', 'correctAnswer'],
               },
             },
-            required: ['questions'],
           },
+          required: ['questions'],
         },
-      });
-      return NextResponse.json(parse(res.text!));
+      );
+      return NextResponse.json(result);
     }
 
     // -- Generate distractors (wrong answer options) ---
@@ -306,21 +289,17 @@ export async function POST(req: NextRequest) {
       const question = clamp(body.question, 500);
       const correctAnswer = clamp(body.correctAnswer, 300);
       const count = Math.min(Math.max(Number(body.count) || 3, 1), 6);
-      const res = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: `For this quiz question: "${question}" with correct answer: "${correctAnswer}", generate ${count} plausible but incorrect answer options (distractors). They should be convincing enough to challenge students but clearly wrong to someone who knows the material. Return only the distractor strings, no explanations.`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              distractors: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-            required: ['distractors'],
+      const result = await generateJSON(
+        `For this quiz question: "${question}" with correct answer: "${correctAnswer}", generate ${count} plausible but incorrect answer options (distractors). They should be convincing enough to challenge students but clearly wrong to someone who knows the material. Return only the distractor strings, no explanations.`,
+        {
+          type: Type.OBJECT,
+          properties: {
+            distractors: { type: Type.ARRAY, items: { type: Type.STRING } },
           },
+          required: ['distractors'],
         },
-      });
-      return NextResponse.json(parse(res.text!));
+      );
+      return NextResponse.json(result);
     }
 
     // -- Generate lesson content ---
@@ -331,9 +310,8 @@ export async function POST(req: NextRequest) {
       const promptText = instruction
         ? `Write a mini, interactive lesson about: "${instruction}".`
         : `Write a mini, interactive lesson that teaches the concept behind this quiz question: "${question}" (correct answer: "${correctAnswer}").`;
-      const res = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: `${promptText}
+      const lesson = await generateJSON(
+        `${promptText}
 
 The lesson must feel lightweight and easy to scan, not bulky.
 
@@ -351,20 +329,16 @@ Requirements:
 Also provide:
 - a short lesson title (3-6 words)
 - a short YouTube search query for a high-quality educational video that would help explain the same concept.`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING, description: 'Short lesson title, 3-6 words' },
-              body: { type: Type.STRING, description: 'Compact lesson content as HTML using p, strong, ul/li, h4, and blockquote when helpful; no hr dividers' },
-              videoSearchQuery: { type: Type.STRING, description: 'Short YouTube search query for an educational explainer video' },
-            },
-            required: ['title', 'body', 'videoSearchQuery'],
+        {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING, description: 'Short lesson title, 3-6 words' },
+            body: { type: Type.STRING, description: 'Compact lesson content as HTML using p, strong, ul/li, h4, and blockquote when helpful; no hr dividers' },
+            videoSearchQuery: { type: Type.STRING, description: 'Short YouTube search query for an educational explainer video' },
           },
+          required: ['title', 'body', 'videoSearchQuery'],
         },
-      });
-      const lesson = parse(res.text!);
+      );
       const query = lesson.videoSearchQuery || lesson.title || `${question} ${correctAnswer}`;
       const videoUrl = await findLessonVideo(query).catch(err => {
         console.warn('YouTube lookup failed:', err);
@@ -381,63 +355,33 @@ Also provide:
     if (action === 'generate_hint') {
       const question = clamp(body.question, 500);
       const correctAnswer = clamp(body.correctAnswer, 300);
-      const res = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: `Write a single-sentence hint for this quiz question: "${question}" (correct answer: "${correctAnswer}"). The hint should nudge students toward the answer without revealing it directly. Keep it to one sentence, max 20 words.`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              hint: { type: Type.STRING },
-            },
-            required: ['hint'],
-          },
-        },
-      });
-      return NextResponse.json(parse(res.text!));
+      const result = await generateJSON(
+        `Write a single-sentence hint for this quiz question: "${question}" (correct answer: "${correctAnswer}"). The hint should nudge students toward the answer without revealing it directly. Keep it to one sentence, max 20 words.`,
+        { type: Type.OBJECT, properties: { hint: { type: Type.STRING } }, required: ['hint'] },
+      );
+      return NextResponse.json(result);
     }
 
     // -- Generate explanation ---
     if (action === 'generate_explanation') {
       const question = clamp(body.question, 500);
       const correctAnswer = clamp(body.correctAnswer, 300);
-      const res = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: `Write a brief explanation (1-2 sentences, max 40 words) for why "${correctAnswer}" is the correct answer to this quiz question: "${question}". Be clear and educational.`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              explanation: { type: Type.STRING },
-            },
-            required: ['explanation'],
-          },
-        },
-      });
-      return NextResponse.json(parse(res.text!));
+      const result = await generateJSON(
+        `Write a brief explanation (1-2 sentences, max 40 words) for why "${correctAnswer}" is the correct answer to this quiz question: "${question}". Be clear and educational.`,
+        { type: Type.OBJECT, properties: { explanation: { type: Type.STRING } }, required: ['explanation'] },
+      );
+      return NextResponse.json(result);
     }
 
     // -- Generate learning outcomes ---
     if (action === 'generate_outcomes') {
       const questions: any[] = Array.isArray(body.questions) ? body.questions.slice(0, 30) : [];
       const summary = questions.map((q: any, i: number) => `${i + 1}. ${clamp(q.question, 300)}`).join('\n');
-      const res = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: `Based on these ${questions.length} quiz questions:\n${summary}\n\nGenerate 3-5 concise learning outcomes (what students will know/be able to do after completing this course). Start each with an action verb (e.g. "Understand", "Apply", "Identify"). Keep each under 15 words.`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              outcomes: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-            required: ['outcomes'],
-          },
-        },
-      });
-      return NextResponse.json(parse(res.text!));
+      const result = await generateJSON(
+        `Based on these ${questions.length} quiz questions:\n${summary}\n\nGenerate 3-5 concise learning outcomes (what students will know/be able to do after completing this course). Start each with an action verb (e.g. "Understand", "Apply", "Identify"). Keep each under 15 words.`,
+        { type: Type.OBJECT, properties: { outcomes: { type: Type.ARRAY, items: { type: Type.STRING } } }, required: ['outcomes'] },
+      );
+      return NextResponse.json(result);
     }
 
     if (action === 'generate_course_description') {
@@ -459,9 +403,8 @@ Also provide:
         .map((outcome: string, i: number) => `${i + 1}. ${outcome}`)
         .join('\n');
 
-      const res = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: `Write a polished, creator-friendly course description for this course.
+      const result = await generateJSON(
+        `Write a polished, creator-friendly course description for this course.
 
 Course title: "${title}"
 
@@ -489,19 +432,9 @@ Requirements:
 - Use clear, direct language. No jargon, no filler phrases like "In this course you will...".
 - Do not use lists or line breaks -- write it as flowing prose.
 - End with a forward-looking motivating sentence.`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              description: { type: Type.STRING },
-            },
-            required: ['description'],
-          },
-        },
-      });
-
-      return NextResponse.json(parse(res.text!));
+        { type: Type.OBJECT, properties: { description: { type: Type.STRING } }, required: ['description'] },
+      );
+      return NextResponse.json(result);
     }
 
     if (action === 'generate_event_setup') {
@@ -510,9 +443,8 @@ Requirements:
       const existingDescription = clamp(body.existingDescription, 1000);
       const eventDetails        = body.eventDetails && typeof body.eventDetails === 'object' ? body.eventDetails : {};
 
-      const res = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: `You are helping a creator set up an event registration experience.
+      const result = await generateJSON(
+        `You are helping a creator set up an event registration experience.
 
 Creator brief:
 ${brief}
@@ -546,60 +478,56 @@ Field rules:
 - Include label, name, type, placeholder when relevant, required, and options only for select.
 - For social fields, also include socialPlatforms as an array if useful.
 - Do not include duplicate first name, last name, email, or phone fields if not necessary.`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              description: { type: Type.STRING },
-              eventDetails: {
+        {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
+            eventDetails: {
+              type: Type.OBJECT,
+              properties: {
+                isEvent: { type: Type.BOOLEAN },
+                date: { type: Type.STRING },
+                time: { type: Type.STRING },
+                timezone: { type: Type.STRING },
+                capacity: { type: Type.NUMBER },
+                eventType: { type: Type.STRING },
+                meetingLink: { type: Type.STRING },
+                location: { type: Type.STRING },
+              },
+              required: ['isEvent', 'eventType'],
+            },
+            fields: {
+              type: Type.ARRAY,
+              items: {
                 type: Type.OBJECT,
                 properties: {
-                  isEvent: { type: Type.BOOLEAN },
-                  date: { type: Type.STRING },
-                  time: { type: Type.STRING },
-                  timezone: { type: Type.STRING },
-                  capacity: { type: Type.NUMBER },
-                  eventType: { type: Type.STRING },
-                  meetingLink: { type: Type.STRING },
-                  location: { type: Type.STRING },
-                },
-                required: ['isEvent', 'eventType'],
-              },
-              fields: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    name: { type: Type.STRING },
-                    label: { type: Type.STRING },
-                    type: { type: Type.STRING },
-                    placeholder: { type: Type.STRING },
-                    required: { type: Type.BOOLEAN },
-                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    socialPlatforms: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  },
-                  required: ['id', 'name', 'label', 'type'],
-                },
-              },
-              postSubmission: {
-                type: Type.OBJECT,
-                properties: {
+                  id: { type: Type.STRING },
+                  name: { type: Type.STRING },
+                  label: { type: Type.STRING },
                   type: { type: Type.STRING },
-                  noticeTitle: { type: Type.STRING },
-                  noticeBody: { type: Type.STRING },
+                  placeholder: { type: Type.STRING },
+                  required: { type: Type.BOOLEAN },
+                  options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  socialPlatforms: { type: Type.ARRAY, items: { type: Type.STRING } },
                 },
-                required: ['type', 'noticeTitle', 'noticeBody'],
+                required: ['id', 'name', 'label', 'type'],
               },
             },
-            required: ['title', 'description', 'eventDetails', 'fields', 'postSubmission'],
+            postSubmission: {
+              type: Type.OBJECT,
+              properties: {
+                type: { type: Type.STRING },
+                noticeTitle: { type: Type.STRING },
+                noticeBody: { type: Type.STRING },
+              },
+              required: ['type', 'noticeTitle', 'noticeBody'],
+            },
           },
+          required: ['title', 'description', 'eventDetails', 'fields', 'postSubmission'],
         },
-      });
-
-      return NextResponse.json(parse(res.text!));
+      );
+      return NextResponse.json(result);
     }
 
     if (action === 'generate_broadcast_email') {
@@ -611,9 +539,8 @@ Field rules:
       const prompt      = clamp(body.prompt, 500);
       const eventDetails = body.eventDetails && typeof body.eventDetails === 'object' ? body.eventDetails : {};
 
-      const res = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: `You are writing a broadcast email for a creator platform.
+      const result = await generateJSON(
+        `You are writing a broadcast email for a creator platform.
 
 Page title: ${formTitle}
 Audience: ${audience}
@@ -640,20 +567,9 @@ Requirements:
 - Do not include HTML.
 - Do not include placeholder brackets like [Name].
 - Do not include a sign-off from AI Skills Africa; write as the creator/host.`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              subject: { type: Type.STRING },
-              body: { type: Type.STRING },
-            },
-            required: ['subject', 'body'],
-          },
-        },
-      });
-
-      return NextResponse.json(parse(res.text!));
+        { type: Type.OBJECT, properties: { subject: { type: Type.STRING }, body: { type: Type.STRING } }, required: ['subject', 'body'] },
+      );
+      return NextResponse.json(result);
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 }); // unreachable -- allowlist above

@@ -17,7 +17,6 @@ const createSingletonClient = () =>
   });
 
 declare global {
-  // eslint-disable-next-line no-var
   var _supabaseClient: ReturnType<typeof createSingletonClient> | undefined;
 }
 

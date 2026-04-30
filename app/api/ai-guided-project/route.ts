@@ -1,6 +1,6 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
+import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
-import { GEMINI_MODEL } from '@/lib/ai';
 import { createClient } from '@supabase/supabase-js';
 import { getRedis } from '@/lib/redis';
 
@@ -51,12 +51,6 @@ async function checkRateLimit(userId: string, role: string): Promise<NextRespons
   }
   return null;
 }
-
-const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
-  return new GoogleGenAI({ apiKey });
-};
 
 const clamp = (val: unknown, max: number): string => String(val ?? '').slice(0, max);
 
@@ -140,8 +134,6 @@ export async function POST(req: NextRequest) {
   if (rateLimitError) return rateLimitError;
 
   try {
-    const ai = getAI();
-
     // -- Generate full project ---
     if (action === 'generate') {
       const industry      = clamp(body.industry, 50) || 'fintech';
@@ -279,40 +271,31 @@ DATASET (generate this first, carefully):
 - csvContent: the full CSV as a string
 `;
 
-      const pass1Res = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: pass1Prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
+      const pass1 = await generateJSON(pass1Prompt, {
+        type: Type.OBJECT,
+        properties: {
+          tagline:       { type: Type.STRING },
+          role:          { type: Type.STRING },
+          company:       { type: Type.STRING },
+          managerName:   { type: Type.STRING },
+          managerTitle:  { type: Type.STRING },
+          duration:      { type: Type.STRING },
+          tools:         { type: Type.ARRAY, items: { type: Type.STRING } },
+          description:   { type: Type.STRING },
+          background:    { type: Type.STRING },
+          learnOutcomes: { type: Type.ARRAY, items: { type: Type.STRING } },
+          dataset: {
             type: Type.OBJECT,
             properties: {
-              tagline:       { type: Type.STRING },
-              role:          { type: Type.STRING },
-              company:       { type: Type.STRING },
-              managerName:   { type: Type.STRING },
-              managerTitle:  { type: Type.STRING },
-              duration:      { type: Type.STRING },
-              tools:         { type: Type.ARRAY, items: { type: Type.STRING } },
-              description:   { type: Type.STRING },
-              background:    { type: Type.STRING },
-              learnOutcomes: { type: Type.ARRAY, items: { type: Type.STRING } },
-              dataset: {
-                type: Type.OBJECT,
-                properties: {
-                  filename:    { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  csvContent:  { type: Type.STRING },
-                },
-                required: ['filename', 'description', 'csvContent'],
-              },
+              filename:    { type: Type.STRING },
+              description: { type: Type.STRING },
+              csvContent:  { type: Type.STRING },
             },
-            required: ['tagline', 'role', 'company', 'managerName', 'managerTitle', 'duration', 'tools', 'description', 'background', 'learnOutcomes', 'dataset'],
+            required: ['filename', 'description', 'csvContent'],
           },
         },
+        required: ['tagline', 'role', 'company', 'managerName', 'managerTitle', 'duration', 'tools', 'description', 'background', 'learnOutcomes', 'dataset'],
       });
-
-      const pass1 = JSON.parse(pass1Res.text!);
       const csvContent = pass1.dataset?.csvContent || '';
 
       // -- Pass 2: modules/lessons/questions (CSV provided) ---
@@ -381,22 +364,11 @@ Choose type based on tools: SQL or Python present  "code_review". Excel present 
 IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", 4th requirement = "req-1-1-4").
 `;
 
-      const pass2Res = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: pass2Prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              modules: { type: Type.ARRAY, items: moduleSchema },
-            },
-            required: ['modules'],
-          },
-        },
+      const pass2 = await generateJSON(pass2Prompt, {
+        type: Type.OBJECT,
+        properties: { modules: { type: Type.ARRAY, items: moduleSchema } },
+        required: ['modules'],
       });
-
-      const pass2 = JSON.parse(pass2Res.text!);
       return NextResponse.json({
         config: {
           isVirtualExperience: true,
@@ -468,31 +440,22 @@ COMPANY:
 - learnOutcomes: 5 action-verb outcomes tied to these tools only
 `;
 
-      const pass1Res = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: pass1Prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              tagline:       { type: Type.STRING },
-              role:          { type: Type.STRING },
-              company:       { type: Type.STRING },
-              managerName:   { type: Type.STRING },
-              managerTitle:  { type: Type.STRING },
-              duration:      { type: Type.STRING },
-              tools:         { type: Type.ARRAY, items: { type: Type.STRING } },
-              description:   { type: Type.STRING },
-              background:    { type: Type.STRING },
-              learnOutcomes: { type: Type.ARRAY, items: { type: Type.STRING } },
-            },
-            required: ['tagline', 'role', 'company', 'managerName', 'managerTitle', 'duration', 'tools', 'description', 'background', 'learnOutcomes'],
-          },
+      const pass1 = await generateJSON(pass1Prompt, {
+        type: Type.OBJECT,
+        properties: {
+          tagline:       { type: Type.STRING },
+          role:          { type: Type.STRING },
+          company:       { type: Type.STRING },
+          managerName:   { type: Type.STRING },
+          managerTitle:  { type: Type.STRING },
+          duration:      { type: Type.STRING },
+          tools:         { type: Type.ARRAY, items: { type: Type.STRING } },
+          description:   { type: Type.STRING },
+          background:    { type: Type.STRING },
+          learnOutcomes: { type: Type.ARRAY, items: { type: Type.STRING } },
         },
+        required: ['tagline', 'role', 'company', 'managerName', 'managerTitle', 'duration', 'tools', 'description', 'background', 'learnOutcomes'],
       });
-
-      const pass1 = JSON.parse(pass1Res.text!);
 
       // Pass 2: modules/lessons/questions -- using the full instructor dataset
       const pass2Prompt = `
@@ -548,22 +511,11 @@ SHORT ANSWER (type "text"):
 IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", short answer = "req-1-1-4").
 `;
 
-      const pass2Res = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: pass2Prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              modules: { type: Type.ARRAY, items: moduleSchema },
-            },
-            required: ['modules'],
-          },
-        },
+      const pass2 = await generateJSON(pass2Prompt, {
+        type: Type.OBJECT,
+        properties: { modules: { type: Type.ARRAY, items: moduleSchema } },
+        required: ['modules'],
       });
-
-      const pass2 = JSON.parse(pass2Res.text!);
       return NextResponse.json({
         config: {
           isVirtualExperience: true,
@@ -623,26 +575,17 @@ RULES:
 - Return the COMPLETE modules array with ALL existing modules and lessons included.
 `;
 
-      const applyRes = await ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: applyPrompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              tagline:       { type: Type.STRING },
-              background:    { type: Type.STRING },
-              description:   { type: Type.STRING },
-              learnOutcomes: { type: Type.ARRAY, items: { type: Type.STRING } },
-              modules:       { type: Type.ARRAY, items: moduleSchema },
-            },
-            required: ['modules'],
-          },
+      const applied = await generateJSON(applyPrompt, {
+        type: Type.OBJECT,
+        properties: {
+          tagline:       { type: Type.STRING },
+          background:    { type: Type.STRING },
+          description:   { type: Type.STRING },
+          learnOutcomes: { type: Type.ARRAY, items: { type: Type.STRING } },
+          modules:       { type: Type.ARRAY, items: moduleSchema },
         },
+        required: ['modules'],
       });
-
-      const applied = JSON.parse(applyRes.text!);
       // Merge: applied fields override, but preserve fields not in response (dataset, coverImage, etc.)
       return NextResponse.json({
         config: {

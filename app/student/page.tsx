@@ -1335,11 +1335,10 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
           const { data: { session } } = await supabase.auth.getSession();
           const token = session?.access_token ?? '';
           setSessionToken(token);
-          const { data: veData } = await supabase
-            .from('virtual_experiences')
-            .select('id, title, slug, modules, company, role, industry, tagline, cover_image, manager_name, manager_title, dataset, background')
-            .eq('id', assignment.config.ve_form_id)
-            .single();
+          const veRes = await fetch(`/api/ve-for-assignment?veId=${assignment.config.ve_form_id}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          const veData = veRes.ok ? (await veRes.json()).ve : null;
           if (veData) {
             setVeForm({
               id: veData.id,
@@ -2933,7 +2932,7 @@ function VirtualExperiencesSection({ userId, userEmail, C }: { userId: string; u
       setLoading(false);
     };
     load();
-  }, [userEmail]);
+  }, [userEmail, userId]);
 
   if (loading) return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -3724,7 +3723,7 @@ function CertificatesSection({ userId, userEmail, userName, C }: { userId: strin
       setLoading(false);
     };
     load();
-  }, [userEmail]);
+  }, [userEmail, userId]);
 
   if (loading) return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -4608,7 +4607,7 @@ export default function StudentDashboard() {
         style={{ background: C.nav, borderColor: C.navBorder }}>
         <div className="flex items-center gap-3">
           {/* Mobile menu toggle */}
-          <button onClick={() => setSidebarOpen(o => !o)}
+          <button onClick={() => { setSidebarOpen(o => { if (!o) setNavCollapsed(false); return !o; }); }}
             className="p-2 rounded-xl lg:hidden transition-all hover:opacity-70"
             style={{ background: C.pill }}>
             <Menu className="w-4 h-4" style={{ color: C.text }}/>

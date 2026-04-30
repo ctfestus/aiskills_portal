@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle2, Circle, ChevronDown, ChevronUp, ChevronRight, ChevronLeft,
-  Loader2, Lock, Upload as UploadIcon, Link as LinkIcon, CheckCircle,
+  Loader2, Lock, Upload as UploadIcon, Link as LinkIcon, CheckCircle, Download,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -39,6 +39,12 @@ interface Module {
   description: string;
   lessons: Lesson[];
 }
+interface Dataset {
+  filename: string;
+  description: string;
+  csvContent?: string;
+  url?: string;
+}
 interface ProjectConfig {
   isVirtualExperience: true;
   title?: string;
@@ -46,6 +52,7 @@ interface ProjectConfig {
   role?: string;
   industry?: string;
   modules: Module[];
+  dataset?: Dataset;
   [key: string]: any;
 }
 type Progress = Record<string, { completed: boolean; notes?: string; selectedAnswer?: string; fileUrl?: string; linkUrl?: string }>;
@@ -94,7 +101,7 @@ function normalize(s: string) { return s.toLowerCase().replace(/\s+/g, ' ').trim
 export default function AssignmentExperiencePlayer({
   formId, config, userId, studentName, studentEmail, sessionToken, initialProgress = {}, isDark = false, onComplete,
 }: Props) {
-  const accent = '#0e09dd';
+  const accent = '#00b95c';
   const modules = config.modules || [];
 
   // Theme tokens
@@ -153,6 +160,7 @@ export default function AssignmentExperiencePlayer({
         });
       } finally { setSaving(false); }
     }, 800);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formId, userId, activeModule, activeLesson, sessionToken]);
 
   const updateProgress = useCallback((reqId: string, patch: Partial<Progress[string]>) => {
@@ -173,6 +181,19 @@ export default function AssignmentExperiencePlayer({
       const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
       updateProgress(reqId, { fileUrl: publicUrl, completed: true });
     } finally { setUploadingReq(null); }
+  }
+
+  function downloadDataset() {
+    if (!config.dataset) return;
+    if (config.dataset.csvContent) {
+      const blob = new Blob([config.dataset.csvContent], { type: 'text/csv' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = config.dataset.filename;
+      a.click(); URL.revokeObjectURL(url);
+    } else if (config.dataset.url) {
+      window.open(config.dataset.url, '_blank', 'noopener,noreferrer');
+    }
   }
 
   function navigate(modId: string, lesId: string) {
@@ -207,6 +228,19 @@ export default function AssignmentExperiencePlayer({
           <div className="h-full rounded-full transition-all duration-500" style={{ width: `${overallPct}%`, background: accent }}/>
         </div>
         <p className="text-[11px] mt-1.5" style={{ color: faint }}>{doneReqs} of {totalReqs} tasks complete</p>
+        {config.dataset && (
+          <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${divider}` }}>
+            <button onClick={downloadDataset}
+              className="flex items-center gap-2 text-xs font-semibold py-2 px-3 rounded-xl transition-all hover:opacity-80"
+              style={{ background: `${accent}12`, color: accent }}>
+              <Download className="w-3.5 h-3.5 flex-shrink-0"/>
+              <span className="truncate">{config.dataset.filename || 'Download dataset'}</span>
+            </button>
+            {config.dataset.description && (
+              <p className="text-[11px] mt-1.5 px-1" style={{ color: faint }}>{config.dataset.description}</p>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4">

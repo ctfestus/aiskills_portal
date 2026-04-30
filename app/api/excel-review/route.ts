@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
+import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getRedis } from '@/lib/redis';
@@ -83,11 +84,6 @@ async function extractFromWorkbook(buffer: ArrayBuffer): Promise<string> {
   return sections.join('\n\n');
 }
 
-const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
-  return new GoogleGenAI({ apiKey });
-};
 
 const responseSchema = {
   type: Type.OBJECT,
@@ -219,20 +215,7 @@ export async function POST(req: NextRequest) {
 
     const prompt = `${SYSTEM_PROMPT}${contextBlock}${rubricBlock}\n\nEXTRACTED SPREADSHEET CONTENTS:\n${extracted}`;
 
-    const ai    = getAI();
-    const model = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
-
-    const result = await ai.models.generateContent({
-      model,
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema,
-        temperature: 0.2,
-      },
-    });
-
-    const parsed = JSON.parse(result.text ?? '');
+    const parsed = await generateJSON(prompt, responseSchema, { temperature: 0.2 });
     return NextResponse.json(parsed);
   } catch (err: any) {
     console.error('excel-review error:', err);

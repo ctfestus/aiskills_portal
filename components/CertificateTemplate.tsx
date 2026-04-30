@@ -173,7 +173,6 @@ const CertificateTemplate = React.forwardRef<HTMLDivElement, CertificateTemplate
       >
         {/* Custom background image */}
         {hasCustomBg && (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={s.backgroundImageUrl!} alt="" crossOrigin="anonymous"
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }} />
         )}
@@ -195,7 +194,6 @@ const CertificateTemplate = React.forwardRef<HTMLDivElement, CertificateTemplate
         {/* Logo */}
         {s.logoUrl && (
           <div style={{ position: "absolute", top: "60px", left: "120px", zIndex: 20 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={s.logoUrl} alt={s.institutionName} crossOrigin="anonymous"
               style={{ height: "120px", width: "auto", objectFit: "contain" }} />
           </div>
@@ -252,7 +250,6 @@ const CertificateTemplate = React.forwardRef<HTMLDivElement, CertificateTemplate
             ...pos("signatory"), zIndex: 30, textAlign: "left",
           }}>
             {s.signatureUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={s.signatureUrl} alt="Signature" crossOrigin="anonymous"
                 style={{ height: "80px", width: "auto", objectFit: "contain", marginBottom: "8px", display: "block" }} />
             )}

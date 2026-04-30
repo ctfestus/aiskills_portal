@@ -166,8 +166,8 @@ function useProgrammes() {
 }
 
 // --- Elevate Template ---
-function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl, appName }: {
-  user: any; profile: any; scrolled: boolean; pastHero: boolean; siteConfig: SiteConfig; logoUrl: string; appName: string;
+function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl, logoDarkUrl, appName }: {
+  user: any; profile: any; scrolled: boolean; pastHero: boolean; siteConfig: SiteConfig; logoUrl: string; logoDarkUrl: string; appName: string;
 }) {
   const [hoveredTrack, setHoveredTrack] = useState<number | null>(null);
   const [hoveredSlide, setHoveredSlide] = useState<number | null>(null);
@@ -277,7 +277,7 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
         className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 py-4 transition-all duration-300"
         style={{ background: nav_bg, boxShadow: scrolled ? '0 1px 24px rgba(0,0,0,0.10)' : `0 1px 0 rgba(0,0,0,0.06)` }}
       >
-        <img src={logoUrl || undefined} alt="" className="h-9 w-auto" />
+        <img src={logoDarkUrl || logoUrl || undefined} alt="" className="h-9 w-auto" />
         <div className="flex items-center gap-3">
           {user ? <NavProfileMenu user={user} profile={profile} /> : (
             <>
@@ -876,7 +876,7 @@ function LandingPageSkeleton() {
 
 // --- Page ---
 export default function LandingPage() {
-  const { logoUrl, appName } = useTenant();
+  const { logoUrl, logoDarkUrl, appName } = useTenant();
 
   const [user, setUser]         = useState<any>(null);
   const [profile, setProfile]   = useState<any>(null);
@@ -1020,7 +1020,7 @@ export default function LandingPage() {
   if (loading) return <LandingPageSkeleton />;
 
   if (templateId === 'elevate') {
-    return <ElevateTemplate user={user} profile={profile} scrolled={scrolled} pastHero={pastHero} siteConfig={siteConfig} logoUrl={logoUrl} appName={appName} />;
+    return <ElevateTemplate user={user} profile={profile} scrolled={scrolled} pastHero={pastHero} siteConfig={siteConfig} logoUrl={logoUrl} logoDarkUrl={logoDarkUrl} appName={appName} />;
   }
 
   return (
@@ -1033,7 +1033,7 @@ export default function LandingPage() {
         style={{ background: primaryColor, boxShadow: scrolled ? `0 2px 20px ${primaryColor}4d` : 'none' }}
       >
         <div className="flex items-center">
-          <img src={logoUrl || undefined} alt="" className="h-9 w-auto" />
+          <img src={logoDarkUrl || logoUrl || undefined} alt="" className="h-9 w-auto" />
         </div>
 
 

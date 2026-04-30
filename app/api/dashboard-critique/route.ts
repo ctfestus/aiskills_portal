@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
+import { generateVisionJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getRedis } from '@/lib/redis';
@@ -47,11 +48,6 @@ async function checkRateLimit(userId: string): Promise<NextResponse | null> {
   return null;
 }
 
-const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
-  return new GoogleGenAI({ apiKey });
-};
 
 const responseSchema = {
   type: Type.OBJECT,
@@ -260,8 +256,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ai = getAI();
-    const model = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
+
 
     const rubricSection = Array.isArray(rubric) && rubric.length > 0
       ? `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nINSTRUCTOR RUBRIC -- GRADE EACH CRITERION\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nThe instructor has defined the following specific criteria for this assignment. In the audit.rubricGrades array, evaluate EVERY criterion below with a "passed" boolean and a 1-2 sentence "comment" explaining your judgement.\n\nCriteria:\n${rubric.map((c: string, i: number) => `${i + 1}. ${c}`).join('\n')}\n\nGrade strictly -- if the dashboard partially meets a criterion, mark passed: false and explain what's missing.`
@@ -269,26 +264,7 @@ export async function POST(req: NextRequest) {
 
     const fullPrompt = SYSTEM_PROMPT + rubricSection;
 
-    const result = await ai.models.generateContent({
-      model,
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: fullPrompt },
-            { inlineData: { mimeType, data: imageBase64 } },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema,
-        temperature: 0.35,
-      },
-    });
-
-    const text = result.text ?? '';
-    const parsed = JSON.parse(text);
+    const parsed = await generateVisionJSON(fullPrompt, { data: imageBase64, mimeType }, responseSchema, { temperature: 0.35 });
     return NextResponse.json(parsed);
   } catch (err: any) {
     console.error('dashboard-critique error:', err);

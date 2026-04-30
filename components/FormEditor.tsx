@@ -698,7 +698,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     supabase.from('cohorts').select('id, name').order('name').then(({ data }) => {
       if (data) setCohorts(data);
     });
-  }, [formId]);
+  }, [formId, contentType]);
 
   useEffect(() => {
     if (formConfig?.postSubmission?.type !== 'events') return;

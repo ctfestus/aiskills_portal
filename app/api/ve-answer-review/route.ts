@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
+import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getRedis } from '@/lib/redis';
@@ -42,11 +43,6 @@ async function checkRateLimit(userId: string): Promise<NextResponse | null> {
   return null;
 }
 
-const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
-  return new GoogleGenAI({ apiKey });
-};
 
 const responseSchema = {
   type: Type.OBJECT,
@@ -102,19 +98,7 @@ Score 0-100 (60+ passes). Write exactly 2-3 sentences of feedback. Rules:
 - No preamble. No filler phrases ("great effort", "however", "it's worth noting"). No bullet points. Start with the assessment, not their name.`;
 
   try {
-    const ai    = getAI();
-    const model = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
-    const result = await ai.models.generateContent({
-      model,
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema,
-        temperature: 0.4,
-      },
-    });
-
-    const parsed = JSON.parse(result.text ?? '{}');
+    const parsed = await generateJSON(prompt, responseSchema, { temperature: 0.4 });
     return NextResponse.json({
       passed:   !!parsed.passed,
       feedback: parsed.feedback || '',

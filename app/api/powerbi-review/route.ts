@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
+import { generateJSON, generateVisionJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getRedis } from '@/lib/redis';
@@ -526,9 +527,6 @@ export async function POST(req: NextRequest) {
   const rateLimitError = isPrivileged ? null : await checkRateLimit(auth.userId);
   if (rateLimitError) return rateLimitError;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: 'AI service not configured' }, { status: 500 });
-
   let form: FormData;
   try { form = await req.formData(); } catch {
     return NextResponse.json({ error: 'Invalid form data' }, { status: 400 });
@@ -568,33 +566,23 @@ export async function POST(req: NextRequest) {
 
   const prompt = `${SYSTEM_PROMPT}${contextSection}${rubricSection}\n\n${extracted}`;
 
-  const ai = new GoogleGenAI({ apiKey });
-  const model = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
-
-  // Build multimodal parts -- prepend reference image if provided
-  type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
-  const parts: Part[] = [];
-  if (referenceImageUrl) {
-    try {
-      const imgRes = await fetch(referenceImageUrl);
-      const imgBuf = await imgRes.arrayBuffer();
-      const mimeType = imgRes.headers.get('content-type') ?? 'image/png';
-      parts.push({ inlineData: { mimeType, data: Buffer.from(imgBuf).toString('base64') } });
-    } catch { /* skip image if fetch fails */ }
-  }
-  parts.push({ text: prompt });
-
   try {
-    const result = await ai.models.generateContent({
-      model,
-      contents: [{ role: 'user', parts }],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema,
-        temperature: 0.1,
-      },
-    });
-    const parsed = JSON.parse(result.text ?? '{}');
+    let parsed: any;
+    if (referenceImageUrl) {
+      let imageData: { data: string; mimeType: string } | undefined;
+      try {
+        const imgRes = await fetch(referenceImageUrl);
+        const imgBuf = await imgRes.arrayBuffer();
+        const mimeType = imgRes.headers.get('content-type') ?? 'image/png';
+        imageData = { data: Buffer.from(imgBuf).toString('base64'), mimeType };
+      } catch { /* skip image if fetch fails */ }
+
+      parsed = imageData
+        ? await generateVisionJSON(prompt, imageData, responseSchema, { temperature: 0.1 })
+        : await generateJSON(prompt, responseSchema, { temperature: 0.1 });
+    } else {
+      parsed = await generateJSON(prompt, responseSchema, { temperature: 0.1 });
+    }
     parsed.rubricGrades = finalizeRubricGrades(rubric, parsed.rubricGrades, extractedPbix.evidence);
     return NextResponse.json(parsed);
   } catch (err: any) {

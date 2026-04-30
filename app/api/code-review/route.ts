@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
+import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getRedis } from '@/lib/redis';
@@ -43,11 +44,6 @@ async function checkRateLimit(userId: string): Promise<NextResponse | null> {
   return null;
 }
 
-const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
-  return new GoogleGenAI({ apiKey });
-};
 
 const responseSchema = {
   type: Type.OBJECT,
@@ -196,20 +192,7 @@ export async function POST(req: NextRequest) {
     const dialectLabel = dialect ? ` (${dialect})` : '';
     const fullPrompt = `${systemPrompt}${rubricSection}\n\nLanguage: ${language}${dialectLabel}\n\nCode to review:\n\`\`\`${language.toLowerCase()}\n${code}\n\`\`\``;
 
-    const ai    = getAI();
-    const model = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
-
-    const result = await ai.models.generateContent({
-      model,
-      contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema,
-        temperature: 0.25,
-      },
-    });
-
-    const parsed = JSON.parse(result.text ?? '');
+    const parsed = await generateJSON(fullPrompt, responseSchema, { temperature: 0.25 });
     return NextResponse.json(parsed);
   } catch (err: any) {
     console.error('code-review error:', err);

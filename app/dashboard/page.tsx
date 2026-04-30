@@ -3440,13 +3440,12 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
     setLoading(false);
   };
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
 
   useEffect(() => {
     if (selectedCohort?.id) loadAllowedEmails(selectedCohort.id);
     else setAllowedEmails([]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCohort?.id]);
 
   // Re-load emails after session refresh (handles the race on page reload where
@@ -3456,7 +3455,6 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
       if (session && selectedCohort?.id) loadAllowedEmails(selectedCohort.id);
     });
     return () => subscription.unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCohort?.id]);
 
   const loadAllowedEmails = async (cohortId: string) => {
@@ -6695,6 +6693,7 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
   onDuplicated: (newForm: any) => void; C: typeof LIGHT_C;
 }) {
   const [page, setPage] = useState(1);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [section]);
 
   if (COMING_SOON.includes(section)) return <ComingSoon id={section} C={C} />;

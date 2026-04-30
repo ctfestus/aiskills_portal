@@ -1,6 +1,6 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
-import { GEMINI_MODEL } from '@/lib/ai';
+import { generateStream } from '@/lib/ai';
 import { adminClient } from '@/lib/admin-client';
 
 export const dynamic = 'force-dynamic';
@@ -38,19 +38,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
-  }
+  const promptText = `Generate a form or course schema for the following use case: "${trimmedPrompt}". Make sure to include all necessary fields, a catchy title, and a brief description. If the user asks for a course, set isCourse to true and populate the questions array with multiple-choice questions.`;
 
-  const ai = new GoogleGenAI({ apiKey });
-
-  const streamConfig = {
-    model: GEMINI_MODEL,
-    contents: `Generate a form or course schema for the following use case: "${trimmedPrompt}". Make sure to include all necessary fields, a catchy title, and a brief description. If the user asks for a course, set isCourse to true and populate the questions array with multiple-choice questions.`,
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: {
+  const responseSchema = {
         type: Type.OBJECT,
         properties: {
           title: { type: Type.STRING, description: 'Form or Course title' },
@@ -101,35 +91,15 @@ export async function POST(req: NextRequest) {
           },
         },
         required: ['title', 'description'],
-      },
-    },
   };
 
   try {
-    const geminiStream = await ai.models.generateContentStream(streamConfig);
-    const encoder = new TextEncoder();
-
-    const readable = new ReadableStream({
-      async start(controller) {
-        try {
-          for await (const chunk of geminiStream) {
-            const text = chunk.text;
-            if (text) controller.enqueue(encoder.encode(text));
-          }
-        } catch (err: any) {
-          console.error('Gemini stream error:', err);
-          controller.enqueue(encoder.encode(JSON.stringify({ error: 'Generation failed. Please try again.' })));
-        } finally {
-          controller.close();
-        }
-      },
-    });
-
-    return new Response(readable, {
+    const stream = await generateStream(promptText, responseSchema);
+    return new Response(stream, {
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
     });
   } catch (error: any) {
-    console.error('Gemini error:', error);
+    console.error('[generate] stream error:', error);
     return NextResponse.json({ error: 'Generation failed. Please try again.' }, { status: 500 });
   }
 }

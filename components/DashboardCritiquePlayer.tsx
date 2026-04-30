@@ -123,7 +123,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
       }
     };
     reader.readAsDataURL(file);
-  }, [onComplete, rubric]);
+  }, [onComplete, rubric, minScore]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();

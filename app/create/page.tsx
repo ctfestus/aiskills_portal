@@ -2815,7 +2815,6 @@ const [isSaving, setIsSaving] = useState(false);
                                   <div key={optIdx} className="relative rounded-lg overflow-hidden transition-colors" style={{ border: `2px solid ${q.correctAnswer === opt ? accentColor : C.inputBorder}` }}>
                                     {imgSrc ? (
                                       <div className="relative group">
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img src={imgSrc} alt="" className="w-full h-20 object-cover" />
                                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                           <button
