@@ -315,20 +315,6 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
             className="text-base md:text-[18px] max-w-xl mx-auto" style={{ color: 'rgba(255,255,255,0.72)', lineHeight: 1.75, fontFamily: bFont }}>
             {heroSubheadline}
           </motion.p>
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.45 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href={user ? '/student' : '/auth'}
-              className="group flex items-center gap-2 px-8 py-4 rounded-full text-base font-bold transition-all hover:scale-105 shadow-2xl"
-              style={{ background: accentColor, color: 'white' }}>
-              {user ? 'Go to dashboard' : heroPrimaryCta}
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </Link>
-            <Link href={user ? '/student' : '/auth'}
-              className="flex items-center gap-2 px-7 py-4 rounded-full text-base font-semibold border-2 transition-all hover:bg-white/10"
-              style={{ borderColor: 'rgba(255,255,255,0.4)', color: 'white' }}>
-              Browse programmes <ChevronDown className="w-4 h-4 -rotate-90" />
-            </Link>
-          </motion.div>
         </div>
         <motion.div className="absolute bottom-10 left-1/2 -translate-x-1/2"
           animate={{ y: [0, 8, 0] }} transition={{ duration: 2, repeat: Infinity }}>
@@ -1042,11 +1028,19 @@ export default function LandingPage() {
             <NavProfileMenu user={user} profile={profile} />
           ) : (
             <>
+              {/* Mobile: Sign In button only */}
+              <Link href="/auth"
+                className="flex items-center px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:opacity-90 bg-white sm:hidden"
+                style={{ color: primaryColor }}
+              >
+                Sign In
+              </Link>
+              {/* Desktop: Sign in link + Get started button */}
               <Link href="/auth" className="text-sm font-medium text-white/75 hover:text-white transition-colors hidden sm:block">
                 Sign in
               </Link>
               <Link href="/auth?mode=signup"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:opacity-90 bg-white"
+                className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:opacity-90 bg-white"
                 style={{ color: primaryColor }}
               >
                 Get started <ArrowRight className="w-3.5 h-3.5" />
