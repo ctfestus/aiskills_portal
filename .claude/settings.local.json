@@ -22,7 +22,8 @@
       "Bash(curl -s https://claudemcp-production-c706.up.railway.app/health)",
       "Bash(curl -v -X POST https://claudemcp-production-c706.up.railway.app/mcp -H \"Content-Type: application/json\" -H \"Accept: application/json, text/event-stream\" -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}')",
       "Bash(xargs grep *)",
-      "Read(//c/c/Users/DELL/Documents/ALL Apps/App_AI Skils/**)"
+      "Read(//c/c/Users/DELL/Documents/ALL Apps/App_AI Skils/**)",
+      "Bash(find \"c:\\\\\\\\Users\\\\\\\\DELL\\\\\\\\Documents\\\\\\\\ALL Apps\\\\\\\\App_AI Skils\\\\\\\\AI Skills Africa App\\\\\\\\app\" -type d)"
     ],
     "additionalDirectories": [
       "C:\\Users\\DELL\\Documents\\ALL Apps\\Landing pages\\elevate-landing\\lib",

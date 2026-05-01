@@ -636,7 +636,7 @@ function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
 }
 
 // --- Courses section ---
-function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
+function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: string; userId?: string; C: typeof LIGHT_C }) {
   const { logoUrl, logoDarkUrl, emailBannerUrl } = useTenant();
   const [courses,   setCourses]   = useState<any[]>([]);
   const [deadlines, setDeadlines] = useState<Record<string, Date | null>>({});
@@ -659,12 +659,13 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
+      const effectiveUserId = userIdProp ?? user.id;
 
       // Get student's cohort -- original_cohort_id being set means they're currently in outstanding
       const { data: student } = await supabase
         .from('students')
         .select('cohort_id, original_cohort_id')
-        .eq('id', user.id)
+        .eq('id', effectiveUserId)
         .single();
 
       const outstanding = !!student?.original_cohort_id;
@@ -685,7 +686,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
           : Promise.resolve({ data: [] }),
         supabase.from('course_attempts')
           .select('course_id, score, points, current_question_index, completed_at, passed, updated_at')
-          .eq('student_id', user.id)
+          .eq('student_id', effectiveUserId)
           .order('started_at', { ascending: false }),
         token
           ? fetch('/api/course', {
@@ -755,7 +756,7 @@ function CoursesSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C
       const { data: veAttempts } = await supabase
         .from('guided_project_attempts')
         .select('ve_id, completed_at')
-        .eq('student_id', user.id);
+        .eq('student_id', effectiveUserId);
       if (veAttempts?.length) {
         const map: Record<string, { started: boolean; completed: boolean }> = {};
         for (const a of veAttempts) {
@@ -2367,7 +2368,7 @@ function AnnouncementPost({ ann, userId, myReactions, C }: {
   );
 }
 
-function AnnouncementsSection({ C }: { C: typeof LIGHT_C }) {
+function AnnouncementsSection({ userId: userIdProp, C }: { userId?: string; C: typeof LIGHT_C }) {
   const [items, setItems]       = useState<any[]>([]);
   const [userId, setUserId]     = useState('');
   const [myReactions, setMyReactions] = useState<Record<string, Set<string>>>({ like: new Set(), bookmark: new Set() });
@@ -2378,9 +2379,10 @@ function AnnouncementsSection({ C }: { C: typeof LIGHT_C }) {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
-      setUserId(user.id);
+      const effectiveUserId = userIdProp ?? user.id;
+      setUserId(effectiveUserId);
 
-      const { data: student } = await supabase.from('students').select('cohort_id').eq('id', user.id).single();
+      const { data: student } = await supabase.from('students').select('cohort_id').eq('id', effectiveUserId).single();
       if (!student?.cohort_id) { setLoading(false); return; }
 
       const { data: anns } = await supabase
@@ -2404,7 +2406,7 @@ function AnnouncementsSection({ C }: { C: typeof LIGHT_C }) {
       const { data: reactions } = await supabase
         .from('announcement_reactions')
         .select('announcement_id, type')
-        .eq('student_id', user.id);
+        .eq('student_id', effectiveUserId);
 
       // Build reaction sets for current user
       const sets: Record<string, Set<string>> = { like: new Set(), bookmark: new Set() };
@@ -2420,7 +2422,7 @@ function AnnouncementsSection({ C }: { C: typeof LIGHT_C }) {
       setLoading(false);
     };
     load();
-  }, []);
+  }, [userIdProp]);
 
   if (loading) return (
     <div className="space-y-4 max-w-2xl mx-auto">
@@ -4480,6 +4482,7 @@ export default function StudentDashboard() {
   const [user, setUser]       = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [viewingAs, setViewingAs] = useState<{ id: string; name: string; email: string } | null>(null);
   const [activeSection, setActiveSection] = useState<SectionId>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(true);
@@ -4564,12 +4567,26 @@ export default function StudentDashboard() {
       if (!authUser) { router.replace('/auth'); return; }
       if (profileData && !profileData.onboarding_completed) { router.replace('/onboarding'); return; }
 
+      // Check for admin viewAs mode
+      const viewAsId = new URLSearchParams(window.location.search).get('viewAs');
+      let resolvedViewingAs: { id: string; name: string; email: string } | null = null;
+      if (viewAsId) {
+        const { data: callerRole } = await supabase.from('students').select('role').eq('id', authUser.id).single();
+        if (callerRole?.role === 'admin' || callerRole?.role === 'instructor') {
+          const { data: target } = await supabase.from('students').select('id, full_name, email').eq('id', viewAsId).single();
+          if (target) resolvedViewingAs = { id: target.id, name: target.full_name || target.email, email: target.email };
+        }
+      }
+      setViewingAs(resolvedViewingAs);
+
       setUser(authUser);
       setProfile(profileData ? { ...profileData, username: studentData?.username ?? null } : profileData);
 
-      // Update last_login_at (fire-and-forget)
-      supabase.from('students').update({ last_login_at: new Date().toISOString() }).eq('id', authUser.id)
-        .then(({ error }) => { if (error) console.error('[last_login_at] update failed:', error.message); });
+      // Update last_login_at (fire-and-forget) -- skip in viewAs mode
+      if (!resolvedViewingAs) {
+        supabase.from('students').update({ last_login_at: new Date().toISOString() }).eq('id', authUser.id)
+          .then(({ error }) => { if (error) console.error('[last_login_at] update failed:', error.message); });
+      }
 
       // Fetch cohort for global activity ticker (fire-and-forget)
       supabase.from('students').select('cohort_id').eq('id', authUser.id).single()
@@ -4585,6 +4602,8 @@ export default function StudentDashboard() {
     router.replace('/auth');
   }, [router]);
 
+  const effectiveId    = viewingAs?.id    ?? user?.id;
+  const effectiveEmail = viewingAs?.email ?? user?.email;
   const userName = profile?.name || profile?.full_name || user?.email?.split('@')[0] || 'Student';
   const activeItem = NAV_ITEMS.find(n => n.id === activeSection)!;
 
@@ -4602,6 +4621,14 @@ export default function StudentDashboard() {
 
   return (
     <div className="min-h-screen" style={{ background: C.page }}>
+      {/* -- Admin viewAs banner -- */}
+      {viewingAs && (
+        <div className="sticky top-0 z-50 flex items-center justify-between px-4 py-2.5 text-sm font-semibold"
+          style={{ background: '#f59e0b', color: '#000' }}>
+          <span>Admin view - viewing dashboard as {viewingAs.name} ({viewingAs.email})</span>
+          <button onClick={() => window.close()} className="text-xs underline opacity-70 hover:opacity-100">Close tab</button>
+        </div>
+      )}
       {/* -- Top nav -- */}
       <header className="sticky top-0 z-40 flex items-center justify-between px-4 py-3 border-b backdrop-blur-md"
         style={{ background: C.nav, borderColor: C.navBorder }}>
@@ -4729,40 +4756,40 @@ export default function StudentDashboard() {
 
             {/* Section content */}
             {activeSection === 'overview' && user && (
-              <OverviewSection user={user} userEmail={user.email} username={profile?.username} C={C} onNavigate={goSection}/>
+              <OverviewSection user={{ ...user, id: effectiveId, email: effectiveEmail }} userEmail={effectiveEmail} username={profile?.username} C={C} onNavigate={goSection}/>
             )}
             {activeSection === 'courses' && user && (
-              <CoursesSection userEmail={user.email} C={C}/>
+              <CoursesSection userEmail={effectiveEmail} userId={effectiveId} C={C}/>
             )}
             {activeSection === 'learning_paths' && user && (
               <LearningPathsSection C={C}/>
             )}
             {activeSection === 'events' && user && (
-              <EventsSection userId={user.id} C={C}/>
+              <EventsSection userId={effectiveId} C={C}/>
             )}
             {activeSection === 'assignments' && user && (
-              <AssignmentsSection userId={user.id} studentName={userName} studentEmail={user.email ?? ''} C={C}/>
+              <AssignmentsSection userId={effectiveId} studentName={viewingAs?.name ?? userName} studentEmail={effectiveEmail ?? ''} C={C}/>
             )}
             {activeSection === 'community' && user && (
-              <CommunitySection userId={user.id} C={C}/>
+              <CommunitySection userId={effectiveId} C={C}/>
             )}
             {activeSection === 'announcements' && (
-              <AnnouncementsSection C={C}/>
+              <AnnouncementsSection userId={effectiveId} C={C}/>
             )}
             {activeSection === 'virtual_experiences' && user && (
-              <VirtualExperiencesSection userId={user.id} userEmail={user.email} C={C}/>
+              <VirtualExperiencesSection userId={effectiveId} userEmail={effectiveEmail} C={C}/>
             )}
             {activeSection === 'recordings' && user && (
-              <RecordingsSection userId={user.id} C={C}/>
+              <RecordingsSection userId={effectiveId} C={C}/>
             )}
             {activeSection === 'schedule' && user && (
-              <ScheduleSection userId={user.id} C={C}/>
+              <ScheduleSection userId={effectiveId} C={C}/>
             )}
             {activeSection === 'leaderboard' && user && (
-              <LeaderboardSection userEmail={user.email} C={C}/>
+              <LeaderboardSection userEmail={effectiveEmail} C={C}/>
             )}
             {activeSection === 'certificates' && user && (
-              <CertificatesSection userId={user.id} userEmail={user.email} userName={userName} C={C}/>
+              <CertificatesSection userId={effectiveId} userEmail={effectiveEmail} userName={viewingAs?.name ?? userName} C={C}/>
             )}
           </motion.div>
         </main>

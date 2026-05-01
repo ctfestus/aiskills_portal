@@ -1161,11 +1161,11 @@ const NAV_ITEMS = [
   { id: 'virtual_experiences',  label: 'Virtual Experiences',  Icon: Briefcase,   adminOnly: false },
   { id: 'schedule',         label: 'Schedule',         Icon: CalendarDays, adminOnly: false },
   { id: 'recordings',      label: 'Recordings',       Icon: PlayCircle,   adminOnly: false },
-  { id: 'reports',       label: 'Reports',        Icon: BarChart3,     adminOnly: false },
   { id: 'learning_paths', label: 'Learning Paths',  Icon: BookOpen,      adminOnly: false },
   { id: 'certificates',  label: 'Certificates',   Icon: Award,         adminOnly: false },
   { id: 'leaderboard',   label: 'Leaderboard',    Icon: Trophy,        adminOnly: false },
   { id: 'tracking',      label: 'Tracking',       Icon: Activity,      adminOnly: false },
+  { id: 'students',      label: 'Students',       Icon: Users,         adminOnly: false },
   { id: 'cohorts',       label: 'Cohorts',        Icon: GraduationCap, adminOnly: false },
   { id: 'payments',      label: 'Payments',       Icon: CreditCard,    adminOnly: false },
   { id: 'branding',      label: 'Platform',       Icon: Palette,       adminOnly: false },
@@ -1178,8 +1178,8 @@ const COMING_SOON: SectionId[] = [];
 const NAV_GROUPS: { label: string; items: SectionId[] }[] = [
   { label: 'Content',    items: ['courses', 'assignments', 'virtual_experiences', 'learning_paths'] },
   { label: 'Engagement', items: ['events', 'community', 'announcements', 'schedule', 'recordings'] },
-  { label: 'Insights',   items: ['reports', 'tracking', 'leaderboard', 'certificates'] },
-  { label: 'Admin',      items: ['cohorts', 'payments', 'branding', 'site'] },
+  { label: 'Insights',   items: ['tracking', 'leaderboard', 'certificates'] },
+  { label: 'Admin',      items: ['students', 'cohorts', 'payments', 'branding', 'site'] },
 ];
 
 // --- Coming Soon placeholder ---
@@ -1198,9 +1198,8 @@ function ComingSoon({ id, C }: { id: SectionId; C: typeof LIGHT_C }) {
   );
 }
 
-// --- Reports section ---
-type ReportTab = 'progress' | 'submissions' | 'logins';
 
+// --- Shared UI primitives ---
 function reportExportCSV(headers: string[], rows: (string | number | null | undefined)[][], filename: string) {
   const escape = (v: string | number | null | undefined) => {
     const s = String(v ?? '');
@@ -1208,41 +1207,10 @@ function reportExportCSV(headers: string[], rows: (string | number | null | unde
     return `"${safe.replace(/"/g, '""')}"`;
   };
   const csv = [headers.map(escape).join(','), ...rows.map(r => r.map(escape).join(','))].join('\n');
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
-}
-
-function relTime(dateStr: string | null | undefined): string {
-  if (!dateStr) return '';
-  const ts = new Date(dateStr).getTime();
-  if (isNaN(ts)) return '';
-  const diff = Date.now() - ts;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return 'Just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d} day${d !== 1 ? 's' : ''} ago`;
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-}
-
-// -- Shared UI primitives ---
-function StudentAvatar2({ name, email, size = 36, C }: { name?: string; email?: string; size?: number; C: typeof LIGHT_C }) {
-  const label = ((name || email || '?').trim().slice(0, 2)).toUpperCase();
-  const hue = ((name || email || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) * 47) % 360;
-  const isDark = C === DARK_C || C.text === '#f0f0f0';
-  const bg = `hsl(${hue},45%,${isDark ? 28 : 88}%)`;
-  const color = `hsl(${hue},55%,${isDark ? 72 : 32}%)`;
-  return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: bg, color, flexShrink: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.36,
-      fontWeight: 700, letterSpacing: '0.02em' }}>
-      {label}
-    </div>
-  );
 }
 
 function RKpi({ label, value, sub, accent, C }: { label: string; value: string | number; sub?: string; accent?: string; C: typeof LIGHT_C }) {
@@ -1251,708 +1219,6 @@ function RKpi({ label, value, sub, accent, C }: { label: string; value: string |
       <p className="text-[10px] font-semibold uppercase tracking-[0.1em] mb-2" style={{ color: C.faint }}>{label}</p>
       <p className="text-2xl font-bold leading-none tabular-nums" style={{ color: accent ?? C.text }}>{value}</p>
       {sub && <p className="text-[11px] mt-1.5 leading-snug" style={{ color: C.faint }}>{sub}</p>}
-    </div>
-  );
-}
-
-function RFilterBar({
-  search, onSearch, filters, onExport, count, noun, C,
-}: {
-  search: string; onSearch: (v: string) => void;
-  filters: { label: string; value: string; onChange: (v: string) => void; options: { label: string; value: string }[] }[];
-  onExport: () => void; count: number; noun: string; C: typeof LIGHT_C;
-}) {
-  const hasActive = filters.some(f => f.value);
-  const isDark = C.text === '#f0f0f0';
-  return (
-    <div className="space-y-2.5">
-      <div className="flex gap-2 flex-wrap items-center">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[220px]">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: C.faint }}/>
-          <input value={search} onChange={e => onSearch(e.target.value)}
-            placeholder="Search name or email…"
-            className="w-full pl-10 pr-9 py-2.5 rounded-xl text-[13px] outline-none"
-            style={{ background: C.input, color: C.text,
-              border: `1.5px solid ${search ? C.green : C.cardBorder}`,
-              transition: 'border-color 0.15s' }}/>
-          {search && (
-            <button onClick={() => onSearch('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center"
-              style={{ background: C.divider }}>
-              <X className="w-2.5 h-2.5" style={{ color: C.muted }}/>
-            </button>
-          )}
-        </div>
-        {/* Selects */}
-        {filters.map(f => (
-          <div key={f.label} className="relative flex-shrink-0">
-            <select value={f.value} onChange={e => f.onChange(e.target.value)}
-              className="appearance-none pl-3.5 pr-8 py-2.5 rounded-xl text-[13px] outline-none cursor-pointer font-medium"
-              style={{ background: f.value ? (isDark ? 'rgba(173,238,102,0.12)' : 'rgba(0,97,40,0.07)') : C.input,
-                color: f.value ? C.green : C.muted,
-                border: `1.5px solid ${f.value ? C.green : C.cardBorder}`,
-                transition: 'all 0.15s' }}>
-              <option value="">{f.label}</option>
-              {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none"
-              style={{ color: f.value ? C.green : C.faint }}/>
-          </div>
-        ))}
-        <div className="flex-1"/>
-        {/* Export */}
-        <button onClick={onExport}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold flex-shrink-0 active:scale-95"
-          style={{ background: C.cta, color: C.ctaText, transition: 'opacity 0.15s' }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
-          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
-          <Download className="w-3.5 h-3.5"/>
-          <span>Export</span>
-        </button>
-      </div>
-      {/* Status strip */}
-      <div className="flex items-center gap-3 h-5">
-        <span className="text-[11px] font-medium tabular-nums" style={{ color: C.faint }}>
-          {count.toLocaleString()} {noun}{count !== 1 ? 's' : ''}
-        </span>
-        {(hasActive || search) && (
-          <>
-            <span style={{ color: C.divider }}>·</span>
-            <button onClick={() => { onSearch(''); filters.forEach(f => f.onChange('')); }}
-              className="text-[11px] font-semibold flex items-center gap-1"
-              style={{ color: C.green }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
-              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
-              <X className="w-2.5 h-2.5"/> Clear all
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function REmptyState({ icon, title, body, C }: { icon: any; title: string; body: string; C: typeof LIGHT_C }) {
-  const Icon = icon;
-  return (
-    <div className="flex flex-col items-center justify-center py-16 px-8 text-center">
-      <div className="w-16 h-16 rounded-3xl flex items-center justify-center mb-5"
-        style={{ background: C.pill, border: `1.5px dashed ${C.cardBorder}` }}>
-        <Icon className="w-7 h-7" style={{ color: C.faint }}/>
-      </div>
-      <p className="text-sm font-bold mb-1.5" style={{ color: C.text }}>{title}</p>
-      <p className="text-xs max-w-[240px] leading-relaxed" style={{ color: C.faint }}>{body}</p>
-    </div>
-  );
-}
-
-function RSkeletonRows({ count = 5, C }: { count?: number; C: typeof LIGHT_C }) {
-  return (
-    <div>
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="flex items-center gap-4 px-5 py-4"
-          style={{ borderBottom: i < count - 1 ? `1px solid ${C.divider}` : 'none',
-            opacity: 1 - i * 0.15 }}>
-          <div className="w-9 h-9 rounded-full flex-shrink-0"
-            style={{ background: C.skeleton, animation: 'pulse 1.5s ease-in-out infinite' }}/>
-          <div className="flex-1 space-y-2">
-            <div className="h-3 rounded-full w-2/5" style={{ background: C.skeleton }}/>
-            <div className="h-2.5 rounded-full w-1/4" style={{ background: C.skeleton, opacity: 0.6 }}/>
-          </div>
-          <div className="hidden md:block h-2.5 rounded-full w-24" style={{ background: C.skeleton, opacity: 0.5 }}/>
-          <div className="hidden md:block h-2.5 rounded-full w-32" style={{ background: C.skeleton, opacity: 0.4 }}/>
-          <div className="hidden md:block h-6 rounded-full w-20" style={{ background: C.skeleton, opacity: 0.35 }}/>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function RTableHeader({ cols, C }: { cols: { label: string; className?: string }[]; C: typeof LIGHT_C }) {
-  return (
-    <div className="flex items-center px-5 py-3 border-b" style={{ borderColor: C.divider, background: C.input }}>
-      {cols.map((col, i) => (
-        <span key={i} className={`text-[11px] font-semibold uppercase tracking-wider ${col.className ?? ''}`}
-          style={{ color: C.faint }}>{col.label}</span>
-      ))}
-    </div>
-  );
-}
-
-// -- Tab 1 - Course Progress ---
-function CourseProgressTab({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
-  const [rows, setRows]         = useState<any[]>([]);
-  const [students, setStudents] = useState<any[]>([]);
-  const [cohorts, setCohorts]   = useState<any[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [search, setSearch]     = useState('');
-  const [filterCourse, setFilterCourse] = useState('');
-  const [filterCohort, setFilterCohort] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-
-  const courseIds    = forms.filter(f => getFormType(f) === 'course').map(f => f.id);
-  const courseIdsKey = courseIds.join(',');
-
-  useEffect(() => {
-    if (!courseIds.length) { setLoading(false); return; }
-    const load = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const headers: Record<string, string> = {};
-        if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
-
-        const [progressRes, { data: stu }, { data: coh }] = await Promise.all([
-          fetch(`/api/course-progress?formIds=${courseIds.join(',')}`, { headers }),
-          supabase.from('students').select('id, full_name, email, cohort_id').eq('role', 'student'),
-          supabase.from('cohorts').select('id, name'),
-        ]);
-
-        const { progress } = progressRes.ok ? await progressRes.json() : { progress: [] };
-        setRows(progress ?? []); setStudents(stu ?? []); setCohorts(coh ?? []);
-      } catch (err) {
-        console.error('[CourseProgressTab]', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- courseIdsKey is the stable string form of courseIds; adding the array would trigger on every render
-  }, [courseIdsKey]);
-
-  const cohortMap  = Object.fromEntries((cohorts ?? []).map(c => [c.id, c.name]));
-  const studentMap = Object.fromEntries((students ?? []).map(s => [s.email, s]));
-
-  const enriched = rows.map(r => {
-    const stu      = studentMap[r.student_email];
-    const form     = forms.find(f => f.id === r.form_id);
-    const cohortId = stu?.cohort_id ?? null;
-    const totalQ   = form?.config?.questions?.length ?? 0;
-    const pct      = r.completed ? 100 : totalQ > 0 ? Math.round((r.current_question_index / totalQ) * 100) : 0;
-    return { ...r, studentName: (r.student_name?.trim() || stu?.full_name || r.student_email || '').trim(),
-      courseTitle: form?.title ?? '--', cohortName: cohortId ? (cohortMap[cohortId] ?? '--') : '--', cohortId, pct };
-  });
-
-  const q = search.toLowerCase();
-  const visible = enriched.filter(r => {
-    if (q && !(r.studentName?.toLowerCase() ?? '').includes(q) && !(r.student_email?.toLowerCase() ?? '').includes(q)) return false;
-    if (filterCourse && r.form_id !== filterCourse) return false;
-    if (filterCohort && r.cohortId !== filterCohort) return false;
-    if (filterStatus === 'completed' && !r.completed) return false;
-    if (filterStatus === 'in_progress' && r.completed) return false;
-    return true;
-  });
-
-  const courseOptions = forms.filter(f => getFormType(f) === 'course').map(f => ({ label: f.title, value: f.id }));
-  const cohortOptions = cohorts.map(c => ({ label: c.name, value: c.id }));
-  const completed     = enriched.filter(r => r.completed).length;
-  const avgPct        = enriched.length ? Math.round(enriched.reduce((s, r) => s + r.pct, 0) / enriched.length) : 0;
-
-  function doExport() {
-    reportExportCSV(['Student', 'Email', 'Cohort', 'Course', 'Progress %', 'Status'],
-      visible.map(r => [r.studentName, r.student_email, r.cohortName, r.courseTitle, r.pct, r.completed ? 'Completed' : 'In Progress']),
-      'course_progress.csv');
-  }
-
-  const completionRate = enriched.length ? Math.round((completed / enriched.length) * 100) : 0;
-
-  if (loading) return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[...Array(4)].map((_,i) => (
-          <div key={i} className="rounded-2xl px-5 py-5 h-24"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-            <div className="h-2 rounded-full w-16 mb-3" style={{ background: C.skeleton }}/>
-            <div className="h-8 rounded-lg w-12" style={{ background: C.skeleton }}/>
-          </div>
-        ))}
-      </div>
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-        <div className="px-5 py-4" style={{ borderBottom: `1px solid ${C.divider}`, background: C.input }}>
-          <div className="h-9 rounded-xl w-full" style={{ background: C.skeleton }}/>
-        </div>
-        <RSkeletonRows count={5} C={C}/>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="space-y-4">
-      {/* KPI row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <RKpi label="Total Learners" value={enriched.length.toLocaleString()} sub="across all courses" C={C}/>
-        <RKpi label="Completions" value={completed.toLocaleString()} sub={`${completionRate}% completion rate`} accent={C.green} C={C}/>
-        <RKpi label="Avg Progress" value={`${avgPct}%`} sub="across all enrolled" C={C}/>
-        <RKpi label="In Progress" value={(enriched.length - completed).toLocaleString()} sub="currently learning" C={C}/>
-      </div>
-
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-        <div className="px-5 pt-4 pb-3" style={{ borderBottom: `1px solid ${C.divider}` }}>
-          <RFilterBar search={search} onSearch={setSearch}
-            filters={[
-              { label: 'All Courses', value: filterCourse, onChange: setFilterCourse, options: courseOptions },
-              { label: 'All Cohorts', value: filterCohort, onChange: setFilterCohort, options: cohortOptions },
-              { label: 'All Status',  value: filterStatus, onChange: setFilterStatus,
-                options: [{ label: 'In Progress', value: 'in_progress' }, { label: 'Completed', value: 'completed' }] },
-            ]}
-            onExport={doExport} count={visible.length} noun="record" C={C}/>
-        </div>
-
-        {visible.length === 0
-          ? <REmptyState icon={TrendingUp} title="No records match" body="Try adjusting your search or filters to find learners." C={C}/>
-          : (
-            <div>
-              <div className="hidden md:grid px-5 py-2.5"
-                style={{ gridTemplateColumns: '2.5fr 1.2fr 2fr 180px 120px',
-                  background: C.input, borderBottom: `1px solid ${C.divider}` }}>
-                {['Student','Cohort','Course','Progress','Status'].map(h => (
-                  <span key={h} className="text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: C.faint }}>{h}</span>
-                ))}
-              </div>
-              {visible.map((r, idx) => (
-                <div key={`${r.form_id}-${r.student_email}`}
-                  className="md:grid items-center px-5 py-3.5"
-                  style={{ gridTemplateColumns: '2.5fr 1.2fr 2fr 180px 120px',
-                    borderBottom: idx < visible.length - 1 ? `1px solid ${C.divider}` : 'none',
-                    transition: 'background 0.1s', cursor: 'default' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = C.input)}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                  <div className="flex items-center gap-3 mb-2 md:mb-0">
-                    <StudentAvatar2 name={r.studentName} email={r.student_email} size={36} C={C}/>
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-semibold truncate leading-tight" style={{ color: C.text }}>{r.studentName || '--'}</p>
-                      <p className="text-[11px] truncate mt-0.5" style={{ color: C.faint }}>{r.student_email}</p>
-                    </div>
-                  </div>
-                  <div className="mb-2 md:mb-0">
-                    <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ background: C.pill, color: C.muted }}>{r.cohortName}</span>
-                  </div>
-                  <p className="text-[13px] truncate pr-4 mb-2 md:mb-0" style={{ color: C.text }}>{r.courseTitle}</p>
-                  <div className="flex items-center gap-2.5 mb-2 md:mb-0 pr-4">
-                    <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: C.divider }}>
-                      <div className="h-full rounded-full"
-                        style={{ width: `${Math.min(r.pct, 100)}%`,
-                          background: r.completed
-                            ? `linear-gradient(90deg, ${C.green}, ${C.lime})`
-                            : 'linear-gradient(90deg, #3b82f6, #60a5fa)',
-                          transition: 'width 0.6s ease',
-                          boxShadow: r.completed ? `0 0 6px ${C.green}55` : '0 0 6px #3b82f644' }}/>
-                    </div>
-                    <span className="text-[11px] font-black tabular-nums w-8 text-right flex-shrink-0"
-                      style={{ color: r.completed ? C.green : '#3b82f6' }}>{r.pct}%</span>
-                  </div>
-                  <div>
-                    {r.completed
-                      ? <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full"
-                          style={{ background: C.green === '#ADEE66' ? 'rgba(173,238,102,0.15)' : 'rgba(0,97,40,0.1)', color: C.green }}>
-                          <CheckCircle2 className="w-3 h-3"/> Done
-                        </span>
-                      : <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full"
-                          style={{ background: 'rgba(59,130,246,0.1)', color: '#3b82f6' }}>
-                          <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#3b82f6' }}/>Active
-                        </span>
-                    }
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        }
-      </div>
-    </div>
-  );
-}
-
-// -- Tab 2 - Assignment Submissions ---
-function AssignmentSubmissionsTab({ C }: { C: typeof LIGHT_C }) {
-  const [rows, setRows]               = useState<any[]>([]);
-  const [cohorts, setCohorts]         = useState<any[]>([]);
-  const [assignments, setAssignments] = useState<any[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [search, setSearch]           = useState('');
-  const [filterAssignment, setFilterAssignment] = useState('');
-  const [filterCohort, setFilterCohort]         = useState('');
-  const [filterStatus, setFilterStatus]         = useState('');
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { setLoading(false); return; }
-        const [{ data: asn }, { data: coh }] = await Promise.all([
-          supabase.from('assignments').select('id, title').eq('created_by', user.id).order('created_at', { ascending: false }),
-          supabase.from('cohorts').select('id, name'),
-        ]);
-        const myAssignmentIds = (asn ?? []).map((a: any) => a.id);
-        const subsResult = myAssignmentIds.length
-          ? await supabase.from('assignment_submissions')
-              .select('*, student:students(id, full_name, email, cohort_id), assignment:assignments(id, title)')
-              .in('assignment_id', myAssignmentIds).order('updated_at', { ascending: false })
-          : { data: [] };
-        setAssignments(asn ?? []); setCohorts(coh ?? []); setRows(subsResult.data ?? []);
-      } catch (err) { console.error('[AssignmentSubmissionsTab]', err); }
-      finally { setLoading(false); }
-    };
-    load();
-  }, []);
-
-  const cohortMap = Object.fromEntries((cohorts ?? []).map(c => [c.id, c.name]));
-  const enriched  = rows.map(r => ({
-    ...r,
-    studentName:     r.student?.full_name || r.student?.email || '--',
-    studentEmail:    r.student?.email     || '--',
-    cohortName:      r.student?.cohort_id ? (cohortMap[r.student.cohort_id] ?? '--') : '--',
-    cohortId:        r.student?.cohort_id ?? null,
-    assignmentTitle: r.assignment?.title  ?? '--',
-  }));
-
-  const q2 = search.toLowerCase();
-  const visible = enriched.filter(r => {
-    if (q2 && !(r.studentName?.toLowerCase() ?? '').includes(q2) && !(r.studentEmail?.toLowerCase() ?? '').includes(q2) && !(r.assignmentTitle?.toLowerCase() ?? '').includes(q2)) return false;
-    if (filterAssignment && r.assignment_id !== filterAssignment) return false;
-    if (filterCohort && r.cohortId !== filterCohort) return false;
-    if (filterStatus && r.status !== filterStatus) return false;
-    return true;
-  });
-
-  const assignmentOptions = assignments.map(a => ({ label: a.title, value: a.id }));
-  const cohortOptions     = cohorts.map(c => ({ label: c.name, value: c.id }));
-  const statusOptions     = [{ label: 'Pending', value: 'draft' }, { label: 'Submitted', value: 'submitted' }, { label: 'Graded', value: 'graded' }];
-
-  const graded    = enriched.filter(r => r.status === 'graded').length;
-  const submitted = enriched.filter(r => r.status === 'submitted').length;
-  const pending   = enriched.filter(r => r.status === 'draft').length;
-  const avgScore  = (() => {
-    const scored = enriched.filter(r => r.score != null);
-    return scored.length ? Math.round(scored.reduce((s, r) => s + r.score, 0) / scored.length) : null;
-  })();
-
-  function statusStyle(status: string) {
-    if (status === 'graded')    return { bg: C.green === '#ADEE66' ? 'rgba(173,238,102,0.15)' : 'rgba(0,97,40,0.1)', color: C.green, dot: C.green, label: 'Graded' };
-    if (status === 'submitted') return { bg: 'rgba(59,130,246,0.1)',  color: '#3b82f6', dot: '#3b82f6', label: 'Submitted' };
-    return { bg: 'rgba(156,163,175,0.12)', color: '#9ca3af', dot: '#9ca3af', label: 'Pending' };
-  }
-
-  function doExport() {
-    reportExportCSV(['Student','Email','Cohort','Assignment','Status','Submitted At','Score'],
-      visible.map(r => [r.studentName, r.studentEmail, r.cohortName, r.assignmentTitle, r.status,
-        r.submitted_at ? new Date(r.submitted_at).toLocaleString() : '--', r.score ?? '--']),
-      'assignment_submissions.csv');
-  }
-
-  if (loading) return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[...Array(4)].map((_,i) => (
-          <div key={i} className="rounded-2xl px-5 py-5 h-24"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-            <div className="h-2 rounded-full w-16 mb-3" style={{ background: C.skeleton }}/>
-            <div className="h-8 rounded-lg w-12" style={{ background: C.skeleton }}/>
-          </div>
-        ))}
-      </div>
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-        <div className="px-5 py-4" style={{ borderBottom: `1px solid ${C.divider}`, background: C.input }}>
-          <div className="h-9 rounded-xl w-full" style={{ background: C.skeleton }}/>
-        </div>
-        <RSkeletonRows count={5} C={C}/>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <RKpi label="Total Submissions" value={enriched.length.toLocaleString()} sub="across all assignments" C={C}/>
-        <RKpi label="Graded" value={graded.toLocaleString()} sub={`${enriched.length ? Math.round((graded/enriched.length)*100) : 0}% graded`} accent={C.green} C={C}/>
-        <RKpi label="Awaiting Review" value={submitted.toLocaleString()} sub="submitted, not graded" C={C}/>
-        <RKpi label="Avg Score" value={avgScore != null ? `${avgScore}` : '--'} sub={avgScore != null ? 'pts across graded' : 'no graded work yet'} C={C}/>
-      </div>
-
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-        <div className="px-5 pt-4 pb-3" style={{ borderBottom: `1px solid ${C.divider}` }}>
-          <RFilterBar search={search} onSearch={setSearch}
-            filters={[
-              { label: 'All Assignments', value: filterAssignment, onChange: setFilterAssignment, options: assignmentOptions },
-              { label: 'All Cohorts',     value: filterCohort,     onChange: setFilterCohort,     options: cohortOptions    },
-              { label: 'All Status',      value: filterStatus,     onChange: setFilterStatus,     options: statusOptions    },
-            ]}
-            onExport={doExport} count={visible.length} noun="submission" C={C}/>
-        </div>
-
-        {visible.length === 0
-          ? <REmptyState icon={ClipboardList} title="No submissions found" body="Try adjusting your search or filters to find submissions." C={C}/>
-          : (
-            <div>
-              <div className="hidden md:grid px-5 py-2.5"
-                style={{ gridTemplateColumns: '2.5fr 1.2fr 2fr 120px 140px 90px',
-                  background: C.input, borderBottom: `1px solid ${C.divider}` }}>
-                {['Student','Cohort','Assignment','Status','Submitted','Score'].map((h, i) => (
-                  <span key={h} className={`text-[10px] font-bold uppercase tracking-[0.1em] ${i === 5 ? 'text-right' : ''}`}
-                    style={{ color: C.faint }}>{h}</span>
-                ))}
-              </div>
-              {visible.map((r, idx) => {
-                const st = statusStyle(r.status);
-                const scoreColor = r.score != null ? (r.score >= 85 ? C.green : r.score >= 50 ? '#f59e0b' : '#ef4444') : C.faint;
-                return (
-                  <div key={r.id} className="md:grid items-center px-5 py-3.5"
-                    style={{ gridTemplateColumns: '2.5fr 1.2fr 2fr 120px 140px 90px',
-                      borderBottom: idx < visible.length - 1 ? `1px solid ${C.divider}` : 'none',
-                      transition: 'background 0.1s' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = C.input)}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                    <div className="flex items-center gap-3 mb-2 md:mb-0">
-                      <StudentAvatar2 name={r.studentName} email={r.studentEmail} size={36} C={C}/>
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-semibold truncate leading-tight" style={{ color: C.text }}>{r.studentName}</p>
-                        <p className="text-[11px] truncate mt-0.5" style={{ color: C.faint }}>{r.studentEmail}</p>
-                      </div>
-                    </div>
-                    <div className="mb-2 md:mb-0">
-                      <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ background: C.pill, color: C.muted }}>{r.cohortName}</span>
-                    </div>
-                    <p className="text-[13px] truncate pr-4 mb-2 md:mb-0" style={{ color: C.text }}>{r.assignmentTitle}</p>
-                    <div className="mb-2 md:mb-0">
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full"
-                        style={{ background: st.bg, color: st.color }}>
-                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: st.dot }}/>
-                        {st.label}
-                      </span>
-                    </div>
-                    <div className="mb-2 md:mb-0">
-                      {r.submitted_at
-                        ? <div>
-                            <p className="text-[12px] font-medium leading-tight" style={{ color: C.text }}>
-                              {new Date(r.submitted_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
-                            </p>
-                            <p className="text-[11px] mt-0.5" style={{ color: C.faint }}>
-                              {new Date(r.submitted_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
-                            </p>
-                          </div>
-                        : <span className="text-[11px] italic" style={{ color: C.faint }}>--</span>
-                      }
-                    </div>
-                    <div className="text-right">
-                      {r.score != null
-                        ? <div className="inline-flex items-baseline gap-0.5">
-                            <span className="text-xl font-black tabular-nums" style={{ color: scoreColor }}>{r.score}</span>
-                            <span className="text-[10px] font-bold" style={{ color: scoreColor, opacity: 0.6 }}>pt</span>
-                          </div>
-                        : <span className="text-sm font-medium" style={{ color: C.faint }}>--</span>
-                      }
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )
-        }
-      </div>
-    </div>
-  );
-}
-
-// -- Tab 3 - Student Logins ---
-function StudentLoginsTab({ C }: { C: typeof LIGHT_C }) {
-  const [students, setStudents] = useState<any[]>([]);
-  const [cohorts, setCohorts]   = useState<any[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [search, setSearch]     = useState('');
-  const [filterCohort, setFilterCohort] = useState('');
-
-  useEffect(() => {
-    Promise.all([
-      supabase.from('students').select('id, full_name, email, cohort_id, created_at, last_login_at').eq('role', 'student').order('last_login_at', { ascending: false, nullsFirst: false }),
-      supabase.from('cohorts').select('id, name'),
-    ]).then(([{ data: stu }, { data: coh }]) => {
-      setStudents(stu ?? []); setCohorts(coh ?? []); setLoading(false);
-    }).catch(err => { console.error('[StudentLoginsTab]', err); setLoading(false); });
-  }, []);
-
-  const cohortMap = Object.fromEntries((cohorts ?? []).map(c => [c.id, c.name]));
-  const enriched  = students.map(s => ({ ...s, cohortName: s.cohort_id ? (cohortMap[s.cohort_id] ?? '--') : '--' }));
-
-  const q3 = search.toLowerCase();
-  const visible = enriched.filter(s => {
-    if (q3 && !(s.full_name?.toLowerCase() ?? '').includes(q3) && !(s.email?.toLowerCase() ?? '').includes(q3)) return false;
-    if (filterCohort && s.cohort_id !== filterCohort) return false;
-    return true;
-  });
-
-  const cohortOptions    = cohorts.map(c => ({ label: c.name, value: c.id }));
-  const neverLoggedIn    = enriched.filter(s => !s.last_login_at).length;
-  // eslint-disable-next-line react-hooks/purity
-  const nowMs            = Date.now();
-  const loggedInToday    = enriched.filter(s => s.last_login_at && (nowMs - new Date(s.last_login_at).getTime()) < 86400000).length;
-  const loggedInWeek     = enriched.filter(s => s.last_login_at && (nowMs - new Date(s.last_login_at).getTime()) < 604800000).length;
-
-  function activityLevel(s: any): { color: string; label: string; dot: string } {
-    if (!s.last_login_at)                                                           return { color: '#9ca3af', dot: '#9ca3af', label: 'Never' };
-    const diff = nowMs - new Date(s.last_login_at).getTime();
-    if (diff < 86400000)   return { color: C.green, dot: C.green, label: 'Today' };
-    if (diff < 604800000)  return { color: '#3b82f6', dot: '#3b82f6', label: 'This week' };
-    if (diff < 2592000000) return { color: '#f59e0b', dot: '#f59e0b', label: 'This month' };
-    return { color: '#ef4444', dot: '#ef4444', label: 'Inactive' };
-  }
-
-  function doExport() {
-    reportExportCSV(['Student','Email','Cohort','Last Login','Joined'],
-      visible.map(s => [s.full_name || s.email, s.email, s.cohortName,
-        s.last_login_at ? new Date(s.last_login_at).toLocaleString() : 'Never logged in',
-        new Date(s.created_at).toLocaleDateString('en-US',{month:'short',year:'numeric'})]),
-      'student_logins.csv');
-  }
-
-  if (loading) return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[...Array(4)].map((_,i) => (
-          <div key={i} className="rounded-2xl px-5 py-5 h-24"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-            <div className="h-2 rounded-full w-16 mb-3" style={{ background: C.skeleton }}/>
-            <div className="h-8 rounded-lg w-12" style={{ background: C.skeleton }}/>
-          </div>
-        ))}
-      </div>
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-        <div className="px-5 py-4" style={{ borderBottom: `1px solid ${C.divider}`, background: C.input }}>
-          <div className="h-9 rounded-xl w-full" style={{ background: C.skeleton }}/>
-        </div>
-        <RSkeletonRows count={5} C={C}/>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <RKpi label="Total Students" value={enriched.length.toLocaleString()} sub="registered in platform" C={C}/>
-        <RKpi label="Active Today" value={loggedInToday.toLocaleString()} sub="logged in last 24h" accent={C.green} C={C}/>
-        <RKpi label="Active This Week" value={loggedInWeek.toLocaleString()} sub="logged in last 7 days" C={C}/>
-        <RKpi label="Never Logged In" value={neverLoggedIn.toLocaleString()} sub="yet to access platform" C={C}/>
-      </div>
-
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-        <div className="px-5 pt-4 pb-3" style={{ borderBottom: `1px solid ${C.divider}` }}>
-          <RFilterBar search={search} onSearch={setSearch}
-            filters={[{ label: 'All Cohorts', value: filterCohort, onChange: setFilterCohort, options: cohortOptions }]}
-            onExport={doExport} count={visible.length} noun="student" C={C}/>
-        </div>
-
-        {visible.length === 0
-          ? <REmptyState icon={Users} title="No students found" body="Try adjusting your search or cohort filter." C={C}/>
-          : (
-            <div>
-              <div className="hidden md:grid px-5 py-2.5"
-                style={{ gridTemplateColumns: '2.5fr 1.2fr 1.2fr 2fr 1fr',
-                  background: C.input, borderBottom: `1px solid ${C.divider}` }}>
-                {['Student','Cohort','Activity','Last Login','Joined'].map(h => (
-                  <span key={h} className="text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: C.faint }}>{h}</span>
-                ))}
-              </div>
-              {visible.map((s, idx) => {
-                const act = activityLevel(s);
-                const isToday = act.label === 'Today';
-                return (
-                  <div key={s.id} className="md:grid items-center px-5 py-3.5"
-                    style={{ gridTemplateColumns: '2.5fr 1.2fr 1.2fr 2fr 1fr',
-                      borderBottom: idx < visible.length - 1 ? `1px solid ${C.divider}` : 'none',
-                      transition: 'background 0.1s' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = C.input)}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                    <div className="flex items-center gap-3 mb-2 md:mb-0">
-                      <StudentAvatar2 name={s.full_name} email={s.email} size={36} C={C}/>
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-semibold truncate leading-tight" style={{ color: C.text }}>{s.full_name || s.email}</p>
-                        <p className="text-[11px] truncate mt-0.5" style={{ color: C.faint }}>{s.email}</p>
-                      </div>
-                    </div>
-                    <div className="mb-2 md:mb-0">
-                      <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg" style={{ background: C.pill, color: C.muted }}>{s.cohortName}</span>
-                    </div>
-                    <div className="mb-2 md:mb-0">
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1.5 rounded-full"
-                        style={{ background: `${act.dot}18`, color: act.color }}>
-                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isToday ? 'animate-pulse' : ''}`}
-                          style={{ background: act.dot }}/>
-                        {act.label}
-                      </span>
-                    </div>
-                    <div className="mb-2 md:mb-0">
-                      {s.last_login_at
-                        ? <div>
-                            <p className="text-[13px] font-semibold leading-tight" style={{ color: C.text }}>{relTime(s.last_login_at)}</p>
-                            <p className="text-[11px] mt-0.5" style={{ color: C.faint }}>
-                              {new Date(s.last_login_at).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'})}
-                            </p>
-                          </div>
-                        : <span className="text-[12px] italic" style={{ color: C.faint }}>Never logged in</span>
-                      }
-                    </div>
-                    <p className="text-[11px]" style={{ color: C.faint }}>
-                      {new Date(s.created_at).toLocaleDateString('en-US',{month:'short',year:'numeric'})}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          )
-        }
-      </div>
-    </div>
-  );
-}
-
-// -- ReportsSection shell ---
-function ReportsSection({ forms, C }: { forms: any[]; C: typeof LIGHT_C }) {
-  const [tab, setTab] = useState<ReportTab>('progress');
-
-  const TABS: { id: ReportTab; label: string; shortLabel: string; Icon: any; desc: string }[] = [
-    { id: 'progress',    label: 'Course Progress',       shortLabel: 'Progress',    Icon: TrendingUp,    desc: 'Learner advancement across all courses' },
-    { id: 'submissions', label: 'Assignment Submissions', shortLabel: 'Submissions', Icon: ClipboardList, desc: 'Review and grade submitted assignments'   },
-    { id: 'logins',      label: 'Student Logins',         shortLabel: 'Logins',      Icon: Users,         desc: 'Platform access and activity history'    },
-  ];
-
-  return (
-    <div className="space-y-5">
-      {/* Section header */}
-      <div>
-        <h2 className="text-xl font-bold tracking-tight leading-none" style={{ color: C.text }}>
-          Reports & Analytics
-        </h2>
-        <p className="text-xs mt-1.5" style={{ color: C.faint }}>
-          {TABS.find(t => t.id === tab)?.desc}
-        </p>
-      </div>
-
-      {/* Tab bar */}
-      <div className="flex gap-1 p-1 rounded-2xl" style={{ background: C.pill }}>
-        {TABS.map(t => {
-          const active = tab === t.id;
-          return (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold"
-              style={{
-                background: active ? C.card : 'transparent',
-                color: active ? C.text : C.faint,
-                boxShadow: active ? C.cardShadow : 'none',
-                transition: 'all 0.15s',
-              }}>
-              <t.Icon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: active ? C.green : C.faint }}/>
-              <span className="hidden sm:inline truncate">{t.label}</span>
-              <span className="sm:hidden">{t.shortLabel}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Tab content */}
-      <div style={{ fontFamily: 'var(--font-mono)' }}>
-        {tab === 'progress'    && <CourseProgressTab forms={forms} C={C} />}
-        {tab === 'submissions' && <AssignmentSubmissionsTab C={C} />}
-        {tab === 'logins'      && <StudentLoginsTab C={C} />}
-      </div>
     </div>
   );
 }
@@ -4548,7 +3814,7 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
                     {meta.label}
                   </span>
                 </div>
-                {/* Last Active + deadline */}
+                {/* Last Active */}
                 <div>
                   <div style={{ fontSize: 12, color: C.faint }}>
                     {row.lastActive
@@ -6700,6 +5966,270 @@ function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
+// --- Students section ---
+function StudentDetailPanel({ student, cohortName, detail, loading, onClose, C }: {
+  student: any; cohortName: string; detail: any; loading: boolean; onClose: () => void; C: typeof LIGHT_C;
+}) {
+  const statusColor = (s: string) => s === 'completed' ? C.green : s === 'in_progress' ? '#f59e0b' : C.faint;
+  const statusLabel = (s: string) => s === 'completed' ? 'Completed' : s === 'in_progress' ? 'In Progress' : 'Not Started';
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(0,0,0,0.35)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="w-full max-w-lg h-full overflow-y-auto flex flex-col"
+        style={{ background: C.card, boxShadow: '-4px 0 32px rgba(0,0,0,0.22)' }}>
+        <div className="p-5 flex items-start justify-between" style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+          <div>
+            <p className="text-base font-bold" style={{ color: C.text }}>{student.full_name || 'No name'}</p>
+            <p className="text-sm" style={{ color: C.muted }}>{student.email}</p>
+            <p className="text-xs mt-0.5" style={{ color: C.faint }}>Cohort: {cohortName || 'None'}</p>
+          </div>
+          <button onClick={onClose} style={{ color: C.faint }}><X className="w-5 h-5"/></button>
+        </div>
+
+        <div className="p-5">
+          <a href={`/student?viewAs=${student.id}`} target="_blank" rel="noreferrer"
+            className="flex items-center justify-center gap-2 w-full text-sm font-semibold py-2.5 rounded-xl mb-5"
+            style={{ background: C.cta, color: C.ctaText }}>
+            <ExternalLink className="w-4 h-4"/>
+            Open Student Dashboard
+          </a>
+
+          {loading && <p className="text-sm text-center py-8" style={{ color: C.muted }}>Loading...</p>}
+
+          {!loading && detail && (
+            <div className="space-y-5">
+              {/* Courses */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>
+                  Courses ({detail.courses?.length ?? 0})
+                </p>
+                {(detail.courses ?? []).length === 0 && (
+                  <p className="text-sm" style={{ color: C.muted }}>No courses in cohort</p>
+                )}
+                {(detail.courses ?? []).map((c: any) => (
+                  <div key={c.id} className="flex items-center justify-between py-2"
+                    style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: C.text }}>{c.title}</p>
+                      {c.score != null && (
+                        <p className="text-xs" style={{ color: C.faint }}>Score: {c.score}%</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                      {c.hasCert && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                          style={{ background: `${C.green}18`, color: C.green }}>Cert</span>
+                      )}
+                      <span className="text-xs font-semibold" style={{ color: statusColor(c.status) }}>
+                        {statusLabel(c.status)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Assignments */}
+              {(detail.assignments ?? []).length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>
+                    Assignments ({detail.assignments.length})
+                  </p>
+                  {detail.assignments.map((a: any) => (
+                    <div key={a.id} className="flex items-center justify-between py-2"
+                      style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+                      <p className="text-sm font-medium truncate min-w-0" style={{ color: C.text }}>{a.title}</p>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                        {a.score != null && (
+                          <span className="text-xs" style={{ color: C.faint }}>{a.score}%</span>
+                        )}
+                        <span className="text-xs font-semibold" style={{ color: statusColor(a.status === 'submitted' || a.status === 'graded' ? 'completed' : a.status) }}>
+                          {a.status === 'not_started' ? 'Not Started' : a.status === 'draft' ? 'Draft' : a.status === 'submitted' ? 'Submitted' : 'Graded'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Virtual Experiences */}
+              {(detail.ves ?? []).length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>
+                    Virtual Experiences ({detail.ves.length})
+                  </p>
+                  {detail.ves.map((v: any) => (
+                    <div key={v.id} className="flex items-center justify-between py-2"
+                      style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+                      <p className="text-sm font-medium truncate min-w-0" style={{ color: C.text }}>{v.title}</p>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                        <span className="text-xs tabular-nums" style={{ color: C.faint }}>{v.progressPct}%</span>
+                        <span className="text-xs font-semibold" style={{ color: statusColor(v.status) }}>
+                          {statusLabel(v.status)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StudentsSection({ C }: { C: typeof LIGHT_C }) {
+  const [students,        setStudents]        = useState<any[]>([]);
+  const [cohorts,         setCohorts]         = useState<any[]>([]);
+  const [courseCounts,    setCourseCounts]    = useState<Record<string, number>>({});
+  const [completedCounts, setCompletedCounts] = useState<Record<string, number>>({});
+  const [loading,      setLoading]      = useState(true);
+  const [search,       setSearch]       = useState('');
+  const [filterCohort, setFilterCohort] = useState('');
+  const [selected,     setSelected]     = useState<any>(null);
+  const [detail,       setDetail]       = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const [{ data: stu }, { data: coh }, statsRes] = await Promise.all([
+        supabase.from('students').select('id, full_name, email, cohort_id, last_login_at').eq('role', 'student').order('full_name'),
+        supabase.from('cohorts').select('id, name'),
+        fetch('/api/admin/students-stats', { headers: { Authorization: `Bearer ${session?.access_token}` } }),
+      ]);
+      const stats = statsRes.ok ? await statsRes.json() : { completedCount: {}, cohortContentCount: {} };
+      setStudents(stu ?? []);
+      setCohorts(coh ?? []);
+      setCourseCounts(stats.cohortContentCount ?? {});
+      setCompletedCounts(stats.completedCount ?? {});
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const cohortMap = Object.fromEntries(cohorts.map(c => [c.id, c.name]));
+
+  const visible = students.filter(s => {
+    const q = search.toLowerCase();
+    return (!q || (s.full_name ?? '').toLowerCase().includes(q) || (s.email ?? '').toLowerCase().includes(q))
+      && (!filterCohort || s.cohort_id === filterCohort);
+  });
+
+  async function openDetail(student: any) {
+    setSelected(student);
+    setDetail(null);
+    setDetailLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    try {
+      const res = await fetch(`/api/admin/student-detail?studentId=${student.id}`, {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (res.ok) setDetail(await res.json());
+    } catch { /* ignore */ }
+    setDetailLoading(false);
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold" style={{ color: C.text }}>Students</h2>
+          <p className="text-sm mt-0.5" style={{ color: C.muted }}>
+            {students.length} student{students.length !== 1 ? 's' : ''} across {cohorts.length} cohort{cohorts.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <button
+          onClick={() => reportExportCSV(
+            ['Name', 'Email', 'Cohort', 'Content in Cohort', 'Completed', 'Last Login'],
+            visible.map(s => [
+              s.full_name || '',
+              s.email || '',
+              cohortMap[s.cohort_id] || '',
+              s.cohort_id ? (courseCounts[s.cohort_id] ?? 0) : '',
+              completedCounts[s.id] ?? 0,
+              s.last_login_at ? new Date(s.last_login_at).toLocaleDateString() : 'Never',
+            ]),
+            'students.csv',
+          )}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold flex-shrink-0 transition-opacity hover:opacity-80"
+          style={{ background: C.pill, color: C.text, border: `1px solid ${C.cardBorder}` }}>
+          <Download className="w-3.5 h-3.5" />
+          Export CSV
+        </button>
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: C.faint }}/>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search name or email..."
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none"
+            style={{ background: C.input, color: C.text, border: `1.5px solid ${C.cardBorder}` }}/>
+        </div>
+        <select value={filterCohort} onChange={e => setFilterCohort(e.target.value)}
+          className="px-3 py-2.5 rounded-xl text-sm outline-none"
+          style={{ background: C.input, color: C.text, border: `1.5px solid ${C.cardBorder}` }}>
+          <option value="">All Cohorts</option>
+          {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+
+      <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+        <div className="grid gap-3 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide"
+          style={{ gridTemplateColumns: '2fr 1.5fr 80px 90px 90px 110px', background: C.pill, color: C.faint, borderBottom: `1px solid ${C.cardBorder}` }}>
+          <span>Student</span><span>Cohort</span><span>In Cohort</span><span>Completed</span><span>Last Login</span><span></span>
+        </div>
+
+        {loading ? (
+          <div className="py-12 text-center text-sm" style={{ color: C.muted }}>Loading students...</div>
+        ) : visible.length === 0 ? (
+          <div className="py-12 text-center text-sm" style={{ color: C.muted }}>No students found</div>
+        ) : visible.map((s, i) => (
+          <div key={s.id} className="grid gap-3 px-4 py-3 items-center"
+            style={{ gridTemplateColumns: '2fr 1.5fr 80px 90px 90px 110px', borderBottom: i < visible.length - 1 ? `1px solid ${C.cardBorder}` : 'none' }}>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || 'No name'}</p>
+              <p className="text-xs truncate" style={{ color: C.muted }}>{s.email}</p>
+            </div>
+            <span className="text-sm truncate" style={{ color: C.muted }}>{cohortMap[s.cohort_id] || '--'}</span>
+            <span className="text-sm tabular-nums" style={{ color: C.text }}>{s.cohort_id ? (courseCounts[s.cohort_id] ?? 0) : '--'}</span>
+            <span className="text-sm tabular-nums font-semibold" style={{ color: C.green }}>{completedCounts[s.id] ?? 0}</span>
+            <span className="text-xs" style={{ color: C.faint }}>
+              {s.last_login_at ? new Date(s.last_login_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'Never'}
+            </span>
+            <div className="flex gap-1.5">
+              <button onClick={() => openDetail(s)}
+                className="text-xs px-2.5 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80"
+                style={{ background: C.pill, color: C.text }}>
+                View
+              </button>
+              <a href={`/student?viewAs=${s.id}`} target="_blank" rel="noreferrer"
+                className="text-xs px-2.5 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80"
+                style={{ background: C.cta, color: C.ctaText }}>
+                Login
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {selected && (
+        <StudentDetailPanel
+          student={selected}
+          cohortName={cohortMap[selected.cohort_id] || ''}
+          detail={detail}
+          loading={detailLoading}
+          onClose={() => setSelected(null)}
+          C={C}
+        />
+      )}
+    </div>
+  );
+}
+
 // --- Section content router ---
 const COURSES_PAGE_SIZE = 12;
 
@@ -6722,9 +6252,9 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
   if (COMING_SOON.includes(section)) return <ComingSoon id={section} C={C} />;
   if (section === 'branding')     return <BrandingSection C={C} />;
   if (section === 'site')         return <SiteSettingsSection C={C} />;
-  if (section === 'reports')      return <ReportsSection forms={forms} C={C} />;
   if (section === 'learning_paths') return <LearningPathsSection C={C} forms={forms} />;
   if (section === 'certificates') return <CertificatesSection C={C} />;
+  if (section === 'students')     return <StudentsSection C={C} />;
   if (section === 'cohorts')      return <CohortsSection C={C} />;
   if (section === 'payments')     return <PaymentsSection C={C} />;
   if (section === 'tracking')     return <StudentTrackingSection C={C} />;

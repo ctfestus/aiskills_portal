@@ -241,6 +241,26 @@ export async function POST(req: NextRequest) {
   const progressUser = await getUser(req);
   if (!progressUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  // Auto-detect completion: fetch VE modules once and use for both completion check and milestone email
+  let resolvedCompletedAt = completedAt || null;
+  let fetchedVe: { modules: any; title: string; slug: string } | null = null;
+
+  if (progress && !completedAt) {
+    const { data: ve } = await supabase
+      .from('virtual_experiences')
+      .select('modules, title, slug')
+      .eq('id', resolvedVeId)
+      .single();
+    fetchedVe = ve ?? null;
+    if (ve) {
+      const total = totalRequirements(ve.modules);
+      const done  = completedRequirements(progress);
+      if (total > 0 && done >= total) {
+        resolvedCompletedAt = new Date().toISOString();
+      }
+    }
+  }
+
   const { error } = await supabase
     .from('guided_project_attempts')
     .upsert(
@@ -250,22 +270,23 @@ export async function POST(req: NextRequest) {
         progress:          progress || {},
         current_module_id: currentModuleId || null,
         current_lesson_id: currentLessonId || null,
-        completed_at:      completedAt || null,
+        completed_at:      resolvedCompletedAt,
       },
       { onConflict: 'student_id,ve_id' },
     );
 
   if (error) { console.error('[guided-project-progress] upsert error:', error); return NextResponse.json({ error: 'Failed to save progress.' }, { status: 500 }); }
 
-  // -- 80% milestone check (fire-and-forget) --
-  if (progress && !completedAt && process.env.RESEND_API_KEY) {
+  // -- 80% milestone check (fire-and-forget) -- skip if already completed
+  if (progress && !resolvedCompletedAt && process.env.RESEND_API_KEY) {
     (async () => {
       try {
-        const { data: ve } = await supabase
+        const ve = fetchedVe ?? await supabase
           .from('virtual_experiences')
           .select('modules, title, slug')
           .eq('id', resolvedVeId)
-          .single();
+          .single()
+          .then(r => r.data);
 
         if (!ve) return;
         const total = totalRequirements(ve.modules);
