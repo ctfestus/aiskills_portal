@@ -174,12 +174,6 @@ export default function AuthPage() {
             />
             <div className="absolute inset-0 bg-gradient-to-b from-black/5 to-black/30" />
 
-            {/* Logo over banner */}
-            {(logoUrl || logoDarkUrl) && (
-              <div className="absolute top-4 left-5 z-10">
-                <img src={logoDarkUrl || logoUrl || undefined} alt="" className="h-7 w-auto drop-shadow" />
-              </div>
-            )}
 
           </div>
         )}
