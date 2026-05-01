@@ -44,14 +44,46 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { data: attempts } = await supabase
-      .from('guided_project_attempts')
-      .select('id, ve_id, student_id, progress, completed_at, started_at, updated_at, review')
-      .eq('ve_id', veId)
-      .order('started_at', { ascending: false })
-      .limit(200);
+    // Fetch VE cohort_ids, all enrolled students, and all attempts in parallel
+    const [{ data: veData }, { data: attempts }] = await Promise.all([
+      supabase.from('virtual_experiences').select('cohort_ids').eq('id', veId).single(),
+      supabase
+        .from('guided_project_attempts')
+        .select('id, student_id, progress, completed_at, started_at, updated_at, review')
+        .eq('ve_id', veId),
+    ]);
 
-    return NextResponse.json({ attempts: attempts ?? [] });
+    const cohortIds: string[] = veData?.cohort_ids ?? [];
+
+    // Get all students enrolled in this VE's cohorts
+    const { data: enrolledStudents } = cohortIds.length > 0
+      ? await supabase
+          .from('students')
+          .select('id, full_name, email, cohort_id')
+          .in('cohort_id', cohortIds)
+          .eq('role', 'student')
+          .order('full_name', { ascending: true })
+      : { data: [] };
+
+    // Merge: every enrolled student gets a row; attempt fields are null if not started
+    const attemptsMap = new Map((attempts ?? []).map((a: any) => [a.student_id, a]));
+    const merged = (enrolledStudents ?? []).map((s: any) => {
+      const attempt = attemptsMap.get(s.id) as any;
+      return {
+        id:            attempt?.id            ?? null,
+        student_id:    s.id,
+        student_name:  s.full_name            ?? null,
+        student_email: s.email                ?? null,
+        cohort_id:     s.cohort_id            ?? null,
+        progress:      attempt?.progress      ?? null,
+        completed_at:  attempt?.completed_at  ?? null,
+        started_at:    attempt?.started_at    ?? null,
+        updated_at:    attempt?.updated_at    ?? null,
+        review:        attempt?.review        ?? null,
+      };
+    });
+
+    return NextResponse.json({ attempts: merged });
   }
 
   // Student view

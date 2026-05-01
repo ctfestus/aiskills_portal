@@ -4215,10 +4215,10 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
   const [msgSending, setMsgSending]       = useState(false);
   const [msgResult, setMsgResult]         = useState<{ sent: number } | null>(null);
 
-  const load = async (cohortId = cohortFilter, contentType = typeFilter) => {
+  const load = async (cohortId = cohortFilter) => {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
-    const params = new URLSearchParams({ cohortId, contentType });
+    const params = new URLSearchParams({ cohortId, contentType: 'all' });
     const res = await fetch(`/api/tracking?${params}`, {
       headers: { Authorization: `Bearer ${session?.access_token}` },
     });
@@ -4232,10 +4232,11 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleCohortChange = (id: string) => { setCohortFilter(id); load(id, typeFilter); };
-  const handleTypeChange   = (t: string)  => { setTypeFilter(t);   load(cohortFilter, t); };
+  const handleCohortChange = (id: string) => { setCohortFilter(id); load(id); };
+  const handleTypeChange   = (t: string)  => { setTypeFilter(t); };
 
   const filtered = rows.filter(r => {
+    if (typeFilter !== 'all' && r.contentType !== typeFilter) return false;
     if (statusFilter === 'at_risk') { if (!r.isAtRisk) return false; }
     else if (statusFilter !== 'all' && r.status !== statusFilter) return false;
     if (search) {
@@ -4337,12 +4338,33 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
           <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0 }}>Student Tracking</h2>
           <p style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>Monitor student progress across all your content. Flag stalled or inactive learners.</p>
         </div>
-        <button
-          onClick={() => { setComposing(v => !v); setMsgResult(null); }}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 10, border: `1px solid ${composing ? C.cta : C.cardBorder}`, background: composing ? C.cta : C.card, color: composing ? C.ctaText : C.text, fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}>
-          <Send style={{ width: 14, height: 14 }} />
-          Message Segment
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => {
+              reportExportCSV(
+                ['Student', 'Email', 'Cohort', 'Content', 'Type', 'Progress %', 'Status', 'Last Active', 'Score'],
+                filtered.map((r: any) => [
+                  r.studentName, r.studentEmail, r.cohortName, r.formTitle, r.contentType,
+                  `${r.progressPct}%`, r.status,
+                  r.lastActive
+                    ? (r.daysSinceActivity === 0 ? 'Today' : r.daysSinceActivity === 1 ? 'Yesterday' : `${r.daysSinceActivity}d ago`)
+                    : '--',
+                  r.score ?? '--',
+                ]),
+                'student_tracking.csv'
+              );
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.text, fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}>
+            <Download style={{ width: 14, height: 14 }} />
+            Export CSV
+          </button>
+          <button
+            onClick={() => { setComposing(v => !v); setMsgResult(null); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 10, border: `1px solid ${composing ? C.cta : C.cardBorder}`, background: composing ? C.cta : C.card, color: composing ? C.ctaText : C.text, fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}>
+            <Send style={{ width: 14, height: 14 }} />
+            Message Segment
+          </button>
+        </div>
       </div>
 
       {/* Stats cards */}
@@ -4468,6 +4490,7 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
           <option value="all">All Types</option>
           <option value="course">Courses</option>
           <option value="virtual_experience">Virtual Experiences</option>
+          <option value="assignment">Assignments</option>
         </select>
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={sel}>
           <option value="all">All Statuses</option>
@@ -4481,8 +4504,8 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
       {/* Table */}
       <div style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 16, overflow: 'hidden' }}>
         {/* Table header */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px 110px 110px 90px', gap: 0, padding: '10px 20px', borderBottom: `1px solid ${C.divider}`, background: C.pill }}>
-          {['Student', 'Content', 'Type', 'Status', 'Last Active', ''].map((h, i) => (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 70px 110px 110px 90px', gap: 0, padding: '10px 20px', borderBottom: `1px solid ${C.divider}`, background: C.pill }}>
+          {['Student', 'Content', 'Progress', 'Status', 'Last Active', ''].map((h, i) => (
             <div key={i} style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
           ))}
         </div>
@@ -4503,7 +4526,7 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
             const canNudge = row.status === 'not_started' || row.status === 'stalled' || row.status === 'in_progress';
             return (
               <div key={nudgeKey}
-                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px 110px 110px 90px', gap: 0, padding: '12px 20px', borderBottom: i < filtered.length - 1 ? `1px solid ${C.divider}` : 'none', alignItems: 'center' }}>
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 70px 110px 110px 90px', gap: 0, padding: '12px 20px', borderBottom: i < filtered.length - 1 ? `1px solid ${C.divider}` : 'none', alignItems: 'center' }}>
                 {/* Student */}
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.studentName || '--'}</div>
@@ -4511,11 +4534,11 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
                   <div style={{ fontSize: 10, color: C.faint, marginTop: 1 }}>{row.cohortName}</div>
                 </div>
                 {/* Content */}
-                <div style={{ fontSize: 13, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: 8 }}>{row.formTitle}</div>
-                {/* Type */}
+                <div style={{ fontSize: 13, color: C.text, paddingRight: 8, wordBreak: 'break-word' }}>{row.formTitle}</div>
+                {/* Progress % */}
                 <div>
-                  <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, background: C.pill, color: C.muted, whiteSpace: 'nowrap' }}>
-                    {typeLabel(row.contentType)}
+                  <span style={{ fontSize: 13, fontWeight: 700, color: row.progressPct === 100 ? C.green : row.progressPct > 0 ? '#f59e0b' : C.faint }}>
+                    {row.progressPct}%
                   </span>
                 </div>
                 {/* Status */}

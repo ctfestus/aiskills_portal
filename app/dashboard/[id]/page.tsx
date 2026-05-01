@@ -776,12 +776,59 @@ function WhatsAppIcon({ className }: { className?: string }) {
 }
 
 // -- Email Tab ---
-function EmailTab({ form, formUrl }: { form: any; formUrl: string }) {
+function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], formCohorts = [] }: {
+  form: any; formUrl: string; courseProgress?: any[]; cohortStudents?: any[]; formCohorts?: { id: string; name: string }[];
+}) {
   const cfg = form.config ?? {};
   const isEvent = cfg.eventDetails?.isEvent === true;
   const isCourse  = cfg.isCourse === true;
+  const isVE      = cfg.isVirtualExperience === true;
   const { theme } = useTheme();
   const isDark = theme !== 'light';
+
+  // Segment counts for VEs (fetched on mount); courses derive from props
+  const [veAttempts, setVeAttempts] = useState<any[]>([]);
+  useEffect(() => {
+    if (!isVE) return;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/guided-project-progress?formId=${form.id}`, {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setVeAttempts(json.attempts || []);
+      }
+    })();
+  }, [form.id, isVE]);
+
+  // Segment + cohort filter (courses and VEs only) -- must be declared before segmentCounts
+  const [blastSegment, setBlastSegment]         = useState<'all' | 'not_started' | 'in_progress' | 'completed'>('all');
+  const [selectedCohortId, setSelectedCohortId] = useState<string>('all');
+
+  const segmentCounts = (() => {
+    if (isCourse) {
+      const filtered     = selectedCohortId === 'all' ? cohortStudents : cohortStudents.filter((s: any) => s.cohort_id === selectedCohortId);
+      const startedIds   = new Set(courseProgress.map((p: any) => String(p.student_id)));
+      const completedIds = new Set(courseProgress.filter((p: any) => p.completed).map((p: any) => String(p.student_id)));
+      return {
+        all:         filtered.length,
+        not_started: filtered.filter((s: any) => !startedIds.has(String(s.id))).length,
+        in_progress: filtered.filter((s: any) => startedIds.has(String(s.id)) && !completedIds.has(String(s.id))).length,
+        completed:   filtered.filter((s: any) => completedIds.has(String(s.id))).length,
+      };
+    }
+    if (isVE) {
+      const filtered = selectedCohortId === 'all' ? veAttempts : veAttempts.filter((a: any) => a.cohort_id === selectedCohortId);
+      return {
+        all:         filtered.length,
+        not_started: filtered.filter((a: any) => !a.started_at && !a.completed_at).length,
+        in_progress: filtered.filter((a: any) => !!a.started_at && !a.completed_at).length,
+        completed:   filtered.filter((a: any) => !!a.completed_at).length,
+      };
+    }
+    return null;
+  })();
 
   // Quick send state
   const [quickTo, setQuickTo]           = useState('');
@@ -795,7 +842,7 @@ function EmailTab({ form, formUrl }: { form: any; formUrl: string }) {
   const [blasting, setBlasting]         = useState(false);
   const [blastResult, setBlastResult]   = useState<{ ok: boolean; msg: string } | null>(null);
   const [blastTone, setBlastTone]       = useState<'friendly' | 'professional' | 'casual'>('friendly');
-  const [blastPurpose, setBlastPurpose] = useState('event update');
+  const [blastPurpose, setBlastPurpose] = useState(isEvent ? 'event update' : 'course update');
   const [blastPrompt, setBlastPrompt]   = useState('');
   const [blastAiLoading, setBlastAiLoading] = useState(false);
   const [blastAiResult, setBlastAiResult] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -820,10 +867,10 @@ function EmailTab({ form, formUrl }: { form: any; formUrl: string }) {
             : `${window.location.origin}/api/og/${form.id}`)
         : undefined;
       let payload: any = { type: quickType, to: quickTo, data: { formUrl } };
-      if (isCourse) {
-        // Course: send a test of the broadcast email to this single address
+      if (isCourse || isVE) {
+        // Course / VE: send a test blast to this single address
         if (!blastSubject.trim() || !blastBody.trim()) {
-          setQuickResult({ ok: false, msg: 'Fill in the Broadcast Email subject and body first, then test here.' });
+          setQuickResult({ ok: false, msg: 'Fill in the subject and message above first, then test here.' });
           setQuickSending(false);
           return;
         }
@@ -908,6 +955,8 @@ function EmailTab({ form, formUrl }: { form: any; formUrl: string }) {
             meetingLink: cfg.eventDetails?.meetingLink,
             bannerUrl: eventBannerUrl,
             formUrl,
+            ...((isCourse || isVE) ? { segment: blastSegment } : {}),
+            ...((isCourse || isVE) && selectedCohortId !== 'all' ? { cohortId: selectedCohortId } : {}),
           },
         }),
       });
@@ -937,7 +986,7 @@ function EmailTab({ form, formUrl }: { form: any; formUrl: string }) {
           action: 'generate_broadcast_email',
           formTitle: cfg.title || form.title,
           description: cfg.description,
-          audience: isEvent ? 'registrants' : isCourse ? 'participants' : 'respondents',
+          audience: isEvent ? 'registrants' : (isCourse || isVE) ? 'enrolled students' : 'respondents',
           tone: blastTone,
           purpose: blastPurpose.trim() || 'event update',
           prompt: blastPrompt.trim(),
@@ -995,9 +1044,8 @@ function EmailTab({ form, formUrl }: { form: any; formUrl: string }) {
   };
 
   const quickTypes = [
-    ...(isEvent  ? [{ value: 'confirmation', label: 'Registration Confirmation' }, { value: 'reminder', label: 'Event Reminder' }] : []),
-    ...(isCourse   ? [{ value: 'course-result',  label: 'Course Result (sample)'      }] : []),
-    ...(!isEvent && !isCourse ? [{ value: 'confirmation', label: 'Confirmation' }] : []),
+    ...(isEvent ? [{ value: 'confirmation', label: 'Registration Confirmation' }, { value: 'reminder', label: 'Event Reminder' }] : []),
+    ...(!isEvent && !isCourse && !isVE ? [{ value: 'confirmation', label: 'Confirmation' }] : []),
   ] as { value: typeof quickType; label: string }[];
 
   // -- Shared style tokens --
@@ -1047,11 +1095,77 @@ function EmailTab({ form, formUrl }: { form: any; formUrl: string }) {
           <div>
             <p className={cardTitle}>Broadcast Email</p>
             <p className={cardSub}>
-              Send a message to all {isEvent ? 'registrants' : isCourse ? 'participants' : 'respondents'} with an email address
+              {isEvent
+                ? 'Send a message to all registrants with an email address'
+                : (isCourse || isVE)
+                  ? 'Send a message to enrolled students filtered by their progress'
+                  : 'Send a message to all respondents with an email address'}
             </p>
           </div>
         </div>
         <div className="p-6 space-y-4">
+          {(isCourse || isVE) && formCohorts.length > 0 && (
+            <div>
+              <label className={label}>Cohort</label>
+              <div className="flex flex-wrap gap-2">
+                {[{ id: 'all', name: 'All Cohorts' }, ...formCohorts].map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => { setSelectedCohortId(c.id); setBlastResult(null); }}
+                    className={`py-1.5 px-3 rounded-xl text-xs font-medium border transition-all ${
+                      selectedCohortId === c.id
+                        ? isDark
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                          : 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                        : isDark
+                          ? 'border-zinc-700/60 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400'
+                          : 'border-[rgba(0,0,0,0.07)] text-[#888] hover:border-[rgba(0,0,0,0.14)] hover:text-[#555] bg-white'
+                    }`}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {(isCourse || isVE) && (
+            <div>
+              <label className={label}>Audience</label>
+              <div className="grid grid-cols-4 gap-2">
+                {([
+                  { value: 'all',         label: 'All Enrolled'  },
+                  { value: 'not_started', label: 'Not Started'   },
+                  { value: 'in_progress', label: 'In Progress'   },
+                  { value: 'completed',   label: 'Completed'     },
+                ] as const).map(seg => {
+                  const count = segmentCounts?.[seg.value];
+                  const active = blastSegment === seg.value;
+                  return (
+                    <button
+                      key={seg.value}
+                      onClick={() => { setBlastSegment(seg.value); setBlastResult(null); }}
+                      className={`py-2.5 px-2 rounded-xl text-xs font-medium border transition-all flex flex-col items-center gap-0.5 ${
+                        active
+                          ? isDark
+                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                            : 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                          : isDark
+                            ? 'border-zinc-700/60 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400'
+                            : 'border-[rgba(0,0,0,0.07)] text-[#888] hover:border-[rgba(0,0,0,0.14)] hover:text-[#555] bg-white'
+                      }`}
+                    >
+                      {count !== undefined && (
+                        <span className={`text-base font-bold leading-none ${active ? '' : isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                          {count}
+                        </span>
+                      )}
+                      <span>{seg.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className={isDark ? 'rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 space-y-3' : 'rounded-xl border border-[rgba(0,0,0,0.07)] bg-[#f5f6f7] p-4 space-y-3'}>
             <div className="flex items-start gap-3">
               <div className={sectionIconBg}>
@@ -1147,10 +1261,14 @@ function EmailTab({ form, formUrl }: { form: any; formUrl: string }) {
             className={primaryBtn}
             style={{ background: '#059669' }}
           >
-            {blasting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Send Broadcast</>}
+            {blasting
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <><Send className="w-4 h-4" /> Send to {(isCourse || isVE) && segmentCounts ? `${segmentCounts[blastSegment]} student${segmentCounts[blastSegment] !== 1 ? 's' : ''}` : 'all'}</>}
           </button>
           <p className={isDark ? 'text-xs text-zinc-600 text-center' : 'text-xs text-gray-400 text-center'}>
-            Only recipients who provided an email address will receive this.
+            {(isCourse || isVE)
+              ? 'Only enrolled students with an email address will receive this.'
+              : 'Only recipients who provided an email address will receive this.'}
           </p>
         </div>
       </div>
@@ -1212,8 +1330,12 @@ function EmailTab({ form, formUrl }: { form: any; formUrl: string }) {
             <Send className={`w-4 h-4 ${iconColor}`} />
           </div>
           <div>
-            <p className={cardTitle}>Send to Individual</p>
-            <p className={cardSub}>Send an email instantly to a single address. Useful for testing or follow-ups.</p>
+            <p className={cardTitle}>Test Send</p>
+            <p className={cardSub}>
+              {(isCourse || isVE)
+                ? 'Send a preview of your email to a single address to check how it looks.'
+                : 'Send an email instantly to a single address. Useful for testing or follow-ups.'}
+            </p>
           </div>
         </div>
         <div className="p-6 space-y-4">
@@ -1265,9 +1387,9 @@ function EmailTab({ form, formUrl }: { form: any; formUrl: string }) {
           >
             {quickSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Send Email</>}
           </button>
-          {isCourse && (
+          {(isCourse || isVE) && (
             <p className={isDark ? 'text-xs text-zinc-600 text-center' : 'text-xs text-gray-400 text-center'}>
-              Sends a test using your Broadcast Email subject &amp; body
+              Sends a preview using the subject and message above
             </p>
           )}
         </div>
@@ -1739,15 +1861,34 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-zinc-500" /></div>;
 
-  const completed = attempts.filter(a => !!a.completed_at).length;
-  const inProgress = attempts.filter(a => !a.completed_at).length;
+  const completed  = attempts.filter(a => !!a.completed_at).length;
+  const inProgress = attempts.filter(a => !!a.started_at && !a.completed_at).length;
+  const notStarted = attempts.filter(a => !a.started_at).length;
+
+  const exportCSV = () => {
+    const headers = ['Name', 'Email', 'Status', 'Requirements Done', 'Score', 'Last Active'];
+    const rows = attempts.map(a => {
+      const doneReqs = a.progress ? Object.values(a.progress as Record<string, any>).filter((v: any) => v.completed).length : 0;
+      const status = !a.started_at ? 'Not Started' : a.completed_at ? 'Completed' : 'In Progress';
+      const score = a.review?.score !== undefined ? `${a.review.score}/100` : '';
+      const lastActive = a.updated_at ? new Date(a.updated_at).toLocaleDateString() : '';
+      return [a.student_name || '', a.student_email || '', status, `${doneReqs}/${totalReqs}`, score, lastActive];
+    });
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `${form.title || 've'}-students.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total Students', value: attempts.length, color: '#8b5cf6' },
+          { label: 'Total Enrolled', value: attempts.length, color: '#8b5cf6' },
+          { label: 'Not Started',    value: notStarted,       color: '#6b7280' },
           { label: 'In Progress',    value: inProgress,       color: '#f59e0b' },
           { label: 'Completed',      value: completed,        color: '#10b981' },
         ].map(s => (
@@ -1758,10 +1899,14 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
         ))}
       </div>
 
-      {/* Attempts table */}
+      {/* Table */}
       <div className={`rounded-3xl border overflow-hidden ${card}`}>
-        <div className={`px-6 py-4 border-b ${cardHeader}`}>
+        <div className={`px-6 py-4 border-b flex items-center justify-between ${cardHeader}`}>
           <h3 className={`text-base font-semibold ${textPrim}`}>Student Progress</h3>
+          <button onClick={exportCSV}
+            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:opacity-80 ${isDark ? 'bg-zinc-700 text-zinc-200' : 'bg-zinc-100 text-zinc-700'}`}>
+            Export CSV
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -1777,28 +1922,35 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
               </tr>
             </thead>
             <tbody className={`divide-y ${divider}`}>
-              {attempts.map(a => {
+              {attempts.map((a, i) => {
                 const doneReqs = a.progress
                   ? Object.values(a.progress as Record<string, any>).filter((v: any) => v.completed).length
                   : 0;
-                const pct = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 0;
+                const pct         = totalReqs ? Math.round((doneReqs / totalReqs) * 100) : 0;
                 const isCompleted = !!a.completed_at;
+                const isStarted   = !!a.started_at;
                 return (
-                  <tr key={a.id} className={`transition-colors ${tableRow}`}>
+                  <tr key={a.id ?? `unenrolled-${i}`} className={`transition-colors ${tableRow}`}>
                     <td className={`px-6 py-3 font-medium ${textPrim}`}>{a.student_name || '--'}</td>
-                    <td className={`px-6 py-3 ${textMut}`}>{a.student_email}</td>
+                    <td className={`px-6 py-3 ${textMut}`}>{a.student_email || '--'}</td>
                     <td className="px-6 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className={`h-1.5 w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
-                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: isCompleted ? '#10b981' : '#6366f1' }} />
+                      {isStarted ? (
+                        <div className="flex items-center gap-2">
+                          <div className={`h-1.5 w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
+                            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: isCompleted ? '#10b981' : '#6366f1' }} />
+                          </div>
+                          <span className={`text-xs ${textMut}`}>{doneReqs}/{totalReqs}</span>
                         </div>
-                        <span className={`text-xs ${textMut}`}>{doneReqs}/{totalReqs}</span>
-                      </div>
+                      ) : (
+                        <span className={`text-xs ${textMut}`}>--</span>
+                      )}
                     </td>
                     <td className="px-6 py-3">
                       {isCompleted
                         ? <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700'}`}><CheckCircle2 className="w-3 h-3" /> Completed</span>
-                        : <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-700'}`}><span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> In Progress</span>}
+                        : isStarted
+                        ? <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-700'}`}><span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> In Progress</span>
+                        : <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-zinc-700 text-zinc-400' : 'bg-zinc-100 text-zinc-500'}`}><span className="w-1.5 h-1.5 rounded-full bg-zinc-400" /> Not Started</span>}
                     </td>
                     {needsReview && (
                       <td className={`px-6 py-3 ${textMut}`}>
@@ -1810,17 +1962,21 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
                     </td>
                     {needsReview && (
                       <td className="px-6 py-3">
-                        <button onClick={() => { setReviewing(a); setRevScore(a.review?.score ?? ''); setRevFeedback(a.review?.feedback ?? ''); }}
-                          className={`text-xs font-medium px-3 py-1.5 rounded-xl transition-all hover:opacity-80 ${isDark ? 'bg-indigo-500/15 text-indigo-300' : 'bg-indigo-50 text-indigo-700'}`}>
-                          {a.review ? 'Edit Review' : 'Review'}
-                        </button>
+                        {isStarted ? (
+                          <button onClick={() => { setReviewing(a); setRevScore(a.review?.score ?? ''); setRevFeedback(a.review?.feedback ?? ''); }}
+                            className={`text-xs font-medium px-3 py-1.5 rounded-xl transition-all hover:opacity-80 ${isDark ? 'bg-indigo-500/15 text-indigo-300' : 'bg-indigo-50 text-indigo-700'}`}>
+                            {a.review ? 'Edit Review' : 'Review'}
+                          </button>
+                        ) : (
+                          <span className={`text-xs ${textMut}`}>--</span>
+                        )}
                       </td>
                     )}
                   </tr>
                 );
               })}
               {attempts.length === 0 && (
-                <tr><td colSpan={needsReview ? 7 : 5} className={`px-6 py-12 text-center ${textMut}`}>No students have started this project yet.</td></tr>
+                <tr><td colSpan={needsReview ? 7 : 5} className={`px-6 py-12 text-center ${textMut}`}>No students enrolled in this virtual experience yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -1828,35 +1984,92 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
       </div>
 
       {/* Review modal */}
-      {reviewing && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className={`rounded-2xl p-6 w-full max-w-md space-y-4 ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-[rgba(0,0,0,0.08)]'}`}>
-            <div className="flex items-center justify-between">
-              <h3 className={`text-base font-semibold ${textPrim}`}>Review: {reviewing.student_name || reviewing.student_email}</h3>
-              <button onClick={() => setReviewing(null)} className={textMut}><X className="w-4 h-4" /></button>
-            </div>
-            <div>
-              <label className={`block text-xs font-semibold mb-1.5 ${textMut}`}>Score (0 - 100)</label>
-              <input type="number" min={0} max={100} value={revScore} onChange={e => setRevScore(e.target.value)}
-                className={`w-full px-3 py-2 rounded-xl border text-sm outline-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-[#f8f8f5] border-[rgba(0,0,0,0.1)] text-[#111]'}`} />
-            </div>
-            <div>
-              <label className={`block text-xs font-semibold mb-1.5 ${textMut}`}>Feedback</label>
-              <textarea value={revFeedback} onChange={e => setRevFeedback(e.target.value)} rows={4}
-                placeholder="Write your feedback for the student…"
-                className={`w-full px-3 py-2 rounded-xl border text-sm outline-none resize-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-[#f8f8f5] border-[rgba(0,0,0,0.1)] text-[#111]'}`} />
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setReviewing(null)} className={`flex-1 py-2.5 rounded-xl text-sm border ${isDark ? 'border-zinc-700 text-zinc-400' : 'border-[rgba(0,0,0,0.1)] text-[#888]'}`}>Cancel</button>
-              <button onClick={submitReview} disabled={revSaving}
-                className="flex-2 flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-80"
-                style={{ background: '#6366f1' }}>
-                {revSaving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Submit Review'}
-              </button>
+      {reviewing && (() => {
+        const reviewableReqs: { moduleTitle: string; lessonTitle: string; label: string; type: string; reqId: string }[] = [];
+        modules.forEach((m: any) => {
+          (m.lessons || []).forEach((l: any) => {
+            (l.requirements || []).forEach((r: any) => {
+              if (r.type === 'text' || r.type === 'upload') {
+                reviewableReqs.push({ moduleTitle: m.title, lessonTitle: l.title, label: r.label || r.description || 'Requirement', type: r.type, reqId: r.id });
+              }
+            });
+          });
+        });
+        return (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className={`rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-[rgba(0,0,0,0.08)]'}`}>
+              {/* Header */}
+              <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? 'border-zinc-800' : 'border-[rgba(0,0,0,0.07)]'}`}>
+                <div>
+                  <h3 className={`text-base font-semibold ${textPrim}`}>{reviewing.student_name || reviewing.student_email || 'Student'}</h3>
+                  {reviewing.student_name && <p className={`text-xs mt-0.5 ${textMut}`}>{reviewing.student_email}</p>}
+                </div>
+                <button onClick={() => setReviewing(null)} className={textMut}><X className="w-4 h-4" /></button>
+              </div>
+
+              {/* Scrollable body */}
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+
+                {/* Student submissions */}
+                {reviewableReqs.length > 0 && (
+                  <div className="space-y-3">
+                    <p className={`text-[11px] font-bold uppercase tracking-widest ${textMut}`}>Student Submissions</p>
+                    {reviewableReqs.map(req => {
+                      const entry = reviewing.progress?.[req.reqId];
+                      const fileUrl = entry?.fileUrl;
+                      const textResponse = entry?.notes;
+                      return (
+                        <div key={req.reqId} className={`rounded-xl p-4 ${isDark ? 'bg-zinc-800' : 'bg-[#f8f8f5]'}`}>
+                          <p className={`text-[11px] font-semibold uppercase tracking-wide mb-0.5 ${textMut}`}>{req.moduleTitle} - {req.lessonTitle}</p>
+                          <p className={`text-sm font-medium mb-2 ${textPrim}`}>{req.label}</p>
+                          {req.type === 'upload' ? (
+                            fileUrl
+                              ? <a href={fileUrl} target="_blank" rel="noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
+                                  style={{ background: '#6366f115', color: '#6366f1' }}>
+                                  View uploaded file
+                                </a>
+                              : <p className={`text-xs italic ${textMut}`}>No file submitted</p>
+                          ) : (
+                            textResponse
+                              ? <p className={`text-sm leading-relaxed ${textPrim}`}>{textResponse}</p>
+                              : <p className={`text-xs italic ${textMut}`}>No response submitted</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Score */}
+                <div>
+                  <label className={`block text-xs font-semibold mb-1.5 ${textMut}`}>Score (0 - 100)</label>
+                  <input type="number" min={0} max={100} value={revScore} onChange={e => setRevScore(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border text-sm outline-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-[#f8f8f5] border-[rgba(0,0,0,0.1)] text-[#111]'}`} />
+                </div>
+
+                {/* Feedback */}
+                <div>
+                  <label className={`block text-xs font-semibold mb-1.5 ${textMut}`}>Feedback for student</label>
+                  <textarea value={revFeedback} onChange={e => setRevFeedback(e.target.value)} rows={4}
+                    placeholder="Write your feedback for the student…"
+                    className={`w-full px-3 py-2 rounded-xl border text-sm outline-none resize-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-[#f8f8f5] border-[rgba(0,0,0,0.1)] text-[#111]'}`} />
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className={`flex gap-2 px-6 py-4 border-t ${isDark ? 'border-zinc-800' : 'border-[rgba(0,0,0,0.07)]'}`}>
+                <button onClick={() => setReviewing(null)} className={`flex-1 py-2.5 rounded-xl text-sm border ${isDark ? 'border-zinc-700 text-zinc-400' : 'border-[rgba(0,0,0,0.1)] text-[#888]'}`}>Cancel</button>
+                <button onClick={submitReview} disabled={revSaving}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-80"
+                  style={{ background: '#6366f1' }}>
+                  {revSaving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Submit Review'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -1875,6 +2088,7 @@ export default function FormDetailPage() {
   const [pageLoading, setPageLoading] = useState(false);
   const [courseProgress, setCourseProgress] = useState<any[]>([]);
   const [cohortStudents, setCohortStudents] = useState<any[]>([]);
+  const [formCohorts, setFormCohorts]       = useState<{ id: string; name: string }[]>([]);
   const initialTab = (searchParams.get('tab') as TabId) || 'settings';
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
 
@@ -1964,13 +2178,23 @@ export default function FormDetailPage() {
       if (responseData) setResponses(responseData);
       setTotalCount(count ?? 0);
 
-      // For courses: fetch cohort students + in-progress students
-      if (formData?.config?.isCourse && Array.isArray(formData?.cohort_ids) && formData.cohort_ids.length > 0) {
-        const { data: cohortStudentData } = await supabase
-          .from('students')
-          .select('id, full_name, email')
-          .in('cohort_id', formData.cohort_ids);
+      // For courses/VEs: fetch cohort students + cohort names
+      const contentCohortIds: string[] = Array.isArray(formData?.cohort_ids) ? formData.cohort_ids : [];
+      const isCourseLike = formData?.config?.isCourse || formData?.config?.isVirtualExperience;
+      if (isCourseLike && contentCohortIds.length > 0) {
+        const [{ data: cohortStudentData }, { data: cohortData }] = await Promise.all([
+          supabase
+            .from('students')
+            .select('id, full_name, email, cohort_id')
+            .in('cohort_id', contentCohortIds)
+            .eq('role', 'student'),
+          supabase
+            .from('cohorts')
+            .select('id, name')
+            .in('id', contentCohortIds),
+        ]);
         if (cohortStudentData) setCohortStudents(cohortStudentData);
+        if (cohortData) setFormCohorts(cohortData);
       }
 
       if (formData?.config?.isCourse) {
@@ -2120,10 +2344,6 @@ export default function FormDetailPage() {
             <Link href="/dashboard" className="flex items-center gap-1.5 hover:opacity-70 transition-opacity flex-shrink-0">
               <img src={(isLight ? logoUrl : logoDarkUrl || logoUrl) || undefined} alt="" className="h-6 w-auto" />
             </Link>
-            <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border flex-shrink-0 ${isLight ? lightBadge[type] : meta.badge}`}>
-              <meta.Icon className="w-3 h-3" />
-              {meta.label}
-            </div>
             <span className="font-semibold truncate" style={{ color: hdrTextPrim }}>{form.title}</span>
           </div>
 
@@ -2212,7 +2432,7 @@ export default function FormDetailPage() {
                 <LeaderboardTab form={form} courseProgress={courseProgress} />
               )}
               {activeTab === 'email' && (
-                <EmailTab form={form} formUrl={formUrl} />
+                <EmailTab form={form} formUrl={formUrl} courseProgress={courseProgress} cohortStudents={cohortStudents} formCohorts={formCohorts} />
               )}
               {activeTab === 'more' && (
                 <MoreTab

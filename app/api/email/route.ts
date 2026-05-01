@@ -385,26 +385,24 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Load recipients from DB -- never trust the client-supplied to list
-      const [{ data: responses, error }, [{ data: blastCourse }, { data: blastEvent }, { data: blastVe }]] = await Promise.all([
-        supabase.from('responses').select('data').eq('form_id', data.formId),
-        Promise.all([
-          supabase.from('courses').select('cohort_ids').eq('id', data.formId).maybeSingle(),
-          supabase.from('events').select('cohort_ids').eq('id', data.formId).maybeSingle(),
-          supabase.from('virtual_experiences').select('cohort_ids').eq('id', data.formId).maybeSingle(),
-        ]),
+      // Load content metadata -- never trust client-supplied recipient lists
+      const [{ data: blastCourse }, { data: blastEvent }, { data: blastVe }] = await Promise.all([
+        supabase.from('courses').select('cohort_ids').eq('id', data.formId).maybeSingle(),
+        supabase.from('events').select('cohort_ids').eq('id', data.formId).maybeSingle(),
+        supabase.from('virtual_experiences').select('cohort_ids').eq('id', data.formId).maybeSingle(),
       ]);
 
-      if (error) throw error;
-
-      const blastContent = blastCourse ?? blastEvent ?? blastVe;
-      const isEvent = !!blastEvent;
+      const isEvent       = !!blastEvent;
+      const isCourseBlast = !!blastCourse;
+      // segment: 'all' | 'not_started' | 'in_progress' | 'completed'
+      const segment: string  = data.segment  ?? 'all';
+      const cohortId: string = data.cohortId ?? '';
 
       // Build deduplicated map of email -> merge data
       const responseByEmail = new Map<string, Record<string, any>>();
 
       if (isEvent) {
-        // For events: only send to actual registrants, not all cohort members
+        // Events: send to registrants only
         const { data: registrants } = await supabase
           .from('event_registrations')
           .select('responses, student:students(full_name, email)')
@@ -420,27 +418,62 @@ export async function POST(req: NextRequest) {
           }
         }
       } else {
-        // For courses / VEs: responses first, then cohort students fill gaps
-        for (const response of responses || []) {
-          const rowData = (response as any)?.data || {};
-          const emailKey = normalizeEmail(rowData.email);
-          if (emailKey && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey) && !responseByEmail.has(emailKey)) {
-            responseByEmail.set(emailKey, rowData);
+        // Courses / VEs: all enrolled cohort students, filtered by segment
+        const blastContent = blastCourse ?? blastVe;
+        const cohortIds: string[] = Array.isArray(blastContent?.cohort_ids) ? blastContent.cohort_ids : [];
+
+        let enrolledStudents: { id: string; full_name: string | null; email: string | null }[] = [];
+        if (cohortIds.length > 0) {
+          const targetCohorts = cohortId ? [cohortId] : cohortIds;
+          const { data: cohortStudents } = await supabase
+            .from('students')
+            .select('id, full_name, email')
+            .in('cohort_id', targetCohorts)
+            .eq('role', 'student');
+          enrolledStudents = cohortStudents || [];
+        }
+
+        // Filter by progress segment when requested
+        if (segment !== 'all' && enrolledStudents.length > 0) {
+          const enrolledIds = enrolledStudents.map((s: any) => s.id);
+          const attemptTable  = isCourseBlast ? 'course_attempts'           : 'guided_project_attempts';
+          const foreignKey    = isCourseBlast ? 'course_id'                 : 've_id';
+
+          const { data: attempts } = await supabase
+            .from(attemptTable)
+            .select('student_id, completed_at')
+            .eq(foreignKey, data.formId)
+            .in('student_id', enrolledIds);
+
+          const startedIds   = new Set((attempts || []).map((a: any) => String(a.student_id)));
+          const completedIds = new Set(
+            (attempts || []).filter((a: any) => !!a.completed_at).map((a: any) => String(a.student_id))
+          );
+
+          enrolledStudents = enrolledStudents.filter((s: any) => {
+            if (segment === 'not_started') return !startedIds.has(String(s.id));
+            if (segment === 'in_progress') return startedIds.has(String(s.id)) && !completedIds.has(String(s.id));
+            if (segment === 'completed')   return completedIds.has(String(s.id));
+            return true;
+          });
+        }
+
+        // Fallback: if no cohorts are configured, read legacy responses table (all segment only)
+        if (enrolledStudents.length === 0 && cohortIds.length === 0 && segment === 'all') {
+          const { data: responses } = await supabase.from('responses').select('data').eq('form_id', data.formId);
+          for (const response of responses || []) {
+            const rowData = (response as any)?.data || {};
+            const emailKey = normalizeEmail(rowData.email);
+            if (emailKey && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey) && !responseByEmail.has(emailKey)) {
+              responseByEmail.set(emailKey, rowData);
+            }
           }
         }
 
-        const cohortIds: string[] = Array.isArray(blastContent?.cohort_ids) ? blastContent.cohort_ids : [];
-        if (cohortIds.length > 0) {
-          const { data: cohortStudents } = await supabase
-            .from('students')
-            .select('full_name, email')
-            .in('cohort_id', cohortIds);
-
-          for (const student of cohortStudents || []) {
-            const emailKey = normalizeEmail(student.email);
-            if (emailKey && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey) && !responseByEmail.has(emailKey)) {
-              responseByEmail.set(emailKey, { name: student.full_name, email: student.email });
-            }
+        for (const student of enrolledStudents) {
+          const emailKey = normalizeEmail(student.email);
+          if (emailKey && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailKey) && !responseByEmail.has(emailKey)) {
+            responseByEmail.set(emailKey, { name: student.full_name, email: student.email });
           }
         }
       }

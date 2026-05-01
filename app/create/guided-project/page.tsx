@@ -755,7 +755,6 @@ function VirtualExperienceCreatePageInner() {
           <div className="max-w-3xl mx-auto space-y-6">
             {/* Eyebrow + H1 */}
             <div className="space-y-1 pt-2">
-              <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.cta }}>New Virtual Experience</p>
               <h1 className="text-[28px] font-black leading-tight" style={{ color: C.text }}>What kind of project?</h1>
             </div>
 

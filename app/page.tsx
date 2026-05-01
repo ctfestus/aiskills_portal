@@ -299,12 +299,6 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
         }}>
         <div className="absolute inset-0" style={{ background: (() => { const c = heroOverlayColor || '#000000'; const r = parseInt(c.slice(1,3),16), g = parseInt(c.slice(3,5),16), b = parseInt(c.slice(5,7),16); return `rgba(${r},${g},${b},${parseFloat(heroOverlayOpacity||'58')/100})`; })() }} />
         <div className="relative z-10 max-w-4xl mx-auto text-center space-y-6 md:space-y-8">
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-semibold"
-            style={{ borderColor: 'rgba(255,255,255,0.3)', color: 'rgba(255,255,255,0.85)' }}>
-            <Zap className="w-3 h-3" style={{ color: accentColor }} />
-            Applications open now
-          </motion.div>
           <motion.h1 initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, delay: 0.15 }}
             className="leading-[1.2] md:leading-[1.05]"
             style={{ fontFamily: hFont, fontWeight: 900, letterSpacing: '-0.02em', fontSize: `clamp(${Math.round(parseInt(heroFontSize||'62')*0.39)}px, ${(parseInt(heroFontSize||'62')/1200*100).toFixed(2)}vw, ${heroFontSize||'62'}px)` }}>
