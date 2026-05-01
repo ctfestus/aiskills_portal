@@ -215,7 +215,7 @@ export default function AuthPage() {
                   ? "Enter your email and we'll send a reset link."
                   : isLogin
                   ? 'Sign in to continue learning.'
-                  : 'Level up your Data and AI career with industry-recognized interactive learning -- Excel, SQL, Power BI, AI and more.'}
+                  : 'Level up your Data and AI career with industry-recognized interactive learning - Excel, SQL, Power BI, AI and more.'}
               </p>
             </motion.div>
           </AnimatePresence>
