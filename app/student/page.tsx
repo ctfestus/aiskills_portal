@@ -79,6 +79,8 @@ function Sk({ w = '100%', h = 16, r = 8 }: { w?: string | number; h?: number; r?
 // --- ProfileMenu ---
 function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; onSignOut: () => void }) {
   const C = useC();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const [open, setOpen] = useState(false);
   const name     = profile?.name || profile?.full_name || user?.email?.split('@')[0] || 'User';
   const username = profile?.username;
@@ -92,10 +94,28 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
     return () => document.removeEventListener('mousedown', h);
   }, [open]);
 
+  const iconBgBlue   = isDark ? 'rgba(62,147,255,0.15)'  : 'rgba(14,9,221,0.08)';
+  const iconBgAmber  = isDark ? 'rgba(245,158,11,0.18)'  : 'rgba(245,158,11,0.10)';
+  const iconBgSubtle = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+
+  const menuItem = (href: string, Icon: React.ElementType, label: string, iconColor: string, iconBg: string, external?: boolean) => (
+    <Link key={label} href={href} onClick={() => setOpen(false)}
+      {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
+      className="profile-menu flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all"
+      style={{ color: C.muted, textDecoration: 'none' }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.pill; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+      <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: iconBg }}>
+        <Icon className="w-3.5 h-3.5" style={{ color: iconColor }}/>
+      </div>
+      {label}
+    </Link>
+  );
+
   return (
     <div className="relative profile-menu">
       <button onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-all hover:shadow-sm"
+        className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-all hover:shadow-md"
         style={{ background: C.card, borderColor: C.cardBorder }}>
         <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold flex-shrink-0"
           style={{ background: C.lime, color: C.green }}>
@@ -104,51 +124,61 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
         <span className="hidden sm:inline text-sm font-medium max-w-[120px] truncate" style={{ color: C.text }}>{name}</span>
         <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} style={{ color: C.faint }}/>
       </button>
+
       <AnimatePresence>
         {open && (
-          <motion.div initial={{ opacity: 0, scale: 0.95, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -4 }} transition={{ duration: 0.15 }}
-            className="profile-menu absolute right-0 top-full mt-2 w-56 rounded-2xl overflow-hidden z-50"
-            style={{ background: C.card, boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
-            <div className="px-4 py-3.5 border-b" style={{ borderColor: C.divider }}>
-              <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{name}</p>
-              {username ? <p className="text-xs mt-0.5" style={{ color: C.faint }}>@{username}</p>
-                : <p className="text-xs mt-0.5 truncate" style={{ color: C.faint }}>{user?.email}</p>}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -6 }}
+            transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+            className="profile-menu absolute right-0 top-full mt-2 w-64 rounded-2xl overflow-hidden z-50"
+            style={{
+              background: C.card,
+              fontFamily: "'Inter', sans-serif",
+              boxShadow: isDark
+                ? '0 20px 60px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.07)'
+                : '0 20px 60px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.06)',
+            }}>
+
+            {/* Header */}
+            <div className="px-4 py-4" style={{ borderBottom: `1px solid ${C.divider}` }}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center text-sm font-bold flex-shrink-0"
+                  style={{ background: C.lime, color: C.green }}>
+                  {avatar ? <img src={avatar} alt={name} className="w-full h-full object-cover"/> : <span>{initials}</span>}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold truncate" style={{ color: C.text }}>{name}</p>
+                  <p className="text-xs truncate mt-0.5" style={{ color: C.faint }}>
+                    {username ? `@${username}` : user?.email}
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="py-1.5">
-              {(profile?.role === 'instructor' || profile?.role === 'admin') && (
-                <Link href="/dashboard" onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:opacity-70"
-                  style={{ color: C.muted }}>
-                  <BarChart3 className="w-4 h-4" style={{ color: C.faint }}/> Instructor dashboard
-                </Link>
-              )}
-              {username ? (
-                <Link href={`/s/${username}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:opacity-70"
-                  style={{ color: C.muted }}>
-                  <User className="w-4 h-4" style={{ color: C.faint }}/> View public profile
-                </Link>
-              ) : (
-                <Link href="/settings" onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:opacity-70"
-                  style={{ color: C.muted }}>
-                  <User className="w-4 h-4" style={{ color: C.faint }}/> Set up profile
-                </Link>
-              )}
-              <Link href="/settings" onClick={() => setOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:opacity-70"
-                style={{ color: C.muted }}>
-                <Settings className="w-4 h-4" style={{ color: C.faint }}/> Settings
-              </Link>
+
+            {/* Navigation items */}
+            <div className="p-2">
+              {(profile?.role === 'instructor' || profile?.role === 'admin') &&
+                menuItem('/dashboard', BarChart3, 'Instructor Dashboard', C.faint, iconBgSubtle)}
+              {menuItem('/student#courses', GraduationCap, 'My Learning', C.faint, iconBgSubtle)}
+              {menuItem('/student#certificates', Award, 'My Certificates', C.faint, iconBgSubtle)}
+              {username && menuItem(`/s/${username}`, User, 'View Profile', C.faint, iconBgSubtle, true)}
+              {menuItem('/settings', Settings, 'Settings', C.faint, iconBgSubtle)}
             </div>
-            <div className="border-t py-1.5" style={{ borderColor: C.divider }}>
+
+            {/* Sign out */}
+            <div className="p-2" style={{ borderTop: `1px solid ${C.divider}` }}>
               <button onClick={() => { setOpen(false); onSignOut(); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all"
                 style={{ color: '#ef4444' }}
-                onMouseEnter={e => (e.currentTarget.style.background = C.signOutHover)}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                <LogOut className="w-4 h-4"/> Sign out
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.signOutHover; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(239,68,68,0.10)' }}>
+                  <LogOut className="w-3.5 h-3.5"/>
+                </div>
+                Sign out
               </button>
             </div>
           </motion.div>
@@ -167,7 +197,7 @@ const NAV_ITEMS = [
   { id: 'events',            label: 'Live Events',          Icon: CalendarDays    },
   { id: 'assignments',       label: 'Assignments',         Icon: ClipboardList   },
   { id: 'community',         label: 'Community',           Icon: Users           },
-  { id: 'announcements',     label: 'Announcements',       Icon: Megaphone       },
+  { id: 'announcements',     label: 'Tech Blog',            Icon: Megaphone       },
   { id: 'schedule',          label: 'Schedule',            Icon: Calendar        },
   { id: 'recordings',       label: 'Recordings',          Icon: Video           },
   { id: 'leaderboard',       label: 'Leaderboard',         Icon: Trophy          },
@@ -2197,125 +2227,193 @@ function CommunitySection({ userId, C }: { userId: string; C: typeof LIGHT_C }) 
   );
 }
 
-// --- Announcements section ---
-// -- Announcement post card (LinkedIn-style) ---
-function AnnouncementPost({ ann, userId, myReactions, C }: {
-  ann: any; userId: string; myReactions: Record<string, Set<string>>; C: typeof LIGHT_C;
-}) {
-  const [expanded, setExpanded]         = useState(false);
-  const [liked, setLiked]               = useState(() => myReactions['like']?.has(ann.id) ?? false);
-  const [bookmarked, setBookmarked]     = useState(() => myReactions['bookmark']?.has(ann.id) ?? false);
-  const [likeCount, setLikeCount]       = useState<number>(ann.like_count ?? 0);
-  const [bookmarkCount, setBookmarkCount] = useState<number>(ann.bookmark_count ?? 0);
-  const [acting, setActing]             = useState(false);
+// --- Announcements section (tech-blog style) ---
 
-  const pub = new Date(ann.published_at);
-  const age = (() => {
-    const diff = Date.now() - pub.getTime();
-    const m = Math.floor(diff / 60000);
-    if (m < 60) return `${m}m ago`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
-    const d = Math.floor(h / 24);
-    if (d < 7) return `${d}d ago`;
-    return pub.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  })();
-
-  const LONG = 280;
-  const plainText = ann.content?.replace(/<[^>]*>/g, ' ').trim() ?? '';
-  const hasEmbed = ann.content ? /yt-embed|youtube\.com\/embed/.test(ann.content) : false;
-  const isLong = !hasEmbed && plainText.length > LONG;
-
-  async function toggleReaction(type: 'like' | 'bookmark') {
-    if (acting) return;
-    setActing(true);
-    const isOn = type === 'like' ? liked : bookmarked;
-    if (type === 'like') { setLiked(!isOn); setLikeCount(c => c + (isOn ? -1 : 1)); }
-    else { setBookmarked(!isOn); setBookmarkCount(c => c + (isOn ? -1 : 1)); }
-    try {
-      if (isOn) {
-        await supabase.from('announcement_reactions')
-          .delete().eq('announcement_id', ann.id).eq('student_id', userId).eq('type', type);
-      } else {
-        await supabase.from('announcement_reactions')
-          .insert({ announcement_id: ann.id, student_id: userId, type });
-      }
-    } catch {
-      // revert on error
-      if (type === 'like') { setLiked(isOn); setLikeCount(c => c + (isOn ? 1 : -1)); }
-      else { setBookmarked(isOn); setBookmarkCount(c => c + (isOn ? 1 : -1)); }
-    } finally { setActing(false); }
-  }
-
-  const author = ann.author;
-  const authorName = author?.full_name || 'Admin';
-  const authorInitials = authorName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+function AnnThumbnail({ ann, isVideo }: { ann: any; isVideo: boolean }) {
+  const C = useC();
+  const embedId = ann.youtube_url?.match(/(?:v=|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/)?.[1];
+  const src = ann.cover_image || (embedId ? `https://img.youtube.com/vi/${embedId}/hqdefault.jpg` : null);
+  const initLetter = (ann.title?.[0] ?? 'A').toUpperCase();
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl overflow-hidden px-5 pt-4 pb-0"
-      style={{ background: C.card }}>
-
-      {/* Poster profile row */}
-      <div className="flex items-center gap-3 mb-3">
-        {/* Avatar */}
-        <div className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden text-sm font-bold"
-          style={{ background: C.green, color: typeof C.ctaText === 'string' ? C.ctaText : '#fff' }}>
-          {author?.avatar_url
-            ? <img src={author.avatar_url} alt={authorName} className="w-full h-full object-cover"/>
-            : authorInitials}
-        </div>
-        {/* Name + timestamp */}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold leading-tight truncate" style={{ color: C.text }}>{authorName}</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            {ann.is_pinned && (
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                style={{ background: `${C.green}18`, color: C.green }}>📌 Pinned</span>
-            )}
-            <p className="text-[11px]" style={{ color: C.faint }}>{age}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Cover image -- shown at top as thumbnail */}
-      {ann.cover_image && (
-        <div className="pb-3">
-          <div className="overflow-hidden rounded-xl" style={{ maxHeight: 280 }}>
-            <img src={ann.cover_image} alt={ann.title} className="w-full object-cover"
-              style={{ maxHeight: 280 }} onError={e => (e.currentTarget.parentElement!.style.display = 'none')}/>
-          </div>
+    <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+      {src ? (
+        <>
+          <img src={src} alt={ann.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}/>
+          {(embedId || isVideo) && (
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Play style={{ width: 13, height: 13, color: '#111', marginLeft: 2 }}/>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.lime, fontSize: 32, fontWeight: 800, color: C.green, opacity: 0.6 }}>
+          {initLetter}
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* Title + content */}
-      <div className="pb-3">
-        <h2 className="font-bold mb-2" style={{ fontSize: '1.5rem', lineHeight: 1.2, letterSpacing: '-0.02em', color: C.text }}>{ann.title}</h2>
-        {ann.content && (
-          <div>
-            <div
-              className="rich-content"
-              style={isLong && !expanded ? { overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' } : undefined}
-              dangerouslySetInnerHTML={{ __html: renderAnnouncementContent(ann.content) }}
-            />
-            {isLong && (
-              <button onClick={() => setExpanded(e => !e)}
-                className="text-xs font-semibold mt-1"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.green, padding: 0 }}>
-                {expanded ? 'see less' : 'see more'}
-              </button>
+function AnnouncementCard({ ann, C, react, onToggleReaction, onClick }: {
+  ann: any; C: typeof LIGHT_C;
+  react: { liked: boolean; bookmarked: boolean; likeCount: number; bookmarkCount: number };
+  onToggleReaction: (type: 'like' | 'bookmark') => void;
+  onClick: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const plainText = (ann.content ?? '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ').trim();
+  const excerpt = plainText.length > 130 ? plainText.slice(0, 130) + '...' : plainText;
+  const pub = new Date(ann.published_at);
+  const dateStr = pub.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  const authorName = ann.author?.full_name || 'Admin';
+  const hasVideo = !!ann.youtube_url;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="rounded-2xl overflow-hidden cursor-pointer"
+      style={{ background: C.card, boxShadow: isDark ? 'none' : (hovered ? C.hoverShadow : C.cardShadow), transition: 'box-shadow 0.2s' }}>
+      <div className="flex" style={{ minHeight: 160 }}>
+        {/* Thumbnail - left */}
+        <div style={{ width: 200, flexShrink: 0, background: C.lime, minHeight: 160 }}>
+          <AnnThumbnail ann={ann} isVideo={hasVideo}/>
+        </div>
+        {/* Content - right */}
+        <div className="flex-1 p-4 min-w-0 flex flex-col gap-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            {ann.is_pinned && (
+              <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
+                style={{ background: `${C.green}18`, color: C.green }}>Pinned</span>
             )}
+            {hasVideo && (
+              <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
+                style={{ background: `${C.green}10`, color: C.green }}>Video</span>
+            )}
+            <span className="text-[13px]" style={{ color: C.faint }}>{dateStr}</span>
           </div>
-        )}
+          <h3 className="font-bold"
+            style={{ fontSize: 17, lineHeight: 1.3, color: C.text, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {ann.title}
+          </h3>
+          {excerpt && (
+            <p style={{ fontSize: 15, lineHeight: 1.4, color: C.muted, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+              {excerpt}
+            </p>
+          )}
+          <div className="mt-auto pt-1 flex items-center justify-end">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={e => { e.stopPropagation(); onToggleReaction('like'); }}
+                className="flex items-center gap-1 text-xs"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: react.liked ? '#2563eb' : C.faint, padding: 0 }}>
+                <ThumbsUp className="w-3.5 h-3.5" style={{ fill: react.liked ? '#2563eb' : 'none' }}/>
+                {react.likeCount > 0 && <span>{react.likeCount}</span>}
+              </button>
+              <button
+                onClick={e => { e.stopPropagation(); onToggleReaction('bookmark'); }}
+                className="flex items-center gap-1 text-xs"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: react.bookmarked ? C.green : C.faint, padding: 0 }}>
+                <Bookmark className="w-3.5 h-3.5" style={{ fill: react.bookmarked ? C.green : 'none' }}/>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
+    </motion.div>
+  );
+}
 
-      {/* YouTube embed (separate field -- fallback for non-inline videos) */}
-      {ann.youtube_url && (() => {
-        const embedId = ann.youtube_url.match(/(?:v=|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/)?.[1];
-        if (!embedId) return null;
-        return (
-          <div className="pb-3">
-            <div className="overflow-hidden rounded-xl" style={{ position: 'relative', paddingBottom: '56.25%', height: 0 }}>
+function AnnouncementModal({ ann, C, react, onToggleReaction, onClose, otherItems, onSelect }: {
+  ann: any; C: typeof LIGHT_C;
+  react: { liked: boolean; bookmarked: boolean; likeCount: number; bookmarkCount: number };
+  onToggleReaction: (type: 'like' | 'bookmark') => void;
+  onClose: () => void;
+  otherItems: any[];
+  onSelect: (a: any) => void;
+}) {
+  const pub = new Date(ann.published_at);
+  const dateStr = pub.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  const authorName = ann.author?.full_name || 'Admin';
+  const authorInitials = authorName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+  const embedId = ann.youtube_url?.match(/(?:v=|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/)?.[1];
+  const backdropRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey); };
+  }, [onClose]);
+
+  return (
+    <motion.div
+      ref={backdropRef}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={e => { if (e.target === backdropRef.current) onClose(); }}
+      style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 16px', overflowY: 'auto' }}>
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 24 }}
+        className="w-full rounded-2xl overflow-hidden relative"
+        style={{ maxWidth: 1040, background: C.card, boxShadow: '0 32px 80px rgba(0,0,0,0.35)', margin: 'auto' }}>
+
+        {/* Close */}
+        <button onClick={onClose}
+          className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full flex items-center justify-center hover:opacity-70 transition-opacity"
+          style={{ background: 'rgba(0,0,0,0.5)', border: 'none', cursor: 'pointer', color: 'white' }}>
+          <X className="w-4 h-4"/>
+        </button>
+
+        {/* Header: pinned + title + author */}
+        <div className="p-6 md:p-8 pb-5">
+          {ann.is_pinned && (
+            <span className="inline-block text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full mb-3"
+              style={{ background: `${C.green}18`, color: C.green }}>Pinned</span>
+          )}
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.02em', color: C.text, marginBottom: '0.9rem' }}>
+            {ann.title}
+          </h1>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden text-sm font-bold"
+              style={{ background: C.green, color: '#fff' }}>
+              {ann.author?.avatar_url
+                ? <img src={ann.author.avatar_url} alt={authorName} className="w-full h-full object-cover"/>
+                : authorInitials}
+            </div>
+            <div>
+              <p className="text-base font-semibold" style={{ color: C.text }}>{authorName}</p>
+              <p className="text-sm" style={{ color: C.faint }}>{dateStr}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Cover image -- full width, edge to edge */}
+        {ann.cover_image && (
+          <img src={ann.cover_image} alt={ann.title}
+            style={{ width: '100%', display: 'block', maxHeight: 420, objectFit: 'cover' }}
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}/>
+        )}
+
+        {/* Body */}
+        <div className="p-6 md:p-8">
+          {embedId && (
+            <div className="mb-6" style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', paddingBottom: '56.25%', height: 0 }}>
               <iframe
                 src={`https://www.youtube.com/embed/${embedId}`}
                 title={ann.title}
@@ -2324,56 +2422,85 @@ function AnnouncementPost({ ann, userId, myReactions, C }: {
                 style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
               />
             </div>
+          )}
+          {ann.content && (
+            <div className="rich-content compact" style={{ color: C.text, fontSize: 17 }}
+              dangerouslySetInnerHTML={{ __html: renderAnnouncementContent(ann.content) }}
+            />
+          )}
+          <div className="flex items-center gap-3 mt-8 pt-5" style={{ borderTop: `1px solid ${C.divider}` }}>
+            <button
+              onClick={() => onToggleReaction('like')}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-base font-semibold transition-all"
+              style={{ background: react.liked ? '#2563eb18' : C.pill, border: 'none', cursor: 'pointer', color: react.liked ? '#2563eb' : C.muted }}>
+              <ThumbsUp className="w-4 h-4" style={{ fill: react.liked ? '#2563eb' : 'none' }}/>
+              {react.liked ? 'Liked' : 'Like'}
+              {react.likeCount > 0 && <span className="text-xs opacity-60 ml-0.5">{react.likeCount}</span>}
+            </button>
+            <button
+              onClick={() => onToggleReaction('bookmark')}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-base font-semibold transition-all"
+              style={{ background: react.bookmarked ? `${C.green}18` : C.pill, border: 'none', cursor: 'pointer', color: react.bookmarked ? C.green : C.muted }}>
+              <Bookmark className="w-4 h-4" style={{ fill: react.bookmarked ? C.green : 'none' }}/>
+              {react.bookmarked ? 'Saved' : 'Save'}
+            </button>
           </div>
-        );
-      })()}
-
-      {/* Reaction counts */}
-      {(likeCount > 0 || bookmarkCount > 0) && (
-        <div className="flex items-center gap-3 px-5 py-2.5" style={{ borderTop: `1px solid ${C.divider}` }}>
-          {likeCount > 0 && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: C.faint }}>
-              <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px]"
-                style={{ background: '#2563eb', color: 'white' }}>👍</span>
-              {likeCount}
-            </span>
-          )}
-          {bookmarkCount > 0 && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: C.faint }}>
-              <Bookmark className="w-3 h-3"/> {bookmarkCount}
-            </span>
-          )}
         </div>
-      )}
 
-      {/* Action buttons */}
-      <div className="flex -mx-5" style={{ borderTop: `1px solid ${C.divider}` }}>
-        {[
-          { label: 'Like', icon: ThumbsUp, active: liked, count: likeCount, action: () => toggleReaction('like'), activeColor: '#2563eb' },
-          { label: 'Save', icon: Bookmark, active: bookmarked, count: bookmarkCount, action: () => toggleReaction('bookmark'), activeColor: C.green },
-        ].map(btn => (
-          <button key={btn.label} onClick={btn.action} disabled={acting}
-            className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-colors"
-            style={{
-              background: 'none', border: 'none', cursor: acting ? 'not-allowed' : 'pointer',
-              color: btn.active ? btn.activeColor : C.faint,
-            }}
-            onMouseEnter={e => { if (!btn.active) (e.currentTarget as HTMLButtonElement).style.color = btn.activeColor; }}
-            onMouseLeave={e => { if (!btn.active) (e.currentTarget as HTMLButtonElement).style.color = C.faint; }}>
-            <btn.icon className="w-4 h-4" style={{ fill: btn.active ? btn.activeColor : 'none' }}/>
-            {btn.label}
-          </button>
-        ))}
-      </div>
+        {/* More posts */}
+        {otherItems.length > 0 && (
+          <div className="px-6 md:px-8 pb-8" style={{ borderTop: `1px solid ${C.divider}` }}>
+            <p className="text-sm font-bold uppercase tracking-wide mt-6 mb-4" style={{ color: C.faint }}>More Posts</p>
+            <div className="space-y-3">
+              {otherItems.slice(0, 3).map(item => {
+                const embedId = item.youtube_url?.match(/(?:v=|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/)?.[1];
+                const thumbSrc = item.cover_image || (embedId ? `https://img.youtube.com/vi/${embedId}/hqdefault.jpg` : null);
+                const initLetter = (item.title?.[0] ?? 'A').toUpperCase();
+                const itemDate = new Date(item.published_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                return (
+                  <button key={item.id} onClick={() => onSelect(item)}
+                    className="w-full text-left flex items-center gap-3 transition-opacity hover:opacity-70"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                    {/* Thumbnail */}
+                    <div style={{ width: 80, height: 56, flexShrink: 0, borderRadius: 8, overflow: 'hidden', background: C.lime, position: 'relative' }}>
+                      {thumbSrc
+                        ? <img src={thumbSrc} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+                        : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: C.green, opacity: 0.5 }}>{initLetter}</div>
+                      }
+                      {embedId && (
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Play style={{ width: 9, height: 9, color: '#111', marginLeft: 1 }}/>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {/* Text */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm leading-snug mb-0.5"
+                        style={{ color: C.text, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {item.title}
+                      </p>
+                      <p className="text-xs" style={{ color: C.faint }}>{itemDate}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </motion.div>
     </motion.div>
   );
 }
 
 function AnnouncementsSection({ userId: userIdProp, C }: { userId?: string; C: typeof LIGHT_C }) {
-  const [items, setItems]       = useState<any[]>([]);
-  const [userId, setUserId]     = useState('');
-  const [myReactions, setMyReactions] = useState<Record<string, Set<string>>>({ like: new Set(), bookmark: new Set() });
-  const [loading, setLoading]   = useState(true);
+  const [items, setItems]     = useState<any[]>([]);
+  const [userId, setUserId]   = useState('');
+  const [reactState, setReactState] = useState<Record<string, { liked: boolean; bookmarked: boolean; likeCount: number; bookmarkCount: number }>>({});
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<any>(null);
+  const [acting, setActing]   = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -2395,7 +2522,6 @@ function AnnouncementsSection({ userId: userIdProp, C }: { userId?: string; C: t
         .order('published_at', { ascending: false })
         .limit(50);
 
-      // Fetch author profiles via security-definer RPC (returns only name+avatar, not email)
       const authorIds = [...new Set((anns ?? []).map((a: any) => a.author_id).filter(Boolean))];
       const { data: authors } = authorIds.length
         ? await supabase.rpc('get_staff_profiles', { p_ids: authorIds })
@@ -2403,37 +2529,64 @@ function AnnouncementsSection({ userId: userIdProp, C }: { userId?: string; C: t
       const authorMap: Record<string, any> = {};
       for (const a of authors ?? []) authorMap[a.id] = a;
 
-      // Fetch reactions separately -- table may not exist yet, so swallow errors
       const { data: reactions } = await supabase
         .from('announcement_reactions')
         .select('announcement_id, type')
         .eq('student_id', effectiveUserId);
 
-      // Build reaction sets for current user
-      const sets: Record<string, Set<string>> = { like: new Set(), bookmark: new Set() };
-      for (const r of reactions ?? []) sets[r.type]?.add(r.announcement_id);
-      setMyReactions(sets);
+      const likes = new Set<string>();
+      const bookmarks = new Set<string>();
+      for (const r of reactions ?? []) {
+        if (r.type === 'like') likes.add(r.announcement_id);
+        if (r.type === 'bookmark') bookmarks.add(r.announcement_id);
+      }
 
-      setItems((anns ?? []).map((a: any) => ({
-        ...a,
-        like_count: 0,
-        bookmark_count: 0,
-        author: authorMap[a.author_id] ?? null,
-      })));
+      const enriched = (anns ?? []).map((a: any) => ({ ...a, author: authorMap[a.author_id] ?? null }));
+      setItems(enriched);
+      const rs: Record<string, { liked: boolean; bookmarked: boolean; likeCount: number; bookmarkCount: number }> = {};
+      for (const a of enriched) rs[a.id] = { liked: likes.has(a.id), bookmarked: bookmarks.has(a.id), likeCount: 0, bookmarkCount: 0 };
+      setReactState(rs);
       setLoading(false);
     };
     load();
   }, [userIdProp]);
 
+  async function toggleReaction(annId: string, type: 'like' | 'bookmark') {
+    if (acting || !userId) return;
+    setActing(true);
+    const prev = reactState[annId] ?? { liked: false, bookmarked: false, likeCount: 0, bookmarkCount: 0 };
+    const isOn = type === 'like' ? prev.liked : prev.bookmarked;
+    setReactState(s => ({
+      ...s,
+      [annId]: {
+        liked: type === 'like' ? !prev.liked : prev.liked,
+        bookmarked: type === 'bookmark' ? !prev.bookmarked : prev.bookmarked,
+        likeCount: type === 'like' ? prev.likeCount + (isOn ? -1 : 1) : prev.likeCount,
+        bookmarkCount: type === 'bookmark' ? prev.bookmarkCount + (isOn ? -1 : 1) : prev.bookmarkCount,
+      }
+    }));
+    try {
+      if (isOn) {
+        await supabase.from('announcement_reactions')
+          .delete().eq('announcement_id', annId).eq('student_id', userId).eq('type', type);
+      } else {
+        await supabase.from('announcement_reactions')
+          .insert({ announcement_id: annId, student_id: userId, type });
+      }
+    } catch {
+      setReactState(s => ({ ...s, [annId]: prev }));
+    } finally { setActing(false); }
+  }
+
   if (loading) return (
-    <div className="space-y-4 max-w-2xl mx-auto">
-      {[0,1,2].map(i => (
-        <div key={i} className="rounded-2xl p-5" style={{ background: C.card }}>
-          <div className="flex gap-3 mb-4"><Sk w={40} h={40} r={99}/><div className="flex-1 space-y-2"><Sk h={14} w="40%"/><Sk h={11} w="25%"/></div></div>
-          <Sk h={15} w="75%"/>
-          <Sk h={11}/><Sk h={11} w="85%"/><Sk h={11} w="60%"/>
-          <div className="flex gap-4 mt-4 pt-4" style={{ borderTop: `1px solid ${C.divider}` }}>
-            <Sk h={32} w="50%" r={8}/><Sk h={32} w="50%" r={8}/>
+    <div className="space-y-3 max-w-5xl">
+      {[0, 1, 2].map(i => (
+        <div key={i} className="rounded-2xl overflow-hidden flex" style={{ background: C.card, minHeight: 160 }}>
+          <div style={{ width: 200, flexShrink: 0, background: C.skeleton }} className="animate-pulse"/>
+          <div className="flex-1 p-4 space-y-2">
+            <Sk h={11} w="30%"/>
+            <Sk h={15} w="75%"/>
+            <Sk h={11}/><Sk h={11} w="60%"/>
           </div>
         </div>
       ))}
@@ -2441,15 +2594,38 @@ function AnnouncementsSection({ userId: userIdProp, C }: { userId?: string; C: t
   );
 
   if (!items.length) return (
-    <EmptyState icon={Megaphone} title="No announcements" body="Announcements from instructors and admins will appear here."/>
+    <EmptyState icon={Megaphone} title="No posts yet" body="Tech blog posts from instructors and admins will appear here."/>
   );
 
   return (
-    <div className="max-w-2xl space-y-4">
-      {items.map(ann => (
-        <AnnouncementPost key={ann.id} ann={ann} userId={userId} myReactions={myReactions} C={C}/>
-      ))}
-    </div>
+    <>
+      <p className="text-sm mb-6" style={{ color: C.muted }}>Explore the latest in tech, AI trends, data insights, and actionable tips to level up your career.</p>
+      <div className="space-y-3 max-w-5xl">
+        {items.map(ann => (
+          <AnnouncementCard
+            key={ann.id}
+            ann={ann}
+            C={C}
+            react={reactState[ann.id] ?? { liked: false, bookmarked: false, likeCount: 0, bookmarkCount: 0 }}
+            onToggleReaction={type => toggleReaction(ann.id, type)}
+            onClick={() => setSelected(ann)}
+          />
+        ))}
+      </div>
+      <AnimatePresence>
+        {selected && (
+          <AnnouncementModal
+            ann={selected}
+            C={C}
+            react={reactState[selected.id] ?? { liked: false, bookmarked: false, likeCount: 0, bookmarkCount: 0 }}
+            onToggleReaction={type => toggleReaction(selected.id, type)}
+            onClose={() => setSelected(null)}
+            otherItems={items.filter(i => i.id !== selected.id)}
+            onSelect={setSelected}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -4310,8 +4486,9 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {gaps.map((gap: any) => {
               const isVE = gap.course.contentType === 'virtual_experience' || gap.course.contentType === 'guided_project';
-              const slug = gap.course.slug || gap.course.formId;
-              const href = isVE ? '/student#virtual_experiences' : (slug ? `/${slug}?go=1` : '/student');
+              const liveItem = courses.find((c: any) => c.id === gap.course.formId);
+              if (!liveItem) return null;
+              const href = isVE ? '/student#virtual_experiences' : `/${liveItem.slug || liveItem.id}?go=1`;
               // Only render cover images from safe http/https URLs
               const rawCover = gap.course.coverImage;
               const safeCover = (() => {

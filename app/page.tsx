@@ -5,8 +5,9 @@ import { motion, useInView, AnimatePresence } from 'motion/react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/components/TenantProvider';
+import { useTheme } from '@/components/ThemeProvider';
 import { resolveConfig, type SiteConfig } from '@/lib/site-templates';
-import { ArrowRight, Check, LayoutDashboard, ChevronDown, ChevronLeft, ChevronRight, User, Settings, LogOut, BookOpen, Calendar, Briefcase, Award, TrendingUp, Users, Zap } from 'lucide-react';
+import { ArrowRight, Check, LayoutDashboard, ChevronDown, ChevronLeft, ChevronRight, User, Settings, LogOut, BookOpen, Calendar, Briefcase, Award, TrendingUp, Users, Zap, BarChart3, GraduationCap } from 'lucide-react';
 
 // --- FadeIn on scroll ---
 function FadeIn({ children, delay = 0, className = '' }: { children: React.ReactNode; delay?: number; className?: string }) {
@@ -35,9 +36,25 @@ function Orb({ x, y, size, color, delay }: { x: string; y: string; size: number;
 
 // --- Nav profile menu ---
 function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
-  const { primaryColor } = useTenant();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  const card    = isDark ? '#1E1F26' : 'white';
+  const divider = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+  const text    = isDark ? '#f0f0f0' : '#111';
+  const muted   = isDark ? '#A8B5C2' : '#555';
+  const faint   = isDark ? '#6b7a89' : '#888';
+  const pill    = isDark ? '#2a2b34' : '#F4F4F4';
+  const cta     = isDark ? '#3E93FF' : '#0e09dd';
+  const lime    = isDark ? 'rgba(62,147,255,0.15)' : '#e0e0f5';
+  const green   = isDark ? '#3E93FF' : '#0e09dd';
+
+  const iconBgBlue   = isDark ? 'rgba(62,147,255,0.15)'  : 'rgba(14,9,221,0.08)';
+  const iconBgAmber  = isDark ? 'rgba(245,158,11,0.18)'  : 'rgba(245,158,11,0.10)';
+  const iconBgSubtle = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+  const signOutHover = isDark ? 'rgba(239,68,68,0.10)'   : 'rgba(239,68,68,0.08)';
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -47,76 +64,99 @@ function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const initials = (profile?.name || user?.email || '?').slice(0, 2).toUpperCase();
+  const name     = profile?.name || profile?.full_name || user?.email?.split('@')[0] || 'User';
+  const username = profile?.username;
+  const initials = name.slice(0, 2).toUpperCase();
+  const avatar   = profile?.avatar_url && /^https?:\/\//.test(profile.avatar_url) ? profile.avatar_url : null;
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     window.location.href = '/';
   };
 
+  const menuItem = (href: string, Icon: React.ElementType, label: string, iconColor: string, iconBg: string, external?: boolean) => (
+    <Link key={label} href={href} onClick={() => setOpen(false)}
+      {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
+      className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all"
+      style={{ color: muted, textDecoration: 'none' }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = pill; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+      <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: iconBg }}>
+        <Icon className="w-3.5 h-3.5" style={{ color: iconColor }}/>
+      </div>
+      {label}
+    </Link>
+  );
+
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-white/25 bg-white/15 hover:bg-white/25 transition-all"
-        style={{ color: 'white' }}
+        className="flex items-center gap-2 px-2 py-1 rounded-full border border-white/25 bg-white/15 hover:bg-white/25 transition-all"
       >
-        <div className="w-6 h-6 rounded-full bg-white/25 flex items-center justify-center text-xs font-bold overflow-hidden" style={{ color: 'white' }}>
-          {profile?.avatar_url && /^https?:\/\//.test(profile.avatar_url)
-            ? <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-            : initials}
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden flex-shrink-0"
+          style={{ background: lime, color: green }}>
+          {avatar ? <img src={avatar} alt={name} className="w-full h-full object-cover"/> : <span>{initials}</span>}
         </div>
-        <span className="text-sm font-medium hidden sm:block" style={{ color: 'white' }}>
-          {profile?.name || user?.email?.split('@')[0]}
+        <span className="text-sm font-medium hidden sm:block pr-1" style={{ color: 'white' }}>
+          {name}
         </span>
-        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} style={{ color: 'rgba(255,255,255,0.7)' }} />
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform mr-1 ${open ? 'rotate-180' : ''}`} style={{ color: 'rgba(255,255,255,0.7)' }} />
       </button>
 
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.96 }}
-            transition={{ duration: 0.15 }}
-            className="absolute right-0 top-full mt-2 w-56 rounded-2xl border shadow-2xl overflow-hidden z-50"
-            style={{ background: 'white', borderColor: '#e5e7eb' }}
+            initial={{ opacity: 0, scale: 0.95, y: -6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -6 }}
+            transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute right-0 top-full mt-2 w-64 rounded-2xl overflow-hidden z-50"
+            style={{
+              background: card,
+              fontFamily: "'Inter', sans-serif",
+              boxShadow: isDark
+                ? '0 20px 60px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.07)'
+                : '0 20px 60px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.06)',
+            }}
           >
-            <div className="px-4 py-3 border-b" style={{ borderColor: '#f3f4f6' }}>
-              <p className="text-sm font-semibold truncate" style={{ color: '#111' }}>{profile?.name || user?.email?.split('@')[0] || user?.email || 'Account'}</p>
-              {profile?.username && <p className="text-xs" style={{ color: '#6b7280' }}>@{profile.username}</p>}
+            {/* Header */}
+            <div className="px-4 py-4" style={{ borderBottom: `1px solid ${divider}` }}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center text-sm font-bold flex-shrink-0"
+                  style={{ background: lime, color: green }}>
+                  {avatar ? <img src={avatar} alt={name} className="w-full h-full object-cover"/> : <span>{initials}</span>}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold truncate" style={{ color: text }}>{name}</p>
+                  <p className="text-xs truncate mt-0.5" style={{ color: faint }}>
+                    {username ? `@${username}` : user?.email}
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="p-1.5 space-y-0.5">
-              {[
-                { href: '/student',   Icon: BookOpen,        label: 'My Learning' },
-                { href: '/dashboard', Icon: LayoutDashboard, label: 'Dashboard' },
-              ].map(({ href, Icon, label }) => (
-                <Link key={label} href={href} onClick={() => setOpen(false)}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-colors hover:bg-blue-50"
-                  style={{ color: '#374151' }}
-                >
-                  <Icon className="w-4 h-4" style={{ color: primaryColor }} /> {label}
-                </Link>
-              ))}
-              {profile?.username && (
-                <Link href={`/u/${profile.username}`} onClick={() => setOpen(false)}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-colors hover:bg-blue-50"
-                  style={{ color: '#374151' }}
-                >
-                  <User className="w-4 h-4" style={{ color: primaryColor }} /> View profile
-                </Link>
-              )}
-              <Link href="/settings" onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-colors hover:bg-blue-50"
-                style={{ color: '#374151' }}
-              >
-                <Settings className="w-4 h-4" style={{ color: primaryColor }} /> Settings
-              </Link>
+
+            {/* Navigation items */}
+            <div className="p-2">
+              {menuItem('/student#courses', GraduationCap, 'My Learning', faint, iconBgSubtle)}
+              {menuItem('/student#certificates', Award, 'My Certificates', faint, iconBgSubtle)}
+              {menuItem('/dashboard', LayoutDashboard, 'Dashboard', faint, iconBgSubtle)}
+              {username && menuItem(`/s/${username}`, User, 'View Profile', faint, iconBgSubtle, true)}
+              {menuItem('/settings', Settings, 'Settings', faint, iconBgSubtle)}
+            </div>
+
+            {/* Sign out */}
+            <div className="p-2" style={{ borderTop: `1px solid ${divider}` }}>
               <button onClick={handleSignOut}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-colors hover:bg-red-50"
-                style={{ color: '#374151' }}
-              >
-                <LogOut className="w-4 h-4 text-red-400" /> Sign out
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all"
+                style={{ color: '#ef4444' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = signOutHover; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(239,68,68,0.10)' }}>
+                  <LogOut className="w-3.5 h-3.5"/>
+                </div>
+                Sign out
               </button>
             </div>
           </motion.div>
