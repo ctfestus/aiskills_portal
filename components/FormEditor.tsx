@@ -7,7 +7,7 @@ import {
   Loader2, Save, Check, Plus, Trash2, Image as ImageIcon, Sun, Moon,
   X, MapPin, ArrowUpRight, ChevronDown, ChevronUp, Sparkles,
   Building2, GripVertical, BookOpen, Pencil, Monitor, Smartphone, RotateCcw, ExternalLink, Video, Search,
-  HelpCircle, CalendarDays, ClipboardList, Share2, CheckCircle2, Zap, Settings, Upload,
+  HelpCircle, CalendarDays, ClipboardList, Share2, CheckCircle2, Zap, Settings, Upload, Download, Link2, FileText,
 } from 'lucide-react';
 import { ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import dynamic from 'next/dynamic';
@@ -43,6 +43,16 @@ interface FormField {
 
 type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique';
 
+interface DownloadItem {
+  id: string;
+  title: string;
+  description?: string;
+  fileUrl?: string;
+  fileName?: string;
+  linkUrl?: string;
+  type: 'file' | 'link';
+}
+
 interface CourseQuestion {
   id: string;
   type?: QuestionType;
@@ -58,6 +68,10 @@ interface CourseQuestion {
   isSection?: boolean;
   sectionTitle?: string;
   sectionDescription?: string;
+  isDownloads?: boolean;
+  downloadsTitle?: string;
+  downloadsDescription?: string;
+  downloadItems?: DownloadItem[];
   lesson?: {
     title?: string;
     body?: string;
@@ -570,7 +584,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const [newFieldRequired, setNewFieldRequired] = useState(true);
   const [newSocialPlatforms, setNewSocialPlatforms] = useState<string[]>(['linkedin', 'twitter']);
   const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
-  const [newQuestionType, setNewQuestionType] = useState<QuestionType>('multiple_choice');
+  const [newQuestionType, setNewQuestionType] = useState<QuestionType | 'downloads'>('multiple_choice');
   const [aiTopic, setAiTopic] = useState('');
   const [aiQuestionCount, setAiQuestionCount] = useState(5);
   const [aiQuestionType, setAiQuestionType] = useState<'multiple_choice' | 'fill_blank' | 'arrange'>('multiple_choice');
@@ -1067,9 +1081,20 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     setNewFieldRequired(true);
   };
 
+  const handleAddDownloads = () => {
+    if (!formConfig) return;
+    const id = Math.random().toString(36).substring(7);
+    updateConfig({
+      questions: [...(formConfig.questions || []), {
+        id, isDownloads: true, downloadsTitle: 'Downloads', downloadsDescription: '', downloadItems: [], question: '', options: [], correctAnswer: '',
+      } as CourseQuestion],
+    });
+  };
+
   // Course management
   const handleAddQuestion = () => {
     if (!formConfig) return;
+    if (newQuestionType === 'downloads') { handleAddDownloads(); return; }
     const id = Math.random().toString(36).substring(7);
     const defaults: Record<QuestionType, Partial<CourseQuestion>> = {
       multiple_choice:     { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A' },
@@ -1113,6 +1138,13 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
 
   const insertQuestionAt = (afterIndex: number) => {
     if (!formConfig) return;
+    if (newQuestionType === 'downloads') {
+      const id = Math.random().toString(36).substring(7);
+      const qs = [...(formConfig.questions || [])];
+      qs.splice(afterIndex + 1, 0, { id, isDownloads: true, downloadsTitle: 'Downloads', downloadsDescription: '', downloadItems: [], question: '', options: [], correctAnswer: '' } as CourseQuestion);
+      updateConfig({ questions: qs });
+      return;
+    }
     const id = Math.random().toString(36).substring(7);
     const defaults: Record<QuestionType, Partial<CourseQuestion>> = {
       multiple_choice:     { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A' },
@@ -2147,13 +2179,29 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     const insertDivider = (
                       <div key={`insert-${q.id}`} className="group relative flex items-center justify-center gap-1.5 h-5 my-0.5">
                         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px transition-colors" style={{ background: FE.divider }} />
+                        <select
+                          value={newQuestionType}
+                          onChange={e => setNewQuestionType(e.target.value as QuestionType | 'downloads')}
+                          className="relative hidden group-hover:block text-[10px] rounded-full font-medium px-2 py-0.5 outline-none"
+                          style={{ background: FE.pill, color: FE.muted, border: `1px solid ${FE.cardBorder}`, zIndex: 1 }}
+                        >
+                          <option value="multiple_choice">Multiple Choice</option>
+                          <option value="fill_blank">Fill in the Blank</option>
+                          <option value="arrange">Arrange / Order</option>
+                          <option value="image">Image Question</option>
+                          <option value="code">Code Snippet</option>
+                          <option value="code_review">AI Code Review</option>
+                          <option value="excel_review">AI Excel Review</option>
+                          <option value="dashboard_critique">AI Dashboard Critique</option>
+                          <option value="downloads">Downloads</option>
+                        </select>
                         <button
                           type="button"
                           onClick={() => insertQuestionAt(qIdx)}
                           className="relative hidden group-hover:flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full font-medium transition-all hover:opacity-90"
                           style={{ background: accentColor, color: 'white', zIndex: 1 }}
                         >
-                          <Plus className="w-2.5 h-2.5" /> Question
+                          <Plus className="w-2.5 h-2.5" /> Add
                         </button>
                         <button
                           type="button"
@@ -2207,6 +2255,129 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                             </div>
                             )}
                           </div>
+                          )}
+                        </SortableQuestionShell>
+                        {insertDivider}
+                        </React.Fragment>
+                      );
+                    }
+
+                    // -- Downloads block card --
+                    if (q.isDownloads) {
+                      const dlItems: DownloadItem[] = q.downloadItems || [];
+                      const updateItems = (newItems: DownloadItem[]) =>
+                        updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, downloadItems: newItems } : qq) });
+
+                      return (
+                        <React.Fragment key={q.id}>
+                        <SortableQuestionShell id={q.id}>
+                          {({ dragHandle }) => (
+                        <div className="rounded-xl overflow-hidden" style={{ background: FE.card, border: `1px solid #f59e0b40`, borderLeft: '3px solid #f59e0b' }}>
+                          <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: `1px solid ${FE.divider}` }}>
+                            {dragHandle}
+                            <span className="flex-1 text-[10px] font-bold tracking-widest uppercase flex items-center gap-1.5" style={{ color: '#f59e0b' }}>
+                              <Download className="w-3 h-3" /> {q.downloadsTitle || 'Downloads'}
+                            </span>
+                            <button type="button" onClick={() => updateConfig({ questions: formConfig.questions?.filter(qq => qq.id !== q.id) })}
+                              className="p-1 rounded transition-colors hover:bg-red-500/10">
+                              <X className="w-3.5 h-3.5 text-red-400" />
+                            </button>
+                          </div>
+                          <div className="px-3.5 py-3 space-y-3">
+                            <input
+                              value={q.downloadsTitle || ''}
+                              onChange={e => updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, downloadsTitle: e.target.value } : qq) })}
+                              placeholder="Section title e.g. Course Materials"
+                              className={`${inputCls} font-semibold`}
+                              style={inputStyle}
+                            />
+                            <RichTextEditor
+                              value={q.downloadsDescription || ''}
+                              onChange={html => updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, downloadsDescription: html } : qq) })}
+                              placeholder="Describe what students will find here..."
+                            />
+                            {dlItems.length > 0 && (
+                              <div className="space-y-2 pt-1">
+                                {dlItems.map((item) => (
+                                  <div key={item.id} className="rounded-lg p-3 space-y-2.5" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-1">
+                                        {(['file', 'link'] as const).map(t => (
+                                          <button key={t} type="button"
+                                            onClick={() => updateItems(dlItems.map(it => it.id === item.id ? { ...it, type: t } : it))}
+                                            className="px-2 py-0.5 rounded-md text-[10px] font-semibold capitalize transition-all"
+                                            style={item.type === t ? { background: accentColor, color: 'white' } : { background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
+                                          >
+                                            {t === 'file' ? <span className="flex items-center gap-1"><Upload className="w-2.5 h-2.5" />File</span> : <span className="flex items-center gap-1"><Link2 className="w-2.5 h-2.5" />Link</span>}
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <button type="button" onClick={() => updateItems(dlItems.filter(it => it.id !== item.id))} className="p-0.5 rounded transition-colors hover:bg-red-500/10">
+                                        <X className="w-3 h-3 text-red-400" />
+                                      </button>
+                                    </div>
+                                    <input
+                                      value={item.title}
+                                      onChange={e => updateItems(dlItems.map(it => it.id === item.id ? { ...it, title: e.target.value } : it))}
+                                      placeholder={item.type === 'file' ? 'File name or label...' : 'Link label...'}
+                                      className={inputCls}
+                                      style={inputStyle}
+                                    />
+                                    <RichTextEditor
+                                      value={item.description || ''}
+                                      onChange={html => updateItems(dlItems.map(it => it.id === item.id ? { ...it, description: html } : it))}
+                                      placeholder="Short description (optional)..."
+                                    />
+                                    {item.type === 'file' ? (
+                                      item.fileUrl ? (
+                                        <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg" style={{ background: '#f59e0b15', border: '1px solid #f59e0b30' }}>
+                                          <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#f59e0b' }} />
+                                          <span className="text-xs flex-1 truncate" style={{ color: FE.text }}>{item.fileName || 'Uploaded file'}</span>
+                                          <button type="button" onClick={() => updateItems(dlItems.map(it => it.id === item.id ? { ...it, fileUrl: '', fileName: '' } : it))} className="text-red-400 text-[10px] font-medium hover:opacity-70 flex-shrink-0">Remove</button>
+                                        </div>
+                                      ) : (
+                                        <label className="block cursor-pointer">
+                                          <input type="file" className="hidden" onChange={async e => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            e.target.value = '';
+                                            try {
+                                              const url = await uploadToCloudinary(file, 'course-downloads');
+                                              updateItems(dlItems.map(it => it.id === item.id ? { ...it, fileUrl: url, fileName: file.name, title: it.title || file.name } : it));
+                                            } catch { /* silently fail */ }
+                                          }} />
+                                          <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-60 cursor-pointer" style={{ border: `1.5px dashed ${FE.inputBorder}`, color: FE.faint }}>
+                                            <Upload className="w-3.5 h-3.5" /> Click to upload file
+                                          </div>
+                                        </label>
+                                      )
+                                    ) : (
+                                      <input
+                                        value={item.linkUrl || ''}
+                                        onChange={e => updateItems(dlItems.map(it => it.id === item.id ? { ...it, linkUrl: e.target.value } : it))}
+                                        placeholder="https://..."
+                                        className={inputCls}
+                                        style={inputStyle}
+                                      />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex gap-2 pt-1">
+                              <button type="button" onClick={() => updateItems([...dlItems, { id: Math.random().toString(36).substring(7), title: '', type: 'file' }])}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all hover:opacity-80"
+                                style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}>
+                                <Upload className="w-3 h-3" /> Add File
+                              </button>
+                              <button type="button" onClick={() => updateItems([...dlItems, { id: Math.random().toString(36).substring(7), title: '', type: 'link' }])}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all hover:opacity-80"
+                                style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}>
+                                <Link2 className="w-3 h-3" /> Add Link
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                           )}
                         </SortableQuestionShell>
                         {insertDivider}
@@ -2791,7 +2962,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   {(!formConfig.questions || formConfig.questions.length === 0) && <p className="text-xs text-center py-3" style={{ color: FE.faint }}>No questions yet.</p>}
 
                   <div className="flex items-center gap-2 pt-1">
-                    <select value={newQuestionType} onChange={e => setNewQuestionType(e.target.value as QuestionType)} className={`${inputCls} py-1.5 flex-1`} style={inputStyle}>
+                    <select value={newQuestionType} onChange={e => setNewQuestionType(e.target.value as QuestionType | 'downloads')} className={`${inputCls} py-1.5 flex-1`} style={inputStyle}>
                       <option value="multiple_choice">Multiple Choice</option>
                       <option value="fill_blank">Fill in the Blank</option>
                       <option value="arrange">Arrange / Order</option>
@@ -2800,6 +2971,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                       <option value="code_review">AI Code Review</option>
                       <option value="excel_review">AI Excel Review</option>
                       <option value="dashboard_critique">AI Dashboard Critique</option>
+                      <option value="downloads">Downloads</option>
                     </select>
                     <button type="button" onClick={handleAddQuestion} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all flex-shrink-0 hover:opacity-80" style={{ background: accentColor, color: 'white' }}>
                       <Plus className="w-3.5 h-3.5" /> Add

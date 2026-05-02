@@ -25,6 +25,26 @@ const ResponsesOverTimeChart = dynamic(
 
 const PAGE_SIZE = 50;
 
+function downloadJSON(data: any, name: string) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${(name || 'export').replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportContent(form: any) {
+  downloadJSON({
+    exportVersion: 1,
+    type: form.content_type,
+    title: form.title,
+    exportedAt: new Date().toISOString(),
+    config: form.config,
+  }, form.title);
+}
+
 type TabId = 'responses' | 'settings' | 'more' | 'email' | 'leaderboard';
 
 const TABS: { id: TabId; label: string; Icon: any; courseOnly?: boolean }[] = [
@@ -2361,6 +2381,9 @@ export default function FormDetailPage() {
             <a href={formUrl} target="_blank" rel="noreferrer" className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-70" style={{ background: hdrBtnBg, border: `1px solid ${hdrBtnBord}`, color: hdrTextMut }}>
               <ExternalLink className="w-3.5 h-3.5" /> View
             </a>
+            <button onClick={() => exportContent(form)} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-70" style={{ background: hdrBtnBg, border: `1px solid ${hdrBtnBord}`, color: hdrTextMut }} title="Export">
+              <Download className="w-3.5 h-3.5" /> Export
+            </button>
             <button onClick={toggleTheme} className="p-2 rounded-lg transition-colors ff-hover" title="Toggle theme" style={{ color: hdrTextMut }}>
               {isLight ? <Moon className="w-4 h-4"/> : <Sun className="w-4 h-4"/>}
             </button>

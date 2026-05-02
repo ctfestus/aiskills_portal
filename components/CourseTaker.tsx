@@ -8,7 +8,7 @@ import {
   CheckCircle2, XCircle, Loader2, ChevronRight, RotateCcw,
   Clock, EyeOff, AlertTriangle, ShieldAlert, GripVertical,
   ChevronLeft, BookOpen, X, ExternalLink, ArrowRight, MoreHorizontal, List, Zap,
-  ArrowLeftToLine, ArrowRightFromLine,
+  ArrowLeftToLine, ArrowRightFromLine, Download, ArrowDownToLine,
 } from 'lucide-react';
 import { AnimatedField } from '@/components/AnimatedField';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -42,6 +42,16 @@ type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'co
 
 const REVIEW_TYPES: QuestionType[] = ['code_review', 'excel_review', 'dashboard_critique'];
 
+interface DownloadItem {
+  id: string;
+  title: string;
+  description?: string;
+  fileUrl?: string;
+  fileName?: string;
+  linkUrl?: string;
+  type: 'file' | 'link';
+}
+
 interface CourseQuestion {
   id: string;
   type?: QuestionType;
@@ -57,6 +67,10 @@ interface CourseQuestion {
   isSection?: boolean;
   sectionTitle?: string;
   sectionDescription?: string;
+  isDownloads?: boolean;
+  downloadsTitle?: string;
+  downloadsDescription?: string;
+  downloadItems?: DownloadItem[];
   lesson?: {
     title?: string;
     body?: string;
@@ -69,6 +83,21 @@ interface CourseQuestion {
   context?: string;
   minScore?: number;
   reviewLanguage?: string;
+}
+
+function getFileIcon(fileName?: string): { label: string; color: string } {
+  if (!fileName) return { label: 'FILE', color: '#6b7280' };
+  const ext = (fileName.split('.').pop() || '').toLowerCase();
+  if (ext === 'pdf') return { label: 'PDF', color: '#ef4444' };
+  if (['xls', 'xlsx'].includes(ext)) return { label: 'XLS', color: '#10b981' };
+  if (['doc', 'docx'].includes(ext)) return { label: 'DOC', color: '#3b82f6' };
+  if (['ppt', 'pptx'].includes(ext)) return { label: 'PPT', color: '#f97316' };
+  if (['zip', 'rar', '7z'].includes(ext)) return { label: 'ZIP', color: '#8b5cf6' };
+  if (['mp4', 'mov', 'avi', 'mkv'].includes(ext)) return { label: 'VID', color: '#ec4899' };
+  if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return { label: 'IMG', color: '#14b8a6' };
+  if (ext === 'csv') return { label: 'CSV', color: '#059669' };
+  if (['mp3', 'wav', 'aac'].includes(ext)) return { label: 'AUD', color: '#a855f7' };
+  return { label: (ext.toUpperCase().slice(0, 4)) || 'FILE', color: '#6b7280' };
 }
 
 
@@ -284,7 +313,7 @@ export function CourseTaker({
   const questions = useMemo(() => config.questions || [], [config.questions]);
   const learningOutcomes: string[] = config.learnOutcomes || [];
   const currentQuestion = questions[currentQuestionIndex];
-  const totalQuestions = questions.filter((q: any) => !q.lessonOnly && !q.isSection).length;
+  const totalQuestions = questions.filter((q: any) => !q.lessonOnly && !q.isSection && !q.isDownloads).length;
   const totalSlides = questions.length;
   // Current section: walk back from currentQuestionIndex to find the nearest section divider
   const currentSection = useMemo(() => {
@@ -1560,7 +1589,7 @@ export function CourseTaker({
   if (phase === 'complete') {
     const percentage = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 100;
     const passed = totalQuestions === 0 ? true : percentage >= passmark;
-    const unansweredCount = questions.filter((q: any) => !q.lessonOnly && !q.isSection && !answers[q.id]).length;
+    const unansweredCount = questions.filter((q: any) => !q.lessonOnly && !q.isSection && !q.isDownloads && !answers[q.id]).length;
 
     const handleGoBack = (idx: number) => {
       setCurrentQuestionIndex(idx);
@@ -1607,7 +1636,7 @@ export function CourseTaker({
               </div>
               <div className="flex flex-wrap gap-1.5 pl-6">
                 {questions
-                  .filter((q: any) => !q.lessonOnly && !q.isSection && !answers[q.id])
+                  .filter((q: any) => !q.lessonOnly && !q.isSection && !q.isDownloads && !answers[q.id])
                   .map((q: any) => {
                     const idx = questions.findIndex((qq: any) => qq.id === q.id);
                     return (
@@ -1761,7 +1790,7 @@ export function CourseTaker({
   };
 
   const doFinish = (finalScore: number) => {
-    const pending = questions.filter((q: any) => !q.lessonOnly && !q.isSection && !answers[q.id]);
+    const pending = questions.filter((q: any) => !q.lessonOnly && !q.isSection && !q.isDownloads && !answers[q.id]);
     if (!reviewMode && pending.length > 0) {
       setFinishPending(pending);
     } else {
@@ -1779,7 +1808,7 @@ export function CourseTaker({
 
     if (currentQuestionIndex < totalSlides - 1) {
       const nextIndex = currentQuestionIndex + 1;
-      if (currentQuestion?.lessonOnly) {
+      if (currentQuestion?.lessonOnly || (currentQuestion as any)?.isDownloads) {
         const newAnswers = { ...answers, [currentQuestion.id]: 'viewed' };
         setAnswers(newAnswers);
         saveProgress(newAnswers, nextIndex, score, totalPoints, streak, hintsUsed);
@@ -2141,6 +2170,165 @@ export function CourseTaker({
   }
 
 
+  // -- Downloads slide --
+  if ((currentQuestion as any).isDownloads) {
+    const isLast = currentQuestionIndex >= totalSlides - 1;
+    const dlItems: DownloadItem[] = (currentQuestion as any).downloadItems || [];
+
+    return (
+      <div
+        className="relative flex flex-col"
+        style={{
+          ...fontStyle,
+          background: isDark ? '#0f0f10' : '#F2F5FA',
+          color: isDark ? '#ffffff' : '#18181b',
+          ...(inlineMode ? { minHeight: 500, borderRadius: 12, overflow: 'hidden' } : { position: 'fixed', inset: 0, zIndex: 200 }),
+        }}
+      >
+        {/* Accent top strip */}
+        <div className="h-1 w-full flex-shrink-0" style={{ background: `linear-gradient(90deg, ${accent} 0%, ${accent}44 100%)` }} />
+
+        {/* Nav bar */}
+        <div
+          className="flex-shrink-0 flex items-center gap-2 px-4 sm:px-6 py-2.5"
+          style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, background: isDark ? '#111113' : '#ffffff' }}
+        >
+          {currentQuestionIndex > 0 && (
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+              style={{ color: isDark ? '#777' : '#999', background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }}
+            >
+              <ChevronLeft className="w-3.5 h-3.5" /> Back
+            </button>
+          )}
+          <div className="flex-1" />
+          <span className="text-[11px] font-medium" style={{ color: isDark ? '#555' : '#bbb' }}>
+            {currentQuestionIndex + 1} / {totalSlides}
+          </span>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-2xl mx-auto px-4 sm:px-8 py-10">
+
+            {/* Badge + title */}
+            <div className="mb-6">
+              <span
+                className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-5"
+                style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}30` }}
+              >
+                <Download className="w-3 h-3" /> Downloads
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-black leading-tight" style={{ color: isDark ? '#fff' : '#111' }}>
+                {(currentQuestion as any).downloadsTitle || 'Downloads'}
+              </h2>
+            </div>
+
+            {/* Overall description */}
+            {(currentQuestion as any).downloadsDescription && (
+              <div
+                className={`text-sm leading-relaxed mb-8 prose max-w-none ${isDark ? '[&_*]:!text-[#a1a1aa] [&_strong]:!text-white [&_b]:!text-white' : '[&_*]:!text-[#555]'}`}
+                style={{ color: isDark ? '#a1a1aa' : '#555' }}
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText((currentQuestion as any).downloadsDescription) }}
+              />
+            )}
+
+            {/* Download item cards */}
+            {dlItems.length > 0 ? (
+              <div className="space-y-3">
+                {dlItems.map((item) => {
+                  const fileIcon = getFileIcon(item.fileName);
+                  const href = item.type === 'file' ? item.fileUrl : item.linkUrl;
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-xl overflow-hidden transition-shadow hover:shadow-md"
+                      style={{ background: isDark ? '#1c1c1e' : '#ffffff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}
+                    >
+                      <div className="flex items-start gap-4 p-4">
+                        {/* Icon */}
+                        <div
+                          className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center"
+                          style={{ background: `${accent}15`, border: `1.5px solid ${accent}25` }}
+                        >
+                          <ArrowDownToLine className="w-5 h-5" style={{ color: accent }} strokeWidth={2} />
+                        </div>
+
+                        {/* Text content */}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm leading-snug" style={{ color: isDark ? '#ffffff' : '#111' }}>
+                            {item.title || (item.type === 'file' ? item.fileName : item.linkUrl) || 'Untitled'}
+                          </p>
+                          {item.description && (
+                            <div
+                              className={`text-sm mt-1.5 leading-relaxed prose max-w-none ${isDark ? '[&_*]:!text-[#a1a1aa] [&_strong]:!text-white [&_b]:!text-white' : '[&_*]:!text-[#555]'}`}
+                              style={{ color: isDark ? '#a1a1aa' : '#555' }}
+                              dangerouslySetInnerHTML={{ __html: sanitizeRichText(item.description) }}
+                            />
+                          )}
+                        </div>
+
+                        {/* Action button */}
+                        {href && (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download={item.type === 'file' ? (item.fileName || true) : undefined}
+                            className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all hover:opacity-85 active:scale-[0.97]"
+                            style={{ background: accent, color: '#fff' }}
+                          >
+                            {item.type === 'file' ? (
+                              <><ArrowDownToLine className="w-3.5 h-3.5" strokeWidth={2} /> Download</>
+                            ) : (
+                              <><ExternalLink className="w-3.5 h-3.5" /> Open</>
+                            )}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm py-4" style={{ color: isDark ? '#444' : '#bbb' }}>No files or links added yet.</p>
+            )}
+
+            {/* Continue button */}
+            <div className="mt-10 flex justify-center">
+              <button
+                onClick={handleNext}
+                className="inline-flex items-center gap-3 px-8 py-4 rounded-2xl font-bold text-base transition-all active:scale-[0.97] hover:opacity-90 shadow-xl"
+                style={{ background: accent, color: '#ffffff', boxShadow: `0 8px 32px ${accent}44` }}
+              >
+                {isLast ? 'Finish Course' : 'Continue'}
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress strip */}
+        <div
+          className="flex-shrink-0 py-3 flex items-center gap-1 justify-center px-4"
+          style={{ borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}
+        >
+          {questions.map((q: any, i: number) => (
+            <div
+              key={q.id}
+              className="h-1 rounded-full transition-all duration-300"
+              style={{
+                width: i === currentQuestionIndex ? 20 : (q.isSection || q.isDownloads ? 7 : 5),
+                background: i <= currentQuestionIndex ? accent : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   // -- Unanswered questions confirmation modal --
   if (finishPending) {
     const goToQuestion = (idx: number) => {
@@ -2487,6 +2675,8 @@ export function CourseTaker({
                                     <div className="w-2 h-2 rounded-full bg-white" />
                                   ) : isAnsweredQ ? (
                                     <CheckCircle2 className="w-3.5 h-3.5" style={{ color: accent }} />
+                                  ) : (q as any).isDownloads ? (
+                                    <Download className="w-3 h-3" style={{ color: isDark ? '#444' : '#bbb' }} />
                                   ) : (q as any).lessonOnly ? (
                                     <BookOpen className="w-3 h-3" style={{ color: isDark ? '#444' : '#bbb' }} />
                                   ) : (
@@ -2509,7 +2699,12 @@ export function CourseTaker({
 
                               {/* Text */}
                               <div className="flex-1 min-w-0 pt-0.5" style={{ paddingBottom: isLastItem ? 8 : 20 }}>
-                                {(q as any).lessonOnly ? (
+                                {(q as any).isDownloads ? (
+                                  <p className="text-[12.5px] font-semibold leading-snug line-clamp-2"
+                                    style={{ color: isCurrent ? (isDark ? '#f0f0f0' : '#111') : isDark ? '#777' : '#888' }}>
+                                    {(q as any).downloadsTitle || 'Downloads'}
+                                  </p>
+                                ) : (q as any).lessonOnly ? (
                                   <p className="text-[12.5px] font-semibold leading-snug line-clamp-2"
                                     style={{ color: isCurrent ? (isDark ? '#f0f0f0' : '#111') : isDark ? '#777' : '#888' }}>
                                     {(q as any).lesson?.title || 'Lesson Content'}
