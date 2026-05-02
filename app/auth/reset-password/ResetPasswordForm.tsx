@@ -121,7 +121,7 @@ export default function ResetPasswordForm({ error }: { error?: string }) {
       </motion.div>
 
       <p className="fixed bottom-5 text-[11px] text-white/20">
-        © {new Date().getFullYear()} AI Skills Africa
+        {process.env.NEXT_PUBLIC_APP_NAME ? `© ${new Date().getFullYear()} ${process.env.NEXT_PUBLIC_APP_NAME}` : ''}
       </p>
     </main>
   );

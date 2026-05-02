@@ -566,7 +566,7 @@ Requirements:
 - Be clear, warm, and action-oriented.
 - Do not include HTML.
 - Do not include placeholder brackets like [Name].
-- Do not include a sign-off from AI Skills Africa; write as the creator/host.`,
+- Do not include a sign-off from any specific platform; write as the creator/host.`,
         { type: Type.OBJECT, properties: { subject: { type: Type.STRING }, body: { type: Type.STRING } }, required: ['subject', 'body'] },
       );
       return NextResponse.json(result);

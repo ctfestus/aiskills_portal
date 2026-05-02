@@ -4959,10 +4959,10 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          {field('appName',     'App / Platform Name',  'AI Skills Africa',                    'Used in page titles and emails.')}
-          {field('orgName',     'Organisation Name',    'AI Skills Africa',                    'Used in certificates and formal text.')}
-          {field('supportEmail','Support Email',        'support@app.aiskillsafrica.com',      'Shown in footer of emails.')}
-          {field('appUrl',      'App URL',              'https://app.aiskillsafrica.com', 'Base URL used in email links.')}
+          {field('appName',     'App / Platform Name',  'e.g. Your Platform Name',  'Used in page titles and emails.')}
+          {field('orgName',     'Organisation Name',    'e.g. Your Organisation',   'Used in certificates and formal text.')}
+          {field('supportEmail','Support Email',        'support@yourapp.com',      'Shown in footer of emails.')}
+          {field('appUrl',      'App URL',              'https://yourapp.com', 'Base URL used in email links.')}
         </div>
 
         {field('appDescription', 'App Description', 'Empowering Africans with practical AI skills…', 'Used in SEO meta description tag.')}
@@ -5103,8 +5103,8 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          {field('senderName', 'Email Sender Name', 'AI Skills Africa - Learning Experience Team', 'Shown as sender label in emails.')}
-          {field('teamName',   'Team Sign-off Name', 'The AI Skills Africa Team',                  'Used in email footers.')}
+          {field('senderName', 'Email Sender Name', 'e.g. Your Team - Learning Experience', 'Shown as sender label in emails.')}
+          {field('teamName',   'Team Sign-off Name', 'e.g. The Team',                        'Used in email footers.')}
         </div>
       </div>
 

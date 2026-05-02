@@ -40,11 +40,13 @@ export async function generateMetadata({
     .slice(0, 200);
 
   // LinkedIn requires at least 100 characters -- pad with a generic suffix if short
+  const appName = process.env.NEXT_PUBLIC_APP_NAME || '';
+  const suffix  = appName ? ` Powered by ${appName}.` : '.';
   const plainDescription = stripped.length >= 100
     ? stripped
     : (stripped
-        ? `${stripped}. Powered by AI Skills Africa.`
-        : `${data.title}. Powered by AI Skills Africa.`
+        ? `${stripped}${suffix}`
+        : `${data.title}${suffix}`
       ).slice(0, 200);
 
   const rawUrl =

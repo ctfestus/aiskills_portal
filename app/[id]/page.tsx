@@ -512,7 +512,7 @@ export default function PublicFormPage() {
     if (!form) return;
     const name = form.config?.title || form.title;
     if (name) document.title = name;
-    return () => { document.title = 'AI Skills Africa'; };
+    return () => { document.title = process.env.NEXT_PUBLIC_APP_NAME || ''; };
   }, [form]);
 
   useEffect(() => {
