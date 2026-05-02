@@ -67,6 +67,7 @@ interface Props {
   initialProgress?: Progress;
   isDark?: boolean;
   onComplete: () => void;
+  previewMode?: boolean;
 }
 
 // -- Helpers ---
@@ -99,7 +100,7 @@ function normalize(s: string) { return s.toLowerCase().replace(/\s+/g, ' ').trim
 // -- Component ---
 
 export default function AssignmentExperiencePlayer({
-  formId, config, userId, studentName, studentEmail, sessionToken, initialProgress = {}, isDark = false, onComplete,
+  formId, config, userId, studentName, studentEmail, sessionToken, initialProgress = {}, isDark = false, onComplete, previewMode = false,
 }: Props) {
   const accent = '#00b95c';
   const modules = config.modules || [];
@@ -149,6 +150,7 @@ export default function AssignmentExperiencePlayer({
   };
 
   const saveProgress = useCallback(async (prog: Progress) => {
+    if (previewMode) return;
     clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(async () => {
       setSaving(true);

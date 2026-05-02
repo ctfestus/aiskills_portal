@@ -7,7 +7,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight,
   Plus, Trash2, X, Check, RefreshCw, Upload, Pencil, Star, Clock, Download,
-  Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical, Video, Search,
+  Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical, Video, Search, Eye,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -273,6 +273,8 @@ function VirtualExperienceCreatePageInner() {
   const toolLogoRef = useRef<HTMLInputElement>(null);
   const [uploadingToolLogo, setUploadingToolLogo] = useState<string | null>(null); // tool name being uploaded
 
+  const [veSlug, setVeSlug] = useState('');
+
   // Bunny video picker
   const [bunnyPickerOpen,    setBunnyPickerOpen]    = useState(false);
   const [bunnyPickerTarget,  setBunnyPickerTarget]  = useState<string | null>(null); // "modId::lesId"
@@ -297,6 +299,7 @@ function VirtualExperienceCreatePageInner() {
       if (editId) {
         const { data: ve } = await supabase.from('virtual_experiences').select('*').eq('id', editId).maybeSingle();
         if (ve) {
+          setVeSlug(ve.slug || '');
           const cfg: any = {
             isVirtualExperience: true, modules: ve.modules ?? [], industry: ve.industry,
             difficulty: ve.difficulty, role: ve.role, company: ve.company, duration: ve.duration,
@@ -733,6 +736,19 @@ function VirtualExperienceCreatePageInner() {
         </span>
         {step === 2 && (
           <div className="ml-auto flex items-center gap-2">
+            {veSlug ? (
+              <a href={`/${veSlug}`} target="_blank" rel="noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-medium border transition-all hover:opacity-70"
+                style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card, textDecoration: 'none' }}>
+                <Eye className="w-3.5 h-3.5" /> Preview
+              </a>
+            ) : (
+              <span title="Save the experience first to preview it"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-medium border cursor-not-allowed opacity-40"
+                style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
+                <Eye className="w-3.5 h-3.5" /> Preview
+              </span>
+            )}
             <button onClick={() => handleSave('draft')} disabled={saving}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-medium border transition-all hover:opacity-70"
               style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>

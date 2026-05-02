@@ -1658,6 +1658,10 @@ CREATE INDEX idx_ca_student_course ON public.course_attempts(student_id, course_
 -- Leaderboard (migration 045)
 CREATE INDEX idx_ca_completions    ON public.course_attempts(student_id, passed, completed_at)
   WHERE passed = true AND completed_at IS NOT NULL;
+-- One active attempt per student per course (migration 063)
+-- Fresh schema has no duplicates so no cleanup needed here (cleanup is in the migration).
+CREATE UNIQUE INDEX idx_ca_one_active_per_student ON public.course_attempts(student_id, course_id)
+  WHERE completed_at IS NULL;
 
 -- guided_project_attempts (migration 031)
 CREATE UNIQUE INDEX guided_project_attempts_uniq ON public.guided_project_attempts(student_id, ve_id);

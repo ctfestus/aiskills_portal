@@ -4,8 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { useTheme } from '@/components/ThemeProvider';
-import { motion } from 'motion/react';
-import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Code2, FileSpreadsheet, LayoutDashboard, Briefcase, ClipboardList } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Code2, FileSpreadsheet, LayoutDashboard, Briefcase, ClipboardList, Eye } from 'lucide-react';
+import dynamic from 'next/dynamic';
+const AssignmentExperiencePlayer = dynamic(() => import('@/components/AssignmentExperiencePlayer'), { ssr: false });
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -139,6 +141,9 @@ export default function CreateAssignmentPage() {
   const [coverUploading, setCoverUploading]       = useState(false);
   const [resourceUploading, setResourceUploading] = useState<Record<string, boolean>>({});
   const [extracting, setExtracting]               = useState<string | null>(null); // label of file being processed
+  const [showPreview, setShowPreview]             = useState(false);
+  const [previewVeConfig, setPreviewVeConfig]     = useState<any>(null);
+  const [loadingPreviewVe, setLoadingPreviewVe]   = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
   const resourceFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const rubricFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -366,6 +371,39 @@ export default function CreateAssignmentPage() {
 
   const showContentFields = assignmentType !== 'virtual_experience';
 
+  const openPreview = async () => {
+    if (assignmentType === 'virtual_experience' && veFormId) {
+      setLoadingPreviewVe(true);
+      const { data: ve } = await supabase
+        .from('virtual_experiences')
+        .select('id, title, slug, modules, company, role, industry, tagline, cover_image, manager_name, manager_title, dataset, background, difficulty, duration, tools, learn_outcomes')
+        .eq('id', veFormId).single();
+      if (ve) {
+        setPreviewVeConfig({
+          isVirtualExperience: true as const,
+          title: ve.title,
+          company: ve.company,
+          role: ve.role,
+          industry: ve.industry,
+          modules: ve.modules ?? [],
+          tagline: ve.tagline,
+          coverImage: ve.cover_image,
+          managerName: ve.manager_name,
+          managerTitle: ve.manager_title,
+          dataset: ve.dataset,
+          background: ve.background,
+          difficulty: ve.difficulty,
+          duration: ve.duration,
+          tools: ve.tools ?? [],
+          learnOutcomes: ve.learn_outcomes ?? [],
+          description: '',
+        });
+      }
+      setLoadingPreviewVe(false);
+    }
+    setShowPreview(true);
+  };
+
   return (
     <div style={{ minHeight: '100vh', background: C.page }}>
       <header style={{
@@ -378,13 +416,22 @@ export default function CreateAssignmentPage() {
             <ArrowLeft style={{ width: 16, height: 16 }}/> Back
           </Link>
           <h1 style={{ fontSize: 16, fontWeight: 700, color: C.text, margin: 0 }}>{editId ? 'Edit Assignment' : 'New Assignment'}</h1>
-          <motion.button
-            type="submit" form="assignment-form" disabled={loading} whileTap={{ scale: 0.96 }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 10, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', background: C.cta, color: C.ctaText, fontSize: 14, fontWeight: 600, opacity: loading ? 0.7 : 1, transition: 'opacity 0.15s' }}
-          >
-            {loading ? <Loader2 style={{ width: 15, height: 15 }} className="animate-spin"/> : <Save style={{ width: 15, height: 15 }}/>}
-            {loading ? 'Saving…' : editId ? 'Update Assignment' : status === 'draft' ? 'Save Draft' : 'Publish'}
-          </motion.button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              type="button" onClick={openPreview} disabled={loadingPreviewVe}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, cursor: 'pointer', background: C.input, color: C.muted, fontSize: 13, fontWeight: 600, transition: 'opacity 0.15s' }}
+            >
+              {loadingPreviewVe ? <Loader2 style={{ width: 14, height: 14 }} className="animate-spin"/> : <Eye style={{ width: 14, height: 14 }}/>}
+              Preview
+            </button>
+            <motion.button
+              type="submit" form="assignment-form" disabled={loading} whileTap={{ scale: 0.96 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 10, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', background: C.cta, color: C.ctaText, fontSize: 14, fontWeight: 600, opacity: loading ? 0.7 : 1, transition: 'opacity 0.15s' }}
+            >
+              {loading ? <Loader2 style={{ width: 15, height: 15 }} className="animate-spin"/> : <Save style={{ width: 15, height: 15 }}/>}
+              {loading ? 'Saving…' : editId ? 'Update Assignment' : status === 'draft' ? 'Save Draft' : 'Publish'}
+            </motion.button>
+          </div>
         </div>
       </header>
 
@@ -715,6 +762,127 @@ export default function CreateAssignmentPage() {
 
         </form>
       </main>
+
+      {/* Preview Modal */}
+      <AnimatePresence>
+        {showPreview && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', flexDirection: 'column', background: C.page }}
+          >
+            {/* Banner */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', background: 'rgba(14,9,221,0.08)', borderBottom: `1px solid rgba(14,9,221,0.2)`, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Eye style={{ width: 14, height: 14, color: C.cta }}/>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.cta }}>Instructor Preview - no data is saved</span>
+              </div>
+              <button onClick={() => setShowPreview(false)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: `1px solid rgba(14,9,221,0.3)`, background: 'rgba(14,9,221,0.08)', color: C.cta, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                <X style={{ width: 12, height: 12 }}/> Exit Preview
+              </button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '24px 16px' }}>
+              {/* VE-type: show AssignmentExperiencePlayer */}
+              {assignmentType === 'virtual_experience' && previewVeConfig && (
+                <AssignmentExperiencePlayer
+                  formId={veFormId || 'preview'}
+                  config={previewVeConfig}
+                  userId="preview"
+                  studentName="Instructor Preview"
+                  studentEmail="preview@instructor"
+                  sessionToken=""
+                  isDark={C.page === DARK_C.page}
+                  onComplete={() => {}}
+                  previewMode={true}
+                />
+              )}
+
+              {assignmentType === 'virtual_experience' && !previewVeConfig && (
+                <div style={{ textAlign: 'center', padding: '60px 20px', color: C.faint, fontSize: 14 }}>
+                  {veFormId ? 'Could not load Virtual Experience config.' : 'Select a Virtual Experience to preview it.'}
+                </div>
+              )}
+
+              {/* Non-VE types: show assignment content */}
+              {assignmentType !== 'virtual_experience' && (
+                <div style={{ maxWidth: 680, margin: '0 auto' }}>
+                  <div style={{ borderRadius: 16, overflow: 'hidden', background: C.card, border: `1px solid ${C.cardBorder}`, marginBottom: 16 }}>
+                    {coverImage && (
+                      <div style={{ padding: '16px 16px 0' }}>
+                        <img src={coverImage} alt={title} style={{ width: '100%', objectFit: 'cover', borderRadius: 12, maxHeight: 220 }}/>
+                      </div>
+                    )}
+                    <div style={{ padding: '20px 24px' }}>
+                      <h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: '0 0 4px' }}>{title || 'Untitled Assignment'}</h2>
+                      <span style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 20, background: C.lime, color: C.cta }}>
+                        {ASSIGNMENT_TYPES.find(t => t.value === assignmentType)?.label}
+                      </span>
+                    </div>
+                    {scenario && (
+                      <>
+                        <div style={{ borderTop: `1px solid ${C.divider}` }}/>
+                        <div style={{ padding: '16px 24px' }}>
+                          <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.faint, marginBottom: 8 }}>Scenario</p>
+                          <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(scenario) }}/>
+                        </div>
+                      </>
+                    )}
+                    {brief && (
+                      <>
+                        <div style={{ borderTop: `1px solid ${C.divider}` }}/>
+                        <div style={{ padding: '16px 24px' }}>
+                          <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.faint, marginBottom: 8 }}>Brief</p>
+                          <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(brief) }}/>
+                        </div>
+                      </>
+                    )}
+                    {tasks && (
+                      <>
+                        <div style={{ borderTop: `1px solid ${C.divider}` }}/>
+                        <div style={{ padding: '16px 24px' }}>
+                          <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.faint, marginBottom: 8 }}>Tasks</p>
+                          <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(tasks) }}/>
+                        </div>
+                      </>
+                    )}
+                    {requirements && (
+                      <>
+                        <div style={{ borderTop: `1px solid ${C.divider}` }}/>
+                        <div style={{ padding: '16px 24px' }}>
+                          <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: C.faint, marginBottom: 8 }}>Requirements</p>
+                          <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(requirements) }}/>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Submission area placeholder */}
+                  <div style={{ borderRadius: 16, background: C.card, border: `1px solid ${C.cardBorder}`, padding: 24, opacity: 0.6 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12, marginTop: 0 }}>Your Submission</p>
+                    {assignmentType === 'standard' && (
+                      <>
+                        <div style={{ height: 80, borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.input, marginBottom: 12 }}/>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <div style={{ height: 36, flex: 1, borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.input }}/>
+                          <div style={{ height: 36, flex: 1, borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.input }}/>
+                        </div>
+                      </>
+                    )}
+                    {assignmentType !== 'standard' && (
+                      <p style={{ fontSize: 13, color: C.faint, margin: 0 }}>
+                        {assignmentType === 'code_review' && 'Students paste their SQL / code here and get AI feedback.'}
+                        {assignmentType === 'excel_review' && 'Students upload their spreadsheet and get AI feedback.'}
+                        {assignmentType === 'dashboard_critique' && 'Students upload a dashboard screenshot and get AI critique.'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

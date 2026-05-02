@@ -711,11 +711,12 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
       const cohortCourses = (cohortCourseRows ?? []).map(normalizeCourse);
 
       // Deduplicate: one row per course -- prefer active (in-progress) over completed; highest score among completed
+      // Attempts are ordered newest-first, so ex is always newer than a when ex exists.
       const progressMap: Record<string, any> = {};
       for (const a of attempts ?? []) {
         const ex = progressMap[a.course_id];
         if (!ex) { progressMap[a.course_id] = a; continue; }
-        if (!a.completed_at) { progressMap[a.course_id] = a; continue; }
+        if (!a.completed_at && ex.completed_at) { progressMap[a.course_id] = a; continue; }
         if (ex.completed_at && a.score > ex.score) progressMap[a.course_id] = a;
       }
 
@@ -3955,6 +3956,13 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
   const [gaps, setGaps]                     = useState<any[]>([]);
   const [assignmentStats, setAssignmentStats] = useState<{ total: number; submitted: number; graded: number } | null>(null);
   const [assignmentItems, setAssignmentItems] = useState<any[]>([]);
+  const [refreshKey, setRefreshKey]           = useState(0);
+
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') setRefreshKey(k => k + 1); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -4094,7 +4102,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
     };
     load();
     return () => { cancelled = true; };
-  }, [user.id, userEmail]);
+  }, [user.id, userEmail, refreshKey]);
 
   const isProjForm = (f: any) =>
     f.content_type === 'guided_project' || f.content_type === 'virtual_experience' ||

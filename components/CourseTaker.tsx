@@ -271,6 +271,8 @@ export function CourseTaker({
   const sessionTokenRef = useRef<string | null>(null);
   // Prevents double-scoring when Check/Next is clicked twice before React state settles
   const scoringLockRef = useRef(false);
+  // Always-current snapshot of progress -- used by the visibilitychange flush
+  const progressRef = useRef({ answers: {} as Record<string, string>, index: 0, score: 0, points: 0, streak: 0, hintsUsed: new Set<string>() });
 
   // Leaderboard rank context (shown on result screen)
   const [rankCtx, setRankCtx] = useState<{ above: any; me: any; below: any; rank: number; total: number } | null>(null);
@@ -542,6 +544,47 @@ export function CourseTaker({
     if (session?.access_token) sessionTokenRef.current = session.access_token;
     await runCourseChecks(studentEmail.trim().toLowerCase());
   }, [studentName, studentEmail, runCourseChecks]);
+
+  // Keep sessionTokenRef in sync whenever Supabase refreshes the access token
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.access_token) sessionTokenRef.current = session.access_token;
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Keep progressRef in sync so the visibilitychange flush always has the latest values
+  useEffect(() => {
+    progressRef.current = { answers, index: currentQuestionIndex, score, points: totalPoints, streak, hintsUsed };
+  }, [answers, currentQuestionIndex, score, totalPoints, streak, hintsUsed]);
+
+  // Flush progress when the student switches away from this tab (keepalive ensures delivery on unload)
+  useEffect(() => {
+    const flush = () => {
+      if (document.visibilityState !== 'hidden') return;
+      if (!formId || !studentEmail.trim() || reviewMode) return;
+      const { answers, index, score, points, streak, hintsUsed } = progressRef.current;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (sessionTokenRef.current) headers['Authorization'] = `Bearer ${sessionTokenRef.current}`;
+      fetch('/api/course', {
+        method: 'POST',
+        headers,
+        keepalive: true,
+        body: JSON.stringify({
+          action: 'save-progress',
+          course_id: formId,
+          current_question_index: index,
+          answers,
+          score,
+          points,
+          streak,
+          hints_used: [...hintsUsed],
+        }),
+      }).catch(() => {});
+    };
+    document.addEventListener('visibilitychange', flush);
+    return () => document.removeEventListener('visibilitychange', flush);
+  }, [formId, studentEmail, reviewMode]);
 
   // Auto-start when pre-filled info arrives from the page (logged-in student)
   const autoStarted = useRef(false);

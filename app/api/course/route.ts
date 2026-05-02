@@ -122,7 +122,22 @@ export async function POST(req: NextRequest) {
           attempt_number: (last?.attempt_number ?? 0) + 1,
           ...payload,
         });
-        if (error) { console.error('[course/save-progress] insert', error); return NextResponse.json({ error: 'Failed to save progress.' }, { status: 500 }); }
+
+        if (error) {
+          // Unique constraint violation: another concurrent request already created the attempt.
+          // Re-fetch it and update instead.
+          if (error.code === '23505') {
+            const { data: race } = await supabase.from('course_attempts').select('id')
+              .eq('course_id', course_id).eq('student_id', sessionUser.id)
+              .is('completed_at', null).limit(1).maybeSingle();
+            if (race) {
+              await supabase.from('course_attempts').update(payload).eq('id', race.id);
+            }
+          } else {
+            console.error('[course/save-progress] insert', error);
+            return NextResponse.json({ error: 'Failed to save progress.' }, { status: 500 });
+          }
+        }
       }
 
       return NextResponse.json({ ok: true });

@@ -87,6 +87,7 @@ interface Props {
   shortCourse?: boolean;
   logoUrl?: string;
   logoDarkUrl?: string;
+  previewMode?: boolean;
 }
 
 // Helpers
@@ -156,7 +157,7 @@ export default function VirtualExperienceTaker({
   formId, formSlug, config, studentName, studentEmail, userId, sessionToken,
   initialProgress = {}, initialModuleId, initialLessonId,
   isDark = true, accentColor = '#00b95c', shortCourse = false,
-  logoUrl = '', logoDarkUrl = '',
+  logoUrl = '', logoDarkUrl = '', previewMode = false,
 }: Props) {
   const authHeader = useMemo(
     () => sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {} as Record<string, string>,
@@ -224,6 +225,7 @@ export default function VirtualExperienceTaker({
 
   // Load existing review / completion state
   useEffect(() => {
+    if (previewMode) return;
     fetch(`/api/guided-project-progress?formId=${formId}&studentId=${userId}`, { headers: authHeader })
       .then(r => r.json())
       .then(({ attempt }) => {
@@ -231,11 +233,11 @@ export default function VirtualExperienceTaker({
         if (attempt?.completed_at) setCompleted(true);
       })
       .catch(() => {});
-  }, [formId, studentEmail, authHeader, userId]);
+  }, [formId, studentEmail, authHeader, userId, previewMode]);
 
-  // Save progress (debounced 800ms): skipped in review mode
+  // Save progress (debounced 800ms): skipped in review mode and preview mode
   const saveProgress = useCallback((prog: Progress, modId: string, lesId: string, completedAt?: string) => {
-    if (reviewMode) return;
+    if (reviewMode || previewMode) return;
     clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(async () => {
       setSaving(true);
@@ -326,6 +328,7 @@ export default function VirtualExperienceTaker({
   };
 
   const handleComplete = async () => {
+    if (previewMode) { setCompleted(true); return; }
     const now = new Date().toISOString();
     setSaving(true);
     try {
@@ -345,6 +348,7 @@ export default function VirtualExperienceTaker({
   };
 
   const handleGetCertificate = async () => {
+    if (previewMode) return;
     setCertLoading(true);
     setCertError(null);
     try {
