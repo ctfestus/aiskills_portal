@@ -138,9 +138,9 @@ function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
 
             {/* Navigation items */}
             <div className="p-2">
+              {menuItem('/dashboard', LayoutDashboard, 'Dashboard', faint, iconBgSubtle)}
               {menuItem('/student#courses', GraduationCap, 'My Learning', faint, iconBgSubtle)}
               {menuItem('/student#certificates', Award, 'My Certificates', faint, iconBgSubtle)}
-              {menuItem('/dashboard', LayoutDashboard, 'Dashboard', faint, iconBgSubtle)}
               {username && menuItem(`/s/${username}`, User, 'View Profile', faint, iconBgSubtle, true)}
               {menuItem('/settings', Settings, 'Settings', faint, iconBgSubtle)}
             </div>
