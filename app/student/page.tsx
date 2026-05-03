@@ -671,6 +671,7 @@ function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
 
 // --- Courses section ---
 function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: string; userId?: string; C: typeof LIGHT_C }) {
+  const { theme } = useTheme();
   const { logoUrl, logoDarkUrl, emailBannerUrl } = useTenant();
   const [courses,   setCourses]   = useState<any[]>([]);
   const [deadlines, setDeadlines] = useState<Record<string, Date | null>>({});
@@ -685,7 +686,7 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
   const searchTimer = useRef<any>(null);
 
-  const isDark = C.text === '#f0f0f0';
+  const isDark = theme === 'dark';
 
   useEffect(() => {
     const load = async () => {
@@ -912,7 +913,7 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
           placeholder="Search courses by topic, skill, or keyword…"
           className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm outline-none transition-all"
           style={{
-            background:  isDark ? 'rgba(255,255,255,0.06)' : '#ffffff',
+            background:  C.card,
             border:      `1px solid ${C.cardBorder}`,
             color:       C.text,
           }}
