@@ -171,7 +171,7 @@ interface FormConfig {
   postSubmission?: PostSubmission;
   pointsSystem?: PointsSystem;
   deadline_days?: number | null;
-  category?: string;
+  category?: string | null;
 }
 
 // --- Constants ---
