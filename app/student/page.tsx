@@ -281,7 +281,7 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
   const certId: string | null = course.cert_id ?? null;
   const [imgErr, setImgErr] = useState(false);
 
-  const courseUrl = `/${course.slug || course.form?.slug || course.form_id}?go=1`;
+  const courseUrl = `/${course.slug || course.form?.slug || course.form_id}`;
   const actionHref = courseUrl;
   const actionLabel = completed ? (passed ? 'Review' : 'Retake') : currentIdx > 0 ? 'Continue' : 'Start';
 
@@ -408,7 +408,7 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
   const progress = completed ? 100 : (assessmentCount > 0 ? Math.round((currentIdx / assessmentCount) * 100) : 0);
   const [imgErr, setImgErr] = useState(false);
 
-  const courseUrl = `/${course.slug || course.form?.slug || course.form_id}?go=1`;
+  const courseUrl = `/${course.slug || course.form?.slug || course.form_id}`;
   const actionHref = completed && passed && certId ? `/certificate/${certId}` : courseUrl;
   const actionLabel = completed ? (passed && certId ? 'View Certificate' : 'Retake') : currentIdx > 0 ? 'Continue' : 'Start';
 
@@ -473,24 +473,6 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
               )}
             </div>
 
-            {/* Stats grid */}
-            <div className="flex gap-2">
-              {[
-                lessonCount > 0 && { icon: <BookOpen className="w-4 h-4" style={{ color: C.green }}/>, value: lessonCount, label: 'Lessons' },
-                assessmentCount > 0 && { icon: <FileText className="w-4 h-4" style={{ color: C.green }}/>, value: assessmentCount, label: 'Assessments' },
-                { icon: <Trophy className="w-4 h-4" style={{ color: C.green }}/>, value: `${config.passmark ?? 50}%`, label: 'Pass mark' },
-                config.courseTimer && { icon: <Clock className="w-4 h-4" style={{ color: C.green }}/>, value: `${config.courseTimer}m`, label: 'Time limit' },
-              ].filter(Boolean).map((s: any, i) => (
-                <div key={i} className="flex flex-1 items-center gap-2 px-3 py-2.5 rounded-xl"
-                  style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)' }}>
-                  {s.icon}
-                  <div>
-                    <div className="text-sm font-bold" style={{ color: C.text }}>{s.value}</div>
-                    <div className="text-xs" style={{ color: C.faint }}>{s.label}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
 
             {/* Description */}
             {config.description && (
@@ -1562,7 +1544,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
             <div className="px-6 py-4">
               <p className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: C.faint }}>Related Course</p>
               <a
-                href={`/${assignment._course_slug || assignment.related_course}?go=1`}
+                href={`/${assignment._course_slug || assignment.related_course}`}
                 className="flex items-center gap-3 no-underline transition-all hover:opacity-80"
                 style={{ background: '#fff', border: `1px solid ${C.divider}`, borderRadius: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}
               >
@@ -3952,7 +3934,7 @@ function ContinueLearningCard({ form, attempt, isProject, deadline, C }: {
     ? Object.values((attempt?.progress ?? {})).filter((v: any) => v?.completed).length
     : (attempt?.current_question_index ?? 0);
   const pct     = totalQ > 0 ? Math.round((done / totalQ) * 100) : 0;
-  const href    = `/${form.slug || form.id}?go=1`;
+  const href    = `/${form.slug || form.id}`;
   const daysLeft = deadline ? Math.ceil((deadline.getTime() - now) / 86400000) : null;
   const dlColor  = daysLeft === null ? null : daysLeft < 0 ? '#ef4444' : daysLeft <= 3 ? '#f59e0b' : '#6b7280';
   const dlLabel  = daysLeft === null ? null : daysLeft < 0 ? 'Overdue' : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`;
@@ -4369,7 +4351,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
           ? Object.values((attempt?.progress ?? {})).filter((v: any) => v?.completed).length
           : (attempt?.current_question_index ?? 0);
         const pct      = totalQ > 0 ? Math.round((done / totalQ) * 100) : 0;
-        const href     = `/${form.slug || form.id}?go=1`;
+        const href     = `/${form.slug || form.id}`;
 
         return (
           <div className="rounded-2xl overflow-hidden"
@@ -4452,7 +4434,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
               const isVE = gap.course.contentType === 'virtual_experience' || gap.course.contentType === 'guided_project';
               const liveItem = courses.find((c: any) => c.id === gap.course.formId);
               if (!liveItem) return null;
-              const href = isVE ? '/student#virtual_experiences' : `/${liveItem.slug || liveItem.id}?go=1`;
+              const href = isVE ? '/student#virtual_experiences' : `/${liveItem.slug || liveItem.id}`;
               // Only render cover images from safe http/https URLs
               const rawCover = gap.course.coverImage;
               const safeCover = (() => {

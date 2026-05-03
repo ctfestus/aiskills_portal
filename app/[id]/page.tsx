@@ -349,7 +349,7 @@ export default function PublicFormPage() {
   const [projectInitModId,    setProjectInitModId]    = useState('');
   const [projectInitLesId,    setProjectInitLesId]    = useState('');
   // Course sign-up flow
-  const [courseStarted, setCourseStarted] = useState(false);
+  const [courseStarted, setCourseStarted] = useState(true);
   const [retakeKey, setRetakeKey] = useState(0);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [prefilledName, setPrefilledName] = useState('');
@@ -496,10 +496,6 @@ export default function PublicFormPage() {
             setPrefilledName(name);
             setPrefilledEmail(email);
 
-            // Auto-start immediately (same batch) when coming from student dashboard
-            if (new URLSearchParams(window.location.search).get('go') === '1') {
-              setCourseStarted(true);
-            }
           }
         }
       }
