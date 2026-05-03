@@ -896,6 +896,8 @@ const [isSaving, setIsSaving] = useState(false);
   const [newFieldRequired, setNewFieldRequired] = useState(true);
   const [newSocialPlatforms, setNewSocialPlatforms] = useState<string[]>(['linkedin', 'twitter']);
   const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
+  const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
+  const toggleQuestion = (id: string) => setExpandedQuestions(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   const [newQuestionType, setNewQuestionType] = useState<QuestionType | 'downloads'>('multiple_choice');
   const [learnOutcomeInput, setLearnOutcomeInput] = useState('');
   const [aiTopic, setAiTopic] = useState('');
@@ -2646,6 +2648,7 @@ const [isSaving, setIsSaving] = useState(false);
 
                   {formConfig.questions?.map((q, qIdx) => {
                     const qType: QuestionType = q.type ?? 'multiple_choice';
+                    const isExpanded = expandedQuestions.has(q.id);
                     const insertDivider = (
                       <div key={`insert-${q.id}`} className="group relative flex items-center justify-center gap-1.5 h-5 my-0.5">
                         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px transition-colors" style={{ background: C.divider }} />
@@ -2729,17 +2732,22 @@ const [isSaving, setIsSaving] = useState(false);
                         <React.Fragment key={q.id}>
                         <div className="rounded-xl overflow-hidden" style={{ background: C.card, border: `1px solid #f59e0b40`, borderLeft: '3px solid #f59e0b' }}>
                           {/* Header */}
-                          <div className="flex items-center justify-between px-3.5 py-2.5" style={{ borderBottom: `1px solid ${C.divider}` }}>
-                            <span className="text-[10px] font-bold tracking-widest uppercase flex items-center gap-1.5" style={{ color: '#f59e0b' }}>
-                              <Download className="w-3 h-3" /> Downloads
-                            </span>
+                          <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: isExpanded ? `1px solid ${C.divider}` : 'none' }}>
+                            <button type="button" onClick={() => toggleQuestion(q.id)} className="flex-1 text-left">
+                              <span className="text-[10px] font-bold tracking-widest uppercase flex items-center gap-1.5" style={{ color: '#f59e0b' }}>
+                                <Download className="w-3 h-3" /> {q.downloadsTitle || 'Downloads'}
+                              </span>
+                            </button>
                             <button type="button" onClick={() => updateConfig({ questions: formConfig.questions?.filter(qq => qq.id !== q.id) })}
                               className="p-1 rounded transition-colors hover:bg-red-500/10">
                               <X className="w-3.5 h-3.5 text-red-400" />
                             </button>
+                            <button type="button" onClick={() => toggleQuestion(q.id)} className="p-1 transition-colors" style={{ color: C.faint }}>
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
                           </div>
 
-                          <div className="px-3.5 py-3 space-y-3">
+                          {isExpanded && <div className="px-3.5 py-3 space-y-3">
                             {/* Title */}
                             <input
                               value={q.downloadsTitle || ''}
@@ -2868,7 +2876,7 @@ const [isSaving, setIsSaving] = useState(false);
                                 <Link2 className="w-3 h-3" /> Add Link
                               </button>
                             </div>
-                          </div>
+                          </div>}
                         </div>
                         {insertDivider}
                         </React.Fragment>

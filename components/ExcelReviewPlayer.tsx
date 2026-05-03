@@ -279,10 +279,8 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
   const newIssues      = prev ? currentTitles.filter(t => !prev.issueTitles.includes(t)) : [];
   const scoreDelta     = prev ? +(result.overallScore - prev.overallScore).toFixed(1) : null;
 
-  const JB = 'var(--font-mono)';
-
   return (
-    <div ref={resultsRef} className="space-y-4" style={{ fontFamily: JB }}>
+    <div ref={resultsRef} className="space-y-4" style={{ fontFamily: 'var(--font-sans)' }}>
 
       {/* Diff panel */}
       {prev && (

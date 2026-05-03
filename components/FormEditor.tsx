@@ -2273,17 +2273,22 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                         <SortableQuestionShell id={q.id}>
                           {({ dragHandle }) => (
                         <div className="rounded-xl overflow-hidden" style={{ background: FE.card, border: `1px solid #f59e0b40`, borderLeft: '3px solid #f59e0b' }}>
-                          <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: `1px solid ${FE.divider}` }}>
+                          <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: isExpanded ? `1px solid ${FE.divider}` : 'none' }}>
                             {dragHandle}
-                            <span className="flex-1 text-[10px] font-bold tracking-widest uppercase flex items-center gap-1.5" style={{ color: '#f59e0b' }}>
-                              <Download className="w-3 h-3" /> {q.downloadsTitle || 'Downloads'}
-                            </span>
+                            <button type="button" onClick={() => toggleQuestion(q.id)} className="flex-1 text-left">
+                              <span className="text-[10px] font-bold tracking-widest uppercase flex items-center gap-1.5" style={{ color: '#f59e0b' }}>
+                                <Download className="w-3 h-3" /> {q.downloadsTitle || 'Downloads'}
+                              </span>
+                            </button>
                             <button type="button" onClick={() => updateConfig({ questions: formConfig.questions?.filter(qq => qq.id !== q.id) })}
                               className="p-1 rounded transition-colors hover:bg-red-500/10">
                               <X className="w-3.5 h-3.5 text-red-400" />
                             </button>
+                            <button type="button" onClick={() => toggleQuestion(q.id)} className="p-1 transition-colors" style={{ color: FE.faint }}>
+                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
                           </div>
-                          <div className="px-3.5 py-3 space-y-3">
+                          {isExpanded && <div className="px-3.5 py-3 space-y-3">
                             <input
                               value={q.downloadsTitle || ''}
                               onChange={e => updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, downloadsTitle: e.target.value } : qq) })}
@@ -2376,7 +2381,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                 <Link2 className="w-3 h-3" /> Add Link
                               </button>
                             </div>
-                          </div>
+                          </div>}
                         </div>
                           )}
                         </SortableQuestionShell>

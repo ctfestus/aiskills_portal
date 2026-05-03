@@ -382,7 +382,6 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
   const warnings    = result.issues.filter(i => i.severity === 'warning');
   const suggestions = result.issues.filter(i => i.severity === 'suggestion');
 
-  const JB = 'var(--font-mono)';
   const prev = submissions.length > 0 ? submissions[submissions.length - 1] : null;
   const currentTitles = result.issues.map(i => i.title);
   const resolvedIssues = prev ? prev.issueTitles.filter(t => !currentTitles.includes(t)) : [];
@@ -390,7 +389,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
   const scoreDelta     = prev ? +(result.overallScore - prev.overallScore).toFixed(1) : null;
 
   return (
-    <div ref={resultsRef} className="space-y-4" style={{ fontFamily: JB }}>
+    <div ref={resultsRef} className="space-y-4" style={{ fontFamily: 'var(--font-sans)' }}>
 
       {/* Diff panel */}
       {prev && (
