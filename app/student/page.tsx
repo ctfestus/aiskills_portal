@@ -2876,22 +2876,6 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
               </div>
             )}
 
-            {/* Stats row */}
-            <div className="flex items-center gap-0 rounded-xl overflow-hidden"
-              style={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'}` }}>
-              {[
-                modules.length > 0 && { icon: <BarChart3 className="w-3.5 h-3.5" style={{ color }}/>, value: modules.length, label: 'Milestones' },
-                totalLessons > 0 && { icon: <BookOpen className="w-3.5 h-3.5" style={{ color }}/>, value: totalLessons, label: 'Missions' },
-                totalReqs > 0 && { icon: <ClipboardList className="w-3.5 h-3.5" style={{ color }}/>, value: totalReqs, label: 'Deliverables' },
-                cfg.duration && { icon: <Clock className="w-3.5 h-3.5" style={{ color }}/>, value: cfg.duration, label: 'Duration' },
-              ].filter(Boolean).map((s: any, i, arr) => (
-                <div key={i} className="flex-1 flex flex-col items-center justify-center py-3 px-2 text-center"
-                  style={{ borderRight: i < arr.length - 1 ? `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'}` : 'none' }}>
-                  <div className="flex items-center gap-1 mb-0.5">{s.icon}<span className="text-sm font-bold" style={{ color: C.text }}>{s.value}</span></div>
-                  <div className="text-[10px] uppercase tracking-wide" style={{ color: C.muted }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
             {/* Tools row */}
             {(cfg.tools || []).length > 0 && (
               <div className="flex items-center gap-2 flex-wrap">
