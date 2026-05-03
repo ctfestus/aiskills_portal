@@ -344,7 +344,7 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
 
         {description && (
           <p className="mb-2.5 line-clamp-4" style={{ color: C.faint, fontSize: '14.5px', fontFamily: 'var(--font-lato)', lineHeight: 1.45 }}>
-            {description.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}
+            {description.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim()}
           </p>
         )}
 
@@ -912,7 +912,7 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
           placeholder="Search courses by topic, skill, or keyword…"
           className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm outline-none transition-all"
           style={{
-            background:  isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+            background:  isDark ? 'rgba(255,255,255,0.06)' : '#ffffff',
             border:      `1px solid ${C.cardBorder}`,
             color:       C.text,
           }}
