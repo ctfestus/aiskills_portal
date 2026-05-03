@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Playfair_Display, JetBrains_Mono } from 'next/font/google';
+import { Inter, Playfair_Display, JetBrains_Mono, Lato } from 'next/font/google';
 import { headers } from 'next/headers';
 import './globals.css';
 import ThemeProvider from '@/components/ThemeProvider';
@@ -12,6 +12,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 // so they shouldn't block every page load
 const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-serif', preload: false });
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', preload: false });
+const lato = Lato({ subsets: ['latin'], weight: ['400', '700', '900'], variable: '--font-lato', preload: false });
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -38,7 +39,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const nonce = (await headers()).get('x-nonce') ?? '';
 
   return (
-    <html lang="en" nonce={nonce} className={`${inter.variable} ${playfair.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="en" nonce={nonce} className={`${inter.variable} ${playfair.variable} ${jetbrainsMono.variable} ${lato.variable}`} suppressHydrationWarning>
       <body nonce={nonce} suppressHydrationWarning>
         <NavigationProgress />
         <TenantProvider>

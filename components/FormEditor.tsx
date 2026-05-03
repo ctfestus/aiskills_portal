@@ -179,9 +179,12 @@ interface FormConfig {
   pointsEnabled?: boolean;
   pointsBase?: number;
   deadline_days?: number | null;
+  category?: string | null;
 }
 
 // --- Constants ---
+const COURSE_CATEGORIES = ['Excel', 'Power BI', 'SQL', 'Tableau', 'AI'] as const;
+
 const buttonThemes: Record<ThemeColor, string> = {
   forest:  'bg-[#006128] hover:bg-[#004d1e] text-white',
   lime:    'bg-[#ADEE66] hover:bg-[#9ad94d] text-black',
@@ -643,7 +646,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     setIsLoading(true);
     (async () => {
       if (contentType === 'course') {
-        const { data: course } = await supabase.from('courses').select('id, title, description, slug, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent').eq('id', formId).maybeSingle();
+        const { data: course } = await supabase.from('courses').select('id, title, description, slug, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, category').eq('id', formId).maybeSingle();
         if (course) {
           setFormConfig({
             isCourse: true,
@@ -664,6 +667,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
             mode: course.mode,
             font: course.font,
             customAccent: course.custom_accent,
+            category: course.category ?? null,
           });
           setCustomSlug(course.slug || '');
           const loadedCohorts = course.cohort_ids ?? [];
@@ -2004,6 +2008,39 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
             {/* Course settings */}
             {activeSection === 'course_settings' && formConfig.isCourse && (
               <div className="space-y-5">
+                  {/* Category */}
+                  <div>
+                    <label className={labelCls} style={labelStyle}>Category</label>
+                    <input
+                      type="text"
+                      value={formConfig.category ?? ''}
+                      onChange={e => updateConfig({ category: e.target.value || null })}
+                      placeholder="e.g. Excel, Power BI, SQL..."
+                      className={inputCls}
+                      style={inputStyle}
+                    />
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {COURSE_CATEGORIES.map(cat => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => updateConfig({ category: formConfig.category === cat ? null : cat })}
+                          className="px-2.5 py-1 rounded-md text-[11px] font-medium transition-all"
+                          style={{
+                            background: formConfig.category === cat ? accentColor : FE.input,
+                            color: formConfig.category === cat ? '#fff' : FE.muted,
+                            border: `1px solid ${formConfig.category === cat ? accentColor : FE.inputBorder}`,
+                          }}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: FE.faint }}>
+                      Students can filter courses by category on their dashboard.
+                    </p>
+                  </div>
+
                   {/* Show answers setting */}
                   <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
                     <label className={labelCls} style={labelStyle}>Show correct answers</label>

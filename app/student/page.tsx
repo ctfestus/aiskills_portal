@@ -19,6 +19,7 @@ import { useRouter } from 'next/navigation';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
 import { sanitizeRichText, renderAnnouncementContent } from '@/lib/sanitize';
+import { getToolIcon } from '@/lib/tool-icons';
 import { RichTextEditor } from '@/components/RichTextEditor';
 
 // --- Design tokens ---
@@ -274,6 +275,9 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
   const progress = completed ? 100 : (totalQ > 0 ? Math.round((currentIdx / totalQ) * 100) : 0);
   const score = course.score ?? 0;
   const coverImage = course.config?.coverImage ?? course.form?.config?.coverImage;
+  const description: string = course.form?.config?.description ?? course.form?.description ?? '';
+  const category: string | null = course.form?.category ?? null;
+  const categoryIcon = category ? getToolIcon(category) : null;
   const certId: string | null = course.cert_id ?? null;
   const [imgErr, setImgErr] = useState(false);
 
@@ -298,34 +302,52 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl overflow-hidden"
-      style={{ background: C.card }}
+      className="rounded-2xl overflow-hidden flex flex-col"
+      style={{ background: C.card, minHeight: 500, boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}
     >
       {/* Cover -- clicking opens the detail pane */}
-      <div className="relative h-36 overflow-hidden cursor-pointer group" style={{ background: C.thumbBg }} onClick={onDetails}>
-        {coverImage && !imgErr
-          ? <img src={coverImage} alt={course.form?.title} onError={() => setImgErr(true)}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
-          : <div className="w-full h-full flex items-center justify-center">
-              <BookOpen className="w-10 h-10 opacity-30" style={{ color: C.green }}/>
+      <div className="p-3 cursor-pointer" onClick={onDetails}>
+        <div className="relative h-44 overflow-hidden rounded-xl group">
+          {coverImage && !imgErr
+            ? <img src={coverImage} alt={course.form?.title} onError={() => setImgErr(true)}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
+            : <div className="w-full h-full flex items-center justify-center">
+                <BookOpen className="w-10 h-10 opacity-30" style={{ color: C.green }}/>
+              </div>
+          }
+          {completed && (
+            <div className="absolute top-2 right-2">
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
+                style={{ background: passed ? '#f0fdf4' : '#fef2f2', color: passed ? '#16a34a' : '#dc2626' }}>
+                {passed ? 'Passed' : 'Not passed'}
+              </span>
             </div>
-        }
-        {completed && (
-          <div className="absolute top-2 right-2">
-            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
-              style={{ background: passed ? '#f0fdf4' : '#fef2f2', color: passed ? '#16a34a' : '#dc2626' }}>
-              {passed ? 'Passed' : 'Not passed'}
-            </span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Content */}
-      <div className="p-4">
-        <h3 className="text-sm font-semibold mb-1 line-clamp-2 leading-snug cursor-pointer hover:opacity-70 transition-opacity"
-          style={{ color: C.text }} onClick={onDetails}>
+      <div className="p-5">
+        {/* Category tag */}
+        {category && (
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-3"
+            style={{ background: C.pill }}>
+            {categoryIcon && <img src={categoryIcon} alt={category} className="w-3.5 h-3.5 object-contain flex-shrink-0" />}
+            <span className="text-[11px] font-semibold" style={{ color: C.muted }}>{category}</span>
+          </div>
+        )}
+
+        <h3 className="mb-1.5 line-clamp-2 leading-snug cursor-pointer hover:opacity-70 transition-opacity"
+          style={{ color: C.text, fontSize: '17.5px', fontFamily: 'var(--font-lato)', fontWeight: 900 }} onClick={onDetails}>
           {course.form?.title ?? 'Untitled Course'}
         </h3>
+
+        {description && (
+          <p className="mb-2.5 line-clamp-4" style={{ color: C.faint, fontSize: '14.5px', fontFamily: 'var(--font-lato)', lineHeight: 1.45 }}>
+            {description.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}
+          </p>
+        )}
+
         {deadlineLabel && (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2"
             style={{ background: `${deadlineColor ?? '#6b7280'}18`, color: deadlineColor ?? '#6b7280' }}>
@@ -340,7 +362,7 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
             <span className="text-xs font-semibold" style={{ color: passed ? '#16a34a' : '#dc2626' }}>Score: {score}%</span>
           )}
         </div>
-        <ProgressBar value={progress} color={passed ? '#16a34a' : C.green}/>
+        <ProgressBar value={progress} color="#22c55e"/>
 
         <div className="mt-4 flex items-center justify-between gap-2">
           {/* Details button */}
@@ -679,7 +701,6 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
   // Semantic search
   const [searchQuery,   setSearchQuery]   = useState('');
   const [searchResults, setSearchResults] = useState<any[] | null>(null);
-  const [searchLoading, setSearchLoading] = useState(false);
   const searchTimer = useRef<any>(null);
 
   const isDark = C.text === '#f0f0f0';
@@ -712,7 +733,7 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
       // Load cohort courses + student attempts + certificates in parallel
       const [{ data: cohortCourseRows }, { data: attempts }, certsRes] = await Promise.all([
         student?.cohort_id
-          ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes, content_type:id').contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
+          ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes, category, content_type:id').contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
           : Promise.resolve({ data: [] }),
         supabase.from('course_attempts')
           .select('course_id, score, points, current_question_index, completed_at, passed, updated_at')
@@ -756,7 +777,7 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
 
       let extraForms: any[] = [];
       if (extraIds.length) {
-        const { data } = await supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes').in('id', extraIds).eq('status', 'published');
+        const { data } = await supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes, category').in('id', extraIds).eq('status', 'published');
         extraForms = (data ?? []).map(normalizeCourse);
       }
 
@@ -802,34 +823,18 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
   }, [userEmail]);
 
 
-  // Debounced semantic search
+  // Client-side search across the student's own courses only
   useEffect(() => {
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (!searchQuery.trim() || searchQuery.trim().length < 3) {
-      setSearchResults(null);
-      return;
-    }
-    searchTimer.current = setTimeout(async () => {
-      setSearchLoading(true);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch(`/api/vector/search?q=${encodeURIComponent(searchQuery.trim())}`, {
-          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
-        });
-        if (res.ok) {
-          const { results } = await res.json();
-          setSearchResults(results ?? []);
-        } else {
-          setSearchResults([]);
-        }
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearchLoading(false);
-      }
-    }, 400);
-    return () => clearTimeout(searchTimer.current);
-  }, [searchQuery]);
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) { setSearchResults(null); return; }
+    const matched = courses.filter((c: any) => {
+      const title    = (c.form?.title ?? '').toLowerCase();
+      const desc     = (c.form?.config?.description ?? c.form?.description ?? '').replace(/<[^>]*>/g, ' ').toLowerCase();
+      const category = (c.form?.category ?? '').toLowerCase();
+      return title.includes(q) || desc.includes(q) || category.includes(q);
+    });
+    setSearchResults(matched);
+  }, [searchQuery, courses]);
 
   if (loading) return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -919,9 +924,6 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
       {/* Semantic search bar */}
       <div className="relative">
         <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: C.muted }} />
-        {searchLoading && (
-          <Loader2 className="w-3.5 h-3.5 absolute right-3.5 top-1/2 -translate-y-1/2 animate-spin" style={{ color: C.muted }} />
-        )}
         <input
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
@@ -943,57 +945,19 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
               No courses found for &ldquo;{searchQuery}&rdquo;
             </p>
           ) : (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>
-                {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {searchResults.map((r: any) => {
-                  const matched = courses.find((c: any) => c.form_id === r.formId);
-                  if (matched) {
-                    return <CourseCard key={r.formId} course={matched} deadline={deadlines[r.formId]} C={C} onDetails={() => setDetailCourse(matched)} />;
-                  }
-                  // Not in courses list -- could be a VE or unstarted course
-                  const isVE      = r.contentType === 'guided_project' || r.contentType === 'virtual_experience';
-                  const veStatus  = isVE ? veStatusMap[r.formId] : null;
-                  const statusLabel = veStatus?.completed ? 'Completed' : veStatus?.started ? 'In Progress' : 'Not started';
-                  const typeLabel   = isVE ? 'Virtual Experience' : 'Course';
-                  const href        = isVE ? `/student?section=virtual_experiences` : `/${r.slug}?go=1`;
-                  return (
-                    <a key={r.formId} href={href}
-                      className="rounded-2xl overflow-hidden no-underline flex flex-col transition-all hover:opacity-90"
-                      style={{ background: C.card, cursor: 'pointer' }}>
-                      <div className="w-full h-36 flex items-center justify-center overflow-hidden flex-shrink-0"
-                        style={{ background: `${C.green}12` }}>
-                        {r.coverImage
-                          ? <img src={r.coverImage} alt="" className="w-full h-full object-cover" />
-                          : <BookOpen className="w-10 h-10" style={{ color: C.green, opacity: 0.5 }} />}
-                      </div>
-                      <div className="p-4 flex-1 flex flex-col gap-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.muted }}>{typeLabel}</p>
-                        <p className="text-sm font-bold leading-snug" style={{ color: C.text }}>{r.title}</p>
-                        <p className="text-xs" style={{ color: veStatus?.completed ? C.green : C.muted }}>{statusLabel}</p>
-                        <div className="mt-auto pt-2">
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
-                            style={{ background: `${C.green}15`, color: C.green }}>
-                            <Play className="w-3 h-3" />
-                            {veStatus?.completed ? 'Review' : veStatus?.started ? 'Continue' : `Start ${typeLabel}`}
-                          </span>
-                        </div>
-                      </div>
-                    </a>
-                  );
-                })}
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {searchResults.map((c: any) => (
+                <CourseCard key={c.form_id} course={c} deadline={deadlines[c.form_id]} C={C} onDetails={() => setDetailCourse(c)} />
+              ))}
             </div>
           )}
         </div>
       )}
 
-      {/* Regular courses grid -- hidden while searching */}
+      {/* Courses grid -- hidden while searching */}
       {searchResults === null && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {courses.map(c => (
+          {courses.map((c: any) => (
             <CourseCard key={c.form_id} course={c} deadline={deadlines[c.form_id]} C={C} onDetails={() => setDetailCourse(c)}/>
           ))}
         </div>

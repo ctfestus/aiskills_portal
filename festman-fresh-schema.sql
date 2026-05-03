@@ -137,6 +137,7 @@ CREATE TABLE public.courses (
   points_enabled  boolean     NOT NULL DEFAULT false,
   points_base     integer     NOT NULL DEFAULT 100,
   post_submission jsonb,
+  category        text,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );

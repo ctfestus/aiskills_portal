@@ -138,6 +138,7 @@ export async function POST(req: NextRequest) {
           points_enabled: config.pointsSystem?.enabled   ?? config.pointsEnabled   ?? true,
           points_base:    config.pointsSystem?.basePoints ?? config.pointsBase      ?? 50,
           post_submission: config.postSubmission ?? null,
+          category:       config.category        ?? null,
         })
         .select('id, slug, status')
         .single());
@@ -260,6 +261,7 @@ export async function PUT(req: NextRequest) {
       points_enabled: config.pointsSystem?.enabled   ?? config.pointsEnabled   ?? true,
       points_base:    config.pointsSystem?.basePoints ?? config.pointsBase      ?? 50,
       post_submission: config.postSubmission ?? null,
+      category:       config.category        ?? null,
     };
   } else if (found.table === 'events') {
     updatePayload = {

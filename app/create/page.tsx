@@ -171,9 +171,12 @@ interface FormConfig {
   postSubmission?: PostSubmission;
   pointsSystem?: PointsSystem;
   deadline_days?: number | null;
+  category?: string;
 }
 
 // --- Constants ---
+const COURSE_CATEGORIES = ['Excel', 'Power BI', 'SQL', 'Tableau', 'AI'] as const;
+
 const buttonThemes: Record<ThemeColor, string> = {
   forest:  'bg-[#006128] hover:bg-[#004d1e] text-white',
   lime:    'bg-[#ADEE66] hover:bg-[#9ad94d] text-black',
@@ -979,7 +982,7 @@ const [isSaving, setIsSaving] = useState(false);
     } else if (editId) {
       // Load existing content from purpose-built tables
       Promise.all([
-        supabase.from('courses').select('id, title, description, slug, status, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent').eq('id', editId).maybeSingle(),
+        supabase.from('courses').select('id, title, description, slug, status, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, category').eq('id', editId).maybeSingle(),
         supabase.from('events').select('id, title, description, slug, status, cohort_ids, fields, event_date, event_time, timezone, location, event_type, capacity, meeting_link, is_private, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, speakers, recurrence, recurrence_end_date, recurrence_days').eq('id', editId).maybeSingle(),
       ]).then(([{ data: course }, { data: event }]) => {
         let id: string | null = null;
@@ -998,7 +1001,8 @@ const [isSaving, setIsSaving] = useState(false);
             pointsSystem: { enabled: course.points_enabled ?? true, basePoints: course.points_base ?? 50 },
             postSubmission: course.post_submission,
             coverImage: course.cover_image, deadline_days: course.deadline_days,
-            theme: course.theme, mode: course.mode, font: course.font, customAccent: course.custom_accent };
+            theme: course.theme, mode: course.mode, font: course.font, customAccent: course.custom_accent,
+            category: course.category ?? null };
         } else if (event) {
           id = event.id; slug = event.slug || ''; cohortIds = event.cohort_ids || []; status = event.status;
           config = { title: event.title, description: event.description,
@@ -2036,6 +2040,7 @@ const [isSaving, setIsSaving] = useState(false);
                     )}
                   </div>
                 </div>
+
               )}
               </div>
             )}
@@ -2425,6 +2430,39 @@ const [isSaving, setIsSaving] = useState(false);
             {/* Course settings section */}
             {activeSection === 'course_settings' && formConfig.isCourse && (
               <div className="space-y-5">
+                  {/* Category */}
+                  <div>
+                    <label className={labelCls} style={labelStyle}>Category</label>
+                    <input
+                      type="text"
+                      value={formConfig.category ?? ''}
+                      onChange={e => updateConfig({ category: e.target.value || null })}
+                      placeholder="e.g. Excel, Power BI, SQL..."
+                      className={inputCls}
+                      style={inputStyle}
+                    />
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {COURSE_CATEGORIES.map(cat => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => updateConfig({ category: formConfig.category === cat ? null : cat })}
+                          className="px-2.5 py-1 rounded-md text-[11px] font-medium transition-all"
+                          style={{
+                            background: formConfig.category === cat ? accentColor : C.input,
+                            color: formConfig.category === cat ? '#fff' : C.muted,
+                            border: `1px solid ${formConfig.category === cat ? accentColor : C.inputBorder}`,
+                          }}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: C.faint }}>
+                      Students can filter courses by category on their dashboard.
+                    </p>
+                  </div>
+
                   {/* Show answers setting */}
                   <div className="p-3 rounded-xl space-y-2" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
                     <label className={labelCls} style={labelStyle}>Show correct answers</label>
