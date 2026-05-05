@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { safeEmbedUrl } from '@/lib/safe-embed-url';
 import { useTheme } from '@/components/ThemeProvider';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -2964,10 +2965,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                 </div>
                                 {(() => {
                                   const vurl = q.lesson.videoUrl || '';
-                                  const ytMatch = vurl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-                                  const embedUrl = ytMatch
-                                    ? `https://www.youtube.com/embed/${ytMatch[1]}`
-                                    : (vurl.includes('iframe.mediadelivery.net') || vurl.includes('/embed/')) ? vurl : null;
+                                  const embedUrl = safeEmbedUrl(vurl);
                                   return embedUrl ? (
                                     <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${FE.cardBorder}` }}>
                                       <iframe src={embedUrl} className="w-full aspect-video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />

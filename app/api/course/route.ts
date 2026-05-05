@@ -1,13 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
 import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
-import { learningPathCertificateEmail } from '@/lib/email-templates';
 import { getRedis, leaderboardKey, studentNameKey } from '@/lib/redis';
 import { publishActivity } from '@/lib/activity';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+import { updateLearningPathProgress } from '@/lib/learning-path-progress';
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -84,7 +81,7 @@ export async function POST(req: NextRequest) {
   if (action === 'save-progress') {
     const sessionUser = await getSessionUser(req);
     if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const { course_id, current_question_index, answers, score, points, streak, hints_used } = body;
+    const { course_id, current_question_index, answers, streak, hints_used } = body;
     if (!course_id) return NextResponse.json({ error: 'course_id required' }, { status: 400 });
 
     try {
@@ -96,8 +93,6 @@ export async function POST(req: NextRequest) {
       const payload = {
         current_question_index: current_question_index ?? 0,
         answers:                answers    ?? {},
-        score:                  score      ?? 0,
-        points:                 points     ?? 0,
         streak:                 streak     ?? 0,
         hints_used:             hints_used ?? [],
         updated_at:             new Date().toISOString(),
@@ -151,22 +146,60 @@ export async function POST(req: NextRequest) {
   if (action === 'complete-attempt') {
     const sessionUser = await getSessionUser(req);
     if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const { course_id, score, passed, points, current_question_index } = body;
+    const { course_id, current_question_index } = body;
     if (!course_id) return NextResponse.json({ error: 'course_id required' }, { status: 400 });
 
     try {
       const supabase = adminClient();
-      const { data: attempt } = await supabase.from('course_attempts').select('id')
-        .eq('course_id', course_id).eq('student_id', sessionUser.id)
-        .is('completed_at', null)
-        .order('started_at', { ascending: false }).limit(1).maybeSingle();
 
-      if (attempt) {
+      const [{ data: courseData }, { data: attempt }] = await Promise.all([
+        supabase.from('courses')
+          .select('questions, passmark, points_enabled, points_base')
+          .eq('id', course_id).single(),
+        supabase.from('course_attempts')
+          .select('id, answers, hints_used')
+          .eq('course_id', course_id).eq('student_id', sessionUser.id)
+          .is('completed_at', null)
+          .order('started_at', { ascending: false }).limit(1).maybeSingle(),
+      ]);
+
+      if (attempt && courseData) {
+        // Server-side scoring - client-supplied score/passed/points are ignored
+        const questions: any[]              = Array.isArray(courseData.questions) ? courseData.questions : [];
+        const storedAnswers: Record<string, string> = attempt.answers   ?? {};
+        const hintsUsed: string[]           = attempt.hints_used ?? [];
+        const passmark                      = courseData.passmark ?? 50;
+
+        const scorable = questions.filter(q => !q.lessonOnly && !q.isSection);
+        let correct = 0;
+        for (const q of scorable) {
+          const ua = storedAnswers[q.id];
+          if (ua == null) continue;
+          const type = q.type ?? 'multiple_choice';
+          if (['code_review', 'excel_review', 'dashboard_critique'].includes(type)) {
+            if (ua === 'completed') correct++;
+          } else if (type === 'fill_blank') {
+            const accepted = (q.correctAnswer ?? '').split('|').map((s: string) => s.trim().toLowerCase());
+            if (accepted.includes(ua.trim().toLowerCase())) correct++;
+          } else if (type === 'arrange') {
+            if (ua === q.correctAnswer) correct++;
+          } else {
+            if (ua === q.correctAnswer) correct++;
+          }
+        }
+
+        const total     = scorable.length;
+        const scorePct  = total === 0 ? 100 : Math.round((correct / total) * 100);
+        const passed    = scorePct >= passmark;
+        const computed_points = courseData.points_enabled
+          ? Math.max(0, correct * (courseData.points_base ?? 100) - hintsUsed.length * 20)
+          : 0;
+
         await supabase.from('course_attempts').update({
           completed_at:           new Date().toISOString(),
-          passed:                 passed ?? false,
-          score:                  score  ?? 0,
-          points:                 points ?? 0,
+          passed,
+          score:                  scorePct,
+          points:                 computed_points,
           current_question_index: current_question_index ?? 0,
           updated_at:             new Date().toISOString(),
         }).eq('id', attempt.id);
@@ -188,36 +221,30 @@ export async function POST(req: NextRequest) {
           }).catch(() => {});
         }
 
-        if (points != null) {
-          supabase
-            .from('students')
-            .select('cohort_id, full_name')
-            .eq('id', sessionUser.id)
-            .single()
-            .then(({ data: student }) => {
-              if (!student?.cohort_id) return;
-              const lbKey   = leaderboardKey(student.cohort_id);
-              const nameKey = studentNameKey(student.cohort_id);
-              supabase
-                .from('student_xp')
-                .select('total_xp')
-                .eq('student_id', sessionUser.id)
-                .single()
-                .then(({ data: xpRow }) => {
-                  const totalXp = xpRow?.total_xp ?? 0;
-                  const redis = getRedis();
-                  if (!redis) return;
-                  redis.pipeline()
-                    .zadd(lbKey,   { score: totalXp, member: sessionUser.email })
-                    .hset(nameKey, { [sessionUser.email]: student.full_name || sessionUser.email })
-                    .expire(lbKey,   600)
-                    .expire(nameKey, 600)
-                    .exec()
-                    .catch((err: any) => console.error('[course/complete-attempt] redis sync', err));
-                });
-            });
-        }
+        supabase
+          .from('students').select('cohort_id, full_name')
+          .eq('id', sessionUser.id).single()
+          .then(({ data: student }) => {
+            if (!student?.cohort_id) return;
+            const lbKey   = leaderboardKey(student.cohort_id);
+            const nameKey = studentNameKey(student.cohort_id);
+            supabase.from('student_xp').select('total_xp')
+              .eq('student_id', sessionUser.id).single()
+              .then(({ data: xpRow }) => {
+                const totalXp = xpRow?.total_xp ?? 0;
+                const redis = getRedis();
+                if (!redis) return;
+                redis.pipeline()
+                  .zadd(lbKey,   { score: totalXp, member: sessionUser.email })
+                  .hset(nameKey, { [sessionUser.email]: student.full_name || sessionUser.email })
+                  .expire(lbKey,   600)
+                  .expire(nameKey, 600)
+                  .exec()
+                  .catch((err: any) => console.error('[course/complete-attempt] redis sync', err));
+              });
+          });
       }
+
       return NextResponse.json({ ok: true });
     } catch (err: any) {
       console.error('[course/complete-attempt]', err);
@@ -280,263 +307,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // -- Mark VE complete (called from guided project completion) ---
-  if (action === 'mark-path-item-complete') {
-    const sessionUser = await getSessionUser(req);
-    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const { item_id } = body;
-    if (!item_id) return NextResponse.json({ error: 'item_id required' }, { status: 400 });
-    try {
-      const supabase = adminClient();
-      await updateLearningPathProgress(supabase, sessionUser.id, item_id);
-      return NextResponse.json({ ok: true });
-    } catch (err: any) {
-      console.error('[course/mark-path-item-complete]', err);
-      return NextResponse.json({ error: 'Failed.' }, { status: 500 });
-    }
-  }
-
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
-}
-
-// -- Shared helper: update learning_path_progress and auto-issue path cert ---
-async function updateLearningPathProgress(supabase: any, studentId: string, completedItemId: string) {
-  try {
-    const { data: student } = await supabase.from('students').select('cohort_id').eq('id', studentId).single();
-    if (!student?.cohort_id) return;
-
-    const { data: paths } = await supabase
-      .from('learning_paths')
-      .select('id, item_ids, title, next_path_id')
-      .eq('status', 'published')
-      .contains('item_ids', [completedItemId])
-      .contains('cohort_ids', [student.cohort_id]);
-
-    if (!paths?.length) return;
-
-    for (const path of paths) {
-      const { data: prog } = await supabase
-        .from('learning_path_progress')
-        .select('*')
-        .eq('student_id', studentId)
-        .eq('learning_path_id', path.id)
-        .maybeSingle();
-
-      const existingCompleted: string[] = prog?.completed_item_ids ?? [];
-      if (existingCompleted.includes(completedItemId)) continue;
-
-      const updatedCompleted = [...existingCompleted, completedItemId];
-      const allDone = (path.item_ids ?? []).every((id: string) => updatedCompleted.includes(id));
-
-      const upsertData: any = {
-        student_id: studentId,
-        learning_path_id: path.id,
-        completed_item_ids: updatedCompleted,
-        updated_at: new Date().toISOString(),
-      };
-      if (allDone) upsertData.completed_at = new Date().toISOString();
-
-      const { data: upserted } = await supabase
-        .from('learning_path_progress')
-        .upsert(upsertData, { onConflict: 'student_id,learning_path_id' })
-        .select('id')
-        .single();
-
-      // Send "next up" email when a non-final item is completed
-      if (!allDone) {
-        const itemIds: string[] = path.item_ids ?? [];
-        const completedIdx = itemIds.indexOf(completedItemId);
-        const nextItemId = completedIdx >= 0 && completedIdx + 1 < itemIds.length ? itemIds[completedIdx + 1] : null;
-        if (nextItemId) {
-          try {
-            const { data: studentRow } = await supabase.from('students').select('full_name, email').eq('id', studentId).single();
-            if (studentRow?.email) {
-              const [{ data: courses }, { data: ves }] = await Promise.all([
-                supabase.from('courses').select('id, title, slug, cover_image, description').in('id', [completedItemId, nextItemId]),
-                supabase.from('virtual_experiences').select('id, title, slug, cover_image, description').in('id', [completedItemId, nextItemId]),
-              ]);
-              const itemMap: Record<string, any> = {};
-              for (const c of courses ?? []) itemMap[c.id] = { ...c, isVE: false };
-              for (const v of ves   ?? []) itemMap[v.id] = { ...v, isVE: true };
-              const completedItem = itemMap[completedItemId];
-              const nextItem      = itemMap[nextItemId];
-              if (completedItem && nextItem) {
-                const { getTenantSettings } = await import('@/lib/get-tenant-settings');
-                const { Resend } = await import('resend');
-                const { courseCompletedNextUpEmail } = await import('@/lib/email-templates');
-                const resend = new Resend(process.env.RESEND_API_KEY);
-                const t = await getTenantSettings();
-                const FROM = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
-                const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
-                const nextUrl = nextItem.isVE
-                  ? `${t.appUrl}/student?section=virtual_experiences`
-                  : `${t.appUrl}/${nextItem.slug || nextItemId}?go=1`;
-                await resend.emails.send({
-                  from: FROM,
-                  to: studentRow.email,
-                  subject: `You completed "${completedItem.title}" -- next up in ${path.title}`,
-                  html: courseCompletedNextUpEmail({
-                    name:             studentRow.full_name ?? 'there',
-                    pathTitle:        path.title,
-                    completedTitle:   completedItem.title,
-                    completedNumber:  completedIdx + 1,
-                    totalItems:       itemIds.length,
-                    nextTitle:        nextItem.title,
-                    nextUrl,
-                    nextCoverImage:    nextItem.cover_image ?? null,
-                    nextIsVE:         nextItem.isVE,
-                    nextDescription:  nextItem.description ?? null,
-                    branding,
-                  }),
-                });
-              }
-            }
-          } catch (err) {
-            console.error('[updateLearningPathProgress] next-up email failed', err);
-          }
-        }
-      }
-
-      // Auto-enroll student's cohort into next path when this path is completed
-      if (allDone && path.next_path_id) {
-        try {
-          const { data: nextPath } = await supabase
-            .from('learning_paths')
-            .select('id, cohort_ids, title, description, item_ids')
-            .eq('id', path.next_path_id)
-            .single();
-          if (nextPath) {
-            const existingCohorts: string[] = nextPath.cohort_ids ?? [];
-            if (!existingCohorts.includes(student.cohort_id)) {
-              const updatedCohorts = [...existingCohorts, student.cohort_id];
-              await supabase.from('learning_paths')
-                .update({ cohort_ids: updatedCohorts })
-                .eq('id', nextPath.id);
-              // Notify the student about their new enrollment
-              const { data: studentRow } = await supabase.from('students').select('full_name, email').eq('id', studentId).single();
-              if (studentRow?.email) {
-                try {
-                  const { getTenantSettings } = await import('@/lib/get-tenant-settings');
-                  const { Resend } = await import('resend');
-                  const { learningPathAssignedEmail } = await import('@/lib/email-templates');
-                  const resend = new Resend(process.env.RESEND_API_KEY);
-                  const t = await getTenantSettings();
-                  const FROM = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
-                  const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
-                  const itemIds: string[] = nextPath.item_ids ?? [];
-                  const [{ data: courseItems }, { data: veItems }] = itemIds.length
-                    ? await Promise.all([
-                        supabase.from('courses').select('id, title, cover_image, description').in('id', itemIds),
-                        supabase.from('virtual_experiences').select('id, title, cover_image, description').in('id', itemIds),
-                      ])
-                    : [{ data: [] }, { data: [] }];
-                  const itemMap: Record<string, any> = {};
-                  for (const c of courseItems ?? []) itemMap[c.id] = { ...c, isVE: false };
-                  for (const v of veItems ?? []) itemMap[v.id] = { ...v, isVE: true };
-                  const items = itemIds.map((id: string) => ({
-                    title: itemMap[id]?.title ?? 'Untitled',
-                    coverImage:   itemMap[id]?.cover_image ?? null,
-                    isVE:         itemMap[id]?.isVE ?? false,
-                    description:  itemMap[id]?.description ?? undefined,
-                  }));
-                  await resend.emails.send({
-                    from: FROM,
-                    to: studentRow.email,
-                    subject: `You've been enrolled in a new learning path: ${nextPath.title}`,
-                    html: learningPathAssignedEmail({
-                      name: studentRow.full_name ?? 'there',
-                      pathTitle: nextPath.title,
-                      pathDescription: nextPath.description ?? undefined,
-                      dashboardUrl: `${t.appUrl}/student?section=courses`,
-                      items,
-                      branding,
-                    }),
-                  });
-                } catch (emailErr) {
-                  console.error('[updateLearningPathProgress] next-path email failed', emailErr);
-                }
-              }
-            }
-          }
-        } catch (nextErr) {
-          console.error('[updateLearningPathProgress] next-path auto-enroll failed', nextErr);
-        }
-      }
-
-      if (allDone && !prog?.cert_id) {
-        const { data: studentRow } = await supabase.from('students').select('full_name, email').eq('id', studentId).single();
-        const studentName = studentRow?.full_name ?? 'Student';
-
-        const { data: pathCert } = await supabase.from('certificates').insert({
-          course_id: null,
-          learning_path_id: path.id,
-          student_name: studentName,
-          student_id: studentId,
-        }).select('id').single();
-
-        if (pathCert?.id && upserted?.id) {
-          await supabase.from('learning_path_progress')
-            .update({ cert_id: pathCert.id })
-            .eq('id', upserted.id);
-
-          if (studentRow?.email) {
-            try {
-              const { data: fullPath } = await supabase
-                .from('learning_paths')
-                .select('title, description, item_ids')
-                .eq('id', path.id)
-                .single();
-
-              const itemIds: string[] = fullPath?.item_ids ?? [];
-
-              // Fetch items from both courses and virtual_experiences tables
-              const [{ data: courseItems }, { data: veItems }] = await Promise.all([
-                itemIds.length
-                  ? supabase.from('courses').select('id, title, cover_image, description').in('id', itemIds)
-                  : { data: [] },
-                itemIds.length
-                  ? supabase.from('virtual_experiences').select('id, title, cover_image, description').in('id', itemIds)
-                  : { data: [] },
-              ]);
-
-              const itemMap: Record<string, any> = {};
-              for (const c of courseItems ?? []) itemMap[c.id] = { ...c, isVE: false };
-              for (const v of veItems   ?? []) itemMap[v.id] = { ...v, isVE: true };
-
-              const items = itemIds.map((id: string) => {
-                const item = itemMap[id];
-                return {
-                  title:      item?.title      ?? 'Untitled',
-                  coverImage:  item?.cover_image  ?? null,
-                  isVE:        item?.isVE         ?? false,
-                  description: item?.description  ?? null,
-                };
-              });
-
-              const t        = await getTenantSettings();
-              const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
-              const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
-              const certUrl  = `${t.appUrl}/certificate/${pathCert.id}`;
-              await resend.emails.send({
-                from: FROM,
-                to: studentRow.email,
-                subject: `Your Learning Path Certificate is ready: ${fullPath?.title ?? path.title}`,
-                html: learningPathCertificateEmail({
-                  name: studentName,
-                  pathTitle: fullPath?.title ?? path.title,
-                  certUrl,
-                  items,
-                  branding,
-                }),
-              });
-            } catch (emailErr) {
-              console.error('[updateLearningPathProgress] cert email failed', emailErr);
-            }
-          }
-        }
-      }
-    }
-  } catch (err) {
-    console.error('[updateLearningPathProgress]', err);
-  }
 }

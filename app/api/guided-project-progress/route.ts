@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { milestoneEmail, courseResultEmail } from '@/lib/email-templates';
-import { hasNudgeBeenSent, recordNudge, totalRequirements, completedRequirements } from '@/lib/nudge-helpers';
+import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
+import { updateLearningPathProgress } from '@/lib/learning-path-progress';
 
 export const dynamic = 'force-dynamic';
 
@@ -159,6 +160,37 @@ export async function POST(req: NextRequest) {
     const certUser = await getUser(req);
     if (!certUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    // Verify VE access before certificate issuance
+    const [{ data: certVe }, { data: certStudentRow }] = await Promise.all([
+      supabase.from('virtual_experiences')
+        .select('status, cohort_ids')
+        .eq('id', resolvedVeId).single(),
+      supabase.from('students').select('cohort_id').eq('id', certUser.id).single(),
+    ]);
+
+    if (!certVe || certVe.status !== 'published') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    const certHasDirectAccess = !!certStudentRow?.cohort_id &&
+      (certVe.cohort_ids as string[] ?? []).includes(certStudentRow.cohort_id);
+
+    let certHasLpAccess = false;
+    if (!certHasDirectAccess && certStudentRow?.cohort_id) {
+      const { data: certLpRow } = await supabase
+        .from('learning_paths')
+        .select('id')
+        .eq('status', 'published')
+        .contains('cohort_ids', [certStudentRow.cohort_id])
+        .contains('item_ids', [resolvedVeId])
+        .limit(1)
+        .maybeSingle();
+      certHasLpAccess = !!certLpRow;
+    }
+
+    if (!certHasDirectAccess && !certHasLpAccess) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
     const { data: attempt } = await supabase
       .from('guided_project_attempts')
       .select('id, completed_at')
@@ -233,7 +265,8 @@ export async function POST(req: NextRequest) {
   }
 
   // -- Student progress save --
-  const { veId, formId, studentName, progress, currentModuleId, currentLessonId, completedAt } = body;
+  const { veId, formId, studentName, progress, currentModuleId, currentLessonId } = body;
+  // completedAt is intentionally excluded - completion is always computed server-side
   const resolvedVeId = veId ?? formId; // formId kept for backward compat
 
   if (!resolvedVeId) return NextResponse.json({ error: 'veId required' }, { status: 400 });
@@ -241,25 +274,56 @@ export async function POST(req: NextRequest) {
   const progressUser = await getUser(req);
   if (!progressUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Auto-detect completion: fetch VE modules once and use for both completion check and milestone email
-  let resolvedCompletedAt = completedAt || null;
-  let fetchedVe: { modules: any; title: string; slug: string } | null = null;
+  // Verify VE access before saving progress
+  const [{ data: ve }, { data: progressStudentRow }] = await Promise.all([
+    supabase.from('virtual_experiences')
+      .select('status, cohort_ids, modules, title, slug')
+      .eq('id', resolvedVeId).single(),
+    supabase.from('students').select('cohort_id').eq('id', progressUser.id).single(),
+  ]);
 
-  if (progress && !completedAt) {
-    const { data: ve } = await supabase
-      .from('virtual_experiences')
-      .select('modules, title, slug')
-      .eq('id', resolvedVeId)
-      .single();
-    fetchedVe = ve ?? null;
-    if (ve) {
-      const total = totalRequirements(ve.modules);
-      const done  = completedRequirements(progress);
-      if (total > 0 && done >= total) {
-        resolvedCompletedAt = new Date().toISOString();
+  if (!ve || ve.status !== 'published') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+  const hasDirectAccess = !!progressStudentRow?.cohort_id &&
+    (ve.cohort_ids as string[] ?? []).includes(progressStudentRow.cohort_id);
+
+  let hasLpAccess = false;
+  if (!hasDirectAccess && progressStudentRow?.cohort_id) {
+    const { data: lpRow } = await supabase
+      .from('learning_paths')
+      .select('id')
+      .eq('status', 'published')
+      .contains('cohort_ids', [progressStudentRow.cohort_id])
+      .contains('item_ids', [resolvedVeId])
+      .limit(1)
+      .maybeSingle();
+    hasLpAccess = !!lpRow;
+  }
+
+  if (!hasDirectAccess && !hasLpAccess) {
+    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+  }
+
+  // Completion derived server-side. MCQ requirements are validated against correctAnswer;
+  // honor-system types (task, upload, reflection, etc.) trust the completed flag.
+  let totalReqs = 0;
+  let doneReqs  = 0;
+  for (const mod of (Array.isArray(ve.modules) ? ve.modules : [])) {
+    for (const lesson of mod.lessons ?? []) {
+      for (const req of lesson.requirements ?? []) {
+        totalReqs++;
+        const entry = (progress ?? {})[req.id];
+        if (!entry) continue;
+        if (req.type === 'mcq') {
+          if (entry.selectedAnswer === req.correctAnswer) doneReqs++;
+        } else {
+          if (entry.completed) doneReqs++;
+        }
       }
     }
   }
+  const resolvedCompletedAt = (totalReqs > 0 && doneReqs >= totalReqs) ? new Date().toISOString() : null;
 
   const { error } = await supabase
     .from('guided_project_attempts')
@@ -277,23 +341,18 @@ export async function POST(req: NextRequest) {
 
   if (error) { console.error('[guided-project-progress] upsert error:', error); return NextResponse.json({ error: 'Failed to save progress.' }, { status: 500 }); }
 
+  // Update learning path progress when VE is completed (fire-and-forget)
+  if (resolvedCompletedAt) {
+    updateLearningPathProgress(supabase, progressUser.id, resolvedVeId)
+      .catch((err) => console.error('[guided-project-progress] LP update failed', err));
+  }
+
   // -- 80% milestone check (fire-and-forget) -- skip if already completed
   if (progress && !resolvedCompletedAt && process.env.RESEND_API_KEY) {
     (async () => {
       try {
-        const ve = fetchedVe ?? await supabase
-          .from('virtual_experiences')
-          .select('modules, title, slug')
-          .eq('id', resolvedVeId)
-          .single()
-          .then(r => r.data);
-
-        if (!ve) return;
-        const total = totalRequirements(ve.modules);
-        if (total === 0) return;
-
-        const done = completedRequirements(progress);
-        const pct  = Math.round((done / total) * 100);
+        if (totalReqs === 0) return;
+        const pct = Math.round((doneReqs / totalReqs) * 100);
         if (pct < 80) return;
 
         const alreadySent = await hasNudgeBeenSent(supabase, progressUser.id, resolvedVeId, 'milestone_80');

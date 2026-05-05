@@ -13,6 +13,11 @@ export async function GET(req: NextRequest) {
   const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
   if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const { data: caller } = await supabase.from('students').select('role').eq('id', user.id).single();
+  if (!caller || !['admin', 'instructor'].includes(caller.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   const studentId = new URL(req.url).searchParams.get('studentId');
   if (!studentId) return NextResponse.json({ error: 'studentId required' }, { status: 400 });
 

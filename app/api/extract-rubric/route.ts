@@ -6,7 +6,12 @@ import ExcelJS from 'exceljs';
 
 export const dynamic = 'force-dynamic';
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_SHEETS = 5;
+const MAX_ROWS_PER_SHEET = 5_000;
+const MAX_TOTAL_CELLS = 50_000;
+const MAX_TEXT_BYTES = 300_000;
+const EXTRACTION_TIMEOUT_MS = 20_000;
 
 function adminClient() {
   return createClient(
@@ -23,20 +28,47 @@ async function authenticate(req: NextRequest): Promise<{ userId: string } | Next
   return { userId: user.id };
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let handle: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    handle = setTimeout(() => reject(new Error('Workbook extraction timed out')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(handle!));
+}
+
 async function extractExcelText(buffer: ArrayBuffer): Promise<string> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buffer);
   const sections: string[] = [];
-  for (const ws of wb.worksheets) {
+  let totalCells = 0;
+  let totalChars = 0;
+  let aborted = false;
+
+  for (const ws of wb.worksheets.slice(0, MAX_SHEETS)) {
+    if (aborted) break;
     const lines: string[] = [`Sheet: ${ws.name}`];
+    let rowCount = 0;
+
     ws.eachRow(row => {
+      if (aborted || rowCount >= MAX_ROWS_PER_SHEET) return;
+      rowCount++;
       row.eachCell({ includeEmpty: false }, cell => {
-        if (cell.formula) lines.push(`  ${cell.address}: =${cell.formula}`);
-        else if (cell.value != null && cell.value !== '') lines.push(`  ${cell.address}: ${cell.value}`);
+        if (aborted || totalCells >= MAX_TOTAL_CELLS) { aborted = true; return; }
+        totalCells++;
+        let line: string;
+        if (cell.formula) line = `  ${cell.address}: =${cell.formula}`;
+        else if (cell.value != null && cell.value !== '') line = `  ${cell.address}: ${cell.value}`;
+        else return;
+        totalChars += line.length;
+        if (totalChars > MAX_TEXT_BYTES) { aborted = true; return; }
+        lines.push(line);
       });
     });
+
     if (lines.length > 1) sections.push(lines.join('\n'));
   }
+
+  if (aborted) sections.push('... (workbook truncated: extraction limit reached)');
   return sections.join('\n\n');
 }
 
@@ -82,7 +114,7 @@ export async function POST(req: NextRequest) {
     let parsed: any;
 
     if (isExcel) {
-      const text = await extractExcelText(buffer);
+      const text = await withTimeout(extractExcelText(buffer), EXTRACTION_TIMEOUT_MS);
       const prompt = `You are an expert assessment designer. The instructor has uploaded ${docDescription} (an Excel/spreadsheet file). Analyse the content below and extract clear, specific, measurable rubric criteria that an AI reviewer can use to grade student submissions. Extract as many criteria as the file warrants -- one criterion per distinct requirement, skill, or standard present in the file. Return each as a concise action-oriented statement.\n\nFile content:\n${text}`;
       parsed = await generateJSON(prompt, responseSchema, { temperature: 0.3 });
     } else if (isText) {

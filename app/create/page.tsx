@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { sanitizeRichText } from '@/lib/sanitize';
+import { safeEmbedUrl } from '@/lib/safe-embed-url';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
 import { motion, AnimatePresence } from 'motion/react';
@@ -2704,7 +2705,6 @@ const [isSaving, setIsSaving] = useState(false);
                           <option value="code_review">AI Code Review</option>
                           <option value="excel_review">AI Excel Review</option>
                           <option value="dashboard_critique">AI Dashboard Critique</option>
-                          <option value="powerbi_review">AI Power BI Review</option>
                           <option value="downloads">Downloads</option>
                         </select>
                         <button
@@ -3464,12 +3464,7 @@ const [isSaving, setIsSaving] = useState(false);
                               </div>
                               {(() => {
                                 const vurl = q.lesson.videoUrl || '';
-                                const ytMatch = vurl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-                                const embedUrl = ytMatch
-                                  ? `https://www.youtube.com/embed/${ytMatch[1]}`
-                                  : (vurl.includes('iframe.mediadelivery.net') || vurl.includes('/embed/')) ? vurl
-                                  : vurl.includes('canva.com/design/') ? (vurl.includes('?') ? vurl : `${vurl}?embed`)
-                                  : null;
+                                const embedUrl = safeEmbedUrl(vurl);
                                 return embedUrl ? (
                                   <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
                                     <iframe src={embedUrl} className="w-full aspect-video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
@@ -3500,7 +3495,6 @@ const [isSaving, setIsSaving] = useState(false);
                       <option value="code_review">AI Code Review</option>
                       <option value="excel_review">AI Excel Review</option>
                       <option value="dashboard_critique">AI Dashboard Critique</option>
-                      <option value="powerbi_review">AI Power BI Review</option>
                       <option value="downloads">Downloads</option>
                     </select>
                     <button type="button" onClick={handleAddQuestion} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all flex-shrink-0 hover:opacity-80" style={{ background: accentColor, color: C.ctaText }}>

@@ -10,6 +10,11 @@ export const dynamic = 'force-dynamic';
 const RATE_LIMIT = 3;
 const RATE_WINDOW_SECONDS = 86400;
 const MAX_FORMULAS = 200;
+const MAX_SHEETS = 5;
+const MAX_ROWS_PER_SHEET = 5_000;
+const MAX_TOTAL_CELLS = 50_000;
+const MAX_TEXT_BYTES = 300_000;
+const EXTRACTION_TIMEOUT_MS = 20_000;
 
 function adminClient() {
   return createClient(
@@ -45,34 +50,54 @@ async function checkRateLimit(userId: string): Promise<NextResponse | null> {
   return null;
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let handle: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    handle = setTimeout(() => reject(new Error('Workbook extraction timed out')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(handle!));
+}
+
 async function extractFromWorkbook(buffer: ArrayBuffer): Promise<string> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buffer);
 
   const sections: string[] = [];
+  let totalCells = 0;
+  let totalChars = 0;
+  let aborted = false;
 
-  for (const ws of wb.worksheets) {
+  for (const ws of wb.worksheets.slice(0, MAX_SHEETS)) {
+    if (aborted) break;
     const lines: string[] = [`Sheet: ${ws.name}`];
     let formulaCount = 0;
+    let rowCount = 0;
 
     ws.eachRow((row) => {
-      if (formulaCount >= MAX_FORMULAS) return;
+      if (aborted || rowCount >= MAX_ROWS_PER_SHEET) return;
+      rowCount++;
       row.eachCell({ includeEmpty: false }, (cell) => {
-        if (formulaCount >= MAX_FORMULAS) return;
+        if (aborted || totalCells >= MAX_TOTAL_CELLS) { aborted = true; return; }
+        totalCells++;
         const addr = cell.address;
         if (cell.formula) {
+          if (formulaCount >= MAX_FORMULAS) return;
           const raw = cell.value;
           const result = raw !== null && typeof raw === 'object' && 'result' in raw
             ? (raw as any).result
             : undefined;
           const val = result !== undefined ? ` => ${result}` : '';
-          lines.push(`  ${addr}: =${cell.formula}${val}`);
+          const line = `  ${addr}: =${cell.formula}${val}`;
+          totalChars += line.length;
+          if (totalChars > MAX_TEXT_BYTES) { aborted = true; return; }
+          lines.push(line);
           formulaCount++;
-          if (formulaCount >= MAX_FORMULAS) {
-            lines.push(`  ... (truncated at ${MAX_FORMULAS} formulas)`);
-          }
+          if (formulaCount >= MAX_FORMULAS) lines.push(`  ... (truncated at ${MAX_FORMULAS} formulas)`);
         } else if (cell.value !== null && cell.value !== undefined && cell.value !== '') {
-          lines.push(`  ${addr}: ${cell.value}`);
+          const line = `  ${addr}: ${cell.value}`;
+          totalChars += line.length;
+          if (totalChars > MAX_TEXT_BYTES) { aborted = true; return; }
+          lines.push(line);
         }
       });
     });
@@ -81,6 +106,7 @@ async function extractFromWorkbook(buffer: ArrayBuffer): Promise<string> {
     sections.push(lines.join('\n'));
   }
 
+  if (aborted) sections.push('... (workbook truncated: extraction limit reached)');
   return sections.join('\n\n');
 }
 
@@ -199,7 +225,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer   = await file.arrayBuffer();
-    const extracted = await extractFromWorkbook(buffer);
+    const extracted = await withTimeout(extractFromWorkbook(buffer), EXTRACTION_TIMEOUT_MS);
 
     if (!extracted.trim()) {
       return NextResponse.json({ error: 'No data found in the spreadsheet.' }, { status: 400 });

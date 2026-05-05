@@ -71,26 +71,40 @@ const SOCIALS: Record<string, { Icon: any; color: string; darkColor: string; lab
   website:   { Icon: Globe,     color: '#475569', darkColor: '#94a3b8', label: 'Website' },
 };
 
-/* --- Portfolio embed helper --- */
-function normalizeEmbedUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes('canva.com')) {
-      let href = url;
-      if (href.includes('/preview')) href = href.replace('/preview', '/view');
-      if (!href.includes('embed')) href += (href.includes('?') ? '&' : '?') + 'embed';
-      return href;
-    }
-  } catch {}
-  return url;
+/* --- Portfolio embed helpers --- */
+const PORTFOLIO_EMBED_HOSTS = new Set([
+  'canva.com', 'www.canva.com',
+  'docs.google.com',
+  'figma.com', 'www.figma.com',
+  'public.tableau.com',
+]);
+const IFRAME_SANDBOX = 'allow-scripts allow-same-origin allow-popups';
+
+function safePortfolioEmbed(raw: string): string | null {
+  if (!raw) return null;
+  let parsed: URL;
+  try { parsed = new URL(raw); } catch { return null; }
+  if (parsed.protocol !== 'https:') return null;
+  const host = parsed.hostname.toLowerCase();
+  if (!PORTFOLIO_EMBED_HOSTS.has(host)) return null;
+  if (host === 'canva.com' || host === 'www.canva.com') {
+    let url = raw;
+    if (url.includes('/preview')) url = url.replace('/preview', '/view');
+    if (!url.includes('embed')) url += (url.includes('?') ? '&' : '?') + 'embed';
+    return url;
+  }
+  return raw;
 }
-function isCanvaUrl(url: string): boolean {
-  try { return new URL(url).hostname.includes('canva.com'); } catch { return false; }
+
+function safeLinkUrl(raw: string): string | null {
+  if (!raw) return null;
+  try { const u = new URL(raw); return u.protocol === 'https:' ? raw : null; } catch { return null; }
 }
 
 /* --- Portfolio card --- */
 function PortfolioCard({ item, t, isDark, onOpen }: { item: any; t: typeof LIGHT; isDark: boolean; onOpen: () => void }) {
-  const embedUrl = normalizeEmbedUrl(item.url);
+  const embedUrl = safePortfolioEmbed(item.url);
+  const linkUrl  = safeLinkUrl(item.url);
   const tools: string[] = Array.isArray(item.tools) && item.tools.length > 0
     ? item.tools : item.tool ? [item.tool] : [];
   return (
@@ -113,10 +127,12 @@ function PortfolioCard({ item, t, isDark, onOpen }: { item: any; t: typeof LIGHT
             )}
             <p style={{ fontSize: 15, fontWeight: 600, color: t.text, margin: 0 }}>{item.title}</p>
           </div>
-          <a href={item.url} target="_blank" rel="noreferrer"
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: t.pill, color: t.muted, textDecoration: 'none', flexShrink: 0 }}>
-            <ExternalLink style={{ width: 13, height: 13 }}/> Open
-          </a>
+          {linkUrl && (
+            <a href={linkUrl} target="_blank" rel="noreferrer"
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: t.pill, color: t.muted, textDecoration: 'none', flexShrink: 0 }}>
+              <ExternalLink style={{ width: 13, height: 13 }}/> Open
+            </a>
+          )}
         </div>
         {item.description && (
           <p style={{ fontSize: 13, marginTop: 10, lineHeight: 1.6, color: t.sub }}>
@@ -125,11 +141,16 @@ function PortfolioCard({ item, t, isDark, onOpen }: { item: any; t: typeof LIGHT
         )}
       </div>
       <div style={{ background: t.card, padding: '0 14px 14px', borderBottomLeftRadius: 14, borderBottomRightRadius: 14, cursor: 'pointer' }} onClick={onOpen}>
-        <div style={{ position: 'relative', height: 260, overflow: 'hidden', borderRadius: 10, transform: 'translateZ(0)' }}>
+        <div style={{ position: 'relative', height: 310, overflow: 'hidden', borderRadius: 10, transform: 'translateZ(0)' }}>
           {item.thumbnail_url
             ? <img src={item.thumbnail_url} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }}/>
-            : <iframe src={embedUrl} title={item.title} loading="lazy" allowFullScreen
-                style={{ border: 'none', width: 'calc(100% + 20px)', height: 520, pointerEvents: 'none' }}/>
+            : embedUrl
+              ? <iframe src={embedUrl} title={item.title} loading="lazy" allowFullScreen
+                  sandbox={IFRAME_SANDBOX}
+                  style={{ border: 'none', width: 'calc(100% + 20px)', height: 620, pointerEvents: 'none' }}/>
+              : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ExternalLink style={{ width: 24, height: 24, color: t.faint }}/>
+                </div>
           }
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, background: `linear-gradient(to bottom, transparent, ${t.card})`, pointerEvents: 'none' }}/>
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.15s' }}
@@ -147,8 +168,8 @@ function PortfolioCard({ item, t, isDark, onOpen }: { item: any; t: typeof LIGHT
 
 /* --- Project modal --- */
 function ProjectModal({ item, profile, t, isDark, onClose }: { item: any; profile: any; t: typeof LIGHT; isDark: boolean; onClose: () => void }) {
-  const embedUrl = normalizeEmbedUrl(item.url);
-  const canva = isCanvaUrl(item.url);
+  const embedUrl = safePortfolioEmbed(item.url);
+  const linkUrl  = safeLinkUrl(item.url);
   const tools: string[] = Array.isArray(item.tools) && item.tools.length > 0
     ? item.tools : item.tool ? [item.tool] : [];
 
@@ -196,10 +217,12 @@ function ProjectModal({ item, profile, t, isDark, onClose }: { item: any; profil
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <a href={item.url} target="_blank" rel="noreferrer"
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600, background: t.pill, color: t.muted, textDecoration: 'none' }}>
-              <ExternalLink style={{ width: 13, height: 13 }}/> Open
-            </a>
+            {linkUrl && (
+              <a href={linkUrl} target="_blank" rel="noreferrer"
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600, background: t.pill, color: t.muted, textDecoration: 'none' }}>
+                <ExternalLink style={{ width: 13, height: 13 }}/> Open
+              </a>
+            )}
             <button onClick={onClose}
               style={{ width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: 'none', cursor: 'pointer', background: t.pill, color: t.muted }}>
               <X style={{ width: 16, height: 16 }}/>
@@ -209,19 +232,30 @@ function ProjectModal({ item, profile, t, isDark, onClose }: { item: any; profil
 
         {/* Modal content */}
         <div className="modal-content" style={{ flex: 1, minHeight: 0 }}>
-          {canva || !item.thumbnail_url ? (
+          {embedUrl ? (
             <iframe
               src={embedUrl}
               title={item.title}
               allowFullScreen
-              style={{ border: 'none', width: '100%', height: '100%', minHeight: 500, display: 'block' }}
+              sandbox={IFRAME_SANDBOX}
+              style={{ border: 'none', width: '100%', height: '100%', minHeight: 550, display: 'block' }}
             />
-          ) : (
+          ) : item.thumbnail_url ? (
             <img
               src={item.thumbnail_url}
               alt={item.title}
               style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
             />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 550, gap: 12 }}>
+              <ExternalLink style={{ width: 32, height: 32, color: t.faint }}/>
+              {linkUrl && (
+                <a href={linkUrl} target="_blank" rel="noreferrer"
+                  style={{ fontSize: 14, fontWeight: 600, color: t.accent, textDecoration: 'none' }}>
+                  Open project
+                </a>
+              )}
+            </div>
           )}
         </div>
       </div>

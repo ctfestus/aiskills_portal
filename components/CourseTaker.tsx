@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { safeEmbedUrl as getVideoEmbedUrl } from '@/lib/safe-embed-url';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1921,16 +1922,6 @@ export function CourseTaker({
     return currentQuestion.correctAnswer;
   };
 
-  const getVideoEmbedUrl = (url: string): string | null => {
-    if (!url) return null;
-    const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
-    if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
-    const vimeo = url.match(/vimeo\.com\/(\d+)/);
-    if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
-    if (url.includes('iframe.mediadelivery.net/embed/') || url.includes('player.mediadelivery.net/embed/') || url.includes('video.bunnycdn.com/')) return url;
-    if (url.includes('canva.com/design/')) return url.includes('?') ? url : `${url}?embed`;
-    return null;
-  };
 
   // -- Section divider slide --
   if (currentQuestion.isSection) {

@@ -2218,7 +2218,8 @@ function AnnouncementCard({ ann, C, react, onToggleReaction, onClick }: {
     .replace(/<[^>]*>/g, ' ')
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
     .replace(/\s+/g, ' ').trim();
-  const excerpt = plainText.length > 130 ? plainText.slice(0, 130) + '...' : plainText;
+  const bodyExcerpt = plainText.length > 380 ? plainText.slice(0, 380) + '...' : plainText;
+  const excerpt = ann.subtitle ? ann.subtitle : bodyExcerpt;
   const pub = new Date(ann.published_at);
   const dateStr = pub.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   const authorName = ann.author?.full_name || 'Admin';
@@ -2233,9 +2234,9 @@ function AnnouncementCard({ ann, C, react, onToggleReaction, onClick }: {
       onMouseLeave={() => setHovered(false)}
       className="rounded-2xl overflow-hidden cursor-pointer"
       style={{ background: C.card, boxShadow: isDark ? 'none' : (hovered ? C.hoverShadow : C.cardShadow), transition: 'box-shadow 0.2s' }}>
-      <div className="flex" style={{ minHeight: 160 }}>
+      <div className="flex" style={{ minHeight: 230 }}>
         {/* Thumbnail - left */}
-        <div style={{ width: 200, flexShrink: 0, background: C.lime, minHeight: 160 }}>
+        <div style={{ width: 300, flexShrink: 0, background: C.lime, minHeight: 230 }}>
           <AnnThumbnail ann={ann} isVideo={hasVideo}/>
         </div>
         {/* Content - right */}
@@ -2256,7 +2257,7 @@ function AnnouncementCard({ ann, C, react, onToggleReaction, onClick }: {
             {ann.title}
           </h3>
           {excerpt && (
-            <p style={{ fontSize: 15, lineHeight: 1.4, color: C.muted, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            <p style={{ fontSize: 15, lineHeight: 1.4, color: C.muted, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
               {excerpt}
             </p>
           )}
@@ -2462,7 +2463,7 @@ function AnnouncementsSection({ userId: userIdProp, C }: { userId?: string; C: t
 
       const { data: anns } = await supabase
         .from('announcements')
-        .select('id, title, content, cover_image, youtube_url, is_pinned, published_at, author_id')
+        .select('id, title, subtitle, content, cover_image, youtube_url, is_pinned, published_at, author_id')
         .or(`cohort_ids.cs.{${student.cohort_id}},cohort_ids.eq.{}`)
         .lte('published_at', new Date().toISOString())
         .order('is_pinned', { ascending: false })
@@ -2528,8 +2529,8 @@ function AnnouncementsSection({ userId: userIdProp, C }: { userId?: string; C: t
   if (loading) return (
     <div className="space-y-3 max-w-5xl">
       {[0, 1, 2].map(i => (
-        <div key={i} className="rounded-2xl overflow-hidden flex" style={{ background: C.card, minHeight: 160 }}>
-          <div style={{ width: 200, flexShrink: 0, background: C.skeleton }} className="animate-pulse"/>
+        <div key={i} className="rounded-2xl overflow-hidden flex" style={{ background: C.card, minHeight: 230 }}>
+          <div style={{ width: 300, flexShrink: 0, background: C.skeleton }} className="animate-pulse"/>
           <div className="flex-1 p-4 space-y-2">
             <Sk h={11} w="30%"/>
             <Sk h={15} w="75%"/>
@@ -2546,7 +2547,7 @@ function AnnouncementsSection({ userId: userIdProp, C }: { userId?: string; C: t
 
   return (
     <>
-      <p className="text-sm mb-6" style={{ color: C.muted }}>Explore the latest in tech, AI trends, data insights, and actionable tips to level up your career.</p>
+      <p className="text-base mb-6" style={{ color: C.muted }}>Explore the latest in tech, AI trends, data insights, and actionable tips to level up your career.</p>
       <div className="space-y-3 max-w-5xl">
         {items.map(ann => (
           <AnnouncementCard
@@ -4866,7 +4867,7 @@ export default function StudentDashboard() {
             {/* Section header -- hidden on overview (has its own greeting) */}
             {activeSection !== 'overview' && (
               <div className="flex items-center justify-between mb-6">
-                <h1 className="text-xl font-bold tracking-tight" style={{ color: C.text }}>{activeItem.label}</h1>
+                <h1 className="text-[22px] font-bold tracking-tight" style={{ color: C.text }}>{activeItem.label}</h1>
               </div>
             )}
 

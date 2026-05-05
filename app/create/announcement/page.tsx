@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { useTheme } from '@/components/ThemeProvider';
 import { motion } from 'motion/react';
-import { ArrowLeft, Loader2, Save, Upload, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Sparkles, Upload, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -62,6 +62,8 @@ export default function CreateAnnouncementPage() {
   const [error, setError]               = useState('');
 
   const [title, setTitle]               = useState('');
+  const [subtitle, setSubtitle]         = useState('');
+  const [subtitleGenerating, setSubtitleGenerating] = useState(false);
   const [content, setContent]           = useState('');
   const [coverImage, setCoverImage]     = useState('');
   const [coverUploading, setCoverUploading] = useState(false);
@@ -94,6 +96,7 @@ export default function CreateAnnouncementPage() {
         const { data } = await supabase.from('announcements').select('*').eq('id', id).single();
         if (data) {
           setTitle(data.title ?? '');
+          setSubtitle(data.subtitle ?? '');
           setContent(data.content ?? '');
           setCoverImage(data.cover_image ?? '');
           setYoutubeUrl(data.youtube_url ?? '');
@@ -109,6 +112,28 @@ export default function CreateAnnouncementPage() {
     };
     init();
   }, [router]);
+
+  async function generateSubtitle() {
+    if (!content.trim()) { setError('Write some content first so the AI has something to work with.'); return; }
+    setSubtitleGenerating(true);
+    setError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch('/api/announcement-subtitle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ content }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Generation failed');
+      setSubtitle(json.subtitle ?? '');
+    } catch (err: any) {
+      setError(err.message || 'Could not generate subtitle.');
+    } finally {
+      setSubtitleGenerating(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -126,7 +151,7 @@ export default function CreateAnnouncementPage() {
     setLoading(true);
     try {
       const payload = {
-        title: trimmedTitle, content: sanitizeAnnouncementContent(content), cover_image: coverImage.trim() || null,
+        title: trimmedTitle, subtitle: subtitle.trim() || null, content: sanitizeAnnouncementContent(content), cover_image: coverImage.trim() || null,
         youtube_url: youtubeUrl.trim() || null,
         is_pinned: isPinned, cohort_ids: selectedCohortIds,
         published_at: publishedDate.toISOString(), expires_at: expiresDate ? expiresDate.toISOString() : null,
@@ -207,6 +232,27 @@ export default function CreateAnnouncementPage() {
                 type="text" value={title} onChange={e => setTitle(sanitizePlainText(e.target.value))}
                 placeholder="e.g. Important update for all students"
                 style={inputStyle(C)} required maxLength={255}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label style={{ ...labelStyle(C), marginBottom: 0 }}>Subtitle <span style={{ color: C.faint, fontWeight: 400 }}>(optional, shown as the card teaser)</span></label>
+                <button
+                  type="button"
+                  onClick={generateSubtitle}
+                  disabled={subtitleGenerating}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 8, border: 'none', cursor: subtitleGenerating ? 'not-allowed' : 'pointer', background: C.lime, color: '#111', fontSize: 12, fontWeight: 700, opacity: subtitleGenerating ? 0.7 : 1, transition: 'opacity 0.15s', flexShrink: 0 }}>
+                  {subtitleGenerating
+                    ? <Loader2 style={{ width: 12, height: 12 }} className="animate-spin"/>
+                    : <Sparkles style={{ width: 12, height: 12 }}/>}
+                  {subtitleGenerating ? 'Writing...' : 'AI Write'}
+                </button>
+              </div>
+              <input
+                type="text" value={subtitle} onChange={e => setSubtitle(sanitizePlainText(e.target.value))}
+                placeholder="A short punchy line shown on the card preview"
+                style={inputStyle(C)} maxLength={200}
               />
             </div>
 

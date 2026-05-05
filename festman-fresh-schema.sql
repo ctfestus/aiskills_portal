@@ -291,6 +291,7 @@ CREATE TABLE public.communities (
 CREATE TABLE public.announcements (
   id           uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
   title        text        NOT NULL,
+  subtitle     text,
   content      text        NOT NULL,
   cover_image  text,
   youtube_url  text,
@@ -781,6 +782,29 @@ CREATE TRIGGER trg_prevent_student_status_change
   BEFORE UPDATE OF status ON public.students
   FOR EACH ROW EXECUTE FUNCTION public.prevent_student_status_change();
 
+-- Prevent students from promoting their own role via REST API (CWE-269 / CWE-862).
+CREATE OR REPLACE FUNCTION public.prevent_student_role_change()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NEW.role <> OLD.role AND (SELECT auth.uid()) = OLD.id THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.students
+      WHERE id = (SELECT auth.uid()) AND role IN ('admin','instructor')
+    ) THEN
+      RAISE EXCEPTION 'permission denied: students may not change their own role'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.prevent_student_role_change() FROM PUBLIC;
+
+DROP TRIGGER IF EXISTS trg_prevent_student_role_change ON public.students;
+CREATE TRIGGER trg_prevent_student_role_change
+  BEFORE UPDATE OF role ON public.students
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_student_role_change();
+
 -- XP recalculation after each course attempt.
 CREATE OR REPLACE FUNCTION public.recalc_student_xp()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -824,6 +848,80 @@ CREATE TRIGGER trg_recalc_student_xp
   AFTER INSERT OR UPDATE OR DELETE ON public.course_attempts
   FOR EACH ROW EXECUTE FUNCTION public.recalc_student_xp();
 
+-- Prevent direct PostgREST writes to outcome fields (CWE-345 / CWE-863).
+-- Service-role callers have auth.uid() = NULL and are always allowed.
+CREATE OR REPLACE FUNCTION public.prevent_attempt_outcome_tampering()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF (SELECT auth.uid()) IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.passed IS NOT NULL
+       OR NEW.score <> 0
+       OR NEW.points <> 0
+       OR NEW.completed_at IS NOT NULL THEN
+      RAISE EXCEPTION 'permission denied: outcome fields may not be set on insert'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.passed IS DISTINCT FROM OLD.passed
+       OR NEW.score IS DISTINCT FROM OLD.score
+       OR NEW.points IS DISTINCT FROM OLD.points
+       OR NEW.completed_at IS DISTINCT FROM OLD.completed_at THEN
+      RAISE EXCEPTION 'permission denied: outcome fields may not be changed directly'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.prevent_attempt_outcome_tampering() FROM PUBLIC;
+
+DROP TRIGGER IF EXISTS trg_prevent_attempt_outcome_tampering ON public.course_attempts;
+CREATE TRIGGER trg_prevent_attempt_outcome_tampering
+  BEFORE INSERT OR UPDATE ON public.course_attempts
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_attempt_outcome_tampering();
+
+-- Prevent direct PostgREST writes to outcome fields on guided_project_attempts (CWE-345 / CWE-863).
+-- progress, current_module_id, current_lesson_id remain student-writable.
+-- completed_at and review are blocked for non-service-role callers.
+CREATE OR REPLACE FUNCTION public.prevent_guided_project_outcome_tampering()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF (SELECT auth.uid()) IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.completed_at IS NOT NULL OR NEW.review IS NOT NULL THEN
+      RAISE EXCEPTION 'permission denied: outcome fields may not be set on insert'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.completed_at IS DISTINCT FROM OLD.completed_at
+       OR NEW.review IS DISTINCT FROM OLD.review THEN
+      RAISE EXCEPTION 'permission denied: outcome fields may not be changed directly'
+        USING ERRCODE = 'insufficient_privilege';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.prevent_guided_project_outcome_tampering() FROM PUBLIC;
+
+DROP TRIGGER IF EXISTS trg_prevent_guided_project_outcome_tampering ON public.guided_project_attempts;
+CREATE TRIGGER trg_prevent_guided_project_outcome_tampering
+  BEFORE INSERT OR UPDATE ON public.guided_project_attempts
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_guided_project_outcome_tampering();
+
 -- Event registration RPC (security definer so it can bypass RLS for the insert)
 CREATE OR REPLACE FUNCTION public.register_event_attendee(
   p_event_id   uuid,
@@ -862,7 +960,7 @@ CREATE POLICY "students: select"
   );
 
 -- Students update their own non-privileged fields.
--- role and status fields are protected by triggers above.
+-- role, status, cohort_id, and original_cohort_id are protected by triggers above.
 CREATE POLICY "students: own update"
   ON public.students FOR UPDATE
   USING  ((SELECT auth.uid()) = id)

@@ -39,19 +39,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'status must be not_started or stalled' }, { status: 400 });
   }
 
-  // Look up content across courses, events, and virtual_experiences
-  const [{ data: course }, { data: event }, { data: ve }] = await Promise.all([
+  // Look up content across courses, events, virtual_experiences, and assignments
+  const [{ data: course }, { data: event }, { data: ve }, { data: assignment }] = await Promise.all([
     supabase.from('courses').select('user_id, title, slug, cover_image').eq('id', formId).maybeSingle(),
     supabase.from('events').select('user_id, title, slug, cover_image').eq('id', formId).maybeSingle(),
     supabase.from('virtual_experiences').select('user_id, title, slug, cover_image').eq('id', formId).maybeSingle(),
+    supabase.from('assignments').select('created_by, title, cover_image').eq('id', formId).maybeSingle(),
   ]);
 
   let content: any = null;
   let contentType: string = 'course';
 
-  if (course)      { content = course; contentType = 'course'; }
-  else if (event)  { content = event;  contentType = 'event'; }
-  else if (ve)     { content = ve;     contentType = 'virtual_experience'; }
+  if (course)           { content = course;      contentType = 'course'; }
+  else if (event)       { content = event;        contentType = 'event'; }
+  else if (ve)          { content = ve;           contentType = 'virtual_experience'; }
+  else if (assignment)  { content = { ...assignment, user_id: assignment.created_by, slug: null }; contentType = 'assignment'; }
 
   if (!content) return NextResponse.json({ error: 'Content not found' }, { status: 404 });
 
@@ -65,7 +67,9 @@ export async function POST(req: NextRequest) {
   const t        = await getTenantSettings();
   const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
   const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
-  const formUrl  = `${t.appUrl}/${content.slug || formId}`;
+  const formUrl  = contentType === 'assignment'
+    ? `${t.appUrl}/assignments/${formId}`
+    : `${t.appUrl}/${content.slug || formId}`;
 
   const subject = status === 'not_started'
     ? `Your learning journey is waiting, ${studentName || 'there'}!`

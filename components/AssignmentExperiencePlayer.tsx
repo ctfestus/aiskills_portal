@@ -84,16 +84,7 @@ function allComplete(config: ProjectConfig, progress: Progress): boolean {
   );
 }
 
-function getEmbedUrl(url: string): string | null {
-  if (!url) return null;
-  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
-  if (yt) return `https://www.youtube.com/embed/${yt[1]}?rel=0`;
-  const vimeo = url.match(/vimeo\.com\/(\d+)/);
-  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
-  if (url.includes('iframe.mediadelivery.net') || url.includes('video.bunnycdn.com')) return url;
-  if (url.includes('canva.com/design/')) return url.includes('?') ? url : `${url}?embed`;
-  return null;
-}
+import { safeEmbedUrl as getEmbedUrl } from '@/lib/safe-embed-url';
 
 function normalize(s: string) { return s.toLowerCase().replace(/\s+/g, ' ').trim(); }
 
