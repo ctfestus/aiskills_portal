@@ -697,7 +697,7 @@ function CoursesSection({ userEmail, userId: userIdProp, C, isOutstandingProp }:
       // Get student's cohort -- original_cohort_id being set means they're currently in outstanding
       const { data: student } = await supabase
         .from('students')
-        .select('cohort_id, original_cohort_id')
+        .select('cohort_id, original_cohort_id, payment_exempt')
         .eq('id', effectiveUserId)
         .single();
 
@@ -728,7 +728,7 @@ function CoursesSection({ userEmail, userId: userIdProp, C, isOutstandingProp }:
         }).access_status;
       }
 
-      const restrictedByPayment = ['pending_deposit', 'overdue', 'expired'].includes(liveStatus ?? '');
+      const restrictedByPayment = !student?.payment_exempt && ['pending_deposit', 'overdue', 'expired'].includes(liveStatus ?? '');
       const outstanding = !!student?.original_cohort_id || restrictedByPayment;
       setIsOutstandingInternal(outstanding);
 
@@ -5228,7 +5228,7 @@ export default function StudentDashboard() {
       }
 
       // Fetch cohort for global activity ticker + outstanding check
-      supabase.from('students').select('cohort_id, original_cohort_id').eq('id', resolvedViewingAs?.id ?? authUser.id).single()
+      supabase.from('students').select('cohort_id, original_cohort_id, payment_exempt').eq('id', resolvedViewingAs?.id ?? authUser.id).single()
         .then(async ({ data: s }) => {
           if (s?.cohort_id) setCohortIdForTicker(s.cohort_id);
           const { data: enroll } = await supabase
@@ -5254,7 +5254,7 @@ export default function StudentDashboard() {
               installments:                (enroll.payment_installments ?? []).map((i: any) => ({ due_date: new Date(i.due_date), status: i.status })),
             }).access_status;
           }
-          const restricted = ['pending_deposit', 'overdue', 'expired'].includes(liveStatus ?? '');
+          const restricted = !s?.payment_exempt && ['pending_deposit', 'overdue', 'expired'].includes(liveStatus ?? '');
           const outstanding = !!s?.original_cohort_id || restricted;
           setIsOutstanding(outstanding);
           setEnrollmentStatus(liveStatus);
