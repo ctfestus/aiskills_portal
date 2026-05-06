@@ -21,10 +21,26 @@ async function getSessionStudent(req: NextRequest): Promise<{ id: string; email:
 
 // GET -- return enrollment, installments, payments, confirmations, payment options
 export async function GET(req: NextRequest) {
-  const student = await getSessionStudent(req);
-  if (!student) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const caller = await getSessionStudent(req);
+  if (!caller) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const db = adminClient();
+
+  // Allow admins/instructors to view any student's payments via ?studentId=
+  const requestedId = req.nextUrl.searchParams.get('studentId');
+  let targetStudentId = caller.id;
+
+  if (requestedId && requestedId !== caller.id) {
+    const { data: callerRecord } = await db
+      .from('students')
+      .select('role')
+      .eq('id', caller.id)
+      .maybeSingle();
+    if (!callerRecord || !['admin', 'instructor'].includes(callerRecord.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    targetStudentId = requestedId;
+  }
 
   try {
     const [enrollRes, optionsRes] = await Promise.all([
@@ -36,7 +52,7 @@ export async function GET(req: NextRequest) {
           bootcamp_starts_at, bootcamp_ends_at,
           payment_installments ( id, due_date, amount_due, amount_paid, status )
         `)
-        .eq('student_id', student.id)
+        .eq('student_id', targetStudentId)
         .order('created_at', { ascending: false })
         .maybeSingle(),
       db
