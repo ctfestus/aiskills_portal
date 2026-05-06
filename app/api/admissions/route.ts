@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
       currency:                    String(body.settings.currency || 'GHS').trim() || 'GHS',
       deposit_percent:             Number(body.settings.deposit_percent ?? 50),
       payment_plan:                body.settings.payment_plan || 'flexible',
-      installment_count:           Number(body.settings.installment_count ?? 2),
+      installment_count:           Number(body.settings.installment_count ?? 3),
       post_bootcamp_access_months: Number(body.settings.post_bootcamp_access_months ?? 3),
       updated_at:                  new Date().toISOString(),
     };

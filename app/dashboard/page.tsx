@@ -2696,12 +2696,19 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   const [admissionsSaving, setAdmissionsSaving] = useState(false);
   const [admissionsResult, setAdmissionsResult] = useState<{ inserted: number; updated: number; errors: any[] } | null>(null);
   const [admissionsError,  setAdmissionsError]  = useState('');
+
+  const blankAdmissionForm = { email: '', full_name: '', total_fee: '', payment_plan: 'flexible', amount_paid: '', paid_at: '', payment_method: '', payment_reference: '', notes: '' };
+  const [addAdmissionOpen,   setAddAdmissionOpen]   = useState(false);
+  const [addAdmissionForm,   setAddAdmissionForm]   = useState(blankAdmissionForm);
+  const [addAdmissionSaving, setAddAdmissionSaving] = useState(false);
+  const [addAdmissionError,  setAddAdmissionError]  = useState('');
+  const [addAdmissionLog,    setAddAdmissionLog]    = useState<{ email: string; name: string; status: string }[]>([]);
   const [paymentSettings, setPaymentSettings] = useState({
     total_fee: '',
     currency: 'GHS',
     deposit_percent: '50',
     payment_plan: 'flexible',
-    installment_count: '2',
+    installment_count: '3',
     post_bootcamp_access_months: '3',
     start_date: '',
     end_date: '',
@@ -2760,6 +2767,38 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
     setAdmissionsSaving(false);
   };
 
+  const handleAddAdmission = async (closeAfter: boolean) => {
+    if (!selectedCohort || !addAdmissionForm.email.trim()) return;
+    setAddAdmissionSaving(true); setAddAdmissionError('');
+    const { data: { session } } = await supabase.auth.getSession();
+    try {
+      const row: any = { email: addAdmissionForm.email.trim().toLowerCase() };
+      if (addAdmissionForm.full_name.trim())         row.full_name          = addAdmissionForm.full_name.trim();
+      if (addAdmissionForm.total_fee.trim())         row.total_fee          = addAdmissionForm.total_fee.trim();
+      if (addAdmissionForm.payment_plan)             row.payment_plan       = addAdmissionForm.payment_plan;
+      if (addAdmissionForm.amount_paid.trim())       row.amount_paid        = addAdmissionForm.amount_paid.trim();
+      if (addAdmissionForm.paid_at.trim())           row.paid_at            = addAdmissionForm.paid_at.trim();
+      if (addAdmissionForm.payment_method.trim())    row.payment_method     = addAdmissionForm.payment_method.trim();
+      if (addAdmissionForm.payment_reference.trim()) row.payment_reference  = addAdmissionForm.payment_reference.trim();
+      if (addAdmissionForm.notes.trim())             row.notes              = addAdmissionForm.notes.trim();
+      const res = await fetch('/api/admissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ cohortId: selectedCohort.id, rows: [row] }),
+      }).then(r => r.json());
+      if (res.error) { setAddAdmissionError(res.error); }
+      else if (res.errors?.length > 0) { setAddAdmissionError(res.errors[0].error); }
+      else {
+        const status = res.inserted > 0 ? 'added' : 'updated';
+        setAddAdmissionLog(prev => [{ email: row.email, name: row.full_name ?? '', status }, ...prev]);
+        setAddAdmissionForm(blankAdmissionForm);
+        loadAllowedEmails(selectedCohort.id);
+        if (closeAfter) { setAddAdmissionOpen(false); setAddAdmissionLog([]); }
+      }
+    } catch { setAddAdmissionError('Failed to save. Please try again.'); }
+    setAddAdmissionSaving(false);
+  };
+
   const load = async () => {
     const [{ data: c }, { data: s }] = await Promise.all([
       supabase.from('cohorts').select('*').order('created_at', { ascending: false }),
@@ -2812,7 +2851,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
         currency:                    settings?.currency ?? 'GHS',
         deposit_percent:             settings?.deposit_percent != null ? String(settings.deposit_percent) : '50',
         payment_plan:                settings?.payment_plan ?? 'flexible',
-        installment_count:           settings?.installment_count != null ? String(settings.installment_count) : '2',
+        installment_count:           settings?.installment_count != null ? String(settings.installment_count) : '3',
         post_bootcamp_access_months: settings?.post_bootcamp_access_months != null ? String(settings.post_bootcamp_access_months) : '3',
         start_date:                  cohortDates?.start_date ?? '',
         end_date:                    cohortDates?.end_date ?? '',
@@ -3359,7 +3398,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                 { label: 'Total Fee', key: 'total_fee', type: 'number', placeholder: '3000' },
                 { label: 'Currency', key: 'currency', type: 'text', placeholder: 'GHS' },
                 { label: 'Deposit %', key: 'deposit_percent', type: 'number', placeholder: '50' },
-                { label: 'Installments', key: 'installment_count', type: 'number', placeholder: '2' },
+                { label: 'Installments', key: 'installment_count', type: 'number', placeholder: '3', min: 3 },
                 { label: 'Extra Months', key: 'post_bootcamp_access_months', type: 'number', placeholder: '3' },
               ].map(f => (
                 <div key={f.key}>
@@ -3368,6 +3407,8 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                     type={f.type}
                     value={(paymentSettings as any)[f.key]}
                     placeholder={f.placeholder}
+                    min={(f as any).min}
+                    max={(f as any).max}
                     onChange={e => setPaymentSettings(prev => ({ ...prev, [f.key]: e.target.value }))}
                     className="w-full rounded-lg px-2.5 py-2 text-xs outline-none"
                     style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}
@@ -3425,14 +3466,20 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
           <div className="px-5 py-3.5 flex items-center justify-between border-b" style={{ borderColor: C.divider }}>
             <div className="flex items-center gap-2.5">
               <Users className="w-4 h-4" style={{ color: C.muted }}/>
-              <p className="text-sm font-semibold" style={{ color: C.text }}>Admissions Import</p>
-              <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: C.pill, color: C.faint }}>CSV</span>
+              <p className="text-sm font-semibold" style={{ color: C.text }}>Admissions</p>
             </div>
-            <button onClick={() => { setAdmissionsOpen(v => !v); setAdmissionsResult(null); setAdmissionsError(''); }}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-              style={{ background: admissionsOpen ? C.pill : C.cta, color: admissionsOpen ? C.muted : C.ctaText }}>
-              {admissionsOpen ? 'Close' : 'Import Students'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => { setAddAdmissionOpen(true); setAddAdmissionLog([]); setAddAdmissionError(''); setAddAdmissionForm(blankAdmissionForm); }}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                style={{ background: C.cta, color: C.ctaText }}>
+                Add Student
+              </button>
+              <button onClick={() => { setAdmissionsOpen(v => !v); setAdmissionsResult(null); setAdmissionsError(''); }}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                style={{ background: C.pill, color: C.muted }}>
+                {admissionsOpen ? 'Close CSV' : 'Import CSV'}
+              </button>
+            </div>
           </div>
 
           {admissionsOpen && (
@@ -3539,6 +3586,149 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {addAdmissionOpen && selectedCohort && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => { setAddAdmissionOpen(false); setAddAdmissionLog([]); }}>
+          <div className="w-full max-w-lg rounded-2xl overflow-hidden flex flex-col max-h-[92vh]"
+            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 24px 80px rgba(0,0,0,0.35)' }}
+            onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="px-6 pt-5 pb-4 flex items-start justify-between flex-shrink-0" style={{ borderBottom: `1px solid ${C.divider}` }}>
+              <div>
+                <h3 className="text-base font-bold" style={{ color: C.text }}>Add Student</h3>
+                <p className="text-xs mt-0.5" style={{ color: C.muted }}>{selectedCohort.name}</p>
+              </div>
+              <button onClick={() => { setAddAdmissionOpen(false); setAddAdmissionLog([]); }}
+                className="text-xs font-semibold px-2.5 py-1 rounded-lg" style={{ background: C.pill, color: C.muted }}>
+                Close
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+              {/* Form */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Email *</label>
+                  <input type="email" value={addAdmissionForm.email} placeholder="student@example.com"
+                    onChange={e => setAddAdmissionForm(p => ({ ...p, email: e.target.value }))}
+                    className="w-full rounded-xl px-3 py-2 text-sm outline-none"
+                    style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Full Name</label>
+                  <input type="text" value={addAdmissionForm.full_name} placeholder="Jane Doe"
+                    onChange={e => setAddAdmissionForm(p => ({ ...p, full_name: e.target.value }))}
+                    className="w-full rounded-xl px-3 py-2 text-sm outline-none"
+                    style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Total Fee</label>
+                    <input type="number" value={addAdmissionForm.total_fee} placeholder="Cohort default"
+                      onChange={e => setAddAdmissionForm(p => ({ ...p, total_fee: e.target.value }))}
+                      className="w-full rounded-xl px-3 py-2 text-sm outline-none"
+                      style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Payment Plan</label>
+                    <select value={addAdmissionForm.payment_plan}
+                      onChange={e => setAddAdmissionForm(p => ({ ...p, payment_plan: e.target.value }))}
+                      className="w-full rounded-xl px-3 py-2 text-sm outline-none"
+                      style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}>
+                      <option value="flexible">Flexible</option>
+                      <option value="full">Full</option>
+                      <option value="sponsored">Sponsored</option>
+                      <option value="waived">Waived</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Amount Paid</label>
+                    <input type="number" value={addAdmissionForm.amount_paid} placeholder="0"
+                      onChange={e => setAddAdmissionForm(p => ({ ...p, amount_paid: e.target.value }))}
+                      className="w-full rounded-xl px-3 py-2 text-sm outline-none"
+                      style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Date Paid</label>
+                    <input type="date" value={addAdmissionForm.paid_at}
+                      onChange={e => setAddAdmissionForm(p => ({ ...p, paid_at: e.target.value }))}
+                      className="w-full rounded-xl px-3 py-2 text-sm outline-none"
+                      style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Payment Method</label>
+                    <input type="text" value={addAdmissionForm.payment_method} placeholder="e.g. bank transfer"
+                      onChange={e => setAddAdmissionForm(p => ({ ...p, payment_method: e.target.value }))}
+                      className="w-full rounded-xl px-3 py-2 text-sm outline-none"
+                      style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Reference</label>
+                    <input type="text" value={addAdmissionForm.payment_reference} placeholder="Transaction ref"
+                      onChange={e => setAddAdmissionForm(p => ({ ...p, payment_reference: e.target.value }))}
+                      className="w-full rounded-xl px-3 py-2 text-sm outline-none"
+                      style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Notes</label>
+                  <textarea value={addAdmissionForm.notes} placeholder="Optional notes..."
+                    rows={2} onChange={e => setAddAdmissionForm(p => ({ ...p, notes: e.target.value }))}
+                    className="w-full rounded-xl px-3 py-2 text-sm resize-none outline-none"
+                    style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+                </div>
+              </div>
+
+              {addAdmissionError && <p className="text-xs" style={{ color: '#dc2626' }}>{addAdmissionError}</p>}
+
+              {/* Session log */}
+              {addAdmissionLog.length > 0 && (
+                <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+                  <div className="px-3 py-2 text-xs font-semibold" style={{ background: C.pill, color: C.muted }}>
+                    Added this session ({addAdmissionLog.length})
+                  </div>
+                  <div className="divide-y" style={{ borderColor: C.divider }}>
+                    {addAdmissionLog.map((entry, i) => (
+                      <div key={i} className="px-3 py-2 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-medium" style={{ color: C.text }}>{entry.email}</p>
+                          {entry.name && <p className="text-xs" style={{ color: C.muted }}>{entry.name}</p>}
+                        </div>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                          style={{ background: entry.status === 'added' ? 'rgba(34,197,94,0.1)' : 'rgba(59,130,246,0.1)', color: entry.status === 'added' ? '#16a34a' : '#2563eb' }}>
+                          {entry.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 flex gap-2 flex-shrink-0" style={{ borderTop: `1px solid ${C.divider}` }}>
+              <button onClick={() => handleAddAdmission(false)}
+                disabled={addAdmissionSaving || !addAdmissionForm.email.trim()}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40"
+                style={{ background: C.pill, color: C.text }}>
+                {addAdmissionSaving ? 'Saving...' : 'Save & Add Another'}
+              </button>
+              <button onClick={() => handleAddAdmission(true)}
+                disabled={addAdmissionSaving || !addAdmissionForm.email.trim()}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40"
+                style={{ background: C.cta, color: C.ctaText }}>
+                {addAdmissionSaving ? 'Saving...' : 'Save & Close'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -5081,10 +5271,7 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
   const [search,     setSearch]     = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Outstanding cohort selector (persisted in localStorage)
-  const [outstandingCohortId, setOutstandingCohortId] = useState<string>(() =>
-    typeof window !== 'undefined' ? (localStorage.getItem('outstandingCohortId') ?? '') : ''
-  );
+  const [outstandingCohortId, setOutstandingCohortId] = useState<string>('');
 
   // Move/restore action state
   const [movingId,   setMovingId]   = useState<string | null>(null);
@@ -5131,52 +5318,22 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
     setLoading(true); setError('');
     const token = await getToken();
     try {
-      const res = await fetch('/api/payments?action=summary', {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then(r => r.json());
+      const [res, cfgRes] = await Promise.all([
+        fetch('/api/payments?action=summary', {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(r => r.json()),
+        fetch('/api/payments?action=payment-config', {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(r => r.json()),
+      ]);
       if (res.error) { setError(res.error); setLoading(false); return; }
 
       const fetchedRows: any[] = res.rows ?? [];
-      const currentOutstandingId = localStorage.getItem('outstandingCohortId') ?? '';
+      const currentOutstandingId: string = cfgRes.config?.outstanding_cohort_id ?? '';
 
       setRows(fetchedRows);
       setCohorts(res.cohorts ?? []);
-
-      // Auto-sync: move overdue students out, restore active/completed/waived students
-      if (currentOutstandingId) {
-        const toRestore = fetchedRows.filter(r =>
-          r.student_id &&
-          r.original_cohort_id &&
-          r.cohort_id === currentOutstandingId &&
-          (r.access_status === 'active' || r.access_status === 'completed' || r.access_status === 'waived')
-        );
-        const toMove = fetchedRows.filter(r =>
-          r.student_id &&
-          !r.payment_exempt &&
-          r.cohort_id !== currentOutstandingId &&
-          !r.original_cohort_id &&
-          (r.access_status === 'overdue' || r.access_status === 'pending_deposit')
-        );
-        if (toRestore.length > 0 || toMove.length > 0) {
-          await Promise.all([
-            ...toRestore.map(r => fetch('/api/payments', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ action: 'restore-cohort', studentId: r.student_id }),
-            })),
-            ...toMove.map(r => fetch('/api/payments', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ action: 'move-to-outstanding', studentId: r.student_id, outstandingCohortId: currentOutstandingId }),
-            })),
-          ]);
-          // Reload to reflect cohort changes
-          const res2 = await fetch('/api/payments?action=summary', {
-            headers: { Authorization: `Bearer ${token}` },
-          }).then(r => r.json());
-          if (!res2.error) { setRows(res2.rows ?? []); setCohorts(res2.cohorts ?? []); }
-        }
-      }
+      setOutstandingCohortId(currentOutstandingId);
     } catch { setError('Failed to load payment data.'); }
     finally { setLoading(false); }
   }, []);
@@ -5481,7 +5638,16 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
       <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
         <span className="text-xs font-semibold flex-shrink-0" style={{ color: C.muted }}>Outstanding Cohort:</span>
         <select value={outstandingCohortId}
-          onChange={e => { setOutstandingCohortId(e.target.value); localStorage.setItem('outstandingCohortId', e.target.value); }}
+          onChange={async e => {
+            const v = e.target.value;
+            setOutstandingCohortId(v);
+            const token = await getToken();
+            fetch('/api/payments', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ action: 'save-payment-config', outstandingCohortId: v || null }),
+            }).catch(() => {});
+          }}
           className="flex-1 min-w-[160px] text-sm px-3 py-1.5 rounded-lg outline-none"
           style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
           <option value="">-- Select the outstanding cohort --</option>

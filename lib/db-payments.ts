@@ -43,12 +43,69 @@ export interface RecordPaymentInput {
 }
 
 // ---
+// CohortAction
+// Pure decision helper -- no DB access, no side effects.
+// Single source of truth for move/restore rules.
+// ---
+
+type CohortAction =
+  | { type: 'move';    studentId: string; fromCohortId: string; toCohortId: string }
+  | { type: 'restore'; studentId: string; toCohortId: string };
+
+function getOutstandingCohortAction(input: {
+  studentId: string | null;
+  accessStatus: string;
+  studentCohortId: string;
+  studentOriginalCohortId: string | null;
+  paymentExempt: boolean;
+  outstandingCohortId: string | null;
+}): CohortAction | null {
+  const { studentId, accessStatus, studentCohortId, studentOriginalCohortId, paymentExempt, outstandingCohortId } = input;
+  if (!studentId || !outstandingCohortId) return null;
+
+  if (
+    !paymentExempt &&
+    !studentOriginalCohortId &&
+    studentCohortId !== outstandingCohortId &&
+    (accessStatus === 'overdue' || accessStatus === 'pending_deposit')
+  ) {
+    return { type: 'move', studentId, fromCohortId: studentCohortId, toCohortId: outstandingCohortId };
+  }
+
+  if (
+    studentOriginalCohortId &&
+    studentCohortId === outstandingCohortId &&
+    (accessStatus === 'active' || accessStatus === 'completed' || accessStatus === 'waived')
+  ) {
+    return { type: 'restore', studentId, toCohortId: studentOriginalCohortId };
+  }
+
+  return null;
+}
+
+async function applyCohortAction(db: SupabaseClient, action: CohortAction): Promise<void> {
+  if (action.type === 'move') {
+    const { error } = await db.from('students').update({
+      original_cohort_id: action.fromCohortId,
+      cohort_id:          action.toCohortId,
+    }).eq('id', action.studentId);
+    if (error) throw error;
+  } else {
+    const { error } = await db.from('students').update({
+      cohort_id:          action.toCohortId,
+      original_cohort_id: null,
+    }).eq('id', action.studentId);
+    if (error) throw error;
+  }
+}
+
+// ---
 // getEnrollmentRows
 // Returns all post-signup enrollments enriched with cohort and student info.
 // ---
 
 export async function getEnrollmentRows(db: SupabaseClient): Promise<{ rows: EnrollmentRow[]; cohorts: { id: string; name: string }[] }> {
-  const [enrollRes, cohortsRes, settingsRes] = await Promise.all([
+  const [enrollRes, cohortsRes, settingsRes, psRes] = await Promise.all([
     db
       .from('bootcamp_enrollments')
       .select(`
@@ -73,6 +130,7 @@ export async function getEnrollmentRows(db: SupabaseClient): Promise<{ rows: Enr
       .order('created_at', { ascending: false }),
     db.from('cohorts').select('id, name').order('name'),
     db.from('cohort_payment_settings').select('cohort_id, post_bootcamp_access_months'),
+    db.from('payment_config').select('outstanding_cohort_id').eq('id', 'default').maybeSingle(),
   ]);
 
   const cohortMap: Record<string, string> = {};
@@ -81,11 +139,13 @@ export async function getEnrollmentRows(db: SupabaseClient): Promise<{ rows: Enr
   const settingsMap: Record<string, number> = {};
   for (const s of settingsRes.data ?? []) settingsMap[s.cohort_id] = s.post_bootcamp_access_months ?? 3;
 
+  const outstandingCohortId: string | null = (psRes as any).data?.outstanding_cohort_id ?? null;
+
   const toUpdate: { id: string; access_status: string; access_until: string | null }[] = [];
 
   const rows: EnrollmentRow[] = (enrollRes.data ?? []).map((e: any) => {
-    const isPresignup = !e.student_id;
-    const student = e.students ?? {};
+    const isPresignup     = !e.student_id;
+    const student         = e.students ?? {};
     const rawInstallments = e.payment_installments ?? [];
 
     const nextUnpaid = rawInstallments
@@ -94,8 +154,8 @@ export async function getEnrollmentRows(db: SupabaseClient): Promise<{ rows: Enr
 
     const originalCohortId = student.original_cohort_id ?? null;
     const resolvedCohortId = isPresignup ? e.cohort_id : (student.cohort_id ?? e.cohort_id);
+    const paymentExempt    = student.payment_exempt ?? false;
 
-    // Recompute access live so overdue status is always current-date-accurate
     const state: EnrollmentState = {
       payment_plan:                e.payment_plan as any,
       total_fee:                   Number(e.total_fee),
@@ -105,9 +165,9 @@ export async function getEnrollmentRows(db: SupabaseClient): Promise<{ rows: Enr
       post_bootcamp_access_months: settingsMap[e.cohort_id] ?? 3,
       installments:                rawInstallments.map((i: any) => ({ due_date: new Date(i.due_date), status: i.status })),
     };
-    const liveAccess  = computeAccess(state);
-    const liveStatus  = liveAccess.access_status;
-    const liveUntil   = liveAccess.access_until ? liveAccess.access_until.toISOString().slice(0, 10) : null;
+    const liveAccess = computeAccess(state);
+    const liveStatus = liveAccess.access_status;
+    const liveUntil  = liveAccess.access_until ? liveAccess.access_until.toISOString().slice(0, 10) : null;
 
     if (liveStatus !== e.access_status || liveUntil !== (e.access_until ?? null)) {
       toUpdate.push({ id: e.id, access_status: liveStatus, access_until: liveUntil });
@@ -132,14 +192,13 @@ export async function getEnrollmentRows(db: SupabaseClient): Promise<{ rows: Enr
       next_due_date:        nextUnpaid?.due_date ?? null,
       bootcamp_starts_at:   e.bootcamp_starts_at ?? null,
       bootcamp_ends_at:     e.bootcamp_ends_at ?? null,
-      payment_exempt:       student.payment_exempt ?? false,
+      payment_exempt:       paymentExempt,
       currency:             e.currency ?? 'GHS',
       is_presignup:         isPresignup,
     };
   });
 
-  // Persist changed statuses back to DB so student page also sees the correct value.
-  // Fire and forget -- don't block the response.
+  // Persist changed access statuses -- fire-and-forget, non-blocking
   if (toUpdate.length > 0) {
     Promise.all(
       toUpdate.map(u => db.from('bootcamp_enrollments').update({
@@ -148,6 +207,42 @@ export async function getEnrollmentRows(db: SupabaseClient): Promise<{ rows: Enr
         updated_at:    new Date().toISOString(),
       }).eq('id', u.id))
     ).catch(() => {});
+  }
+
+  // Collect cohort actions using in-memory data (no extra DB queries)
+  const cohortActions: CohortAction[] = rows
+    .filter(r => !r.is_presignup)
+    .map(r => getOutstandingCohortAction({
+      studentId:               r.student_id,
+      accessStatus:            r.access_status,
+      studentCohortId:         r.cohort_id,
+      studentOriginalCohortId: r.original_cohort_id,
+      paymentExempt:           r.payment_exempt,
+      outstandingCohortId,
+    }))
+    .filter((a): a is CohortAction => a !== null);
+
+  // Apply cohort moves; only patch rows where the DB write actually succeeded
+  if (cohortActions.length > 0) {
+    const results = await Promise.allSettled(cohortActions.map(a => applyCohortAction(db, a)));
+
+    for (let i = 0; i < cohortActions.length; i++) {
+      if (results[i].status !== 'fulfilled') continue;
+      const action = cohortActions[i];
+      const row = rows.find(r => r.student_id === action.studentId);
+      if (!row) continue;
+      if (action.type === 'move') {
+        row.original_cohort_id   = action.fromCohortId;
+        row.original_cohort_name = cohortMap[action.fromCohortId] ?? 'Unknown';
+        row.cohort_id            = action.toCohortId;
+        row.cohort_name          = cohortMap[action.toCohortId] ?? 'Unknown';
+      } else {
+        row.cohort_id            = action.toCohortId;
+        row.cohort_name          = cohortMap[action.toCohortId] ?? 'Unknown';
+        row.original_cohort_id   = null;
+        row.original_cohort_name = null;
+      }
+    }
   }
 
   return { rows, cohorts: cohortsRes.data ?? [] };
@@ -278,8 +373,8 @@ export async function activateEnrollment(
   const installments = generateInstallments(
     enrollment.id,
     Number(enrollment.total_fee),
-    Number(enrollment.deposit_required),
-    settings?.installment_count ?? 2,
+    Number(enrollment.amount_paid_initial),
+    settings?.installment_count ?? 3,
     enrollment.bootcamp_starts_at ? new Date(enrollment.bootcamp_starts_at) : null,
   );
   if (installments.length > 0) {
@@ -340,7 +435,7 @@ export async function recordPayment(db: SupabaseClient, input: RecordPaymentInpu
 
   const { data: enroll, error: enErr } = await db
     .from('bootcamp_enrollments')
-    .select('total_fee, deposit_required, paid_total, payment_plan, bootcamp_ends_at, cohort_id')
+    .select('paid_total, cohort_id')
     .eq('id', input.enrollmentId)
     .single();
   if (enErr || !enroll) throw enErr ?? new Error('Enrollment not found');
@@ -351,35 +446,17 @@ export async function recordPayment(db: SupabaseClient, input: RecordPaymentInpu
     .eq('cohort_id', enroll.cohort_id)
     .maybeSingle();
 
-  const { data: freshInst } = await db
-    .from('payment_installments')
-    .select('due_date, status')
-    .eq('enrollment_id', input.enrollmentId);
-
   const newPaidTotal = Number(enroll.paid_total) + input.amount;
 
-  const state: EnrollmentState = {
-    payment_plan:                enroll.payment_plan as any,
-    total_fee:                   Number(enroll.total_fee),
-    deposit_required:            Number(enroll.deposit_required),
-    paid_total:                  newPaidTotal,
-    bootcamp_ends_at:            enroll.bootcamp_ends_at ? new Date(enroll.bootcamp_ends_at) : null,
-    post_bootcamp_access_months: settings?.post_bootcamp_access_months ?? 3,
-    installments:                (freshInst ?? []).map((i: any) => ({ due_date: new Date(i.due_date), status: i.status })),
-  };
-
-  const access = computeAccess(state);
-
+  // Write paid_total first so recomputeEnrollmentAccess reads the correct value
   const { error: enrollUpdErr } = await db
     .from('bootcamp_enrollments')
-    .update({
-      paid_total:    newPaidTotal,
-      access_status: access.access_status,
-      access_until:  access.access_until ? access.access_until.toISOString().slice(0, 10) : null,
-      updated_at:    new Date().toISOString(),
-    })
+    .update({ paid_total: newPaidTotal, updated_at: new Date().toISOString() })
     .eq('id', input.enrollmentId);
   if (enrollUpdErr) throw enrollUpdErr;
+
+  // Recompute access_status, access_until, and sync cohort membership
+  await recomputeEnrollmentAccess(db, input.enrollmentId, settings?.post_bootcamp_access_months ?? 3);
 }
 
 // ---
@@ -389,7 +466,7 @@ export async function recordPayment(db: SupabaseClient, input: RecordPaymentInpu
 export function generateInstallments(
   enrollmentId: string,
   totalFee: number,
-  depositRequired: number,
+  amountPaidInitial: number,
   installmentCount: number,
   bootcampStartsAt: Date | null,
 ): { enrollment_id: string; due_date: string; amount_due: number; amount_paid: number; status: string }[] {
@@ -401,14 +478,14 @@ export function generateInstallments(
   rows.push({
     enrollment_id: enrollmentId,
     due_date:      today,
-    amount_due:    depositRequired,
+    amount_due:    amountPaidInitial,
     amount_paid:   0,
     status:        'unpaid',
   });
 
-  if (installmentCount <= 1) return rows;
+  if (installmentCount <= 1 || amountPaidInitial >= totalFee) return rows;
 
-  const remainder = totalFee - depositRequired;
+  const remainder = totalFee - amountPaidInitial;
   const count = installmentCount - 1;
   const perInstallment = Math.round((remainder / count) * 100) / 100;
   const base = bootcampStartsAt;
@@ -646,7 +723,7 @@ async function recomputeEnrollmentAccess(
 ): Promise<void> {
   const { data: enroll, error } = await db
     .from('bootcamp_enrollments')
-    .select('total_fee, deposit_required, paid_total, payment_plan, bootcamp_ends_at')
+    .select('total_fee, deposit_required, paid_total, payment_plan, bootcamp_ends_at, student_id')
     .eq('id', enrollmentId)
     .single();
   if (error || !enroll) throw error ?? new Error('Enrollment not found');
@@ -676,4 +753,22 @@ async function recomputeEnrollmentAccess(
     })
     .eq('id', enrollmentId);
   if (accessUpdErr) throw accessUpdErr;
+
+  if (enroll.student_id) {
+    const [psResult, studentResult] = await Promise.all([
+      db.from('payment_config').select('outstanding_cohort_id').eq('id', 'default').maybeSingle(),
+      db.from('students').select('cohort_id, original_cohort_id, payment_exempt').eq('id', enroll.student_id).maybeSingle(),
+    ]);
+
+    const action = getOutstandingCohortAction({
+      studentId:               enroll.student_id,
+      accessStatus:            access.access_status,
+      studentCohortId:         studentResult.data?.cohort_id ?? '',
+      studentOriginalCohortId: studentResult.data?.original_cohort_id ?? null,
+      paymentExempt:           studentResult.data?.payment_exempt ?? false,
+      outstandingCohortId:     psResult.data?.outstanding_cohort_id ?? null,
+    });
+
+    if (action) await applyCohortAction(db, action).catch(() => {});
+  }
 }

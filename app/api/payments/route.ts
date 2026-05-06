@@ -8,8 +8,8 @@ import {
   getPaymentHistory,
   editPayment,
   deletePayment,
+  recomputeEnrollmentAccessPublic,
 } from '@/lib/db-payments';
-import { computeAccess, EnrollmentState } from '@/lib/enrollment-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -141,6 +141,26 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  if (action === 'payment-config') {
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!['instructor', 'admin'].includes(sessionUser.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    try {
+      const db = adminClient();
+      const { data, error } = await db
+        .from('payment_config')
+        .select('outstanding_cohort_id')
+        .eq('id', 'default')
+        .maybeSingle();
+      if (error) throw error;
+      return NextResponse.json({ config: data ?? {} });
+    } catch (err: any) {
+      return NextResponse.json({ error: err.message ?? 'Failed to load payment config' }, { status: 500 });
+    }
+  }
+
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 }
 
@@ -205,10 +225,9 @@ export async function POST(req: NextRequest) {
 
       await db.from('bootcamp_enrollments').update(updates).eq('id', enrollmentId);
 
-      // Recompute access with fresh data
       const { data: enroll } = await db
         .from('bootcamp_enrollments')
-        .select('total_fee, deposit_required, paid_total, payment_plan, bootcamp_ends_at, cohort_id')
+        .select('cohort_id')
         .eq('id', enrollmentId)
         .single();
       const { data: settings } = await db
@@ -216,26 +235,8 @@ export async function POST(req: NextRequest) {
         .select('post_bootcamp_access_months')
         .eq('cohort_id', enroll!.cohort_id)
         .maybeSingle();
-      const { data: installments } = await db
-        .from('payment_installments')
-        .select('due_date, status')
-        .eq('enrollment_id', enrollmentId);
 
-      const state: EnrollmentState = {
-        payment_plan:                enroll!.payment_plan as any,
-        total_fee:                   Number(enroll!.total_fee),
-        deposit_required:            Number(enroll!.deposit_required),
-        paid_total:                  Number(enroll!.paid_total),
-        bootcamp_ends_at:            enroll!.bootcamp_ends_at ? new Date(enroll!.bootcamp_ends_at) : null,
-        post_bootcamp_access_months: settings?.post_bootcamp_access_months ?? 3,
-        installments:                (installments ?? []).map((i: any) => ({ due_date: new Date(i.due_date), status: i.status })),
-      };
-      const access = computeAccess(state);
-      await db.from('bootcamp_enrollments').update({
-        access_status: access.access_status,
-        access_until:  access.access_until ? access.access_until.toISOString().slice(0, 10) : null,
-        updated_at:    new Date().toISOString(),
-      }).eq('id', enrollmentId);
+      await recomputeEnrollmentAccessPublic(db, enrollmentId, settings?.post_bootcamp_access_months ?? 3);
 
       return NextResponse.json({ ok: true });
     } catch (err: any) {
@@ -244,17 +245,27 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // mark-waived -- set payment_plan to waived, recompute access, restore cohort if outstanding
+  // mark-waived -- set payment_plan to waived, recompute access + auto-restore cohort
   if (body.action === 'mark-waived') {
     const { enrollmentId } = body;
     if (!enrollmentId) return NextResponse.json({ error: 'enrollmentId is required' }, { status: 400 });
     try {
       const { data: enroll } = await db
         .from('bootcamp_enrollments')
-        .select('total_fee, deposit_required, paid_total, bootcamp_ends_at, cohort_id, student_id')
+        .select('cohort_id, student_id')
         .eq('id', enrollmentId)
         .single();
       if (!enroll) return NextResponse.json({ error: 'Enrollment not found' }, { status: 404 });
+
+      await db.from('bootcamp_enrollments').update({
+        payment_plan: 'waived',
+        updated_at:   new Date().toISOString(),
+      }).eq('id', enrollmentId);
+
+      // Set payment_exempt so waived students are never auto-moved to outstanding
+      if (enroll.student_id) {
+        await db.from('students').update({ payment_exempt: true }).eq('id', enroll.student_id);
+      }
 
       const { data: settings } = await db
         .from('cohort_payment_settings')
@@ -262,33 +273,9 @@ export async function POST(req: NextRequest) {
         .eq('cohort_id', enroll.cohort_id)
         .maybeSingle();
 
-      const state: EnrollmentState = {
-        payment_plan:                'waived',
-        total_fee:                   Number(enroll.total_fee),
-        deposit_required:            Number(enroll.deposit_required),
-        paid_total:                  Number(enroll.paid_total),
-        bootcamp_ends_at:            enroll.bootcamp_ends_at ? new Date(enroll.bootcamp_ends_at) : null,
-        post_bootcamp_access_months: settings?.post_bootcamp_access_months ?? 3,
-        installments:                [],
-      };
-      const access = computeAccess(state);
-
-      await db.from('bootcamp_enrollments').update({
-        payment_plan:  'waived',
-        access_status: access.access_status,
-        access_until:  access.access_until ? access.access_until.toISOString().slice(0, 10) : null,
-        updated_at:    new Date().toISOString(),
-      }).eq('id', enrollmentId);
-
-      // Auto-restore cohort if student is in outstanding
-      const { data: student } = await db
-        .from('students')
-        .select('original_cohort_id')
-        .eq('id', enroll.student_id)
-        .single();
-      if (student?.original_cohort_id) {
-        await restoreAccess(db, enroll.student_id);
-      }
+      // recomputeEnrollmentAccessPublic computes access_status='waived' and
+      // auto-restores cohort via getOutstandingCohortAction
+      await recomputeEnrollmentAccessPublic(db, enrollmentId, settings?.post_bootcamp_access_months ?? 3);
 
       return NextResponse.json({ ok: true });
     } catch (err: any) {
@@ -484,6 +471,23 @@ export async function POST(req: NextRequest) {
     } catch (err: any) {
       console.error('[payments/reject-confirmation]', err);
       return NextResponse.json({ error: err.message ?? 'Failed to reject confirmation' }, { status: 500 });
+    }
+  }
+
+  // save-payment-config -- upsert global payment behaviour settings
+  if (body.action === 'save-payment-config') {
+    const { outstandingCohortId } = body;
+    try {
+      const { error } = await db.from('payment_config').upsert({
+        id:                    'default',
+        outstanding_cohort_id: outstandingCohortId || null,
+        updated_at:            new Date().toISOString(),
+      }, { onConflict: 'id' });
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    } catch (err: any) {
+      console.error('[payments/save-payment-config]', err);
+      return NextResponse.json({ error: err.message ?? 'Failed to save payment config' }, { status: 500 });
     }
   }
 

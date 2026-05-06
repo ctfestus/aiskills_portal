@@ -29,7 +29,7 @@ export function computeAccess(e: EnrollmentState): AccessResult {
     };
   }
 
-  if (e.paid_total < e.deposit_required) {
+  if (e.paid_total <= 0) {
     return { access_status: 'pending_deposit', access_until: null };
   }
 
