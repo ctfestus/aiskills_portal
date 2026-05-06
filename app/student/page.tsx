@@ -12,6 +12,7 @@ import {
   Play, FileText, BarChart3, Plus, ArrowLeft, Upload, Video,
   ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase, Search, LayoutDashboard,
   Copy, Check, Layers, Repeat, Film,
+  CreditCard, XCircle, Send, Wallet, TrendingDown, CalendarCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -21,6 +22,7 @@ import { useTenant } from '@/components/TenantProvider';
 import { sanitizeRichText, renderAnnouncementContent } from '@/lib/sanitize';
 import { getToolIcon } from '@/lib/tool-icons';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { computeAccess } from '@/lib/enrollment-access';
 
 // --- Design tokens ---
 const LIGHT_C = {
@@ -203,6 +205,7 @@ const NAV_ITEMS = [
   { id: 'recordings',       label: 'Recordings',          Icon: Video           },
   { id: 'leaderboard',       label: 'Leaderboard',         Icon: Trophy          },
   { id: 'certificates',      label: 'Certificates',        Icon: Award           },
+  { id: 'payments',          label: 'Payments',            Icon: CreditCard      },
 ] as const;
 type SectionId = typeof NAV_ITEMS[number]['id'];
 
@@ -211,6 +214,7 @@ const NAV_GROUPS: { label: string; items: SectionId[] }[] = [
   { label: 'Activities',  items: ['events', 'assignments', 'schedule', 'recordings'] },
   { label: 'Community',   items: ['community', 'announcements'] },
   { label: 'Achievements', items: ['leaderboard', 'certificates'] },
+  { label: 'Account',     items: ['payments'] },
 ];
 
 // --- Empty state ---
@@ -670,23 +674,18 @@ function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
 }
 
 // --- Courses section ---
-function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: string; userId?: string; C: typeof LIGHT_C }) {
-  const { theme } = useTheme();
-  const { logoUrl, logoDarkUrl, emailBannerUrl } = useTenant();
+function CoursesSection({ userEmail, userId: userIdProp, C, isOutstandingProp }: { userEmail: string; userId?: string; C: typeof LIGHT_C; isOutstandingProp?: boolean }) {
   const [courses,   setCourses]   = useState<any[]>([]);
   const [deadlines, setDeadlines] = useState<Record<string, Date | null>>({});
   const [loading,   setLoading]   = useState(true);
   const [detailCourse, setDetailCourse] = useState<any>(null);
   // VE attempt status map: formId -> { started, completed }
   const [veStatusMap, setVeStatusMap] = useState<Record<string, { started: boolean; completed: boolean }>>({});
-  const [isOutstanding, setIsOutstanding] = useState(false);
-  const [showOutstandingModal, setShowOutstandingModal] = useState(false);
+  const [isOutstandingInternal, setIsOutstandingInternal] = useState(false);
+  const isOutstanding = isOutstandingProp ?? isOutstandingInternal;
   // Semantic search
   const [searchQuery,   setSearchQuery]   = useState('');
-  const [searchResults, setSearchResults] = useState<any[] | null>(null);
   const searchTimer = useRef<any>(null);
-
-  const isDark = theme === 'dark';
 
   useEffect(() => {
     const load = async () => {
@@ -702,11 +701,36 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
         .eq('id', effectiveUserId)
         .single();
 
-      const outstanding = !!student?.original_cohort_id;
-      setIsOutstanding(outstanding);
-      if (outstanding && !sessionStorage.getItem('outstandingModalDismissed')) {
-        setShowOutstandingModal(true);
+      // Query by student_id only -- cohort_id filter breaks when student is moved to outstanding cohort
+      const { data: enrollment } = await supabase
+        .from('bootcamp_enrollments')
+        .select('access_status, total_fee, deposit_required, paid_total, payment_plan, bootcamp_ends_at, cohort_id, payment_installments ( due_date, status )')
+        .eq('student_id', effectiveUserId)
+        .order('created_at', { ascending: false })
+        .maybeSingle();
+
+      // Compute access live so overdue status reflects today's date without needing an admin action
+      let liveStatus = enrollment?.access_status ?? null;
+      if (enrollment) {
+        const { data: settings } = await supabase
+          .from('cohort_payment_settings')
+          .select('post_bootcamp_access_months')
+          .eq('cohort_id', enrollment.cohort_id)
+          .maybeSingle();
+        liveStatus = computeAccess({
+          payment_plan:                enrollment.payment_plan as any,
+          total_fee:                   Number(enrollment.total_fee),
+          deposit_required:            Number(enrollment.deposit_required),
+          paid_total:                  Number(enrollment.paid_total),
+          bootcamp_ends_at:            enrollment.bootcamp_ends_at ? new Date(enrollment.bootcamp_ends_at) : null,
+          post_bootcamp_access_months: settings?.post_bootcamp_access_months ?? 3,
+          installments:                (enrollment.payment_installments ?? []).map((i: any) => ({ due_date: new Date(i.due_date), status: i.status })),
+        }).access_status;
       }
+
+      const restrictedByPayment = ['pending_deposit', 'overdue', 'expired'].includes(liveStatus ?? '');
+      const outstanding = !!student?.original_cohort_id || restrictedByPayment;
+      setIsOutstandingInternal(outstanding);
 
       // Get session token for authenticated API calls
       const { data: { session } } = await supabase.auth.getSession();
@@ -715,7 +739,7 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
 
       // Load cohort courses + student attempts + certificates in parallel
       const [{ data: cohortCourseRows }, { data: attempts }, certsRes] = await Promise.all([
-        student?.cohort_id
+        student?.cohort_id && !restrictedByPayment
           ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes, category, content_type:id').contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
           : Promise.resolve({ data: [] }),
         supabase.from('course_attempts')
@@ -806,17 +830,15 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
   }, [userEmail]);
 
 
-  // Client-side search across the student's own courses only
-  useEffect(() => {
+  const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) { setSearchResults(null); return; }
-    const matched = courses.filter((c: any) => {
+    if (!q) return null;
+    return courses.filter((c: any) => {
       const title    = (c.form?.title ?? '').toLowerCase();
       const desc     = (c.form?.config?.description ?? c.form?.description ?? '').replace(/<[^>]*>/g, ' ').toLowerCase();
       const category = (c.form?.category ?? '').toLowerCase();
       return title.includes(q) || desc.includes(q) || category.includes(q);
     });
-    setSearchResults(matched);
   }, [searchQuery, courses]);
 
   if (loading) return (
@@ -826,77 +848,8 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
   );
 
   return (
-    <>
-    {/* Outstanding balance modal -- shown once per session */}
-    {showOutstandingModal && (
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}>
-        <motion.div
-          initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-          className="w-full max-w-sm rounded-xl overflow-hidden"
-          style={{ background: C.card, boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
-
-          {/* Brand banner image */}
-          <div className="relative">
-            <img
-              src={emailBannerUrl || logoUrl}
-              alt=""
-              className="w-full object-cover"
-              style={{ height: 140 }}
-            />
-            {/* Dark overlay with warning badge */}
-            <div className="absolute inset-0 flex items-end p-4" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 55%)' }}>
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-md" style={{ background: 'rgba(220,38,38,0.9)', backdropFilter: 'blur(8px)' }}>
-                <AlertTriangle className="w-3.5 h-3.5" style={{ color: '#ffffff' }}/>
-                <span className="text-xs font-bold tracking-wide" style={{ color: '#ffffff' }}>Action Required</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-6 space-y-4">
-            {/* Heading */}
-            <div className="text-center space-y-1">
-              <h3 className="text-lg font-bold tracking-tight" style={{ color: C.text }}>Payment Overdue</h3>
-              <p className="text-sm" style={{ color: C.muted }}>Your course access has been temporarily restricted.</p>
-            </div>
-
-            {/* Steps */}
-            <div className="rounded-lg p-4 space-y-2.5" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }}>
-              <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: C.faint }}>What to do</p>
-              {['Contact your instructor or admin', 'Confirm your payment has been made', 'Access is restored automatically'].map((step, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 text-[10px] font-bold"
-                    style={{ background: 'linear-gradient(135deg,#dc2626,#b91c1c)', color: 'white' }}>{i + 1}</div>
-                  <p className="text-xs" style={{ color: C.muted }}>{step}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* CTA */}
-            <button
-              onClick={() => { sessionStorage.setItem('outstandingModalDismissed', '1'); setShowOutstandingModal(false); }}
-              className="w-full py-3 rounded-lg text-sm font-bold tracking-wide transition-all hover:opacity-90 active:scale-95"
-              style={{ background: 'linear-gradient(135deg, #dc2626, #b91c1c)', color: 'white', boxShadow: '0 4px 20px rgba(220,38,38,0.4)' }}>
-              I Understand
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    )}
-
     <div className="space-y-6">
-      {/* Outstanding balance banner -- persistent while student is in outstanding cohort */}
-      {isOutstanding && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
-          style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.25)' }}>
-          <AlertTriangle className="w-4 h-4 flex-shrink-0" style={{ color: '#dc2626' }}/>
-          <p className="text-sm font-medium flex-1" style={{ color: '#dc2626' }}>
-            Outstanding payment balance -- course access is restricted. Contact your instructor to resolve payment.
-          </p>
-        </div>
-      )}
-
-      {/* Empty state -- shown here so modal/banner still render above it */}
+      {/* Empty state */}
       {!courses.length && !isOutstanding && (
         <EmptyState icon={BookOpen} title="No courses yet"
           body="You have not started any courses. Browse available courses to get started."
@@ -952,8 +905,6 @@ function CoursesSection({ userEmail, userId: userIdProp, C }: { userEmail: strin
         )}
       </AnimatePresence>
     </div>
-
-    </>
   );
 }
 
@@ -4589,12 +4540,580 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
   );
 }
 
+// --- Copyable detail row used inside payment option cards ---
+function Detail({ label, value, C, copyable }: { label: string; value: string; C: typeof LIGHT_C; copyable?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  };
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-sm flex-shrink-0" style={{ color: C.faint }}>{label}</span>
+      <div className="flex items-center gap-1.5 min-w-0">
+        <span className="text-sm font-semibold truncate" style={{ color: C.text }}>{value}</span>
+        {copyable && (
+          <button onClick={copy} className="flex-shrink-0 p-0.5 rounded transition-opacity hover:opacity-70"
+            style={{ color: copied ? '#16a34a' : C.faint }}>
+            {copied ? <Check className="w-3 h-3"/> : <Copy className="w-3 h-3"/>}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Payments section ---
+function PaymentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState('');
+  const [enrollment, setEnrollment]     = useState<any>(null);
+  const [installments, setInstallments] = useState<any[]>([]);
+  const [payments, setPayments]         = useState<any[]>([]);
+  const [confirmations, setConf]        = useState<any[]>([]);
+  const [options, setOptions]           = useState<any[]>([]);
+
+  // Submit form
+  const [amount, setAmount]     = useState('');
+  const [paidAt, setPaidAt]     = useState(new Date().toISOString().slice(0, 10));
+  const [method, setMethod]     = useState('');
+  const [reference, setRef]     = useState('');
+  const [notes, setNotes]       = useState('');
+  const [receiptUrl, setReceipt] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [payTab, setPayTab]           = useState<'make' | 'submit' | 'history'>('make');
+  const [selectedOptId, setSelectedOptId] = useState<string | null>(null);
+
+  const getToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? '';
+  };
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const token = await getToken();
+      const res = await fetch('/api/student-payments', {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(r => r.json());
+      if (res.error) { setError(res.error); return; }
+      setEnrollment(res.enrollment ?? null);
+      setInstallments(res.installments ?? []);
+      setPayments(res.payments ?? []);
+      setConf(res.confirmations ?? []);
+      setOptions(res.paymentOptions ?? []);
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to load payment data');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleSubmit = async () => {
+    setSubmitError(''); setSubmitSuccess(false);
+    if (!amount || Number(amount) <= 0) { setSubmitError('Enter a valid amount'); return; }
+    if (!paidAt) { setSubmitError('Enter the date you paid'); return; }
+    if (!enrollment?.id) { setSubmitError('No enrollment found'); return; }
+    setSubmitting(true);
+    try {
+      const token = await getToken();
+      const res = await fetch('/api/student-payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          enrollmentId: enrollment.id,
+          amount: Number(amount),
+          paidAt,
+          method: method || undefined,
+          reference: reference || undefined,
+          notes: notes || undefined,
+          receiptUrl: receiptUrl || undefined,
+        }),
+      }).then(r => r.json());
+      if (res.error) { setSubmitError(res.error); return; }
+      setSubmitSuccess(true);
+      setAmount(''); setMethod(''); setRef(''); setNotes(''); setReceipt('');
+      await load();
+    } catch (e: any) {
+      setSubmitError(e.message ?? 'Failed to submit');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const card = (bg: string, color: string) => ({
+    background: isDark ? 'rgba(255,255,255,0.04)' : bg,
+    border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'}`,
+    borderRadius: 14,
+    padding: '16px 20px',
+  });
+
+  const statusColor = (s: string) => {
+    if (s === 'approved')  return '#16a34a';
+    if (s === 'rejected')  return '#dc2626';
+    if (s === 'pending')   return '#d97706';
+    if (s === 'active')    return '#16a34a';
+    if (s === 'completed') return '#2563eb';
+    if (s === 'overdue')   return '#dc2626';
+    if (s === 'pending_deposit') return '#d97706';
+    if (s === 'waived')    return '#7c3aed';
+    return C.muted;
+  };
+  const statusLabel = (s: string) => {
+    const map: Record<string, string> = {
+      approved: 'Approved', rejected: 'Rejected', pending: 'Pending',
+      active: 'Active', completed: 'Completed', overdue: 'Overdue',
+      pending_deposit: 'Pending Deposit', waived: 'Waived', expired: 'Expired',
+      paid: 'Paid', partial: 'Partial', unpaid: 'Unpaid',
+    };
+    return map[s] ?? s;
+  };
+
+  const fmt = (n: number, currency = 'GHS') => `${currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+  const inputStyle = {
+    width: '100%', padding: '9px 12px', borderRadius: 10, fontSize: 13,
+    background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text, outline: 'none',
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4 mt-2">
+        {[1,2,3].map(i => <Sk key={i} h={80}/>)}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <AlertCircle className="w-8 h-8 mb-3" style={{ color: '#dc2626' }}/>
+        <p className="text-sm" style={{ color: C.muted }}>{error}</p>
+        <button onClick={load} className="mt-4 px-4 py-2 rounded-lg text-sm font-semibold" style={{ background: C.cta, color: C.ctaText }}>Retry</button>
+      </div>
+    );
+  }
+
+  const currency = enrollment?.currency ?? 'GHS';
+  const nextDue = installments.find((i: any) => i.status === 'unpaid' || i.status === 'partial');
+
+  return (
+    <div className="space-y-7 pb-10">
+
+      {/* Summary cards -- enrollment required */}
+      {enrollment && (() => {
+        const neutralBg  = isDark ? 'rgba(255,255,255,0.05)' : '#ffffff';
+        const neutralBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)';
+        const neutralIconBg = isDark ? 'rgba(255,255,255,0.1)' : '#f1f1f6';
+
+        const summaryCards: {
+          label: string; sub: string; value: string;
+          Icon: React.ElementType; colored: boolean;
+          grad?: string; accentColor?: string;
+        }[] = [
+          {
+            label: 'Total Fee',
+            sub: 'Program cost',
+            value: fmt(enrollment.total_fee, currency),
+            Icon: CreditCard,
+            colored: false,
+          },
+          {
+            label: 'Amount Paid',
+            sub: 'Confirmed by admin',
+            value: fmt(enrollment.paid_total, currency),
+            Icon: CheckCircle,
+            colored: false,
+          },
+          {
+            label: 'Balance',
+            sub: 'Remaining',
+            value: fmt(enrollment.balance, currency),
+            Icon: Wallet,
+            colored: true,
+            grad: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+          },
+          {
+            label: 'Next Due',
+            sub: nextDue ? 'Upcoming installment' : 'All installments paid',
+            value: nextDue ? fmtDate(nextDue.due_date) : 'None',
+            Icon: CalendarCheck,
+            colored: false,
+          },
+          {
+            label: 'Status',
+            sub: 'Access level',
+            value: statusLabel(enrollment.access_status),
+            Icon: TrendingDown,
+            colored: true,
+            grad: `linear-gradient(135deg, ${statusColor(enrollment.access_status)} 0%, ${statusColor(enrollment.access_status)}cc 100%)`,
+          },
+        ];
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+            {summaryCards.map(({ label, sub, value, Icon, colored, grad }) => {
+              const txtPrimary   = colored ? 'rgba(255,255,255,0.92)' : C.text;
+              const txtSecondary = colored ? 'rgba(255,255,255,0.68)' : C.muted;
+              const iconBg       = colored ? 'rgba(255,255,255,0.2)' : neutralIconBg;
+              const iconColor    = colored ? '#ffffff' : C.cta;
+              return (
+                <div key={label} className="relative overflow-hidden rounded-2xl p-4 flex flex-col justify-between min-h-[130px]"
+                  style={{ background: colored ? grad : neutralBg }}>
+                  {/* Top row: label + icon */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-bold leading-tight" style={{ color: txtPrimary }}>{label}</p>
+                      <p className="text-[13px] mt-0.5 leading-tight" style={{ color: txtSecondary }}>{sub}</p>
+                    </div>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: iconBg }}>
+                      <Icon className="w-4 h-4" style={{ color: iconColor }}/>
+                    </div>
+                  </div>
+                  {/* Value */}
+                  <p className="text-xl font-extrabold leading-none mt-3 truncate" style={{ color: txtPrimary }}>{value}</p>
+                  {/* Decorative circle (colored cards only) */}
+                  {colored && (
+                    <div className="absolute -bottom-5 -right-5 w-20 h-20 rounded-full"
+                      style={{ background: 'rgba(255,255,255,0.08)' }}/>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {/* Tabs: Make Payment / Submit Confirmation */}
+      <div className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
+
+        {/* Tab bar */}
+        <div className="flex" style={{ borderBottom: `1px solid ${C.divider}` }}>
+          {([['make', 'Make Payment'], ['submit', 'Submit Confirmation'], ['history', 'Payment History']] as const).map(([id, label]) => (
+            <button key={id} onClick={() => setPayTab(id)}
+              className="flex-1 py-3.5 text-sm font-semibold transition-all"
+              style={{
+                color:        payTab === id ? C.cta : C.faint,
+                borderBottom: payTab === id ? `2px solid ${C.cta}` : '2px solid transparent',
+                background:   'transparent',
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Make Payment tab */}
+        {payTab === 'make' && (
+          <div className="p-5">
+            {options.length === 0 ? (
+              <div className="py-10 text-center text-sm" style={{ color: C.faint }}>
+                No payment options have been set up yet. Contact your instructor.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm font-semibold" style={{ color: C.muted }}>Select preferred payment option</p>
+                {/* Option selector chips */}
+                <div className="flex flex-wrap gap-3">
+                  {options.map((opt: any) => {
+                    const selected = selectedOptId === opt.id;
+                    return (
+                      <button key={opt.id}
+                        onClick={() => setSelectedOptId(selected ? null : opt.id)}
+                        className="flex items-center justify-center p-3 rounded-2xl transition-all"
+                        title={opt.label}
+                        style={{
+                          background: selected ? C.page : 'transparent',
+                          boxShadow: selected || isDark ? 'none' : '0 1px 4px rgba(0,0,0,0.12)',
+                          width: 64, height: 64,
+                        }}>
+                        {opt.logo_url
+                          ? <img src={opt.logo_url} alt={opt.label} className="w-full h-full object-contain"/>
+                          : <CreditCard className="w-6 h-6" style={{ color: C.faint }}/>}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Selected option detail panel */}
+                {selectedOptId && (() => {
+                  const opt = options.find((o: any) => o.id === selectedOptId);
+                  if (!opt) return null;
+                  return (
+                    <div className="flex justify-start mt-2">
+                      <div className="rounded-2xl p-5 space-y-4 w-full sm:w-auto sm:min-w-[260px]"
+                        style={{ background: C.page, maxWidth: 380 }}>
+                        {/* Header */}
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
+                            {opt.logo_url
+                              ? <img src={opt.logo_url} alt={opt.label} className="w-full h-full object-contain"/>
+                              : <CreditCard className="w-6 h-6" style={{ color: C.faint }}/>}
+                          </div>
+                          <div>
+                            <p className="text-base font-bold" style={{ color: C.text }}>{opt.label}</p>
+                            <p className="text-xs font-semibold uppercase tracking-wide mt-0.5" style={{ color: C.faint }}>
+                              {opt.type === 'bank_transfer' ? 'Bank Transfer'
+                                : opt.type === 'mobile_money' ? 'Mobile Money'
+                                : 'Online Payment'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Details */}
+                        <div className="space-y-2.5">
+                          {opt.type === 'bank_transfer' && (<>
+                            {opt.bank_name      && <Detail label="Bank"           value={opt.bank_name}      C={C}/>}
+                            {opt.account_name   && <Detail label="Account Name"   value={opt.account_name}   C={C}/>}
+                            {opt.account_number && <Detail label="Account Number" value={opt.account_number} C={C} copyable/>}
+                            {opt.branch         && <Detail label="Branch"         value={opt.branch}         C={C}/>}
+                            {opt.country        && <Detail label="Country"        value={opt.country}        C={C}/>}
+                          </>)}
+                          {opt.type === 'mobile_money' && (<>
+                            {opt.network             && <Detail label="Network"      value={opt.network}             C={C}/>}
+                            {opt.mobile_money_number && <Detail label="Number"       value={opt.mobile_money_number} C={C} copyable/>}
+                            {opt.account_name        && <Detail label="Account Name" value={opt.account_name}        C={C}/>}
+                          </>)}
+                          {opt.type === 'online' && (<>
+                            {opt.platform && <Detail label="Platform" value={opt.platform} C={C}/>}
+                            {opt.payment_link && (
+                              <a href={opt.payment_link} target="_blank" rel="noreferrer"
+                                className="mt-1 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-bold transition-opacity hover:opacity-80"
+                                style={{ background: C.cta, color: C.ctaText }}>
+                                <ExternalLink className="w-3.5 h-3.5"/> Pay Now
+                              </a>
+                            )}
+                          </>)}
+                          {opt.instructions && (
+                            <p className="text-sm pt-1" style={{ color: C.muted }}>{opt.instructions}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {!selectedOptId && (
+                  <p className="text-xs text-center pt-1" style={{ color: C.faint }}>
+                    Select a payment method above to see the details.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Submit Confirmation tab */}
+        {payTab === 'submit' && (
+          <div className="p-5 space-y-5">
+
+            {/* Submit form */}
+            {enrollment ? (
+              <div className="space-y-3">
+                <p className="text-xs" style={{ color: C.muted }}>
+                  Already made a payment? Fill in the details below. Your balance updates once an admin confirms it.
+                </p>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Amount *</label>
+                    <input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)}
+                      placeholder="0.00" style={inputStyle}/>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Date Paid *</label>
+                    <input type="date" value={paidAt} onChange={e => setPaidAt(e.target.value)} style={inputStyle}/>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Payment Method</label>
+                    <input type="text" value={method} onChange={e => setMethod(e.target.value)}
+                      placeholder="e.g. Mobile Money, Bank Transfer" style={inputStyle}/>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Reference / Transaction ID</label>
+                    <input type="text" value={reference} onChange={e => setRef(e.target.value)}
+                      placeholder="Transaction reference" style={inputStyle}/>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Notes</label>
+                    <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
+                      placeholder="Any additional details" style={inputStyle}/>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Receipt URL</label>
+                    <input type="url" value={receiptUrl} onChange={e => setReceipt(e.target.value)}
+                      placeholder="Link to receipt image or document" style={inputStyle}/>
+                  </div>
+                </div>
+                {submitError   && <p className="text-xs" style={{ color: '#dc2626' }}>{submitError}</p>}
+                {submitSuccess && <p className="text-xs font-semibold" style={{ color: '#16a34a' }}>Submitted! Pending admin review.</p>}
+                <button onClick={handleSubmit} disabled={submitting}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-90"
+                  style={{ background: C.cta, color: C.ctaText }}>
+                  <Send className="w-3.5 h-3.5"/>
+                  {submitting ? 'Submitting...' : 'Submit Confirmation'}
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-center py-6" style={{ color: C.faint }}>
+                Enrollment required to submit a payment confirmation.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Payment History tab - timeline */}
+        {payTab === 'history' && (() => {
+          // Merge confirmed payments + student confirmations, sort newest first
+          const timelineItems: any[] = [
+            ...payments.map((p: any) => ({
+              _type: 'payment',
+              id: p.id,
+              amount: Number(p.amount),
+              date: p.paid_at,
+              method: p.method ?? null,
+              reference: p.reference ?? null,
+              notes: p.notes ?? null,
+              status: 'confirmed',
+            })),
+            ...confirmations.filter((c: any) => c.status !== 'approved').map((c: any) => ({
+              _type: 'confirmation',
+              id: c.id,
+              amount: Number(c.amount),
+              date: c.paid_at,
+              submittedAt: c.created_at,
+              method: c.method ?? null,
+              reference: c.reference ?? null,
+              notes: c.notes ?? null,
+              receipt_url: c.receipt_url ?? null,
+              admin_notes: c.admin_notes ?? null,
+              status: c.status,
+            })),
+          ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+          if (timelineItems.length === 0) {
+            return (
+              <div className="p-8 text-center text-sm" style={{ color: C.faint }}>
+                No payment history yet.
+              </div>
+            );
+          }
+
+          const dotColor = (status: string) =>
+            status === 'confirmed' || status === 'approved' ? '#16a34a'
+            : status === 'rejected' ? '#dc2626'
+            : '#d97706';
+
+          return (
+            <div className="p-5">
+              <div className="space-y-0" style={{ maxWidth: 520 }}>
+                  {timelineItems.map((item, idx) => {
+                    const color = dotColor(item.status);
+                    const isLast = idx === timelineItems.length - 1;
+                    return (
+                    <div key={item.id} className={`flex gap-3 items-stretch${isLast ? '' : ' mb-4'}`}>
+                      {/* Dot column */}
+                      <div className="flex flex-col items-center flex-shrink-0" style={{ width: 28 }}>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                          style={{ background: `${color}15`, border: `1.5px solid ${color}` }}>
+                          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                            {item.status === 'rejected'
+                              ? <><line x1="3" y1="3" x2="11" y2="11" stroke={color} strokeWidth="2" strokeLinecap="round"/><line x1="11" y1="3" x2="3" y2="11" stroke={color} strokeWidth="2" strokeLinecap="round"/></>
+                              : item.status === 'pending'
+                              ? <circle cx="7" cy="7" r="2.5" fill={color}/>
+                              : <polyline points="2.5,7 5.5,10 11.5,4" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                            }
+                          </svg>
+                        </div>
+                        {!isLast && (
+                          <div className="flex-1 mt-1" style={{ width: 0, borderLeft: `2px dashed ${C.cardBorder}` }}/>
+                        )}
+                      </div>
+
+                      {/* Content card */}
+                      <div className="flex-1 rounded-xl px-4 py-3 min-w-0 mb-0.5"
+                        style={{ background: isDark ? 'rgba(255,255,255,0.03)' : '#f8f9fb' }}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold" style={{ color: C.text }}>
+                              {fmt(item.amount, currency)}
+                            </p>
+                            <p className="text-xs mt-0.5" style={{ color: C.muted }}>
+                              {fmtDate(item.date)}
+                              {item.method ? ` - ${item.method}` : ''}
+                            </p>
+                            {item.reference && (
+                              <p className="text-xs mt-0.5 font-medium" style={{ color: C.faint }}>
+                                Ref: {item.reference}
+                              </p>
+                            )}
+                            {item._type === 'confirmation' && item.submittedAt && (
+                              <p className="text-[11px] mt-1" style={{ color: C.faint }}>
+                                Submitted {fmtDate(item.submittedAt)}
+                              </p>
+                            )}
+                            {item.notes && (
+                              <p className="text-xs mt-1 italic" style={{ color: C.muted }}>{item.notes}</p>
+                            )}
+                            {item.admin_notes && item.status === 'rejected' && (
+                              <p className="text-xs mt-1 font-medium" style={{ color: '#dc2626' }}>
+                                Admin: {item.admin_notes}
+                              </p>
+                            )}
+                            {item.receipt_url && (
+                              <a href={item.receipt_url} target="_blank" rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-xs mt-1.5 font-medium underline"
+                                style={{ color: C.cta }}>
+                                <ExternalLink className="w-3 h-3"/> View Receipt
+                              </a>
+                            )}
+                          </div>
+                          <span className="flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                            style={{ background: `${color}15`, color }}>
+                            {item.status === 'confirmed' ? 'Confirmed'
+                              : item.status === 'approved' ? 'Approved'
+                              : item.status === 'rejected' ? 'Rejected'
+                              : 'Pending'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    );
+                  })}
+              </div>
+            </div>
+          );
+        })()}
+
+      </div>
+
+      {/* No enrollment + no options: show placeholder */}
+      {!enrollment && options.length === 0 && (
+        <EmptyState
+          icon={CreditCard}
+          title="No payment information yet"
+          body="Payment details will appear here once your enrollment is confirmed by an admin."
+        />
+      )}
+
+    </div>
+  );
+}
+
 // --- Main dashboard ---
 export default function StudentDashboard() {
   const [mounted, setMounted] = useState(false);
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl, logoDarkUrl } = useTenant();
+  const { logoUrl, logoDarkUrl, emailBannerUrl } = useTenant();
   const router = useRouter();
   const [user, setUser]       = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -4603,6 +5122,9 @@ export default function StudentDashboard() {
   const [activeSection, setActiveSection] = useState<SectionId>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(true);
+  const [isOutstanding,        setIsOutstanding]        = useState(false);
+  const [enrollmentStatus,     setEnrollmentStatus]     = useState<string | null>(null);
+  const [showOutstandingModal, setShowOutstandingModal] = useState(false);
 
   // Live activity ticker (persists across all tabs)
   const [activeTicker,       setActiveTicker]       = useState<{ name: string; title: string } | null>(null);
@@ -4705,9 +5227,41 @@ export default function StudentDashboard() {
           .then(({ error }) => { if (error) console.error('[last_login_at] update failed:', error.message); });
       }
 
-      // Fetch cohort for global activity ticker (fire-and-forget)
-      supabase.from('students').select('cohort_id').eq('id', authUser.id).single()
-        .then(({ data: s }) => { if (s?.cohort_id) setCohortIdForTicker(s.cohort_id); });
+      // Fetch cohort for global activity ticker + outstanding check
+      supabase.from('students').select('cohort_id, original_cohort_id').eq('id', resolvedViewingAs?.id ?? authUser.id).single()
+        .then(async ({ data: s }) => {
+          if (s?.cohort_id) setCohortIdForTicker(s.cohort_id);
+          const { data: enroll } = await supabase
+            .from('bootcamp_enrollments')
+            .select('access_status, total_fee, deposit_required, paid_total, payment_plan, bootcamp_ends_at, cohort_id, payment_installments ( due_date, status )')
+            .eq('student_id', resolvedViewingAs?.id ?? authUser.id)
+            .order('created_at', { ascending: false })
+            .maybeSingle();
+          let liveStatus = enroll?.access_status ?? null;
+          if (enroll) {
+            const { data: settings } = await supabase
+              .from('cohort_payment_settings')
+              .select('post_bootcamp_access_months')
+              .eq('cohort_id', enroll.cohort_id)
+              .maybeSingle();
+            liveStatus = computeAccess({
+              payment_plan:                enroll.payment_plan as any,
+              total_fee:                   Number(enroll.total_fee),
+              deposit_required:            Number(enroll.deposit_required),
+              paid_total:                  Number(enroll.paid_total),
+              bootcamp_ends_at:            enroll.bootcamp_ends_at ? new Date(enroll.bootcamp_ends_at) : null,
+              post_bootcamp_access_months: settings?.post_bootcamp_access_months ?? 3,
+              installments:                (enroll.payment_installments ?? []).map((i: any) => ({ due_date: new Date(i.due_date), status: i.status })),
+            }).access_status;
+          }
+          const restricted = ['pending_deposit', 'overdue', 'expired'].includes(liveStatus ?? '');
+          const outstanding = !!s?.original_cohort_id || restricted;
+          setIsOutstanding(outstanding);
+          setEnrollmentStatus(liveStatus);
+          if (outstanding && !sessionStorage.getItem('outstandingModalDismissed')) {
+            setShowOutstandingModal(true);
+          }
+        });
 
       setLoading(false);
     };
@@ -4871,12 +5425,75 @@ export default function StudentDashboard() {
               </div>
             )}
 
+            {/* Outstanding payment modal -- shown once per session on any tab */}
+            {showOutstandingModal && (
+              <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}>
+                <motion.div
+                  initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+                  className="w-full max-w-sm rounded-xl overflow-hidden"
+                  style={{ background: C.card, boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
+                  <div className="relative">
+                    <img src={emailBannerUrl || logoUrl} alt="" className="w-full object-cover" style={{ height: 140 }}/>
+                    <div className="absolute inset-0 flex items-end p-4" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 55%)' }}>
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-md" style={{ background: 'rgba(220,38,38,0.9)', backdropFilter: 'blur(8px)' }}>
+                        <AlertTriangle className="w-3.5 h-3.5" style={{ color: '#ffffff' }}/>
+                        <span className="text-xs font-bold tracking-wide" style={{ color: '#ffffff' }}>Action Required</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div className="text-center space-y-1">
+                      <h3 className="text-lg font-bold tracking-tight" style={{ color: C.text }}>Payment Overdue</h3>
+                      <p className="text-sm" style={{ color: C.muted }}>Your course access has been temporarily restricted.</p>
+                    </div>
+                    <div className="rounded-lg p-4 space-y-2.5" style={{ background: theme === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }}>
+                      <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: C.faint }}>What to do</p>
+                      {['Go to Payments and submit a confirmation', 'Include your method, reference, and amount', 'Access is restored once admin approves'].map((step, i) => (
+                        <div key={i} className="flex items-center gap-3">
+                          <div className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 text-[10px] font-bold"
+                            style={{ background: 'linear-gradient(135deg,#dc2626,#b91c1c)', color: 'white' }}>{i + 1}</div>
+                          <p className="text-xs" style={{ color: C.muted }}>{step}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => { sessionStorage.setItem('outstandingModalDismissed', '1'); setShowOutstandingModal(false); }}
+                      className="w-full py-3 rounded-lg text-sm font-bold tracking-wide transition-all hover:opacity-90 active:scale-95"
+                      style={{ background: 'linear-gradient(135deg, #dc2626, #b91c1c)', color: 'white', boxShadow: '0 4px 20px rgba(220,38,38,0.4)' }}>
+                      I Understand
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+
             {/* Section content */}
+            {/* Outstanding banner -- persists across all tabs */}
+            {isOutstanding && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl mb-4"
+                style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.25)' }}>
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" style={{ color: '#dc2626' }}/>
+                <p className="text-sm font-medium flex-1" style={{ color: '#dc2626' }}>
+                  {enrollmentStatus === 'expired'
+                    ? 'Your post-bootcamp access period has expired. Contact your instructor for assistance.'
+                    : 'Payment overdue. Go to '}
+                  {enrollmentStatus !== 'expired' && (
+                    <button onClick={() => goSection('payments')}
+                      className="underline font-bold" style={{ color: '#dc2626' }}>
+                      Payments
+                    </button>
+                  )}
+                  {enrollmentStatus !== 'expired' && ' to submit a payment confirmation.'}
+                </p>
+              </div>
+            )}
+
             {activeSection === 'overview' && user && (
               <OverviewSection user={{ ...user, id: effectiveId, email: effectiveEmail }} userEmail={effectiveEmail} username={profile?.username} C={C} onNavigate={goSection}/>
             )}
             {activeSection === 'courses' && user && (
-              <CoursesSection userEmail={effectiveEmail} userId={effectiveId} C={C}/>
+              <CoursesSection userEmail={effectiveEmail} userId={effectiveId} C={C} isOutstandingProp={isOutstanding}/>
             )}
             {activeSection === 'learning_paths' && user && (
               <LearningPathsSection C={C}/>
@@ -4907,6 +5524,9 @@ export default function StudentDashboard() {
             )}
             {activeSection === 'certificates' && user && (
               <CertificatesSection userId={effectiveId} userEmail={effectiveEmail} userName={viewingAs?.name ?? userName} C={C}/>
+            )}
+            {activeSection === 'payments' && user && (
+              <PaymentsSection userId={effectiveId} C={C}/>
             )}
           </motion.div>
         </main>

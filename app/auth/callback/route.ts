@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
+import { activateEnrollment } from '@/lib/db-payments';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -38,7 +39,6 @@ export async function GET(request: NextRequest) {
 
     const { data: existing } = await db.from('students').select('id, cohort_id').eq('id', user.id).maybeSingle();
 
-    // Only skip allowlist if cohort is already assigned.
     if (existing?.cohort_id) {
       return NextResponse.redirect(new URL('/student', request.url));
     }
@@ -48,6 +48,17 @@ export async function GET(request: NextRequest) {
     if (!cohortId) {
       await db.auth.admin.deleteUser(user.id);
       return NextResponse.redirect(new URL('/auth?error=not_allowed', request.url));
+    }
+
+    try {
+      await activateEnrollment(db, user.email, cohortId, user.id);
+    } catch (e: any) {
+      console.error('[auth/callback] enrollment activation failed', e?.message ?? e);
+      await db.auth.admin.deleteUser(user.id);
+      // no_admission_record = email is on the allowlist but has no bootcamp_enrollments pre-signup row
+      const isNoRecord = typeof e?.message === 'string' && e.message.includes('No admission record');
+      const errorParam = isNoRecord ? 'no_admission_record' : 'not_allowed';
+      return NextResponse.redirect(new URL(`/auth?error=${errorParam}`, request.url));
     }
 
     await db.from('students').update({ cohort_id: cohortId }).eq('id', user.id);

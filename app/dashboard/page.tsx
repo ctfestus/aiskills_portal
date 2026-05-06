@@ -11,7 +11,7 @@ import {
   ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
   Users, Megaphone, Trophy, Menu, CheckCircle2, XCircle,
   UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
-  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw, Palette, Mail, Video, PlayCircle,
+  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw, Palette, Mail, Video, PlayCircle, MoreVertical,
 } from 'lucide-react';
 import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS, TextPositions, defaultTextPositions } from '@/components/CertificateTemplate';
 import Link from 'next/link';
@@ -2679,20 +2679,85 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   const [showCreate, setShowCreate]     = useState(false);
   const [newName, setNewName]           = useState('');
   const [newDesc, setNewDesc]           = useState('');
+  const [newStartDate, setNewStartDate] = useState('');
+  const [newEndDate, setNewEndDate]     = useState('');
   const [toast, setToast]               = useState<{ ok: boolean; text: string } | null>(null);
   const [deletingId, setDeletingId]     = useState<string | null>(null);
   const [view, setView]                 = useState<'members' | 'unassigned'>('members');
   const [reassignId, setReassignId]     = useState<string | null>(null);
   const [allowedEmails, setAllowedEmails]   = useState<any[]>([]);
-  const [emailInput, setEmailInput]         = useState('');
   const [emailPanelOpen, setEmailPanelOpen] = useState(false);
-  const [emailLoading, setEmailLoading]     = useState(false);
-  const [emailSaving, setEmailSaving]       = useState(false);
-  const [emailFileRef]                      = useState<{ current: HTMLInputElement | null }>({ current: null });
+  const [emailLoading, setEmailLoading]     = useState(false);;
+
+  // Admissions import
+  const [admissionsOpen,   setAdmissionsOpen]   = useState(false);
+  const [admissionsCsv,    setAdmissionsCsv]    = useState('');
+  const [admissionsRows,   setAdmissionsRows]   = useState<any[]>([]);
+  const [admissionsSaving, setAdmissionsSaving] = useState(false);
+  const [admissionsResult, setAdmissionsResult] = useState<{ inserted: number; updated: number; errors: any[] } | null>(null);
+  const [admissionsError,  setAdmissionsError]  = useState('');
+  const [paymentSettings, setPaymentSettings] = useState({
+    total_fee: '',
+    currency: 'GHS',
+    deposit_percent: '50',
+    payment_plan: 'flexible',
+    installment_count: '2',
+    post_bootcamp_access_months: '3',
+    start_date: '',
+    end_date: '',
+  });
+  const [paymentSettingsSaving, setPaymentSettingsSaving] = useState(false);
+  const [paymentSettingsError, setPaymentSettingsError] = useState('');
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   const showToast = (ok: boolean, text: string) => {
     setToast({ ok, text });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const parseAdmissionsCsv = (text: string) => {
+    setAdmissionsError('');
+    if (!text.trim()) { setAdmissionsRows([]); return; }
+    const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
+    // Detect CSV: first line contains an 'email' column header
+    const firstLineLower = lines[0].toLowerCase();
+    if (firstLineLower.includes('email') && lines.length >= 2) {
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/\s+/g, '_'));
+      const rows = lines.slice(1).map(line => {
+        const vals = line.split(',');
+        const obj: any = {};
+        headers.forEach((h, i) => { obj[h] = (vals[i] ?? '').trim(); });
+        return obj;
+      }).filter(r => r.email);
+      setAdmissionsRows(rows);
+    } else {
+      // Plain email list: each line is an email address
+      const rows = lines
+        .map(l => l.trim().toLowerCase())
+        .filter(l => l.includes('@'))
+        .map(email => ({ email }));
+      setAdmissionsRows(rows);
+    }
+  };
+
+  const handleAdmissionsImport = async () => {
+    if (!selectedCohort || admissionsRows.length === 0) return;
+    setAdmissionsSaving(true); setAdmissionsError(''); setAdmissionsResult(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    try {
+      const res = await fetch('/api/admissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ cohortId: selectedCohort.id, rows: admissionsRows }),
+      }).then(r => r.json());
+      if (res.error) { setAdmissionsError(res.error); }
+      else {
+        setAdmissionsResult({ inserted: res.inserted, updated: res.updated, errors: res.errors ?? [] });
+        setAdmissionsCsv(''); setAdmissionsRows([]);
+        loadAllowedEmails(selectedCohort.id);
+      }
+    } catch { setAdmissionsError('Import failed. Please try again.'); }
+    setAdmissionsSaving(false);
   };
 
   const load = async () => {
@@ -2725,43 +2790,82 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
 
   const loadAllowedEmails = async (cohortId: string) => {
     setEmailLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { setEmailLoading(false); return; } // session mid-refresh; onAuthStateChange will retry
-    const res = await fetch(`/api/cohort-allowlist?cohortId=${cohortId}`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    const json = await res.json();
-    setAllowedEmails(json.emails ?? []);
-    setEmailLoading(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setEmailLoading(false); return; }
+      const [allowRes, admissionsRes, cohortRes] = await Promise.all([
+        fetch(`/api/cohort-allowlist?cohortId=${cohortId}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }),
+        fetch(`/api/admissions?cohortId=${cohortId}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }),
+        supabase.from('cohorts').select('start_date, end_date').eq('id', cohortId).single(),
+      ]);
+      const json = await allowRes.json();
+      const admissionsJson = await admissionsRes.json();
+      setAllowedEmails(json.emails ?? []);
+      const settings = admissionsJson.settings;
+      const cohortDates = cohortRes.data;
+      setPaymentSettings({
+        total_fee:                   settings?.total_fee != null ? String(settings.total_fee) : '',
+        currency:                    settings?.currency ?? 'GHS',
+        deposit_percent:             settings?.deposit_percent != null ? String(settings.deposit_percent) : '50',
+        payment_plan:                settings?.payment_plan ?? 'flexible',
+        installment_count:           settings?.installment_count != null ? String(settings.installment_count) : '2',
+        post_bootcamp_access_months: settings?.post_bootcamp_access_months != null ? String(settings.post_bootcamp_access_months) : '3',
+        start_date:                  cohortDates?.start_date ?? '',
+        end_date:                    cohortDates?.end_date ?? '',
+      });
+    } catch {
+      // network error -- leave existing state, will retry on next cohort select
+    } finally {
+      setEmailLoading(false);
+    }
   };
 
-  const addEmails = async () => {
-    if (!selectedCohort || !emailInput.trim()) return;
-    const parsed = emailInput
-      .split(/[\n,;]+/)
-      .map(e => e.trim().toLowerCase())
-      .filter(e => e.includes('@'));
-    if (!parsed.length) return;
-    setEmailSaving(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    const res = await fetch('/api/cohort-allowlist', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ cohortId: selectedCohort.id, emails: parsed }),
-    });
-    const json = await res.json();
-    if (json.error) { showToast(false, json.error); }
-    else {
-      setEmailInput('');
-      const added   = json.inserted?.length ?? 0;
-      const skipped = json.skipped?.length  ?? 0;
-      const msg = skipped
-        ? `${added} added -- ${skipped} skipped (already registered)`
-        : `${added} email(s) added`;
-      showToast(true, msg);
-      loadAllowedEmails(selectedCohort.id);
+  const savePaymentSettings = async () => {
+    if (!selectedCohort) return;
+    if (!Number(paymentSettings.total_fee)) {
+      setPaymentSettingsError('Total fee is required before importing or assigning students.');
+      return;
     }
-    setEmailSaving(false);
+    if (!paymentSettings.start_date) {
+      setPaymentSettingsError('Cohort start date is required so installment due dates are calculated correctly.');
+      return;
+    }
+    setPaymentSettingsSaving(true);
+    setPaymentSettingsError('');
+    const { data: { session } } = await supabase.auth.getSession();
+    try {
+      const [settingsRes] = await Promise.all([
+        fetch('/api/admissions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+          body: JSON.stringify({
+            action:   'save-settings',
+            cohortId: selectedCohort.id,
+            settings: paymentSettings,
+          }),
+        }).then(r => r.json()),
+        supabase.from('cohorts').update({
+          start_date: paymentSettings.start_date,
+          end_date:   paymentSettings.end_date || null,
+          updated_at: new Date().toISOString(),
+        }).eq('id', selectedCohort.id),
+      ]);
+      if (settingsRes.error) setPaymentSettingsError(settingsRes.error);
+      else {
+        setCohorts(prev => prev.map(c => c.id === selectedCohort.id
+          ? { ...c, start_date: paymentSettings.start_date, end_date: paymentSettings.end_date || null }
+          : c
+        ));
+        showToast(true, 'Payment settings saved');
+      }
+    } catch {
+      setPaymentSettingsError('Failed to save payment settings.');
+    }
+    setPaymentSettingsSaving(false);
   };
 
   const removeEmail = async (id: string) => {
@@ -2774,63 +2878,23 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
     setAllowedEmails(prev => prev.filter(e => e.id !== id));
   };
 
-  const handleEmailFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedCohort) return;
-    const allowed = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel', 'text/csv'];
-    if (!allowed.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv)$/i)) {
-      showToast(false, 'Only .xlsx, .xls, or .csv files are allowed'); return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      showToast(false, 'File too large. Maximum size is 2 MB'); return;
-    }
-    setEmailSaving(true);
-    try {
-      const XLSX = await import('xlsx');
-      const buf  = await file.arrayBuffer();
-      const wb   = XLSX.read(buf, { type: 'array' });
-      const ws   = wb.Sheets[wb.SheetNames[0]];
-      const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
-      const emails = rows
-        .flat()
-        .map((v: any) => String(v ?? '').toLowerCase().trim())
-        .filter(v => v.includes('@'));
-      if (!emails.length) { showToast(false, 'No valid emails found in file'); return; }
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/cohort-allowlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ cohortId: selectedCohort.id, emails }),
-      });
-      const json = await res.json();
-      if (json.error) { showToast(false, json.error); }
-      else {
-        const added   = json.inserted?.length ?? 0;
-        const skipped = json.skipped?.length  ?? 0;
-        const msg = skipped
-          ? `${added} imported -- ${skipped} skipped (already registered)`
-          : `${added} email(s) imported from file`;
-        showToast(true, msg);
-        loadAllowedEmails(selectedCohort.id);
-      }
-    } catch (err: any) {
-      showToast(false, err?.message || 'Failed to read file');
-    } finally {
-      setEmailSaving(false);
-      e.target.value = '';
-    }
-  };
-
   const createCohort = async () => {
     if (!newName.trim()) return;
+    if (!newStartDate) { showToast(false, 'Start date is required.'); return; }
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     const { data, error } = await supabase.from('cohorts')
-      .insert({ name: newName.trim(), description: newDesc.trim() || null, created_by: user!.id })
+      .insert({
+        name:        newName.trim(),
+        description: newDesc.trim() || null,
+        start_date:  newStartDate,
+        end_date:    newEndDate || null,
+        created_by:  user!.id,
+      })
       .select().single();
     if (error) { showToast(false, error.message); }
     else {
-      setNewName(''); setNewDesc(''); setShowCreate(false);
+      setNewName(''); setNewDesc(''); setNewStartDate(''); setNewEndDate(''); setShowCreate(false);
       setCohorts(prev => [data, ...prev]);
       setSelectedCohort(data);
       showToast(true, `"${data.name}" created`);
@@ -2848,18 +2912,46 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   };
 
   const assignStudent = async (studentId: string, cohortId: string | null) => {
-    await supabase.from('students').update({ cohort_id: cohortId }).eq('id', studentId);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/admissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ action: 'assign-student', studentId, cohortId }),
+    }).then(r => r.json());
+    if (res.error) {
+      showToast(false, res.error);
+      return false;
+    }
     setStudents(prev => prev.map(s => s.id === studentId ? { ...s, cohort_id: cohortId } : s));
+    return true;
   };
 
   const assignSelected = async () => {
     if (!selectedCohort || !selected.size) return;
     setAssigning(true);
-    await Promise.all([...selected].map(id => supabase.from('students').update({ cohort_id: selectedCohort.id }).eq('id', id)));
-    setStudents(prev => prev.map(s => selected.has(s.id) ? { ...s, cohort_id: selectedCohort.id } : s));
-    showToast(true, `${selected.size} student${selected.size > 1 ? 's' : ''} added to "${selectedCohort.name}"`);
+    const results = await Promise.all([...selected].map(id => assignStudent(id, selectedCohort.id)));
+    const added = results.filter(Boolean).length;
+    if (added > 0) showToast(true, `${added} student${added > 1 ? 's' : ''} added to "${selectedCohort.name}"`);
     setSelected(new Set());
     setAssigning(false);
+  };
+
+  const handleDeleteUser = async (studentId: string, label: string) => {
+    if (!window.confirm(`Permanently delete "${label}"? This removes them from Supabase Auth and cannot be undone.`)) return;
+    setDeletingUserId(studentId);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch('/api/admin/delete-user', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ userId: studentId }),
+    }).then(r => r.json());
+    if (res.error) {
+      showToast(false, res.error);
+    } else {
+      setStudents(prev => prev.filter(s => s.id !== studentId));
+      showToast(true, `${label} deleted`);
+    }
+    setDeletingUserId(null);
   };
 
   const toggleSelect = (id: string) => setSelected(prev => {
@@ -2868,7 +2960,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
     return next;
   });
 
-  const cohortStudents = students.filter(s => s.cohort_id === selectedCohort?.id);
+  const cohortStudents  = students.filter(s => s.cohort_id === selectedCohort?.id);
   const q = search.trim().toLowerCase();
   const unassigned = students.filter(s => !s.cohort_id && (
     !q || (s.full_name ?? '').toLowerCase().includes(q) || s.email.toLowerCase().includes(q)
@@ -2899,13 +2991,14 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   return (
     <div className="space-y-5">
 
-      {/* Toast */}
-      {toast && (
-        <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-medium"
-          style={{ background: toast.ok ? (isLight ? '#f0fdf4' : '#052e16') : (isLight ? '#fef2f2' : '#2d0a0a'), color: toast.ok ? '#16a34a' : '#ef4444' }}>
+      {/* Toast -- fixed bottom-right so it's visible regardless of scroll position */}
+      {toast && createPortal(
+        <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-semibold shadow-lg"
+          style={{ background: toast.ok ? '#16a34a' : '#dc2626', color: '#fff', minWidth: 220, maxWidth: 360 }}>
           {toast.ok ? <Check className="w-4 h-4 flex-shrink-0"/> : <X className="w-4 h-4 flex-shrink-0"/>}
           {toast.text}
-        </div>
+        </div>,
+        document.body
       )}
 
       <div className="grid grid-cols-[260px_1fr] gap-5 items-start">
@@ -2934,7 +3027,21 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                 placeholder="Description (optional)"
                 className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none"
                 style={input}/>
-              <button onClick={createCohort} disabled={saving || !newName.trim()}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold mb-1" style={{ color: C.faint }}>Start Date*</label>
+                  <input type="date" value={newStartDate} onChange={e => setNewStartDate(e.target.value)}
+                    className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none"
+                    style={input}/>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold mb-1" style={{ color: C.faint }}>End Date</label>
+                  <input type="date" value={newEndDate} onChange={e => setNewEndDate(e.target.value)}
+                    className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none"
+                    style={input}/>
+                </div>
+              </div>
+              <button onClick={createCohort} disabled={saving || !newName.trim() || !newStartDate}
                 className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold disabled:opacity-40"
                 style={{ background: C.cta, color: C.ctaText }}>
                 {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4"/>}
@@ -2964,7 +3071,12 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate" style={{ color: isActive ? C.green : C.text }}>{c.name}</p>
-                    <p className="text-xs" style={{ color: C.faint }}>{count} student{count !== 1 ? 's' : ''}</p>
+                    <p className="text-xs" style={{ color: C.faint }}>
+                      {count} student{count !== 1 ? 's' : ''}
+                      {c.start_date
+                        ? ` - starts ${new Date(c.start_date).toLocaleDateString()}`
+                        : <span style={{ color: '#d97706' }}> - no start date</span>}
+                    </p>
                   </div>
                   <button onClick={e => { e.stopPropagation(); if (window.confirm(`Delete "${c.name}"?`)) deleteCohort(c.id); }}
                     className="opacity-0 group-hover:opacity-100 p-1 rounded-lg transition-all hover:bg-red-500/10"
@@ -3059,10 +3171,18 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                                 style={{ color: '#3b82f6' }}>
                                 <ArrowRight className="w-3.5 h-3.5"/> Move
                               </button>
-                              <button onClick={() => { assignStudent(s.id, null); showToast(true, `${s.full_name || s.email} removed`); setReassignId(null); }}
+                              <button onClick={async () => { if (await assignStudent(s.id, null)) showToast(true, `${s.full_name || s.email} removed`); setReassignId(null); }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-red-500/10"
                                 style={{ color: '#ef4444' }}>
                                 <UserMinus className="w-3.5 h-3.5"/> Remove
+                              </button>
+                              <button onClick={() => handleDeleteUser(s.id, s.full_name || s.email)}
+                                disabled={deletingUserId === s.id}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-red-500/10 disabled:opacity-40"
+                                style={{ color: '#dc2626' }}
+                                title="Delete from Supabase">
+                                {deletingUserId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Trash2 className="w-3.5 h-3.5"/>}
+                                Delete
                               </button>
                             </div>
                           </div>
@@ -3094,7 +3214,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                                     const count = students.filter(st => st.cohort_id === c.id).length;
                                     return (
                                       <button key={c.id}
-                                        onClick={() => { assignStudent(s.id, c.id); showToast(true, `${s.full_name || s.email} moved to "${c.name}"`); setReassignId(null); }}
+                                        onClick={async () => { if (await assignStudent(s.id, c.id)) showToast(true, `${s.full_name || s.email} moved to "${c.name}"`); setReassignId(null); }}
                                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all hover:scale-[0.99]"
                                         style={{ background: isLight ? '#f7f8f9' : '#1c1c1c' }}
                                         onMouseEnter={e => (e.currentTarget.style.background = isLight ? '#e8f5ee' : '#0d2016')}
@@ -3142,17 +3262,25 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                     </div>
                   ) : unassigned.map(s => (
                     <div key={s.id}
-                      onClick={() => toggleSelect(s.id)}
-                      className="flex items-center gap-3 px-5 py-3 cursor-pointer transition-colors"
+                      className="group flex items-center gap-3 px-5 py-3 transition-colors"
                       style={{ background: selected.has(s.id) ? (isLight ? '#e8f5ee' : '#0d2016') : 'transparent', borderBottom: `1px solid ${C.divider}` }}>
                       <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSelect(s.id)}
-                        onClick={e => e.stopPropagation()}
                         className="w-4 h-4 rounded cursor-pointer accent-green-600"/>
-                      <Avatar name={s.full_name} email={s.email}/>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || '--'}</p>
-                        <p className="text-xs truncate" style={{ color: C.faint }}>{s.email}</p>
+                      <div className="flex-1 flex items-center gap-3 min-w-0 cursor-pointer" onClick={() => toggleSelect(s.id)}>
+                        <Avatar name={s.full_name} email={s.email}/>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || '--'}</p>
+                          <p className="text-xs truncate" style={{ color: C.faint }}>{s.email}</p>
+                        </div>
                       </div>
+                      <button onClick={e => { e.stopPropagation(); handleDeleteUser(s.id, s.full_name || s.email); }}
+                        disabled={deletingUserId === s.id}
+                        className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-red-500/10 disabled:opacity-40"
+                        style={{ color: '#dc2626' }}
+                        title="Delete from Supabase">
+                        {deletingUserId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Trash2 className="w-3.5 h-3.5"/>}
+                        Delete
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -3182,44 +3310,6 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
 
           {emailPanelOpen && (
             <div className="p-5 space-y-4">
-              {/* Add emails */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium" style={{ color: C.muted }}>Add emails (one per line, or comma/semicolon separated)</p>
-                  <div>
-                    <input
-                      type="file"
-                      accept=".csv,.xlsx,.xls"
-                      ref={el => { emailFileRef.current = el; }}
-                      onChange={handleEmailFile}
-                      className="hidden"
-                    />
-                    <button
-                      onClick={() => emailFileRef.current?.click()}
-                      disabled={emailSaving}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 transition-colors"
-                      style={{ background: C.pill, color: C.muted }}>
-                      {emailSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Upload className="w-3.5 h-3.5"/>}
-                      Upload CSV / Excel
-                    </button>
-                  </div>
-                </div>
-                <textarea
-                  value={emailInput}
-                  onChange={e => setEmailInput(e.target.value)}
-                  rows={3}
-                  placeholder="student@example.com&#10;another@example.com"
-                  className="w-full rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none"
-                  style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}
-                />
-                <button onClick={addEmails} disabled={emailSaving || !emailInput.trim()}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-40"
-                  style={{ background: C.cta, color: C.ctaText }}>
-                  {emailSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4"/>}
-                  Add Emails
-                </button>
-              </div>
-
               {/* Email list */}
               <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
                 {emailLoading ? (
@@ -3230,7 +3320,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                   <div className="flex flex-col items-center py-10 gap-1.5">
                     <Mail className="w-8 h-8 opacity-20" style={{ color: C.faint }}/>
                     <p className="text-sm" style={{ color: C.faint }}>No emails added yet</p>
-                    <p className="text-xs" style={{ color: C.faint }}>Add student emails above to allow them to register</p>
+                    <p className="text-xs" style={{ color: C.faint }}>Import students via Admissions Import to populate this list</p>
                   </div>
                 ) : (
                   <div className="max-h-[320px] overflow-y-auto">
@@ -3247,6 +3337,205 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Payment Settings panel */}
+      {selectedCohort && (
+        <div className="rounded-2xl overflow-hidden" style={card}>
+          <div className="px-5 py-3.5 flex items-center gap-2.5 border-b" style={{ borderColor: C.divider }}>
+            <CreditCard className="w-4 h-4" style={{ color: C.muted }}/>
+            <p className="text-sm font-semibold" style={{ color: C.text }}>Payment Settings</p>
+            <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: C.pill, color: C.faint }}>
+              Required for admissions
+            </span>
+          </div>
+          <div className="p-5 space-y-3">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+              {[
+                { label: 'Total Fee', key: 'total_fee', type: 'number', placeholder: '3000' },
+                { label: 'Currency', key: 'currency', type: 'text', placeholder: 'GHS' },
+                { label: 'Deposit %', key: 'deposit_percent', type: 'number', placeholder: '50' },
+                { label: 'Installments', key: 'installment_count', type: 'number', placeholder: '2' },
+                { label: 'Extra Months', key: 'post_bootcamp_access_months', type: 'number', placeholder: '3' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="block text-[10px] font-semibold mb-1" style={{ color: C.faint }}>{f.label}</label>
+                  <input
+                    type={f.type}
+                    value={(paymentSettings as any)[f.key]}
+                    placeholder={f.placeholder}
+                    onChange={e => setPaymentSettings(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    className="w-full rounded-lg px-2.5 py-2 text-xs outline-none"
+                    style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}
+                  />
+                </div>
+              ))}
+              <div>
+                <label className="block text-[10px] font-semibold mb-1" style={{ color: C.faint }}>Plan</label>
+                <select
+                  value={paymentSettings.payment_plan}
+                  onChange={e => setPaymentSettings(prev => ({ ...prev, payment_plan: e.target.value }))}
+                  className="w-full rounded-lg px-2.5 py-2 text-xs outline-none"
+                  style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}>
+                  <option value="flexible">Flexible</option>
+                  <option value="full">Full</option>
+                  <option value="sponsored">Sponsored</option>
+                  <option value="waived">Waived</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'Cohort Start Date*', key: 'start_date' },
+                { label: 'Cohort End Date', key: 'end_date' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="block text-[10px] font-semibold mb-1" style={{ color: C.faint }}>{f.label}</label>
+                  <input type="date" value={(paymentSettings as any)[f.key]}
+                    onChange={e => setPaymentSettings(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    className="w-full rounded-lg px-2.5 py-2 text-xs outline-none"
+                    style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] leading-relaxed" style={{ color: C.faint }}>
+              Changing the start date updates pending (not yet signed-up) students automatically.
+              Installment due dates for already signed-up students are not changed -- use the Edit button in Payments to adjust those individually.
+            </p>
+            {paymentSettingsError && <p className="text-xs" style={{ color: '#dc2626' }}>{paymentSettingsError}</p>}
+            <button
+              onClick={savePaymentSettings}
+              disabled={paymentSettingsSaving}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-40"
+              style={{ background: C.cta, color: C.ctaText }}>
+              {paymentSettingsSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4"/>}
+              Save Payment Settings
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Admissions Import panel */}
+      {selectedCohort && (
+        <div className="rounded-2xl overflow-hidden" style={card}>
+          <div className="px-5 py-3.5 flex items-center justify-between border-b" style={{ borderColor: C.divider }}>
+            <div className="flex items-center gap-2.5">
+              <Users className="w-4 h-4" style={{ color: C.muted }}/>
+              <p className="text-sm font-semibold" style={{ color: C.text }}>Admissions Import</p>
+              <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: C.pill, color: C.faint }}>CSV</span>
+            </div>
+            <button onClick={() => { setAdmissionsOpen(v => !v); setAdmissionsResult(null); setAdmissionsError(''); }}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+              style={{ background: admissionsOpen ? C.pill : C.cta, color: admissionsOpen ? C.muted : C.ctaText }}>
+              {admissionsOpen ? 'Close' : 'Import Students'}
+            </button>
+          </div>
+
+          {admissionsOpen && (
+            <div className="p-5 space-y-4">
+              <p className="text-xs leading-relaxed" style={{ color: C.muted }}>
+                Paste a CSV below to add students to the allowlist and create enrollment intake records with payment details.
+                Required column: <strong>email</strong>. Optional columns: <strong>full_name, total_fee, payment_plan, amount_paid, paid_at, payment_method, payment_reference, notes</strong>.
+                Missing fee/plan values fall back to this cohort&apos;s payment settings.
+              </p>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  id="admissions-csv-file"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = ev => {
+                      const text = ev.target?.result as string;
+                      setAdmissionsCsv(text);
+                      parseAdmissionsCsv(text);
+                    };
+                    reader.readAsText(file);
+                    e.target.value = '';
+                  }}
+                />
+                <label htmlFor="admissions-csv-file"
+                  className="cursor-pointer text-xs font-semibold px-3 py-2 rounded-lg"
+                  style={{ background: C.pill, color: C.muted }}>
+                  Upload CSV file
+                </label>
+                <span className="text-xs" style={{ color: C.faint }}>or paste below</span>
+              </div>
+
+              <textarea
+                value={admissionsCsv}
+                onChange={e => { setAdmissionsCsv(e.target.value); parseAdmissionsCsv(e.target.value); }}
+                rows={6}
+                placeholder={`email,full_name,total_fee,payment_plan,amount_paid\nstudent@example.com,Jane Doe,3000,flexible,1500`}
+                className="w-full rounded-xl px-3 py-2.5 text-xs font-mono resize-none focus:outline-none"
+                style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}
+              />
+
+              {admissionsError && <p className="text-xs" style={{ color: '#dc2626' }}>{admissionsError}</p>}
+
+              {admissionsRows.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold" style={{ color: C.muted }}>{admissionsRows.length} row{admissionsRows.length !== 1 ? 's' : ''} parsed -- preview:</p>
+                  <div className="rounded-xl overflow-x-auto" style={{ border: `1px solid ${C.cardBorder}`, maxHeight: 200 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ background: C.pill }}>
+                          {Object.keys(admissionsRows[0]).map(h => (
+                            <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: C.faint, fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {admissionsRows.slice(0, 5).map((r, i) => (
+                          <tr key={i} style={{ borderTop: `1px solid ${C.divider}` }}>
+                            {Object.values(r).map((v: any, j) => (
+                              <td key={j} style={{ padding: '5px 10px', color: C.text, whiteSpace: 'nowrap' }}>{v}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {admissionsRows.length > 5 && (
+                      <div className="px-4 py-2 text-xs" style={{ color: C.faint, borderTop: `1px solid ${C.divider}` }}>
+                        ...and {admissionsRows.length - 5} more rows
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {admissionsResult && (
+                <div className="rounded-xl px-4 py-3 space-y-1" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}>
+                  <p className="text-xs font-semibold" style={{ color: '#16a34a' }}>
+                    Import complete -- {admissionsResult.inserted} added, {admissionsResult.updated} updated
+                  </p>
+                  {admissionsResult.errors.length > 0 && (
+                    <p className="text-xs" style={{ color: '#dc2626' }}>
+                      {admissionsResult.errors.length} error(s): {admissionsResult.errors.map((e: any) => e.email).join(', ')}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button onClick={() => { setAdmissionsOpen(false); setAdmissionsCsv(''); setAdmissionsRows([]); setAdmissionsResult(null); }}
+                  className="flex-1 py-2 rounded-xl text-sm font-semibold"
+                  style={{ background: C.pill, color: C.muted }}>
+                  Cancel
+                </button>
+                <button onClick={handleAdmissionsImport} disabled={admissionsSaving || admissionsRows.length === 0}
+                  className="flex-1 py-2 rounded-xl text-sm font-semibold disabled:opacity-40"
+                  style={{ background: C.cta, color: C.ctaText }}>
+                  {admissionsSaving ? <span className="flex items-center justify-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin"/> Importing...</span> : `Import ${admissionsRows.length > 0 ? admissionsRows.length + ' ' : ''}Student${admissionsRows.length !== 1 ? 's' : ''}`}
+                </button>
               </div>
             </div>
           )}
@@ -4259,6 +4548,520 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }>
   waived:  { bg: 'rgba(148,163,184,0.15)', text: '#64748b', label: 'Waived'  },
 };
 
+// --- Payment Options management tab (admin) ---
+const PAYMENT_TYPES = [
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'mobile_money',  label: 'Mobile Money'  },
+  { value: 'online',        label: 'Online Payment' },
+] as const;
+
+const TYPE_FIELDS: Record<string, { key: string; label: string; placeholder: string }[]> = {
+  bank_transfer: [
+    { key: 'bank_name',     label: 'Bank Name',      placeholder: 'e.g. GCB Bank' },
+    { key: 'account_name',  label: 'Account Name',   placeholder: 'Full name on account' },
+    { key: 'account_number',label: 'Account Number', placeholder: '' },
+    { key: 'branch',        label: 'Branch',         placeholder: 'e.g. Accra Main' },
+    { key: 'country',       label: 'Country',        placeholder: 'e.g. Ghana' },
+  ],
+  mobile_money: [
+    { key: 'mobile_money_number', label: 'Mobile Number', placeholder: '024XXXXXXX' },
+    { key: 'account_name',        label: 'Account Name',  placeholder: 'Registered name' },
+    { key: 'network',             label: 'Network',       placeholder: 'e.g. MTN, Vodafone, AirtelTigo' },
+  ],
+  online: [
+    { key: 'payment_link', label: 'Payment URL', placeholder: 'https://' },
+    { key: 'platform',     label: 'Platform',    placeholder: 'e.g. Paystack, Flutterwave, PayPal' },
+  ],
+};
+
+function PaymentOptionsTab({ C, getToken }: { C: typeof LIGHT_C; getToken: () => Promise<string> }) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  const [options,       setOptions]       = useState<any[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState('');
+  const [editing,       setEditing]       = useState<any | null>(null);
+  const [saving,        setSaving]        = useState(false);
+  const [saveErr,       setSaveErr]       = useState('');
+  const [deleting,      setDeleting]      = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const blank = (): any => ({
+    id: '', label: '', type: 'bank_transfer', instructions: '',
+    bank_name: '', account_name: '', account_number: '', branch: '', country: '',
+    mobile_money_number: '', network: '',
+    payment_link: '', platform: '',
+    logo_url: '', is_active: true, sort_order: 0,
+  });
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const token = await getToken();
+      const res = await fetch('/api/payments?action=payment-options', {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(r => r.json());
+      if (res.error) { setError(res.error); return; }
+      setOptions(res.options ?? []);
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleLogoUpload = async (file: File) => {
+    setLogoUploading(true);
+    try {
+      const url = await uploadToCloudinary(file, 'payment-options');
+      setEditing((p: any) => ({ ...p, logo_url: url }));
+    } catch (e: any) {
+      setSaveErr(e.message ?? 'Logo upload failed');
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!editing?.label) { setSaveErr('Label is required'); return; }
+    setSaving(true); setSaveErr('');
+    try {
+      const token = await getToken();
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action:              'save-payment-option',
+          id:                  editing.id || undefined,
+          label:               editing.label,
+          type:                editing.type,
+          instructions:        editing.instructions || null,
+          bank_name:           editing.bank_name || null,
+          account_name:        editing.account_name || null,
+          account_number:      editing.account_number || null,
+          branch:              editing.branch || null,
+          country:             editing.country || null,
+          mobile_money_number: editing.mobile_money_number || null,
+          network:             editing.network || null,
+          payment_link:        editing.payment_link || null,
+          platform:            editing.platform || null,
+          logo_url:            editing.logo_url || null,
+          is_active:           editing.is_active,
+          sort_order:          Number(editing.sort_order) || 0,
+        }),
+      }).then(r => r.json());
+      if (res.error) { setSaveErr(res.error); return; }
+      setEditing(null);
+      await load();
+    } catch (e: any) {
+      setSaveErr(e.message ?? 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this payment option?')) return;
+    setDeleting(id);
+    try {
+      const token = await getToken();
+      await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'delete-payment-option', id }),
+      });
+      await load();
+    } catch { /* ignore */ }
+    setDeleting(null);
+  };
+
+  const inp = {
+    width: '100%', padding: '8px 11px', borderRadius: 9, fontSize: 13,
+    background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text, outline: 'none',
+  };
+
+  const typeLabel = (t: string) => PAYMENT_TYPES.find(p => p.value === t)?.label ?? t;
+
+  if (loading) return <div className="py-12 text-center text-sm" style={{ color: C.faint }}>Loading...</div>;
+  if (error)   return <div className="py-12 text-center text-sm" style={{ color: '#dc2626' }}>{error}</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-bold" style={{ color: C.text }}>Payment Options</h3>
+          <p className="text-xs mt-0.5" style={{ color: C.faint }}>Global options shown to all students on the Payments page.</p>
+        </div>
+        <button onClick={() => { setEditing(blank()); setSaveErr(''); }}
+          className="flex items-center gap-1.5 text-sm font-semibold px-3 py-2 rounded-xl transition-opacity hover:opacity-80"
+          style={{ background: C.cta, color: C.ctaText }}>
+          <Plus className="w-4 h-4"/> Add Option
+        </button>
+      </div>
+
+      {options.length === 0 && (
+        <div className="py-16 text-center text-sm" style={{ color: C.faint }}>No payment options yet. Add one above.</div>
+      )}
+
+      <div className="space-y-3">
+        {options.map((opt: any) => (
+          <div key={opt.id} className="p-4 rounded-xl flex items-center gap-4"
+            style={{ background: isDark ? 'rgba(255,255,255,0.03)' : '#f8f9fb', border: `1px solid ${C.cardBorder}` }}>
+            {/* Logo */}
+            <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center overflow-hidden"
+              style={{ background: C.pill }}>
+              {opt.logo_url
+                ? <img src={opt.logo_url} alt="" className="w-full h-full object-contain"/>
+                : <CreditCard className="w-5 h-5" style={{ color: C.faint }}/>}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-bold" style={{ color: C.text }}>{opt.label}</p>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                  style={{ background: C.lime, color: C.green }}>{typeLabel(opt.type)}</span>
+                {!opt.is_active && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: C.pill, color: C.faint }}>Hidden</span>
+                )}
+              </div>
+              <p className="text-xs mt-0.5" style={{ color: C.muted }}>
+                {opt.type === 'bank_transfer' && [opt.bank_name, opt.account_name, opt.account_number].filter(Boolean).join(' - ')}
+                {opt.type === 'mobile_money'  && [opt.network, opt.mobile_money_number, opt.account_name].filter(Boolean).join(' - ')}
+                {opt.type === 'online'        && [opt.platform, opt.payment_link].filter(Boolean).join(' - ')}
+              </p>
+            </div>
+            <div className="flex gap-2 flex-shrink-0">
+              <button onClick={() => { setEditing({ ...opt }); setSaveErr(''); }}
+                className="p-1.5 rounded-lg transition-opacity hover:opacity-70" style={{ color: C.muted }}>
+                <Edit2 className="w-3.5 h-3.5"/>
+              </button>
+              <button onClick={() => handleDelete(opt.id)} disabled={deleting === opt.id}
+                className="p-1.5 rounded-lg transition-opacity hover:opacity-70 disabled:opacity-40" style={{ color: '#dc2626' }}>
+                <Trash2 className="w-3.5 h-3.5"/>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Edit / Create modal */}
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
+          <div className="w-full max-w-lg rounded-2xl overflow-hidden flex flex-col max-h-[92vh]"
+            style={{ background: C.card, boxShadow: '0 24px 80px rgba(0,0,0,0.35)' }}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0">
+              <h3 className="text-base font-bold" style={{ color: C.text }}>{editing.id ? 'Edit Option' : 'New Payment Option'}</h3>
+              <button onClick={() => setEditing(null)}><X className="w-5 h-5" style={{ color: C.faint }}/></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4">
+              {/* Label */}
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Label *</label>
+                <input value={editing.label} onChange={e => setEditing((p: any) => ({ ...p, label: e.target.value }))}
+                  placeholder="e.g. GCB Bank Transfer" style={inp}/>
+              </div>
+
+              {/* Type selector */}
+              <div>
+                <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Payment Type *</label>
+                <div className="flex gap-2">
+                  {PAYMENT_TYPES.map(t => (
+                    <button key={t.value} onClick={() => setEditing((p: any) => ({ ...p, type: t.value }))}
+                      className="flex-1 py-2 rounded-xl text-xs font-semibold border transition-all"
+                      style={{
+                        background: editing.type === t.value ? C.cta : C.pill,
+                        color:      editing.type === t.value ? C.ctaText : C.muted,
+                        border:     `1px solid ${editing.type === t.value ? C.cta : C.cardBorder}`,
+                      }}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Type-specific fields */}
+              <div className="grid sm:grid-cols-2 gap-3">
+                {(TYPE_FIELDS[editing.type] ?? []).map(({ key, label, placeholder }) => (
+                  <div key={key} className={key === 'payment_link' ? 'sm:col-span-2' : ''}>
+                    <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>{label}</label>
+                    <input value={(editing as any)[key] ?? ''} onChange={e => setEditing((p: any) => ({ ...p, [key]: e.target.value }))}
+                      placeholder={placeholder} style={inp}/>
+                  </div>
+                ))}
+              </div>
+
+              {/* Logo upload */}
+              <div>
+                <label className="block text-xs font-semibold mb-2" style={{ color: C.muted }}>Logo / Image</label>
+                <input ref={logoInputRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); e.target.value = ''; }}/>
+                <div className="flex items-center gap-3">
+                  {editing.logo_url && (
+                    <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 border" style={{ borderColor: C.cardBorder }}>
+                      <img src={editing.logo_url} alt="" className="w-full h-full object-contain"/>
+                    </div>
+                  )}
+                  <button type="button" onClick={() => logoInputRef.current?.click()} disabled={logoUploading}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-opacity hover:opacity-80 disabled:opacity-50"
+                    style={{ background: C.pill, color: C.text, border: `1px solid ${C.cardBorder}` }}>
+                    {logoUploading
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin"/> Uploading...</>
+                      : <><Upload className="w-3.5 h-3.5"/> {editing.logo_url ? 'Replace Logo' : 'Upload Logo'}</>}
+                  </button>
+                  {editing.logo_url && (
+                    <button type="button" onClick={() => setEditing((p: any) => ({ ...p, logo_url: '' }))}
+                      className="text-xs font-semibold transition-opacity hover:opacity-70" style={{ color: '#dc2626' }}>
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Instructions */}
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Instructions (optional)</label>
+                <textarea rows={3} value={editing.instructions ?? ''} onChange={e => setEditing((p: any) => ({ ...p, instructions: e.target.value }))}
+                  placeholder="Step-by-step instructions shown to students..."
+                  style={{ ...inp, resize: 'vertical' }}/>
+              </div>
+
+              {/* Sort order + visibility */}
+              <div className="flex items-center gap-4">
+                <div className="w-28">
+                  <label className="block text-xs font-semibold mb-1" style={{ color: C.muted }}>Sort Order</label>
+                  <input type="number" value={editing.sort_order} onChange={e => setEditing((p: any) => ({ ...p, sort_order: e.target.value }))}
+                    style={inp}/>
+                </div>
+                <div className="flex items-center gap-2 mt-5">
+                  <input type="checkbox" id="opt_is_active" checked={editing.is_active}
+                    onChange={e => setEditing((p: any) => ({ ...p, is_active: e.target.checked }))}
+                    className="w-4 h-4"/>
+                  <label htmlFor="opt_is_active" className="text-sm" style={{ color: C.text }}>Visible to students</label>
+                </div>
+              </div>
+
+              {saveErr && <p className="text-xs" style={{ color: '#dc2626' }}>{saveErr}</p>}
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-3 px-6 pb-6 flex-shrink-0">
+              <button onClick={() => setEditing(null)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+                style={{ background: C.pill, color: C.muted }}>Cancel</button>
+              <button onClick={handleSave} disabled={saving || logoUploading}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                style={{ background: C.cta, color: C.ctaText }}>
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Confirmations review tab (admin) ---
+function ConfirmationsTab({ C, getToken }: { C: typeof LIGHT_C; getToken: () => Promise<string> }) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  const [confs,    setConfs]    = useState<any[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState('');
+  const [filter,   setFilter]   = useState<'all'|'pending'|'approved'|'rejected'>('pending');
+  const [acting,   setActing]   = useState<string | null>(null);
+  const [rejectId, setRejectId] = useState<string | null>(null);
+  const [rejectNote, setRejectNote] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const token = await getToken();
+      const res = await fetch('/api/payments?action=confirmations', {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(r => r.json());
+      if (res.error) { setError(res.error); return; }
+      setConfs(res.confirmations ?? []);
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleApprove = async (id: string) => {
+    if (!confirm('Approve this confirmation and record the payment?')) return;
+    setActing(id);
+    try {
+      const token = await getToken();
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'approve-confirmation', confirmationId: id }),
+      }).then(r => r.json());
+      if (res.error) alert(res.error);
+      else await load();
+    } catch { alert('Failed to approve.'); }
+    setActing(null);
+  };
+
+  const handleReject = async () => {
+    if (!rejectId) return;
+    setActing(rejectId);
+    try {
+      const token = await getToken();
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'reject-confirmation', confirmationId: rejectId, adminNotes: rejectNote }),
+      }).then(r => r.json());
+      if (res.error) alert(res.error);
+      else { setRejectId(null); setRejectNote(''); await load(); }
+    } catch { alert('Failed to reject.'); }
+    setActing(null);
+  };
+
+  const statusColor = (s: string) =>
+    s === 'approved' ? '#16a34a' : s === 'rejected' ? '#dc2626' : '#d97706';
+
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+  const filtered = confs.filter(c => filter === 'all' || c.status === filter);
+  const pendingCount = confs.filter(c => c.status === 'pending').length;
+
+  if (loading) return <div className="py-12 text-center text-sm" style={{ color: C.faint }}>Loading...</div>;
+  if (error) return <div className="py-12 text-center text-sm" style={{ color: '#dc2626' }}>{error}</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h3 className="text-base font-bold" style={{ color: C.text }}>Student Confirmations</h3>
+          <p className="text-xs mt-0.5" style={{ color: C.faint }}>
+            Review student-submitted payment proofs. Approval records the payment automatically.
+          </p>
+        </div>
+        <button onClick={load} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
+          style={{ background: C.pill, color: C.muted }}>
+          <RefreshCw className="w-3.5 h-3.5"/> Refresh
+        </button>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex gap-1.5 flex-wrap">
+        {([['all','All'], ['pending','Pending'], ['approved','Approved'], ['rejected','Rejected']] as const).map(([val, label]) => (
+          <button key={val} onClick={() => setFilter(val)}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+            style={{
+              background: filter === val ? C.cta : C.pill,
+              color: filter === val ? C.ctaText : C.muted,
+            }}>
+            {label}{val === 'pending' && pendingCount > 0 ? ` (${pendingCount})` : ''}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 && (
+        <div className="py-16 text-center text-sm" style={{ color: C.faint }}>No {filter === 'all' ? '' : filter} confirmations.</div>
+      )}
+
+      <div className="space-y-3">
+        {filtered.map((c: any) => {
+          const student = c.students ?? {};
+          const cohort  = c.cohorts ?? {};
+          return (
+            <div key={c.id} className="p-4 rounded-xl space-y-3"
+              style={{ background: isDark ? 'rgba(255,255,255,0.03)' : '#f8f9fb', border: `1px solid ${C.cardBorder}` }}>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div className="space-y-0.5 flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-bold" style={{ color: C.text }}>
+                      {student.full_name || student.email || 'Unknown'}
+                    </p>
+                    <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                      style={{ background: `${statusColor(c.status)}18`, color: statusColor(c.status) }}>
+                      {c.status}
+                    </span>
+                  </div>
+                  <p className="text-xs" style={{ color: C.muted }}>
+                    {student.email}{cohort.name ? ` - ${cohort.name}` : ''}
+                  </p>
+                  <p className="text-sm font-semibold mt-1" style={{ color: C.text }}>
+                    {c.amount ? `GHS ${Number(c.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : ''} - {c.paid_at ? fmtDate(c.paid_at) : ''}
+                  </p>
+                  <p className="text-xs" style={{ color: C.muted }}>
+                    {c.method ? `Method: ${c.method}` : ''}{c.reference ? ` - Ref: ${c.reference}` : ''}
+                    {c.notes ? ` - ${c.notes}` : ''}
+                  </p>
+                  {c.receipt_url && (
+                    <a href={c.receipt_url} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-semibold mt-1"
+                      style={{ color: C.cta }}>
+                      <ExternalLink className="w-3 h-3"/> View Receipt
+                    </a>
+                  )}
+                  {c.admin_notes && (
+                    <p className="text-xs mt-1" style={{ color: '#dc2626' }}>Admin note: {c.admin_notes}</p>
+                  )}
+                  <p className="text-[11px] mt-1" style={{ color: C.faint }}>Submitted {fmtDate(c.created_at)}</p>
+                </div>
+                {c.status === 'pending' && (
+                  <div className="flex gap-2 flex-shrink-0 self-start">
+                    <button onClick={() => handleApprove(c.id)} disabled={acting === c.id}
+                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-50 transition-opacity hover:opacity-80"
+                      style={{ background: '#16a34a18', color: '#16a34a' }}>
+                      <CheckCircle className="w-3.5 h-3.5"/>
+                      {acting === c.id ? '...' : 'Approve'}
+                    </button>
+                    <button onClick={() => { setRejectId(c.id); setRejectNote(''); }}
+                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80"
+                      style={{ background: '#dc262618', color: '#dc2626' }}>
+                      <XCircle className="w-3.5 h-3.5"/> Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Reject confirmation modal */}
+      {rejectId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="w-full max-w-sm rounded-2xl p-6 space-y-4"
+            style={{ background: C.card, boxShadow: '0 24px 80px rgba(0,0,0,0.35)' }}>
+            <h3 className="text-base font-bold" style={{ color: C.text }}>Reject Confirmation</h3>
+            <p className="text-sm" style={{ color: C.muted }}>Optionally add a note explaining why this was rejected.</p>
+            <textarea rows={3} value={rejectNote} onChange={e => setRejectNote(e.target.value)}
+              placeholder="Reason for rejection (optional)"
+              className="w-full text-sm px-3 py-2 rounded-xl outline-none resize-none"
+              style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text }}/>
+            <div className="flex gap-3">
+              <button onClick={() => setRejectId(null)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+                style={{ background: C.pill, color: C.muted }}>Cancel</button>
+              <button onClick={handleReject} disabled={acting === rejectId}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                style={{ background: '#dc2626', color: 'white' }}>
+                {acting === rejectId ? 'Rejecting...' : 'Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatusBadge({ status, C }: { status: PaymentStatus; C: typeof LIGHT_C }) {
   const s = STATUS_COLORS[status] ?? { bg: C.pill, text: C.faint, label: status };
   return (
@@ -4269,14 +5072,14 @@ function StatusBadge({ status, C }: { status: PaymentStatus; C: typeof LIGHT_C }
 }
 
 function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
+  const [payTab, setPayTab] = useState<'enrollments' | 'confirmations' | 'options'>('enrollments');
+
   const [rows,       setRows]       = useState<any[]>([]);
   const [cohorts,    setCohorts]    = useState<any[]>([]);
-  const [sheetUrl,   setSheetUrl]   = useState('');
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState('');
   const [search,     setSearch]     = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [refreshing, setRefreshing] = useState(false);
 
   // Outstanding cohort selector (persisted in localStorage)
   const [outstandingCohortId, setOutstandingCohortId] = useState<string>(() =>
@@ -4286,18 +5089,38 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
   // Move/restore action state
   const [movingId,   setMovingId]   = useState<string | null>(null);
 
-  // Edit modal state
-  const [editRow,    setEditRow]    = useState<any | null>(null);
-  const [editFields, setEditFields] = useState<any>({});
-  const [saving,     setSaving]     = useState(false);
-  const [saveError,  setSaveError]  = useState('');
+  // Edit enrollment modal state
+  const [editRow,         setEditRow]         = useState<any | null>(null);
+  const [editFields,      setEditFields]      = useState<any>({});
+  const [saving,          setSaving]          = useState(false);
+  const [saveError,       setSaveError]       = useState('');
+  const [installments,    setInstallments]    = useState<any[]>([]);
+  const [instDates,       setInstDates]       = useState<Record<string, string>>({});
+  const [instSaving,      setInstSaving]      = useState<Record<string, boolean>>({});
+  const [instError,       setInstError]       = useState('');
 
-  // New month modal
-  const [newMonthOpen,   setNewMonthOpen]   = useState(false);
-  const [newMonthLabel,  setNewMonthLabel]  = useState('');
-  const [newMonthAmount, setNewMonthAmount] = useState('');
-  const [newMonthSaving, setNewMonthSaving] = useState(false);
-  const [newMonthError,  setNewMonthError]  = useState('');
+  // Record payment modal
+  const [payRow,       setPayRow]       = useState<any | null>(null);
+  const [payAmount,    setPayAmount]    = useState('');
+  const [payDate,      setPayDate]      = useState('');
+  const [payMethod,    setPayMethod]    = useState('');
+  const [payRef,       setPayRef]       = useState('');
+  const [payNotes,     setPayNotes]     = useState('');
+  const [paySaving,    setPaySaving]    = useState(false);
+  const [payError,     setPayError]     = useState('');
+
+  // Payment history modal
+  const [histRow,      setHistRow]      = useState<any | null>(null);
+  const [histPayments, setHistPayments] = useState<any[]>([]);
+  const [histLoading,  setHistLoading]  = useState(false);
+  const [histError,    setHistError]    = useState('');
+  const [editingPayId, setEditingPayId] = useState<string | null>(null);
+  const [editPayFields, setEditPayFields] = useState<any>({});
+  const [editPaySaving, setEditPaySaving] = useState(false);
+  const [editPayError,  setEditPayError]  = useState('');
+  const [deletingPayId, setDeletingPayId] = useState<string | null>(null);
+  const [menuRow,  setMenuRow]  = useState<any | null>(null);
+  const [menuPos,  setMenuPos]  = useState<{ top?: number; bottom?: number; right: number } | null>(null);
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -4311,80 +5134,66 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
       const res = await fetch('/api/payments?action=summary', {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
-      if (res.error) { setError(res.error); return; }
-      setRows(res.rows ?? []);
+      if (res.error) { setError(res.error); setLoading(false); return; }
+
+      const fetchedRows: any[] = res.rows ?? [];
+      const currentOutstandingId = localStorage.getItem('outstandingCohortId') ?? '';
+
+      setRows(fetchedRows);
       setCohorts(res.cohorts ?? []);
-      setSheetUrl(res.sheetUrl ?? '');
+
+      // Auto-sync: move overdue students out, restore active/completed/waived students
+      if (currentOutstandingId) {
+        const toRestore = fetchedRows.filter(r =>
+          r.student_id &&
+          r.original_cohort_id &&
+          r.cohort_id === currentOutstandingId &&
+          (r.access_status === 'active' || r.access_status === 'completed' || r.access_status === 'waived')
+        );
+        const toMove = fetchedRows.filter(r =>
+          r.student_id &&
+          !r.payment_exempt &&
+          r.cohort_id !== currentOutstandingId &&
+          !r.original_cohort_id &&
+          (r.access_status === 'overdue' || r.access_status === 'pending_deposit')
+        );
+        if (toRestore.length > 0 || toMove.length > 0) {
+          await Promise.all([
+            ...toRestore.map(r => fetch('/api/payments', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ action: 'restore-cohort', studentId: r.student_id }),
+            })),
+            ...toMove.map(r => fetch('/api/payments', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ action: 'move-to-outstanding', studentId: r.student_id, outstandingCohortId: currentOutstandingId }),
+            })),
+          ]);
+          // Reload to reflect cohort changes
+          const res2 = await fetch('/api/payments?action=summary', {
+            headers: { Authorization: `Bearer ${token}` },
+          }).then(r => r.json());
+          if (!res2.error) { setRows(res2.rows ?? []); setCohorts(res2.cohorts ?? []); }
+        }
+      }
     } catch { setError('Failed to load payment data.'); }
     finally { setLoading(false); }
   }, []);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [load]);
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
+  const handleToggleExempt = async (r: any, exempt: boolean) => {
+    setMovingId(r.student_id);
     const token = await getToken();
-
-    // Invalidate Redis cache so we get fresh data from the sheet
     await fetch('/api/payments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action: 'refresh' }),
+      body: JSON.stringify({ action: 'toggle-exempt', studentId: r.student_id, exempt }),
     });
-
-    // Fetch updated rows
-    const res = await fetch('/api/payments?action=summary', {
-      headers: { Authorization: `Bearer ${token}` },
-    }).then(r => r.json());
-
-    if (!res.error) {
-      const fetchedRows: any[] = res.rows ?? [];
-      const currentOutstandingId = localStorage.getItem('outstandingCohortId') ?? '';
-
-      if (currentOutstandingId) {
-        const toRestore = fetchedRows.filter(r =>
-          r.student_id &&
-          r.current_cohort_id === currentOutstandingId &&
-          r.original_cohort_id &&
-          (r.status === 'paid' || r.status === 'waived')
-        );
-        const toMove = fetchedRows.filter(r =>
-          r.student_id &&
-          !r.payment_exempt &&           // skip manually exempted students
-          r.current_cohort_id !== currentOutstandingId &&
-          (r.status === 'unpaid' || r.status === 'partial')
-        );
-
-        if (toRestore.length > 0 || toMove.length > 0) {
-          await Promise.all([
-            ...toRestore.map(r =>
-              fetch('/api/payments', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ action: 'restore-cohort', studentId: r.student_id }),
-              })
-            ),
-            ...toMove.map(r =>
-              fetch('/api/payments', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ action: 'move-to-outstanding', studentId: r.student_id, outstandingCohortId: currentOutstandingId }),
-              })
-            ),
-          ]);
-          // Reload once more to reflect cohort changes
-          await load();
-          setRefreshing(false);
-          return;
-        }
-      }
-
-      setRows(fetchedRows);
-      setCohorts(res.cohorts ?? []);
-      setSheetUrl(res.sheetUrl ?? '');
-    }
-
-    setRefreshing(false);
+    await load();
+    setMovingId(null);
   };
 
   const handleMoveToOutstanding = async (r: any) => {
@@ -4395,18 +5204,6 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ action: 'move-to-outstanding', studentId: r.student_id, outstandingCohortId }),
-    });
-    await load();
-    setMovingId(null);
-  };
-
-  const handleToggleExempt = async (r: any, exempt: boolean) => {
-    setMovingId(r.student_id);
-    const token = await getToken();
-    await fetch('/api/payments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action: 'toggle-exempt', studentId: r.student_id, exempt }),
     });
     await load();
     setMovingId(null);
@@ -4425,16 +5222,64 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
     setMovingId(null);
   };
 
-  // Open edit modal pre-filled with the row's current values
-  const openEdit = (r: any) => {
+  const handleMarkWaived = async (r: any) => {
+    if (!confirm(`Mark ${r.email} as waived/sponsored? This grants full access.`)) return;
+    setMovingId(r.student_id);
+    const token = await getToken();
+    await fetch('/api/payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: 'mark-waived', enrollmentId: r.enrollment_id }),
+    });
+    await load();
+    setMovingId(null);
+  };
+
+  // Open edit enrollment modal
+  const openEdit = async (r: any) => {
     setEditRow(r);
     setEditFields({
-      billing_month: r.billing_month ?? '',
-      amount_due:    String(r.amount_due ?? ''),
-      amount_paid:   String(r.amount_paid ?? ''),
-      notes:         r.notes ?? '',
+      total_fee:        String(r.total_fee ?? ''),
+      deposit_required: String(r.deposit_required ?? ''),
+      payment_plan:     r.payment_plan ?? 'flexible',
     });
-    setSaveError('');
+    setSaveError(''); setInstError('');
+    setInstallments([]); setInstDates({}); setInstSaving({});
+    if (!r.is_presignup && r.enrollment_id) {
+      const token = await getToken();
+      try {
+        const res = await fetch(`/api/payments?action=installments&enrollmentId=${r.enrollment_id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(r => r.json());
+        if (!res.error) {
+          setInstallments(res.installments ?? []);
+          const dates: Record<string, string> = {};
+          for (const inst of res.installments ?? []) dates[inst.id] = inst.due_date ?? '';
+          setInstDates(dates);
+        }
+      } catch { /* non-blocking */ }
+    }
+  };
+
+  const handleSaveInstallmentDate = async (instId: string) => {
+    const due_date = instDates[instId];
+    if (!due_date) return;
+    setInstSaving(prev => ({ ...prev, [instId]: true }));
+    setInstError('');
+    const token = await getToken();
+    try {
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'edit-installment', installmentId: instId, due_date }),
+      }).then(r => r.json());
+      if (res.error) setInstError(res.error);
+      else {
+        setInstallments(prev => prev.map(i => i.id === instId ? { ...i, due_date } : i));
+        await load();
+      }
+    } catch { setInstError('Failed to save due date.'); }
+    setInstSaving(prev => ({ ...prev, [instId]: false }));
   };
 
   const handleSave = async () => {
@@ -4446,13 +5291,11 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          action:        'update-row',
-          email:         editRow.email,
-          billing_month: editFields.billing_month,
-          amount_due:    Number(editFields.amount_due),
-          amount_paid:   Number(editFields.amount_paid),
-          notes:         editFields.notes,
-          // status omitted -- controlled by sheet formula
+          action:           'edit-enrollment',
+          enrollmentId:     editRow.enrollment_id,
+          total_fee:        Number(editFields.total_fee),
+          deposit_required: Number(editFields.deposit_required),
+          payment_plan:     editFields.payment_plan,
         }),
       }).then(r => r.json());
       if (res.error) { setSaveError(res.error); } else { setEditRow(null); await load(); }
@@ -4460,213 +5303,297 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
     setSaving(false);
   };
 
-  // Quick mark-paid without opening the modal
-  const handleMarkPaid = async (r: any) => {
-    const token = await getToken();
-    await fetch('/api/payments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        action: 'update-row', email: r.email,
-        amount_paid: r.amount_due,
-      }),
-    });
-    await load();
+  // Open record payment modal
+  const openPay = (r: any) => {
+    setPayRow(r);
+    setPayAmount('');
+    setPayDate(new Date().toISOString().slice(0, 10));
+    setPayMethod(''); setPayRef(''); setPayNotes(''); setPayError('');
   };
 
-  // New month reset
-  const handleNewMonth = async () => {
-    if (!newMonthLabel.trim()) { setNewMonthError('Billing month is required.'); return; }
-    setNewMonthSaving(true); setNewMonthError('');
+  const handleRecordPayment = async () => {
+    if (!payRow || !payAmount) { setPayError('Amount is required.'); return; }
+    setPaySaving(true); setPayError('');
     const token = await getToken();
     try {
       const res = await fetch('/api/payments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          action: 'new-month',
-          billing_month: newMonthLabel.trim(),
-          ...(newMonthAmount ? { amount_due: Number(newMonthAmount) } : {}),
+          action:       'record-payment',
+          enrollmentId: payRow.enrollment_id,
+          amount:       Number(payAmount),
+          paidAt:       payDate || undefined,
+          method:       payMethod || undefined,
+          reference:    payRef || undefined,
+          notes:        payNotes || undefined,
         }),
       }).then(r => r.json());
-      if (res.error) { setNewMonthError(res.error); }
-      else { setNewMonthOpen(false); setNewMonthLabel(''); setNewMonthAmount(''); await load(); }
-    } catch { setNewMonthError('Failed to reset month.'); }
-    setNewMonthSaving(false);
+      if (res.error) { setPayError(res.error); }
+      else { setPayRow(null); await load(); }
+    } catch { setPayError('Failed to record payment.'); }
+    setPaySaving(false);
+  };
+
+  const openHistory = async (r: any) => {
+    setHistRow(r);
+    setHistPayments([]);
+    setHistError('');
+    setEditingPayId(null);
+    setHistLoading(true);
+    const token = await getToken();
+    try {
+      const res = await fetch(`/api/payments?action=history&enrollmentId=${r.enrollment_id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then(r => r.json());
+      if (res.error) setHistError(res.error);
+      else setHistPayments(res.payments ?? []);
+    } catch { setHistError('Failed to load payment history.'); }
+    setHistLoading(false);
+  };
+
+  const startEditPayment = (p: any) => {
+    setEditingPayId(p.id);
+    setEditPayFields({ amount: String(p.amount), paid_at: p.paid_at ?? '', method: p.method ?? '', reference: p.reference ?? '', notes: p.notes ?? '' });
+    setEditPayError('');
+  };
+
+  const handleEditPayment = async () => {
+    if (!editingPayId || !editPayFields.amount) { setEditPayError('Amount is required.'); return; }
+    setEditPaySaving(true); setEditPayError('');
+    const token = await getToken();
+    try {
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action:    'edit-payment',
+          paymentId: editingPayId,
+          amount:    Number(editPayFields.amount),
+          paidAt:    editPayFields.paid_at || undefined,
+          method:    editPayFields.method || null,
+          reference: editPayFields.reference || null,
+          notes:     editPayFields.notes || null,
+        }),
+      }).then(r => r.json());
+      if (res.error) { setEditPayError(res.error); }
+      else {
+        setEditingPayId(null);
+        await openHistory(histRow);
+        await load();
+      }
+    } catch { setEditPayError('Failed to update payment.'); }
+    setEditPaySaving(false);
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!confirm('Delete this payment record? This will recompute the student\'s balance and access status.')) return;
+    setDeletingPayId(paymentId);
+    const token = await getToken();
+    try {
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'delete-payment', paymentId }),
+      }).then(r => r.json());
+      if (res.error) alert(res.error);
+      else {
+        await openHistory(histRow);
+        await load();
+      }
+    } catch { alert('Failed to delete payment.'); }
+    setDeletingPayId(null);
+  };
+
+  const ACCESS_COLORS: Record<string, string> = {
+    active:          '#16a34a',
+    completed:       '#2563eb',
+    waived:          '#7c3aed',
+    overdue:         '#dc2626',
+    pending_deposit: '#d97706',
+    expired:         '#6b7280',
   };
 
   const filtered = rows.filter(r => {
-    const matchSearch = !search || r.email?.toLowerCase().includes(search.toLowerCase()) || r.billing_month?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'all' || r.status === statusFilter;
+    const matchSearch = !search ||
+      r.email?.toLowerCase().includes(search.toLowerCase()) ||
+      r.student_name?.toLowerCase().includes(search.toLowerCase()) ||
+      r.cohort_name?.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === 'all' || r.access_status === statusFilter;
     return matchSearch && matchStatus;
   });
 
-  const withBalance      = new Set(rows.filter(r => r.status === 'unpaid' || r.status === 'partial').map(r => r.email)).size;
-  const totalOutstanding = rows.filter(r => r.status === 'unpaid' || r.status === 'partial').reduce((s, r) => s + (r.amount_due - r.amount_paid), 0);
-  const paidThisMonth    = (() => {
-    const label = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
-    return rows.filter(r => r.status === 'paid' && r.billing_month?.toLowerCase() === label.toLowerCase()).length;
-  })();
+  const withBalance      = rows.filter(r => r.access_status === 'overdue' || r.access_status === 'pending_deposit').length;
+  const totalOutstanding = rows.reduce((s: number, r: any) => s + (r.balance ?? 0), 0);
+  const fullyPaid        = rows.filter(r => r.access_status === 'completed' || r.access_status === 'waived').length;
 
   return (
     <div className="space-y-5">
+      {/* Payment section tabs */}
+      <div className="flex gap-1 p-1 rounded-xl" style={{ background: C.pill }}>
+        {([
+          ['enrollments',   'Enrollments'],
+          ['confirmations', 'Confirmations'],
+          ['options',       'Payment Options'],
+        ] as const).map(([id, label]) => (
+          <button key={id} onClick={() => setPayTab(id)}
+            className="flex-1 py-2 px-2 rounded-lg text-xs sm:text-sm font-semibold transition-all"
+            style={{
+              background: payTab === id ? C.card : 'transparent',
+              color: payTab === id ? C.text : C.faint,
+              boxShadow: payTab === id ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+            }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {payTab === 'confirmations' && <ConfirmationsTab C={C} getToken={getToken}/>}
+      {payTab === 'options'       && <PaymentOptionsTab C={C} getToken={getToken}/>}
+
+      {payTab === 'enrollments' && <>
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-xl font-bold tracking-tight leading-none" style={{ color: C.text }}>Payments</h2>
-          <p className="text-xs mt-1.5" style={{ color: C.faint }}>Synced with your Google Sheet. Move outstanding students to their cohort directly from here.</p>
+          <p className="text-xs mt-1.5" style={{ color: C.faint }}>Enrollment-based payment tracking. Access gates are applied automatically.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {sheetUrl && (
-            <a href={sheetUrl} target="_blank" rel="noreferrer"
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-opacity hover:opacity-80"
-              style={{ background: C.pill, color: C.text, textDecoration: 'none' }}>
-              <ExternalLink className="w-3.5 h-3.5"/> Open Sheet
-            </a>
-          )}
-          <button onClick={() => { setNewMonthLabel(''); setNewMonthAmount(''); setNewMonthError(''); setNewMonthOpen(true); }}
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-opacity hover:opacity-80"
+          <button onClick={() => reportExportCSV(
+            ['Email', 'Student', 'Cohort', 'Total Fee', 'Paid', 'Balance', 'Plan', 'Access Status', 'Access Until', 'Next Due'],
+            filtered.map(r => [r.email, r.student_name, r.cohort_name, r.total_fee, r.paid_total, r.balance, r.payment_plan, r.access_status, r.access_until ?? '', r.next_due_date ?? '']),
+            'enrollments-export.csv'
+          )} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-opacity hover:opacity-80"
             style={{ background: C.pill, color: C.text }}>
-            <RefreshCw className="w-3.5 h-3.5"/> New Month
-          </button>
-          <button onClick={handleRefresh} disabled={refreshing}
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-opacity hover:opacity-80 disabled:opacity-50"
-            style={{ background: C.cta, color: C.ctaText }}>
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`}/> Refresh
+            <Download className="w-3.5 h-3.5"/> Export CSV
           </button>
         </div>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-3">
-        <RKpi label="Students with Balance" value={withBalance} sub="unpaid or partial" accent="#dc2626" C={C} />
-        <RKpi label="Total Outstanding" value={`GHS ${totalOutstanding.toLocaleString()}`} sub="across all months" C={C} />
-        <RKpi label="Paid This Month" value={paidThisMonth} sub="billing rows marked paid" accent="#16a34a" C={C} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <RKpi label="Overdue / Pending" value={withBalance} sub="needs payment" accent="#dc2626" C={C} />
+        <RKpi label="Total Outstanding (GHS)" value={totalOutstanding.toLocaleString()} sub="across all enrollments" C={C} />
+        <RKpi label="Paid / Waived" value={fullyPaid} sub="fully settled" accent="#16a34a" C={C} />
       </div>
 
       {/* Outstanding cohort selector */}
-      <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+      <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
         <span className="text-xs font-semibold flex-shrink-0" style={{ color: C.muted }}>Outstanding Cohort:</span>
         <select value={outstandingCohortId}
           onChange={e => { setOutstandingCohortId(e.target.value); localStorage.setItem('outstandingCohortId', e.target.value); }}
-          className="flex-1 text-sm px-3 py-1.5 rounded-lg outline-none"
+          className="flex-1 min-w-[160px] text-sm px-3 py-1.5 rounded-lg outline-none"
           style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
           <option value="">-- Select the outstanding cohort --</option>
           {cohorts.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <span className="text-[11px]" style={{ color: C.faint }}>Students moved here lose access to all course resources.</span>
+        <span className="hidden sm:inline text-[11px]" style={{ color: C.faint }}>Students moved here lose access to course resources.</span>
       </div>
 
       {/* Filters */}
       <div className="flex gap-2 flex-wrap">
-        <input placeholder="Search by email or month…" value={search} onChange={e => setSearch(e.target.value)}
+        <input placeholder="Search by email, name, or cohort..." value={search} onChange={e => setSearch(e.target.value)}
           className="flex-1 min-w-[180px] text-sm px-3 py-2 rounded-lg outline-none"
           style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
           className="text-sm px-3 py-2 rounded-lg outline-none"
           style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
           <option value="all">All Statuses</option>
-          <option value="unpaid">Unpaid</option>
-          <option value="partial">Partial</option>
-          <option value="paid">Paid</option>
+          <option value="active">Active</option>
+          <option value="pending_deposit">Pending Deposit</option>
+          <option value="overdue">Overdue</option>
+          <option value="completed">Completed</option>
           <option value="waived">Waived</option>
+          <option value="expired">Expired</option>
         </select>
-        <button onClick={() => reportExportCSV(
-          ['Email', 'Billing Month', 'Amount Due (GHS)', 'Amount Paid (GHS)', 'Balance (GHS)', 'Status', 'Notes'],
-          filtered.map(r => [r.email, r.billing_month, r.amount_due, r.amount_paid, r.amount_due - r.amount_paid, r.status, r.notes]),
-          'payments-export.csv'
-        )} className="text-xs font-semibold px-3 py-2 rounded-lg transition-opacity hover:opacity-80"
-          style={{ background: C.pill, color: C.text }}>
-          <Download className="w-3.5 h-3.5 inline mr-1"/> Export CSV
-        </button>
       </div>
+
+      {/* Menu overlay - closes any open kebab menu */}
+      {menuRow && (
+        <div className="fixed inset-0 z-40" onClick={() => { setMenuRow(null); setMenuPos(null); }}/>
+      )}
 
       {/* Table */}
       {loading ? (
         <div className="flex items-center gap-2 py-10 justify-center" style={{ color: C.faint }}>
-          <Loader2 className="w-4 h-4 animate-spin"/> Loading payment data…
+          <Loader2 className="w-4 h-4 animate-spin"/> Loading enrollment data...
         </div>
       ) : error ? (
-        <div className="py-10 text-center text-sm" style={{ color: '#dc2626' }}>
-          {error}
-          {!sheetUrl && <p className="mt-2 text-xs" style={{ color: C.faint }}>Make sure <code>GOOGLE_SHEETS_SPREADSHEET_ID</code> and service account credentials are set in your environment variables.</p>}
-        </div>
+        <div className="py-10 text-center text-sm" style={{ color: '#dc2626' }}>{error}</div>
       ) : filtered.length === 0 ? (
         <div className="py-10 text-center text-sm" style={{ color: C.faint }}>
-          {rows.length === 0 ? 'No payment data found. Add rows to your Google Sheet and click Refresh.' : 'No results match your filters.'}
+          {rows.length === 0 ? 'No signed-up students found. Students appear here after completing signup via their invitation link.' : 'No results match your filters.'}
         </div>
       ) : (
         <div className="rounded-xl overflow-x-auto" style={{ border: `1px solid ${C.cardBorder}` }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 780 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 900 }}>
             <thead>
               <tr style={{ background: C.pill }}>
-                {['Email', 'Billing Month', 'Due', 'Paid', 'Balance', 'Status', 'Cohort', ''].map(h => (
+                {['Student', 'Cohort', 'Total Fee', 'Paid', 'Balance', 'Plan', 'Access Status', 'Next Due', ''].map(h => (
                   <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, fontSize: 10, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r, i) => {
-                const balance = r.amount_due - r.amount_paid;
-                const isOutstanding = outstandingCohortId && r.current_cohort_id === outstandingCohortId;
+              {filtered.map((r: any, i: number) => {
+                const isOutstanding = outstandingCohortId && r.cohort_id === outstandingCohortId;
+                const accentColor = ACCESS_COLORS[r.access_status] ?? C.muted;
                 return (
-                  <tr key={i} style={{ borderTop: `1px solid ${C.divider}`, background: i % 2 === 0 ? C.card : (C === DARK_C ? '#161616' : '#fafafa') }}>
-                    <td style={{ padding: '8px 10px', color: C.text, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.email}>{r.email}</td>
-                    <td style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r.billing_month}</td>
-                    <td style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{Number(r.amount_due).toLocaleString()}</td>
-                    <td style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{Number(r.amount_paid).toLocaleString()}</td>
-                    <td style={{ padding: '8px 10px', color: balance > 0 ? '#dc2626' : '#16a34a', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      {balance > 0 ? balance.toLocaleString() : '--'}
-                    </td>
-                    <td style={{ padding: '8px 10px' }}><StatusBadge status={r.status} C={C} /></td>
-                    <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', color: isOutstanding ? '#dc2626' : C.muted, fontWeight: isOutstanding ? 600 : 400 }}>
-                      {r.current_cohort_name ?? '--'}
-                    </td>
-                    <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {/* Exempt badge + revoke */}
-                        {r.payment_exempt && (
-                          <>
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md"
-                              style={{ background: 'rgba(234,179,8,0.12)', color: '#a16207' }}>
-                              Exempt
-                            </span>
-                            <button onClick={() => handleToggleExempt(r, false)} disabled={movingId === r.student_id}
-                              className="text-[10px] font-semibold px-2 py-0.5 rounded-md transition-opacity hover:opacity-80 disabled:opacity-50"
-                              style={{ background: C.pill, color: C.muted }}>
-                              {movingId === r.student_id ? '…' : 'Revoke'}
-                            </button>
-                          </>
+                  <tr key={r.enrollment_id ?? i} style={{ borderTop: `1px solid ${C.divider}`, background: i % 2 === 0 ? C.card : (C === DARK_C ? '#161616' : '#fafafa') }}>
+                    <td style={{ padding: '8px 10px', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div className="flex items-center gap-1.5">
+                        <p style={{ color: C.text, fontWeight: 500 }} title={r.student_name}>{r.student_name || '--'}</p>
+                        {r.is_presignup && (
+                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(245,158,11,0.15)', color: '#b45309' }}>Pending Signup</span>
                         )}
-                        {/* Move to Outstanding -- only if not exempt */}
-                        {!r.payment_exempt && (r.status === 'unpaid' || r.status === 'partial') && r.student_id && outstandingCohortId && !isOutstanding && (
-                          <button onClick={() => handleMoveToOutstanding(r)} disabled={movingId === r.student_id}
-                            className="text-[10px] font-semibold px-2 py-0.5 rounded-md transition-opacity hover:opacity-80 disabled:opacity-50"
-                            style={{ background: 'rgba(220,38,38,0.12)', color: '#dc2626' }}>
-                            {movingId === r.student_id ? '…' : 'Move Out'}
-                          </button>
+                        {!r.is_presignup && r.payment_exempt && (
+                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(234,179,8,0.12)', color: '#a16207' }}>Exempt</span>
                         )}
-                        {/* Restore */}
-                        {r.student_id && isOutstanding && r.original_cohort_id && (
-                          <button onClick={() => handleRestoreCohort(r)} disabled={movingId === r.student_id}
-                            className="text-[10px] font-semibold px-2 py-0.5 rounded-md transition-opacity hover:opacity-80 disabled:opacity-50"
-                            style={{ background: 'rgba(34,197,94,0.12)', color: '#16a34a' }}>
-                            {movingId === r.student_id ? '…' : 'Restore'}
-                          </button>
-                        )}
-                        {(r.status === 'unpaid' || r.status === 'partial') && (
-                          <button onClick={() => handleMarkPaid(r)}
-                            className="text-[10px] font-semibold px-2 py-0.5 rounded-md transition-opacity hover:opacity-80"
-                            style={{ background: 'rgba(34,197,94,0.12)', color: '#16a34a' }}>
-                            Paid
-                          </button>
-                        )}
-                        <button onClick={() => openEdit(r)}
-                          className="text-[10px] font-semibold px-2 py-0.5 rounded-md transition-opacity hover:opacity-80"
-                          style={{ background: C.pill, color: C.muted }}>
-                          Edit
-                        </button>
                       </div>
+                      <p style={{ color: C.faint, fontSize: 10 }} title={r.email}>{r.email}</p>
+                    </td>
+                    <td style={{ padding: '8px 10px', color: isOutstanding ? '#dc2626' : C.muted, fontWeight: isOutstanding ? 600 : 400, whiteSpace: 'nowrap' }}>
+                      {r.cohort_name ?? '--'}
+                    </td>
+                    <td style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r.currency} {Number(r.total_fee).toLocaleString()}</td>
+                    <td style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{Number(r.paid_total).toLocaleString()}</td>
+                    <td style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap', color: r.balance > 0 ? '#dc2626' : '#16a34a' }}>
+                      {r.balance > 0 ? r.balance.toLocaleString() : '--'}
+                    </td>
+                    <td style={{ padding: '8px 10px', color: C.muted, whiteSpace: 'nowrap', textTransform: 'capitalize' }}>{r.payment_plan}</td>
+                    <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md" style={{ background: `${accentColor}18`, color: accentColor }}>
+                        {r.access_status?.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                    <td style={{ padding: '8px 10px', color: C.muted, whiteSpace: 'nowrap', fontSize: 11 }}>
+                      {r.next_due_date ? new Date(r.next_due_date).toLocaleDateString() : '--'}
+                    </td>
+                    <td style={{ padding: '8px 10px' }}>
+                      {r.enrollment_id && (
+                        <div className="flex justify-end">
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              if (menuRow?.enrollment_id === r.enrollment_id) {
+                                setMenuRow(null); setMenuPos(null);
+                              } else {
+                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                const right = Math.max(8, window.innerWidth - rect.right);
+                                if (window.innerHeight - rect.bottom >= 270) {
+                                  setMenuPos({ top: rect.bottom + 4, right });
+                                } else {
+                                  setMenuPos({ bottom: window.innerHeight - rect.top + 4, right });
+                                }
+                                setMenuRow(r);
+                              }
+                            }}
+                            className="p-1.5 rounded-lg transition-opacity hover:opacity-70"
+                            style={{ color: C.muted, background: menuRow?.enrollment_id === r.enrollment_id ? C.pill : 'transparent' }}>
+                            <MoreVertical className="w-4 h-4"/>
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -4674,102 +5601,350 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
             </tbody>
           </table>
           <div className="px-4 py-2.5 text-xs" style={{ color: C.faint, borderTop: `1px solid ${C.divider}`, background: C.pill }}>
-            {filtered.length} row{filtered.length !== 1 ? 's' : ''}{rows.length !== filtered.length ? ` of ${rows.length}` : ''}
+            {filtered.length} enrollment{filtered.length !== 1 ? 's' : ''}{rows.length !== filtered.length ? ` of ${rows.length}` : ''}
           </div>
         </div>
       )}
 
-      {/* Edit modal */}
-      {editRow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setEditRow(null)}>
-          <div className="w-full max-w-sm rounded-2xl p-6 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold" style={{ color: C.text }}>Edit Payment</h3>
-              <button onClick={() => setEditRow(null)} style={{ color: C.faint }}><X className="w-4 h-4"/></button>
-            </div>
-            <p className="text-xs font-medium" style={{ color: C.muted }}>{editRow.email}</p>
+      {/* Kebab dropdown - rendered outside table to escape overflow-x-auto clip */}
+      {menuRow && menuPos && (
+        <div className="fixed z-50 w-52 rounded-xl shadow-2xl py-1.5"
+          style={{ top: menuPos.top, bottom: menuPos.bottom, right: menuPos.right, background: C.card, border: `1px solid ${C.cardBorder}` }}
+          onClick={e => e.stopPropagation()}>
+          <button onClick={() => { setMenuRow(null); setMenuPos(null); openPay(menuRow); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-opacity hover:opacity-70"
+            style={{ color: C.text }}>
+            <CreditCard className="w-3.5 h-3.5 flex-shrink-0"/> Record Payment
+          </button>
+          <button onClick={() => { setMenuRow(null); setMenuPos(null); openHistory(menuRow); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-opacity hover:opacity-70"
+            style={{ color: C.text }}>
+            <Clock className="w-3.5 h-3.5 flex-shrink-0"/> Payment History
+          </button>
+          <button onClick={() => { setMenuRow(null); setMenuPos(null); openEdit(menuRow); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-opacity hover:opacity-70"
+            style={{ color: C.text }}>
+            <Edit2 className="w-3.5 h-3.5 flex-shrink-0"/> Edit Enrollment
+          </button>
+          <div className="my-1 mx-3" style={{ borderTop: `1px solid ${C.divider}` }}/>
+          {menuRow.access_status !== 'waived' && (
+            <button onClick={() => { setMenuRow(null); setMenuPos(null); handleMarkWaived(menuRow); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-opacity hover:opacity-70"
+              style={{ color: C.text }}>
+              <Check className="w-3.5 h-3.5 flex-shrink-0"/> Mark as Waived
+            </button>
+          )}
+          {!menuRow.is_presignup && menuRow.student_id && outstandingCohortId &&
+            menuRow.cohort_id !== outstandingCohortId && !menuRow.payment_exempt &&
+            (menuRow.access_status === 'overdue' || menuRow.access_status === 'pending_deposit') && (
+            <button onClick={() => { setMenuRow(null); setMenuPos(null); handleMoveToOutstanding(menuRow); }} disabled={movingId === menuRow.student_id}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-opacity hover:opacity-70 disabled:opacity-50"
+              style={{ color: C.text }}>
+              <ArrowRight className="w-3.5 h-3.5 flex-shrink-0"/> Move to Outstanding
+            </button>
+          )}
+          {!menuRow.is_presignup && menuRow.student_id && menuRow.original_cohort_id && (
+            <button onClick={() => { setMenuRow(null); setMenuPos(null); handleRestoreCohort(menuRow); }} disabled={movingId === menuRow.student_id}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-opacity hover:opacity-70 disabled:opacity-50"
+              style={{ color: C.text }}>
+              <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0"/> Restore to Cohort
+            </button>
+          )}
+          {!menuRow.is_presignup && menuRow.student_id && (
+            menuRow.payment_exempt ? (
+              <button onClick={() => { setMenuRow(null); setMenuPos(null); handleToggleExempt(menuRow, false); }} disabled={movingId === menuRow.student_id}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-opacity hover:opacity-70 disabled:opacity-50"
+                style={{ color: C.text }}>
+                <XCircle className="w-3.5 h-3.5 flex-shrink-0"/> Revoke Exemption
+              </button>
+            ) : (
+              <button onClick={() => { setMenuRow(null); setMenuPos(null); handleToggleExempt(menuRow, true); }} disabled={movingId === menuRow.student_id}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-opacity hover:opacity-70 disabled:opacity-50"
+                style={{ color: C.text }}>
+                <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0"/> Grant Exemption
+              </button>
+            )
+          )}
+        </div>
+      )}
 
-            <div>
-              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Billing Date</label>
-              <input type="date" value={editFields.billing_month}
-                onChange={e => setEditFields((p: any) => ({ ...p, billing_month: e.target.value }))}
-                className="w-full text-sm px-3 py-2 rounded-lg outline-none"
-                style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+      {/* Record Payment modal */}
+      {payRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setPayRow(null)}>
+          <div className="w-full max-w-md rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }} onClick={e => e.stopPropagation()}>
+            <div className="px-6 pt-6 pb-5" style={{ borderBottom: `1px solid ${C.divider}` }}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-bold" style={{ color: C.text }}>Record Payment</h3>
+                  <p className="text-xs mt-1" style={{ color: C.faint }}>{payRow.student_name || payRow.email}</p>
+                </div>
+                <button onClick={() => setPayRow(null)} className="p-1 rounded-lg transition-opacity hover:opacity-70 flex-shrink-0 mt-0.5" style={{ color: C.faint }}><X className="w-4 h-4"/></button>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-4 min-w-0">
+                {[
+                  { label: 'Total Fee', value: `${payRow.currency} ${Number(payRow.total_fee).toLocaleString()}`, color: C.text },
+                  { label: 'Paid', value: Number(payRow.paid_total).toLocaleString(), color: '#16a34a' },
+                  { label: 'Balance', value: payRow.balance > 0 ? Number(payRow.balance).toLocaleString() : 'Settled', color: payRow.balance > 0 ? '#dc2626' : '#16a34a' },
+                ].map(s => (
+                  <div key={s.label} className="rounded-xl px-3 py-2.5" style={{ background: C.pill }}>
+                    <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: C.faint }}>{s.label}</p>
+                    <p className="text-sm font-bold mt-0.5" style={{ color: s.color }}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-
-            {[
-              { label: 'Amount Due (GHS)', key: 'amount_due', placeholder: '500' },
-              { label: 'Amount Paid (GHS)', key: 'amount_paid', placeholder: '0' },
-            ].map(f => (
-              <div key={f.key}>
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>{f.label}</label>
-                <input type="number" value={editFields[f.key]} placeholder={f.placeholder}
-                  onChange={e => setEditFields((p: any) => ({ ...p, [f.key]: e.target.value }))}
-                  className="w-full text-sm px-3 py-2 rounded-lg outline-none"
+            <div className="px-6 py-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Amount ({payRow.currency}) *</label>
+                  <input type="number" value={payAmount} placeholder="0" onChange={e => setPayAmount(e.target.value)}
+                    className="w-full text-sm px-3 py-2.5 rounded-xl outline-none"
+                    style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Date Paid</label>
+                  <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)}
+                    className="w-full text-sm px-3 py-2.5 rounded-xl outline-none"
+                    style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Method</label>
+                  <input type="text" value={payMethod} placeholder="Cash, Mobile Money..." onChange={e => setPayMethod(e.target.value)}
+                    className="w-full text-sm px-3 py-2.5 rounded-xl outline-none"
+                    style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Reference</label>
+                  <input type="text" value={payRef} placeholder="Receipt / transaction ref" onChange={e => setPayRef(e.target.value)}
+                    className="w-full text-sm px-3 py-2.5 rounded-xl outline-none"
+                    style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Notes</label>
+                <input type="text" value={payNotes} placeholder="Optional notes" onChange={e => setPayNotes(e.target.value)}
+                  className="w-full text-sm px-3 py-2.5 rounded-xl outline-none"
                   style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
               </div>
-            ))}
-
-            <div>
-              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Notes</label>
-              <input type="text" value={editFields.notes} placeholder="Optional note"
-                onChange={e => setEditFields((p: any) => ({ ...p, notes: e.target.value }))}
-                className="w-full text-sm px-3 py-2 rounded-lg outline-none"
-                style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+              {payError && <p className="text-xs" style={{ color: '#dc2626' }}>{payError}</p>}
             </div>
-            <p className="text-[11px]" style={{ color: C.faint }}>Status is managed automatically by your sheet formula.</p>
-
-            {saveError && <p className="text-xs" style={{ color: '#dc2626' }}>{saveError}</p>}
-
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => setEditRow(null)} className="flex-1 py-2 rounded-xl text-sm font-semibold"
-                style={{ background: C.pill, color: C.muted }}>Cancel</button>
-              <button onClick={handleSave} disabled={saving} className="flex-1 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
-                style={{ background: C.cta, color: C.ctaText }}>
-                {saving ? 'Saving…' : 'Save Changes'}
+            <div className="px-6 pb-6 flex gap-3">
+              <button onClick={() => setPayRow(null)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80" style={{ background: C.pill, color: C.muted }}>Cancel</button>
+              <button onClick={handleRecordPayment} disabled={paySaving} className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-90" style={{ background: C.cta, color: C.ctaText }}>
+                {paySaving ? 'Saving...' : 'Record Payment'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* New Month modal */}
-      {newMonthOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setNewMonthOpen(false)}>
-          <div className="w-full max-w-sm rounded-2xl p-6 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold" style={{ color: C.text }}>Start New Month</h3>
-              <button onClick={() => setNewMonthOpen(false)} style={{ color: C.faint }}><X className="w-4 h-4"/></button>
+      {/* Payment History modal */}
+      {histRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setHistRow(null)}>
+          <div className="w-full max-w-lg rounded-2xl overflow-hidden max-h-[90vh] flex flex-col" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }} onClick={e => e.stopPropagation()}>
+            <div className="px-6 pt-6 pb-5 flex-shrink-0" style={{ borderBottom: `1px solid ${C.divider}` }}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-bold" style={{ color: C.text }}>Payment History</h3>
+                  <p className="text-xs mt-1" style={{ color: C.faint }}>{histRow.student_name || histRow.email}</p>
+                </div>
+                <button onClick={() => setHistRow(null)} className="p-1 rounded-lg transition-opacity hover:opacity-70 flex-shrink-0 mt-0.5" style={{ color: C.faint }}><X className="w-4 h-4"/></button>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <div className="rounded-xl px-3 py-2.5" style={{ background: C.pill }}>
+                  <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: C.faint }}>Total Paid</p>
+                  <p className="text-sm font-bold mt-0.5" style={{ color: '#16a34a' }}>{histRow.currency} {Number(histRow.paid_total).toLocaleString()}</p>
+                </div>
+                <div className="rounded-xl px-3 py-2.5" style={{ background: histRow.balance > 0 ? 'rgba(220,38,38,0.08)' : C.pill }}>
+                  <p className="text-[10px] font-medium uppercase tracking-wide" style={{ color: C.faint }}>Balance</p>
+                  <p className="text-sm font-bold mt-0.5" style={{ color: histRow.balance > 0 ? '#dc2626' : '#16a34a' }}>
+                    {histRow.balance > 0 ? `${histRow.currency} ${histRow.balance.toLocaleString()}` : 'Settled'}
+                  </p>
+                </div>
+              </div>
             </div>
-            <p className="text-xs leading-relaxed" style={{ color: C.muted }}>
-              This will reset <strong>all students</strong> to <strong>unpaid</strong> with the new billing month. Amount paid will be set to 0.
-            </p>
-            <div>
-              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>New Billing Date</label>
-              <input type="date" value={newMonthLabel}
-                onChange={e => setNewMonthLabel(e.target.value)}
-                className="w-full text-sm px-3 py-2 rounded-lg outline-none"
-                style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+              {histError && <p className="text-xs mb-2" style={{ color: '#dc2626' }}>{histError}</p>}
+              {histLoading ? (
+                <div className="flex items-center justify-center gap-2 py-12" style={{ color: C.faint }}>
+                  <Loader2 className="w-4 h-4 animate-spin"/> Loading transactions...
+                </div>
+              ) : histPayments.length === 0 ? (
+                <div className="py-12 text-center">
+                  <CreditCard className="w-8 h-8 mx-auto mb-3" style={{ color: C.faint }}/>
+                  <p className="text-sm" style={{ color: C.faint }}>No payment records yet.</p>
+                </div>
+              ) : (
+                histPayments.map((p: any) => (
+                  <div key={p.id} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+                    {editingPayId === p.id ? (
+                      <div className="p-4 space-y-3" style={{ background: C.pill }}>
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            { label: 'Amount', key: 'amount', type: 'number' },
+                            { label: 'Date Paid', key: 'paid_at', type: 'date' },
+                            { label: 'Method', key: 'method', type: 'text' },
+                            { label: 'Reference', key: 'reference', type: 'text' },
+                          ].map(f => (
+                            <div key={f.key}>
+                              <label className="block text-[10px] font-semibold mb-1" style={{ color: C.muted }}>{f.label}</label>
+                              <input type={f.type} value={editPayFields[f.key]}
+                                onChange={e => setEditPayFields((prev: any) => ({ ...prev, [f.key]: e.target.value }))}
+                                className="w-full text-xs px-2.5 py-2 rounded-lg outline-none"
+                                style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+                            </div>
+                          ))}
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold mb-1" style={{ color: C.muted }}>Notes</label>
+                          <input type="text" value={editPayFields.notes}
+                            onChange={e => setEditPayFields((prev: any) => ({ ...prev, notes: e.target.value }))}
+                            className="w-full text-xs px-2.5 py-2 rounded-lg outline-none"
+                            style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+                        </div>
+                        {editPayError && <p className="text-[10px]" style={{ color: '#dc2626' }}>{editPayError}</p>}
+                        <div className="flex gap-2 pt-1">
+                          <button onClick={() => setEditingPayId(null)} className="flex-1 py-2 rounded-lg text-xs font-semibold" style={{ background: C.input, color: C.muted }}>Cancel</button>
+                          <button onClick={handleEditPayment} disabled={editPaySaving} className="flex-1 py-2 rounded-lg text-xs font-semibold disabled:opacity-50" style={{ background: C.cta, color: C.ctaText }}>
+                            {editPaySaving ? 'Saving...' : 'Save Changes'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 px-4 py-3" style={{ background: C.card }}>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(37,99,235,0.1)' }}>
+                          <CreditCard className="w-4 h-4" style={{ color: '#2563eb' }}/>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold" style={{ color: C.text }}>{histRow.currency} {Number(p.amount).toLocaleString()}</p>
+                          <p className="text-[11px] mt-0.5" style={{ color: C.muted }}>
+                            {p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '--'}
+                            {p.method ? ` - ${p.method}` : ''}
+                            {p.reference ? ` (${p.reference})` : ''}
+                          </p>
+                          {p.notes && <p className="text-[11px] mt-0.5" style={{ color: C.faint }}>{p.notes}</p>}
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button onClick={() => startEditPayment(p)}
+                            className="p-1.5 rounded-lg transition-opacity hover:opacity-70"
+                            style={{ color: C.muted, background: C.pill }}>
+                            <Edit2 className="w-3 h-3"/>
+                          </button>
+                          <button onClick={() => handleDeletePayment(p.id)} disabled={deletingPayId === p.id}
+                            className="p-1.5 rounded-lg transition-opacity hover:opacity-70 disabled:opacity-50"
+                            style={{ color: '#dc2626', background: 'rgba(220,38,38,0.08)' }}>
+                            {deletingPayId === p.id ? <Loader2 className="w-3 h-3 animate-spin"/> : <Trash2 className="w-3 h-3"/>}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>New Amount Due (GHS) -- leave blank to keep existing</label>
-              <input type="number" value={newMonthAmount} placeholder="e.g. 500"
-                onChange={e => setNewMonthAmount(e.target.value)}
-                className="w-full text-sm px-3 py-2 rounded-lg outline-none"
-                style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
-            </div>
-            {newMonthError && <p className="text-xs" style={{ color: '#dc2626' }}>{newMonthError}</p>}
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => setNewMonthOpen(false)} className="flex-1 py-2 rounded-xl text-sm font-semibold"
-                style={{ background: C.pill, color: C.muted }}>Cancel</button>
-              <button onClick={handleNewMonth} disabled={newMonthSaving} className="flex-1 py-2 rounded-xl text-sm font-semibold disabled:opacity-50"
-                style={{ background: '#dc2626', color: 'white' }}>
-                {newMonthSaving ? 'Resetting…' : 'Reset All'}
+            <div className="px-6 py-4 flex-shrink-0" style={{ borderTop: `1px solid ${C.divider}` }}>
+              <button onClick={() => { setHistRow(null); openPay(histRow); }}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-opacity hover:opacity-80"
+                style={{ background: 'rgba(37,99,235,0.1)', color: '#2563eb' }}>
+                <CreditCard className="w-4 h-4"/> Record New Payment
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Edit Enrollment modal */}
+      {editRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setEditRow(null)}>
+          <div className="w-full max-w-md rounded-2xl p-6 space-y-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold" style={{ color: C.text }}>Edit Enrollment</h3>
+                <p className="text-xs mt-1" style={{ color: C.faint }}>{editRow.student_name || editRow.email}</p>
+              </div>
+              <button onClick={() => setEditRow(null)} className="p-1 rounded-lg transition-opacity hover:opacity-70 flex-shrink-0 mt-0.5" style={{ color: C.faint }}><X className="w-4 h-4"/></button>
+            </div>
+            <div className="space-y-5">
+              <div className="space-y-4">
+                <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.faint }}>Payment Terms</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Total Fee (GHS)</label>
+                    <input type="number" value={editFields.total_fee} placeholder="3000"
+                      onChange={e => setEditFields((p: any) => ({ ...p, total_fee: e.target.value }))}
+                      className="w-full text-sm px-3 py-2.5 rounded-xl outline-none"
+                      style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Deposit Required (GHS)</label>
+                    <input type="number" value={editFields.deposit_required} placeholder="1500"
+                      onChange={e => setEditFields((p: any) => ({ ...p, deposit_required: e.target.value }))}
+                      className="w-full text-sm px-3 py-2.5 rounded-xl outline-none"
+                      style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Payment Plan</label>
+                  <select value={editFields.payment_plan} onChange={e => setEditFields((p: any) => ({ ...p, payment_plan: e.target.value }))}
+                    className="w-full text-sm px-3 py-2.5 rounded-xl outline-none"
+                    style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
+                    <option value="flexible">Flexible</option>
+                    <option value="full">Full</option>
+                    <option value="sponsored">Sponsored</option>
+                    <option value="waived">Waived</option>
+                  </select>
+                </div>
+              </div>
+              {installments.length > 0 && (
+                <div className="space-y-3 pt-2" style={{ borderTop: `1px solid ${C.divider}` }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider pt-1" style={{ color: C.faint }}>Installment Schedule</p>
+                  {instError && <p className="text-[11px]" style={{ color: '#dc2626' }}>{instError}</p>}
+                  {installments.map((inst: any, i: number) => (
+                    <div key={inst.id} className="rounded-xl px-3 py-3" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold" style={{ color: C.muted }}>
+                          {i === 0 ? 'Deposit' : `Installment ${i}`}
+                        </span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md"
+                          style={{
+                            background: inst.status === 'paid' ? 'rgba(22,163,74,0.12)' : inst.status === 'partial' ? 'rgba(217,119,6,0.12)' : C.input,
+                            color: inst.status === 'paid' ? '#16a34a' : inst.status === 'partial' ? '#d97706' : C.faint,
+                          }}>
+                          {inst.status}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <input type="date" value={instDates[inst.id] ?? inst.due_date}
+                          onChange={e => setInstDates(prev => ({ ...prev, [inst.id]: e.target.value }))}
+                          disabled={inst.status === 'paid'}
+                          className="flex-1 text-xs px-2.5 py-2 rounded-lg outline-none disabled:opacity-50"
+                          style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+                        <button
+                          onClick={() => handleSaveInstallmentDate(inst.id)}
+                          disabled={inst.status === 'paid' || instSaving[inst.id] || instDates[inst.id] === inst.due_date}
+                          className="text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-40 transition-opacity hover:opacity-80"
+                          style={{ background: C.cta, color: C.ctaText }}>
+                          {instSaving[inst.id] ? '...' : 'Save'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {saveError && <p className="text-xs" style={{ color: '#dc2626' }}>{saveError}</p>}
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setEditRow(null)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80" style={{ background: C.pill, color: C.muted }}>Cancel</button>
+              <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-90" style={{ background: C.cta, color: C.ctaText }}>
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      </>}
     </div>
   );
 }

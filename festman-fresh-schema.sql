@@ -813,6 +813,11 @@ DECLARE
 BEGIN
   v_id := COALESCE(NEW.student_id, OLD.student_id);
 
+  -- Student row is already gone (cascade delete in progress) -- nothing to update
+  IF NOT EXISTS (SELECT 1 FROM public.students WHERE id = v_id) THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+
   INSERT INTO public.student_xp (student_id, total_xp, updated_at)
   SELECT
     v_id,
@@ -1934,6 +1939,241 @@ REVOKE EXECUTE ON FUNCTION public.check_email_allowlist(text) FROM PUBLIC, anon,
 GRANT  EXECUTE ON FUNCTION public.check_email_allowlist(text) TO service_role;
 
 
+
+-- ─────────────────────────────────────────────────────────────
+--  Migration 069: Enrollment + Payments tables (hardened)
+-- ─────────────────────────────────────────────────────────────
+
+CREATE TABLE public.cohort_payment_settings (
+  cohort_id                   uuid          PRIMARY KEY REFERENCES public.cohorts(id) ON DELETE CASCADE,
+  total_fee                   numeric(10,2) NOT NULL CHECK (total_fee > 0),
+  currency                    text          NOT NULL DEFAULT 'GHS',
+  deposit_percent             numeric(5,2)  NOT NULL DEFAULT 50
+                                            CHECK (deposit_percent BETWEEN 0 AND 100),
+  payment_plan                text          NOT NULL DEFAULT 'flexible'
+                                            CHECK (payment_plan IN ('full','flexible','sponsored','waived')),
+  installment_count           integer       NOT NULL DEFAULT 2 CHECK (installment_count >= 1),
+  post_bootcamp_access_months integer       NOT NULL DEFAULT 3 CHECK (post_bootcamp_access_months >= 0),
+  created_at                  timestamptz   NOT NULL DEFAULT now(),
+  updated_at                  timestamptz   NOT NULL DEFAULT now()
+);
+ALTER TABLE public.cohort_payment_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "cohort_payment_settings: instructor read"
+  ON public.cohort_payment_settings FOR SELECT
+  USING ((SELECT public.is_instructor_or_admin()));
+CREATE POLICY "cohort_payment_settings: instructor write"
+  ON public.cohort_payment_settings FOR ALL
+  USING ((SELECT public.is_instructor_or_admin()));
+CREATE TRIGGER trg_cohort_payment_settings_updated_at
+  BEFORE UPDATE ON public.cohort_payment_settings
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TABLE public.bootcamp_enrollments (
+  id                   uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- NULL until student signs up; set by auth/callback via activateEnrollment
+  student_id           uuid          REFERENCES public.students(id) ON DELETE CASCADE,
+  cohort_id            uuid          NOT NULL REFERENCES public.cohorts(id) ON DELETE CASCADE,
+  email                text          NOT NULL CHECK (email = lower(email)),
+  full_name            text,
+  total_fee            numeric(10,2) NOT NULL CHECK (total_fee > 0),
+  currency             text          NOT NULL DEFAULT 'GHS',
+  payment_plan         text          NOT NULL
+                                     CHECK (payment_plan IN ('full','flexible','sponsored','waived')),
+  deposit_required     numeric(10,2) NOT NULL CHECK (deposit_required >= 0),
+  amount_paid_initial  numeric(10,2) NOT NULL DEFAULT 0 CHECK (amount_paid_initial >= 0),
+  paid_at              date,
+  payment_method       text,
+  payment_reference    text,
+  notes                text,
+  paid_total           numeric(10,2) NOT NULL DEFAULT 0 CHECK (paid_total >= 0),
+  access_status        text          NOT NULL DEFAULT 'pending_deposit'
+                                     CHECK (access_status IN
+                                       ('pending_deposit','active','overdue','completed','expired','waived')),
+  access_until         date,
+  bootcamp_starts_at   date,
+  bootcamp_ends_at     date,
+  created_at           timestamptz   NOT NULL DEFAULT now(),
+  updated_at           timestamptz   NOT NULL DEFAULT now()
+);
+ALTER TABLE public.bootcamp_enrollments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "bootcamp_enrollments: instructor all"
+  ON public.bootcamp_enrollments FOR ALL
+  USING ((SELECT public.is_instructor_or_admin()));
+CREATE POLICY "bootcamp_enrollments: student read own"
+  ON public.bootcamp_enrollments FOR SELECT
+  USING (student_id = (SELECT auth.uid()));
+-- One enrollment per student per cohort (post-signup)
+CREATE UNIQUE INDEX idx_bootcamp_enrollments_student_cohort
+  ON public.bootcamp_enrollments(student_id, cohort_id)
+  WHERE student_id IS NOT NULL;
+-- One admission record per email per cohort
+CREATE UNIQUE INDEX idx_bootcamp_enrollments_email_cohort
+  ON public.bootcamp_enrollments(lower(email), cohort_id);
+CREATE INDEX idx_bootcamp_enrollments_email   ON public.bootcamp_enrollments(lower(email));
+CREATE INDEX idx_bootcamp_enrollments_student ON public.bootcamp_enrollments(student_id);
+CREATE INDEX idx_bootcamp_enrollments_cohort  ON public.bootcamp_enrollments(cohort_id);
+CREATE INDEX idx_bootcamp_enrollments_status  ON public.bootcamp_enrollments(access_status);
+CREATE TRIGGER trg_bootcamp_enrollments_updated_at
+  BEFORE UPDATE ON public.bootcamp_enrollments
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TABLE public.payment_installments (
+  id            uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+  enrollment_id uuid          NOT NULL REFERENCES public.bootcamp_enrollments(id) ON DELETE CASCADE,
+  due_date      date          NOT NULL,
+  amount_due    numeric(10,2) NOT NULL CHECK (amount_due > 0),
+  amount_paid   numeric(10,2) NOT NULL DEFAULT 0
+                              CHECK (amount_paid >= 0 AND amount_paid <= amount_due),
+  status        text          NOT NULL DEFAULT 'unpaid'
+                              CHECK (status IN ('unpaid','partial','paid','waived')),
+  created_at    timestamptz   NOT NULL DEFAULT now(),
+  updated_at    timestamptz   NOT NULL DEFAULT now()
+);
+ALTER TABLE public.payment_installments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "payment_installments: instructor all"
+  ON public.payment_installments FOR ALL
+  USING ((SELECT public.is_instructor_or_admin()));
+CREATE POLICY "payment_installments: student read own"
+  ON public.payment_installments FOR SELECT
+  USING (
+    enrollment_id IN (
+      SELECT id FROM public.bootcamp_enrollments WHERE student_id = (SELECT auth.uid())
+    )
+  );
+CREATE INDEX idx_payment_installments_enrollment ON public.payment_installments(enrollment_id);
+CREATE INDEX idx_payment_installments_due_date   ON public.payment_installments(due_date);
+CREATE TRIGGER trg_payment_installments_updated_at
+  BEFORE UPDATE ON public.payment_installments
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TABLE public.payments (
+  id              uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+  enrollment_id   uuid          REFERENCES public.bootcamp_enrollments(id)        ON DELETE SET NULL,
+  student_id      uuid          REFERENCES public.students(id)                    ON DELETE SET NULL,
+  payer_email     text          NOT NULL,
+  cohort_id       uuid          NOT NULL REFERENCES public.cohorts(id)            ON DELETE RESTRICT,
+  amount          numeric(10,2) NOT NULL CHECK (amount > 0),
+  paid_at         date          NOT NULL DEFAULT current_date,
+  method          text,
+  reference       text,
+  notes           text,
+  confirmation_id uuid,
+  created_at      timestamptz   NOT NULL DEFAULT now()
+);
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "payments: instructor all"
+  ON public.payments FOR ALL
+  USING ((SELECT public.is_instructor_or_admin()));
+CREATE POLICY "payments: student read own"
+  ON public.payments FOR SELECT
+  USING (student_id = (SELECT auth.uid()));
+CREATE INDEX idx_payments_enrollment_id ON public.payments(enrollment_id);
+CREATE INDEX idx_payments_student_id    ON public.payments(student_id);
+CREATE INDEX idx_payments_payer_email   ON public.payments(lower(payer_email));
+CREATE INDEX idx_payments_cohort_id     ON public.payments(cohort_id);
+
+-- ─────────────────────────────────────────────────────────────
+--  Migration 072: payment_options + student_payment_confirmations
+-- ─────────────────────────────────────────────────────────────
+
+CREATE TABLE public.payment_options (
+  id                  uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  label               text        NOT NULL,
+  type                text        NOT NULL DEFAULT 'bank_transfer'
+                                    CHECK (type IN ('bank_transfer', 'mobile_money', 'online')),
+  instructions        text,
+  -- bank_transfer fields
+  bank_name           text,
+  account_name        text,
+  account_number      text,
+  branch              text,
+  country             text,
+  -- mobile_money fields
+  mobile_money_number text,
+  network             text,
+  -- online fields
+  payment_link        text,
+  platform            text,
+  -- shared
+  logo_url            text,
+  is_active           boolean     NOT NULL DEFAULT true,
+  sort_order          integer     NOT NULL DEFAULT 0,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.payment_options ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "payment_options: student read active"
+  ON public.payment_options FOR SELECT
+  USING (
+    is_active = true
+    AND EXISTS (
+      SELECT 1 FROM public.students WHERE id = auth.uid()
+    )
+  );
+CREATE POLICY "payment_options: instructor all"
+  ON public.payment_options FOR ALL
+  USING ((SELECT public.is_instructor_or_admin()));
+CREATE TRIGGER trg_payment_options_updated_at
+  BEFORE UPDATE ON public.payment_options
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TABLE public.student_payment_confirmations (
+  id            uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+  enrollment_id uuid          NOT NULL REFERENCES public.bootcamp_enrollments(id) ON DELETE CASCADE,
+  student_id    uuid          NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  cohort_id     uuid          NOT NULL REFERENCES public.cohorts(id) ON DELETE CASCADE,
+  amount        numeric(10,2) NOT NULL CHECK (amount > 0),
+  paid_at       date          NOT NULL,
+  method        text,
+  reference     text,
+  notes         text,
+  receipt_url   text,
+  status        text          NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  reviewed_by   uuid          REFERENCES public.students(id) ON DELETE SET NULL,
+  reviewed_at   timestamptz,
+  admin_notes   text,
+  created_at    timestamptz   NOT NULL DEFAULT now(),
+  updated_at    timestamptz   NOT NULL DEFAULT now()
+);
+ALTER TABLE public.student_payment_confirmations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "student_payment_confirmations: student insert own"
+  ON public.student_payment_confirmations FOR INSERT
+  WITH CHECK (
+    student_id = (SELECT auth.uid())
+    AND enrollment_id IN (
+      SELECT id FROM public.bootcamp_enrollments
+      WHERE student_id = (SELECT auth.uid())
+    )
+    AND cohort_id = (
+      SELECT cohort_id FROM public.bootcamp_enrollments
+      WHERE id = enrollment_id
+        AND student_id = (SELECT auth.uid())
+    )
+  );
+CREATE POLICY "student_payment_confirmations: student read own"
+  ON public.student_payment_confirmations FOR SELECT
+  USING (student_id = (SELECT auth.uid()));
+CREATE POLICY "student_payment_confirmations: instructor all"
+  ON public.student_payment_confirmations FOR ALL
+  USING ((SELECT public.is_instructor_or_admin()));
+CREATE TRIGGER trg_student_payment_confirmations_updated_at
+  BEFORE UPDATE ON public.student_payment_confirmations
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE INDEX idx_spc_enrollment ON public.student_payment_confirmations(enrollment_id);
+CREATE INDEX idx_spc_student    ON public.student_payment_confirmations(student_id);
+CREATE INDEX idx_spc_status     ON public.student_payment_confirmations(status);
+
+-- Deferred FK: payments.confirmation_id -> student_payment_confirmations
+-- Must come after student_payment_confirmations is created.
+ALTER TABLE public.payments
+  ADD CONSTRAINT payments_confirmation_id_fk
+  FOREIGN KEY (confirmation_id)
+  REFERENCES public.student_payment_confirmations(id)
+  ON DELETE SET NULL;
+CREATE UNIQUE INDEX payments_confirmation_id_unique
+  ON public.payments (confirmation_id)
+  WHERE confirmation_id IS NOT NULL;
+CREATE INDEX idx_spc_cohort     ON public.student_payment_confirmations(cohort_id);
 
 -- ─────────────────────────────────────────────────────────────
 --  DONE — this is the only SQL file you need to run.

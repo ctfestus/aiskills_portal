@@ -53,9 +53,11 @@ export async function POST(req: NextRequest) {
     ).end(buffer);
   });
 
-  // Insert f_auto,q_auto so Cloudinary serves WebP/AVIF and optimal compression automatically.
-  // e.g. .../upload/v1234/... .../upload/f_auto,q_auto/v1234/...
-  const optimisedUrl = result.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
+  // SVGs must not have f_auto applied -- Cloudinary converts them to raster, breaking the image.
+  const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
+  const optimisedUrl = isSvg
+    ? result.secure_url
+    : result.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
 
   return NextResponse.json({ url: optimisedUrl, publicId: result.public_id });
 }

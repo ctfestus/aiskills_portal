@@ -1,0 +1,171 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
+
+function adminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  if (!url || !key) throw new Error('Supabase service role key not configured');
+  return createClient(url, key);
+}
+
+async function getSessionStudent(req: NextRequest): Promise<{ id: string; email: string } | null> {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7);
+  const { data: { user } } = await adminClient().auth.getUser(token);
+  if (!user?.email) return null;
+  return { id: user.id, email: user.email.trim().toLowerCase() };
+}
+
+// GET -- return enrollment, installments, payments, confirmations, payment options
+export async function GET(req: NextRequest) {
+  const student = await getSessionStudent(req);
+  if (!student) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const db = adminClient();
+
+  try {
+    const [enrollRes, optionsRes] = await Promise.all([
+      db
+        .from('bootcamp_enrollments')
+        .select(`
+          id, cohort_id, total_fee, currency, payment_plan,
+          deposit_required, paid_total, access_status, access_until,
+          bootcamp_starts_at, bootcamp_ends_at,
+          payment_installments ( id, due_date, amount_due, amount_paid, status )
+        `)
+        .eq('student_id', student.id)
+        .order('created_at', { ascending: false })
+        .maybeSingle(),
+      db
+        .from('payment_options')
+        .select('id, label, type, instructions, bank_name, account_name, account_number, branch, country, mobile_money_number, network, payment_link, platform, logo_url, sort_order')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true }),
+    ]);
+
+    if (!enrollRes.data) {
+      return NextResponse.json({
+        enrollment: null,
+        installments: [],
+        payments: [],
+        confirmations: [],
+        paymentOptions: optionsRes.data ?? [],
+      });
+    }
+
+    const enrollment = enrollRes.data;
+    const enrollmentId = enrollment.id;
+
+    const [paymentsRes, confirmationsRes] = await Promise.all([
+      db
+        .from('payments')
+        .select('id, amount, paid_at, method, reference, notes, created_at')
+        .eq('enrollment_id', enrollmentId)
+        .order('paid_at', { ascending: false }),
+      db
+        .from('student_payment_confirmations')
+        .select('id, amount, paid_at, method, reference, notes, receipt_url, status, admin_notes, created_at')
+        .eq('enrollment_id', enrollmentId)
+        .order('created_at', { ascending: false }),
+    ]);
+
+    const installments = (enrollment.payment_installments ?? [])
+      .slice()
+      .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+
+    return NextResponse.json({
+      enrollment: {
+        id:              enrollment.id,
+        cohort_id:       enrollment.cohort_id,
+        total_fee:       Number(enrollment.total_fee),
+        currency:        enrollment.currency ?? 'GHS',
+        payment_plan:    enrollment.payment_plan,
+        deposit_required: Number(enrollment.deposit_required),
+        paid_total:      Number(enrollment.paid_total),
+        balance:         Math.max(0, Number(enrollment.total_fee) - Number(enrollment.paid_total)),
+        access_status:   enrollment.access_status,
+        access_until:    enrollment.access_until,
+        bootcamp_starts_at: enrollment.bootcamp_starts_at,
+        bootcamp_ends_at:   enrollment.bootcamp_ends_at,
+      },
+      installments,
+      payments:          paymentsRes.data ?? [],
+      confirmations:     confirmationsRes.data ?? [],
+      paymentOptions:    optionsRes.data ?? [],
+    });
+  } catch (err: any) {
+    console.error('[student-payments/GET]', err);
+    return NextResponse.json({ error: err.message ?? 'Failed to load payment data' }, { status: 500 });
+  }
+}
+
+// POST -- submit payment confirmation
+export async function POST(req: NextRequest) {
+  const student = await getSessionStudent(req);
+  if (!student) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  let body: any;
+  try { body = await req.json(); } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  const { enrollmentId, amount, paidAt, method, reference, notes, receiptUrl } = body;
+
+  if (!enrollmentId || !amount || !paidAt) {
+    return NextResponse.json({ error: 'enrollmentId, amount, and paidAt are required' }, { status: 400 });
+  }
+  if (Number(amount) <= 0) {
+    return NextResponse.json({ error: 'amount must be greater than 0' }, { status: 400 });
+  }
+  if (receiptUrl != null && receiptUrl !== '') {
+    try {
+      const parsed = new URL(receiptUrl);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        return NextResponse.json({ error: 'receiptUrl must be an https:// or http:// URL' }, { status: 400 });
+      }
+    } catch {
+      return NextResponse.json({ error: 'receiptUrl is not a valid URL' }, { status: 400 });
+    }
+  }
+
+  const db = adminClient();
+
+  try {
+    // Verify enrollment belongs to this student
+    const { data: enrollment } = await db
+      .from('bootcamp_enrollments')
+      .select('id, cohort_id')
+      .eq('id', enrollmentId)
+      .eq('student_id', student.id)
+      .maybeSingle();
+
+    if (!enrollment) {
+      return NextResponse.json({ error: 'Enrollment not found' }, { status: 404 });
+    }
+
+    const { error: insertErr } = await db
+      .from('student_payment_confirmations')
+      .insert({
+        enrollment_id: enrollmentId,
+        student_id:    student.id,
+        cohort_id:     enrollment.cohort_id,
+        amount:        Number(amount),
+        paid_at:       paidAt,
+        method:        method ?? null,
+        reference:     reference ?? null,
+        notes:         notes ?? null,
+        receipt_url:   receiptUrl ?? null,
+        status:        'pending',
+      });
+
+    if (insertErr) throw insertErr;
+
+    return NextResponse.json({ ok: true });
+  } catch (err: any) {
+    console.error('[student-payments/POST]', err);
+    return NextResponse.json({ error: err.message ?? 'Failed to submit confirmation' }, { status: 500 });
+  }
+}
