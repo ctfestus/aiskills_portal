@@ -490,7 +490,7 @@ export async function recordPayment(db: SupabaseClient, input: RecordPaymentInpu
             name:      studentName,
             amount:    input.amount,
             currency:  enroll.currency ?? 'GHS',
-            paidAt:    paidAt,
+            paidAt:    input.paidAt ?? new Date().toISOString().slice(0, 10),
             method:    input.method ?? null,
             reference: input.reference ?? null,
             dashboardUrl,
