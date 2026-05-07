@@ -1904,7 +1904,7 @@ export function CourseTaker({
     }
   };
 
-  const progressPct = totalQuestions > 0 ? (score / totalQuestions) * 100 : 0;
+  const progressPct = totalSlides > 0 ? (currentQuestionIndex / totalSlides) * 100 : 0;
   const timerWarning = timeLeft !== null && timeLeft <= 60;
 
   // -- Correct answer display for after-check feedback --

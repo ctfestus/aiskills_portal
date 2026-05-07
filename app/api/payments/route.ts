@@ -319,7 +319,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'studentId and exempt (boolean) are required' }, { status: 400 });
     }
     try {
-      await db.from('students').update({ payment_exempt: exempt }).eq('id', studentId);
+      if (exempt) {
+        // If student is currently in the outstanding cohort, restore them first
+        const { data: student } = await db
+          .from('students')
+          .select('cohort_id, original_cohort_id')
+          .eq('id', studentId)
+          .maybeSingle();
+
+        if (student?.original_cohort_id) {
+          await db.from('students').update({
+            cohort_id:          student.original_cohort_id,
+            original_cohort_id: null,
+            payment_exempt:     true,
+          }).eq('id', studentId);
+        } else {
+          await db.from('students').update({ payment_exempt: true }).eq('id', studentId);
+        }
+      } else {
+        // Remove exemption then move to outstanding if their payment status warrants it
+        await db.from('students').update({ payment_exempt: false }).eq('id', studentId);
+
+        const [{ data: enroll }, { data: config }] = await Promise.all([
+          db.from('bootcamp_enrollments')
+            .select('access_status')
+            .eq('student_id', studentId)
+            .order('created_at', { ascending: false })
+            .maybeSingle(),
+          db.from('payment_config')
+            .select('outstanding_cohort_id')
+            .eq('id', 'default')
+            .maybeSingle(),
+        ]);
+
+        const restrictedStatus = ['overdue', 'pending_deposit'].includes(enroll?.access_status ?? '');
+        const outstandingCohortId = config?.outstanding_cohort_id;
+        if (restrictedStatus && outstandingCohortId) {
+          await markOutstanding(db, studentId, outstandingCohortId);
+        }
+      }
       return NextResponse.json({ ok: true });
     } catch (err: any) {
       return NextResponse.json({ error: err.message ?? 'Failed to update exemption' }, { status: 500 });

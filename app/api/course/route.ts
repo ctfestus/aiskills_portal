@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
   if (action === 'save-progress') {
     const sessionUser = await getSessionUser(req);
     if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const { course_id, current_question_index, answers, streak, hints_used } = body;
+    const { course_id, current_question_index, answers, streak, hints_used, points } = body;
     if (!course_id) return NextResponse.json({ error: 'course_id required' }, { status: 400 });
 
     try {
@@ -95,6 +95,7 @@ export async function POST(req: NextRequest) {
         answers:                answers    ?? {},
         streak:                 streak     ?? 0,
         hints_used:             hints_used ?? [],
+        points:                 points     ?? 0,
         updated_at:             new Date().toISOString(),
       };
 

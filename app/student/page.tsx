@@ -271,7 +271,7 @@ function ProgressBar({ value, max = 100, color }: { value: number; max?: number;
 
 // --- Course card ---
 function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?: Date | null; C: typeof LIGHT_C; onDetails: () => void }) {
-  const questions = course.config?.questions ?? course.form?.config?.questions ?? [];
+  const questions = course.form?.questions ?? course.config?.questions ?? course.form?.config?.questions ?? [];
   const totalQ = questions.length;
   const currentIdx = course.current_question_index ?? 0;
   const completed = !!course.completed_at;
@@ -400,7 +400,7 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const config = course.config ?? course.form?.config ?? {};
-  const questions: any[] = config.questions ?? [];
+  const questions: any[] = course.form?.questions ?? config.questions ?? [];
   const lessons = questions.filter((q: any) => q.lesson?.title || q.lesson?.body);
   const lessonCount = lessons.length;
   const assessmentCount = questions.length;
