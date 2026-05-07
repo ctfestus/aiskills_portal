@@ -2710,6 +2710,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
     payment_plan: 'flexible',
     installment_count: '3',
     post_bootcamp_access_months: '3',
+    grace_period_days: '',
     start_date: '',
     end_date: '',
   });
@@ -2853,6 +2854,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
         payment_plan:                settings?.payment_plan ?? 'flexible',
         installment_count:           settings?.installment_count != null ? String(settings.installment_count) : '3',
         post_bootcamp_access_months: settings?.post_bootcamp_access_months != null ? String(settings.post_bootcamp_access_months) : '3',
+        grace_period_days:           settings?.grace_period_days != null ? String(settings.grace_period_days) : '',
         start_date:                  cohortDates?.start_date ?? '',
         end_date:                    cohortDates?.end_date ?? '',
       });
@@ -3400,6 +3402,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                 { label: 'Deposit %', key: 'deposit_percent', type: 'number', placeholder: '50' },
                 { label: 'Installments', key: 'installment_count', type: 'number', placeholder: '3', min: 3 },
                 { label: 'Extra Months', key: 'post_bootcamp_access_months', type: 'number', placeholder: '3' },
+                { label: 'Grace Period (days)', key: 'grace_period_days', type: 'number', placeholder: 'None' },
               ].map(f => (
                 <div key={f.key}>
                   <label className="block text-[10px] font-semibold mb-1" style={{ color: C.faint }}>{f.label}</label>
@@ -5273,6 +5276,13 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
 
   const [outstandingCohortId, setOutstandingCohortId] = useState<string>('');
 
+  // Grace period state
+  const [gracePeriods,        setGracePeriods]        = useState<Record<string, number | null>>({});
+  const [graceCohortId,       setGraceCohortId]       = useState<string>('');
+  const [graceDaysInput,      setGraceDaysInput]      = useState<string>('');
+  const [graceSaving,         setGraceSaving]         = useState(false);
+  const [graceError,          setGraceError]          = useState('');
+
   // Move/restore action state
   const [movingId,   setMovingId]   = useState<string | null>(null);
 
@@ -5318,11 +5328,14 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
     setLoading(true); setError('');
     const token = await getToken();
     try {
-      const [res, cfgRes] = await Promise.all([
+      const [res, cfgRes, gpRes] = await Promise.all([
         fetch('/api/payments?action=summary', {
           headers: { Authorization: `Bearer ${token}` },
         }).then(r => r.json()),
         fetch('/api/payments?action=payment-config', {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(r => r.json()),
+        fetch('/api/payments?action=grace-periods', {
           headers: { Authorization: `Bearer ${token}` },
         }).then(r => r.json()),
       ]);
@@ -5334,6 +5347,10 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
       setRows(fetchedRows);
       setCohorts(res.cohorts ?? []);
       setOutstandingCohortId(currentOutstandingId);
+
+      const gpMap: Record<string, number | null> = {};
+      for (const g of gpRes.gracePeriods ?? []) gpMap[g.cohort_id] = g.grace_period_days ?? null;
+      setGracePeriods(gpMap);
     } catch { setError('Failed to load payment data.'); }
     finally { setLoading(false); }
   }, []);
@@ -5654,6 +5671,64 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
           {cohorts.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <span className="hidden sm:inline text-[11px]" style={{ color: C.faint }}>Students moved here lose access to course resources.</span>
+      </div>
+
+      {/* Grace period manager */}
+      <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+        <span className="text-xs font-semibold flex-shrink-0" style={{ color: C.muted }}>Grace Period:</span>
+        <select
+          value={graceCohortId}
+          onChange={e => {
+            const id = e.target.value;
+            setGraceCohortId(id);
+            setGraceDaysInput(id && gracePeriods[id] != null ? String(gracePeriods[id]) : '');
+            setGraceError('');
+          }}
+          className="flex-1 min-w-[160px] text-sm px-3 py-1.5 rounded-lg outline-none"
+          style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
+          <option value="">-- Select cohort --</option>
+          {cohorts.map((c: any) => (
+            <option key={c.id} value={c.id}>
+              {c.name}{gracePeriods[c.id] != null ? ` (${gracePeriods[c.id]}d)` : ''}
+            </option>
+          ))}
+        </select>
+        <input
+          type="number"
+          min={0}
+          placeholder="Days (blank = none)"
+          value={graceDaysInput}
+          onChange={e => { setGraceDaysInput(e.target.value); setGraceError(''); }}
+          className="w-36 text-sm px-3 py-1.5 rounded-lg outline-none"
+          style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}
+        />
+        <button
+          disabled={!graceCohortId || graceSaving}
+          onClick={async () => {
+            if (!graceCohortId) return;
+            setGraceSaving(true); setGraceError('');
+            const token = await getToken();
+            try {
+              const res = await fetch('/api/payments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ action: 'save-grace-period', cohortId: graceCohortId, gracePeriodDays: graceDaysInput }),
+              }).then(r => r.json());
+              if (res.error) { setGraceError(res.error); }
+              else {
+                const days = graceDaysInput !== '' ? Number(graceDaysInput) : null;
+                setGracePeriods(prev => ({ ...prev, [graceCohortId]: days }));
+              }
+            } catch { setGraceError('Failed to save.'); }
+            setGraceSaving(false);
+          }}
+          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-40"
+          style={{ background: C.cta, color: C.ctaText }}>
+          {graceSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Check className="w-3.5 h-3.5"/>}
+          Save
+        </button>
+        {graceError && <span className="text-xs" style={{ color: '#dc2626' }}>{graceError}</span>}
+        <span className="hidden sm:inline text-[11px]" style={{ color: C.faint }}>Days of access after a missed installment before moving to outstanding.</span>
       </div>
 
       {/* Filters */}

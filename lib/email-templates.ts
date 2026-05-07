@@ -1,5 +1,9 @@
 ﻿import { tenant } from './tenant';
 
+function esc(s: string | null | undefined): string {
+  return (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 const BANNER  = tenant.logoUrl;
 const APP_URL = process.env.APP_URL || tenant.appUrl;
 
@@ -114,7 +118,7 @@ export function confirmationEmail(data: {
     </div>` : '';
 
   const content = `
-    <p><b>Hi ${name || 'there'},</b></p>
+    <p><b>Hi ${esc(name || 'there')},</b></p>
     <p>${customBody || 'Your registration has been confirmed. We look forward to seeing you!'}</p>
 
     <p style="font-size:18px;font-weight:bold;margin-top:16px;">${customTitle || 'Registration Confirmed ✓'}</p>
@@ -158,7 +162,7 @@ export function reminderEmail(data: {
     </div>` : '';
 
   const content = `
-    <p><b>Hi ${name || 'there'},</b></p>
+    <p><b>Hi ${esc(name || 'there')},</b></p>
     <p>This is a friendly reminder that <b>${eventTitle}</b> is starting in <b>${timeLabel}</b>${isOneHour ? '. Get ready!' : '.'}</p>
 
     <p style="font-size:18px;font-weight:bold;margin-top:16px;">Event Reminder</p>
@@ -215,7 +219,7 @@ export function courseResultEmail(data: {
   ` : '';
 
   const content = `
-    <p><b>Hi ${name || 'there'},</b></p>
+    <p><b>Hi ${esc(name || 'there')},</b></p>
 
     ${passed ? `
       <p style="color:#555;">You have successfully completed <b>${courseTitle}</b>. Your certificate is ready to view, download, and share.</p>
@@ -277,7 +281,7 @@ export function nudgeEmail(data: {
     : `We noticed you have not visited <b>${contentTitle}</b> in a while. We are checking in because we believe in you and do not want you to miss out.`;
 
   const content = `
-    <p><b>Hi ${name},</b></p>
+    <p><b>Hi ${esc(name)},</b></p>
     <p>${intro}</p>
 
     <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;">
@@ -341,7 +345,7 @@ export function milestoneEmail(data: {
   const typeLabel = contentType === 'virtual_experience' ? 'virtual experience' : contentType;
 
   const content = `
-    <p><b>Hi ${name},</b></p>
+    <p><b>Hi ${esc(name)},</b></p>
     <p>You are <b>80% of the way through</b> <b>${contentTitle}</b>. That is incredible progress! 🎉</p>
 
     <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;text-align:center;">
@@ -422,7 +426,7 @@ export function weeklyDigestEmail(data: {
     </tr>`).join('');
 
   const content = `
-    <p><b>Hi ${name},</b></p>
+    <p><b>Hi ${esc(name)},</b></p>
     <p>Here's your weekly learning update. Stay consistent -- every lesson counts! 🚀</p>
 
     ${completed.length > 0 ? `
@@ -485,7 +489,7 @@ export function deadlineReminderEmail(data: {
 
   const content = `
     <h2 style="color:#111;font-size:22px;margin-bottom:8px;">⏰ ${urgency}</h2>
-    <p>Hi ${name},</p>
+    <p>Hi ${esc(name)},</p>
     <p>This is a reminder that your deadline for the following ${typeLabel} is approaching:</p>
     <div style="background:#f9fafb;border-left:4px solid ${urgencyColor};border-radius:0;padding:16px;margin:16px 0;">
       <p style="font-weight:700;font-size:16px;margin:0;">${contentTitle}</p>
@@ -509,7 +513,7 @@ export function welcomeEmail(data: { name: string; studentUrl: string; branding?
   const { name, studentUrl, branding } = data;
   const appName = branding?.appName || tenant.appName;
   const content = `
-    <p><b>Welcome to ${appName}, ${name}! 🎉</b></p>
+    <p><b>Welcome to ${appName}, ${esc(name)}! 🎉</b></p>
     <p>We are thrilled to have you on board. You have just taken the first step toward building industry-relevant skills that will shape your career.</p>
 
     <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;">
@@ -537,7 +541,7 @@ export function day3CheckInEmail(data: { name: string; studentUrl: string; cours
   const { name, studentUrl, courseTitle, courseUrl, branding } = data;
   const appName = branding?.appName || tenant.appName;
   const content = `
-    <p><b>Hi ${name},</b></p>
+    <p><b>Hi ${esc(name)},</b></p>
     <p>It has been a few days since you joined ${appName}. We just wanted to check in -- have you had a chance to explore your courses yet?</p>
 
     ${courseTitle && courseUrl ? `
@@ -564,7 +568,7 @@ export function day3CheckInEmail(data: { name: string; studentUrl: string; cours
 export function day7EncouragementEmail(data: { name: string; studentUrl: string; hasStarted: boolean; coursesCompleted: number; branding?: EmailBranding }) {
   const { name, studentUrl, hasStarted, coursesCompleted, branding } = data;
   const content = `
-    <p><b>Hi ${name},</b></p>
+    <p><b>Hi ${esc(name)},</b></p>
     ${hasStarted && coursesCompleted > 0 ? `
     <p>One week in and you have already completed <b>${coursesCompleted} course${coursesCompleted > 1 ? 's' : ''}</b>. That is outstanding progress! 🏆</p>
     <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;text-align:center;">
@@ -668,7 +672,7 @@ export function learningPathAssignedEmail(data: {
   }).join('');
 
   const content = `
-    <p><b>Hi ${name},</b></p>
+    <p><b>Hi ${esc(name)},</b></p>
     <p>You have been enrolled in a new learning path. This is a structured programme designed to build your skills step by step, and you will earn a certificate when you complete every item.</p>
 
     <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;">
@@ -715,7 +719,7 @@ export function recordingPublishedEmail(data: {
     : newWeeks.map(w => `Week ${w}`).join(', ');
 
   const content = `
-    <p><b>Hi ${name},</b></p>
+    <p><b>Hi ${esc(name)},</b></p>
 
     ${coverImage ? `
     <a href="${dashboardUrl}" style="display:block;text-decoration:none;margin:16px 0;border-radius:0;overflow:hidden;border:1px solid #e5e7eb;">
@@ -767,7 +771,7 @@ export function learningPathCertificateEmail(data: {
   `).join('');
 
   const content = `
-    <p><b>Hi ${name},</b></p>
+    <p><b>Hi ${esc(name)},</b></p>
     <p style="color:#374151;">This is a major achievement. You have completed every item in your learning path and your certificate is ready.</p>
 
     <div style="margin:20px 0;padding:24px;background:linear-gradient(135deg,#064e3b,#0f766e);border-radius:0;text-align:center;">
@@ -817,7 +821,7 @@ export function courseCompletedNextUpEmail(data: {
   const emoji = nextIsVE ? '💼' : '📘';
 
   const content = `
-    <p><b>Hi ${name},</b></p>
+    <p><b>Hi ${esc(name)},</b></p>
     <p style="color:#374151;">You have completed item ${completedNumber} of ${totalItems} in <b>${pathTitle}</b>. Keep the momentum going!</p>
 
     <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;">
@@ -877,8 +881,8 @@ export function assignmentGradedEmail(data: {
     : '';
 
   const content = `
-    <p><b>Hi ${name},</b></p>
-    <p style="color:#555;">Your assignment <b>${assignmentTitle}</b> has been graded.</p>
+    <p><b>Hi ${esc(name)},</b></p>
+    <p style="color:#555;">Your assignment <b>${esc(assignmentTitle)}</b> has been graded.</p>
 
     <div style="margin:20px 0;padding:20px;border-radius:0;background:#f9fafb;border:1px solid #e5e7eb;text-align:center;">
       ${scoreHtml}
@@ -902,6 +906,173 @@ export function assignmentGradedEmail(data: {
   return shell(content, branding);
 }
 
+// -- Grace Period Warning ---
+export function gracePeriodWarningEmail(data: {
+  name: string;
+  graceEndDate: string;
+  daysLeft: number;
+  dashboardUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { name, graceEndDate, daysLeft, dashboardUrl, branding } = data;
+  const urgency = daysLeft <= 1
+    ? 'Your grace period ends tomorrow'
+    : `Your grace period ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`;
+  const urgencyColor = daysLeft <= 1 ? '#dc2626' : '#d97706';
+
+  const content = `
+    <p><b>Hi ${esc(name)},</b></p>
+    <p>A payment installment on your account is overdue. As a courtesy, you have been granted a <b>grace period</b> and your access remains active for now.</p>
+
+    <div style="margin:20px 0;padding:20px;background:#fffbeb;border-left:4px solid ${urgencyColor};border-radius:0;">
+      <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:${urgencyColor};">${urgency}</p>
+      <p style="margin:0;font-size:14px;color:#92400e;">Make your payment before <b>${graceEndDate}</b> to avoid losing access to your course materials.</p>
+    </div>
+
+    <p style="color:#374151;">Once the grace period expires, your access will be restricted until your balance is settled. Please log in and submit a payment confirmation as soon as possible.</p>
+
+    <div style="margin:20px 0;padding:16px;background:#f9fafb;border-radius:0;border:1px solid #e5e7eb;">
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">How to pay</p>
+      <ol style="margin:8px 0 0;padding-left:20px;color:#374151;font-size:14px;line-height:2;">
+        <li>Go to your dashboard and open the <b>Payments</b> section</li>
+        <li>Submit a payment confirmation with your method, reference, and amount</li>
+        <li>Your access will be restored once an admin approves your payment</li>
+      </ol>
+    </div>
+
+    ${cta('Go to Payments', `${dashboardUrl}#payments`)}
+
+    <p style="color:#6b7280;font-size:13px;">If you have already made this payment, please submit a confirmation so our team can verify and restore your full access.</p>
+
+    <br>
+    <p><b>Best regards,</b></p>
+  `;
+
+  return shell(content, branding);
+}
+
+// -- Overdue Notification ---
+export function overdueNotificationEmail(data: {
+  name: string;
+  dashboardUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { name, dashboardUrl, branding } = data;
+  const content = `
+    <p><b>Hi ${esc(name)},</b></p>
+    <p>Your account has an <b>overdue payment</b>. Your access to course materials has been restricted until your balance is settled.</p>
+
+    <div style="margin:20px 0;padding:20px;background:#fef2f2;border-left:4px solid #dc2626;border-radius:0;">
+      <p style="margin:0;font-size:14px;font-weight:700;color:#dc2626;">Action required: Please make your payment as soon as possible.</p>
+    </div>
+
+    <div style="margin:20px 0;padding:16px;background:#f9fafb;border-radius:0;border:1px solid #e5e7eb;">
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">How to pay</p>
+      <ol style="margin:8px 0 0;padding-left:20px;color:#374151;font-size:14px;line-height:2;">
+        <li>Log in and open the <b>Payments</b> section of your dashboard</li>
+        <li>Submit a payment confirmation with your method, reference, and amount</li>
+        <li>Your access will be restored once an admin approves your payment</li>
+      </ol>
+    </div>
+
+    ${cta('Go to Payments', `${dashboardUrl}#payments`)}
+
+    <p style="color:#6b7280;font-size:13px;">If you have already made this payment, please submit a confirmation so our team can verify and restore your access.</p>
+    <br><p><b>Best regards,</b></p>
+  `;
+  return shell(content, branding);
+}
+
+// -- Payment Receipt ---
+export function paymentReceiptEmail(data: {
+  name: string;
+  amount: number;
+  currency: string;
+  paidAt: string;
+  method?: string | null;
+  reference?: string | null;
+  dashboardUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { name, amount, currency, paidAt, method, reference, dashboardUrl, branding } = data;
+  const content = `
+    <p><b>Hi ${esc(name)},</b></p>
+    <p>A payment has been recorded on your account. Here are the details:</p>
+
+    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #16a34a;border-radius:0;">
+      <table cellpadding="0" cellspacing="0" style="width:100%;font-size:14px;color:#374151;">
+        <tr><td style="padding:4px 0;font-weight:700;width:140px;">Amount</td><td>${currency} ${Number(amount).toLocaleString()}</td></tr>
+        <tr><td style="padding:4px 0;font-weight:700;">Date</td><td>${paidAt}</td></tr>
+        ${method ? `<tr><td style="padding:4px 0;font-weight:700;">Method</td><td>${esc(method)}</td></tr>` : ''}
+        ${reference ? `<tr><td style="padding:4px 0;font-weight:700;">Reference</td><td>${esc(reference)}</td></tr>` : ''}
+      </table>
+    </div>
+
+    <p style="color:#374151;">You can view your full payment history and outstanding balance on your dashboard.</p>
+
+    ${cta('View Payments', `${dashboardUrl}#payments`)}
+
+    <p style="color:#6b7280;font-size:13px;">If you did not expect this payment record, please contact our support team.</p>
+    <br><p><b>Best regards,</b></p>
+  `;
+  return shell(content, branding);
+}
+
+// -- Payment Confirmation Acknowledged (student submitted) ---
+export function paymentConfirmationAcknowledgedEmail(data: {
+  name: string;
+  amount: number;
+  currency: string;
+  dashboardUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { name, amount, currency, dashboardUrl, branding } = data;
+  const content = `
+    <p><b>Hi ${esc(name)},</b></p>
+    <p>We have received your payment confirmation of <b>${currency} ${Number(amount).toLocaleString()}</b>. Our team will review and approve it shortly.</p>
+
+    <div style="margin:20px 0;padding:16px;background:#eff6ff;border-left:4px solid #2563eb;border-radius:0;">
+      <p style="margin:0;font-size:14px;color:#1d4ed8;">Once approved, your account balance will be updated and your access status will be refreshed automatically.</p>
+    </div>
+
+    <p style="color:#374151;">You can track the status of your confirmation in the <b>Payments</b> section of your dashboard.</p>
+
+    ${cta('View Payments', `${dashboardUrl}#payments`)}
+
+    <br><p><b>Best regards,</b></p>
+  `;
+  return shell(content, branding);
+}
+
+// -- Admin: New Payment Confirmation Pending ---
+export function adminPaymentConfirmationEmail(data: {
+  studentName: string;
+  studentEmail: string;
+  amount: number;
+  currency: string;
+  adminUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { studentName, studentEmail, amount, currency, adminUrl, branding } = data;
+  const content = `
+    <p><b>Hi,</b></p>
+    <p>A student has submitted a payment confirmation pending your review.</p>
+
+    <div style="margin:20px 0;padding:20px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:0;">
+      <table cellpadding="0" cellspacing="0" style="width:100%;font-size:14px;color:#374151;">
+        <tr><td style="padding:4px 0;font-weight:700;width:140px;">Student</td><td>${esc(studentName)}</td></tr>
+        <tr><td style="padding:4px 0;font-weight:700;">Email</td><td>${esc(studentEmail)}</td></tr>
+        <tr><td style="padding:4px 0;font-weight:700;">Amount</td><td>${currency} ${Number(amount).toLocaleString()}</td></tr>
+      </table>
+    </div>
+
+    ${cta('Review Confirmation', adminUrl)}
+
+    <br><p><b>Best regards,</b></p>
+  `;
+  return shell(content, branding);
+}
+
 // -- Cohort Invitation ---
 export function cohortInviteEmail(data: {
   cohortName: string;
@@ -913,7 +1084,7 @@ export function cohortInviteEmail(data: {
 
   const content = `
     <p><b>Hi there,</b></p>
-    <p>You have been invited to join <b>${cohortName}</b> on ${appName}.</p>
+    <p>You have been invited to join <b>${esc(cohortName)}</b> on ${appName}.</p>
     <p>Click the button below to create your account and get started.</p>
 
     ${cta('Accept Invitation', signupUrl)}

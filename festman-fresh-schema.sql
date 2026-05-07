@@ -1972,6 +1972,7 @@ CREATE TABLE public.cohort_payment_settings (
                                             CHECK (payment_plan IN ('full','flexible','sponsored','waived')),
   installment_count           integer       NOT NULL DEFAULT 3 CHECK (installment_count >= 3),
   post_bootcamp_access_months integer       NOT NULL DEFAULT 3 CHECK (post_bootcamp_access_months >= 0),
+  grace_period_days           integer       DEFAULT NULL CHECK (grace_period_days IS NULL OR (grace_period_days >= 0 AND grace_period_days <= 365)),
   created_at                  timestamptz   NOT NULL DEFAULT now(),
   updated_at                  timestamptz   NOT NULL DEFAULT now()
 );

@@ -161,6 +161,24 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  if (action === 'grace-periods') {
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!['instructor', 'admin'].includes(sessionUser.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    try {
+      const db = adminClient();
+      const { data, error } = await db
+        .from('cohort_payment_settings')
+        .select('cohort_id, grace_period_days');
+      if (error) throw error;
+      return NextResponse.json({ gracePeriods: data ?? [] });
+    } catch (err: any) {
+      return NextResponse.json({ error: err.message ?? 'Failed to load grace periods' }, { status: 500 });
+    }
+  }
+
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 }
 
@@ -509,6 +527,33 @@ export async function POST(req: NextRequest) {
     } catch (err: any) {
       console.error('[payments/reject-confirmation]', err);
       return NextResponse.json({ error: err.message ?? 'Failed to reject confirmation' }, { status: 500 });
+    }
+  }
+
+  // save-grace-period -- update grace_period_days for a specific cohort
+  if (body.action === 'save-grace-period') {
+    const { cohortId, gracePeriodDays } = body;
+    if (!cohortId) return NextResponse.json({ error: 'cohortId is required' }, { status: 400 });
+    let days: number | null = null;
+    if (gracePeriodDays !== '' && gracePeriodDays != null) {
+      const parsed = Number(gracePeriodDays);
+      if (!Number.isInteger(parsed) || parsed < 0 || parsed > 365) {
+        return NextResponse.json({ error: 'Grace period must be a whole number between 0 and 365.' }, { status: 400 });
+      }
+      days = parsed;
+    }
+    try {
+      const { data: updated, error } = await db
+        .from('cohort_payment_settings')
+        .update({ grace_period_days: days, updated_at: new Date().toISOString() })
+        .eq('cohort_id', cohortId)
+        .select('cohort_id');
+      if (error) throw error;
+      if (!updated || updated.length === 0) throw new Error('Payment settings for this cohort have not been configured yet. Set them in Payment Settings first.');
+      return NextResponse.json({ ok: true });
+    } catch (err: any) {
+      console.error('[payments/save-grace-period]', err);
+      return NextResponse.json({ error: err.message ?? 'Failed to save grace period' }, { status: 500 });
     }
   }
 

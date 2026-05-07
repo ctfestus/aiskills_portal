@@ -1,5 +1,10 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { computeAccess, EnrollmentState } from './enrollment-access';
+import { Resend } from 'resend';
+import { getTenantSettings } from './get-tenant-settings';
+import { overdueNotificationEmail, paymentReceiptEmail } from './email-templates';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ---
 // Types
@@ -129,7 +134,7 @@ export async function getEnrollmentRows(db: SupabaseClient): Promise<{ rows: Enr
       `)
       .order('created_at', { ascending: false }),
     db.from('cohorts').select('id, name').order('name'),
-    db.from('cohort_payment_settings').select('cohort_id, post_bootcamp_access_months'),
+    db.from('cohort_payment_settings').select('cohort_id, post_bootcamp_access_months, grace_period_days'),
     db.from('payment_config').select('outstanding_cohort_id').eq('id', 'default').maybeSingle(),
   ]);
 
@@ -137,7 +142,11 @@ export async function getEnrollmentRows(db: SupabaseClient): Promise<{ rows: Enr
   for (const c of cohortsRes.data ?? []) cohortMap[c.id] = c.name;
 
   const settingsMap: Record<string, number> = {};
-  for (const s of settingsRes.data ?? []) settingsMap[s.cohort_id] = s.post_bootcamp_access_months ?? 3;
+  const gracePeriodMap: Record<string, number | null> = {};
+  for (const s of settingsRes.data ?? []) {
+    settingsMap[s.cohort_id] = s.post_bootcamp_access_months ?? 3;
+    gracePeriodMap[s.cohort_id] = s.grace_period_days ?? null;
+  }
 
   const outstandingCohortId: string | null = (psRes as any).data?.outstanding_cohort_id ?? null;
 
@@ -163,6 +172,7 @@ export async function getEnrollmentRows(db: SupabaseClient): Promise<{ rows: Enr
       paid_total:                  Number(e.paid_total),
       bootcamp_ends_at:            e.bootcamp_ends_at ? new Date(e.bootcamp_ends_at) : null,
       post_bootcamp_access_months: settingsMap[e.cohort_id] ?? 3,
+      grace_period_days:           gracePeriodMap[e.cohort_id] ?? null,
       installments:                rawInstallments.map((i: any) => ({ due_date: new Date(i.due_date), status: i.status })),
     };
     const liveAccess = computeAccess(state);
@@ -435,7 +445,7 @@ export async function recordPayment(db: SupabaseClient, input: RecordPaymentInpu
 
   const { data: enroll, error: enErr } = await db
     .from('bootcamp_enrollments')
-    .select('paid_total, cohort_id')
+    .select('paid_total, cohort_id, currency')
     .eq('id', input.enrollmentId)
     .single();
   if (enErr || !enroll) throw enErr ?? new Error('Enrollment not found');
@@ -457,6 +467,39 @@ export async function recordPayment(db: SupabaseClient, input: RecordPaymentInpu
 
   // Recompute access_status, access_until, and sync cohort membership
   await recomputeEnrollmentAccess(db, input.enrollmentId, settings?.post_bootcamp_access_months ?? 3);
+
+  // Fire-and-forget payment receipt to student
+  if (process.env.RESEND_API_KEY) {
+    ;(async () => {
+      try {
+        let studentName = 'there';
+        if (input.studentId) {
+          const { data: s } = await db.from('students').select('full_name').eq('id', input.studentId).maybeSingle();
+          if (s?.full_name) studentName = s.full_name;
+        }
+        const t = await getTenantSettings();
+        const FROM = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+        const dashboardUrl = t.appUrl || process.env.APP_URL || '';
+        const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+
+        await resend.emails.send({
+          from:    FROM,
+          to:      input.payerEmail,
+          subject: 'Payment received on your account',
+          html:    paymentReceiptEmail({
+            name:      studentName,
+            amount:    input.amount,
+            currency:  enroll.currency ?? 'GHS',
+            paidAt:    paidAt,
+            method:    input.method ?? null,
+            reference: input.reference ?? null,
+            dashboardUrl,
+            branding,
+          }),
+        });
+      } catch { /* non-blocking */ }
+    })();
+  }
 }
 
 // ---
@@ -723,16 +766,16 @@ async function recomputeEnrollmentAccess(
 ): Promise<void> {
   const { data: enroll, error } = await db
     .from('bootcamp_enrollments')
-    .select('total_fee, deposit_required, paid_total, payment_plan, bootcamp_ends_at, student_id')
+    .select('total_fee, deposit_required, paid_total, payment_plan, bootcamp_ends_at, student_id, cohort_id')
     .eq('id', enrollmentId)
     .single();
   if (error || !enroll) throw error ?? new Error('Enrollment not found');
 
-  const { data: installments, error: instErr } = await db
-    .from('payment_installments')
-    .select('due_date, status')
-    .eq('enrollment_id', enrollmentId);
-  if (instErr) throw instErr;
+  const [installmentsRes, cohortSettingsRes] = await Promise.all([
+    db.from('payment_installments').select('due_date, status').eq('enrollment_id', enrollmentId),
+    db.from('cohort_payment_settings').select('grace_period_days').eq('cohort_id', enroll.cohort_id).maybeSingle(),
+  ]);
+  if (installmentsRes.error) throw installmentsRes.error;
 
   const access = computeAccess({
     payment_plan: enroll.payment_plan as any,
@@ -741,7 +784,8 @@ async function recomputeEnrollmentAccess(
     paid_total: Number(enroll.paid_total),
     bootcamp_ends_at: enroll.bootcamp_ends_at ? new Date(enroll.bootcamp_ends_at) : null,
     post_bootcamp_access_months: postBootcampAccessMonths,
-    installments: (installments ?? []).map((i: any) => ({ due_date: new Date(i.due_date), status: i.status })),
+    grace_period_days: cohortSettingsRes.data?.grace_period_days ?? null,
+    installments: (installmentsRes.data ?? []).map((i: any) => ({ due_date: new Date(i.due_date), status: i.status })),
   });
 
   const { error: accessUpdErr } = await db
@@ -757,7 +801,7 @@ async function recomputeEnrollmentAccess(
   if (enroll.student_id) {
     const [psResult, studentResult] = await Promise.all([
       db.from('payment_config').select('outstanding_cohort_id').eq('id', 'default').maybeSingle(),
-      db.from('students').select('cohort_id, original_cohort_id, payment_exempt').eq('id', enroll.student_id).maybeSingle(),
+      db.from('students').select('cohort_id, original_cohort_id, payment_exempt, email, full_name').eq('id', enroll.student_id).maybeSingle(),
     ]);
 
     const action = getOutstandingCohortAction({
@@ -770,5 +814,39 @@ async function recomputeEnrollmentAccess(
     });
 
     if (action) await applyCohortAction(db, action).catch(() => {});
+
+    // Fire-and-forget overdue notification (once per enrollment per 14 days)
+    if (access.access_status === 'overdue' && studentResult.data?.email && process.env.RESEND_API_KEY) {
+      const studentEmail = (studentResult.data.email as string).trim().toLowerCase();
+      const studentName  = (studentResult.data.full_name as string | null) || 'there';
+      ;(async () => {
+        try {
+          const since14 = new Date(Date.now() - 14 * 86400000).toISOString();
+          const { data: existing } = await db
+            .from('sent_nudges')
+            .select('id')
+            .eq('student_id', enroll.student_id)
+            .eq('form_id', enrollmentId)
+            .eq('nudge_type', 'overdue_alert')
+            .gte('sent_at', since14)
+            .limit(1)
+            .maybeSingle();
+          if (existing) return;
+
+          const t = await getTenantSettings();
+          const FROM = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+          const dashboardUrl = t.appUrl || process.env.APP_URL || '';
+          const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+
+          await resend.emails.send({
+            from:    FROM,
+            to:      studentEmail,
+            subject: 'Your account has an overdue payment',
+            html:    overdueNotificationEmail({ name: studentName, dashboardUrl, branding }),
+          });
+          await db.from('sent_nudges').insert({ student_id: enroll.student_id, form_id: enrollmentId, nudge_type: 'overdue_alert' });
+        } catch { /* non-blocking */ }
+      })();
+    }
   }
 }

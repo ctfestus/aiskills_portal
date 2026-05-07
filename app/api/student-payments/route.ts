@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
+import { paymentConfirmationAcknowledgedEmail, adminPaymentConfirmationEmail } from '@/lib/email-templates';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +59,7 @@ export async function GET(req: NextRequest) {
         `)
         .eq('student_id', targetStudentId)
         .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle(),
       db
         .from('payment_options')
@@ -178,6 +184,40 @@ export async function POST(req: NextRequest) {
       });
 
     if (insertErr) throw insertErr;
+
+    // Fire-and-forget: acknowledge student + notify admin
+    if (process.env.RESEND_API_KEY) {
+      ;(async () => {
+        try {
+          const [{ data: studentRow }, { data: enroll }, t] = await Promise.all([
+            db.from('students').select('full_name').eq('id', student.id).maybeSingle(),
+            db.from('bootcamp_enrollments').select('currency').eq('id', enrollmentId).maybeSingle(),
+            getTenantSettings(),
+          ]);
+          const FROM        = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+          const dashboardUrl = t.appUrl || process.env.APP_URL || '';
+          const branding    = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+          const studentName = studentRow?.full_name || 'there';
+          const currency    = enroll?.currency ?? 'GHS';
+          const adminUrl    = `${t.appUrl || process.env.APP_URL || ''}/dashboard#payments`;
+
+          await resend.batch.send([
+            {
+              from:    FROM,
+              to:      student.email,
+              subject: 'We received your payment confirmation',
+              html:    paymentConfirmationAcknowledgedEmail({ name: studentName, amount: Number(amount), currency, dashboardUrl, branding }),
+            },
+            {
+              from:    FROM,
+              to:      t.supportEmail || process.env.RESEND_FROM_EMAIL || FROM,
+              subject: `New payment confirmation from ${studentName}`,
+              html:    adminPaymentConfirmationEmail({ studentName, studentEmail: student.email, amount: Number(amount), currency, adminUrl, branding }),
+            },
+          ]);
+        } catch { /* non-blocking */ }
+      })();
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {

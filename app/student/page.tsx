@@ -707,14 +707,15 @@ function CoursesSection({ userEmail, userId: userIdProp, C, isOutstandingProp }:
         .select('access_status, total_fee, deposit_required, paid_total, payment_plan, bootcamp_ends_at, cohort_id, payment_installments ( due_date, status )')
         .eq('student_id', effectiveUserId)
         .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      // Compute access live so overdue status reflects today's date without needing an admin action
+      // Compute access live so overdue/grace status reflects today's date without needing an admin action
       let liveStatus = enrollment?.access_status ?? null;
       if (enrollment) {
         const { data: settings } = await supabase
           .from('cohort_payment_settings')
-          .select('post_bootcamp_access_months')
+          .select('post_bootcamp_access_months, grace_period_days')
           .eq('cohort_id', enrollment.cohort_id)
           .maybeSingle();
         liveStatus = computeAccess({
@@ -724,6 +725,7 @@ function CoursesSection({ userEmail, userId: userIdProp, C, isOutstandingProp }:
           paid_total:                  Number(enrollment.paid_total),
           bootcamp_ends_at:            enrollment.bootcamp_ends_at ? new Date(enrollment.bootcamp_ends_at) : null,
           post_bootcamp_access_months: settings?.post_bootcamp_access_months ?? 3,
+          grace_period_days:           settings?.grace_period_days ?? null,
           installments:                (enrollment.payment_installments ?? []).map((i: any) => ({ due_date: new Date(i.due_date), status: i.status })),
         }).access_status;
       }
@@ -5128,6 +5130,8 @@ export default function StudentDashboard() {
   const [isOutstanding,        setIsOutstanding]        = useState(false);
   const [enrollmentStatus,     setEnrollmentStatus]     = useState<string | null>(null);
   const [showOutstandingModal, setShowOutstandingModal] = useState(false);
+  const [isInGracePeriod,      setIsInGracePeriod]      = useState(false);
+  const [graceAccessUntil,     setGraceAccessUntil]     = useState<string | null>(null);
 
   // Live activity ticker (persists across all tabs)
   const [activeTicker,       setActiveTicker]       = useState<{ name: string; title: string } | null>(null);
@@ -5239,28 +5243,37 @@ export default function StudentDashboard() {
             .select('access_status, total_fee, deposit_required, paid_total, payment_plan, bootcamp_ends_at, cohort_id, payment_installments ( due_date, status )')
             .eq('student_id', resolvedViewingAs?.id ?? authUser.id)
             .order('created_at', { ascending: false })
+            .limit(1)
             .maybeSingle();
           let liveStatus = enroll?.access_status ?? null;
+          let liveGraceActive = false;
+          let liveAccessUntil: Date | null = null;
           if (enroll) {
             const { data: settings } = await supabase
               .from('cohort_payment_settings')
-              .select('post_bootcamp_access_months')
+              .select('post_bootcamp_access_months, grace_period_days')
               .eq('cohort_id', enroll.cohort_id)
               .maybeSingle();
-            liveStatus = computeAccess({
+            const result = computeAccess({
               payment_plan:                enroll.payment_plan as any,
               total_fee:                   Number(enroll.total_fee),
               deposit_required:            Number(enroll.deposit_required),
               paid_total:                  Number(enroll.paid_total),
               bootcamp_ends_at:            enroll.bootcamp_ends_at ? new Date(enroll.bootcamp_ends_at) : null,
               post_bootcamp_access_months: settings?.post_bootcamp_access_months ?? 3,
+              grace_period_days:           settings?.grace_period_days ?? null,
               installments:                (enroll.payment_installments ?? []).map((i: any) => ({ due_date: new Date(i.due_date), status: i.status })),
-            }).access_status;
+            });
+            liveStatus      = result.access_status;
+            liveGraceActive = result.grace_active;
+            liveAccessUntil = result.access_until;
           }
           const restricted = !s?.payment_exempt && ['pending_deposit', 'overdue', 'expired'].includes(liveStatus ?? '');
           const outstanding = !!s?.original_cohort_id || restricted;
           setIsOutstanding(outstanding);
           setEnrollmentStatus(liveStatus);
+          setIsInGracePeriod(liveGraceActive);
+          setGraceAccessUntil(liveGraceActive && liveAccessUntil ? liveAccessUntil.toISOString().slice(0, 10) : null);
           if (outstanding && !sessionStorage.getItem('outstandingModalDismissed')) {
             setShowOutstandingModal(true);
           }
@@ -5480,6 +5493,24 @@ export default function StudentDashboard() {
             )}
 
             {/* Section content */}
+
+            {/* Grace period banner -- payment is overdue but still within grace window */}
+            {isInGracePeriod && !isOutstanding && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl mb-4"
+                style={{ background: 'rgba(245,158,11,0.09)', border: '1px solid rgba(245,158,11,0.35)' }}>
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#d97706' }}/>
+                <p className="text-sm font-medium flex-1" style={{ color: '#b45309' }}>
+                  {'Your payment installment is overdue. You have until '}
+                  <span className="font-bold">{graceAccessUntil ?? 'your grace deadline'}</span>
+                  {' to make a payment before your access is restricted. Go to '}
+                  <button onClick={() => goSection('payments')} className="underline font-bold" style={{ color: '#b45309' }}>
+                    Payments
+                  </button>
+                  {' to submit a confirmation.'}
+                </p>
+              </div>
+            )}
+
             {/* Outstanding banner -- persists across all tabs */}
             {isOutstanding && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl mb-4"

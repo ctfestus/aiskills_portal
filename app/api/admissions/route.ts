@@ -52,6 +52,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Total fee must be greater than 0.' }, { status: 400 });
     }
 
+    const graceDaysRaw = body.settings.grace_period_days;
+    let gracePeriodDays: number | null = null;
+    if (graceDaysRaw !== '' && graceDaysRaw != null) {
+      const parsed = Number(graceDaysRaw);
+      if (!Number.isInteger(parsed) || parsed < 0 || parsed > 365) {
+        return NextResponse.json({ error: 'Grace period must be a whole number between 0 and 365.' }, { status: 400 });
+      }
+      gracePeriodDays = parsed;
+    }
+
     const payload = {
       cohort_id:                   cohortId,
       total_fee:                   totalFee,
@@ -60,6 +70,7 @@ export async function POST(req: NextRequest) {
       payment_plan:                body.settings.payment_plan || 'flexible',
       installment_count:           Number(body.settings.installment_count ?? 3),
       post_bootcamp_access_months: Number(body.settings.post_bootcamp_access_months ?? 3),
+      grace_period_days:           gracePeriodDays,
       updated_at:                  new Date().toISOString(),
     };
 
@@ -121,16 +132,28 @@ export async function POST(req: NextRequest) {
       if (cohortId) {
         const { createAdmissionRecord, activateEnrollment } = await import('@/lib/db-payments');
 
-        // Case 1: already has a post-signup enrollment for this cohort -- nothing to do
-        const { data: existing } = await db
+        // Check if the student already has an active (post-signup) enrollment anywhere
+        const { data: anyEnrollment } = await db
           .from('bootcamp_enrollments')
-          .select('id')
+          .select('id, cohort_id')
           .eq('student_id', studentId)
-          .eq('cohort_id', cohortId)
+          .order('created_at', { ascending: false })
+          .limit(1)
           .maybeSingle();
 
-        if (!existing) {
-          // Case 2: pre-signup row exists -- activate it
+        if (anyEnrollment) {
+          // Student already enrolled -- just move the enrollment to the new cohort.
+          // Payment history, installments, and paid amounts stay on the same row.
+          if (anyEnrollment.cohort_id !== cohortId) {
+            await db
+              .from('bootcamp_enrollments')
+              .update({ cohort_id: cohortId, updated_at: new Date().toISOString() })
+              .eq('id', anyEnrollment.id);
+          }
+        } else {
+          // No existing enrollment -- create one fresh.
+
+          // Case 1: pre-signup row exists for this cohort -- activate it
           const { data: presignup } = await db
             .from('bootcamp_enrollments')
             .select('id')
@@ -142,7 +165,7 @@ export async function POST(req: NextRequest) {
           if (presignup) {
             await activateEnrollment(db, email, cohortId, studentId);
           } else {
-            // Case 3: no row at all -- create from cohort defaults then activate
+            // Case 2: no row at all -- create from cohort defaults then activate
             const [{ data: settings }, { data: cohortRow }] = await Promise.all([
               db.from('cohort_payment_settings').select('*').eq('cohort_id', cohortId).maybeSingle(),
               db.from('cohorts').select('start_date, end_date').eq('id', cohortId).maybeSingle(),

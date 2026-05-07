@@ -9,6 +9,7 @@ export type AccessStatus =
 export interface AccessResult {
   access_status: AccessStatus;
   access_until: Date | null;
+  grace_active: boolean;
 }
 
 export interface EnrollmentState {
@@ -19,6 +20,7 @@ export interface EnrollmentState {
   bootcamp_ends_at: Date | null;
   post_bootcamp_access_months: number;
   installments: { due_date: Date; status: string }[];
+  grace_period_days?: number | null;
 }
 
 export function computeAccess(e: EnrollmentState): AccessResult {
@@ -26,17 +28,19 @@ export function computeAccess(e: EnrollmentState): AccessResult {
     return {
       access_status: 'waived',
       access_until: addMonths(e.bootcamp_ends_at, e.post_bootcamp_access_months),
+      grace_active: false,
     };
   }
 
   if (e.paid_total <= 0) {
-    return { access_status: 'pending_deposit', access_until: null };
+    return { access_status: 'pending_deposit', access_until: null, grace_active: false };
   }
 
   if (e.paid_total >= e.total_fee) {
     return {
       access_status: 'completed',
       access_until: addMonths(e.bootcamp_ends_at, e.post_bootcamp_access_months),
+      grace_active: false,
     };
   }
 
@@ -48,12 +52,22 @@ export function computeAccess(e: EnrollmentState): AccessResult {
   today.setHours(0, 0, 0, 0);
 
   if (nextUnpaid && nextUnpaid.due_date < today) {
-    return { access_status: 'overdue', access_until: nextUnpaid.due_date };
+    const graceDays = e.grace_period_days ?? 0;
+    if (graceDays > 0) {
+      const graceEnd = new Date(nextUnpaid.due_date);
+      graceEnd.setDate(graceEnd.getDate() + graceDays);
+      graceEnd.setHours(0, 0, 0, 0);
+      if (today <= graceEnd) {
+        return { access_status: 'active', access_until: graceEnd, grace_active: true };
+      }
+    }
+    return { access_status: 'overdue', access_until: nextUnpaid.due_date, grace_active: false };
   }
 
   return {
     access_status: 'active',
     access_until: nextUnpaid?.due_date ?? null,
+    grace_active: false,
   };
 }
 
