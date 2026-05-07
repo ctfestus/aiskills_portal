@@ -4566,7 +4566,7 @@ function Detail({ label, value, C, copyable }: { label: string; value: string; C
 }
 
 // --- Payments section ---
-function PaymentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
+function PaymentsSection({ userId, C, readOnly = false }: { userId: string; C: typeof LIGHT_C; readOnly?: boolean }) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
@@ -4600,7 +4600,7 @@ function PaymentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
     setLoading(true); setError('');
     try {
       const token = await getToken();
-      const res = await fetch('/api/student-payments', {
+      const res = await fetch(`/api/student-payments?studentId=${encodeURIComponent(userId)}`, {
         headers: { Authorization: `Bearer ${token}` },
       }).then(r => r.json());
       if (res.error) { setError(res.error); return; }
@@ -4614,7 +4614,7 @@ function PaymentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -4799,7 +4799,10 @@ function PaymentsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
 
         {/* Tab bar */}
         <div className="flex" style={{ borderBottom: `1px solid ${C.divider}` }}>
-          {([['make', 'Make Payment'], ['submit', 'Submit Confirmation'], ['history', 'Payment History']] as const).map(([id, label]) => (
+          {(readOnly
+            ? ([['make', 'Make Payment'], ['history', 'Payment History']] as const)
+            : ([['make', 'Make Payment'], ['submit', 'Submit Confirmation'], ['history', 'Payment History']] as const)
+          ).map(([id, label]) => (
             <button key={id} onClick={() => setPayTab(id)}
               className="flex-1 py-3.5 text-sm font-semibold transition-all"
               style={{
@@ -5534,7 +5537,7 @@ export default function StudentDashboard() {
               <CertificatesSection userId={effectiveId} userEmail={effectiveEmail} userName={viewingAs?.name ?? userName} C={C}/>
             )}
             {activeSection === 'payments' && user && (
-              <PaymentsSection userId={effectiveId} C={C}/>
+              <PaymentsSection userId={effectiveId} C={C} readOnly={!!viewingAs}/>
             )}
           </motion.div>
         </main>
