@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
   // 4. Fetch attempts
   const [{ data: courseAttempts }, { data: gpAttempts }] = await Promise.all([
     courseIds.length
-      ? supabase.from('course_attempts').select('student_id, course_id, completed_at, updated_at').in('course_id', courseIds)
+      ? supabase.from('course_attempts').select('student_id, course_id, completed_at, passed, updated_at').in('course_id', courseIds)
       : Promise.resolve({ data: [] as any[] }),
     veIds.length
       ? supabase.from('guided_project_attempts').select('student_id, ve_id, completed_at, updated_at').in('ve_id', veIds)
@@ -96,12 +96,16 @@ export async function POST(req: NextRequest) {
   ]);
 
   // Build attempt map: "studentId|contentId"
-  const attemptMap = new Map<string, { completed: boolean; lastActive: string | null }>();
+  // Passed+completed always wins over in-progress (student may retake after passing).
+  const attemptMap = new Map<string, { completed: boolean; passed: boolean; lastActive: string | null }>();
   for (const a of courseAttempts ?? []) {
     const key = `${a.student_id}|${a.course_id}`;
     const existing = attemptMap.get(key);
-    const isNewer = !existing || (a.updated_at && (!existing.lastActive || a.updated_at > existing.lastActive));
-    if (isNewer) attemptMap.set(key, { completed: !!a.completed_at, lastActive: a.updated_at ?? null });
+    if (!existing) { attemptMap.set(key, { completed: !!a.completed_at, passed: !!a.passed, lastActive: a.updated_at ?? null }); continue; }
+    if (a.passed && a.completed_at && !existing.completed) { attemptMap.set(key, { completed: true, passed: true, lastActive: a.updated_at ?? null }); continue; }
+    if (existing.passed && existing.completed && !a.completed_at) continue;
+    const isNewer = a.updated_at && (!existing.lastActive || a.updated_at > existing.lastActive);
+    if (isNewer && !existing.completed) attemptMap.set(key, { completed: !!a.completed_at, passed: !!a.passed, lastActive: a.updated_at ?? null });
   }
   for (const a of gpAttempts ?? []) {
     const key = `${a.student_id}|${a.ve_id}`;

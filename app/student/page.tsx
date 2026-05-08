@@ -4310,12 +4310,14 @@ function OverviewSection({ user, userEmail, username, profile, C, onNavigate }: 
         config: { isVirtualExperience: true, title: ve.title, coverImage: ve.cover_image, modules: ve.modules ?? [], deadline_days: ve.deadline_days },
       }));
 
-      // Deduplicate course attempts (active beats completed; higher score among completed)
+      // Deduplicate course attempts: passed+completed always wins over in-progress; higher score among completed.
       const caMap: Record<string, any> = {};
       for (const a of attemptsRes.data ?? []) {
         const key = a.course_id;
         const ex = caMap[key];
         if (!ex) { caMap[key] = a; continue; }
+        if (a.passed && a.completed_at && !ex.completed_at) { caMap[key] = a; continue; }
+        if (ex.passed && ex.completed_at && !a.completed_at) continue;
         if (!a.completed_at && ex.completed_at) { caMap[key] = a; continue; }
         if (a.completed_at && ex.completed_at && (a.score ?? 0) > (ex.score ?? 0)) caMap[key] = a;
       }

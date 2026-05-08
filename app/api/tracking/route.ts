@@ -130,9 +130,14 @@ export async function GET(req: NextRequest) {
   for (const a of courseAttempts ?? []) {
     const key = `${a.student_id}|${a.course_id}`;
     const existing = courseAttemptMap.get(key);
-    if (!existing || new Date(a.updated_at) > new Date(existing.updated_at)) {
-      courseAttemptMap.set(key, a);
-    }
+    if (!existing) { courseAttemptMap.set(key, a); continue; }
+    // Passed+completed always wins over in-progress
+    if (a.passed && a.completed_at && !existing.completed_at) { courseAttemptMap.set(key, a); continue; }
+    if (existing.passed && existing.completed_at && !a.completed_at) continue;
+    // Among completed, prefer higher score
+    if (a.completed_at && existing.completed_at && (a.score ?? 0) > (existing.score ?? 0)) { courseAttemptMap.set(key, a); continue; }
+    // Among in-progress, prefer most recently updated
+    if (!a.completed_at && !existing.completed_at && new Date(a.updated_at) > new Date(existing.updated_at)) courseAttemptMap.set(key, a);
   }
 
   const gpAttemptMap = new Map<string, any>();

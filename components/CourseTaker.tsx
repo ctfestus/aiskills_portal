@@ -521,8 +521,22 @@ export function CourseTaker({
         return;
       }
 
-      if (d.cert?.id) {
-        // Already certified -- enter review mode: no saves, no XP, no new attempt
+      if (d.cert?.id || d.hasPassed) {
+        // Already passed -- enter review mode: no saves, no XP, no new attempt.
+        // Restore the passing attempt's state so previously completed lessons and answers remain visible.
+        const prev = d.passingAttempt;
+        if (prev) {
+          const prevIdx = prev.current_question_index ?? 0;
+          maxIdxRef.current = prevIdx;
+          setCurrentQuestionIndex(prevIdx);
+          setAnswers(prev.answers ?? {});
+          answersRef.current = prev.answers ?? {};
+          setScore(prev.score ?? 0);
+          setTotalPoints(prev.points ?? 0);
+          setDisplayedPoints(prev.points ?? 0);
+          setStreak(prev.streak ?? 0);
+          setHintsUsed(new Set(prev.hints_used ?? []));
+        }
         setReviewMode(true);
         setCheckingAttempts(false);
         setPhase('course');

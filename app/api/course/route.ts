@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 
     try {
       const supabase = adminClient();
-      const [{ data: cert }, { data: progress }, { count: attemptCount }] = await Promise.all([
+      const [{ data: cert }, { data: progress }, { count: attemptCount }, { data: passingAttempt }] = await Promise.all([
         supabase.from('certificates').select('id')
           .eq('course_id', course_id).eq('student_id', sessionUser.id).eq('revoked', false)
           .maybeSingle(),
@@ -68,8 +68,14 @@ export async function POST(req: NextRequest) {
         supabase.from('course_attempts').select('id', { count: 'exact', head: true })
           .eq('course_id', course_id).eq('student_id', sessionUser.id)
           .not('completed_at', 'is', null),
+        // Best passing attempt -- used to restore answers/progress in review mode
+        supabase.from('course_attempts')
+          .select('answers, current_question_index, score, points, hints_used, streak')
+          .eq('course_id', course_id).eq('student_id', sessionUser.id)
+          .eq('passed', true).not('completed_at', 'is', null)
+          .order('score', { ascending: false }).limit(1).maybeSingle(),
       ]);
-      return NextResponse.json({ cert, progress, attemptCount: attemptCount ?? 0 });
+      return NextResponse.json({ cert, progress, attemptCount: attemptCount ?? 0, hasPassed: !!passingAttempt, passingAttempt });
     } catch (err: any) {
       console.error('[course/get-progress]', err);
       return NextResponse.json({ error: 'Failed to load progress.' }, { status: 500 });

@@ -115,7 +115,7 @@ export default function AssignmentExperiencePlayer({
   const [activeLesson,  setActiveLesson]  = useState(modules[0]?.lessons[0]?.id ?? '');
   const [saving,        setSaving]        = useState(false);
   const [uploadingReq,  setUploadingReq]  = useState<string | null>(null);
-  const [done,          setDone]          = useState(false);
+  const [done,          setDone]          = useState(() => allComplete(config, initialProgress ?? {}));
   const [expandedMods,  setExpandedMods]  = useState<Set<string>>(new Set([modules[0]?.id]));
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const authHeader = sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {} as Record<string, string>;
