@@ -953,12 +953,15 @@ const [isSaving, setIsSaving] = useState(false);
     e.target.value = '';
     setUploadingBadge(true);
     try {
-      const publicUrl = await uploadToCloudinary(file, 'badges');
+      const { data: { session } } = await supabase.auth.getSession();
+      const ext  = file.name.split('.').pop() ?? 'png';
+      const path = `badges/${session?.user.id ?? 'anon'}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
       updateConfig({ badgeImageUrl: publicUrl });
     } catch {
-      const reader = new FileReader();
-      reader.onload = (ev) => updateConfig({ badgeImageUrl: ev.target?.result as string });
-      reader.readAsDataURL(file);
+      alert('Badge upload failed. Please try again.');
     }
     setUploadingBadge(false);
   };

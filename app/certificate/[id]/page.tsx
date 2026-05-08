@@ -12,11 +12,14 @@ export default function CertificatePage() {
   const [certData, setCertData] = useState<{
     certId: string;
     studentName: string;
+    studentAvatarUrl?: string | null;
+    studentUsername?: string | null;
     courseName: string;
     issueDate: string;
     settings: CertificateSettings;
     issuedAt: string;
     certType: 'course' | 'virtual_experience' | 'learning_path';
+    badgeImageUrl?: string | null;
     pathItems?: { id: string; title: string; coverImage: string | null }[];
     pathCoverImage?: string | null;
   } | null>(null);
@@ -33,15 +36,18 @@ export default function CertificatePage() {
       if (data.revoked)  { setState("revoked");  return; }
 
       setCertData({
-        certId:      data.certId,
-        studentName: data.studentName,
-        courseName:  data.courseName,
-        issueDate:   data.issueDate,
-        settings:    data.settings ?? DEFAULT_CERT_SETTINGS,
-        issuedAt:    data.issuedAt,
-        certType:    data.certType ?? 'course',
-        pathItems:      data.pathItems,
-        pathCoverImage: data.pathCoverImage ?? null,
+        certId:           data.certId,
+        studentName:      data.studentName,
+        studentAvatarUrl: data.studentAvatarUrl ?? null,
+        studentUsername:  data.studentUsername  ?? null,
+        courseName:       data.courseName,
+        issueDate:        data.issueDate,
+        settings:         data.settings ?? DEFAULT_CERT_SETTINGS,
+        issuedAt:         data.issuedAt,
+        certType:         data.certType ?? 'course',
+        badgeImageUrl:    data.badgeImageUrl ?? null,
+        pathItems:        data.pathItems,
+        pathCoverImage:   data.pathCoverImage ?? null,
       });
       setState("ready");
     };

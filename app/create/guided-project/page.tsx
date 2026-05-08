@@ -646,7 +646,12 @@ function VirtualExperienceCreatePageInner() {
     if (!file) return;
     setUploadingBadge(true);
     try {
-      const publicUrl = await uploadToCloudinary(file, 'badges');
+      const { data: { session } } = await supabase.auth.getSession();
+      const ext  = file.name.split('.').pop() ?? 'png';
+      const path = `badges/${session?.user.id ?? 'anon'}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
       setConfig(c => c ? { ...c, badgeImageUrl: publicUrl } : c);
     } catch (err: any) {
       alert('Upload failed: ' + err.message);

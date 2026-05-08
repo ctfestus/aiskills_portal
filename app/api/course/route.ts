@@ -1,9 +1,12 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
 import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
 import { getRedis, leaderboardKey, studentNameKey } from '@/lib/redis';
 import { publishActivity } from '@/lib/activity';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { updateLearningPathProgress } from '@/lib/learning-path-progress';
+import { courseResultEmail } from '@/lib/email-templates';
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -152,7 +155,7 @@ export async function POST(req: NextRequest) {
   if (action === 'complete-attempt') {
     const sessionUser = await getSessionUser(req);
     if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const { course_id, current_question_index } = body;
+    const { course_id, current_question_index, final_answers } = body;
     if (!course_id) return NextResponse.json({ error: 'course_id required' }, { status: 400 });
 
     try {
@@ -170,9 +173,14 @@ export async function POST(req: NextRequest) {
       ]);
 
       if (attempt && courseData) {
-        // Server-side scoring - client-supplied score/passed/points are ignored
+        // Server-side scoring - client-supplied score/passed/points are ignored.
+        // Merge final_answers (sent by client) over stored answers so that the last
+        // lessonOnly 'viewed' entry is always present, regardless of race timing.
         const questions: any[]              = Array.isArray(courseData.questions) ? courseData.questions : [];
-        const storedAnswers: Record<string, string> = attempt.answers   ?? {};
+        const storedAnswers: Record<string, string> = {
+          ...(attempt.answers ?? {}),
+          ...(final_answers && typeof final_answers === 'object' ? final_answers : {}),
+        };
         const hintsUsed: string[]           = attempt.hints_used ?? [];
         const passmark                      = courseData.passmark ?? 50;
 
@@ -207,6 +215,7 @@ export async function POST(req: NextRequest) {
           score:                  scorePct,
           points:                 computed_points,
           current_question_index: current_question_index ?? 0,
+          answers:                storedAnswers,
           updated_at:             new Date().toISOString(),
         }).eq('id', attempt.id);
 
@@ -306,27 +315,72 @@ export async function POST(req: NextRequest) {
 
       await updateLearningPathProgress(supabase, sessionUser.id, course_id);
 
-      // Award course badge (fire-and-forget) -- badge block is included in the course-result email
+      // Award badge + send cert email (fire-and-forget)
       (async () => {
         try {
-          const { data: courseRow } = await supabase.from('courses').select('title, badge_image_url').eq('id', course_id).single();
-          if (!courseRow?.badge_image_url) return;
-          const badgeId = `crs_${course_id}`;
-          await supabase.from('badges').upsert({
-            id:          badgeId,
-            name:        `${courseRow.title} Badge`,
-            description: `Awarded for completing ${courseRow.title}`,
-            icon:        'graduated',
-            color:       '#6366f1',
-            image_url:   courseRow.badge_image_url,
-            category:    'course',
-          }, { onConflict: 'id' });
-          await supabase.from('student_badges').upsert({
-            student_id: sessionUser.id,
-            badge_id:   badgeId,
-          }, { onConflict: 'student_id,badge_id', ignoreDuplicates: true });
-        } catch (badgeErr) {
-          console.error('[course/issue-certificate] badge award failed', badgeErr);
+          const [{ data: courseRow }, { data: studentRow }, { data: bestAttempt }] = await Promise.all([
+            supabase.from('courses').select('title, slug, badge_image_url').eq('id', course_id).single(),
+            supabase.from('students').select('full_name, email').eq('id', sessionUser.id).single(),
+            supabase.from('course_attempts').select('score, points')
+              .eq('course_id', course_id).eq('student_id', sessionUser.id)
+              .eq('passed', true).order('score', { ascending: false }).limit(1).maybeSingle(),
+          ]);
+          if (!courseRow || !studentRow?.email) return;
+
+          let badgeName: string | undefined;
+          let badgeImageUrl: string | undefined;
+          if (courseRow.badge_image_url) {
+            try {
+              const badgeId = `crs_${course_id}`;
+              await supabase.from('badges').upsert({
+                id:          badgeId,
+                name:        `${courseRow.title} Badge`,
+                description: `Awarded for completing ${courseRow.title}`,
+                icon:        'graduated',
+                color:       '#6366f1',
+                image_url:   courseRow.badge_image_url,
+                category:    'course',
+              }, { onConflict: 'id' });
+              await supabase.from('student_badges').upsert({
+                student_id: sessionUser.id,
+                badge_id:   badgeId,
+              }, { onConflict: 'student_id,badge_id', ignoreDuplicates: true });
+              badgeName     = `${courseRow.title} Badge`;
+              badgeImageUrl = courseRow.badge_image_url;
+            } catch (badgeErr) {
+              console.error('[course/issue-certificate] badge award failed', badgeErr);
+            }
+          }
+
+          if (process.env.RESEND_API_KEY) {
+            const t        = await getTenantSettings();
+            const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+            const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+            const certUrl  = `${t.appUrl}/certificate/${cert.id}`;
+            const formUrl  = courseRow.slug ? `${t.appUrl}/${courseRow.slug}` : `${t.appUrl}/${course_id}`;
+            const resend   = new Resend(process.env.RESEND_API_KEY);
+            await resend.emails.send({
+              from:    FROM,
+              to:      studentRow.email,
+              subject: `Congratulations! Your certificate for ${courseRow.title} is ready`,
+              html:    courseResultEmail({
+                name:         studentRow.full_name ?? 'there',
+                courseTitle:  courseRow.title,
+                score:        bestAttempt?.score ?? 100,
+                total:        100,
+                percentage:   bestAttempt?.score ?? 100,
+                passed:       true,
+                points:       bestAttempt?.points ?? undefined,
+                formUrl,
+                certUrl,
+                badgeName,
+                badgeImageUrl,
+                branding,
+              }),
+            });
+          }
+        } catch (err) {
+          console.error('[course/issue-certificate] post-cert tasks failed', err);
         }
       })();
 

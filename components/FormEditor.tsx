@@ -181,6 +181,7 @@ interface FormConfig {
   pointsBase?: number;
   deadline_days?: number | null;
   category?: string | null;
+  badgeImageUrl?: string | null;
 }
 
 // --- Constants ---
@@ -641,13 +642,33 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const [speakerDraft, setSpeakerDraft] = useState({ name: '', title: '', bio: '', avatar_url: '', linkedin_url: '' });
   const [speakerImgUploading, setSpeakerImgUploading] = useState(false);
   const [speakerCropSrc, setSpeakerCropSrc] = useState<string | null>(null);
+  const badgeInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingBadge, setUploadingBadge] = useState(false);
+  const handleBadgeImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setUploadingBadge(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const ext  = file.name.split('.').pop() ?? 'png';
+      const path = `badges/${session?.user.id ?? 'anon'}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
+      updateConfig({ badgeImageUrl: publicUrl });
+    } catch {
+      alert('Badge upload failed. Please try again.');
+    }
+    setUploadingBadge(false);
+  };
 
   // Load form on mount
   useEffect(() => {
     setIsLoading(true);
     (async () => {
       if (contentType === 'course') {
-        const { data: course } = await supabase.from('courses').select('id, title, description, slug, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, category').eq('id', formId).maybeSingle();
+        const { data: course } = await supabase.from('courses').select('id, title, description, slug, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, badge_image_url, deadline_days, theme, mode, font, custom_accent, category').eq('id', formId).maybeSingle();
         if (course) {
           setFormConfig({
             isCourse: true,
@@ -669,6 +690,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
             font: course.font,
             customAccent: course.custom_accent,
             category: course.category ?? null,
+            badgeImageUrl: course.badge_image_url ?? null,
           });
           setCustomSlug(course.slug || '');
           const loadedCohorts = course.cohort_ids ?? [];
@@ -2040,6 +2062,38 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: FE.faint }}>
                       Students can filter courses by category on their dashboard.
                     </p>
+                  </div>
+
+                  {/* Completion badge */}
+                  <div>
+                    <label className={labelCls} style={labelStyle}>Completion Badge</label>
+                    <p className="text-[10px] mb-2 leading-relaxed" style={{ color: FE.faint }}>
+                      Students earn this badge when they pass the course assessment. It appears in their Badges section alongside their certificate.
+                    </p>
+                    <input ref={badgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleBadgeImageUpload}/>
+                    {formConfig.badgeImageUrl ? (
+                      <div className="flex items-center gap-3">
+                        <img src={formConfig.badgeImageUrl} alt="Badge" className="w-16 h-16 rounded-xl object-contain flex-shrink-0" style={{ border: `1px solid ${FE.inputBorder}`, background: FE.input }}/>
+                        <div className="flex flex-col gap-1.5">
+                          <button type="button" onClick={() => badgeInputRef.current?.click()} disabled={uploadingBadge}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                            style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}>
+                            {uploadingBadge ? <Loader2 className="w-3 h-3 animate-spin"/> : <Upload className="w-3 h-3"/>}
+                            {uploadingBadge ? 'Uploading...' : 'Change'}
+                          </button>
+                          <button type="button" onClick={() => updateConfig({ badgeImageUrl: null })}
+                            className="text-xs px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
+                            style={{ color: '#ef4444', background: '#ef444412' }}>Remove</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => badgeInputRef.current?.click()} disabled={uploadingBadge}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                        style={{ border: `1.5px dashed ${FE.inputBorder}`, color: FE.faint, background: FE.input, width: '100%', justifyContent: 'center' }}>
+                        {uploadingBadge ? <Loader2 className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4"/>}
+                        {uploadingBadge ? 'Uploading...' : 'Upload badge image'}
+                      </button>
+                    )}
                   </div>
 
                   {/* Show answers setting */}

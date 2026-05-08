@@ -94,11 +94,11 @@ function platformColor(url?: string): string {
 
 function badgeBlock(badgeName: string, badgeImageUrl: string, badgesUrl: string) {
   return `
-    <div style="margin:24px 0;padding:20px;background:linear-gradient(135deg,#1e1b4b,#3730a3);border-radius:0;text-align:center;">
-      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#a5b4fc;text-transform:uppercase;letter-spacing:0.1em;">You Earned a Badge</p>
-      <img src="${badgeImageUrl}" alt="${esc(badgeName)}" width="96" height="96" style="display:inline-block;width:96px;height:96px;object-fit:contain;margin:8px 0;" />
-      <p style="margin:4px 0 12px;font-size:18px;font-weight:900;color:#ffffff;">${esc(badgeName)}</p>
-      <a href="${badgesUrl}" style="display:inline-block;background:#ffffff;color:#1e1b4b;padding:10px 24px;border-radius:0;text-decoration:none;font-weight:800;font-size:13px;">View in Your Profile</a>
+    <div style="margin:24px 0;">
+      <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:0.1em;">You Earned a Badge</p>
+      <img src="${badgeImageUrl}" alt="${esc(badgeName)}" width="96" height="96" style="display:block;width:96px;height:96px;object-fit:contain;margin-bottom:8px;" />
+      <p style="margin:0 0 12px;font-size:18px;font-weight:900;color:#111827;">${esc(badgeName)}</p>
+      <a href="${badgesUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:10px 24px;border-radius:0;text-decoration:none;font-weight:800;font-size:13px;">View in Your Profile</a>
     </div>
   `;
 }

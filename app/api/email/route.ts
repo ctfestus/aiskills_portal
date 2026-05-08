@@ -225,7 +225,7 @@ export async function POST(req: NextRequest) {
 
       const [[{ data: courseRow }, { data: veRow }], { data: cert }] = await Promise.all([
         Promise.all([
-          supabase.from('courses').select('title, slug, questions, learn_outcomes, cover_image, badge_image_url').eq('id', data.formId).maybeSingle(),
+          supabase.from('courses').select('title, slug, questions, learn_outcomes, cover_image').eq('id', data.formId).maybeSingle(),
           supabase.from('virtual_experiences').select('title, slug, tagline').eq('id', data.formId).maybeSingle(),
         ]),
         supabase.from('certificates').select('id').eq('response_id', data.responseId).eq('revoked', false).maybeSingle(),
@@ -297,8 +297,6 @@ export async function POST(req: NextRequest) {
         percentage:  response?.data?.percentage  ?? 0,
         passed,
         points:      response?.data?.points,
-        badgeName:     passed && courseRow?.badge_image_url ? `${courseRow.title} Badge` : undefined,
-        badgeImageUrl: passed && courseRow?.badge_image_url ? courseRow.badge_image_url : undefined,
         passmark:    form?.config?.passmark       ?? 50,
         formUrl,
         certUrl,

@@ -18,18 +18,26 @@ export async function GET(
 
   const { data: cert, error } = await anonSupabase
     .from('certificates')
-    .select('id, student_name, issued_at, revoked, course_id, ve_id, learning_path_id')
+    .select('id, student_name, issued_at, revoked, course_id, ve_id, learning_path_id, student_id')
     .eq('id', id)
     .single();
 
   if (error || !cert) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   if (cert.revoked)   return NextResponse.json({ revoked: true }, { status: 200 });
 
+  const { data: studentRow } = await anonSupabase
+    .from('students')
+    .select('avatar_url, username')
+    .eq('id', cert.student_id)
+    .maybeSingle();
+  const studentAvatarUrl = studentRow?.avatar_url ?? null;
+  const studentUsername  = studentRow?.username   ?? null;
+
   // VE certificate
   if (cert.ve_id) {
     const { data: ve } = await anonSupabase
       .from('virtual_experiences')
-      .select('title, user_id')
+      .select('title, user_id, badge_image_url')
       .eq('id', cert.ve_id)
       .single();
 
@@ -57,14 +65,17 @@ export async function GET(
     } : null;
 
     return NextResponse.json({
-      certId:      cert.id,
-      studentName: cert.student_name,
-      courseName:  ve?.title ?? 'Virtual Experience',
-      issueDate:   new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-      issuedAt:    cert.issued_at,
-      certType:    'virtual_experience',
+      certId:           cert.id,
+      studentName:      cert.student_name,
+      studentAvatarUrl,
+      studentUsername,
+      courseName:       ve?.title ?? 'Virtual Experience',
+      issueDate:        new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+      issuedAt:         cert.issued_at,
+      certType:         'virtual_experience',
+      badgeImageUrl:    ve?.badge_image_url ?? null,
       settings,
-      revoked:     false,
+      revoked:          false,
     });
   }
 
@@ -72,7 +83,7 @@ export async function GET(
   if (!cert.course_id && cert.learning_path_id) {
     const { data: path } = await anonSupabase
       .from('learning_paths')
-      .select('title, instructor_id, item_ids, cover_image')
+      .select('title, instructor_id, item_ids, cover_image, badge_image_url')
       .eq('id', cert.learning_path_id)
       .single();
 
@@ -118,23 +129,26 @@ export async function GET(
     } : null;
 
     return NextResponse.json({
-      certId:          cert.id,
-      studentName:     cert.student_name,
-      courseName:      path?.title ?? 'Learning Path',
-      issueDate:       new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-      issuedAt:        cert.issued_at,
-      certType:        'learning_path',
+      certId:           cert.id,
+      studentName:      cert.student_name,
+      studentAvatarUrl,
+      studentUsername,
+      courseName:       path?.title ?? 'Learning Path',
+      issueDate:        new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+      issuedAt:         cert.issued_at,
+      certType:         'learning_path',
+      badgeImageUrl:    (path as any)?.badge_image_url ?? null,
       pathItems,
-      pathCoverImage:  (path as any)?.cover_image ?? null,
+      pathCoverImage:   (path as any)?.cover_image ?? null,
       settings,
-      revoked:         false,
+      revoked:          false,
     });
   }
 
   // Course certificate
   const { data: content } = await anonSupabase
     .from('courses')
-    .select('title, user_id')
+    .select('title, user_id, badge_image_url')
     .eq('id', cert.course_id)
     .maybeSingle();
 
@@ -164,13 +178,16 @@ export async function GET(
     : null;
 
   return NextResponse.json({
-    certId:      cert.id,
-    studentName: cert.student_name,
-    courseName:  content?.title || 'Course',
-    issueDate:   new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-    issuedAt:    cert.issued_at,
-    certType:    'course',
+    certId:           cert.id,
+    studentName:      cert.student_name,
+    studentAvatarUrl,
+    studentUsername,
+    courseName:       content?.title || 'Course',
+    issueDate:        new Date(cert.issued_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    issuedAt:         cert.issued_at,
+    certType:         'course',
+    badgeImageUrl:    content?.badge_image_url ?? null,
     settings,
-    revoked:     false,
+    revoked:          false,
   });
 }

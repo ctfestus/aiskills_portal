@@ -512,21 +512,17 @@ export function CourseTaker({
       });
       const d = await res.json();
 
-      if (maxAttempts > 0 && d.attemptCount >= maxAttempts) {
-        setAttemptError(
-          `You have used all ${maxAttempts} attempt${maxAttempts > 1 ? 's' : ''} for this course.`
-        );
-        setCheckingAttempts(false);
-        setPhase('info');
-        return;
-      }
-
+      // Review check comes first -- a student who passed must always be able to review,
+      // even if they have since used all their remaining attempts.
       if (d.cert?.id || d.hasPassed) {
         // Already passed -- enter review mode: no saves, no XP, no new attempt.
         // Restore the passing attempt's state so previously completed lessons and answers remain visible.
         const prev = d.passingAttempt;
-        if (prev) {
-          const prevIdx = prev.current_question_index ?? 0;
+        if (prev && questions.length > 0) {
+          // Clamp to a valid slide index -- complete-attempt stores totalQuestions which can
+          // equal totalSlides on pure-quiz courses, causing currentQuestion to be undefined.
+          const storedIndex = prev.current_question_index ?? 0;
+          const prevIdx = Math.max(0, Math.min(storedIndex, questions.length - 1));
           maxIdxRef.current = prevIdx;
           setCurrentQuestionIndex(prevIdx);
           // Fill in 'viewed' for any lessonOnly/isDownloads slides missing from the
@@ -548,6 +544,15 @@ export function CourseTaker({
         setReviewMode(true);
         setCheckingAttempts(false);
         setPhase('course');
+        return;
+      }
+
+      if (maxAttempts > 0 && d.attemptCount >= maxAttempts) {
+        setAttemptError(
+          `You have used all ${maxAttempts} attempt${maxAttempts > 1 ? 's' : ''} for this course.`
+        );
+        setCheckingAttempts(false);
+        setPhase('info');
         return;
       }
 
@@ -682,6 +687,8 @@ export function CourseTaker({
     const scorePct = totalQuestions > 0 ? Math.round((Math.min(finalScore, totalQuestions) / totalQuestions) * 100) : 100;
     const passed   = totalQuestions === 0 ? true : scorePct >= passmark;
     const { data: { session } } = await supabase.auth.getSession();
+    // Pass the final answers so complete-attempt writes them atomically with completed_at,
+    // avoiding a race where save-progress loses the last lessonOnly 'viewed' entry.
     await fetch('/api/course', {
       method: 'POST',
       headers: {
@@ -695,6 +702,7 @@ export function CourseTaker({
         passed,
         points:                 totalPoints,
         current_question_index: totalQuestions,
+        final_answers:          answersRef.current,
       }),
     }).catch(err => console.error('[clearProgress] failed:', err));
   }, [formId, studentEmail, totalQuestions, passmark, totalPoints, reviewMode]);

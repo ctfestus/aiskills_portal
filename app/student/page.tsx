@@ -3590,13 +3590,23 @@ function StudentBadgesSection({ userId, C }: { userId: string; C: typeof LIGHT_C
   const totalEarned = earnedIds.size;
   const totalBadges = allBadges.length;
 
-  const handleDownload = (b: typeof allBadges[0]) => {
-    const url = b.image_url!.includes('/upload/')
-      ? b.image_url!.replace('/upload/', '/upload/fl_attachment/')
-      : b.image_url!;
-    const a = document.createElement('a');
-    a.href = url; a.download = `${b.id}-badge`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  const handleDownload = async (b: typeof allBadges[0]) => {
+    const safeName = `${(b.name ?? b.id).replace(/[^a-zA-Z0-9\s-]/g, '').trim().replace(/\s+/g, '-')}-badge`;
+    const ext = b.image_url?.split('.').pop()?.split('?')[0] ?? 'png';
+    const filename = `${safeName}.${ext}`;
+    try {
+      const res = await fetch(b.image_url!);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      const a = document.createElement('a');
+      a.href = b.image_url!; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
   };
 
   if (loading) return (

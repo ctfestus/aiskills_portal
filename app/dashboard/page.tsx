@@ -4542,8 +4542,13 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
     if (!file.type.startsWith('image/')) return;
     setUploadingBadge(true);
     try {
-      const url = await uploadToCloudinary(file, 'badges');
-      setEditing((p: any) => ({ ...p, badge_image_url: url }));
+      const { data: { session } } = await supabase.auth.getSession();
+      const ext  = file.name.split('.').pop() ?? 'png';
+      const path = `badges/${session?.user.id ?? 'anon'}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
+      setEditing((p: any) => ({ ...p, badge_image_url: publicUrl }));
     } catch { /* ignore */ }
     setUploadingBadge(false);
   };
