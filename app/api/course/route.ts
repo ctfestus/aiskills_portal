@@ -3,7 +3,6 @@ import { createClient } from '@supabase/supabase-js';
 import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
 import { getRedis, leaderboardKey, studentNameKey } from '@/lib/redis';
 import { publishActivity } from '@/lib/activity';
-import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { updateLearningPathProgress } from '@/lib/learning-path-progress';
 
 function adminClient() {
@@ -300,6 +299,30 @@ export async function POST(req: NextRequest) {
       if (error) { console.error('[course/issue-certificate]', error); return NextResponse.json({ error: 'Failed to issue certificate.' }, { status: 500 }); }
 
       await updateLearningPathProgress(supabase, sessionUser.id, course_id);
+
+      // Award course badge (fire-and-forget) -- badge block is included in the course-result email
+      (async () => {
+        try {
+          const { data: courseRow } = await supabase.from('courses').select('title, badge_image_url').eq('id', course_id).single();
+          if (!courseRow?.badge_image_url) return;
+          const badgeId = `crs_${course_id}`;
+          await supabase.from('badges').upsert({
+            id:          badgeId,
+            name:        `${courseRow.title} Badge`,
+            description: `Awarded for completing ${courseRow.title}`,
+            icon:        'graduated',
+            color:       '#6366f1',
+            image_url:   courseRow.badge_image_url,
+            category:    'course',
+          }, { onConflict: 'id' });
+          await supabase.from('student_badges').upsert({
+            student_id: sessionUser.id,
+            badge_id:   badgeId,
+          }, { onConflict: 'student_id,badge_id', ignoreDuplicates: true });
+        } catch (badgeErr) {
+          console.error('[course/issue-certificate] badge award failed', badgeErr);
+        }
+      })();
 
       return NextResponse.json({ certId: cert.id });
     } catch (err: any) {

@@ -169,6 +169,8 @@ export async function updateLearningPathProgress(
         const { data: studentRow } = await supabase.from('students').select('full_name, email').eq('id', studentId).single();
         const studentName = studentRow?.full_name ?? 'Student';
 
+        const { data: pathMeta } = await supabase.from('learning_paths').select('badge_image_url').eq('id', path.id).single();
+
         const { data: pathCert } = await supabase.from('certificates').insert({
           course_id:        null,
           learning_path_id: path.id,
@@ -180,6 +182,29 @@ export async function updateLearningPathProgress(
           await supabase.from('learning_path_progress')
             .update({ cert_id: pathCert.id })
             .eq('id', upserted.id);
+
+          let lpBadgeName: string | undefined;
+          if (pathMeta?.badge_image_url) {
+            try {
+              const badgeId = `lp_${path.id}`;
+              await supabase.from('badges').upsert({
+                id:          badgeId,
+                name:        `${path.title} Badge`,
+                description: `Awarded for completing ${path.title}`,
+                icon:        'map',
+                color:       '#6366f1',
+                image_url:   pathMeta.badge_image_url,
+                category:    'learning_path',
+              }, { onConflict: 'id' });
+              await supabase.from('student_badges').upsert({
+                student_id: studentId,
+                badge_id:   badgeId,
+              }, { onConflict: 'student_id,badge_id', ignoreDuplicates: true });
+              lpBadgeName = `${path.title} Badge`;
+            } catch (badgeErr) {
+              console.error('[updateLearningPathProgress] badge award failed', badgeErr);
+            }
+          }
 
           if (studentRow?.email) {
             try {
@@ -216,11 +241,13 @@ export async function updateLearningPathProgress(
                 to:   studentRow.email,
                 subject: `Your Learning Path Certificate is ready: ${fullPath?.title ?? path.title}`,
                 html: learningPathCertificateEmail({
-                  name:      studentName,
-                  pathTitle: fullPath?.title ?? path.title,
+                  name:          studentName,
+                  pathTitle:     fullPath?.title ?? path.title,
                   certUrl,
                   items,
                   branding,
+                  badgeName:     lpBadgeName,
+                  badgeImageUrl: pathMeta?.badge_image_url ?? undefined,
                 }),
               });
             } catch (emailErr) {

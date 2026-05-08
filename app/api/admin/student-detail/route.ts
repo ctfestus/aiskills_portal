@@ -46,7 +46,14 @@ export async function GET(req: NextRequest) {
   ]);
 
   const certSet = new Set((certificates ?? []).map((c: any) => c.form_id ?? c.course_id));
-  const attemptMap = Object.fromEntries((courseAttempts ?? []).map((a: any) => [a.course_id, a]));
+  const attemptMap = (courseAttempts ?? []).reduce((map: Record<string, any>, a: any) => {
+    const ex = map[a.course_id];
+    if (!ex) { map[a.course_id] = a; return map; }
+    if (a.passed && a.completed_at && !ex.completed_at) { map[a.course_id] = a; return map; }
+    if (ex.passed && ex.completed_at && !a.completed_at) return map;
+    if (a.completed_at && (a.score ?? 0) > (ex.score ?? 0)) map[a.course_id] = a;
+    return map;
+  }, {} as Record<string, any>);
   const submMap    = Object.fromEntries((submissions ?? []).map((s: any) => [s.assignment_id, s]));
   const gpMap      = Object.fromEntries((gpAttempts ?? []).map((a: any) => [a.ve_id, a]));
 

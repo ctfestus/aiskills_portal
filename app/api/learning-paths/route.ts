@@ -53,13 +53,14 @@ export async function POST(req: NextRequest) {
     const user = await getSessionUser(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { title, description, cover_image, item_ids, cohort_ids, status, next_path_id } = body;
+    const { title, description, cover_image, badge_image_url, item_ids, cohort_ids, status, next_path_id } = body;
     if (!title?.trim()) return NextResponse.json({ error: 'title is required' }, { status: 400 });
 
     const { data, error } = await supabase.from('learning_paths').insert({
       title: title.trim(),
       description: description ?? null,
       cover_image: cover_image ?? null,
+      badge_image_url: badge_image_url ?? null,
       instructor_id: user.id,
       item_ids: item_ids ?? [],
       cohort_ids: cohort_ids ?? [],
@@ -82,20 +83,21 @@ export async function POST(req: NextRequest) {
     const user = await getSessionUser(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { id, title, description, cover_image, item_ids, cohort_ids, status, next_path_id } = body;
+    const { id, title, description, cover_image, badge_image_url, item_ids, cohort_ids, status, next_path_id } = body;
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
 
     // Fetch previous state to detect newly published or newly added cohorts
     const { data: prev } = await supabase.from('learning_paths').select('status, cohort_ids').eq('id', id).single();
 
     const updateData: any = { updated_at: new Date().toISOString() };
-    if (title        !== undefined) updateData.title        = title.trim();
-    if (description  !== undefined) updateData.description  = description;
-    if (cover_image  !== undefined) updateData.cover_image  = cover_image;
-    if (item_ids     !== undefined) updateData.item_ids     = item_ids;
-    if (cohort_ids   !== undefined) updateData.cohort_ids   = cohort_ids;
-    if (status       !== undefined) updateData.status       = status;
-    if (next_path_id !== undefined) updateData.next_path_id = next_path_id ?? null;
+    if (title           !== undefined) updateData.title           = title.trim();
+    if (description     !== undefined) updateData.description     = description;
+    if (cover_image     !== undefined) updateData.cover_image     = cover_image;
+    if (badge_image_url !== undefined) updateData.badge_image_url = badge_image_url ?? null;
+    if (item_ids        !== undefined) updateData.item_ids        = item_ids;
+    if (cohort_ids      !== undefined) updateData.cohort_ids      = cohort_ids;
+    if (status          !== undefined) updateData.status          = status;
+    if (next_path_id    !== undefined) updateData.next_path_id    = next_path_id ?? null;
 
     const { error } = await supabase.from('learning_paths')
       .update(updateData)

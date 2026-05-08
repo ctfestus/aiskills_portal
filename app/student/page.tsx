@@ -13,6 +13,7 @@ import {
   ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase, Search, LayoutDashboard,
   Copy, Check, Layers, Repeat, Film,
   CreditCard, XCircle, Send, Wallet, TrendingDown, CalendarCheck,
+  Lock, Flame, Medal, Download,
 } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -193,7 +194,7 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
 
 // --- Nav items ---
 const NAV_ITEMS = [
-  { id: 'overview',          label: 'Overview',            Icon: LayoutDashboard },
+  { id: 'overview',          label: 'Dashboard',           Icon: LayoutDashboard },
   { id: 'courses',           label: 'My Courses',          Icon: Film            },
   { id: 'learning_paths',    label: 'Learning Paths',      Icon: Layers          },
   { id: 'virtual_experiences', label: 'Virtual Experiences', Icon: Briefcase     },
@@ -205,6 +206,7 @@ const NAV_ITEMS = [
   { id: 'recordings',       label: 'Recordings',          Icon: Video           },
   { id: 'leaderboard',       label: 'Leaderboard',         Icon: Trophy          },
   { id: 'certificates',      label: 'Certificates',        Icon: Award           },
+  { id: 'badges',            label: 'Badges',              Icon: Medal           },
   { id: 'payments',          label: 'Payments',            Icon: CreditCard      },
 ] as const;
 type SectionId = typeof NAV_ITEMS[number]['id'];
@@ -213,7 +215,7 @@ const NAV_GROUPS: { label: string; items: SectionId[] }[] = [
   { label: 'Learn',       items: ['overview', 'courses', 'learning_paths', 'virtual_experiences'] },
   { label: 'Activities',  items: ['events', 'assignments', 'schedule', 'recordings'] },
   { label: 'Community',   items: ['community', 'announcements'] },
-  { label: 'Achievements', items: ['leaderboard', 'certificates'] },
+  { label: 'Achievements', items: ['leaderboard', 'certificates', 'badges'] },
   { label: 'Account',     items: ['payments'] },
 ];
 
@@ -644,27 +646,37 @@ function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
                 {(path.items ?? []).map((item: any, idx: number) => {
                   const done      = completedIds.includes(item.id);
                   const isCurrent = !done && (idx === 0 || completedIds.includes((path.items[idx - 1] as any)?.id));
+                  const isLocked  = !done && !isCurrent;
                   const isVE = item.content_type === 'virtual_experience' || item.content_type === 'guided_project' || item.config?.isVirtualExperience || item.config?.isGuidedProject;
                   const href = isVE ? `/student?section=virtual_experiences` : `/${item.slug || item.id}`;
                   return (
                     <div key={item.id} className="flex items-center gap-3 px-4 py-3 border-t first:border-t-0"
-                      style={{ borderColor: C.cardBorder, background: isCurrent ? `${C.green}09` : 'transparent' }}>
+                      style={{ borderColor: C.cardBorder, background: isCurrent ? `${C.green}09` : 'transparent', opacity: isLocked ? 0.55 : 1 }}>
                       <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
                         style={{ background: done ? '#16a34a' : isCurrent ? C.green : C.cardBorder }}>
                         {done
                           ? <CheckCircle className="w-3.5 h-3.5 text-white"/>
-                          : <span className="text-[10px] font-bold" style={{ color: isCurrent ? '#fff' : C.faint }}>{idx + 1}</span>}
+                          : isLocked
+                            ? <Lock className="w-3 h-3" style={{ color: C.faint }}/>
+                            : <span className="text-[10px] font-bold" style={{ color: isCurrent ? '#fff' : C.faint }}>{idx + 1}</span>}
                       </div>
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
                         style={{ background: isVE ? '#6366f120' : '#3b82f620', color: isVE ? '#6366f1' : '#3b82f6' }}>
                         {isVE ? 'VE' : 'Course'}
                       </span>
                       <span className="text-sm flex-1 truncate" style={{ color: C.text }}>{item.title}</span>
-                      <a href={href} target="_blank" rel="noreferrer"
-                        className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80 flex-shrink-0"
-                        style={{ background: done ? C.pill : C.cta, color: done ? C.muted : C.ctaText }}>
-                        <Play className="w-3 h-3 inline mr-1"/>{done ? 'Review' : 'Start'}
-                      </a>
+                      {isLocked ? (
+                        <span className="text-[11px] font-medium px-3 py-1.5 rounded-lg flex-shrink-0 flex items-center gap-1"
+                          style={{ background: C.pill, color: C.faint }}>
+                          <Lock className="w-3 h-3"/> Locked
+                        </span>
+                      ) : (
+                        <a href={href} target="_blank" rel="noreferrer"
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80 flex-shrink-0"
+                          style={{ background: done ? C.pill : C.cta, color: done ? C.muted : C.ctaText }}>
+                          <Play className="w-3 h-3 inline mr-1"/>{done ? 'Review' : 'Start'}
+                        </a>
+                      )}
                     </div>
                   );
                 })}
@@ -774,14 +786,21 @@ function CoursesSection({ userEmail, userId: userIdProp, C, isOutstandingProp }:
       });
       const cohortCourses = (cohortCourseRows ?? []).map(normalizeCourse);
 
-      // Deduplicate: one row per course -- prefer active (in-progress) over completed; highest score among completed
-      // Attempts are ordered newest-first, so ex is always newer than a when ex exists.
+      // Deduplicate: one row per course.
+      // A passed+completed attempt always wins over in-progress (student retaking a passed course).
+      // Among completed, prefer higher score. For failed courses, prefer in-progress (retake flow).
       const progressMap: Record<string, any> = {};
       for (const a of attempts ?? []) {
         const ex = progressMap[a.course_id];
         if (!ex) { progressMap[a.course_id] = a; continue; }
+        // a is passed+completed and ex is in-progress -- elevate the passing attempt
+        if (a.passed && a.completed_at && !ex.completed_at) { progressMap[a.course_id] = a; continue; }
+        // ex is already passed+completed -- never overwrite with an in-progress attempt
+        if (ex.passed && ex.completed_at && !a.completed_at) continue;
+        // Prefer in-progress over a not-yet-passed completed attempt (student is retaking)
         if (!a.completed_at && ex.completed_at) { progressMap[a.course_id] = a; continue; }
-        if (ex.completed_at && a.score > ex.score) progressMap[a.course_id] = a;
+        // Among completed, prefer higher score
+        if (ex.completed_at && a.completed_at && a.score > ex.score) progressMap[a.course_id] = a;
       }
 
       // Merge: cohort courses + any extra courses the student has attempted
@@ -1398,6 +1417,11 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
       setLinks(['']);
       if (!asDraft) {
         setSubmitSuccess(true);
+        fetch('/api/assignments/submit-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignment_id: assignment.id }),
+        }).catch(() => {});
         setTimeout(() => onBack(), 2500);
       }
     } catch (err: any) {
@@ -3529,6 +3553,175 @@ function ScheduleSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   );
 }
 
+// --- Student Badges section ---
+const BADGE_TABS = [
+  { id: 'achievement',       label: 'Achievements'       },
+  { id: 'course',            label: 'Courses'            },
+  { id: 'learning_path',     label: 'Learning Paths'     },
+  { id: 'virtual_experience',label: 'Virtual Experiences'},
+] as const;
+type BadgeTabId = typeof BADGE_TABS[number]['id'];
+
+function StudentBadgesSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
+  const { appName, appUrl } = useTenant();
+  const [tab, setTab]               = useState<BadgeTabId>('achievement');
+  const [liOpen, setLiOpen]         = useState<string | null>(null);
+  const [allBadges, setAllBadges]   = useState<{ id: string; name: string; description: string; icon: string; color: string; image_url: string | null; category: string }[]>([]);
+  const [earnedIds, setEarnedIds]   = useState<Set<string>>(new Set());
+  const [streak, setStreak]         = useState<{ current_streak: number; longest_streak: number } | null>(null);
+  const [loading, setLoading]       = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const [badgesRes, earnedRes, streakRes] = await Promise.all([
+        supabase.from('badges').select('id, name, description, icon, color, image_url, category').order('id'),
+        supabase.from('student_badges').select('badge_id').eq('student_id', userId),
+        supabase.from('student_streaks').select('current_streak, longest_streak').eq('student_id', userId).maybeSingle(),
+      ]);
+      setAllBadges(badgesRes.data ?? []);
+      setEarnedIds(new Set((earnedRes.data ?? []).map((b: any) => b.badge_id)));
+      const s = streakRes.data;
+      setStreak(s ? { current_streak: s.current_streak, longest_streak: s.longest_streak } : null);
+      setLoading(false);
+    })();
+  }, [userId]);
+
+  const tabBadges = allBadges.filter(b => (b.category ?? 'achievement') === tab);
+  const totalEarned = earnedIds.size;
+  const totalBadges = allBadges.length;
+
+  const handleDownload = (b: typeof allBadges[0]) => {
+    const url = b.image_url!.includes('/upload/')
+      ? b.image_url!.replace('/upload/', '/upload/fl_attachment/')
+      : b.image_url!;
+    const a = document.createElement('a');
+    a.href = url; a.download = `${b.id}-badge`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
+
+  if (loading) return (
+    <div className="space-y-4 p-2">
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+        {[...Array(8)].map((_, i) => <div key={i} className="rounded-2xl h-40 animate-pulse" style={{ background: C.skeleton }}/>)}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Header row */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <p className="text-sm" style={{ color: C.muted }}>{totalEarned} of {totalBadges} earned</p>
+        {streak && streak.current_streak > 0 && (
+          <div className="flex items-center gap-2 px-4 py-2 rounded-xl"
+            style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.18)' }}>
+            <span className="text-xl leading-none">🔥</span>
+            <div>
+              <p className="text-sm font-bold leading-none" style={{ color: '#f97316' }}>{streak.current_streak}-day streak</p>
+              <p className="text-[11px]" style={{ color: C.faint }}>Best: {streak.longest_streak} days</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 p-1.5 rounded-2xl w-fit" style={{ background: C.pill }}>
+        {BADGE_TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className="px-5 py-3 rounded-xl text-sm font-semibold transition-all"
+            style={{
+              background:  tab === t.id ? C.card : 'transparent',
+              color:       tab === t.id ? C.text : C.faint,
+              boxShadow:   tab === t.id ? C.cardShadow : 'none',
+              fontFamily:  'var(--font-lato)',
+            }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Badge grid */}
+      {tabBadges.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center rounded-2xl"
+          style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <Medal className="w-10 h-10 mb-3" style={{ color: C.faint, opacity: 0.4 }}/>
+          <p className="text-sm font-semibold" style={{ color: C.text }}>No badges in this category yet</p>
+          <p className="text-xs mt-1" style={{ color: C.faint }}>Check back when new badges are added.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {tabBadges.map(b => {
+            const earned = earnedIds.has(b.id);
+            const now = new Date();
+            const certUrl = b.image_url ?? appUrl ?? '';
+            const liCertUrl = `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(b.name)}&organizationName=${encodeURIComponent(appName ?? '')}&issueYear=${now.getFullYear()}&issueMonth=${now.getMonth() + 1}&certUrl=${encodeURIComponent(certUrl)}&certId=${encodeURIComponent(b.id)}`;
+            const liPostUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(certUrl)}&title=${encodeURIComponent(`I earned the ${b.name} badge on ${appName ?? 'my learning platform'}!`)}&summary=${encodeURIComponent(b.description)}`;
+            return (
+              <div key={b.id}
+                className="flex flex-col items-center gap-3 px-5 pt-8 pb-6 rounded-2xl text-center"
+                style={{ background: C.card, opacity: earned ? 1 : 0.45 }}>
+                {/* Badge image */}
+                <div className="w-28 h-28 flex items-center justify-center flex-shrink-0">
+                  {earned && b.image_url
+                    ? <img src={b.image_url} alt={b.name} className="w-28 h-28 object-contain drop-shadow-md"/>
+                    : earned
+                      ? <span className="text-6xl leading-none">{b.icon}</span>
+                      : <div className="w-28 h-28 rounded-full flex items-center justify-center" style={{ background: C.pill }}>
+                          <Lock className="w-9 h-9" style={{ color: C.faint }}/>
+                        </div>
+                  }
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <p className="text-[17px] font-bold leading-tight" style={{ color: C.text, fontFamily: 'var(--font-lato)' }}>{b.name}</p>
+                  <p className="text-sm leading-snug" style={{ color: C.muted, fontFamily: 'var(--font-lato)' }}>{b.description}</p>
+                </div>
+                {/* Actions -- earned only, right-aligned */}
+                {earned && (
+                  <div className="flex items-center justify-end gap-2 w-full mt-2">
+                    {b.image_url && (
+                      <button onClick={() => handleDownload(b)} title="Download badge"
+                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-opacity hover:opacity-70"
+                        style={{ background: C.pill, color: C.muted }}>
+                        <Download className="w-3.5 h-3.5"/>
+                      </button>
+                    )}
+                    <div className="relative">
+                      <button onClick={() => setLiOpen(liOpen === b.id ? null : b.id)} title="Share on LinkedIn"
+                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-opacity hover:opacity-80"
+                        style={{ background: '#0A66C2', color: '#fff' }}>
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                      </button>
+                      {liOpen === b.id && (
+                        <div className="absolute bottom-10 right-0 z-20 w-48 rounded-xl overflow-hidden shadow-lg"
+                          style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                          <a href={liCertUrl} target="_blank" rel="noreferrer"
+                            onClick={() => setLiOpen(null)}
+                            className="flex items-center gap-2.5 px-4 py-3 text-xs font-semibold hover:opacity-70 transition-opacity"
+                            style={{ color: C.text, borderBottom: `1px solid ${C.divider}` }}>
+                            <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4 flex-shrink-0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                            Add to Certifications
+                          </a>
+                          <a href={liPostUrl} target="_blank" rel="noreferrer"
+                            onClick={() => setLiOpen(null)}
+                            className="flex items-center gap-2.5 px-4 py-3 text-xs font-semibold hover:opacity-70 transition-opacity"
+                            style={{ color: C.text }}>
+                            <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4 flex-shrink-0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                            Share as Post
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // --- Leaderboard section ---
 function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIGHT_C }) {
   const [cohort, setCohort]     = useState<any>(null);
@@ -4007,9 +4200,10 @@ function ShareProfileCard({ username, C }: { username?: string; C: typeof LIGHT_
 }
 
 // --- Overview section ---
-function OverviewSection({ user, userEmail, username, C, onNavigate }: {
-  user: any; userEmail: string; username?: string; C: typeof LIGHT_C; onNavigate: (id: SectionId) => void;
+function OverviewSection({ user, userEmail, username, profile, C, onNavigate }: {
+  user: any; userEmail: string; username?: string; profile?: any; C: typeof LIGHT_C; onNavigate: (id: SectionId) => void;
 }) {
+  const { emailBannerUrl } = useTenant();
   const [loading, setLoading]               = useState(true);
   const [courses, setCourses]               = useState<any[]>([]);
   const [courseAttempts, setCourseAttempts] = useState<Record<string, any>>({});
@@ -4023,6 +4217,10 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
   const [assignmentStats, setAssignmentStats] = useState<{ total: number; submitted: number; graded: number } | null>(null);
   const [assignmentItems, setAssignmentItems] = useState<any[]>([]);
   const [refreshKey, setRefreshKey]           = useState(0);
+  const [allBadges, setAllBadges]             = useState<{ id: string; name: string; description: string; icon: string; color: string; image_url: string | null }[]>([]);
+  const [earnedBadgeIds, setEarnedBadgeIds]   = useState<Set<string>>(new Set());
+  const [streak, setStreak]                   = useState<{ current_streak: number; longest_streak: number } | null>(null);
+  const [studentInfo, setStudentInfo]         = useState<{ full_name: string | null; avatar_url: string | null; username: string | null }>({ full_name: null, avatar_url: null, username: null });
 
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === 'visible') setRefreshKey(k => k + 1); };
@@ -4038,10 +4236,11 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
       const token = session?.access_token ?? '';
 
       const { data: student } = await supabase
-        .from('students').select('cohort_id').eq('id', user.id).single();
+        .from('students').select('cohort_id, full_name, avatar_url, username').eq('id', user.id).single();
       const cohort = student?.cohort_id ?? null;
+      setStudentInfo({ full_name: student?.full_name ?? null, avatar_url: student?.avatar_url ?? null, username: student?.username ?? null });
 
-      const [courseRes, veRes, attemptsRes, gpAttRes, cohortAssignCrsRes, cohortAssignVeRes, certsData, lbData, actData, gapsData, assignmentsRes, asmSubsRes] =
+      const [courseRes, veRes, attemptsRes, gpAttRes, cohortAssignCrsRes, cohortAssignVeRes, certsData, lbData, actData, gapsData, assignmentsRes, asmSubsRes, allBadgesRes, earnedBadgesRes, streakRes] =
         await Promise.all([
           cohort
             ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes').contains('cohort_ids', [cohort]).eq('status', 'published')
@@ -4088,6 +4287,15 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
           supabase.from('assignment_submissions')
             .select('assignment_id, status')
             .eq('student_id', user.id),
+          // All badge definitions (public)
+          supabase.from('badges').select('id, name, description, icon, color, image_url').order('id'),
+          // Earned badge IDs for this student
+          supabase.from('student_badges').select('badge_id').eq('student_id', user.id),
+          // Streak
+          supabase.from('student_streaks')
+            .select('current_streak, longest_streak')
+            .eq('student_id', user.id)
+            .maybeSingle(),
         ]);
 
       if (cancelled) return;
@@ -4164,6 +4372,15 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
 
       // Store assignments in state so deadlines panel can render them
       setAssignmentItems(asmRows.map((a: any) => ({ ...a, _subStatus: subMap.get(a.id) ?? null })));
+
+      // Badges
+      setAllBadges((allBadgesRes as any)?.data ?? []);
+      setEarnedBadgeIds(new Set(((earnedBadgesRes as any)?.data ?? []).map((b: any) => b.badge_id)));
+
+      // Streak
+      const streakData = (streakRes as any)?.data;
+      setStreak(streakData ? { current_streak: streakData.current_streak, longest_streak: streakData.longest_streak } : null);
+
       setLoading(false);
     };
     load();
@@ -4265,23 +4482,17 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
     </div>
   );
 
+  // Profile display values -- students table is the source of truth (settings page writes there)
+  const profileName     = studentInfo.full_name || profile?.name || profile?.full_name || userEmail?.split('@')[0] || 'Student';
+  const profileAvatar   = studentInfo.avatar_url || profile?.avatar_url || null;
+  const profileUsername = studentInfo.username || username || null;
+  const profileInitials = profileName.slice(0, 2).toUpperCase();
+  const profileUrl      = profileUsername ? `${typeof window !== 'undefined' ? window.location.origin : ''}/s/${profileUsername}` : '';
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 lg:space-y-6">
 
-      {/* Greeting */}
-      <div>
-        <h1 className="text-2xl font-black" style={{ color: C.text }}>Welcome back 👋</h1>
-        <p className="text-sm mt-1" style={{ color: C.muted }}>
-          {inProgressCount > 0
-            ? `You have ${inProgressCount} item${inProgressCount !== 1 ? 's' : ''} in progress.`
-            : courses.length > 0 ? 'Ready to continue learning today?' : 'Your learning journey starts here.'}
-        </p>
-      </div>
-
-      {/* Share Profile card */}
-      <ShareProfileCard username={username} C={C}/>
-
-      {/* Pick up where you left off -- most recently accessed, not completed */}
+      {/* Pick up where you left off */}
       {continueLearning[0] && (() => {
         const { form, attempt, isProject } = continueLearning[0];
         const dl       = deadlines[form.id] ?? null;
@@ -4299,43 +4510,45 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
         const href     = `/${form.slug || form.id}`;
 
         return (
-          <div className="rounded-2xl overflow-hidden"
-            style={{ background: C.card }}>
-            <div className="flex items-center gap-4 p-4">
-              {/* Cover image -- fixed small thumbnail */}
-              <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 relative"
-                style={{ background: C.thumbBg }}>
-                {form.config?.coverImage
-                  ? <img src={form.config.coverImage} alt="" className="w-full h-full object-cover"/>
-                  : <div className="w-full h-full flex items-center justify-center">
-                      {isProject
-                        ? <Briefcase className="w-6 h-6 opacity-30" style={{ color: C.green }}/>
-                        : <BookOpen  className="w-6 h-6 opacity-30" style={{ color: C.green }}/>}
-                    </div>
-                }
-              </div>
-              {/* Content */}
-              <div className="flex-1 min-w-0 space-y-2">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>Pick up where you left off</p>
-                  <p className="text-sm font-bold leading-snug truncate" style={{ color: C.text }}>{form.title}</p>
-                  {dlLabel && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mt-1"
-                      style={{ background: `${dlColor ?? '#6b7280'}18`, color: dlColor ?? '#6b7280' }}>
-                      ⏰ {dlLabel}
-                    </span>
-                  )}
+          <div className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
+            {/* On mobile: thumbnail+content row, then full-width CTA below */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                {/* Thumbnail */}
+                <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 relative"
+                  style={{ background: isProject ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'linear-gradient(135deg,#0e09dd,#3b82f6)' }}>
+                  {form.config?.coverImage
+                    ? <img src={form.config.coverImage} alt="" className="w-full h-full object-cover"/>
+                    : <div className="w-full h-full flex items-center justify-center">
+                        {isProject
+                          ? <Briefcase className="w-6 h-6" style={{ color: 'rgba(255,255,255,0.9)' }}/>
+                          : <BookOpen  className="w-6 h-6" style={{ color: 'rgba(255,255,255,0.9)' }}/>}
+                      </div>
+                  }
                 </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11px]" style={{ color: C.faint }}>
-                    <span>{pct}%</span><span>{done}/{totalQ}</span>
+                {/* Content */}
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>Pick up where you left off</p>
+                    <p className="text-sm font-bold leading-snug truncate" style={{ color: C.text }}>{form.title}</p>
+                    {dlLabel && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mt-1"
+                        style={{ background: `${dlColor ?? '#6b7280'}18`, color: dlColor ?? '#6b7280' }}>
+                        {dlLabel}
+                      </span>
+                    )}
                   </div>
-                  <ProgressBar value={pct} color={C.green}/>
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px]" style={{ color: C.faint }}>
+                      <span>{pct}%</span><span>{done}/{totalQ}</span>
+                    </div>
+                    <ProgressBar value={pct} color={C.green}/>
+                  </div>
                 </div>
               </div>
-              {/* CTA */}
+              {/* CTA -- full width on mobile, auto on sm+ */}
               <a href={href} target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold flex-shrink-0 transition-opacity hover:opacity-80 dashboard-cta"
+                className="w-full sm:w-auto sm:flex-shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80"
                 style={{ background: C.cta, color: C.ctaText }}>
                 <Play className="w-3 h-3"/> Continue
               </a>
@@ -4344,76 +4557,130 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
         );
       })()}
 
-      {/* Stats bar */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {([
-          { icon: TrendingUp,  color: '#3b82f6', bg: 'rgba(59,130,246,0.12)',  value: inProgressCount,                                    label: 'In Progress',                                    nav: 'courses'      },
-          { icon: CheckCircle, color: '#16a34a', bg: 'rgba(22,163,74,0.12)',   value: completedCount,                                     label: 'Completed',                                      nav: 'courses'      },
-          { icon: Award,       color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  value: certs.length,                                       label: 'Certificates',                                   nav: 'certificates' },
-          { icon: Trophy,      color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)',  value: myRank ? `#${myRank}` : '--',                       label: totalInCohort > 0 ? `Rank of ${totalInCohort}` : 'Rank', nav: 'leaderboard'  },
-        ] as const).map(({ icon: Icon, color, bg, value, label, nav }) => (
-          <button key={label} onClick={() => onNavigate(nav as SectionId)}
-            className="rounded-2xl p-5 flex items-center gap-4 text-left hover:opacity-90 transition-opacity w-full"
-            style={{ background: C.card }}>
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: bg }}>
-              <Icon className="w-5 h-5" style={{ color }}/>
-            </div>
-            <div>
-              <div className="text-2xl font-black tabular-nums" style={{ color: C.text }}>{value}</div>
-              <div className="text-xs font-medium mt-0.5" style={{ color: C.muted }}>{label}</div>
-            </div>
-          </button>
-        ))}
-      </div>
+      {/* 3-column layout: profile | stats | donuts -- equal height on desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 lg:items-stretch">
 
-      {/* Recommended for you */}
-      {gaps.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 flex-shrink-0" style={{ color: C.green }}/>
-            <h2 className="text-base font-bold" style={{ color: C.text }}>Recommended for You</h2>
-            <span className="text-xs" style={{ color: C.muted }}>Topics you haven&apos;t explored yet</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {gaps.map((gap: any) => {
-              const isVE = gap.course.contentType === 'virtual_experience' || gap.course.contentType === 'guided_project';
-              const liveItem = courses.find((c: any) => c.id === gap.course.formId);
-              if (!liveItem) return null;
-              const href = isVE ? '/student#virtual_experiences' : `/${liveItem.slug || liveItem.id}`;
-              // Only render cover images from safe http/https URLs
-              const rawCover = gap.course.coverImage;
-              const safeCover = (() => {
-                try { const u = new URL(rawCover ?? ''); return (u.protocol === 'https:' || u.protocol === 'http:') ? rawCover : null; } catch { return null; }
-              })();
-              return (
-                <a key={gap.course.formId} href={href}
-                  className="rounded-2xl overflow-hidden no-underline flex flex-col transition-all hover:opacity-90"
-                  style={{ background: C.card }}>
-                  <div className="w-full h-28 flex items-center justify-center overflow-hidden flex-shrink-0 relative"
-                    style={{ background: `${C.green}10` }}>
-                    {safeCover
-                      ? <img src={safeCover} alt="" className="w-full h-full object-cover"/>
-                      : <TrendingUp className="w-8 h-8" style={{ color: C.green, opacity: 0.3 }}/>}
-                    <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
-                      style={{ background: 'rgba(0,0,0,0.45)', color: 'white', backdropFilter: 'blur(4px)' }}>
-                      {String(gap.topic ?? '').slice(0, 24)}
-                    </span>
-                  </div>
-                  <div className="p-4 flex-1 flex flex-col gap-2">
-                    <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: C.text }}>{gap.course.title}</p>
-                    <div className="mt-auto">
-                      <span className="text-xs font-semibold" style={{ color: C.green }}>Start learning </span>
-                    </div>
-                  </div>
+        {/* LEFT -- Profile */}
+        <div className="lg:h-full">
+          <div className="lg:h-full rounded-2xl overflow-hidden flex flex-col items-center text-center"
+            style={{ background: C.card }}>
+            {/* Cover banner */}
+            <div className="w-full h-20 flex-shrink-0 overflow-hidden">
+              {emailBannerUrl
+                ? <img src={emailBannerUrl} alt="" className="w-full h-full object-cover"/>
+                : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #0e09dd 0%, #3b82f6 60%, #8b5cf6 100%)' }}/>
+              }
+            </div>
+            {/* Avatar */}
+            <div className="w-20 h-20 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-2xl font-black -mt-10"
+              style={{ background: profileAvatar ? 'transparent' : '#1e3a8a', color: 'white', outline: `4px solid ${C.card}` }}>
+              {profileAvatar
+                ? <img src={profileAvatar} alt={profileName} className="w-full h-full object-cover"/>
+                : profileInitials
+              }
+            </div>
+            {/* Name + handle */}
+            <div className="space-y-0.5 mt-2 px-5">
+              <p className="text-base font-black leading-tight" style={{ color: C.text }}>{profileName}</p>
+              {profileUsername && (
+                <p className="text-xs font-medium" style={{ color: C.muted }}>@{profileUsername}</p>
+              )}
+            </div>
+            {/* Spacer pushes button to bottom */}
+            <div className="flex-1"/>
+            {/* Profile link */}
+            <div className="w-full px-5 pb-5">
+              {profileUrl ? (
+                <a href={`/s/${profileUsername}`} target="_blank" rel="noreferrer"
+                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-70"
+                  style={{ background: C.lime, color: C.green }}>
+                  <ExternalLink className="w-3.5 h-3.5"/> View Profile
                 </a>
-              );
-            })}
+              ) : (
+                <Link href="/settings"
+                  className="w-full flex items-center justify-center py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-70"
+                  style={{ background: C.lime, color: C.green }}>
+                  Complete your profile
+                </Link>
+              )}
+            </div>
           </div>
         </div>
-      )}
 
-      {/* Two-column: Deadlines | Activity + Achievements */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* MIDDLE -- Stat cards 2x2 */}
+        <div className="lg:h-full grid grid-cols-2 gap-3" style={{ gridAutoRows: '1fr' }}>
+          {([
+            { icon: TrendingUp,  color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', value: inProgressCount,     label: 'In Progress',   nav: 'courses'      },
+            { icon: CheckCircle, color: '#16a34a', bg: 'rgba(22,163,74,0.12)',  value: completedCount,      label: 'Completed',     nav: 'courses'      },
+            { icon: Award,       color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', value: certs.length,        label: 'Certificates',  nav: 'certificates' },
+            { icon: Medal,       color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)', value: earnedBadgeIds.size, label: 'Badges Earned', nav: 'badges'       },
+          ] as const).map(({ icon: Icon, color, bg, value, label, nav }) => (
+            <button key={label} onClick={() => onNavigate(nav as SectionId)}
+              className="rounded-2xl p-4 flex items-center gap-3 text-left hover:opacity-90 transition-opacity w-full lg:h-full"
+              style={{ background: C.card }}>
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: bg }}>
+                <Icon className="w-4 h-4" style={{ color }}/>
+              </div>
+              <div className="min-w-0">
+                <div className="text-xl font-black tabular-nums leading-none" style={{ color: C.text }}>{value}</div>
+                <div className="text-[11px] font-medium mt-0.5 truncate" style={{ color: C.muted }}>{label}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* RIGHT -- Donut charts */}
+        <div className="lg:h-full flex flex-col gap-3">
+          {(() => {
+            const total     = courses.length;
+            const completed = completedCount;
+            const pct       = total > 0 ? Math.round((completed / total) * 100) : 0;
+            return (
+              <button onClick={() => onNavigate('courses')} className="lg:flex-1 rounded-2xl p-4 flex items-center gap-4 text-left hover:opacity-90 transition-opacity w-full"
+                style={{ background: C.card }}>
+                <div className="relative flex-shrink-0 flex items-center justify-center" style={{ width: 60, height: 60 }}>
+                  <DonutChart total={total} done={completed} color="#09c86c" size={60}/>
+                  <span className="absolute text-[11px] font-black" style={{ color: C.text }}>{pct}%</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-black" style={{ color: C.text }}>{completed}<span className="text-xs font-semibold" style={{ color: C.muted }}>/{total}</span></p>
+                  <p className="text-xs font-semibold" style={{ color: C.muted }}>Courses completed</p>
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#09c86c' }}/>
+                    <span className="text-[10px]" style={{ color: C.faint }}>Completed</span>
+                    <div className="w-2 h-2 rounded-full ml-1 flex-shrink-0" style={{ background: C.pill }}/>
+                    <span className="text-[10px]" style={{ color: C.faint }}>Remaining</span>
+                  </div>
+                </div>
+              </button>
+            );
+          })()}
+          {assignmentStats && (
+            <button onClick={() => onNavigate('assignments')} className="lg:flex-1 rounded-2xl p-4 flex items-center gap-4 text-left hover:opacity-90 transition-opacity w-full"
+              style={{ background: C.card }}>
+              <div className="relative flex-shrink-0 flex items-center justify-center" style={{ width: 60, height: 60 }}>
+                <DonutChart total={assignmentStats.total} done={assignmentStats.submitted} color="#09c86c" size={60}/>
+                <span className="absolute text-[11px] font-black" style={{ color: C.text }}>
+                  {assignmentStats.total > 0 ? Math.round((assignmentStats.submitted / assignmentStats.total) * 100) : 0}%
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black" style={{ color: C.text }}>{assignmentStats.submitted}<span className="text-xs font-semibold" style={{ color: C.muted }}>/{assignmentStats.total}</span></p>
+                <p className="text-xs font-semibold" style={{ color: C.muted }}>Assignments submitted</p>
+                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#09c86c' }}/>
+                  <span className="text-[10px]" style={{ color: C.faint }}>Submitted</span>
+                  <div className="w-2 h-2 rounded-full ml-1 flex-shrink-0" style={{ background: C.pill }}/>
+                  <span className="text-[10px]" style={{ color: C.faint }}>Pending</span>
+                </div>
+              </div>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Two-column: Deadlines | Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
 
         {/* Deadlines */}
         <div className="lg:col-span-3 space-y-3">
@@ -4453,97 +4720,85 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
           )}
         </div>
 
-        {/* Right: Activity feed + Achievements */}
-        <div className="lg:col-span-2 space-y-6">
-
-          {/* Live Activity */}
-          <div className="space-y-3">
-            <h2 className="text-base font-bold" style={{ color: C.text }}>Live Activity</h2>
-            {activityEvents.length === 0 ? (
-              <div className="rounded-2xl p-5 text-center"
-                style={{ background: C.card }}>
-                <p className="text-xs" style={{ color: C.faint }}>No recent cohort activity in the last 30 minutes.</p>
-              </div>
-            ) : (
-              <div className="rounded-2xl overflow-hidden"
-                style={{ background: C.card }}>
-                {activityEvents.map((e: any, idx: number) => (
-                  <div key={`${e.ts}:${String(e.name)}`} className="flex items-center gap-3 px-4 py-3"
-                    style={{ borderBottom: idx < activityEvents.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold"
-                      style={{ background: `${C.green}18`, color: C.green }}>
-                      {String(e.name ?? '?').slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs leading-snug" style={{ color: C.text }}>
-                        <span className="font-semibold">{String(e.name ?? '').slice(0, 30)}</span>{' '}
-                        <span style={{ color: C.muted }}>completed</span>
-                      </p>
-                      <p className="text-[11px] truncate mt-0.5" style={{ color: C.faint }}>
-                        {String(e.title ?? '').slice(0, 40)}
-                      </p>
-                    </div>
-                    <Zap className="w-3 h-3 flex-shrink-0" style={{ color: C.green }}/>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Donut charts -- courses + assignments */}
-          <div className="space-y-3">
-            {/* Courses donut */}
-            {(() => {
-              const total     = courses.length;
-              const completed = completedCount;
-              const pct       = total > 0 ? Math.round((completed / total) * 100) : 0;
-              return (
-                <button onClick={() => onNavigate('courses')} className="rounded-2xl p-4 flex items-center gap-4 text-left hover:opacity-90 transition-opacity w-full"
-                  style={{ background: C.card }}>
-                  <div className="relative flex-shrink-0 flex items-center justify-center" style={{ width: 72, height: 72 }}>
-                    <DonutChart total={total} done={completed} color="#09c86c" size={72}/>
-                    <span className="absolute text-xs font-black" style={{ color: C.text }}>{pct}%</span>
+        {/* Right: Activity feed */}
+        <div className="lg:col-span-2 space-y-3">
+          <h2 className="text-base font-bold" style={{ color: C.text }}>Live Activity</h2>
+          {activityEvents.length === 0 ? (
+            <div className="rounded-2xl p-5 text-center"
+              style={{ background: C.card }}>
+              <p className="text-xs" style={{ color: C.faint }}>No recent cohort activity in the last 30 minutes.</p>
+            </div>
+          ) : (
+            <div className="rounded-2xl overflow-hidden"
+              style={{ background: C.card }}>
+              {activityEvents.map((e: any, idx: number) => (
+                <div key={`${e.ts}:${String(e.name)}`} className="flex items-center gap-3 px-4 py-3"
+                  style={{ borderBottom: idx < activityEvents.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold"
+                    style={{ background: `${C.green}18`, color: C.green }}>
+                    {String(e.name ?? '?').slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-black" style={{ color: C.text }}>{completed}<span className="text-xs font-semibold" style={{ color: C.muted }}>/{total}</span></p>
-                    <p className="text-xs font-semibold" style={{ color: C.muted }}>Courses completed</p>
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                      <div className="w-2 h-2 rounded-full" style={{ background: '#09c86c' }}/>
-                      <span className="text-[10px]" style={{ color: C.faint }}>Completed</span>
-                      <div className="w-2 h-2 rounded-full ml-2" style={{ background: C.pill }}/>
-                      <span className="text-[10px]" style={{ color: C.faint }}>Remaining</span>
-                    </div>
+                    <p className="text-xs leading-snug" style={{ color: C.text }}>
+                      <span className="font-semibold">{String(e.name ?? '').slice(0, 30)}</span>{' '}
+                      <span style={{ color: C.muted }}>completed</span>
+                    </p>
+                    <p className="text-[11px] truncate mt-0.5" style={{ color: C.faint }}>
+                      {String(e.title ?? '').slice(0, 40)}
+                    </p>
                   </div>
-                </button>
-              );
-            })()}
-
-            {/* Assignments donut */}
-            {assignmentStats && (
-              <button onClick={() => onNavigate('assignments')} className="rounded-2xl p-4 flex items-center gap-4 text-left hover:opacity-90 transition-opacity w-full"
-                style={{ background: C.card }}>
-                <div className="relative flex-shrink-0 flex items-center justify-center" style={{ width: 72, height: 72 }}>
-                  <DonutChart total={assignmentStats.total} done={assignmentStats.submitted} color="#09c86c" size={72}/>
-                  <span className="absolute text-xs font-black" style={{ color: C.text }}>
-                    {assignmentStats.total > 0 ? Math.round((assignmentStats.submitted / assignmentStats.total) * 100) : 0}%
-                  </span>
+                  <Zap className="w-3 h-3 flex-shrink-0" style={{ color: C.green }}/>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-black" style={{ color: C.text }}>{assignmentStats.submitted}<span className="text-xs font-semibold" style={{ color: C.muted }}>/{assignmentStats.total}</span></p>
-                  <p className="text-xs font-semibold" style={{ color: C.muted }}>Assignments submitted</p>
-                  <div className="flex items-center gap-1.5 mt-1.5">
-                    <div className="w-2 h-2 rounded-full" style={{ background: '#09c86c' }}/>
-                    <span className="text-[10px]" style={{ color: C.faint }}>Submitted</span>
-                    <div className="w-2 h-2 rounded-full ml-2" style={{ background: C.pill }}/>
-                    <span className="text-[10px]" style={{ color: C.faint }}>Pending</span>
-                  </div>
-                </div>
-              </button>
-            )}
-          </div>
-
+              ))}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Recommended for you -- last on page */}
+      {gaps.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 flex-shrink-0" style={{ color: C.green }}/>
+            <h2 className="text-base font-bold" style={{ color: C.text }}>Recommended for You</h2>
+            <span className="text-xs" style={{ color: C.muted }}>Topics you haven&apos;t explored yet</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+            {gaps.map((gap: any) => {
+              const isVE = gap.course.contentType === 'virtual_experience' || gap.course.contentType === 'guided_project';
+              const liveItem = courses.find((c: any) => c.id === gap.course.formId);
+              if (!liveItem) return null;
+              const href = isVE ? '/student#virtual_experiences' : `/${liveItem.slug || liveItem.id}`;
+              const rawCover = gap.course.coverImage;
+              const safeCover = (() => {
+                try { const u = new URL(rawCover ?? ''); return (u.protocol === 'https:' || u.protocol === 'http:') ? rawCover : null; } catch { return null; }
+              })();
+              return (
+                <a key={gap.course.formId} href={href}
+                  className="rounded-2xl overflow-hidden no-underline flex flex-col transition-all hover:opacity-90"
+                  style={{ background: C.card }}>
+                  <div className="w-full h-28 flex items-center justify-center overflow-hidden flex-shrink-0 relative"
+                    style={{ background: `${C.green}10` }}>
+                    {safeCover
+                      ? <img src={safeCover} alt="" className="w-full h-full object-cover"/>
+                      : <TrendingUp className="w-8 h-8" style={{ color: C.green, opacity: 0.3 }}/>}
+                    <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
+                      style={{ background: 'rgba(0,0,0,0.45)', color: 'white', backdropFilter: 'blur(4px)' }}>
+                      {String(gap.topic ?? '').slice(0, 24)}
+                    </span>
+                  </div>
+                  <div className="p-4 flex-1 flex flex-col gap-2">
+                    <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: C.text }}>{gap.course.title}</p>
+                    <div className="mt-auto">
+                      <span className="text-xs font-semibold" style={{ color: C.green }}>Start learning </span>
+                    </div>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -5538,7 +5793,7 @@ export default function StudentDashboard() {
             )}
 
             {activeSection === 'overview' && user && (
-              <OverviewSection user={{ ...user, id: effectiveId, email: effectiveEmail }} userEmail={effectiveEmail} username={profile?.username} C={C} onNavigate={goSection}/>
+              <OverviewSection user={{ ...user, id: effectiveId, email: effectiveEmail }} userEmail={effectiveEmail} username={profile?.username} profile={profile} C={C} onNavigate={goSection}/>
             )}
             {activeSection === 'courses' && user && (
               <CoursesSection userEmail={effectiveEmail} userId={effectiveId} C={C} isOutstandingProp={isOutstanding}/>
@@ -5566,6 +5821,9 @@ export default function StudentDashboard() {
             )}
             {activeSection === 'schedule' && user && (
               <ScheduleSection userId={effectiveId} C={C}/>
+            )}
+            {activeSection === 'badges' && user && (
+              <StudentBadgesSection userId={effectiveId} C={C}/>
             )}
             {activeSection === 'leaderboard' && user && (
               <LeaderboardSection userEmail={effectiveEmail} C={C}/>

@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
     manager_name:   config.managerName   ?? null,
     manager_title:  config.managerTitle  ?? 'Manager',
     is_short_course: is_short_course ?? false,
+    badge_image_url: config.badgeImageUrl ?? null,
     dataset:        null, // set below after optional storage upload
   };
 

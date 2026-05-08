@@ -113,8 +113,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ rankings: response }, {
       headers: {
-        // Cache for 30 s in the browser; CDN may cache for up to 60 s.
-        // Private prevents other users from seeing a cached response meant for someone else.
         'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
       },
     });

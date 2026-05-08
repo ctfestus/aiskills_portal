@@ -438,12 +438,14 @@ export default function SettingsPage() {
     if (pwNew !== pwConfirm) { setPwMsg({ ok: false, text: 'Passwords do not match.' }); return; }
     if (pwNew.length < 8) { setPwMsg({ ok: false, text: 'Password must be at least 8 characters.' }); return; }
     setPwLoading(true); setPwMsg(null);
-    // Re-authenticate to verify current password
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email: user!.email!, password: pwCurrent });
-    if (signInError) { setPwMsg({ ok: false, text: 'Current password is incorrect.' }); setPwLoading(false); return; }
-    const { error } = await supabase.auth.updateUser({ password: pwNew });
+    const res = await fetch('/api/account/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ currentPassword: pwCurrent, newPassword: pwNew }),
+    });
+    const data = await res.json();
     setPwLoading(false);
-    if (error) { setPwMsg({ ok: false, text: 'Failed to update password. Try again.' }); }
+    if (!res.ok) { setPwMsg({ ok: false, text: data.error ?? 'Failed to update password. Try again.' }); }
     else { setPwMsg({ ok: true, text: 'Password updated successfully.' }); setPwCurrent(''); setPwNew(''); setPwConfirm(''); }
   };
 

@@ -101,6 +101,7 @@ interface ProjectConfig {
   modules: Module[];
   managerName?: string;
   managerTitle?: string;
+  badgeImageUrl?: string | null;
 }
 
 const INDUSTRIES = [
@@ -306,6 +307,7 @@ function VirtualExperienceCreatePageInner() {
             tools: ve.tools, toolLogos: ve.tool_logos ?? {}, tagline: ve.tagline, background: ve.background,
             learnOutcomes: ve.learn_outcomes, managerName: ve.manager_name, managerTitle: ve.manager_title,
             dataset: ve.dataset, coverImage: ve.cover_image, deadline_days: ve.deadline_days,
+            badgeImageUrl: ve.badge_image_url ?? null,
           };
           setTitle(ve.title || '');
           setCoverImage(cfg.coverImage || '');
@@ -633,6 +635,24 @@ function VirtualExperienceCreatePageInner() {
       alert('Upload failed: ' + e.message);
     } finally {
       setUploadingCover(false);
+    }
+  };
+
+  const [uploadingBadge, setUploadingBadge] = useState(false);
+  const badgeInputRef = useRef<HTMLInputElement>(null);
+
+  const handleBadgeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingBadge(true);
+    try {
+      const publicUrl = await uploadToCloudinary(file, 'badges');
+      setConfig(c => c ? { ...c, badgeImageUrl: publicUrl } : c);
+    } catch (err: any) {
+      alert('Upload failed: ' + err.message);
+    } finally {
+      setUploadingBadge(false);
+      if (badgeInputRef.current) badgeInputRef.current.value = '';
     }
   };
 
@@ -1793,6 +1813,32 @@ function VirtualExperienceCreatePageInner() {
                     </button>
                   </div>
                   <input ref={coverRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
+                </div>
+
+                {/* Completion badge card */}
+                <div style={card} className="p-5 space-y-3">
+                  <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Completion Badge</p>
+                  <p className="text-[12px] leading-relaxed" style={{ color: C.faint }}>
+                    Students earn this badge on completing the virtual experience, alongside their certificate.
+                  </p>
+                  {config?.badgeImageUrl && (
+                    <div className="flex items-center gap-3">
+                      <img src={config.badgeImageUrl} alt="Badge" className="w-16 h-16 rounded-xl object-contain flex-shrink-0"
+                        style={{ border: `1px solid ${C.cardBorder}`, background: C.input }}/>
+                      <button onClick={() => setConfig(c => c ? { ...c, badgeImageUrl: null } : c)}
+                        className="text-xs px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
+                        style={{ color: '#ef4444', background: '#ef444412' }}>Remove</button>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button onClick={() => badgeInputRef.current?.click()} disabled={uploadingBadge}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-[13px] font-medium transition-all hover:opacity-70 disabled:opacity-50"
+                      style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
+                      {uploadingBadge ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                      {uploadingBadge ? 'Uploading...' : config?.badgeImageUrl ? 'Change badge' : 'Upload badge'}
+                    </button>
+                  </div>
+                  <input ref={badgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleBadgeUpload} />
                 </div>
 
                 {/* Cohorts card */}

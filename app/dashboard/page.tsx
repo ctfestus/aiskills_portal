@@ -1164,6 +1164,7 @@ const NAV_ITEMS = [
   { id: 'learning_paths', label: 'Learning Paths',  Icon: BookOpen,      adminOnly: false },
   { id: 'certificates',  label: 'Certificates',   Icon: Award,         adminOnly: false },
   { id: 'leaderboard',   label: 'Leaderboard',    Icon: Trophy,        adminOnly: false },
+  { id: 'badges',        label: 'Badges',         Icon: Award,         adminOnly: false },
   { id: 'tracking',      label: 'Tracking',       Icon: Activity,      adminOnly: false },
   { id: 'students',      label: 'Students',       Icon: Users,         adminOnly: false },
   { id: 'cohorts',       label: 'Cohorts',        Icon: GraduationCap, adminOnly: false },
@@ -1178,7 +1179,7 @@ const COMING_SOON: SectionId[] = [];
 const NAV_GROUPS: { label: string; items: SectionId[] }[] = [
   { label: 'Content',    items: ['courses', 'assignments', 'virtual_experiences', 'learning_paths'] },
   { label: 'Engagement', items: ['events', 'community', 'announcements', 'schedule', 'recordings'] },
-  { label: 'Insights',   items: ['tracking', 'leaderboard', 'certificates'] },
+  { label: 'Insights',   items: ['tracking', 'leaderboard', 'badges', 'certificates'] },
   { label: 'Admin',      items: ['students', 'cohorts', 'payments', 'branding', 'site'] },
 ];
 
@@ -3738,6 +3739,146 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
+// --- Badges section (admin/instructor) ---
+function BadgesSection({ C }: { C: typeof LIGHT_C }) {
+  const [badges, setBadges] = useState<{ id: string; name: string; description: string; icon: string; color: string; image_url: string | null; category: string }[]>([]);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [removing, setRemoving]   = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  useEffect(() => {
+    supabase.from('badges').select('id, name, description, icon, color, image_url, category').order('category, id')
+      .then(({ data }) => setBadges(data ?? []));
+  }, []);
+
+  const handleUpload = async (badge: typeof badges[0], file: File) => {
+    if (!file.type.startsWith('image/')) { setMsg({ ok: false, text: 'Please select an image file' }); return; }
+    setUploading(badge.id);
+    setMsg(null);
+    try {
+      const url = await uploadToCloudinary(file, 'badge-images');
+      const { error } = await supabase.from('badges').update({ image_url: url }).eq('id', badge.id);
+      if (error) throw error;
+      setBadges(prev => prev.map(b => b.id === badge.id ? { ...b, image_url: url } : b));
+      setMsg({ ok: true, text: `${badge.name} image updated` });
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message ?? 'Upload failed' });
+    } finally {
+      setUploading(null);
+      setTimeout(() => setMsg(null), 3500);
+    }
+  };
+
+  const handleRemove = async (badge: typeof badges[0]) => {
+    setRemoving(badge.id);
+    setMsg(null);
+    try {
+      const { error } = await supabase.from('badges').update({ image_url: null }).eq('id', badge.id);
+      if (error) throw error;
+      setBadges(prev => prev.map(b => b.id === badge.id ? { ...b, image_url: null } : b));
+      setMsg({ ok: true, text: `${badge.name} image removed` });
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message ?? 'Remove failed' });
+    } finally {
+      setRemoving(null);
+      setTimeout(() => setMsg(null), 3500);
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-6 max-w-3xl mx-auto">
+      <div>
+        <h2 className="text-xl font-bold" style={{ color: C.text }}>Badge Images</h2>
+        <p className="text-sm mt-1" style={{ color: C.muted }}>Upload a custom image for each badge. If no image is uploaded, the emoji icon is shown instead.</p>
+      </div>
+
+      {msg && (
+        <div className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{
+          background: msg.ok ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.10)',
+          color: msg.ok ? '#10b981' : '#ef4444',
+          border: `1px solid ${msg.ok ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)'}`,
+        }}>
+          {msg.text}
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {badges.map(badge => {
+          const isUp  = uploading === badge.id;
+          const isRem = removing  === badge.id;
+          return (
+            <div key={badge.id}
+              className="flex items-center gap-4 p-4 rounded-2xl"
+              style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+
+              {/* Badge preview */}
+              <div className="flex-shrink-0 w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden"
+                style={{ background: badge.image_url ? 'transparent' : `${badge.color}20`, border: `2px solid ${badge.color}40` }}>
+                {badge.image_url
+                  ? <img src={badge.image_url} alt={badge.name} className="w-full h-full object-cover" />
+                  : <span className="text-2xl">{badge.icon}</span>
+                }
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate" style={{ color: C.text }}>{badge.name}</p>
+                <p className="text-xs mt-0.5 line-clamp-1" style={{ color: C.muted }}>{badge.description}</p>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <p className="text-xs font-mono" style={{ color: C.faint }}>{badge.id}</p>
+                  <select
+                    value={badge.category}
+                    onChange={async e => {
+                      const category = e.target.value;
+                      await supabase.from('badges').update({ category }).eq('id', badge.id);
+                      setBadges(prev => prev.map(b => b.id === badge.id ? { ...b, category } : b));
+                    }}
+                    className="text-[11px] px-2 py-0.5 rounded-lg border-0 outline-none"
+                    style={{ background: C.pill, color: C.muted }}>
+                    <option value="achievement">Achievement</option>
+                    <option value="course">Course</option>
+                    <option value="learning_path">Learning Path</option>
+                    <option value="virtual_experience">Virtual Experience</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {badge.image_url && (
+                  <button
+                    onClick={() => handleRemove(badge)}
+                    disabled={isRem || isUp}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40 transition-opacity"
+                    style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}` }}>
+                    {isRem ? 'Removing...' : 'Remove'}
+                  </button>
+                )}
+                <button
+                  onClick={() => fileRefs.current[badge.id]?.click()}
+                  disabled={isUp || isRem}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40 transition-opacity"
+                  style={{ background: C.cta, color: C.ctaText }}>
+                  <Upload className="w-3.5 h-3.5" />
+                  {isUp ? 'Uploading...' : badge.image_url ? 'Replace' : 'Upload'}
+                </button>
+                <input
+                  ref={el => { fileRefs.current[badge.id] = el; }}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(badge, f); e.target.value = ''; }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // --- Leaderboard section (admin/instructor) ---
 const HERO_LB = 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)';
 
@@ -4362,8 +4503,10 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
   const [saveMsg, setSaveMsg]       = useState<{ ok: boolean; text: string } | null>(null);
   const [deleting, setDeleting]     = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingBadge, setUploadingBadge] = useState(false);
   const [generatingDesc, setGeneratingDesc] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const badgeInputRef = useRef<HTMLInputElement>(null);
 
   const publishedForms = forms.filter(f => f.status === 'published');
   const courseOptions  = publishedForms.filter(f => f.content_type === 'course' || f.config?.isCourse);
@@ -4393,6 +4536,16 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
       setEditing((p: any) => ({ ...p, cover_image: url }));
     } catch { /* ignore */ }
     setUploadingCover(false);
+  };
+
+  const uploadBadge = async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    setUploadingBadge(true);
+    try {
+      const url = await uploadToCloudinary(file, 'badges');
+      setEditing((p: any) => ({ ...p, badge_image_url: url }));
+    } catch { /* ignore */ }
+    setUploadingBadge(false);
   };
 
   const generateDescription = async () => {
@@ -4533,6 +4686,33 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
               </button>
               {editing.cover_image && (
                 <button onClick={() => setEditing((p: any) => ({ ...p, cover_image: '' }))}
+                  className="text-xs px-3 py-2 rounded-xl transition-opacity hover:opacity-70"
+                  style={{ color: '#ef4444', background: '#ef444412' }}>Remove</button>
+              )}
+            </div>
+          </div>
+
+          {/* Completion Badge */}
+          <div>
+            <label className="text-xs font-medium mb-1.5 block" style={{ color: C.muted }}>Completion Badge</label>
+            <p className="text-[11px] mb-2 leading-relaxed" style={{ color: C.faint }}>
+              Students earn this badge when they complete all items in the path, alongside their certificate.
+            </p>
+            <input ref={badgeInputRef} type="file" accept="image/*" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) uploadBadge(f); e.target.value = ''; }}/>
+            <div className="flex items-center gap-3">
+              {editing.badge_image_url && (
+                <img src={editing.badge_image_url} alt="Badge" className="w-14 h-14 rounded-lg object-contain flex-shrink-0"
+                  style={{ border: `1px solid ${C.cardBorder}`, background: C.pill }}/>
+              )}
+              <button onClick={() => badgeInputRef.current?.click()} disabled={uploadingBadge}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.pill }}>
+                {uploadingBadge ? <Loader2 className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4"/>}
+                {uploadingBadge ? 'Uploading...' : editing.badge_image_url ? 'Change badge' : 'Upload badge'}
+              </button>
+              {editing.badge_image_url && (
+                <button onClick={() => setEditing((p: any) => ({ ...p, badge_image_url: null }))}
                   className="text-xs px-3 py-2 rounded-xl transition-opacity hover:opacity-70"
                   style={{ color: '#ef4444', background: '#ef444412' }}>Remove</button>
               )}
@@ -7678,6 +7858,7 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
   if (section === 'payments')     return <PaymentsSection C={C} />;
   if (section === 'tracking')     return <StudentTrackingSection C={C} />;
   if (section === 'leaderboard')  return <LeaderboardSection C={C} />;
+  if (section === 'badges')       return <BadgesSection C={C} />;
 
   if (section === 'assignments') return <AssignmentsManageSection C={C}/>;
 

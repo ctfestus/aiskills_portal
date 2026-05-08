@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
-import { milestoneEmail, courseResultEmail } from '@/lib/email-templates';
+import { milestoneEmail, courseResultEmail, badgeEarnedEmail } from '@/lib/email-templates';
 import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { updateLearningPathProgress } from '@/lib/learning-path-progress';
@@ -223,12 +223,12 @@ export async function POST(req: NextRequest) {
 
     if (certErr) { console.error('[guided-project-progress] certificate error:', certErr); return NextResponse.json({ error: 'Failed to issue certificate.' }, { status: 500 }); }
 
-    // Fire-and-forget certificate email
+    // Fire-and-forget certificate + badge email
     if (process.env.RESEND_API_KEY) {
       (async () => {
         try {
           const [{ data: ve }, { data: student }] = await Promise.all([
-            supabase.from('virtual_experiences').select('title, slug').eq('id', resolvedVeId).single(),
+            supabase.from('virtual_experiences').select('title, slug, badge_image_url').eq('id', resolvedVeId).single(),
             supabase.from('students').select('email, full_name').eq('id', certUser.id).single(),
           ]);
           if (!student?.email || !ve) return;
@@ -239,19 +239,41 @@ export async function POST(req: NextRequest) {
           const certUrl  = `${t.appUrl}/certificate/${cert.id}`;
           const formUrl  = `${t.appUrl}/${ve.slug ?? resolvedVeId}`;
 
+          // Award badge if VE has one
+          let earnedBadgeName: string | undefined;
+          if (ve.badge_image_url) {
+            const badgeId = `ve_${resolvedVeId}`;
+            await supabase.from('badges').upsert({
+              id:          badgeId,
+              name:        `${ve.title} Badge`,
+              description: `Awarded for completing ${ve.title}`,
+              icon:        'briefcase',
+              color:       '#6366f1',
+              image_url:   ve.badge_image_url,
+              category:    'virtual_experience',
+            }, { onConflict: 'id' });
+            await supabase.from('student_badges').upsert({
+              student_id: certUser.id,
+              badge_id:   badgeId,
+            }, { onConflict: 'student_id,badge_id', ignoreDuplicates: true });
+            earnedBadgeName = `${ve.title} Badge`;
+          }
+
           await resend.emails.send({
             from:    FROM,
             to:      student.email,
             subject: `Your certificate is ready: ${ve.title}`,
             html:    courseResultEmail({
-              name:        studentName || student.full_name || 'there',
-              courseTitle: ve.title,
-              score:       0,
-              total:       0,
-              percentage:  100,
-              passed:      true,
+              name:         studentName || student.full_name || 'there',
+              courseTitle:  ve.title,
+              score:        0,
+              total:        0,
+              percentage:   100,
+              passed:       true,
               certUrl,
               formUrl,
+              badgeName:     earnedBadgeName,
+              badgeImageUrl: ve.badge_image_url ?? undefined,
               branding,
             }),
           });

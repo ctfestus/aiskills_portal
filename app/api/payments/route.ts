@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
+import { paymentConfirmationApprovedEmail, paymentConfirmationRejectedEmail } from '@/lib/email-templates';
 import {
   getEnrollmentRows,
   recordPayment,
@@ -10,6 +13,8 @@ import {
   deletePayment,
   recomputeEnrollmentAccessPublic,
 } from '@/lib/db-payments';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const dynamic = 'force-dynamic';
 
@@ -489,6 +494,33 @@ export async function POST(req: NextRequest) {
         throw payErr;
       }
 
+      // Fire-and-forget: notify student of approval
+      if (process.env.RESEND_API_KEY) {
+        ;(async () => {
+          try {
+            const [{ data: studentRow }, { data: enroll }, t] = await Promise.all([
+              db.from('students').select('full_name').eq('id', conf.student_id).maybeSingle(),
+              db.from('bootcamp_enrollments').select('currency, email').eq('id', conf.enrollment_id).single(),
+              getTenantSettings(),
+            ]);
+            const FROM         = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+            const branding     = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+            const studentName  = studentRow?.full_name || 'there';
+            const studentEmail = enroll?.email || '';
+            const currency     = enroll?.currency ?? 'GHS';
+            const dashboardUrl = t.appUrl || process.env.APP_URL || '';
+            if (studentEmail) {
+              await resend.emails.send({
+                from:    FROM,
+                to:      studentEmail,
+                subject: 'Your payment confirmation has been approved',
+                html:    paymentConfirmationApprovedEmail({ name: studentName, amount: Number(conf.amount), currency, dashboardUrl, adminNotes: adminNotes ?? null, branding }),
+              });
+            }
+          } catch { /* non-blocking */ }
+        })();
+      }
+
       return NextResponse.json({ ok: true });
     } catch (err: any) {
       console.error('[payments/approve-confirmation]', err);
@@ -511,7 +543,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Confirmation is not pending' }, { status: 409 });
       }
 
-      const { error: updErr } = await db
+      const { data: updConf, error: updErr } = await db
         .from('student_payment_confirmations')
         .update({
           status:      'rejected',
@@ -520,8 +552,37 @@ export async function POST(req: NextRequest) {
           admin_notes: adminNotes ?? null,
           updated_at:  new Date().toISOString(),
         })
-        .eq('id', confirmationId);
+        .eq('id', confirmationId)
+        .select('student_id, enrollment_id, amount')
+        .single();
       if (updErr) throw updErr;
+
+      // Fire-and-forget: notify student of rejection
+      if (process.env.RESEND_API_KEY && updConf) {
+        ;(async () => {
+          try {
+            const [{ data: studentRow }, { data: enroll }, t] = await Promise.all([
+              db.from('students').select('full_name').eq('id', updConf.student_id).maybeSingle(),
+              db.from('bootcamp_enrollments').select('currency, email').eq('id', updConf.enrollment_id).single(),
+              getTenantSettings(),
+            ]);
+            const FROM         = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+            const branding     = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+            const studentName  = studentRow?.full_name || 'there';
+            const studentEmail = enroll?.email || '';
+            const currency     = enroll?.currency ?? 'GHS';
+            const dashboardUrl = t.appUrl || process.env.APP_URL || '';
+            if (studentEmail) {
+              await resend.emails.send({
+                from:    FROM,
+                to:      studentEmail,
+                subject: 'Your payment confirmation could not be verified',
+                html:    paymentConfirmationRejectedEmail({ name: studentName, amount: Number(updConf.amount), currency, dashboardUrl, adminNotes: adminNotes ?? null, branding }),
+              });
+            }
+          } catch { /* non-blocking */ }
+        })();
+      }
 
       return NextResponse.json({ ok: true });
     } catch (err: any) {

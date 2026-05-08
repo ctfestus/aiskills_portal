@@ -173,6 +173,7 @@ interface FormConfig {
   pointsSystem?: PointsSystem;
   deadline_days?: number | null;
   category?: string | null;
+  badgeImageUrl?: string | null;
 }
 
 // --- Constants ---
@@ -942,6 +943,25 @@ const [isSaving, setIsSaving] = useState(false);
     setSelectedCohortIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  const badgeInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingBadge, setUploadingBadge] = useState(false);
+
+  const handleBadgeImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { alert('File size exceeds 20MB limit.'); return; }
+    e.target.value = '';
+    setUploadingBadge(true);
+    try {
+      const publicUrl = await uploadToCloudinary(file, 'badges');
+      updateConfig({ badgeImageUrl: publicUrl });
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (ev) => updateConfig({ badgeImageUrl: ev.target?.result as string });
+      reader.readAsDataURL(file);
+    }
+    setUploadingBadge(false);
+  };
 
 
   useEffect(() => {
@@ -983,7 +1003,7 @@ const [isSaving, setIsSaving] = useState(false);
     } else if (editId) {
       // Load existing content from purpose-built tables
       Promise.all([
-        supabase.from('courses').select('id, title, description, slug, status, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, category').eq('id', editId).maybeSingle(),
+        supabase.from('courses').select('id, title, description, slug, status, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, badge_image_url, deadline_days, theme, mode, font, custom_accent, category').eq('id', editId).maybeSingle(),
         supabase.from('events').select('id, title, description, slug, status, cohort_ids, fields, event_date, event_time, timezone, location, event_type, capacity, meeting_link, is_private, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, speakers, recurrence, recurrence_end_date, recurrence_days').eq('id', editId).maybeSingle(),
       ]).then(([{ data: course }, { data: event }]) => {
         let id: string | null = null;
@@ -1001,7 +1021,8 @@ const [isSaving, setIsSaving] = useState(false);
             points_base: course.points_base,
             pointsSystem: { enabled: course.points_enabled ?? true, basePoints: course.points_base ?? 50 },
             postSubmission: course.post_submission,
-            coverImage: course.cover_image, deadline_days: course.deadline_days,
+            coverImage: course.cover_image, badgeImageUrl: course.badge_image_url ?? null,
+            deadline_days: course.deadline_days,
             theme: course.theme, mode: course.mode, font: course.font, customAccent: course.custom_accent,
             category: course.category ?? null };
         } else if (event) {
@@ -2462,6 +2483,38 @@ const [isSaving, setIsSaving] = useState(false);
                     <p className="text-[10px] mt-1.5 leading-relaxed" style={{ color: C.faint }}>
                       Students can filter courses by category on their dashboard.
                     </p>
+                  </div>
+
+                  {/* Completion badge */}
+                  <div>
+                    <label className={labelCls} style={labelStyle}>Completion Badge</label>
+                    <p className="text-[10px] mb-2 leading-relaxed" style={{ color: C.faint }}>
+                      Students earn this badge when they pass the course assessment. It appears in their Badges section alongside their certificate.
+                    </p>
+                    <input ref={badgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleBadgeImageUpload}/>
+                    {formConfig.badgeImageUrl ? (
+                      <div className="flex items-center gap-3">
+                        <img src={formConfig.badgeImageUrl} alt="Badge" className="w-16 h-16 rounded-xl object-contain flex-shrink-0" style={{ border: `1px solid ${C.inputBorder}`, background: C.pill }}/>
+                        <div className="flex flex-col gap-1.5">
+                          <button type="button" onClick={() => badgeInputRef.current?.click()} disabled={uploadingBadge}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                            style={{ background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.muted }}>
+                            {uploadingBadge ? <Loader2 className="w-3 h-3 animate-spin"/> : <Upload className="w-3 h-3"/>}
+                            {uploadingBadge ? 'Uploading...' : 'Change'}
+                          </button>
+                          <button type="button" onClick={() => updateConfig({ badgeImageUrl: null })}
+                            className="text-xs px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
+                            style={{ color: '#ef4444', background: '#ef444412' }}>Remove</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => badgeInputRef.current?.click()} disabled={uploadingBadge}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                        style={{ border: `1.5px dashed ${C.inputBorder}`, color: C.faint, background: C.input, width: '100%', justifyContent: 'center' }}>
+                        {uploadingBadge ? <Loader2 className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4"/>}
+                        {uploadingBadge ? 'Uploading...' : 'Upload badge image'}
+                      </button>
+                    )}
                   </div>
 
                   {/* Show answers setting */}

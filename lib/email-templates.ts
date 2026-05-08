@@ -92,6 +92,17 @@ function platformColor(url?: string): string {
   return '#1f1bc3';
 }
 
+function badgeBlock(badgeName: string, badgeImageUrl: string, badgesUrl: string) {
+  return `
+    <div style="margin:24px 0;padding:20px;background:linear-gradient(135deg,#1e1b4b,#3730a3);border-radius:0;text-align:center;">
+      <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#a5b4fc;text-transform:uppercase;letter-spacing:0.1em;">You Earned a Badge</p>
+      <img src="${badgeImageUrl}" alt="${esc(badgeName)}" width="96" height="96" style="display:inline-block;width:96px;height:96px;object-fit:contain;margin:8px 0;" />
+      <p style="margin:4px 0 12px;font-size:18px;font-weight:900;color:#ffffff;">${esc(badgeName)}</p>
+      <a href="${badgesUrl}" style="display:inline-block;background:#ffffff;color:#1e1b4b;padding:10px 24px;border-radius:0;text-decoration:none;font-weight:800;font-size:13px;">View in Your Profile</a>
+    </div>
+  `;
+}
+
 // -- 1. Event Registration Confirmation ---
 export function confirmationEmail(data: {
   name?: string;
@@ -194,10 +205,12 @@ export function courseResultEmail(data: {
   passmark?: number;
   formUrl: string;
   certUrl?: string;
+  badgeName?: string;
+  badgeImageUrl?: string;
   recommendations?: Array<{ title: string; slug: string; coverImage?: string | null }>;
   branding?: EmailBranding;
 }) {
-  const { name, courseTitle, score, total, percentage, passed, points, passmark, formUrl, certUrl, recommendations, branding } = data;
+  const { name, courseTitle, score, total, percentage, passed, points, passmark, formUrl, certUrl, badgeName, badgeImageUrl, recommendations, branding } = data;
   const appUrl = branding?.appUrl || process.env.APP_URL || tenant.appUrl;
 
   const recsHtml = recommendations?.length ? `
@@ -228,6 +241,8 @@ export function courseResultEmail(data: {
       <p>Thanks for completing <b>${courseTitle}</b>. Keep practising -- you can retake it to improve your score.</p>
       ${cta('Retake Course', formUrl)}
     `}
+
+    ${passed && badgeName && badgeImageUrl ? badgeBlock(badgeName, badgeImageUrl, `${appUrl}/student?section=badges`) : ''}
 
     ${recsHtml}
 
@@ -744,9 +759,12 @@ export function learningPathCertificateEmail(data: {
   pathDescription?: string;
   certUrl: string;
   items: Array<{ title: string; coverImage?: string | null; isVE?: boolean }>;
+  badgeName?: string;
+  badgeImageUrl?: string;
   branding?: EmailBranding;
 }) {
-  const { name, pathTitle, pathDescription, certUrl, items, branding } = data;
+  const { name, pathTitle, pathDescription, certUrl, items, badgeName, badgeImageUrl, branding } = data;
+  const appUrl = branding?.appUrl || process.env.APP_URL || tenant.appUrl;
 
   const itemsHtml = items.slice(0, 6).map((item) => `
     <tr>
@@ -793,6 +811,8 @@ export function learningPathCertificateEmail(data: {
         Every credential you earn makes your profile stronger.
       </p>
     </div>
+
+    ${badgeName && badgeImageUrl ? badgeBlock(badgeName, badgeImageUrl, `${appUrl}/student?section=badges`) : ''}
 
     ${cta('View & Download Certificate', certUrl)}
 
@@ -1044,6 +1064,63 @@ export function paymentConfirmationAcknowledgedEmail(data: {
   return shell(content, branding);
 }
 
+// -- Payment Confirmation Approved (student notified) ---
+export function paymentConfirmationApprovedEmail(data: {
+  name: string;
+  amount: number;
+  currency: string;
+  dashboardUrl: string;
+  adminNotes?: string | null;
+  branding?: EmailBranding;
+}) {
+  const { name, amount, currency, dashboardUrl, adminNotes, branding } = data;
+  const content = `
+    <p><b>Hi ${esc(name)},</b></p>
+    <p>Great news! Your payment confirmation of <b>${currency} ${Number(amount).toLocaleString()}</b> has been <b style="color:#16a34a;">approved</b>.</p>
+
+    <div style="margin:20px 0;padding:16px;background:#f0fdf4;border-left:4px solid #16a34a;border-radius:0;">
+      <p style="margin:0;font-size:14px;color:#15803d;">Your account balance has been updated and your access status has been refreshed.</p>
+    </div>
+
+    ${adminNotes ? `<p style="color:#374151;"><b>Note from our team:</b> ${esc(adminNotes)}</p>` : ''}
+
+    <p style="color:#374151;">You can view your updated payment history in the <b>Payments</b> section of your dashboard.</p>
+
+    ${cta('View Payments', `${dashboardUrl}#payments`)}
+
+    <br><p><b>Best regards,</b></p>
+  `;
+  return shell(content, branding);
+}
+
+// -- Payment Confirmation Rejected (student notified) ---
+export function paymentConfirmationRejectedEmail(data: {
+  name: string;
+  amount: number;
+  currency: string;
+  dashboardUrl: string;
+  adminNotes?: string | null;
+  branding?: EmailBranding;
+}) {
+  const { name, amount, currency, dashboardUrl, adminNotes, branding } = data;
+  const content = `
+    <p><b>Hi ${esc(name)},</b></p>
+    <p>Unfortunately, your payment confirmation of <b>${currency} ${Number(amount).toLocaleString()}</b> could not be verified and has been <b style="color:#dc2626;">rejected</b>.</p>
+
+    ${adminNotes ? `
+    <div style="margin:20px 0;padding:16px;background:#fef2f2;border-left:4px solid #dc2626;border-radius:0;">
+      <p style="margin:0;font-size:14px;color:#b91c1c;"><b>Reason:</b> ${esc(adminNotes)}</p>
+    </div>` : ''}
+
+    <p style="color:#374151;">Please double-check your payment details and resubmit your confirmation, or contact our support team if you believe this is an error.</p>
+
+    ${cta('Resubmit Confirmation', `${dashboardUrl}#payments`)}
+
+    <br><p><b>Best regards,</b></p>
+  `;
+  return shell(content, branding);
+}
+
 // -- Admin: New Payment Confirmation Pending ---
 export function adminPaymentConfirmationEmail(data: {
   studentName: string;
@@ -1093,5 +1170,94 @@ export function cohortInviteEmail(data: {
     <br><p><b>Best regards,</b></p>
   `;
 
+  return shell(content, branding);
+}
+
+// -- 16. Assignment Submission Confirmation ---
+export function submissionConfirmEmail(data: {
+  name: string;
+  assignmentTitle: string;
+  dashboardUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { name, assignmentTitle, dashboardUrl, branding } = data;
+  const content = `
+    <p><b>Hi ${esc(name)},</b></p>
+    <p>Your submission for <b>${esc(assignmentTitle)}</b> has been received. Your instructor will review it and share feedback with you soon.</p>
+    <div style="margin:20px 0;padding:16px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;">
+      <p style="margin:0;font-weight:600;color:#15803d;">Submission received</p>
+      <p style="margin:4px 0 0;font-size:13px;color:#166534;">${esc(assignmentTitle)}</p>
+    </div>
+    ${cta('View Submission', dashboardUrl)}
+    <p>Well done for submitting. Keep up the great work!</p>
+    <br><p><b>Best regards,</b></p>
+  `;
+  return shell(content, branding);
+}
+
+// -- 17. At-Risk Student Digest (to instructors) ---
+export function atRiskDigestEmail(data: {
+  instructorName: string;
+  students: { name: string; email: string; riskScore: number; reasons: string[] }[];
+  dashboardUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { instructorName, students, dashboardUrl, branding } = data;
+
+  const rows = students.map(s => `
+    <tr style="border-bottom:1px solid #e5e7eb;">
+      <td style="padding:8px 12px;font-size:13px;color:#111;">${esc(s.name)}</td>
+      <td style="padding:8px 12px;font-size:13px;color:#6b7280;">${esc(s.email)}</td>
+      <td style="padding:8px 12px;">
+        <span style="background:${s.riskScore >= 5 ? '#fee2e2' : '#fef3c7'};color:${s.riskScore >= 5 ? '#dc2626' : '#d97706'};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;">
+          ${s.riskScore >= 5 ? 'HIGH RISK' : 'AT RISK'}
+        </span>
+      </td>
+      <td style="padding:8px 12px;font-size:12px;color:#6b7280;">${s.reasons.join(', ')}</td>
+    </tr>`).join('');
+
+  const content = `
+    <p><b>Hi ${esc(instructorName || 'there')},</b></p>
+    <p>Here is your weekly at-risk student digest. These <b>${students.length}</b> student${students.length !== 1 ? 's' : ''} may need your attention this week.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      <thead>
+        <tr style="background:#f9fafb;">
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#374151;border-bottom:2px solid #e5e7eb;">Student</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#374151;border-bottom:2px solid #e5e7eb;">Email</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#374151;border-bottom:2px solid #e5e7eb;">Risk</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#374151;border-bottom:2px solid #e5e7eb;">Signals</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${cta('Open Dashboard', dashboardUrl)}
+    <p style="font-size:12px;color:#6b7280;">Sent every Monday. Students are flagged when inactive 7+ days, stalled on content, or have overdue payments.</p>
+    <br><p><b>Best regards,</b></p>
+  `;
+  return shell(content, branding);
+}
+
+// -- Badge Earned (standalone notification for course completion badges) ---
+export function badgeEarnedEmail(data: {
+  name: string;
+  contentTitle: string;
+  contentType: 'course' | 'virtual_experience' | 'learning_path';
+  badgeName: string;
+  badgeImageUrl: string;
+  certUrl: string;
+  badgesUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { name, contentTitle, contentType, badgeName, badgeImageUrl, certUrl, badgesUrl, branding } = data;
+  const label = contentType === 'course' ? 'course' : contentType === 'virtual_experience' ? 'virtual experience' : 'learning path';
+  const content = `
+    <p><b>Hi ${esc(name)},</b></p>
+    <p style="color:#374151;">Congratulations on completing <b>${esc(contentTitle)}</b>! You have earned a new badge and your certificate is ready.</p>
+    ${badgeBlock(badgeName, badgeImageUrl, badgesUrl)}
+    <p style="color:#374151;">Head to your profile to download the badge, add it to LinkedIn, or share it with your network.</p>
+    ${cta('View Certificate', certUrl)}
+    <br>
+    <p><b>Well done,</b></p>
+  `;
   return shell(content, branding);
 }
