@@ -6099,15 +6099,17 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
       {/* Edit Enrollment modal */}
       {editRow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setEditRow(null)}>
-          <div className="w-full max-w-md rounded-2xl p-6 space-y-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-4">
+          <div className="w-full max-w-md rounded-2xl flex flex-col" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 flex-shrink-0" style={{ borderBottom: `1px solid ${C.divider}` }}>
               <div>
                 <h3 className="text-base font-bold" style={{ color: C.text }}>Edit Enrollment</h3>
-                <p className="text-xs mt-1" style={{ color: C.faint }}>{editRow.student_name || editRow.email}</p>
+                <p className="text-xs mt-0.5" style={{ color: C.faint }}>{editRow.student_name || editRow.email}</p>
               </div>
               <button onClick={() => setEditRow(null)} className="p-1 rounded-lg transition-opacity hover:opacity-70 flex-shrink-0 mt-0.5" style={{ color: C.faint }}><X className="w-4 h-4"/></button>
             </div>
-            <div className="space-y-5">
+            {/* Scrollable body */}
+            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
               <div className="space-y-4">
                 <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.faint }}>Payment Terms</p>
                 <div className="grid grid-cols-2 gap-4">
@@ -6176,7 +6178,8 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
               )}
               {saveError && <p className="text-xs" style={{ color: '#dc2626' }}>{saveError}</p>}
             </div>
-            <div className="flex gap-3 pt-2">
+            {/* Footer */}
+            <div className="flex gap-3 px-6 py-4 flex-shrink-0" style={{ borderTop: `1px solid ${C.divider}` }}>
               <button onClick={() => setEditRow(null)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80" style={{ background: C.pill, color: C.muted }}>Cancel</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-90" style={{ background: C.cta, color: C.ctaText }}>
                 {saving ? 'Saving...' : 'Save Changes'}

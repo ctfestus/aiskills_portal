@@ -289,6 +289,9 @@ export function CourseTaker({
   const scoringLockRef = useRef(false);
   // Always-current snapshot of progress -- used by the visibilitychange flush
   const progressRef = useRef({ answers: {} as Record<string, string>, index: 0, score: 0, points: 0, streak: 0, hintsUsed: new Set<string>() });
+  const maxIdxRef   = useRef(0);
+  // Synchronously-updated mirror of answers -- avoids stale closure when user navigates rapidly
+  const answersRef  = useRef<Record<string, string>>({});
 
   // Leaderboard rank context (shown on result screen)
   const [rankCtx, setRankCtx] = useState<{ above: any; me: any; below: any; rank: number; total: number } | null>(null);
@@ -528,8 +531,10 @@ export function CourseTaker({
 
       if (d.progress && d.progress.current_question_index > 0) {
         // In-progress -- auto-resume from where they left off
+        maxIdxRef.current = d.progress.current_question_index;
         setCurrentQuestionIndex(d.progress.current_question_index);
         setAnswers(d.progress.answers ?? {});
+        answersRef.current = d.progress.answers ?? {};
         setScore(d.progress.score ?? 0);
         setTotalPoints(d.progress.points ?? 0);
         setDisplayedPoints(d.progress.points ?? 0);
@@ -571,7 +576,9 @@ export function CourseTaker({
 
   // Keep progressRef in sync so the visibilitychange flush always has the latest values
   useEffect(() => {
-    progressRef.current = { answers, index: currentQuestionIndex, score, points: totalPoints, streak, hintsUsed };
+    maxIdxRef.current = Math.max(maxIdxRef.current, currentQuestionIndex);
+    answersRef.current = answers;
+    progressRef.current = { answers, index: maxIdxRef.current, score, points: totalPoints, streak, hintsUsed };
   }, [answers, currentQuestionIndex, score, totalPoints, streak, hintsUsed]);
 
   // Flush progress when the student switches away from this tab (keepalive ensures delivery on unload)
@@ -673,8 +680,10 @@ export function CourseTaker({
   // Resume from saved progress
   const handleResume = useCallback(() => {
     if (!savedProgress) return;
+    maxIdxRef.current = savedProgress.current_question_index ?? 0;
     setCurrentQuestionIndex(savedProgress.current_question_index);
     setAnswers(savedProgress.answers ?? {});
+    answersRef.current = savedProgress.answers ?? {};
     setScore(savedProgress.score ?? 0);
     setTotalPoints(savedProgress.points ?? 0);
     setDisplayedPoints(savedProgress.points ?? 0);
@@ -1388,7 +1397,9 @@ export function CourseTaker({
               )}
 
               {/* Resume in-progress */}
-              {!checkingAttempts && !existingCertId && showResumePrompt && savedProgress && (
+              {!checkingAttempts && !existingCertId && showResumePrompt && savedProgress && (() => {
+                const savedPct = totalSlides > 0 ? Math.round((savedProgress.current_question_index / totalSlides) * 100) : 0;
+                return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ width: 48, height: 48, borderRadius: 14, background: `${accent}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 22 }}>
@@ -1397,14 +1408,14 @@ export function CourseTaker({
                     <div>
                       <p className={`text-base font-bold ${textColor}`}>Welcome back, {studentName.split(' ')[0]}!</p>
                       <p className={`text-xs mt-0.5 ${mutedColor}`}>
-                        You&apos;re on question {savedProgress.current_question_index + 1} of {totalSlides}
+                        Slide {savedProgress.current_question_index + 1} of {totalSlides}
                         {savedProgress.points > 0 && <> · <span style={{ color: accent }}>{savedProgress.points} XP earned</span></>}
                       </p>
                     </div>
                   </div>
                   {/* Progress bar */}
                   <div style={{ height: 6, borderRadius: 99, background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', borderRadius: 99, background: accent, width: `${Math.round((savedProgress.current_question_index / totalSlides) * 100)}%`, transition: 'width 0.6s ease' }} />
+                    <div style={{ height: '100%', borderRadius: 99, background: accent, width: `${savedPct}%`, transition: 'width 0.6s ease' }} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <button
@@ -1421,7 +1432,8 @@ export function CourseTaker({
                     </button>
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </div>
           </motion.div>
         </div>
@@ -1531,8 +1543,11 @@ export function CourseTaker({
             </div>
           ) : showResumePrompt && savedProgress ? (
             <div className={`rounded-2xl overflow-hidden ${isDark ? 'bg-zinc-800/50 border border-zinc-700/50' : 'bg-zinc-50 border border-zinc-200/80'}`}>
+              {(() => {
+                const savedPct = totalSlides > 0 ? Math.round((savedProgress.current_question_index / totalSlides) * 100) : 0;
+                return (<>
               <div className={`h-0.5 w-full ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
-                <div className="h-full transition-all duration-700" style={{ width: `${Math.round((savedProgress.current_question_index / totalSlides) * 100)}%`, background: accent }} />
+                <div className="h-full transition-all duration-700" style={{ width: `${savedPct}%`, background: accent }} />
               </div>
               <div className="p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -1544,7 +1559,7 @@ export function CourseTaker({
                     </p>
                   </div>
                   <span className={`text-xs font-semibold tabular-nums px-2 py-1 rounded-lg ${isDark ? 'bg-zinc-700 text-zinc-300' : 'bg-zinc-200 text-zinc-600'}`}>
-                    {Math.round((savedProgress.current_question_index / totalSlides) * 100)}%
+                    {savedPct}%
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -1556,6 +1571,8 @@ export function CourseTaker({
                   </button>
                 </div>
               </div>
+              </>);
+              })()}
             </div>
           ) : (
             <button
@@ -1766,7 +1783,8 @@ export function CourseTaker({
         setStreak(0);
       }
     }
-    const newAnswers = { ...answers, [currentQuestion.id]: userAnswer };
+    const newAnswers = { ...answersRef.current, [currentQuestion.id]: userAnswer };
+    answersRef.current = newAnswers;
     setAnswers(newAnswers);
     // Compute updated score/points for saving (state updates are async)
     const hintWasUsed = hintsUsed.has(currentQuestion.id);
@@ -1796,7 +1814,8 @@ export function CourseTaker({
     if (currentQuestionIndex < totalSlides - 1) {
       const nextIndex = currentQuestionIndex + 1;
       if (currentQuestion?.lessonOnly || (currentQuestion as any)?.isDownloads) {
-        const newAnswers = { ...answers, [currentQuestion.id]: 'viewed' };
+        const newAnswers = { ...answersRef.current, [currentQuestion.id]: 'viewed' };
+        answersRef.current = newAnswers;
         setAnswers(newAnswers);
         saveProgress(newAnswers, nextIndex, score, totalPoints, streak, hintsUsed);
       }
@@ -1808,6 +1827,7 @@ export function CourseTaker({
     } else {
       if (reviewMode) {
         setCurrentQuestionIndex(0);
+        answersRef.current = {};
         setAnswers({});
         setSelectedOption(null);
         setFillBlankAnswer('');
@@ -1847,6 +1867,7 @@ export function CourseTaker({
       if (reviewMode) {
         // Review complete -- reset to start, same as handleNext/handleNextDirect
         setCurrentQuestionIndex(0);
+        answersRef.current = {};
         setAnswers({});
         setSelectedOption(null);
         setFillBlankAnswer('');
@@ -1860,9 +1881,9 @@ export function CourseTaker({
 
   const handleNextDirect = () => {
     setLessonOpen(false);
-    let newAnswers = answers;
+    let newAnswers = answersRef.current;
     let newScore   = score;
-    if (!reviewMode && isAnswered() && !answers[currentQuestion.id]) {
+    if (!reviewMode && isAnswered() && !answersRef.current[currentQuestion.id]) {
       if (scoringLockRef.current) return; // prevent double-fire before state settles
       scoringLockRef.current = true;
       const userAnswer = getCurrentAnswer();
@@ -1879,7 +1900,8 @@ export function CourseTaker({
         newScore = score + (hintWasUsed ? 0.9 : 1);
         setScore(newScore);
       }
-      newAnswers = { ...answers, [currentQuestion.id]: userAnswer };
+      newAnswers = { ...answersRef.current, [currentQuestion.id]: userAnswer };
+      answersRef.current = newAnswers;
       setAnswers(newAnswers);
     }
     setDirection(1);
@@ -1893,6 +1915,7 @@ export function CourseTaker({
       if (reviewMode) {
         // Review complete -- loop back to start, same as handleNext does
         setCurrentQuestionIndex(0);
+        answersRef.current = {};
         setAnswers({});
         setSelectedOption(null);
         setFillBlankAnswer('');
@@ -1904,7 +1927,9 @@ export function CourseTaker({
     }
   };
 
-  const progressPct = totalSlides > 0 ? (currentQuestionIndex / totalSlides) * 100 : 0;
+  const countableSlides = questions.filter((q: any) => !q.isSection);
+  const completedSlides = countableSlides.filter((q: any) => !!answers[q.id]).length;
+  const progressPct = countableSlides.length > 0 ? (completedSlides / countableSlides.length) * 100 : 0;
   const timerWarning = timeLeft !== null && timeLeft <= 60;
 
   // -- Correct answer display for after-check feedback --
@@ -2868,7 +2893,8 @@ export function CourseTaker({
                         setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: lean }));
                         setReviewSubmissions(prev => ({ ...prev, [currentQuestion.id]: [...(prev[currentQuestion.id] ?? []), lean] }));
                         const answer = passed ? 'completed' : 'failed';
-                        const newAnswers = { ...answers, [currentQuestion.id]: answer };
+                        const newAnswers = { ...answersRef.current, [currentQuestion.id]: answer };
+                        answersRef.current = newAnswers;
                         if (!alreadyDone && passed && !reviewMode) setScore(s => s + 1);
                         setAnswers(newAnswers);
                         saveProgress(newAnswers, currentQuestionIndex + 1, score + (!alreadyDone && passed ? 1 : 0), totalPoints, streak, hintsUsed);
@@ -2893,7 +2919,8 @@ export function CourseTaker({
                         setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: lean }));
                         setReviewSubmissions(prev => ({ ...prev, [currentQuestion.id]: [...(prev[currentQuestion.id] ?? []), lean] }));
                         const answer = passed ? 'completed' : 'failed';
-                        const newAnswers = { ...answers, [currentQuestion.id]: answer };
+                        const newAnswers = { ...answersRef.current, [currentQuestion.id]: answer };
+                        answersRef.current = newAnswers;
                         if (!alreadyDone && passed && !reviewMode) setScore(s => s + 1);
                         setAnswers(newAnswers);
                         saveProgress(newAnswers, currentQuestionIndex + 1, score + (!alreadyDone && passed ? 1 : 0), totalPoints, streak, hintsUsed);
@@ -2918,7 +2945,8 @@ export function CourseTaker({
                         setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: { result, imageUrl: imageDataUrl } }));
                         setReviewDashCounts(prev => ({ ...prev, [currentQuestion.id]: (prev[currentQuestion.id] ?? 0) + 1 }));
                         const answer = passed ? 'completed' : 'failed';
-                        const newAnswers = { ...answers, [currentQuestion.id]: answer };
+                        const newAnswers = { ...answersRef.current, [currentQuestion.id]: answer };
+                        answersRef.current = newAnswers;
                         if (!alreadyDone && passed && !reviewMode) setScore(s => s + 1);
                         setAnswers(newAnswers);
                         saveProgress(newAnswers, currentQuestionIndex + 1, score + (!alreadyDone && passed ? 1 : 0), totalPoints, streak, hintsUsed);

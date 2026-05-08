@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
 
   const [{ data: courseAttempts }, { data: gpAttempts }, { data: assignmentSubs }, { data: cohortAssignments }, { data: veModulesData }] = await Promise.all([
     courseIds.length
-      ? supabase.from('course_attempts').select('student_id, course_id, completed_at, updated_at, score, passed, current_question_index').in('course_id', courseIds)
+      ? supabase.from('course_attempts').select('student_id, course_id, completed_at, updated_at, score, passed, current_question_index, answers').in('course_id', courseIds)
       : Promise.resolve({ data: [] as any[] }),
     allGpVeIds.length
       ? supabase.from('guided_project_attempts').select('student_id, ve_id, completed_at, updated_at, progress').in('ve_id', allGpVeIds)
@@ -178,7 +178,7 @@ export async function GET(req: NextRequest) {
         ? totalRequirementsFromModules(item.modules)
         : isAssignment
           ? 0
-          : ((item.questions as any[])?.length ?? 0);
+          : ((item.questions as any[])?.filter((q: any) => !q.isSection).length ?? 0);
 
     const itemStudents = itemCohortIds.flatMap(cid => studentsByCohort.get(cid) ?? []);
 
@@ -238,9 +238,10 @@ export async function GET(req: NextRequest) {
           const days = daysSince(lastActive);
           status = days !== null && days >= STALL_DAYS ? 'stalled' : 'in_progress';
           if (total > 0) {
+            const answeredCount = isVE ? 0 : ((item.questions as any[])?.filter((q: any) => !q.isSection && !!(attempt.answers ?? {})[q.id]).length ?? 0);
             progressPct = isVE
               ? Math.round((completedRequirements(attempt.progress) / total) * 100)
-              : Math.round(((attempt.current_question_index ?? 0) / total) * 100);
+              : Math.round((answeredCount / total) * 100);
           }
         }
       }

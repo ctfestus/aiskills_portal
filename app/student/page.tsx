@@ -272,11 +272,13 @@ function ProgressBar({ value, max = 100, color }: { value: number; max?: number;
 // --- Course card ---
 function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?: Date | null; C: typeof LIGHT_C; onDetails: () => void }) {
   const questions = course.form?.questions ?? course.config?.questions ?? course.form?.config?.questions ?? [];
-  const totalQ = questions.length;
+  const countableQ = questions.filter((q: any) => !q.isSection);
+  const answeredQ = countableQ.filter((q: any) => !!(course.answers ?? {})[q.id]).length;
+  const totalQ = countableQ.length;
   const currentIdx = course.current_question_index ?? 0;
   const completed = !!course.completed_at;
   const passed = course.passed === true;
-  const progress = completed ? 100 : (totalQ > 0 ? Math.round((currentIdx / totalQ) * 100) : 0);
+  const progress = completed ? 100 : (totalQ > 0 ? Math.round((answeredQ / totalQ) * 100) : 0);
   const score = course.score ?? 0;
   const coverImage = course.config?.coverImage ?? course.form?.config?.coverImage;
   const description: string = course.form?.config?.description ?? course.form?.description ?? '';
@@ -403,13 +405,15 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
   const questions: any[] = course.form?.questions ?? config.questions ?? [];
   const lessons = questions.filter((q: any) => q.lesson?.title || q.lesson?.body);
   const lessonCount = lessons.length;
-  const assessmentCount = questions.length;
+  const countableDetailQ = questions.filter((q: any) => !q.isSection);
+  const answeredDetailQ = countableDetailQ.filter((q: any) => !!(course.answers ?? {})[q.id]).length;
+  const assessmentCount = countableDetailQ.length;
   const currentIdx = course.current_question_index ?? 0;
   const completed = !!course.completed_at;
   const passed = course.passed === true;
   const score = course.score ?? 0;
   const certId: string | null = course.cert_id ?? null;
-  const progress = completed ? 100 : (assessmentCount > 0 ? Math.round((currentIdx / assessmentCount) * 100) : 0);
+  const progress = completed ? 100 : (assessmentCount > 0 ? Math.round((answeredDetailQ / assessmentCount) * 100) : 0);
   const [imgErr, setImgErr] = useState(false);
 
   const courseUrl = `/${course.slug || course.form?.slug || course.form_id}`;
@@ -745,7 +749,7 @@ function CoursesSection({ userEmail, userId: userIdProp, C, isOutstandingProp }:
           ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes, category, content_type:id').contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
           : Promise.resolve({ data: [] }),
         supabase.from('course_attempts')
-          .select('course_id, score, points, current_question_index, completed_at, passed, updated_at')
+          .select('course_id, score, points, current_question_index, completed_at, passed, updated_at, answers')
           .eq('student_id', effectiveUserId)
           .order('started_at', { ascending: false }),
         token
@@ -3866,12 +3870,13 @@ function ContinueLearningCard({ form, attempt, isProject, deadline, C }: {
   const [imgErr, setImgErr] = useState(false);
   // eslint-disable-next-line react-hooks/purity
   const now = useMemo(() => Date.now(), []);
+  const countableQ = isProject ? [] : (form.config?.questions ?? []).filter((q: any) => !q.isSection);
   const totalQ = isProject
     ? (form.config?.modules ?? []).reduce((a: number, m: any) => a + (m.lessons ?? []).reduce((b: number, l: any) => b + (l.requirements ?? []).length, 0), 0)
-    : (form.config?.questions ?? []).length;
+    : countableQ.length;
   const done  = isProject
     ? Object.values((attempt?.progress ?? {})).filter((v: any) => v?.completed).length
-    : (attempt?.current_question_index ?? 0);
+    : countableQ.filter((q: any) => !!(attempt?.answers ?? {})[q.id]).length;
   const pct     = totalQ > 0 ? Math.round((done / totalQ) * 100) : 0;
   const href    = `/${form.slug || form.id}`;
   const daysLeft = deadline ? Math.ceil((deadline.getTime() - now) / 86400000) : null;
@@ -4045,7 +4050,7 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
             ? supabase.from('virtual_experiences').select('id, title, slug, cover_image, modules, deadline_days').contains('cohort_ids', [cohort]).eq('status', 'published')
             : Promise.resolve({ data: [] as any[] }),
           supabase.from('course_attempts')
-            .select('course_id, score, current_question_index, completed_at, passed, updated_at')
+            .select('course_id, score, current_question_index, completed_at, passed, updated_at, answers')
             .eq('student_id', user.id).order('updated_at', { ascending: false }),
           supabase.from('guided_project_attempts')
             .select('ve_id, completed_at, progress, updated_at')
@@ -4283,12 +4288,13 @@ function OverviewSection({ user, userEmail, username, C, onNavigate }: {
         const daysLeft = dl ? Math.ceil((dl.getTime() - now) / 86400000) : null;
         const dlColor  = daysLeft === null ? null : daysLeft < 0 ? '#ef4444' : daysLeft <= 3 ? '#f59e0b' : '#6b7280';
         const dlLabel  = daysLeft === null ? null : daysLeft < 0 ? 'Overdue' : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`;
+        const countableQ = isProject ? [] : (form.config?.questions ?? []).filter((q: any) => !q.isSection);
         const totalQ   = isProject
           ? (form.config?.modules ?? []).reduce((a: number, m: any) => a + (m.lessons ?? []).reduce((b: number, l: any) => b + (l.requirements ?? []).length, 0), 0)
-          : (form.config?.questions ?? []).length;
+          : countableQ.length;
         const done     = isProject
           ? Object.values((attempt?.progress ?? {})).filter((v: any) => v?.completed).length
-          : (attempt?.current_question_index ?? 0);
+          : countableQ.filter((q: any) => !!(attempt?.answers ?? {})[q.id]).length;
         const pct      = totalQ > 0 ? Math.round((done / totalQ) * 100) : 0;
         const href     = `/${form.slug || form.id}`;
 
