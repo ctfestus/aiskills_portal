@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
     const key = `${a.student_id}|${a.ve_id}`;
     const existing = attemptMap.get(key);
     const isNewer = !existing || (a.updated_at && (!existing.lastActive || a.updated_at > existing.lastActive));
-    if (isNewer) attemptMap.set(key, { completed: !!a.completed_at, lastActive: a.updated_at ?? null });
+    if (isNewer) attemptMap.set(key, { completed: !!a.completed_at, passed: false, lastActive: a.updated_at ?? null });
   }
 
   // 5. Build recipient list filtered by segment
