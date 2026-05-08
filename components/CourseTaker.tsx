@@ -529,8 +529,16 @@ export function CourseTaker({
           const prevIdx = prev.current_question_index ?? 0;
           maxIdxRef.current = prevIdx;
           setCurrentQuestionIndex(prevIdx);
-          setAnswers(prev.answers ?? {});
-          answersRef.current = prev.answers ?? {};
+          // Fill in 'viewed' for any lessonOnly/isDownloads slides missing from the
+          // stored answers (the last lesson was not saved before completion in older attempts).
+          const restoredAnswers: Record<string, string> = { ...(prev.answers ?? {}) };
+          for (const q of questions) {
+            if ((q.lessonOnly || (q as any).isDownloads) && !restoredAnswers[q.id]) {
+              restoredAnswers[q.id] = 'viewed';
+            }
+          }
+          setAnswers(restoredAnswers);
+          answersRef.current = restoredAnswers;
           setScore(prev.score ?? 0);
           setTotalPoints(prev.points ?? 0);
           setDisplayedPoints(prev.points ?? 0);
@@ -1848,6 +1856,14 @@ export function CourseTaker({
         setIsChecking(false);
         setIsCorrect(null);
       } else {
+        // Mark the last lessonOnly / isDownloads slide as viewed before finishing so
+        // it shows as completed when the student later opens the course in review mode.
+        if (currentQuestion?.lessonOnly || (currentQuestion as any)?.isDownloads) {
+          const newAnswers = { ...answersRef.current, [currentQuestion.id]: 'viewed' };
+          answersRef.current = newAnswers;
+          setAnswers(newAnswers);
+          saveProgress(newAnswers, totalSlides, score, totalPoints, streak, hintsUsed);
+        }
         doFinish(score);
       }
     }
