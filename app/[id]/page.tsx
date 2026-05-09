@@ -654,14 +654,20 @@ export default function PublicFormPage() {
               }),
             });
             const certJson = await certRes.json();
-            if (certJson.certId) {
+            if (!certRes.ok) {
+              console.error('[issue-certificate] server error', certRes.status, certJson);
+            } else if (certJson.certId) {
               setCertificateId(certJson.certId);
               certUrl = `${window.location.origin}/certificate/${certJson.certId}`;
             }
-          } catch { /* non-blocking */ }
+          } catch (certErr) {
+            console.error('[issue-certificate] request failed', certErr);
+          }
         }
 
-        if (validEmail && courseSession?.access_token) {
+        // Skip generic result email when a cert was issued: the cert side effects
+        // already sent the certificate email server-side.
+        if (validEmail && courseSession?.access_token && !certUrl) {
           fetch('/api/email', {
             method: 'POST',
             headers: {

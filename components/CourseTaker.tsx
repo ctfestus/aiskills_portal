@@ -2609,35 +2609,54 @@ export function CourseTaker({
                           </div>
                         )}
                         {dlItems.length > 0 && (
-                          <div className="px-4 sm:px-8 pt-4 pb-2 space-y-3">
+                          <div className="px-4 sm:px-8 pt-4 pb-2 space-y-4">
                             {dlItems.map((item) => {
                               const href = item.type === 'file' ? item.fileUrl : item.linkUrl;
                               return (
-                                <div key={item.id} className="rounded-xl overflow-hidden" style={{ background: isDark ? '#2a2a2e' : '#F2F5FA', border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
-                                  <div className="flex items-center gap-4 p-4">
-                                    <div className="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center" style={{ background: `${accent}15`, border: `1.5px solid ${accent}25` }}>
-                                      <ArrowDownToLine className="w-4.5 h-4.5" style={{ color: accent }} strokeWidth={2} />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="font-semibold text-sm leading-snug" style={{ color: isDark ? '#ffffff' : '#111' }}>
-                                        {item.title || 'Untitled'}
-                                      </p>
-                                      {item.description && (
+                                <div key={item.id}>
+                                  <div className="flex flex-col items-center text-center px-6 pt-6 pb-7 gap-4">
+                                    <img
+                                      src="https://wbbcxctblfoyoboskazr.supabase.co/storage/v1/object/public/form-assets/assignment-resources/file_downloadable.svg"
+                                      alt=""
+                                      className="w-48 h-auto select-none pointer-events-none"
+                                      draggable={false}
+                                    />
+                                    <div className="space-y-1">
+                                      <h3 className="text-lg font-bold leading-snug" style={{ color: isDark ? '#ffffff' : '#111' }}>
+                                        {item.title || 'Download file'}
+                                      </h3>
+                                      {item.description ? (
                                         <div
-                                          className={`text-sm mt-1 leading-relaxed prose max-w-none ${isDark ? '[&_*]:!text-[#a1a1aa] [&_strong]:!text-white [&_b]:!text-white' : '[&_*]:!text-[#555]'}`}
-                                          style={{ color: isDark ? '#a1a1aa' : '#555' }}
+                                          className={`text-sm leading-relaxed prose max-w-none ${isDark ? '[&_*]:!text-[#a1a1aa] [&_strong]:!text-white [&_b]:!text-white' : '[&_*]:!text-[#555]'}`}
+                                          style={{ color: isDark ? '#a1a1aa' : '#666' }}
                                           dangerouslySetInnerHTML={{ __html: sanitizeRichText(item.description) }}
                                         />
+                                      ) : (
+                                        <p className="text-sm" style={{ color: isDark ? '#a1a1aa' : '#666' }}>
+                                          {item.type === 'file' ? 'Download the file using the link below:' : 'Open the link below:'}
+                                        </p>
                                       )}
                                     </div>
+                                    {item.type === 'file' && (
+                                      <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl" style={{ background: isDark ? '#1e1e1e' : '#ffffff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}>
+                                        <svg className="w-5 h-5 flex-shrink-0" style={{ color: isDark ? '#a1a1aa' : '#888' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" strokeLinecap="round" strokeLinejoin="round" />
+                                          <polyline points="14 2 14 8 20 8" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                        <div className="text-left">
+                                          <p className="text-[10px] font-medium leading-none mb-0.5" style={{ color: isDark ? '#71717a' : '#999' }}>File Type</p>
+                                          <p className="text-sm font-bold leading-none" style={{ color: isDark ? '#ffffff' : '#111' }}>Document</p>
+                                        </div>
+                                      </div>
+                                    )}
                                     {href && (
                                       <a href={href} target="_blank" rel="noopener noreferrer"
                                         download={item.type === 'file' ? (item.fileName || true) : undefined}
-                                        className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all hover:opacity-85 active:scale-[0.97]"
+                                        className="flex items-center justify-center gap-2 px-10 py-3.5 rounded-xl text-sm font-bold transition-all hover:opacity-85 active:scale-[0.97]"
                                         style={{ background: accent, color: '#fff' }}>
                                         {item.type === 'file'
-                                          ? <><ArrowDownToLine className="w-3.5 h-3.5" strokeWidth={2} /> Download</>
-                                          : <><ExternalLink className="w-3.5 h-3.5" /> Open</>}
+                                          ? <><ArrowDownToLine className="w-4 h-4" strokeWidth={2.5} /> Download</>
+                                          : <><ExternalLink className="w-4 h-4" /> Open Link</>}
                                       </a>
                                     )}
                                   </div>

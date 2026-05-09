@@ -17,10 +17,21 @@ export interface EmailBranding {
 
 // -- Shared shell ---
 function shell(content: string, opts?: { bannerUrl?: string } & EmailBranding) {
-  const banner   = opts?.bannerUrl || opts?.emailBannerUrl || opts?.logoUrl || BANNER;
-  const appName  = opts?.appName   || tenant.appName  || 'the platform';
-  const appUrl_  = opts?.appUrl    || APP_URL;
-  const teamName = opts?.teamName;
+  const bannerUrl = opts?.bannerUrl || opts?.emailBannerUrl;
+  const logoUrl   = opts?.logoUrl || BANNER;
+  const appName   = opts?.appName   || tenant.appName  || 'the platform';
+  const appUrl_   = opts?.appUrl    || APP_URL;
+  const teamName  = opts?.teamName;
+
+  const headerHtml = bannerUrl
+    ? `<tr><td>
+        <img src="${bannerUrl}" alt="${appName}" width="600" style="width:100%;height:auto;display:block;" />
+      </td></tr>`
+    : logoUrl
+    ? `<tr><td style="padding:20px 20px 0;">
+        <img src="${logoUrl}" alt="${appName}" style="height:48px;width:auto;display:block;object-fit:contain;" />
+      </td></tr>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -33,15 +44,7 @@ function shell(content: string, opts?: { bannerUrl?: string } & EmailBranding) {
     <tr><td align="center">
       <table style="max-width:600px;width:100%;margin:0 auto;" cellpadding="0" cellspacing="0">
 
-        <!-- Banner -->
-        <tr><td>
-          <img
-            src="${banner}"
-            alt="${appName}"
-            width="600"
-            style="width:100%;height:auto;display:block;"
-          />
-        </td></tr>
+        ${headerHtml}
 
         <!-- Content -->
         <tr><td style="padding:20px;">

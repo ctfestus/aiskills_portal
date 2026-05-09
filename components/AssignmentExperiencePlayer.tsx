@@ -64,9 +64,10 @@ interface Props {
   studentName: string;
   studentEmail: string;
   sessionToken: string;
+  assignmentId?: string;
   initialProgress?: Progress;
   isDark?: boolean;
-  onComplete: () => void;
+  onComplete: (submission?: any) => void;
   previewMode?: boolean;
 }
 
@@ -91,7 +92,7 @@ function normalize(s: string) { return s.toLowerCase().replace(/\s+/g, ' ').trim
 // -- Component ---
 
 export default function AssignmentExperiencePlayer({
-  formId, config, userId, studentName, studentEmail, sessionToken, initialProgress = {}, isDark = false, onComplete, previewMode = false,
+  formId, config, userId, studentName, studentEmail, sessionToken, assignmentId = '', initialProgress = {}, isDark = false, onComplete, previewMode = false,
 }: Props) {
   const accent = '#00b95c';
   const modules = config.modules || [];
@@ -117,6 +118,7 @@ export default function AssignmentExperiencePlayer({
   const [uploadingReq,  setUploadingReq]  = useState<string | null>(null);
   const [done,          setDone]          = useState(() => allComplete(config, initialProgress ?? {}));
   const [expandedMods,  setExpandedMods]  = useState<Set<string>>(new Set([modules[0]?.id]));
+  const [completeError, setCompleteError] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const authHeader = sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {} as Record<string, string>;
 
@@ -566,6 +568,11 @@ export default function AssignmentExperiencePlayer({
               )}
 
               {/* Prev / Next navigation */}
+              {completeError && (
+                <div className="mx-6 mb-0 mt-0 px-4 py-3 rounded-xl text-xs" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}>
+                  {completeError}
+                </div>
+              )}
               <div className="px-6 py-4 flex items-center justify-between" style={{ borderTop: `1px solid ${divider}` }}>
                 <button
                   disabled={!prevEntry}
@@ -584,11 +591,36 @@ export default function AssignmentExperiencePlayer({
                   </button>
                 ) : (
                   <button
-                    disabled={overallPct < 100}
-                    onClick={() => { if (overallPct === 100) { setDone(true); onComplete(); } }}
+                    disabled={overallPct < 100 || saving}
+                    onClick={async () => {
+                      if (previewMode) { setDone(true); onComplete(); return; }
+                      if (overallPct < 100) return;
+                      setCompleteError(null);
+                      clearTimeout(saveTimeout.current);
+                      setSaving(true);
+                      try {
+                        const res = await fetch('/api/assignments/complete-ve-assignment', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', ...authHeader },
+                          body: JSON.stringify({ assignmentId, progress, currentModuleId: activeModule, currentLessonId: activeLesson }),
+                        });
+                        let json: any = {};
+                        try { json = await res.json(); } catch (_) {}
+                        if (!res.ok) {
+                          setCompleteError(json?.error || 'Failed to submit. Please try again.');
+                          return;
+                        }
+                        setDone(true);
+                        onComplete(json.submission);
+                      } catch (_) {
+                        setCompleteError('Failed to submit. Please try again.');
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
-                    style={{ background: '#10b981', color: 'white', border: 'none', cursor: overallPct < 100 ? 'not-allowed' : 'pointer' }}>
-                    <CheckCircle className="w-4 h-4"/> Complete
+                    style={{ background: '#10b981', color: 'white', border: 'none', cursor: overallPct < 100 || saving ? 'not-allowed' : 'pointer' }}>
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>} Complete
                   </button>
                 )}
               </div>

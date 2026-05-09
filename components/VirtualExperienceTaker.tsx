@@ -1500,7 +1500,7 @@ export default function VirtualExperienceTaker({
                     <Trophy className="w-4 h-4" /> <span className="hidden xs:inline">Summary</span>
                   </button>
                 ) : (
-                  <button onClick={handleComplete} disabled={saving || !overallPct === 100 as any}
+                  <button onClick={handleComplete} disabled={saving || overallPct < 100}
                     className="flex items-center gap-1.5 px-3 sm:px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all hover:opacity-80 flex-shrink-0"
                     style={{ background: overallPct === 100 ? accentColor : border, color: overallPct === 100 ? (isDark ? '#111' : '#fff') : muted }}>
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trophy className="w-4 h-4" />}

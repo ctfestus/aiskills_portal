@@ -335,10 +335,10 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
       </div>
 
       {/* Content */}
-      <div className="p-5">
+      <div className="p-5 flex flex-col flex-1">
         {/* Category tag */}
         {category && (
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-3"
+          <div className="self-start inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-3"
             style={{ background: C.pill }}>
             {categoryIcon && <img src={categoryIcon} alt={category} className="w-3.5 h-3.5 object-contain flex-shrink-0" />}
             <span className="text-[11px] font-semibold" style={{ color: C.muted }}>{category}</span>
@@ -372,24 +372,24 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
         </div>
         <ProgressBar value={progress} color="#22c55e"/>
 
-        <div className="mt-4 flex items-center justify-between gap-2">
+        <div className="mt-auto pt-4 flex items-center justify-between gap-2">
           {/* Details button */}
           <button onClick={onDetails}
-            className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70"
+            className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl transition-opacity hover:opacity-70"
             style={{ background: C.pill, color: C.muted }}>
-            <FileText className="w-3 h-3"/>
+            <FileText className="w-3.5 h-3.5"/>
             Details
           </button>
 
           <div className="flex items-center gap-2">
             {/* Primary action */}
             <a href={actionHref} target="_blank" rel="noreferrer"
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-opacity hover:opacity-70 dashboard-cta"
+              className="flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl transition-opacity hover:opacity-70 dashboard-cta"
               style={{
                 background: completed ? C.pill : C.cta,
                 color: completed ? C.muted : C.ctaText,
               }}>
-              <Play className="w-3 h-3"/>
+              <Play className="w-3.5 h-3.5"/>
               {actionLabel}
             </a>
           </div>
@@ -1731,9 +1731,10 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               studentName={studentName}
               studentEmail={studentEmail}
               sessionToken={sessionToken}
+              assignmentId={assignment.id}
               initialProgress={veProgress}
               isDark={isDark}
-              onComplete={() => autoSubmit(null, 'Virtual experience completed.')}
+              onComplete={(submission) => { if (submission) setSubmission(submission); }}
             />
           )}
         </div>
@@ -3569,19 +3570,33 @@ function StudentBadgesSection({ userId, C }: { userId: string; C: typeof LIGHT_C
   const [allBadges, setAllBadges]   = useState<{ id: string; name: string; description: string; icon: string; color: string; image_url: string | null; category: string }[]>([]);
   const [earnedIds, setEarnedIds]   = useState<Set<string>>(new Set());
   const [streak, setStreak]         = useState<{ current_streak: number; longest_streak: number } | null>(null);
-  const [loading, setLoading]       = useState(true);
+  const [certIdMap, setCertIdMap]     = useState<Record<string, string>>({});
+  const [badgeUuidMap, setBadgeUuidMap] = useState<Record<string, string>>({});
+  const [loading, setLoading]         = useState(true);
 
   useEffect(() => {
     (async () => {
-      const [badgesRes, earnedRes, streakRes] = await Promise.all([
+      const [badgesRes, earnedRes, streakRes, certsRes] = await Promise.all([
         supabase.from('badges').select('id, name, description, icon, color, image_url, category').order('id'),
-        supabase.from('student_badges').select('badge_id').eq('student_id', userId),
+        supabase.from('student_badges').select('id, badge_id').eq('student_id', userId),
         supabase.from('student_streaks').select('current_streak, longest_streak').eq('student_id', userId).maybeSingle(),
+        supabase.from('certificates').select('id, course_id, ve_id, learning_path_id').eq('student_id', userId).eq('revoked', false),
       ]);
       setAllBadges(badgesRes.data ?? []);
-      setEarnedIds(new Set((earnedRes.data ?? []).map((b: any) => b.badge_id)));
+      const earnedRows = earnedRes.data ?? [];
+      setEarnedIds(new Set(earnedRows.map((b: any) => b.badge_id)));
+      setBadgeUuidMap(Object.fromEntries(earnedRows.map((b: any) => [b.badge_id, b.id])));
       const s = streakRes.data;
       setStreak(s ? { current_streak: s.current_streak, longest_streak: s.longest_streak } : null);
+
+      // Build badge_id -> cert_id map
+      const map: Record<string, string> = {};
+      for (const cert of (certsRes.data ?? [])) {
+        if (cert.course_id)        map[`crs_${cert.course_id}`]                   = cert.id;
+        if (cert.ve_id)            map[`ve_${cert.ve_id}`]                        = cert.id;
+        if (cert.learning_path_id) map[`lp_${cert.learning_path_id}`]            = cert.id;
+      }
+      setCertIdMap(map);
       setLoading(false);
     })();
   }, [userId]);
@@ -3663,9 +3678,17 @@ function StudentBadgesSection({ userId, C }: { userId: string; C: typeof LIGHT_C
           {tabBadges.map(b => {
             const earned = earnedIds.has(b.id);
             const now = new Date();
-            const certUrl = b.image_url ?? appUrl ?? '';
-            const liCertUrl = `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(b.name)}&organizationName=${encodeURIComponent(appName ?? '')}&issueYear=${now.getFullYear()}&issueMonth=${now.getMonth() + 1}&certUrl=${encodeURIComponent(certUrl)}&certId=${encodeURIComponent(b.id)}`;
-            const liPostUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(certUrl)}&title=${encodeURIComponent(`I earned the ${b.name} badge on ${appName ?? 'my learning platform'}!`)}&summary=${encodeURIComponent(b.description)}`;
+            const certPageId   = certIdMap[b.id];
+            const certPageUrl  = certPageId              ? `${appUrl}/certificate/${certPageId}`     : null;
+            const badgeUuid    = badgeUuidMap[b.id];
+            const badgePageUrl = badgeUuid               ? `${appUrl}/b/${badgeUuid}`                : null;
+            const shareUrl     = certPageUrl ?? badgePageUrl ?? null;
+            const liCertUrl   = shareUrl
+              ? `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(b.name)}&organizationName=${encodeURIComponent(appName ?? '')}&issueYear=${now.getFullYear()}&issueMonth=${now.getMonth() + 1}&certUrl=${encodeURIComponent(shareUrl)}&certId=${encodeURIComponent(certPageId ?? b.id)}`
+              : null;
+            const liPostUrl = shareUrl
+              ? `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(`I earned the ${b.name} badge on ${appName ?? 'my learning platform'}!`)}&summary=${encodeURIComponent(b.description)}`
+              : null;
             return (
               <div key={b.id}
                 className="flex flex-col items-center gap-3 px-5 pt-8 pb-6 rounded-2xl text-center"
@@ -3704,20 +3727,24 @@ function StudentBadgesSection({ userId, C }: { userId: string; C: typeof LIGHT_C
                       {liOpen === b.id && (
                         <div className="absolute bottom-10 right-0 z-20 w-48 rounded-xl overflow-hidden shadow-lg"
                           style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-                          <a href={liCertUrl} target="_blank" rel="noreferrer"
-                            onClick={() => setLiOpen(null)}
-                            className="flex items-center gap-2.5 px-4 py-3 text-xs font-semibold hover:opacity-70 transition-opacity"
-                            style={{ color: C.text, borderBottom: `1px solid ${C.divider}` }}>
-                            <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4 flex-shrink-0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                            Add to Certifications
-                          </a>
-                          <a href={liPostUrl} target="_blank" rel="noreferrer"
-                            onClick={() => setLiOpen(null)}
-                            className="flex items-center gap-2.5 px-4 py-3 text-xs font-semibold hover:opacity-70 transition-opacity"
-                            style={{ color: C.text }}>
-                            <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4 flex-shrink-0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                            Share as Post
-                          </a>
+                          {liCertUrl && (
+                            <a href={liCertUrl} target="_blank" rel="noreferrer"
+                              onClick={() => setLiOpen(null)}
+                              className="flex items-center gap-2.5 px-4 py-3 text-xs font-semibold hover:opacity-70 transition-opacity"
+                              style={{ color: C.text, borderBottom: `1px solid ${C.divider}` }}>
+                              <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4 flex-shrink-0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                              Add to Certifications
+                            </a>
+                          )}
+                          {liPostUrl && (
+                            <a href={liPostUrl} target="_blank" rel="noreferrer"
+                              onClick={() => setLiOpen(null)}
+                              className="flex items-center gap-2.5 px-4 py-3 text-xs font-semibold hover:opacity-70 transition-opacity"
+                              style={{ color: C.text }}>
+                              <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4 flex-shrink-0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                              Share as Post
+                            </a>
+                          )}
                         </div>
                       )}
                     </div>
