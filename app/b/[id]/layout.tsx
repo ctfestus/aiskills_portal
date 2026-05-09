@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Metadata } from 'next';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,8 +29,9 @@ export async function generateMetadata({
 
   if (!badge || !student) return { title: 'Badge Not Found' };
 
-  const appName = process.env.NEXT_PUBLIC_APP_NAME || '';
-  const rawUrl  =
+  const t      = await getTenantSettings();
+  const appName = t.appName || t.orgName || '';
+  const rawUrl  = t.appUrl ||
     process.env.APP_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
   const appUrl  = rawUrl.replace(/\/$/, '');
