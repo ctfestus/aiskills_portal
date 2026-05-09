@@ -34,13 +34,10 @@ export async function generateMetadata({
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
   const appUrl  = rawUrl.replace(/\/$/, '');
 
-  const title = `${student.full_name} earned: ${badge.name}`;
-
-  const suffix = appName ? ` Powered by ${appName}.` : '.';
-  const base   = (badge.description || '').trim().slice(0, 200);
-  const description = base.length >= 100
-    ? base
-    : (base ? `${base}${suffix}` : `${badge.name}${suffix}`).slice(0, 200);
+  const platform = appName || 'the platform';
+  const title = `${badge.name} issued to ${student.full_name} by ${platform}`;
+  const baseDesc = (badge.description || '').trim();
+  const description = `${student.full_name} earned the ${badge.name} badge on ${platform}. ${baseDesc}`.slice(0, 300);
 
   const ogImage = badge.image_url?.startsWith('http') ? badge.image_url : undefined;
 
