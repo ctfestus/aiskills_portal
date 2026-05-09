@@ -3757,7 +3757,12 @@ function BadgesSection({ C }: { C: typeof LIGHT_C }) {
     setUploading(badge.id);
     setMsg(null);
     try {
-      const url = await uploadToCloudinary(file, 'badge-images');
+      const ext  = file.name.split('.').pop() || 'png';
+      const path = `badge-images/${badge.id}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
+      const url = publicUrl;
       const { error } = await supabase.from('badges').update({ image_url: url }).eq('id', badge.id);
       if (error) throw error;
       setBadges(prev => prev.map(b => b.id === badge.id ? { ...b, image_url: url } : b));
