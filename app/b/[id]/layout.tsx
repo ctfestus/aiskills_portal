@@ -29,12 +29,9 @@ export async function generateMetadata({
 
   if (!badge || !student) return { title: 'Badge Not Found' };
 
-  const t      = await getTenantSettings();
+  const t       = await getTenantSettings();
   const appName = t.appName || t.orgName || '';
-  const rawUrl  = t.appUrl ||
-    process.env.APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
-  const appUrl  = rawUrl.replace(/\/$/, '');
+  const appUrl  = t.appUrl;
 
   const platform = appName || 'the platform';
   const title = `${badge.name} issued to ${student.full_name} by ${platform}`;

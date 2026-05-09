@@ -3564,8 +3564,7 @@ const BADGE_TABS = [
 type BadgeTabId = typeof BADGE_TABS[number]['id'];
 
 function StudentBadgesSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
-  const { appName, appUrl: rawAppUrl } = useTenant();
-  const appUrl = rawAppUrl.replace(/\/$/, '');
+  const { appName, appUrl } = useTenant();
   const [tab, setTab]               = useState<BadgeTabId>('achievement');
   const [liOpen, setLiOpen]         = useState<string | null>(null);
   const [allBadges, setAllBadges]   = useState<{ id: string; name: string; description: string; icon: string; color: string; image_url: string | null; category: string }[]>([]);

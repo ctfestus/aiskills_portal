@@ -18,7 +18,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         setSettings({
           appName:      d.app_name      || tenant.appName,
           orgName:      d.org_name      || tenant.orgName,
-          appUrl:       d.app_url       || tenant.appUrl,
+          appUrl:       (d.app_url       || tenant.appUrl).replace(/\/$/, ''),
           logoUrl:      d.logo_url      || tenant.logoUrl,
           logoDarkUrl:  d.logo_dark_url || tenant.logoDarkUrl,
           teamName:     d.team_name     || tenant.teamName,
