@@ -3687,7 +3687,7 @@ function StudentBadgesSection({ userId, C }: { userId: string; C: typeof LIGHT_C
               ? `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(b.name)}&organizationName=${encodeURIComponent(appName ?? '')}&issueYear=${now.getFullYear()}&issueMonth=${now.getMonth() + 1}&certUrl=${encodeURIComponent(shareUrl)}&certId=${encodeURIComponent(certPageId ?? badgeUuid ?? b.id)}`
               : null;
             const liPostUrl = shareUrl
-              ? `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(`I earned the ${b.name} badge on ${appName ?? 'my learning platform'}!`)}&summary=${encodeURIComponent(b.description)}`
+              ? `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`
               : null;
             return (
               <div key={b.id}

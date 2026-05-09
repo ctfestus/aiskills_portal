@@ -1,4 +1,10 @@
+import { createClient } from '@supabase/supabase-js';
 import type { Metadata } from 'next';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function generateMetadata({
   params,
@@ -7,37 +13,36 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
 
+  const { data: earned } = await supabase
+    .from('student_badges')
+    .select('student_id, badge_id')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (!earned) return { title: 'Badge Not Found' };
+
+  const [{ data: badge }, { data: student }] = await Promise.all([
+    supabase.from('badges').select('name, description, image_url').eq('id', earned.badge_id).single(),
+    supabase.from('students').select('full_name').eq('id', earned.student_id).single(),
+  ]);
+
+  if (!badge || !student) return { title: 'Badge Not Found' };
+
   const appName = process.env.NEXT_PUBLIC_APP_NAME || '';
   const rawUrl  =
     process.env.APP_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
-  const appUrl = rawUrl.replace(/\/$/, '');
+  const appUrl  = rawUrl.replace(/\/$/, '');
 
-  let data: {
-    studentName: string;
-    badgeName: string;
-    badgeDescription: string;
-    badgeImageUrl: string | null;
-  } | null = null;
-
-  try {
-    const res = await fetch(`${appUrl}/api/b/${id}`, { cache: 'no-store' });
-    if (res.ok) data = await res.json();
-  } catch {
-    // non-critical -- metadata falls back to defaults
-  }
-
-  if (!data) return { title: 'Badge Not Found' };
-
-  const title = `${data.studentName} earned: ${data.badgeName}`;
+  const title = `${student.full_name} earned: ${badge.name}`;
 
   const suffix = appName ? ` Powered by ${appName}.` : '.';
-  const base   = (data.badgeDescription || '').trim().slice(0, 200);
+  const base   = (badge.description || '').trim().slice(0, 200);
   const description = base.length >= 100
     ? base
-    : (base ? `${base}${suffix}` : `${data.badgeName}${suffix}`).slice(0, 200);
+    : (base ? `${base}${suffix}` : `${badge.name}${suffix}`).slice(0, 200);
 
-  const ogImage = data.badgeImageUrl?.startsWith('http') ? data.badgeImageUrl : undefined;
+  const ogImage = badge.image_url?.startsWith('http') ? badge.image_url : undefined;
 
   return {
     title,
