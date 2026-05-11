@@ -101,15 +101,14 @@ export async function POST(req: NextRequest) {
   }
   const content_type = isCourse ? 'course' : 'event';
 
-  // Shared columns
+  // Shared columns (badge_image_url excluded -- only courses and virtual_experiences have that column)
   const shared = {
     user_id:       user.id,
     title:         title ?? 'Untitled',
     description:   description ?? null,
     status:        formStatus,
     cohort_ids:    cohort_ids ?? [],
-    cover_image:     config.coverImage    ?? null,
-    badge_image_url: config.badgeImageUrl ?? null,
+    cover_image:   config.coverImage ?? null,
     deadline_days: deadline_days ? Number(deadline_days) : (config.deadline_days ? Number(config.deadline_days) : null),
     theme:         config.theme ?? null,
     mode:          config.mode ?? null,
@@ -130,6 +129,7 @@ export async function POST(req: NextRequest) {
         .from('courses')
         .insert({
           ...shared,
+          badge_image_url: config.badgeImageUrl ?? null,
           slug,
           questions:      normalizeQuestions(config.questions),
           fields:         config.fields         ?? [],
@@ -246,8 +246,7 @@ export async function PUT(req: NextRequest) {
     description:   description ?? null,
     status:        formStatus,
     cohort_ids:    cohort_ids ?? found.row.cohort_ids ?? [],
-    cover_image:     config.coverImage    ?? null,
-    badge_image_url: config.badgeImageUrl ?? null,
+    cover_image:   config.coverImage ?? null,
     deadline_days: deadline_days != null ? Number(deadline_days) : (config.deadline_days != null ? Number(config.deadline_days) : null),
     theme:         config.theme ?? null,
     mode:          config.mode ?? null,
@@ -260,6 +259,7 @@ export async function PUT(req: NextRequest) {
   if (found.table === 'courses') {
     updatePayload = {
       ...shared,
+      badge_image_url: config.badgeImageUrl ?? null,
       questions:      normalizeQuestions(config.questions),
       fields:         config.fields         ?? [],
       passmark:       config.passmark        ?? 50,
@@ -290,7 +290,7 @@ export async function PUT(req: NextRequest) {
     };
   } else {
     // virtual_experiences -- not edited via FormEditor but handle gracefully
-    updatePayload = shared;
+    updatePayload = { ...shared, badge_image_url: config.badgeImageUrl ?? null };
   }
 
   const { error: updateError } = await supabase.from(found.table).update(updatePayload).eq('id', id);

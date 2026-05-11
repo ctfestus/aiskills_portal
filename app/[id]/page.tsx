@@ -332,6 +332,7 @@ export default function PublicFormPage() {
   }, [form, systemDark]);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [joinToken, setJoinToken] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [relatedForms, setRelatedForms] = useState<any[]>([]);
   const [relatedAssignment, setRelatedAssignment] = useState<{ id: string; title: string } | null>(null);
@@ -589,8 +590,8 @@ export default function PublicFormPage() {
           responses: Object.keys(data).length > 0 ? data : undefined,
         }),
       });
+      const regJson = await regRes.json().catch(() => ({}));
       if (!regRes.ok) {
-        const regJson = await regRes.json().catch(() => ({}));
         if (regJson.error !== 'already_registered') {
           console.error('[event-register] unexpected error:', regRes.status, regJson);
         }
@@ -600,6 +601,7 @@ export default function PublicFormPage() {
           : 'Failed to register. Please try again.');
         return;
       }
+      if (regJson.join_token) setJoinToken(regJson.join_token);
     } else if (!form.config?.isCourse) {
       // Pure registration forms only -- courses track state in course_attempts
       const { error } = await supabase.from('responses').insert({
@@ -1299,13 +1301,14 @@ export default function PublicFormPage() {
                 const ev = config.eventDetails;
                 if (ev.eventType === 'virtual' && ev.meetingLink) {
                   const platform = detectPlatform(ev.meetingLink);
+                  const joinHref = joinToken ? `/api/join?token=${joinToken}` : ev.meetingLink;
                   return (
                     <div style={{ marginBottom: 20, padding: '16px 20px', borderRadius: 14, background: dark ? 'rgba(16,185,129,0.06)' : '#edf7f1', border: `1px solid ${dark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.2)'}`, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {platform?.icon}
                         <span style={{ fontSize: 13, fontWeight: 600, color: t.title }}>{platform?.name ?? 'Meeting Link'}</span>
                       </div>
-                      <a href={ev.meetingLink} target="_blank" rel="noopener noreferrer"
+                      <a href={joinHref} target="_blank" rel="noopener noreferrer"
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, fontSize: 13, fontWeight: 600, background: platform?.color ?? accentColor, color: 'white', textDecoration: 'none' }}>
                         Join Meeting <ExternalLink style={{ width: 13, height: 13 }}/>
                       </a>
@@ -1327,8 +1330,9 @@ export default function PublicFormPage() {
               {config.eventDetails?.isEvent && config.eventDetails.date && config.postSubmission?.type !== 'redirect' && (() => {
                 const ev = config.eventDetails;
                 const isVirtual = ev.eventType === 'virtual' && ev.meetingLink;
-                const calLocation = isVirtual ? ev.meetingLink : (ev.location ?? '');
-                const calDescription = [config.description ?? '', isVirtual ? `Join: ${ev.meetingLink}` : ''].filter(Boolean).join('\n\n');
+                const joinHref = joinToken ? `/api/join?token=${joinToken}` : (ev.meetingLink ?? '');
+                const calLocation = isVirtual ? joinHref : (ev.location ?? '');
+                const calDescription = [config.description ?? '', isVirtual ? `Join: ${joinHref}` : ''].filter(Boolean).join('\n\n');
                 const googleUrl  = buildGoogleCalUrl(config.title, ev.date, ev.time, calLocation, calDescription, form.recurrence, form.recurrence_end_date, form.recurrence_days);
                 const outlookUrl = buildOutlookCalUrl(config.title, ev.date, ev.time, calLocation, calDescription);
                 const yahooUrl   = buildYahooCalUrl(config.title, ev.date, ev.time, calLocation, calDescription);

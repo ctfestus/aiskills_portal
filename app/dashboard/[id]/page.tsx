@@ -9,6 +9,7 @@ import {
   Copy, Check, ExternalLink, Code2, GitFork, QrCode, Edit2,
   AlignLeft, HelpCircle, CalendarDays, Share2, Mail, Send, Bell,
   Award, Upload, Trash2, RefreshCw, Link as LinkIcon, Sun, Moon, Sparkles, X,
+  ChevronDown,
 } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -101,6 +102,19 @@ function ResponsesTab({
   const isCourse = form.config?.isCourse;
   const isEvent = form.config?.eventDetails?.isEvent;
   const [selectedResponse, setSelectedResponse] = useState<any | null>(null);
+  const [eventAttendance, setEventAttendance] = useState<any[]>([]);
+  const [expandedSession, setExpandedSession] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isEvent || !form.id) return;
+    supabase
+      .from('live_attendance')
+      .select('student_id, session_date, joined_at, student:students(full_name, email)')
+      .eq('event_id', form.id)
+      .order('session_date', { ascending: false })
+      .then(({ data }) => setEventAttendance(data ?? []));
+  }, [isEvent, form.id]);
+
   const configuredFields = form.config?.fields ?? [];
   const resolveResponseValue = (response: any, matcher: (key: string, field: any) => boolean) => {
     const data = response?.data || {};
@@ -535,6 +549,87 @@ function ResponsesTab({
             </div>
             <Pagination totalCount={totalCount} page={page} pageLoading={pageLoading} onPageChange={onPageChange} isDark={isDark} />
           </div>
+
+          {/* Session Attendance */}
+          {(() => {
+            const byDate = new Map<string, any[]>();
+            for (const row of eventAttendance) {
+              if (!byDate.has(row.session_date)) byDate.set(row.session_date, []);
+              byDate.get(row.session_date)!.push(row);
+            }
+            const sessionDates = [...byDate.keys()].sort().reverse();
+            return (
+              <div className={`rounded-[28px] border ${card}`}>
+                <div className={`flex items-center justify-between gap-3 border-b px-6 py-5 ${cardHeader}`}>
+                  <div>
+                    <h3 className={`text-base font-semibold ${textPrim}`}>Session Attendance</h3>
+                    <p className={`mt-1 text-sm ${textMut}`}>Recorded each time a student clicks the Join button.</p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-medium ${isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-[#f1f2f3] text-[#555]'}`}>
+                    {sessionDates.length} {sessionDates.length === 1 ? 'session' : 'sessions'}
+                  </span>
+                </div>
+                {sessionDates.length === 0 ? (
+                  <div className={`px-6 py-16 text-center text-sm ${textMut}`}>
+                    No attendance recorded yet. Students are tracked automatically when they click Join.
+                  </div>
+                ) : (
+                  <div className="divide-y" style={{ borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}>
+                    {sessionDates.map(date => {
+                      const attendees = byDate.get(date) ?? [];
+                      const attended = attendees.length;
+                      const pct = totalCount > 0 ? Math.round((attended / totalCount) * 100) : 0;
+                      const isOpen = expandedSession === date;
+                      const label = (() => {
+                        const d = new Date(date + 'T12:00:00');
+                        return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+                      })();
+                      return (
+                        <div key={date}>
+                          <button
+                            onClick={() => setExpandedSession(isOpen ? null : date)}
+                            className={`w-full flex items-center justify-between px-6 py-4 text-left transition-colors ${tableRow}`}
+                          >
+                            <div>
+                              <p className={`text-sm font-semibold ${textPrim}`}>{label}</p>
+                              <p className={`mt-0.5 text-xs ${textMut}`}>{attended} of {totalCount} registered students joined</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${pct >= 75 ? (isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-700') : (isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-[#f1f2f3] text-[#666]')}`}>
+                                {pct}%
+                              </span>
+                              <ChevronDown className={`w-4 h-4 transition-transform ${textMut} ${isOpen ? 'rotate-180' : ''}`} />
+                            </div>
+                          </button>
+                          {isOpen && (
+                            <div className={`px-6 pb-4 ${isDark ? 'bg-zinc-900/30' : 'bg-[#fafafa]'}`}>
+                              {attendees.length === 0 ? (
+                                <p className={`text-sm py-4 ${textMut}`}>No joins recorded for this session.</p>
+                              ) : (
+                                <div className="divide-y" style={{ borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}>
+                                  {attendees.map((a: any) => (
+                                    <div key={a.student_id} className="flex items-center justify-between py-3">
+                                      <div>
+                                        <p className={`text-sm font-medium ${textPrim}`}>{(a.student as any)?.full_name || 'Unknown'}</p>
+                                        <p className={`text-xs ${textMut}`}>{(a.student as any)?.email || ''}</p>
+                                      </div>
+                                      <span className={`text-xs ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                                        Joined {new Date(a.joined_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         <AnimatePresence>

@@ -131,33 +131,57 @@ export async function POST(req: NextRequest) {
         }
 
         const reminderSubject = data.isOneHour ? `Starting in 1 hour: ${data.eventTitle}` : `Tomorrow: ${data.eventTitle}`;
-        const reminderHtml = reminderEmail({ ...data, branding });
 
         if (typeof to === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim())) {
-          // Test mode: creator provided a single email -- send once
-          await resend.emails.send({ from: FROM, to: to.trim(), subject: reminderSubject, html: reminderHtml });
+          // Test mode: single address, no personal token needed
+          const html = reminderEmail({ ...data, branding });
+          await resend.emails.send({ from: FROM, to: to.trim(), subject: reminderSubject, html });
           return NextResponse.json({ success: true, test: true });
         }
 
-        // Production mode: event registrants live in event_registrations (validated as event above)
+        // Production mode: per-student email with their personal tracked join link
         const { data: registrations } = await supabase
           .from('event_registrations')
-          .select('student:students(email)')
+          .select('join_token, student:students(email, full_name)')
           .eq('event_id', data.formId);
 
-        const emails = [...new Set(
-          (registrations || [])
-            .map((reg: any) => {
-              const s = Array.isArray(reg.student) ? reg.student[0] : reg.student;
-              return String(s?.email || '').trim().toLowerCase();
-            })
-            .filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
-        )];
-        if (!emails.length) return NextResponse.json({ error: 'No valid recipients found' }, { status: 400 });
-        await sendBatch(emails, reminderSubject, reminderHtml, FROM);
-        return NextResponse.json({ success: true, count: emails.length });
+        const messages = (registrations ?? []).flatMap((reg: any) => {
+          const s     = Array.isArray(reg.student) ? reg.student[0] : reg.student;
+          const email = normalizeEmail(s?.email);
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return [];
+          const joinUrl = reg.join_token ? `${t.appUrl}/api/join?token=${reg.join_token}` : undefined;
+          const html    = reminderEmail({ ...data, joinUrl, branding });
+          return [{ from: FROM, to: email, subject: reminderSubject, html }];
+        });
+
+        if (!messages.length) return NextResponse.json({ error: 'No valid recipients found' }, { status: 400 });
+        for (let i = 0; i < messages.length; i += 100) {
+          await resend.batch.send(messages.slice(i, i + 100));
+        }
+        return NextResponse.json({ success: true, count: messages.length });
       }
-      // Cron path falls through to switch/send below
+      // Cron path: per-student personalization when formId is available
+      if (data?.formId) {
+        const supabase        = getAdminSupabase();
+        const cronSubject     = data.isOneHour
+          ? `Starting in 1 hour: ${data.eventTitle}`
+          : `Tomorrow: ${data.eventTitle}`;
+        const { data: regs } = await supabase
+          .from('event_registrations')
+          .select('join_token, student:students(email, full_name)')
+          .eq('event_id', data.formId);
+        const msgs = (regs ?? []).flatMap((reg: any) => {
+          const s     = Array.isArray(reg.student) ? reg.student[0] : reg.student;
+          const email = normalizeEmail(s?.email);
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return [];
+          const joinUrl = reg.join_token ? `${t.appUrl}/api/join?token=${reg.join_token}` : undefined;
+          return [{ from: FROM, to: email, subject: cronSubject, html: reminderEmail({ ...data, joinUrl, branding }) }];
+        });
+        if (!msgs.length) return NextResponse.json({ error: 'No valid recipients found' }, { status: 400 });
+        for (let i = 0; i < msgs.length; i += 100) await resend.batch.send(msgs.slice(i, i + 100));
+        return NextResponse.json({ success: true, count: msgs.length });
+      }
+      // No formId: fall through to switch/send with a shared html
     } else if (type === 'confirmation') {
       // Confirmation emails are now sent server-side inside /api/event-register.
       // Test mode only is still supported here (creator previewing template).

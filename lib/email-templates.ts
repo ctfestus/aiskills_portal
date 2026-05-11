@@ -115,6 +115,7 @@ export function confirmationEmail(data: {
   eventLocation?: string;
   eventTimezone?: string;
   meetingLink?: string;
+  joinUrl?: string;
   eventType?: string;
   formUrl: string;
   customTitle?: string;
@@ -122,12 +123,13 @@ export function confirmationEmail(data: {
   bannerUrl?: string;
   branding?: EmailBranding;
 }) {
-  const { name, eventTitle, eventDate, eventTime, eventLocation, eventTimezone, meetingLink, formUrl, customTitle, customBody, bannerUrl, branding } = data;
+  const { name, eventTitle, eventDate, eventTime, eventLocation, eventTimezone, meetingLink, joinUrl, formUrl, customTitle, customBody, bannerUrl, branding } = data;
+  const joinHref = joinUrl || meetingLink;
 
   const meetingBlock = meetingLink ? `
     <div style="margin:16px 0;padding:16px;background:#f0f7ff;border-radius:0;border:1px solid #c5deff;text-align:center;">
       <p style="margin:0 0 10px;font-weight:600;color:#333;">${platformName(meetingLink)}</p>
-      <a href="${meetingLink}" style="display:inline-block;padding:10px 24px;background:${platformColor(meetingLink)};color:white;border-radius:0;text-decoration:none;font-weight:600;font-size:14px;">Join Meeting</a>
+      <a href="${joinHref}" style="display:inline-block;padding:10px 24px;background:${platformColor(meetingLink)};color:white;border-radius:0;text-decoration:none;font-weight:600;font-size:14px;">Join Meeting</a>
       <p style="margin:8px 0 0;font-size:12px;color:#888;">Keep this link. You will need it to attend.</p>
     </div>` : '';
 
@@ -161,18 +163,20 @@ export function reminderEmail(data: {
   eventLocation?: string;
   eventTimezone?: string;
   meetingLink?: string;
+  joinUrl?: string;
   formUrl: string;
   isOneHour?: boolean;
   bannerUrl?: string;
   branding?: EmailBranding;
 }) {
-  const { name, eventTitle, eventDate, eventTime, eventLocation, eventTimezone, meetingLink, formUrl, isOneHour, bannerUrl, branding } = data;
+  const { name, eventTitle, eventDate, eventTime, eventLocation, eventTimezone, meetingLink, joinUrl, formUrl, isOneHour, bannerUrl, branding } = data;
   const timeLabel = isOneHour ? '1 hour' : 'tomorrow';
+  const joinHref  = joinUrl || meetingLink;
 
   const meetingBlock = meetingLink ? `
     <div style="margin:16px 0;padding:16px;background:#f0f7ff;border-radius:0;border:1px solid #c5deff;text-align:center;">
       <p style="margin:0 0 10px;font-weight:600;color:#333;">${platformName(meetingLink)}</p>
-      <a href="${meetingLink}" style="display:inline-block;padding:10px 24px;background:${platformColor(meetingLink)};color:white;border-radius:0;text-decoration:none;font-weight:600;font-size:14px;">Join Meeting</a>
+      <a href="${joinHref}" style="display:inline-block;padding:10px 24px;background:${platformColor(meetingLink)};color:white;border-radius:0;text-decoration:none;font-weight:600;font-size:14px;">Join Meeting</a>
     </div>` : '';
 
   const content = `
@@ -1264,6 +1268,113 @@ export function badgeEarnedEmail(data: {
     <br>
     <p><b>Well done,</b></p>
   `;
+  return shell(content, branding);
+}
+
+// -- Live Session Attendance Report (to instructors + admins) ---
+export function attendanceReportEmail(data: {
+  eventTitle: string;
+  sessionDate: string;
+  attended: { name: string; email: string; joinedAt: string }[];
+  missed: { name: string; email: string }[];
+  dashboardUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { eventTitle, sessionDate, attended, missed, dashboardUrl, branding } = data;
+  const total = attended.length + missed.length;
+  const dateLabel = new Date(sessionDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  const tableHead = `
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;">
+      <thead>
+        <tr style="background:#f9fafb;">
+          <th style="padding:8px 12px;text-align:left;font-weight:600;color:#374151;border-bottom:2px solid #e5e7eb;">Name</th>
+          <th style="padding:8px 12px;text-align:left;font-weight:600;color:#374151;border-bottom:2px solid #e5e7eb;">Email</th>
+          <th style="padding:8px 12px;text-align:center;font-weight:600;color:#374151;border-bottom:2px solid #e5e7eb;">Status</th>
+          <th style="padding:8px 12px;text-align:right;font-weight:600;color:#374151;border-bottom:2px solid #e5e7eb;">Joined At</th>
+        </tr>
+      </thead>
+      <tbody>`;
+
+  const attendedRows = attended.map(s => `
+    <tr style="border-bottom:1px solid #f0f0f0;">
+      <td style="padding:8px 12px;color:#111;">${esc(s.name)}</td>
+      <td style="padding:8px 12px;color:#6b7280;">${esc(s.email)}</td>
+      <td style="padding:8px 12px;text-align:center;">
+        <span style="background:#dcfce7;color:#16a34a;padding:2px 8px;font-size:11px;font-weight:700;">ATTENDED</span>
+      </td>
+      <td style="padding:8px 12px;text-align:right;color:#6b7280;">
+        ${s.joinedAt ? new Date(s.joinedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '--'}
+      </td>
+    </tr>`).join('');
+
+  const missedRows = missed.map(s => `
+    <tr style="border-bottom:1px solid #f0f0f0;">
+      <td style="padding:8px 12px;color:#111;">${esc(s.name)}</td>
+      <td style="padding:8px 12px;color:#6b7280;">${esc(s.email)}</td>
+      <td style="padding:8px 12px;text-align:center;">
+        <span style="background:#fee2e2;color:#dc2626;padding:2px 8px;font-size:11px;font-weight:700;">MISSED</span>
+      </td>
+      <td style="padding:8px 12px;text-align:right;color:#6b7280;">--</td>
+    </tr>`).join('');
+
+  const content = `
+    <p><b>Hi,</b></p>
+    <p>Here is the attendance report for today's live session.</p>
+
+    <div style="margin:20px 0;padding:20px;background:#f0fdf4;border-left:4px solid #16a34a;">
+      <p style="margin:0 0 4px;font-size:18px;font-weight:700;color:#111;">${esc(eventTitle)}</p>
+      <p style="margin:0;font-size:13px;color:#16a34a;font-weight:600;">${esc(dateLabel)}</p>
+    </div>
+
+    <div style="margin:16px 0;padding:16px;background:#f9fafb;text-align:center;">
+      <span style="font-size:36px;font-weight:900;color:${attended.length > 0 ? '#16a34a' : '#dc2626'};">${attended.length}</span>
+      <span style="font-size:16px;color:#6b7280;"> / ${total} registered attended</span>
+    </div>
+
+    ${tableHead}${attendedRows}${missedRows}
+      </tbody>
+    </table>
+
+    ${cta('View Full Attendance Report', dashboardUrl)}
+
+    <br><p><b>Best regards,</b></p>
+  `;
+
+  return shell(content, branding);
+}
+
+// -- Missed Session Nudge (to absent students) ---
+export function missedSessionEmail(data: {
+  name: string;
+  eventTitle: string;
+  sessionDate: string;
+  joinUrl?: string;
+  meetingLink?: string;
+  dashboardUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { name, eventTitle, sessionDate, joinUrl, meetingLink, dashboardUrl, branding } = data;
+  const joinHref  = joinUrl || meetingLink;
+  const dateLabel = new Date(sessionDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+  const joinBlock = joinHref ? `
+    <div style="margin:20px 0;padding:16px;background:#f0f7ff;border-left:4px solid ${platformColor(meetingLink || joinHref)};text-align:center;">
+      <p style="margin:0 0 10px;font-weight:600;color:#333;">${platformName(meetingLink || joinHref)}</p>
+      <a href="${joinHref}" style="display:inline-block;padding:10px 24px;background:${platformColor(meetingLink || joinHref)};color:white;border-radius:0;text-decoration:none;font-weight:600;font-size:14px;">Join Next Session</a>
+    </div>` : cta('Go to Dashboard', dashboardUrl);
+
+  const content = `
+    <p><b>Hi ${esc(name)},</b></p>
+    <p>We noticed you missed <b>${esc(eventTitle)}</b> on <b>${esc(dateLabel)}</b>.</p>
+    <p style="color:#374151;">No worries - we would love to see you at the next session. The link below will take you straight in.</p>
+
+    ${joinBlock}
+
+    <p style="color:#6b7280;font-size:13px;">If you have any questions or ran into an issue joining, please reply to this email and we will help you out.</p>
+    <br><p><b>Best regards,</b></p>
+  `;
+
   return shell(content, branding);
 }
 

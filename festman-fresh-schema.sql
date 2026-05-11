@@ -487,14 +487,27 @@ CREATE TABLE public.certificate_defaults (
 );
 
 -- ── event_registrations ───────────────────────────────────────
--- Final state after migration 039 + 054: student_id NOT NULL, responses jsonb for custom form field answers
+-- Final state after migration 039 + 054 + 091: student_id NOT NULL, responses jsonb, join_token for attendance tracking
 CREATE TABLE public.event_registrations (
   id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id    uuid        NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
   event_id      uuid        NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   registered_at timestamptz NOT NULL DEFAULT now(),
   responses     jsonb       NOT NULL DEFAULT '{}',
+  join_token    text        NOT NULL UNIQUE DEFAULT gen_random_uuid()::text,
   UNIQUE (student_id, event_id)
+);
+
+-- ── live_attendance ───────────────────────────────────────────
+-- Records a row each time a student clicks the tracked join link for a live session.
+-- session_date is the calendar date of the click, enabling per-session tracking for recurring events.
+CREATE TABLE public.live_attendance (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id     uuid        NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
+  student_id   uuid        NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  session_date date        NOT NULL DEFAULT CURRENT_DATE,
+  joined_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (event_id, student_id, session_date)
 );
 
 -- ── sent_nudges ───────────────────────────────────────────────

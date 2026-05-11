@@ -78,6 +78,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'already_registered' }, { status: 409 });
   }
 
+  // Fetch the join_token assigned to this registration
+  const { data: regRow } = await supabase
+    .from('event_registrations')
+    .select('join_token')
+    .eq('event_id', formId)
+    .eq('student_id', student.id)
+    .single();
+  const joinToken: string | null = regRow?.join_token ?? null;
+
   // Save custom form field responses if provided
   if (formResponses && typeof formResponses === 'object' && Object.keys(formResponses).length > 0) {
     await supabase
@@ -102,6 +111,7 @@ export async function POST(req: NextRequest) {
       eventTimezone: event.timezone   || '',
       eventLocation: event.location   || '',
       meetingLink:   event.meeting_link || '',
+      joinUrl:       joinToken ? `${t.appUrl}/api/join?token=${joinToken}` : undefined,
       formUrl:       `${t.appUrl}/${event.slug ?? formId}`,
       branding,
     });
@@ -111,5 +121,5 @@ export async function POST(req: NextRequest) {
       .catch((err: unknown) => console.error('[event-register] confirmation email failed:', err));
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, join_token: joinToken });
 }

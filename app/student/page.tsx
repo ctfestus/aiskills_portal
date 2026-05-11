@@ -198,7 +198,7 @@ const NAV_ITEMS = [
   { id: 'courses',           label: 'My Courses',          Icon: Film            },
   { id: 'learning_paths',    label: 'Learning Paths',      Icon: Layers          },
   { id: 'virtual_experiences', label: 'Virtual Experiences', Icon: Briefcase     },
-  { id: 'events',            label: 'Live Events',          Icon: CalendarDays    },
+  { id: 'events',            label: 'Live Sessions',        Icon: CalendarDays    },
   { id: 'assignments',       label: 'Assignments',         Icon: ClipboardList   },
   { id: 'community',         label: 'Community',           Icon: Users           },
   { id: 'announcements',     label: 'Tech Blog',            Icon: Megaphone       },
@@ -950,7 +950,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
         const [{ data: regsData }, { data: cohortData }] = await Promise.all([
           supabase
             .from('event_registrations')
-            .select('event_id, registered_at')
+            .select('event_id, registered_at, join_token')
             .eq('student_id', userId),
           student?.cohort_id
             ? supabase.from('events').select('id, title, description, slug, cover_image, event_date, event_time, timezone, location, meeting_link, event_type, status, recurrence, recurrence_end_date, recurrence_days')
@@ -992,6 +992,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   };
 
   const registeredEventIds = new Set(regs.map((r: any) => r.event_id).filter(Boolean));
+  const regTokenMap = new Map(regs.filter((r: any) => r.event_id && r.join_token).map((r: any) => [r.event_id, r.join_token as string]));
 
   const allCohortEvents = cohortEvents.map((f: any) => {
     const start = buildDateFromEventDetails({ date: f.event_date, time: f.event_time });
@@ -1010,6 +1011,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
       meetingProvider: mode === 'Virtual' ? 'Google Meet' : 'Venue',
       meetingNote: mode === 'Virtual' ? 'Link shared after registration' : (f.location || 'In-person event'),
       meetingUrl,
+      joinToken: regTokenMap.get(f.id) ?? null,
       imageUrl: f.cover_image || '',
       source: registered ? 'registration' : 'cohort',
       recurrence: f.recurrence ?? 'once',
@@ -1045,8 +1047,8 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   );
 
   if (!cohortEvents.length) return (
-    <EmptyState icon={CalendarDays} title="No events yet"
-      body="No events have been assigned to the cohort yet." />
+    <EmptyState icon={CalendarDays} title="No live sessions yet"
+      body="No live sessions have been scheduled for this cohort yet." />
   );
 
   // -- Realistic provider logos ---
@@ -1167,8 +1169,10 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
             )}
 
             {/* Join button */}
-            {isRegistered && item.meetingUrl && (
-              <a href={item.meetingUrl} target="_blank" rel="noopener noreferrer"
+            {isRegistered && (item.joinToken || item.meetingUrl) && (
+              <a
+                href={item.joinToken ? `/api/join?token=${item.joinToken}` : item.meetingUrl}
+                target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg w-fit dashboard-cta"
                 style={{ background: C.cta, color: C.ctaText, textDecoration: 'none' }}
                 onClick={e => e.stopPropagation()}>
