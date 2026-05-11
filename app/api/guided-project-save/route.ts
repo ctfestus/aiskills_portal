@@ -96,10 +96,10 @@ export async function POST(req: NextRequest) {
   }
 
   if (editId) {
-    // Fetch current cohort_ids before updating so we can detect newly added cohorts
+    // Fetch current cohort_ids/status before updating so we can detect newly added cohorts and first publish
     const { data: existing } = await supabase
       .from('virtual_experiences')
-      .select('cohort_ids, slug')
+      .select('cohort_ids, slug, status')
       .eq('id', editId)
       .eq('user_id', user.id)
       .single();
@@ -115,17 +115,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to save project.' }, { status: 500 });
     }
 
-    await upsertCohortAssignments(supabase, editId, newCohortIds);
-
     const oldCohortIds: string[] = Array.isArray(existing?.cohort_ids) ? existing.cohort_ids : [];
-    const addedCohortIds = newCohortIds.filter(id => !oldCohortIds.includes(id));
-    if (addedCohortIds.length && existing?.slug) {
-      sendAssignmentNotifications({
-        cohortIds:   addedCohortIds,
-        title:       title.trim(),
-        slug:        existing.slug,
-        contentType: 'virtual_experience',
-      }).catch(() => {});
+    const addedCohortIds   = newCohortIds.filter(id => !oldCohortIds.includes(id));
+    const removedCohortIds = oldCohortIds.filter(id => !newCohortIds.includes(id));
+    const isFirstPublish = existing?.status !== 'published' && formStatus === 'published';
+    const notifyCohortIds = isFirstPublish ? newCohortIds : addedCohortIds;
+
+    if (formStatus === 'published') {
+      await upsertCohortAssignments(supabase, editId, newCohortIds);
+    }
+
+    if (formStatus === 'published') {
+      if (removedCohortIds.length) {
+        const { error: delErr } = await supabase
+          .from('cohort_assignments')
+          .delete()
+          .eq('content_id', editId)
+          .in('cohort_id', removedCohortIds);
+        if (delErr) console.error('[guided-project-save] cohort_assignments delete error:', delErr);
+      }
+    } else {
+      const { error: delErr } = await supabase
+        .from('cohort_assignments')
+        .delete()
+        .eq('content_id', editId);
+      if (delErr) console.error('[guided-project-save] draft cohort_assignments cleanup error:', delErr);
+    }
+
+    if (formStatus === 'published' && notifyCohortIds.length && existing?.slug) {
+      try {
+        await sendAssignmentNotifications({
+          cohortIds:   notifyCohortIds,
+          title:       title.trim(),
+          slug:        existing.slug,
+          contentType: 'virtual_experience',
+        });
+      } catch (err) {
+        console.error('[guided-project-save] notification error (edit):', err);
+        return NextResponse.json({ error: 'Saved but notification emails failed to send.' }, { status: 500 });
+      }
     }
 
     if (formStatus === 'published') {
@@ -154,15 +182,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to save project.' }, { status: 500 });
   }
 
-  await upsertCohortAssignments(supabase, data.id, newCohortIds);
+  if (formStatus === 'published') {
+    await upsertCohortAssignments(supabase, data.id, newCohortIds);
+  }
 
-  if (newCohortIds.length) {
-    sendAssignmentNotifications({
-      cohortIds:   newCohortIds,
-      title:       title.trim(),
-      slug:        data.slug,
-      contentType: 'virtual_experience',
-    }).catch(() => {});
+  if (formStatus === 'published' && newCohortIds.length) {
+    try {
+      await sendAssignmentNotifications({
+        cohortIds:   newCohortIds,
+        title:       title.trim(),
+        slug:        data.slug,
+        contentType: 'virtual_experience',
+      });
+    } catch (err) {
+      console.error('[guided-project-save] notification error (create):', err);
+      return NextResponse.json({ error: 'Saved but notification emails failed to send.' }, { status: 500 });
+    }
   }
 
   if (formStatus === 'published') {

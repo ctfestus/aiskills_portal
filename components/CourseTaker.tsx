@@ -858,6 +858,20 @@ export function CourseTaker({
     });
   }, [isSuccess, formId]);
 
+  // -- Fetch public certificate metadata for LinkedIn sharing when cert is available --
+  const [certInstitutionName, setCertInstitutionName] = useState('');
+  const [certIssuedAt, setCertIssuedAt] = useState<string | null>(null);
+  useEffect(() => {
+    if (!certificateId) return;
+    fetch(`/api/certificate/${certificateId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.settings?.institutionName) setCertInstitutionName(data.settings.institutionName);
+        if (data?.issuedAt) setCertIssuedAt(data.issuedAt);
+      })
+      .catch(() => {});
+  }, [certificateId]);
+
   // -- All questions answered but student never hit Submit (e.g. closed tab) --
   // Detect on mount/resume and auto-transition to the completion screen.
   useEffect(() => {
@@ -871,6 +885,27 @@ export function CourseTaker({
   if (isSuccess) {
     const submittedPct = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 100;
     const submittedPassed = totalQuestions === 0 ? true : submittedPct >= passmark;
+
+    const buildLinkedInUrl = (name: string, certId: string, orgName?: string, issuedAt?: string | null) => {
+      const issueDate = issuedAt ? new Date(issuedAt) : new Date();
+      const certUrl = `${window.location.origin}/certificate/${certId}`;
+      const params = new URLSearchParams({
+        startTask: 'CERTIFICATION_NAME',
+        name,
+        issueYear: String(issueDate.getFullYear()),
+        issueMonth: String(issueDate.getMonth() + 1),
+        certId,
+        certUrl,
+      });
+      if (orgName) params.set('organizationName', orgName);
+      return `https://www.linkedin.com/profile/add?${params}`;
+    };
+
+    const LinkedInIcon = () => (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" aria-hidden="true">
+        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+      </svg>
+    );
     const isLessonOnly = totalQuestions === 0;
     const scoreDisplay = Number.isInteger(score) ? String(score) : score.toFixed(1);
     const scoreMarker = Math.max(4, Math.min(96, submittedPct));
@@ -972,17 +1007,28 @@ export function CourseTaker({
               </div>
             </div>
 
-            {/* Certificate button */}
+            {/* Certificate + share actions */}
             {submittedPassed && certificateId && (
-              <a
-                href={`/certificate/${certificateId}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl font-bold text-sm transition-all"
-                style={{ background: accent, color: '#ffffff' }}
-              >
-                View Your Certificate
-              </a>
+              <div className="space-y-2">
+                <a
+                  href={`/certificate/${certificateId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl font-bold text-sm transition-all"
+                  style={{ background: accent, color: '#ffffff' }}
+                >
+                  View Your Certificate
+                </a>
+                <a
+                  href={buildLinkedInUrl(config.title || 'Course Certificate', certificateId, certInstitutionName || undefined, certIssuedAt)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-semibold text-sm transition-all hover:opacity-90"
+                  style={{ background: '#0A66C2', color: '#fff' }}
+                >
+                  <LinkedInIcon /> Add to LinkedIn Profile
+                </a>
+              </div>
             )}
 
             {/* XP + milestones */}
@@ -2876,9 +2922,9 @@ export function CourseTaker({
                             style={{ border: `${borderWidth}px solid ${borderColor}` }}
                           >
                             {imgSrc ? (
-                              <img src={imgSrc} alt={`Option ${idx + 1}`} className="w-full h-52 object-cover group-hover:scale-105 transition-transform duration-300" />
+                              <img src={imgSrc} alt={`Option ${idx + 1}`} className="w-full h-72 object-cover group-hover:scale-105 transition-transform duration-300" />
                             ) : (
-                              <div className={`w-full h-52 flex items-center justify-center text-sm ${isDark ? 'bg-zinc-800 text-zinc-600' : 'bg-zinc-100 text-zinc-400'}`}>No image</div>
+                              <div className={`w-full h-72 flex items-center justify-center text-sm ${isDark ? 'bg-zinc-800 text-zinc-600' : 'bg-zinc-100 text-zinc-400'}`}>No image</div>
                             )}
                             <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
                             <div className="absolute bottom-0 inset-x-0 px-3 py-2.5 flex items-center justify-between">

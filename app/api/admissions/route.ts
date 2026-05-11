@@ -320,7 +320,7 @@ export async function POST(req: NextRequest) {
         const cohortName = cohortRow?.name ?? 'your cohort';
         const signupUrl  = process.env.APP_URL || t.appUrl || '';
         const FROM       = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
-        const branding   = { appName: t.appName, appUrl: signupUrl, logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl };
+        const branding   = { appName: t.appName, appUrl: signupUrl, logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName };
 
         await resend.batch.send(
           newEmails.map(email => ({

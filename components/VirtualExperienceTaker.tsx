@@ -180,7 +180,9 @@ export default function VirtualExperienceTaker({
   const [completed,    setCompleted]    = useState(false);
   const [reviewMode,   setReviewMode]   = useState(false);
   const [review,       setReview]       = useState<any>(null);
-  const [certId,       setCertId]       = useState<string | null>(null);
+  const [certId,            setCertId]            = useState<string | null>(null);
+  const [certInstitutionName, setCertInstitutionName] = useState('');
+  const [certIssuedAt, setCertIssuedAt] = useState<string | null>(null);
   const [certLoading,  setCertLoading]  = useState(false);
   const [certError,    setCertError]    = useState<string | null>(null);
   const [uploadingReq, setUploadingReq] = useState<string | null>(null);
@@ -348,6 +350,13 @@ export default function VirtualExperienceTaker({
       const json = await res.json();
       if (json.certId) {
         setCertId(json.certId);
+        fetch(`/api/certificate/${json.certId}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data?.settings?.institutionName) setCertInstitutionName(data.settings.institutionName);
+            if (data?.issuedAt) setCertIssuedAt(data.issuedAt);
+          })
+          .catch(() => {});
       } else {
         setCertError(json.error || 'Something went wrong. Please try again.');
         console.error('[VE cert]', json);
@@ -377,6 +386,27 @@ export default function VirtualExperienceTaker({
   if (completed && !reviewMode) {
     const totalLessons  = modules.reduce((a, m) => a + m.lessons.length, 0);
     const totalModules  = modules.length;
+
+    const buildLinkedInUrl = (name: string, id: string, orgName?: string, issuedAt?: string | null) => {
+      const issueDate = issuedAt ? new Date(issuedAt) : new Date();
+      const certUrl = `${window.location.origin}/certificate/${id}`;
+      const params = new URLSearchParams({
+        startTask: 'CERTIFICATION_NAME',
+        name,
+        issueYear: String(issueDate.getFullYear()),
+        issueMonth: String(issueDate.getMonth() + 1),
+        certId: id,
+        certUrl,
+      });
+      if (orgName) params.set('organizationName', orgName);
+      return `https://www.linkedin.com/profile/add?${params}`;
+    };
+
+    const LinkedInIcon = () => (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5" aria-hidden="true">
+        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+      </svg>
+    );
 
     return (
       <div className="min-h-screen flex flex-col font-sans" style={{ background: isDark ? '#0e0e0e' : '#F3F4F2', color: text }}>
@@ -479,11 +509,31 @@ export default function VirtualExperienceTaker({
           {/* Actions */}
           <div className="space-y-2 pt-2">
             {certId ? (
-              <a href={`/certificate/${certId}`} target="_blank" rel="noopener noreferrer"
-                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90"
-                style={{ background: accentColor, color: isDark ? '#111' : '#fff', boxShadow: `0 8px 24px ${accentColor}35` }}>
-                <Award className="w-5 h-5" /> View Certificate
-              </a>
+              <div className="space-y-2">
+                <a
+                  href={buildLinkedInUrl(
+                    config.title || config.role || 'Virtual Experience Certificate',
+                    certId,
+                    certInstitutionName || config.company || undefined,
+                    certIssuedAt
+                  )}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90"
+                  style={{ background: '#0A66C2', color: '#fff', boxShadow: '0 8px 24px rgba(10,102,194,0.35)' }}
+                >
+                  <LinkedInIcon /> Add to LinkedIn Profile
+                </a>
+                <a
+                  href={`/certificate/${certId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-[14px] border transition-all hover:opacity-70"
+                  style={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)'}`, color: muted, background: 'transparent' }}
+                >
+                  <Award className="w-4 h-4" /> View Certificate
+                </a>
+              </div>
             ) : (
               <>
                 <button onClick={handleGetCertificate} disabled={certLoading}

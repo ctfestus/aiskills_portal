@@ -820,7 +820,7 @@ export function learningPathCertificateEmail(data: {
     ${cta('View & Download Certificate', certUrl)}
 
     <br>
-    <p><b>Congratulations,</b></p>
+    <p><b>Best regards,</b></p>
   `;
 
   return shell(content, branding);
@@ -990,17 +990,19 @@ export function overdueNotificationEmail(data: {
     </div>
 
     <div style="margin:20px 0;padding:16px;background:#f9fafb;border-radius:0;border:1px solid #e5e7eb;">
-      <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">How to pay</p>
+      <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">How to complete your payment</p>
       <ol style="margin:8px 0 0;padding-left:20px;color:#374151;font-size:14px;line-height:2;">
         <li>Log in and open the <b>Payments</b> section of your dashboard</li>
-        <li>Submit a payment confirmation with your method, reference, and amount</li>
-        <li>Your access will be restored once an admin approves your payment</li>
+        <li>Click the <b>Make Payment</b> tab to view available payment options</li>
+        <li>Make your payment using <b>Bank Transfer</b>, <b>Mobile Money</b>, or <b>Online Payment</b></li>
+        <li>Once payment is made, return to the Payments section and submit a <b>payment confirmation</b> with your method, reference, and amount</li>
+        <li>Your access will be restored once our team verifies and approves your confirmation</li>
       </ol>
     </div>
 
     ${cta('Go to Payments', `${dashboardUrl}#payments`)}
 
-    <p style="color:#6b7280;font-size:13px;">If you have already made this payment, please submit a confirmation so our team can verify and restore your access.</p>
+    <p style="color:#6b7280;font-size:13px;">If you have already made this payment, please submit a payment confirmation so our team can verify and restore your access promptly.</p>
     <br><p><b>Best regards,</b></p>
   `;
   return shell(content, branding);
@@ -1261,6 +1263,28 @@ export function badgeEarnedEmail(data: {
     ${cta('View Certificate', certUrl)}
     <br>
     <p><b>Well done,</b></p>
+  `;
+  return shell(content, branding);
+}
+
+// -- Open Certificate (manual issuance for events / programs) ---
+export function openCertificateEmail(data: {
+  recipientName: string;
+  programName:   string;
+  issuedDate:    string;
+  certUrl:       string;
+  branding?:     EmailBranding;
+}) {
+  const { recipientName, programName, issuedDate, certUrl, branding } = data;
+  const content = `
+    <p><b>Hi ${esc(recipientName)},</b></p>
+    <p style="color:#374151;">Congratulations! Your certificate for <b>${esc(programName)}</b> is ready.</p>
+    ${detailBlock('Program', esc(programName))}
+    ${detailBlock('Issued', esc(issuedDate))}
+    <p style="color:#374151;margin-top:16px;">You can view, download, and share your certificate using the link below. It includes a button to add it directly to your LinkedIn profile.</p>
+    ${cta('View Certificate', certUrl)}
+    <br>
+    <p><b>Congratulations,</b></p>
   `;
   return shell(content, branding);
 }

@@ -1125,11 +1125,11 @@ const [isSaving, setIsSaving] = useState(false);
         router.push(`/dashboard/${formId}?tab=settings`);
         return;
       } else {
-        // Fetch current cohort_ids to detect newly added cohorts
+        // Fetch current cohort_ids/status to detect newly added cohorts and first publish
         const { data: { session: fetchSession } } = await supabase.auth.getSession();
         const [{ data: existingCourse }, { data: existingEvent }] = await Promise.all([
-          supabase.from('courses').select('cohort_ids').eq('id', formId!).maybeSingle(),
-          supabase.from('events').select('cohort_ids').eq('id', formId!).maybeSingle(),
+          supabase.from('courses').select('cohort_ids, status').eq('id', formId!).maybeSingle(),
+          supabase.from('events').select('cohort_ids, status').eq('id', formId!).maybeSingle(),
         ]);
         const existingForm = existingCourse ?? existingEvent;
         const patchRes = await fetch('/api/forms', {
@@ -1152,24 +1152,21 @@ const [isSaving, setIsSaving] = useState(false);
             }).catch(() => {});
           });
         }
-        // Notify students in newly added cohorts only
-        const oldCohortIds: string[] = Array.isArray(existingForm?.cohort_ids) ? existingForm.cohort_ids : [];
-        const addedCohortIds = selectedCohortIds.filter((id: string) => !oldCohortIds.includes(id));
         const { data: { session: editSession } } = await supabase.auth.getSession();
-        if (addedCohortIds.length) {
-          fetch('/api/notify-assignment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${editSession?.access_token}` },
-            body: JSON.stringify({ formId }),
-          }).catch(() => {});
-        }
-        // Upsert cohort_assignments for all selected cohorts (preserves original assigned_at)
-        if (selectedCohortIds.length) {
-          fetch('/api/cohort-assignments', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${editSession?.access_token}` },
-            body: JSON.stringify({ formId, cohortIds: selectedCohortIds }),
-          }).catch(() => {});
+        // Compute notification cohorts from the pre-save snapshot; pass to route so it doesn't infer from cohort_assignments
+        const oldCohortIds: string[] = Array.isArray(existingForm?.cohort_ids) ? existingForm.cohort_ids : [];
+        const isFirstPublish = existingForm?.status !== 'published' && saveStatus === 'published';
+        const addedCohortIds = selectedCohortIds.filter((id: string) => !oldCohortIds.includes(id));
+        const notifyCohortIds = isFirstPublish ? selectedCohortIds : addedCohortIds;
+        // Always call even when empty so removed-cohort rows are cleaned up
+        const caRes = await fetch('/api/cohort-assignments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${editSession?.access_token}` },
+          body: JSON.stringify({ formId, cohortIds: selectedCohortIds, newCohortIds: notifyCohortIds }),
+        });
+        if (!caRes.ok) {
+          const caErr = await caRes.json().catch(() => ({}));
+          showToast(caErr.error || 'Saved, but notification emails failed to send.');
         }
       }
       const url = `${window.location.origin}/${slugValue}`;

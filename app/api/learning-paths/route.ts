@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
-import { learningPathAssignedEmail } from '@/lib/email-templates';
-import { getTenantSettings } from '@/lib/get-tenant-settings';
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+import { sendPathNotification } from '@/lib/send-path-notification';
 
 function adminClient() {
   return createClient(
@@ -72,7 +68,12 @@ export async function POST(req: NextRequest) {
 
     // Send assignment emails if published with cohorts
     if ((status ?? 'draft') === 'published' && (cohort_ids ?? []).length > 0) {
-      await sendPathAssignmentEmails(supabase, data.id, title.trim(), description, item_ids ?? [], cohort_ids);
+      try {
+        await sendPathNotification(supabase, { id: data.id, title: title.trim(), description, item_ids: item_ids ?? [] }, cohort_ids);
+      } catch (err) {
+        console.error('[learning-paths] create notify error:', err);
+        return NextResponse.json({ error: 'Saved but notification emails failed to send.' }, { status: 500 });
+      }
     }
 
     return NextResponse.json({ id: data.id });
@@ -114,7 +115,12 @@ export async function POST(req: NextRequest) {
         ? (cohort_ids ?? []).filter((cid: string) => !prevCohorts.includes(cid))
         : cohort_ids ?? []; // just published -- notify all cohorts
       if (newCohorts.length > 0) {
-        await sendPathAssignmentEmails(supabase, id, title?.trim(), description, item_ids ?? [], newCohorts);
+        try {
+          await sendPathNotification(supabase, { id, title: title?.trim() ?? '', description, item_ids: item_ids ?? [] }, newCohorts);
+        } catch (err) {
+          console.error('[learning-paths] update notify error:', err);
+          return NextResponse.json({ error: 'Saved but notification emails failed to send.' }, { status: 500 });
+        }
       }
     }
 
@@ -225,74 +231,3 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 }
 
-// -- Send assignment emails to all students in given cohorts ---
-async function sendPathAssignmentEmails(
-  supabase: any,
-  pathId: string,
-  pathTitle: string,
-  pathDescription: string | null,
-  itemIds: string[],
-  cohortIds: string[],
-) {
-  try {
-    // Fetch content metadata for email from courses and virtual_experiences
-    const [{ data: coursesRaw }, { data: vesRaw }] = itemIds.length
-      ? await Promise.all([
-          supabase.from('courses').select('id, title, cover_image').in('id', itemIds),
-          supabase.from('virtual_experiences').select('id, title, cover_image').in('id', itemIds),
-        ])
-      : [{ data: [] }, { data: [] }];
-
-    const contentMap: Record<string, any> = {};
-    for (const c of coursesRaw ?? []) contentMap[c.id] = { ...c, content_type: 'course' };
-    for (const v of vesRaw     ?? []) contentMap[v.id] = { ...v, content_type: 'virtual_experience' };
-
-    const items = itemIds.map((id: string) => {
-      const f = contentMap[id];
-      const isVE = f?.content_type === 'virtual_experience';
-      return {
-        title:      f?.title ?? 'Untitled',
-        coverImage: f?.cover_image ?? null,
-        isVE,
-        description: undefined,
-      };
-    });
-
-    // Fetch all students in those cohorts
-    const { data: students } = await supabase
-      .from('students')
-      .select('id, full_name, email')
-      .in('cohort_id', cohortIds)
-      .eq('role', 'student');
-
-    if (!students?.length) return;
-
-    const t        = await getTenantSettings();
-    const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
-    const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
-    const dashboardUrl = `${t.appUrl}/student?section=courses`;
-
-    for (const student of students) {
-      if (!student.email) continue;
-      try {
-        await resend.emails.send({
-          from: FROM,
-          to: student.email,
-          subject: `You've been enrolled in a new learning path: ${pathTitle}`,
-          html: learningPathAssignedEmail({
-            name: student.full_name ?? 'there',
-            pathTitle,
-            pathDescription: pathDescription ?? undefined,
-            dashboardUrl,
-            items,
-            branding,
-          }),
-        });
-      } catch (e) {
-        console.error('[sendPathAssignmentEmails] failed for', student.email, e);
-      }
-    }
-  } catch (err) {
-    console.error('[sendPathAssignmentEmails]', err);
-  }
-}

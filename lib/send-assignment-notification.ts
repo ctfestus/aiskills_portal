@@ -46,7 +46,10 @@ export async function sendAssignmentNotifications({
   contentType: string;
   formUrl?: string;
 }): Promise<void> {
-  if (!process.env.RESEND_API_KEY) return;
+  if (!process.env.RESEND_API_KEY) {
+    console.error('[send-assignment-notification] RESEND_API_KEY is not set -- emails will not be sent.');
+    throw new Error('RESEND_API_KEY is not configured');
+  }
   if (!cohortIds.length) return;
 
   try {
@@ -87,12 +90,13 @@ export async function sendAssignmentNotifications({
     for (let i = 0; i < recipients.length; i += 100) {
       const batch = recipients.slice(i, i + 100).map(({ email, name }) => {
         const body = `Hi ${name},\n\n${typeMessage}\n\n<b>${title}</b>\n\nClick the button below to open your ${typeLabel}.`;
-        const html = blastEmail({ subject, body, formTitle: title, formUrl, ctaLabel, senderName: t.senderName, branding });
+        const html = blastEmail({ subject, body, formTitle: title, formUrl, ctaLabel, senderName: t.senderName || t.teamName || t.appName, branding });
         return { from: FROM, to: email, subject, html };
       });
       await resend.batch.send(batch);
     }
   } catch (err) {
     console.error('[send-assignment-notification]', err);
+    throw err;
   }
 }

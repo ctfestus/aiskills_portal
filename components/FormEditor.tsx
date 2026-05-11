@@ -1025,11 +1025,15 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
       if (addedCohortIds.length) {
         const { data: { session: notifySession } } = await supabase.auth.getSession();
         if (notifySession?.access_token) {
-          fetch('/api/notify-assignment', {
+          const notifyRes = await fetch('/api/notify-assignment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${notifySession.access_token}` },
-            body: JSON.stringify({ formId }),
-          }).catch(() => {});
+            body: JSON.stringify({ formId, cohortIds: addedCohortIds }),
+          });
+          if (!notifyRes.ok) {
+            const notifyErr = await notifyRes.json().catch(() => ({}));
+            showToast(notifyErr.error || 'Saved, but notification emails failed to send.');
+          }
         }
       }
       savedCohortIds.current = [...selectedCohortIds];

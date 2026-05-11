@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
-import { sendAssignmentNotifications } from '@/lib/send-assignment-notification';
+import { sendPathNotification } from '@/lib/send-path-notification';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,37 +21,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { assignmentId, cohortIds } = body;
-  if (!assignmentId) return NextResponse.json({ error: 'assignmentId is required' }, { status: 400 });
+  const { learningPathId, cohortIds } = body;
+  if (!learningPathId) return NextResponse.json({ error: 'learningPathId is required' }, { status: 400 });
   if (!Array.isArray(cohortIds) || !cohortIds.length) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  const { data: assignment } = await supabase
-    .from('assignments')
-    .select('id, title, created_by')
-    .eq('id', assignmentId)
+  const { data: lp } = await supabase
+    .from('learning_paths')
+    .select('id, title, description, item_ids, instructor_id')
+    .eq('id', learningPathId)
     .maybeSingle();
 
-  if (!assignment) return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+  if (!lp) return NextResponse.json({ error: 'Learning path not found' }, { status: 404 });
 
   const { data: student } = await supabase.from('students').select('role').eq('id', user.id).single();
   const isAdmin = student?.role === 'admin';
 
-  if (assignment.created_by !== user.id && !isAdmin) {
+  if (lp.instructor_id !== user.id && !isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {
-    await sendAssignmentNotifications({
-      cohortIds,
-      title:       assignment.title,
-      contentType: 'assignment',
-      formUrl:     '/student#assignments',
-    });
+    await sendPathNotification(supabase, lp, cohortIds);
   } catch (err) {
-    console.error('[assignments/notify-cohorts] notification error:', err);
-    return NextResponse.json({ error: 'Assignment saved but notification failed.' }, { status: 500 });
+    console.error('[learning-paths/notify-cohorts] error:', err);
+    return NextResponse.json({ error: 'Notification failed.' }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

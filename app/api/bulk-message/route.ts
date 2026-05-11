@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
         body:       personalBody,
         formTitle:  t.appName,
         formUrl:    `${t.appUrl}/student`,
-        senderName: t.senderName,
+        senderName: t.senderName || t.teamName || t.appName,
         branding:   { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl },
       });
       return { from: FROM, to: email, subject, html };

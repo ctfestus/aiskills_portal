@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
-import { paymentConfirmationApprovedEmail, paymentConfirmationRejectedEmail } from '@/lib/email-templates';
+import { paymentConfirmationApprovedEmail, paymentConfirmationRejectedEmail, overdueNotificationEmail } from '@/lib/email-templates';
 import {
   getEnrollmentRows,
   recordPayment,
@@ -689,6 +689,45 @@ export async function POST(req: NextRequest) {
     } catch (err: any) {
       console.error('[payments/delete-payment-option]', err);
       return NextResponse.json({ error: err.message ?? 'Failed to delete payment option' }, { status: 500 });
+    }
+  }
+
+  // send-payment-reminder -- email a reminder to a student with an outstanding balance
+  if (body.action === 'send-payment-reminder') {
+    const { enrollmentId } = body;
+    if (!enrollmentId) return NextResponse.json({ error: 'enrollmentId is required' }, { status: 400 });
+    if (!process.env.RESEND_API_KEY) return NextResponse.json({ error: 'Email service not configured' }, { status: 503 });
+    try {
+      const [{ data: enroll }, t] = await Promise.all([
+        db.from('bootcamp_enrollments')
+          .select('email, student_id, total_fee, paid_total')
+          .eq('id', enrollmentId)
+          .single(),
+        getTenantSettings(),
+      ]);
+      if (!enroll) return NextResponse.json({ error: 'Enrollment not found' }, { status: 404 });
+      const balance = Math.max(0, Number(enroll.total_fee) - Number(enroll.paid_total));
+      if (balance <= 0) return NextResponse.json({ error: 'No outstanding balance' }, { status: 400 });
+      const email = (enroll.email ?? '').trim().toLowerCase();
+      if (!email) return NextResponse.json({ error: 'No email address for this enrollment' }, { status: 400 });
+      let studentName = 'there';
+      if (enroll.student_id) {
+        const { data: s } = await db.from('students').select('full_name').eq('id', enroll.student_id).maybeSingle();
+        if (s?.full_name) studentName = s.full_name;
+      }
+      const FROM         = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+      const branding     = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+      const dashboardUrl = t.appUrl || process.env.APP_URL || '';
+      await resend.emails.send({
+        from:    FROM,
+        to:      email,
+        subject: 'Payment reminder - outstanding balance on your account',
+        html:    overdueNotificationEmail({ name: studentName, dashboardUrl, branding }),
+      });
+      return NextResponse.json({ ok: true });
+    } catch (err: any) {
+      console.error('[payments/send-payment-reminder]', err);
+      return NextResponse.json({ error: err.message ?? 'Failed to send reminder' }, { status: 500 });
     }
   }
 

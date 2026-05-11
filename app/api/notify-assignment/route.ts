@@ -21,14 +21,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { formId } = body;
+  const { formId, cohortIds: explicitCohortIds } = body;
   if (!formId) return NextResponse.json({ error: 'formId is required' }, { status: 400 });
 
   // Look up the content across all three tables
   const [c, e, v] = await Promise.all([
-    supabase.from('courses').select('user_id, title, slug, cohort_ids').eq('id', formId).maybeSingle(),
-    supabase.from('events').select('user_id, title, slug, cohort_ids').eq('id', formId).maybeSingle(),
-    supabase.from('virtual_experiences').select('user_id, title, slug, cohort_ids').eq('id', formId).maybeSingle(),
+    supabase.from('courses').select('user_id, title, slug, status, cohort_ids').eq('id', formId).maybeSingle(),
+    supabase.from('events').select('user_id, title, slug, status, cohort_ids').eq('id', formId).maybeSingle(),
+    supabase.from('virtual_experiences').select('user_id, title, slug, status, cohort_ids').eq('id', formId).maybeSingle(),
   ]);
 
   let content: any = null;
@@ -47,15 +47,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const cohortIds: string[] = content.cohort_ids ?? [];
+  if (content.status !== 'published') {
+    return NextResponse.json({ ok: true, skipped: true });
+  }
+
+  // Use caller-supplied list when provided (only newly added cohorts); fall back to all cohort_ids
+  const cohortIds: string[] = Array.isArray(explicitCohortIds) && explicitCohortIds.length
+    ? explicitCohortIds
+    : (content.cohort_ids ?? []);
+
   if (!cohortIds.length) return NextResponse.json({ ok: true, skipped: true });
 
-  sendAssignmentNotifications({
-    cohortIds,
-    title:       content.title || '',
-    slug:        content.slug  || '',
-    contentType,
-  }).catch(() => {});
+  try {
+    await sendAssignmentNotifications({
+      cohortIds,
+      title:       content.title || '',
+      slug:        content.slug  || '',
+      contentType,
+    });
+  } catch (err) {
+    console.error('[notify-assignment] notification error:', err);
+    return NextResponse.json({ error: 'Notification email failed to send.' }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }

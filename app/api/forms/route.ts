@@ -169,14 +169,19 @@ export async function POST(req: NextRequest) {
     }
 
     if (!error) {
-      if (cohort_ids?.length) {
+      if (cohort_ids?.length && formStatus === 'published') {
         await upsertCohortAssignments(supabase, content_type, data.id, cohort_ids);
-        sendAssignmentNotifications({
-          cohortIds:   cohort_ids,
-          title:       title || '',
-          slug:        data.slug,
-          contentType: content_type,
-        }).catch(() => {});
+        try {
+          await sendAssignmentNotifications({
+            cohortIds:   cohort_ids,
+            title:       title || '',
+            slug:        data.slug,
+            contentType: content_type,
+          });
+        } catch (err) {
+          console.error('[api/forms] POST notification error:', err);
+          return NextResponse.json({ error: 'Saved but notification emails failed to send.' }, { status: 500 });
+        }
       }
       if (formStatus === 'published' && isCourse) {
         fetch(`${process.env.APP_URL || ''}/api/vector/index-course`, {
@@ -297,12 +302,22 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to update.' }, { status: 500 });
   }
 
-  // Sync cohort_assignments for any newly added cohorts
-  const prevCohorts = found.row.cohort_ids ?? [];
-  const newCohorts  = cohort_ids ?? [];
-  const addedCohorts = newCohorts.filter((c: string) => !prevCohorts.includes(c));
+  // Sync cohort_assignments: upsert added, delete removed
+  // Use found.row fallback so callers that omit cohort_ids do not accidentally wipe all rows
+  const prevCohorts    = found.row.cohort_ids ?? [];
+  const newCohorts     = cohort_ids ?? found.row.cohort_ids ?? [];
+  const addedCohorts   = newCohorts.filter((c: string) => !prevCohorts.includes(c));
+  const removedCohorts = prevCohorts.filter((c: string) => !newCohorts.includes(c));
+  const contentType    = found.table === 'courses' ? 'course' : found.table === 'events' ? 'event' : 'virtual_experience';
+  if (removedCohorts.length) {
+    const { error: delErr } = await supabase
+      .from('cohort_assignments')
+      .delete()
+      .eq('content_id', id)
+      .in('cohort_id', removedCohorts);
+    if (delErr) console.error('[api/forms] cohort_assignments delete error:', delErr);
+  }
   if (addedCohorts.length) {
-    const contentType = found.table === 'courses' ? 'course' : found.table === 'events' ? 'event' : 'virtual_experience';
     await upsertCohortAssignments(supabase, contentType, id, addedCohorts);
   }
 

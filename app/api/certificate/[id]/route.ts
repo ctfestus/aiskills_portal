@@ -1,22 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Service role is appropriate here: this is a server-side public read-only
-// endpoint. It never exposes student_email, has no write operations, and
-// the output is deliberately minimal (display fields only).
-const anonSupabase = createClient(
+// Service role is used for this public, read-only certificate display endpoint.
+// Keep the response limited to fields intended for public certificate pages;
+// never expose private learner fields such as student_email.
+const serviceSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-// Returns public display data for a certificate -- never exposes student_email.
+// Returns public display data for a certificate.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
 
-  const { data: cert, error } = await anonSupabase
+  const { data: cert, error } = await serviceSupabase
     .from('certificates')
     .select('id, student_name, issued_at, revoked, course_id, ve_id, learning_path_id, student_id')
     .eq('id', id)
@@ -25,7 +25,7 @@ export async function GET(
   if (error || !cert) return NextResponse.json({ error: 'not_found' }, { status: 404 });
   if (cert.revoked)   return NextResponse.json({ revoked: true }, { status: 200 });
 
-  const { data: studentRow } = await anonSupabase
+  const { data: studentRow } = await serviceSupabase
     .from('students')
     .select('avatar_url, username')
     .eq('id', cert.student_id)
@@ -35,14 +35,14 @@ export async function GET(
 
   // VE certificate
   if (cert.ve_id) {
-    const { data: ve } = await anonSupabase
+    const { data: ve } = await serviceSupabase
       .from('virtual_experiences')
       .select('title, user_id, badge_image_url')
       .eq('id', cert.ve_id)
       .single();
 
     const { data: rawSettings } = ve?.user_id
-      ? await anonSupabase.from('certificate_defaults').select('*').eq('user_id', ve.user_id).maybeSingle()
+      ? await serviceSupabase.from('certificate_defaults').select('*').eq('user_id', ve.user_id).maybeSingle()
       : { data: null };
 
     const settings = rawSettings ? {
@@ -81,7 +81,7 @@ export async function GET(
 
   // Path certificate -- no course_id, look up path title and instructor settings
   if (!cert.course_id && cert.learning_path_id) {
-    const { data: path } = await anonSupabase
+    const { data: path } = await serviceSupabase
       .from('learning_paths')
       .select('title, instructor_id, item_ids, cover_image, badge_image_url')
       .eq('id', cert.learning_path_id)
@@ -89,12 +89,12 @@ export async function GET(
 
     const [{ data: rawSettings }, pathItemsResult] = await Promise.all([
       path?.instructor_id
-        ? anonSupabase.from('certificate_defaults').select('*').eq('user_id', path.instructor_id).maybeSingle()
+        ? serviceSupabase.from('certificate_defaults').select('*').eq('user_id', path.instructor_id).maybeSingle()
         : Promise.resolve({ data: null }),
       (path?.item_ids ?? []).length > 0
         ? Promise.all([
-            anonSupabase.from('courses').select('id, title, cover_image').in('id', path!.item_ids),
-            anonSupabase.from('virtual_experiences').select('id, title, cover_image').in('id', path!.item_ids),
+            serviceSupabase.from('courses').select('id, title, cover_image').in('id', path!.item_ids),
+            serviceSupabase.from('virtual_experiences').select('id, title, cover_image').in('id', path!.item_ids),
           ])
         : Promise.resolve(null),
     ]);
@@ -146,14 +146,14 @@ export async function GET(
   }
 
   // Course certificate
-  const { data: content } = await anonSupabase
+  const { data: content } = await serviceSupabase
     .from('courses')
     .select('title, user_id, badge_image_url')
     .eq('id', cert.course_id)
     .maybeSingle();
 
   const { data: rawSettings } = content?.user_id
-    ? await anonSupabase.from('certificate_defaults').select('*').eq('user_id', content.user_id).maybeSingle()
+    ? await serviceSupabase.from('certificate_defaults').select('*').eq('user_id', content.user_id).maybeSingle()
     : { data: null };
 
   const settings = rawSettings
