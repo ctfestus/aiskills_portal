@@ -71,7 +71,7 @@ type IssueMode = 'certificate_only' | 'badge_only' | 'both';
 type Program = {
   id: string; name: string; description: string | null;
   skills: string[]; badge_image_url: string | null;
-  issue_mode: IssueMode; created_at: string;
+  issue_mode: IssueMode; completion_text: string | null; created_at: string;
 };
 type OpenCert = {
   id: string; program_id: string | null; program_name: string;
@@ -169,6 +169,7 @@ function ProgramForm({ initial, onSave, onCancel, C }: {
   const [customSkill, setCustomSkill] = useState('');
   const [issueMode, setIssueMode]     = useState<IssueMode>(initial?.issue_mode ?? 'certificate_only');
   const [badgeUrl, setBadgeUrl]       = useState(initial?.badge_image_url ?? '');
+  const [completionText, setCompletionText] = useState(initial?.completion_text ?? '');
   const [uploading, setUploading]     = useState(false);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
@@ -203,7 +204,7 @@ function ProgramForm({ initial, onSave, onCancel, C }: {
     try {
       const token  = (await supabase.auth.getSession()).data.session?.access_token;
       const method = isEdit ? 'PATCH' : 'POST';
-      const body: any = { name: name.trim(), description: desc.trim() || null, skills, badge_image_url: badgeUrl || null, issue_mode: issueMode };
+      const body: any = { name: name.trim(), description: desc.trim() || null, skills, badge_image_url: badgeUrl || null, issue_mode: issueMode, completion_text: completionText.trim() || null };
       if (isEdit) body.id = initial!.id;
       const res  = await fetch('/api/programs', { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
       const data = await res.json();
@@ -233,6 +234,13 @@ function ProgramForm({ initial, onSave, onCancel, C }: {
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>Description</label>
             <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="What did participants learn or achieve?" rows={isMobile ? 3 : 5}
               style={{ width: '100%', background: C.input, border: `1px solid ${C.cardBorder}`, borderRadius: 8, padding: '10px 12px', fontSize: 14, color: C.text, resize: 'vertical', boxSizing: 'border-box' }} />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 4 }}>Completion Text</label>
+            <p style={{ fontSize: 11, color: C.faint, margin: '0 0 6px' }}>Text that appears on the certificate before the program name (e.g. &quot;has successfully completed&quot;). Leave blank to use your default.</p>
+            <input value={completionText} onChange={e => setCompletionText(e.target.value)} placeholder="has successfully completed"
+              style={{ width: '100%', background: C.input, border: `1px solid ${C.cardBorder}`, borderRadius: 8, padding: '10px 12px', fontSize: 14, color: C.text, boxSizing: 'border-box' }} />
           </div>
 
           {needsBadge && (

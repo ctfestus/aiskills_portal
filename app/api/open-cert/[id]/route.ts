@@ -16,7 +16,7 @@ export async function GET(
     .from('open_certificates')
     .select(`
       id, recipient_name, program_name, issued_date, revoked, issued_by, program_id,
-      programs ( description, skills, badge_image_url, issue_mode )
+      programs ( description, skills, badge_image_url, issue_mode, completion_text )
     `)
     .eq('id', id)
     .single();
@@ -54,6 +54,10 @@ export async function GET(
   const d = new Date(cert.issued_date);
   const issueDate = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
+  const finalSettings = settings
+    ? { ...settings, ...(prog?.completion_text ? { completionText: prog.completion_text } : {}) }
+    : (prog?.completion_text ? { completionText: prog.completion_text } : null);
+
   return NextResponse.json({
     certId:        cert.id,
     recipientName: cert.recipient_name,
@@ -64,6 +68,6 @@ export async function GET(
     skills:        prog?.skills        ?? [],
     badgeImageUrl: prog?.badge_image_url ?? null,
     issueMode:     prog?.issue_mode    ?? 'certificate_only',
-    settings,
+    settings:      finalSettings,
   });
 }

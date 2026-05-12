@@ -2429,6 +2429,7 @@ CREATE TABLE IF NOT EXISTS public.programs (
   badge_image_url text,
   issue_mode      text        NOT NULL DEFAULT 'certificate_only'
                               CHECK (issue_mode IN ('certificate_only', 'badge_only', 'both')),
+  completion_text text,
   issued_by       uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at      timestamptz NOT NULL DEFAULT now()
 );

@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await adminClient()
     .from('programs')
-    .select('id, name, description, skills, badge_image_url, issue_mode, created_at')
+    .select('id, name, description, skills, badge_image_url, issue_mode, completion_text, created_at')
     .eq('issued_by', user.id)
     .order('created_at', { ascending: false });
 
@@ -50,9 +50,10 @@ export async function POST(req: NextRequest) {
       skills:          Array.isArray(body.skills) ? body.skills.map((s: string) => s.trim()).filter(Boolean) : [],
       badge_image_url: body.badge_image_url || null,
       issue_mode:      issueMode,
+      completion_text: body.completion_text?.trim() || null,
       issued_by:       user.id,
     })
-    .select('id, name, description, skills, badge_image_url, issue_mode, created_at')
+    .select('id, name, description, skills, badge_image_url, issue_mode, completion_text, created_at')
     .single();
 
   if (error) return NextResponse.json({ error: 'Failed to create program' }, { status: 500 });
@@ -78,6 +79,7 @@ export async function PATCH(req: NextRequest) {
   if (Array.isArray(rest.skills))    update.skills      = rest.skills.map((s: string) => s.trim()).filter(Boolean);
   if (rest.badge_image_url !== undefined) update.badge_image_url = rest.badge_image_url || null;
   if (validModes.includes(rest.issue_mode)) update.issue_mode = rest.issue_mode;
+  if (rest.completion_text !== undefined) update.completion_text = rest.completion_text?.trim() || null;
 
   if (!Object.keys(update).length) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
 
@@ -86,7 +88,7 @@ export async function PATCH(req: NextRequest) {
     .update(update)
     .eq('id', id)
     .eq('issued_by', user.id)
-    .select('id, name, description, skills, badge_image_url, issue_mode, created_at')
+    .select('id, name, description, skills, badge_image_url, issue_mode, completion_text, created_at')
     .single();
 
   if (error) return NextResponse.json({ error: 'Failed to update program' }, { status: 500 });
