@@ -437,6 +437,16 @@ export default function PublicFormPage() {
         if (data.config?.eventDetails?.isEvent) {
           const { data: count } = await supabase.rpc('get_response_count', { p_form_id: data.id });
           if (count !== null) setAttendeeCount(Number(count));
+          // Fetch this student's join token if they are already enrolled
+          if (user) {
+            const { data: reg } = await supabase
+              .from('event_registrations')
+              .select('join_token')
+              .eq('event_id', data.id)
+              .eq('student_id', user.id)
+              .maybeSingle();
+            if (reg?.join_token) setJoinToken(reg.join_token);
+          }
         }
         if (data.user_id) {
           const { data: prof } = await supabase
@@ -573,35 +583,10 @@ export default function PublicFormPage() {
     const responseId = crypto.randomUUID();
 
     if (form.config?.eventDetails?.isEvent) {
-      const { data: { session: eventSession } } = await supabase.auth.getSession();
-      if (!eventSession?.access_token) {
-        setSubmitting(false);
-        alert('You must be logged in to register for this event.');
-        return;
-      }
-      const regRes = await fetch('/api/event-register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${eventSession.access_token}`,
-        },
-        body: JSON.stringify({
-          formId: form.id,
-          responses: Object.keys(data).length > 0 ? data : undefined,
-        }),
-      });
-      const regJson = await regRes.json().catch(() => ({}));
-      if (!regRes.ok) {
-        if (regJson.error !== 'already_registered') {
-          console.error('[event-register] unexpected error:', regRes.status, regJson);
-        }
-        setSubmitting(false);
-        alert(regJson.error === 'already_registered'
-          ? 'You are already registered for this event.'
-          : 'Failed to register. Please try again.');
-        return;
-      }
-      if (regJson.join_token) setJoinToken(regJson.join_token);
+      // Events are pre-enrolled via cohort assignment -- no form submission needed.
+      setSubmitting(false);
+      setSuccess(true);
+      return;
     } else if (!form.config?.isCourse) {
       // Pure registration forms only -- courses track state in course_attempts
       const { error } = await supabase.from('responses').insert({
@@ -1284,7 +1269,7 @@ export default function PublicFormPage() {
                     {config.postSubmission?.type === 'redirect'
                       ? 'Redirecting you...'
                       : config.eventDetails?.isEvent
-                        ? "You're registered!"
+                        ? "You're enrolled!"
                         : 'Successfully Submitted!'}
                   </h2>
                   <p style={{ fontSize: 14, marginTop: 4, color: t.body, transition: 'color 0.3s' }}>
@@ -1469,7 +1454,7 @@ export default function PublicFormPage() {
                             )}
                           </div>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: accentColor }}>
-                            {rfConfig.eventDetails?.isEvent ? 'Register now' : 'Start learning'} <ArrowRight style={{ width: 12, height: 12 }} />
+                            {rfConfig.eventDetails?.isEvent ? 'View event' : 'Start learning'} <ArrowRight style={{ width: 12, height: 12 }} />
                           </span>
                         </div>
                       </a>
@@ -1816,7 +1801,7 @@ export default function PublicFormPage() {
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 48 }}>
                                 <div style={{ fontSize: 15, fontWeight: 600, color: t.title }}>{platform?.name ?? 'Virtual Event'}</div>
-                                <div style={{ fontSize: 13, marginTop: 2, color: t.body }}>Link shared after registration</div>
+                                <div style={{ fontSize: 13, marginTop: 2, color: t.body }}>{joinToken ? 'Link included in your invitation email' : 'Link sent to enrolled students'}</div>
                               </div>
                             </div>
                           );
@@ -1849,20 +1834,17 @@ export default function PublicFormPage() {
                         );
                       })()}
 
-                      {/* Register button */}
-                      {!isRegistering && !isPast && (
-                        isSoldOut ? (
-                          <div style={{ padding: '12px 20px', borderRadius: 12, fontWeight: 500, fontSize: 14, background: dark ? '#2a2a2a' : '#e5e7eb', color: t.muted, alignSelf: 'flex-start' }}>
-                            Sold Out
-                          </div>
-                        ) : (
-                          <button type="button" onClick={() => setIsRegistering(true)}
-                            className={`py-3 px-8 rounded-xl font-medium transition-transform active:scale-[0.98] ${buttonThemes[config.theme as ThemeColor] || buttonThemes.forest}`}
-                            style={{ alignSelf: 'flex-start', marginTop: 4 }}>
-                            Register Now
-                          </button>
-                        )
-                      )}
+                      {/* Join link for enrolled students (no registration required) */}
+                      {joinToken && !isPast && config.eventDetails?.eventType === 'virtual' && config.eventDetails?.meetingLink && (() => {
+                        const platform = detectPlatform(config.eventDetails.meetingLink);
+                        const joinHref = `/api/join?token=${joinToken}`;
+                        return (
+                          <a href={joinHref} target="_blank" rel="noopener noreferrer"
+                            style={{ alignSelf: 'flex-start', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderRadius: 12, fontWeight: 600, fontSize: 14, background: platform?.color ?? accentColor, color: 'white', textDecoration: 'none' }}>
+                            Join Meeting <ExternalLink style={{ width: 14, height: 14 }}/>
+                          </a>
+                        );
+                      })()}
 
                       {/* Divider */}
                       <div style={{ borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`, marginTop: 8 }}/>
@@ -1884,8 +1866,8 @@ export default function PublicFormPage() {
             })()}
             <div style={!config.eventDetails?.isEvent ? { background: t.card, border: `1px solid ${t.cardBorder}`, borderRadius: 20, padding: 28, boxShadow: t.cardShadow, transition: 'background 0.3s' } : {}}>
 
-              {(!config.eventDetails?.isEvent || isRegistering) && (
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: config.eventDetails?.isEvent ? 24 : 0 }}>
+              {!config.eventDetails?.isEvent && (
+                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 0 }}>
                 {(config.fields ?? []).map((field: any, idx: number) => {
                   const req = field.required !== false;
                   const dividerCls = resolvedMode === 'light' ? 'bg-zinc-200' : 'bg-zinc-700';

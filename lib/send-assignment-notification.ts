@@ -15,7 +15,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 const TYPE_MESSAGES: Record<string, string> = {
   course: 'You have been enrolled in a new course. Log in to start learning.',
-  event: 'You have been registered for an upcoming event. Mark your calendar.',
+  event: 'An upcoming event has been added to your schedule. Check the details below.',
   virtual_experience: 'You have been assigned a new virtual experience. Jump in and get started.',
   announcement: 'A new announcement has been posted for you.',
   assignment: 'You have been assigned a new assignment. Log in to view the details and submit your work.',

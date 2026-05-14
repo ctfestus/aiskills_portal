@@ -249,10 +249,10 @@ function ResponsesTab({
             </div>
             <div className={`divide-y ${dividerCls}`}>
               {questionStats.map((q: any, i: number) => (
-                <div key={i} className="px-6 py-4 flex items-center gap-4">
+                <div key={i} className="px-3 sm:px-6 py-3 sm:py-4 flex items-center gap-3 sm:gap-4">
                   <span className={`text-xs font-mono w-5 flex-shrink-0 ${textMut}`}>Q{i + 1}</span>
-                  <p className={`flex-1 text-sm ${textSub}`}>{q.fullQuestion}</p>
-                  <div className="flex items-center gap-3 flex-shrink-0">
+                  <p className={`flex-1 text-sm min-w-0 ${textSub}`}>{q.fullQuestion}</p>
+                  <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                     <span className="flex items-center gap-1 text-xs text-emerald-400"><CheckCircle2 className="w-3.5 h-3.5" /> {q.correct}</span>
                     <span className="flex items-center gap-1 text-xs text-rose-400"><XCircle className="w-3.5 h-3.5" /> {q.incorrect}</span>
                     <span className="text-xs font-semibold w-10 text-right" style={{ color: q.pct >= 50 ? '#10b981' : '#f43f5e' }}>{q.pct}%</span>
@@ -272,11 +272,11 @@ function ResponsesTab({
             <table className="w-full text-left text-sm">
               <thead className={`border-b ${tableHead}`}>
                 <tr>
-                  <th className="px-6 py-3 font-medium">Student</th>
-                  <th className="px-6 py-3 font-medium">Email</th>
-                  <th className="px-6 py-3 font-medium">Score</th>
-                  <th className="px-6 py-3 font-medium">Result</th>
-                  <th className="px-6 py-3 font-medium">Date</th>
+                  <th className="px-3 sm:px-6 py-3 font-medium">Student</th>
+                  <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Email</th>
+                  <th className="px-3 sm:px-6 py-3 font-medium">Score</th>
+                  <th className="px-3 sm:px-6 py-3 font-medium">Result</th>
+                  <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Date</th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${dividerCls}`}>
@@ -295,20 +295,20 @@ function ResponsesTab({
                     const pass = pct >= passmark;
                     return (
                       <tr key={r.id} className={`transition-colors ${tableRow}`}>
-                        <td className={`px-6 py-3 font-medium ${textPrim}`}>{r.data?.name || <span className={`italic ${textMut}`}>Anonymous</span>}</td>
-                        <td className={`px-6 py-3 ${textMut}`}>{r.data?.email || '--'}</td>
-                        <td className="px-6 py-3">
+                        <td className={`px-3 sm:px-6 py-3 font-medium ${textPrim}`}>{r.data?.name || <span className={`italic ${textMut}`}>Anonymous</span>}</td>
+                        <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 ${textMut}`}>{r.data?.email || '--'}</td>
+                        <td className="px-3 sm:px-6 py-3">
                           <span className={`font-semibold ${textPrim}`}>{r.data?.score ?? '--'}</span>
                           <span className={textMut}> / {r.data?.total ?? questions.length}</span>
                           <span className={`ml-2 text-xs ${textMut}`}>({pct}%)</span>
                         </td>
-                        <td className="px-6 py-3">
+                        <td className="px-3 sm:px-6 py-3">
                           <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${pass ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
                             {pass ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                             {pass ? 'Passed' : 'Failed'}
                           </span>
                         </td>
-                        <td className={`px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>{new Date(r.created_at).toLocaleString()}</td>
+                        <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>{new Date(r.created_at).toLocaleString()}</td>
                       </tr>
                     );
                   });
@@ -338,34 +338,34 @@ function ResponsesTab({
               <table className="w-full text-left text-sm">
                 <thead className={`border-b ${tableHead}`}>
                   <tr>
-                    <th className="px-6 py-3 font-medium">Student</th>
-                    <th className="px-6 py-3 font-medium">Email</th>
-                    <th className="px-6 py-3 font-medium">Status</th>
-                    <th className="px-6 py-3 font-medium">Progress</th>
-                    <th className="px-6 py-3 font-medium">Last Active</th>
+                    <th className="px-3 sm:px-6 py-3 font-medium">Student</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Email</th>
+                    <th className="px-3 sm:px-6 py-3 font-medium">Status</th>
+                    <th className="px-3 sm:px-6 py-3 font-medium">Progress</th>
+                    <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Last Active</th>
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${dividerCls}`}>
                   {/* Not started students (assigned via cohort but haven't begun) */}
                   {notStartedStudents.map((s: any) => (
                     <tr key={`ns_${s.id}`} className={`transition-colors ${tableRow}`}>
-                      <td className={`px-6 py-3 font-medium ${textPrim}`}>{s.full_name || <span className={`italic ${textMut}`}>Unknown</span>}</td>
-                      <td className={`px-6 py-3 ${textMut}`}>{s.email || '--'}</td>
-                      <td className="px-6 py-3">
+                      <td className={`px-3 sm:px-6 py-3 font-medium ${textPrim}`}>{s.full_name || <span className={`italic ${textMut}`}>Unknown</span>}</td>
+                      <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 ${textMut}`}>{s.email || '--'}</td>
+                      <td className="px-3 sm:px-6 py-3">
                         <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${isDark ? 'bg-zinc-700/60 text-zinc-400' : 'bg-zinc-100 text-zinc-500'}`}>
                           <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
                           Not Started
                         </span>
                       </td>
-                      <td className="px-6 py-3">
+                      <td className="px-3 sm:px-6 py-3">
                         <div className="flex items-center gap-2">
-                          <div className={`h-1.5 w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
+                          <div className={`h-1.5 w-16 sm:w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
                             <div className="h-full rounded-full bg-zinc-400" style={{ width: '0%' }} />
                           </div>
                           <span className={`text-xs ${textMut}`}>0/{questions.length || 0}</span>
                         </div>
                       </td>
-                      <td className={`px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>--</td>
+                      <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>--</td>
                     </tr>
                   ))}
                   {/* In-progress students */}
@@ -374,23 +374,23 @@ function ResponsesTab({
                     const progressPct = Math.min(100, Math.round(((p.current_question_index ?? 0) / qTotal) * 100));
                     return (
                       <tr key={`ip_${p.student_email}`} className={`transition-colors ${tableRow}`}>
-                        <td className={`px-6 py-3 font-medium ${textPrim}`}>{p.student_name || <span className={`italic ${textMut}`}>Unknown</span>}</td>
-                        <td className={`px-6 py-3 ${textMut}`}>{p.student_email || '--'}</td>
-                        <td className="px-6 py-3">
+                        <td className={`px-3 sm:px-6 py-3 font-medium ${textPrim}`}>{p.student_name || <span className={`italic ${textMut}`}>Unknown</span>}</td>
+                        <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 ${textMut}`}>{p.student_email || '--'}</td>
+                        <td className="px-3 sm:px-6 py-3">
                           <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-700'}`}>
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                             In Progress
                           </span>
                         </td>
-                        <td className="px-6 py-3">
+                        <td className="px-3 sm:px-6 py-3">
                           <div className="flex items-center gap-2">
-                            <div className={`h-1.5 w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
+                            <div className={`h-1.5 w-16 sm:w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
                               <div className="h-full rounded-full bg-amber-400" style={{ width: `${progressPct}%` }} />
                             </div>
                             <span className={`text-xs ${textMut}`}>{p.current_question_index ?? 0}/{qTotal}</span>
                           </div>
                         </td>
-                        <td className={`px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>
+                        <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>
                           {p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--'}
                         </td>
                       </tr>
@@ -402,23 +402,23 @@ function ResponsesTab({
                     const pass = p.passed ?? false;
                     return (
                       <tr key={`cp_${p.student_email}`} className={`transition-colors ${tableRow}`}>
-                        <td className={`px-6 py-3 font-medium ${textPrim}`}>{p.student_name || <span className={`italic ${textMut}`}>Unknown</span>}</td>
-                        <td className={`px-6 py-3 ${textMut}`}>{p.student_email || '--'}</td>
-                        <td className="px-6 py-3">
+                        <td className={`px-3 sm:px-6 py-3 font-medium ${textPrim}`}>{p.student_name || <span className={`italic ${textMut}`}>Unknown</span>}</td>
+                        <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 ${textMut}`}>{p.student_email || '--'}</td>
+                        <td className="px-3 sm:px-6 py-3">
                           <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${pass ? (isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700') : (isDark ? 'bg-rose-500/15 text-rose-300' : 'bg-rose-50 text-rose-700')}`}>
                             {pass ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
                             {pass ? 'Passed' : 'Failed'}
                           </span>
                         </td>
-                        <td className="px-6 py-3">
+                        <td className="px-3 sm:px-6 py-3">
                           <div className="flex items-center gap-2">
-                            <div className={`h-1.5 w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
+                            <div className={`h-1.5 w-16 sm:w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
                               <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pass ? '#10b981' : '#f43f5e' }} />
                             </div>
                             <span className={`text-xs ${textMut}`}>{pct}%</span>
                           </div>
                         </td>
-                        <td className={`px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>
+                        <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>
                           {p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--'}
                         </td>
                       </tr>
@@ -532,14 +532,15 @@ function ResponsesTab({
                     <button
                       key={r.id}
                       onClick={() => setSelectedResponse(r)}
-                      className={`grid w-full grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_90px] items-center gap-4 px-6 py-4 text-left transition-colors ${tableRow}`}
+                      className={`flex w-full items-center gap-3 px-4 sm:px-6 py-4 text-left transition-colors ${tableRow}`}
                     >
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className={`truncate text-sm font-semibold ${textPrim}`}>{r.participantName}</p>
+                        <p className={`mt-0.5 text-xs truncate sm:hidden ${textMut}`}>{r.participantEmail}</p>
                         <p className={`mt-1 text-xs ${textMut}`}>Open response details</p>
                       </div>
-                      <p className={`truncate text-sm ${textSub}`}>{r.participantEmail}</p>
-                      <p className={`text-right text-xs font-medium ${textMut}`}>{r.submittedDate}</p>
+                      <p className={`hidden sm:block truncate text-sm min-w-0 flex-1 ${textSub}`}>{r.participantEmail}</p>
+                      <p className={`text-right text-xs font-medium flex-shrink-0 ${textMut}`}>{r.submittedDate}</p>
                     </button>
                   ))}
                 </div>
@@ -818,15 +819,15 @@ function ResponsesTab({
           <table className="w-full text-left text-sm">
             <thead className={`border-b ${tableHead}`}>
               <tr>
-                <th className="px-6 py-4 font-medium">Date</th>
-                {fields.map((f: any) => <th key={f.id} className="px-6 py-4 font-medium">{f.label}</th>)}
+                <th className="px-3 sm:px-6 py-3 sm:py-4 font-medium">Date</th>
+                {fields.map((f: any) => <th key={f.id} className="px-3 sm:px-6 py-3 sm:py-4 font-medium">{f.label}</th>)}
               </tr>
             </thead>
             <tbody className={`transition-opacity ${pageLoading ? 'opacity-40' : ''} divide-y ${dividerCls}`}>
               {responses.map((r: any) => (
                 <tr key={r.id} className={`transition-colors ${tableRow}`}>
-                  <td className={`px-6 py-4 whitespace-nowrap text-xs ${textMut}`}>{new Date(r.created_at).toLocaleString()}</td>
-                  {fields.map((f: any) => <td key={f.id} className={`px-6 py-4 max-w-[200px] truncate ${textSub}`}>{r.data?.[f.name] || '--'}</td>)}
+                  <td className={`px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs ${textMut}`}>{new Date(r.created_at).toLocaleString()}</td>
+                  {fields.map((f: any) => <td key={f.id} className={`px-3 sm:px-6 py-3 sm:py-4 max-w-[160px] sm:max-w-[200px] truncate ${textSub}`}>{r.data?.[f.name] || '--'}</td>)}
                 </tr>
               ))}
               {responses.length === 0 && (
@@ -1571,10 +1572,11 @@ function LeaderboardTab({ form, courseProgress }: { form: any; courseProgress: a
       <div className={`rounded-2xl border overflow-hidden ${bg} ${bdr}`}>
 
         {/* Header */}
-        <div className={`grid items-center px-5 py-3 border-b ${bdr}`} style={{ gridTemplateColumns: '44px 1fr 120px 88px' }}>
-          {['Rank', 'Student', 'Score', 'XP'].map(h => (
-            <span key={h} className={`text-[11px] font-semibold uppercase tracking-widest ${muted}`}>{h}</span>
-          ))}
+        <div className={`grid items-center px-3 sm:px-5 py-3 border-b grid-cols-[36px_1fr_80px] sm:grid-cols-[44px_1fr_120px_88px] ${bdr}`}>
+          <span className={`text-[11px] font-semibold uppercase tracking-widest ${muted}`}>Rank</span>
+          <span className={`text-[11px] font-semibold uppercase tracking-widest ${muted}`}>Student</span>
+          <span className={`text-[11px] font-semibold uppercase tracking-widest ${muted}`}>Score</span>
+          <span className={`hidden sm:block text-[11px] font-semibold uppercase tracking-widest ${muted}`}>XP</span>
         </div>
 
         {rows.map((r, i) => {
@@ -1589,8 +1591,7 @@ function LeaderboardTab({ form, courseProgress }: { form: any; courseProgress: a
           return (
             <div
               key={i}
-              className={`grid items-center px-5 py-4 border-b last:border-0 transition-all duration-150 group ${isDark ? 'border-zinc-800/40 hover:bg-zinc-900/80' : 'border-zinc-100 hover:bg-zinc-50'} ${rank === 1 ? (isDark ? 'bg-amber-500/[0.04]' : 'bg-amber-50/60') : ''}`}
-              style={{ gridTemplateColumns: '44px 1fr 120px 88px' }}
+              className={`grid items-center px-3 sm:px-5 py-3 sm:py-4 border-b last:border-0 transition-all duration-150 group grid-cols-[36px_1fr_80px] sm:grid-cols-[44px_1fr_120px_88px] ${isDark ? 'border-zinc-800/40 hover:bg-zinc-900/80' : 'border-zinc-100 hover:bg-zinc-50'} ${rank === 1 ? (isDark ? 'bg-amber-500/[0.04]' : 'bg-amber-50/60') : ''}`}
             >
               {/* Rank */}
               <div className="flex items-center justify-start">
@@ -1633,7 +1634,7 @@ function LeaderboardTab({ form, courseProgress }: { form: any; courseProgress: a
               </div>
 
               {/* XP */}
-              <div>
+              <div className="hidden sm:block">
                 {pts > 0 ? (
                   <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg ${isDark ? 'bg-yellow-500/10 text-yellow-400' : 'bg-yellow-50 text-yellow-600'}`}>
                     ⭐ {pts.toLocaleString()}
@@ -2000,14 +2001,14 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
   return (
     <div className="space-y-6">
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Total Enrolled', value: attempts.length, color: '#8b5cf6' },
           { label: 'Not Started',    value: notStarted,       color: '#6b7280' },
           { label: 'In Progress',    value: inProgress,       color: '#f59e0b' },
           { label: 'Completed',      value: completed,        color: '#10b981' },
         ].map(s => (
-          <div key={s.label} className={`border rounded-2xl p-5 ${card}`}>
+          <div key={s.label} className={`border rounded-2xl p-4 sm:p-5 ${card}`}>
             <p className={`text-xs font-medium uppercase tracking-wide mb-3 ${textMut}`}>{s.label}</p>
             <p className="text-3xl font-bold" style={{ color: s.color }}>{s.value}</p>
           </div>
@@ -2027,13 +2028,13 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
           <table className="w-full text-left text-sm">
             <thead className={`border-b ${tableHead}`}>
               <tr>
-                <th className="px-6 py-3 font-medium">Student</th>
-                <th className="px-6 py-3 font-medium">Email</th>
-                <th className="px-6 py-3 font-medium">Requirements Done</th>
-                <th className="px-6 py-3 font-medium">Status</th>
-                {needsReview && <th className="px-6 py-3 font-medium">Score</th>}
-                <th className="px-6 py-3 font-medium">Last Active</th>
-                {needsReview && <th className="px-6 py-3 font-medium">Action</th>}
+                <th className="px-3 sm:px-6 py-3 font-medium">Student</th>
+                <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Email</th>
+                <th className="px-3 sm:px-6 py-3 font-medium">Status</th>
+                <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Requirements</th>
+                {needsReview && <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Score</th>}
+                <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Last Active</th>
+                {needsReview && <th className="px-3 sm:px-6 py-3 font-medium">Review</th>}
               </tr>
             </thead>
             <tbody className={`divide-y ${divider}`}>
@@ -2046,9 +2047,16 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
                 const isStarted   = !!a.started_at;
                 return (
                   <tr key={a.id ?? `unenrolled-${i}`} className={`transition-colors ${tableRow}`}>
-                    <td className={`px-6 py-3 font-medium ${textPrim}`}>{a.student_name || '--'}</td>
-                    <td className={`px-6 py-3 ${textMut}`}>{a.student_email || '--'}</td>
-                    <td className="px-6 py-3">
+                    <td className={`px-3 sm:px-6 py-3 font-medium ${textPrim}`}>{a.student_name || '--'}</td>
+                    <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 ${textMut}`}>{a.student_email || '--'}</td>
+                    <td className="px-3 sm:px-6 py-3">
+                      {isCompleted
+                        ? <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700'}`}><CheckCircle2 className="w-3 h-3" /> Completed</span>
+                        : isStarted
+                        ? <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-700'}`}><span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> In Progress</span>
+                        : <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-zinc-700 text-zinc-400' : 'bg-zinc-100 text-zinc-500'}`}><span className="w-1.5 h-1.5 rounded-full bg-zinc-400" /> Not Started</span>}
+                    </td>
+                    <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
                       {isStarted ? (
                         <div className="flex items-center gap-2">
                           <div className={`h-1.5 w-20 rounded-full overflow-hidden ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
@@ -2060,23 +2068,16 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
                         <span className={`text-xs ${textMut}`}>--</span>
                       )}
                     </td>
-                    <td className="px-6 py-3">
-                      {isCompleted
-                        ? <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-700'}`}><CheckCircle2 className="w-3 h-3" /> Completed</span>
-                        : isStarted
-                        ? <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-amber-500/15 text-amber-300' : 'bg-amber-50 text-amber-700'}`}><span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> In Progress</span>
-                        : <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-zinc-700 text-zinc-400' : 'bg-zinc-100 text-zinc-500'}`}><span className="w-1.5 h-1.5 rounded-full bg-zinc-400" /> Not Started</span>}
-                    </td>
                     {needsReview && (
-                      <td className={`px-6 py-3 ${textMut}`}>
+                      <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 ${textMut}`}>
                         {a.review?.score !== undefined ? <span className="font-semibold" style={{ color: '#6366f1' }}>{a.review.score}/100</span> : '--'}
                       </td>
                     )}
-                    <td className={`px-6 py-3 text-xs ${textMut}`}>
+                    <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 text-xs ${textMut}`}>
                       {a.updated_at ? new Date(a.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--'}
                     </td>
                     {needsReview && (
-                      <td className="px-6 py-3">
+                      <td className="px-3 sm:px-6 py-3">
                         {isStarted ? (
                           <button onClick={() => { setReviewing(a); setRevScore(a.review?.score ?? ''); setRevFeedback(a.review?.feedback ?? ''); }}
                             className={`text-xs font-medium px-3 py-1.5 rounded-xl transition-all hover:opacity-80 ${isDark ? 'bg-indigo-500/15 text-indigo-300' : 'bg-indigo-50 text-indigo-700'}`}>

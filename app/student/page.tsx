@@ -24,6 +24,7 @@ import { sanitizeRichText, renderAnnouncementContent } from '@/lib/sanitize';
 import { getToolIcon } from '@/lib/tool-icons';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { computeAccess } from '@/lib/enrollment-access';
+import CalendarSection from '@/components/StudentCalendar';
 
 // --- Design tokens ---
 const LIGHT_C = {
@@ -200,6 +201,7 @@ const NAV_ITEMS = [
   { id: 'virtual_experiences', label: 'Virtual Experiences', Icon: Briefcase     },
   { id: 'events',            label: 'Live Sessions',        Icon: CalendarDays    },
   { id: 'assignments',       label: 'Assignments',         Icon: ClipboardList   },
+  { id: 'calendar',          label: 'Calendar',            Icon: CalendarCheck   },
   { id: 'community',         label: 'Community',           Icon: Users           },
   { id: 'announcements',     label: 'Tech Blog',            Icon: Megaphone       },
   { id: 'schedule',          label: 'Schedule',            Icon: Calendar        },
@@ -213,7 +215,7 @@ type SectionId = typeof NAV_ITEMS[number]['id'];
 
 const NAV_GROUPS: { label: string; items: SectionId[] }[] = [
   { label: 'Learn',       items: ['overview', 'courses', 'learning_paths', 'virtual_experiences'] },
-  { label: 'Activities',  items: ['events', 'assignments', 'schedule', 'recordings'] },
+  { label: 'Activities',  items: ['events', 'assignments', 'calendar', 'schedule', 'recordings'] },
   { label: 'Community',   items: ['community', 'announcements'] },
   { label: 'Achievements', items: ['leaderboard', 'certificates', 'badges'] },
   { label: 'Account',     items: ['payments'] },
@@ -5849,6 +5851,9 @@ export default function StudentDashboard() {
             )}
             {activeSection === 'assignments' && user && (
               <AssignmentsSection userId={effectiveId} studentName={viewingAs?.name ?? userName} studentEmail={effectiveEmail ?? ''} C={C}/>
+            )}
+            {activeSection === 'calendar' && user && (
+              <CalendarSection userId={effectiveId} onNavigate={(s) => goSection(s as SectionId)}/>
             )}
             {activeSection === 'community' && user && (
               <CommunitySection userId={effectiveId} C={C}/>

@@ -3214,10 +3214,10 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
           <div className="rounded-2xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
 
             {/* Table header */}
-            <div className="grid px-5 py-2.5 border-b" style={{ borderColor: C.divider, gridTemplateColumns: '1fr 100px 100px 40px', background: C.card }}>
+            <div className="grid grid-cols-[1fr_40px] sm:grid-cols-[1fr_100px_100px_40px] px-5 py-2.5 border-b" style={{ borderColor: C.divider, background: C.card }}>
               <p className="text-[12.5px] font-semibold uppercase tracking-wide" style={{ color: C.faint }}>Cohort</p>
-              <p className="text-[13.5px] font-semibold uppercase tracking-wide text-center" style={{ color: C.faint }}>Students</p>
-              <p className="text-[13.5px] font-semibold uppercase tracking-wide text-center" style={{ color: C.faint }}>Courses</p>
+              <p className="hidden sm:block text-[13.5px] font-semibold uppercase tracking-wide text-center" style={{ color: C.faint }}>Students</p>
+              <p className="hidden sm:block text-[13.5px] font-semibold uppercase tracking-wide text-center" style={{ color: C.faint }}>Courses</p>
               <div/>
             </div>
             {cohorts.length === 0 ? (
@@ -3231,17 +3231,17 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
               const cCount = cohortCourseCount(c.id);
               return (
                 <div key={c.id}
-                  className="group grid items-center px-5 py-2 transition-colors"
-                  style={{ gridTemplateColumns: '1fr 100px 100px 40px', borderBottom: `1px solid ${C.divider}` }}>
+                  className="group grid grid-cols-[1fr_40px] sm:grid-cols-[1fr_100px_100px_40px] items-center px-5 py-2 transition-colors"
+                  style={{ borderBottom: `1px solid ${C.divider}` }}>
                   {/* Name + description */}
                   <div className="min-w-0 pr-4">
                     <p className="text-[13.5px] font-semibold truncate" style={{ color: C.text }}>{c.name}</p>
                     {c.description && <p className="text-[11.5px] truncate mt-0.5" style={{ color: C.faint }}>{c.description}</p>}
                   </div>
                   {/* Students */}
-                  <p className="text-[13.5px] font-semibold text-center" style={{ color: C.text }}>{studentCount}</p>
+                  <p className="hidden sm:block text-[13.5px] font-semibold text-center" style={{ color: C.text }}>{studentCount}</p>
                   {/* Courses */}
-                  <p className="text-[13.5px] font-semibold text-center" style={{ color: C.text }}>{cCount}</p>
+                  <p className="hidden sm:block text-[13.5px] font-semibold text-center" style={{ color: C.text }}>{cCount}</p>
                   {/* 3-dots menu */}
                   <div className="relative cohort-menu-btn flex-shrink-0 flex justify-end">
                     <button
@@ -4574,9 +4574,10 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
       {/* Table */}
       <div style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 16, overflow: 'hidden' }}>
         {/* Table header */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 70px 110px 110px 90px', gap: 0, padding: '10px 20px', borderBottom: `1px solid ${C.divider}`, background: C.pill }}>
+        <div className="grid grid-cols-[1fr_110px_90px] sm:grid-cols-[1fr_1fr_70px_110px_110px_90px]"
+          style={{ gap: 0, padding: '10px 20px', borderBottom: `1px solid ${C.divider}`, background: C.pill }}>
           {['Student', 'Content', 'Progress', 'Status', 'Last Active', ''].map((h, i) => (
-            <div key={i} style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
+            <div key={i} className={[1, 2, 4].includes(i) ? 'hidden sm:block' : ''} style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
           ))}
         </div>
 
@@ -4596,7 +4597,8 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
             const canNudge = row.status === 'not_started' || row.status === 'stalled' || row.status === 'in_progress';
             return (
               <div key={nudgeKey}
-                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 70px 110px 110px 90px', gap: 0, padding: '12px 20px', borderBottom: i < filtered.length - 1 ? `1px solid ${C.divider}` : 'none', alignItems: 'center' }}>
+                className="grid grid-cols-[1fr_110px_90px] sm:grid-cols-[1fr_1fr_70px_110px_110px_90px]"
+                style={{ gap: 0, padding: '12px 20px', borderBottom: i < filtered.length - 1 ? `1px solid ${C.divider}` : 'none', alignItems: 'center' }}>
                 {/* Student */}
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.studentName || '--'}</div>
@@ -4604,9 +4606,9 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
                   <div style={{ fontSize: 10, color: C.faint, marginTop: 1 }}>{row.cohortName}</div>
                 </div>
                 {/* Content */}
-                <div style={{ fontSize: 13, color: C.text, paddingRight: 8, wordBreak: 'break-word' }}>{row.formTitle}</div>
+                <div className="hidden sm:block" style={{ fontSize: 13, color: C.text, paddingRight: 8, wordBreak: 'break-word' }}>{row.formTitle}</div>
                 {/* Progress % */}
-                <div>
+                <div className="hidden sm:block">
                   <span style={{ fontSize: 13, fontWeight: 700, color: row.progressPct === 100 ? C.green : row.progressPct > 0 ? '#f59e0b' : C.faint }}>
                     {row.progressPct}%
                   </span>
@@ -4619,7 +4621,7 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
                   </span>
                 </div>
                 {/* Last Active */}
-                <div>
+                <div className="hidden sm:block">
                   <div style={{ fontSize: 12, color: C.faint }}>
                     {row.lastActive
                       ? row.daysSinceActivity === 0 ? 'Today'
@@ -6159,11 +6161,11 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
         </div>
       ) : (
         <div className="rounded-xl overflow-x-auto" style={{ border: `1px solid ${C.cardBorder}` }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 900 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: C.pill }}>
-                {['Student', 'Cohort', 'Total Fee', 'Paid', 'Balance', 'Plan', 'Access Status', 'Next Due', ''].map(h => (
-                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, fontSize: 10, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>{h}</th>
+                {['Student', 'Cohort', 'Total Fee', 'Paid', 'Balance', 'Plan', 'Access Status', 'Next Due', ''].map((h, i) => (
+                  <th key={h} className={[1, 2, 3, 5, 7].includes(i) ? 'hidden sm:table-cell' : ''} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, fontSize: 10, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -6185,21 +6187,21 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
                       </div>
                       <p style={{ color: C.faint, fontSize: 10 }} title={r.email}>{r.email}</p>
                     </td>
-                    <td style={{ padding: '8px 10px', color: isOutstanding ? '#dc2626' : C.muted, fontWeight: isOutstanding ? 600 : 400, whiteSpace: 'nowrap' }}>
+                    <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: isOutstanding ? '#dc2626' : C.muted, fontWeight: isOutstanding ? 600 : 400, whiteSpace: 'nowrap' }}>
                       {r.cohort_name ?? '--'}
                     </td>
-                    <td style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r.currency} {Number(r.total_fee).toLocaleString()}</td>
-                    <td style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{Number(r.paid_total).toLocaleString()}</td>
+                    <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r.currency} {Number(r.total_fee).toLocaleString()}</td>
+                    <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{Number(r.paid_total).toLocaleString()}</td>
                     <td style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap', color: r.balance > 0 ? '#dc2626' : '#16a34a' }}>
                       {r.balance > 0 ? r.balance.toLocaleString() : '--'}
                     </td>
-                    <td style={{ padding: '8px 10px', color: C.muted, whiteSpace: 'nowrap', textTransform: 'capitalize' }}>{r.payment_plan}</td>
+                    <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.muted, whiteSpace: 'nowrap', textTransform: 'capitalize' }}>{r.payment_plan}</td>
                     <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md" style={{ background: `${accentColor}18`, color: accentColor }}>
                         {r.access_status?.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td style={{ padding: '8px 10px', color: C.muted, whiteSpace: 'nowrap', fontSize: 11 }}>
+                    <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.muted, whiteSpace: 'nowrap', fontSize: 11 }}>
                       {r.next_due_date ? new Date(r.next_due_date).toLocaleDateString() : '--'}
                     </td>
                     <td style={{ padding: '8px 10px' }}>
@@ -8009,9 +8011,14 @@ function StudentsSection({ C }: { C: typeof LIGHT_C }) {
       </div>
 
       <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
-        <div className="grid gap-3 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide"
-          style={{ gridTemplateColumns: '2fr 1.5fr 80px 90px 90px 110px', background: C.pill, color: C.faint, borderBottom: `1px solid ${C.cardBorder}` }}>
-          <span>Student</span><span>Cohort</span><span>In Cohort</span><span>Completed</span><span>Last Login</span><span></span>
+        <div className="grid gap-3 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide grid-cols-[1fr_auto] sm:grid-cols-[2fr_1.5fr_80px_90px_90px_110px]"
+          style={{ background: C.pill, color: C.faint, borderBottom: `1px solid ${C.cardBorder}` }}>
+          <span>Student</span>
+          <span className="hidden sm:inline">Cohort</span>
+          <span className="hidden sm:inline">In Cohort</span>
+          <span className="hidden sm:inline">Completed</span>
+          <span className="hidden sm:inline">Last Login</span>
+          <span></span>
         </div>
 
         {loading ? (
@@ -8019,16 +8026,16 @@ function StudentsSection({ C }: { C: typeof LIGHT_C }) {
         ) : visible.length === 0 ? (
           <div className="py-12 text-center text-sm" style={{ color: C.muted }}>No students found</div>
         ) : visible.map((s, i) => (
-          <div key={s.id} className="grid gap-3 px-4 py-3 items-center"
-            style={{ gridTemplateColumns: '2fr 1.5fr 80px 90px 90px 110px', borderBottom: i < visible.length - 1 ? `1px solid ${C.cardBorder}` : 'none' }}>
+          <div key={s.id} className="grid gap-3 px-4 py-3 items-center grid-cols-[1fr_auto] sm:grid-cols-[2fr_1.5fr_80px_90px_90px_110px]"
+            style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.cardBorder}` : 'none' }}>
             <div className="min-w-0">
               <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || 'No name'}</p>
               <p className="text-xs truncate" style={{ color: C.muted }}>{s.email}</p>
             </div>
-            <span className="text-sm truncate" style={{ color: C.muted }}>{cohortMap[s.cohort_id] || '--'}</span>
-            <span className="text-sm tabular-nums" style={{ color: C.text }}>{s.cohort_id ? (courseCounts[s.cohort_id] ?? 0) : '--'}</span>
-            <span className="text-sm tabular-nums font-semibold" style={{ color: C.green }}>{completedCounts[s.id] ?? 0}</span>
-            <span className="text-xs" style={{ color: C.faint }}>
+            <span className="hidden sm:block text-sm truncate" style={{ color: C.muted }}>{cohortMap[s.cohort_id] || '--'}</span>
+            <span className="hidden sm:block text-sm tabular-nums" style={{ color: C.text }}>{s.cohort_id ? (courseCounts[s.cohort_id] ?? 0) : '--'}</span>
+            <span className="hidden sm:block text-sm tabular-nums font-semibold" style={{ color: C.green }}>{completedCounts[s.id] ?? 0}</span>
+            <span className="hidden sm:block text-xs" style={{ color: C.faint }}>
               {s.last_login_at ? new Date(s.last_login_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'Never'}
             </span>
             <div className="flex gap-1.5">
@@ -8252,12 +8259,12 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
           </div>
 
           <div className="rounded-2xl overflow-hidden" style={card}>
-            <div className="flex items-center justify-between px-5 py-4">
+            <div className="flex flex-wrap items-start sm:items-center justify-between gap-3 px-4 sm:px-5 py-4">
               <div>
                 <p className="text-sm font-semibold" style={{ color: C.text }}>Student Report</p>
                 <p className="text-xs mt-0.5" style={{ color: C.faint }}>{registrations.length} registered &middot; {totalSessions} sessions recorded</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
                   {(['summary', 'matrix'] as const).map(m => (
                     <button key={m} onClick={() => setViewMode(m)}
@@ -8302,10 +8309,10 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={thStyle}>
-                      <th className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wide">Student</th>
-                      <th className="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide">Attended</th>
-                      <th className="text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide">Missed</th>
-                      <th className="text-right px-5 py-3 text-xs font-semibold uppercase tracking-wide">Last Joined</th>
+                      <th className="text-left px-4 sm:px-5 py-3 text-xs font-semibold uppercase tracking-wide">Student</th>
+                      <th className="text-center px-3 sm:px-4 py-3 text-xs font-semibold uppercase tracking-wide">Attended</th>
+                      <th className="text-center px-3 sm:px-4 py-3 text-xs font-semibold uppercase tracking-wide">Missed</th>
+                      <th className="hidden sm:table-cell text-right px-5 py-3 text-xs font-semibold uppercase tracking-wide">Last Joined</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -8313,17 +8320,17 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
                       const missed = totalSessions - r.count;
                       return (
                         <tr key={r.id}>
-                          <td className="px-5 py-3">
+                          <td className="px-4 sm:px-5 py-3">
                             <p className="font-semibold" style={{ color: C.text }}>{r.name}</p>
                             <p className="text-xs" style={{ color: C.faint }}>{r.email}</p>
                           </td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-3 sm:px-4 py-3 text-center">
                             <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full"
                               style={{ background: '#dcfce7', color: '#16a34a' }}>
                               <CheckCircle2 className="w-3 h-3" /> {r.count}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-3 sm:px-4 py-3 text-center">
                             {missed > 0 ? (
                               <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full"
                                 style={{ background: '#fee2e2', color: '#dc2626' }}>
@@ -8331,7 +8338,7 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
                               </span>
                             ) : <span style={{ color: C.faint }}>--</span>}
                           </td>
-                          <td className="px-5 py-3 text-right text-xs" style={{ color: C.faint }}>
+                          <td className="hidden sm:table-cell px-5 py-3 text-right text-xs" style={{ color: C.faint }}>
                             {r.lastJoined ? new Date(r.lastJoined).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Never joined'}
                           </td>
                         </tr>
@@ -8869,7 +8876,7 @@ export default function DashboardPage() {
         </aside>
 
         {/* -- Main content -- */}
-        <main className="flex-1 min-w-0 px-6 md:px-10 py-8">
+        <main className="flex-1 min-w-0 px-4 md:px-10 py-6 sm:py-8">
           <motion.div
             key={activeSection}
             initial={{ opacity: 0, y: 8 }}
@@ -8877,7 +8884,7 @@ export default function DashboardPage() {
             transition={{ duration: 0.2 }}
           >
             {/* Section header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex flex-wrap items-start sm:items-center justify-between gap-3 mb-6 sm:mb-8">
               <div>
                 <h1 className="text-2xl font-bold tracking-tight" style={{ color: C.text }}>{activeItem.label}</h1>
                 {(activeSection === 'courses' || activeSection === 'events') && (
@@ -8887,7 +8894,7 @@ export default function DashboardPage() {
                 )}
               </div>
               {(activeSection === 'courses' || activeSection === 'events') && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {activeSection === 'courses' && forms.filter(f => f.content_type === 'course').length > 0 && (
                     <button
                       onClick={() => exportAllInSection(forms, 'course', 'courses_bulk')}

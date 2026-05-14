@@ -3,7 +3,9 @@
  * Upserts rows in cohort_assignments for the given content + cohort list.
  * Uses INSERT ... ON CONFLICT DO NOTHING so the original assigned_at is preserved
  * when cohorts are re-added after being removed.
- * Sends assignment notification emails only to cohorts that are newly added.
+ * For events: auto-registers all students in newly added cohorts and sends each
+ * a personalised confirmation email with their tracked join link.
+ * For other content types: sends generic assignment notification emails.
  *
  * DELETE /api/cohort-assignments
  * Removes a single row from cohort_assignments for a given content + cohort pair.
@@ -11,10 +13,111 @@
  * future re-assignment is treated as genuinely new and triggers notification emails.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { Resend } from 'resend';
 import { adminClient } from '@/lib/admin-client';
 import { sendAssignmentNotifications } from '@/lib/send-assignment-notification';
+import { confirmationEmail } from '@/lib/email-templates';
+import { getTenantSettings } from '@/lib/get-tenant-settings';
 
 export const dynamic = 'force-dynamic';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+const BATCH_SIZE = 100;
+
+async function autoRegisterAndNotifyEvent(
+  supabase: ReturnType<typeof adminClient>,
+  eventId: string,
+  cohortIds: string[],
+) {
+  if (!cohortIds.length) return;
+
+  const t = await getTenantSettings();
+  const FROM = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
+  const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+
+  const { data: event } = await supabase
+    .from('events')
+    .select('id, title, slug, event_date, event_time, timezone, location, meeting_link, event_type')
+    .eq('id', eventId)
+    .maybeSingle();
+
+  if (!event) return;
+
+  const { data: students } = await supabase
+    .from('students')
+    .select('id, email, full_name')
+    .in('cohort_id', cohortIds);
+
+  if (!students?.length) return;
+
+  // Auto-register each student (RPC is idempotent -- skips already-registered)
+  const batch: Parameters<typeof resend.batch.send>[0] = [];
+
+  for (const student of students) {
+    const email = (student.email ?? '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+
+    const { error: rpcError } = await supabase.rpc('register_event_attendee', {
+      p_event_id:   eventId,
+      p_student_id: student.id,
+    });
+    if (rpcError) {
+      console.error('[cohort-assignments] auto-register rpc error:', rpcError.message);
+      continue;
+    }
+
+    // Fetch the join token for this registration
+    const { data: reg } = await supabase
+      .from('event_registrations')
+      .select('join_token')
+      .eq('event_id', eventId)
+      .eq('student_id', student.id)
+      .maybeSingle();
+
+    const joinToken: string | null = reg?.join_token ?? null;
+    const joinUrl = joinToken ? `${t.appUrl}/api/join?token=${joinToken}` : undefined;
+    const formUrl = `${t.appUrl}/${event.slug ?? eventId}`;
+
+    const html = confirmationEmail({
+      name:          student.full_name || student.email,
+      eventTitle:    event.title       || '',
+      eventDate:     event.event_date  ? String(event.event_date) : '',
+      eventTime:     event.event_time  ? String(event.event_time) : '',
+      eventTimezone: event.timezone    || '',
+      eventLocation: event.location    || '',
+      meetingLink:   event.meeting_link || '',
+      joinUrl,
+      formUrl,
+      customTitle:  'You have been added to an upcoming event',
+      customBody:   'You have been enrolled in an upcoming event. Your place is confirmed -- no registration needed.',
+      branding,
+    });
+
+    batch.push({
+      from: FROM,
+      to:   email,
+      subject: `Upcoming event: ${event.title || 'Event'}`,
+      html,
+    });
+
+    if (batch.length >= BATCH_SIZE) {
+      try {
+        await resend.batch.send(batch.splice(0, BATCH_SIZE));
+      } catch (err) {
+        console.error('[cohort-assignments] event notification batch error:', err);
+      }
+    }
+  }
+
+  if (batch.length) {
+    try {
+      await resend.batch.send(batch);
+    } catch (err) {
+      console.error('[cohort-assignments] event notification batch error:', err);
+    }
+  }
+}
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -99,7 +202,18 @@ export async function POST(req: NextRequest) {
     ? callerNewCohortIds
     : cohortIds.filter((id: string) => !existingSet.has(id));
 
-  if (emailCohortIds.length && content.slug) {
+  if (!emailCohortIds.length) return NextResponse.json({ ok: true });
+
+  if (contentType === 'event') {
+    // Events: auto-register each student and send a personalised confirmation email
+    try {
+      await autoRegisterAndNotifyEvent(supabase, formId, emailCohortIds);
+    } catch (err) {
+      console.error('[cohort-assignments] event auto-register error:', err);
+      return NextResponse.json({ error: 'Assigned but event registration/notification failed.' }, { status: 500 });
+    }
+  } else if (content.slug) {
+    // Courses / VEs: generic assignment notification
     try {
       await sendAssignmentNotifications({
         cohortIds: emailCohortIds,

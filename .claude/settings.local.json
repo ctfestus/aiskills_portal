@@ -24,7 +24,10 @@
       "Bash(xargs grep *)",
       "Read(//c/c/Users/DELL/Documents/ALL Apps/App_AI Skils/**)",
       "Bash(find \"c:\\\\\\\\Users\\\\\\\\DELL\\\\\\\\Documents\\\\\\\\ALL Apps\\\\\\\\App_AI Skils\\\\\\\\AI Skills Africa App\\\\\\\\app\" -type d)",
-      "Bash(grep -E \"\\\\.ts$|\\\\.tsx$\")"
+      "Bash(grep -E \"\\\\.ts$|\\\\.tsx$\")",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\DELL\\\\Documents\\\\ALL Apps\\\\App_AI Skils\\\\AI Skills Africa App\\\\components\" -Recurse -Force -ErrorAction SilentlyContinue | Where-Object {$_.PSIsContainer -eq $false} | Select-Object FullName | Format-List)",
+      "Bash(Get-ChildItem -Recurse -Path \"app\" -Filter \"page.tsx\")",
+      "Bash(Select-Object FullName)"
     ],
     "additionalDirectories": [
       "C:\\Users\\DELL\\Documents\\ALL Apps\\Landing pages\\elevate-landing\\lib",
