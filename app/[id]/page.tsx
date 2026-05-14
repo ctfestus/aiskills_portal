@@ -1835,8 +1835,8 @@ export default function PublicFormPage() {
                       })()}
 
                       {/* Join link for enrolled students (no registration required) */}
-                      {joinToken && !isPast && config.eventDetails?.eventType === 'virtual' && config.eventDetails?.meetingLink && (() => {
-                        const platform = detectPlatform(config.eventDetails.meetingLink);
+                      {joinToken && !isPast && ev.meetingLink && (() => {
+                        const platform = detectPlatform(ev.meetingLink);
                         const joinHref = `/api/join?token=${joinToken}`;
                         return (
                           <a href={joinHref} target="_blank" rel="noopener noreferrer"

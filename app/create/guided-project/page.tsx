@@ -18,10 +18,21 @@ import { CSS } from '@dnd-kit/utilities';
 
 function SortableVEShell({ id, children }: {
   id: string;
-  children: (bag: { dragHandle: React.ReactNode }) => React.ReactNode;
+  children: (bag: { dragHandle: React.ReactNode; isDragging: boolean }) => React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0 : 1 };
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    ...(isDragging ? {
+      opacity: 0.85,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.22)',
+      borderRadius: 14,
+      zIndex: 50,
+      position: 'relative',
+      outline: '2px solid rgba(173,238,102,0.7)',
+    } : {}),
+  };
   const dragHandle = (
     <button type="button" {...attributes} {...listeners}
       className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -29,7 +40,7 @@ function SortableVEShell({ id, children }: {
       <GripVertical className="w-3.5 h-3.5" />
     </button>
   );
-  return <div ref={setNodeRef} style={style}>{children({ dragHandle })}</div>;
+  return <div ref={setNodeRef} style={style}>{children({ dragHandle, isDragging })}</div>;
 }
 import { RichTextEditor } from '@/components/RichTextEditor';
 import Link from 'next/link';
@@ -191,7 +202,12 @@ function RubricBuilder({ criteria, onChange, C, inp, sessionToken }: {
             style={{ background: '#6366f118' }}>
             <span className="text-[9px] font-black" style={{ color: '#6366f1' }}>{ci + 1}</span>
           </div>
-          <p className="flex-1 text-[12px]" style={{ color: C.text }}>{crit}</p>
+          <input
+            className="flex-1 bg-transparent text-[12px] outline-none"
+            style={{ color: C.text }}
+            value={crit}
+            onChange={e => { const next = [...criteria]; next[ci] = e.target.value; onChange(next); }}
+          />
           <button onClick={() => onChange(criteria.filter((_, j) => j !== ci))}
             className="hover:text-red-400 flex-shrink-0 transition-colors" style={{ color: C.faint }}>
             <X className="w-3 h-3" />
@@ -357,6 +373,29 @@ function VirtualExperienceCreatePageInner() {
           const oldIdx = m.lessons.findIndex(l => l.id === active.id);
           const newIdx = m.lessons.findIndex(l => l.id === over.id);
           return { ...m, lessons: arrayMove(m.lessons, oldIdx, newIdx) };
+        }),
+      };
+    });
+  };
+
+  const handleReqDragEnd = (moduleId: string, lessonId: string) => (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !config) return;
+    setConfig(c => {
+      if (!c) return c;
+      return {
+        ...c,
+        modules: c.modules.map(m => {
+          if (m.id !== moduleId) return m;
+          return {
+            ...m,
+            lessons: m.lessons.map(l => {
+              if (l.id !== lessonId) return l;
+              const oldIdx = l.requirements.findIndex(r => r.id === active.id);
+              const newIdx = l.requirements.findIndex(r => r.id === over.id);
+              return { ...l, requirements: arrayMove(l.requirements, oldIdx, newIdx) };
+            }),
+          };
         }),
       };
     });
@@ -1435,6 +1474,8 @@ function VirtualExperienceCreatePageInner() {
                                           <span className="text-[11px] font-black uppercase tracking-widest" style={{ color: C.muted }}>Deliverables</span>
                                           <div className="flex-1 h-px" style={{ background: C.divider }}/>
                                         </div>
+                                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleReqDragEnd(mod.id, les.id)}>
+                                        <SortableContext items={les.requirements.map(r => r.id)} strategy={verticalListSortingStrategy}>
                                         {les.requirements.map((req, qi) => {
                                           const opts = req.options?.length === 4 ? req.options : ['', '', '', ''];
                                           const TYPE_COLORS: Record<string, { bg: string; color: string; label: string }> = {
@@ -1448,8 +1489,11 @@ function VirtualExperienceCreatePageInner() {
                                           };
                                           const tc = TYPE_COLORS[req.type] || TYPE_COLORS.mcq;
                                           return (
-                                            <div key={req.id} className="rounded-xl p-3 space-y-2" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                                            <SortableVEShell key={req.id} id={req.id}>
+                                            {({ dragHandle: reqDragHandle }) => (
+                                            <div className="rounded-xl p-3 space-y-2 group" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
                                               <div className="flex items-center gap-2">
+                                                {reqDragHandle}
                                                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
                                                   style={{ background: tc.bg, color: tc.color }}>Deliverable {qi + 1}</span>
                                                 <select value={req.type}
@@ -1641,8 +1685,12 @@ function VirtualExperienceCreatePageInner() {
                                                 </div>
                                               )}
                                             </div>
+                                            )}
+                                            </SortableVEShell>
                                           );
                                         })}
+                                        </SortableContext>
+                                        </DndContext>
                                         <button onClick={() => addReq(mod.id, les.id)}
                                           className="text-[12px] flex items-center gap-1 hover:opacity-70 font-medium" style={{ color: C.cta }}>
                                           <Plus className="w-3 h-3" /> Add task

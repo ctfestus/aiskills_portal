@@ -8,6 +8,7 @@ import {
   Clock, MapPin, ClipboardList, ExternalLink, Video,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
+import { sanitizeRichText } from '@/lib/sanitize';
 
 /* --- tokens --- */
 const LIGHT = {
@@ -234,9 +235,11 @@ function ItemModal({ item, onClose, onNavigate }: {
           )}
 
           {item.description && (
-            <p className="text-sm leading-relaxed line-clamp-4" style={{ color: C.muted }}>
-              {item.description}
-            </p>
+            <div
+              className="text-sm leading-relaxed line-clamp-4"
+              style={{ color: C.muted }}
+              dangerouslySetInnerHTML={{ __html: sanitizeRichText(item.description) }}
+            />
           )}
 
           <div className="pt-2 space-y-2">
