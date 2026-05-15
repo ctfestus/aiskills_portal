@@ -383,6 +383,7 @@ function TiltProjectCard({ item, t, isDark, onOpen }: { item: any; t: typeof LIG
   const ref    = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: '-40px' });
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setNoTilt(window.matchMedia('(hover: none)').matches); }, []);
 
   const onMove  = (e: React.MouseEvent<HTMLDivElement>) => {

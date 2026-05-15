@@ -1267,21 +1267,84 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
   const [sessionToken, setSessionToken] = useState('');
   const [veLoading, setVeLoading]     = useState(false);
 
+  // Group-specific state
+  const isGroupAssignment = (assignment.group_ids?.length ?? 0) > 0;
+  const [myGroupId, setMyGroupId]             = useState<string | null>(null);
+  const [groupMembers, setGroupMembers]       = useState<any[]>([]);
+  const [hoveredMember, setHoveredMember] = useState<string | null>(null);
+  const [popupRect, setPopupRect]         = useState<DOMRect | null>(null);
+  const [isLeader, setIsLeader]               = useState(false);
+  const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
+  const [workspaceNotes, setWorkspaceNotes] = useState('');
+  const [workspaceLinks, setWorkspaceLinks] = useState<{ url: string; label?: string }[]>([{ url: '', label: '' }]);
+  const [workspaceSaving, setWorkspaceSaving] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState('');
+  const [groupPanelTab, setGroupPanelTab] = useState<'members' | 'connect'>('members');
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const toggleParticipant = (id: string) =>
+    setSelectedParticipants(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
   const assignmentType = assignment.type ?? 'standard';
   const isAiType = ['code_review', 'excel_review', 'dashboard_critique'].includes(assignmentType);
   const isVeType = assignmentType === 'virtual_experience';
 
   useEffect(() => {
     const load = async () => {
+      // If group assignment, resolve student's group membership first
+      let resolvedGroupId: string | null = null;
+      if (isGroupAssignment) {
+        const { data: memberRow } = await supabase
+          .from('group_members')
+          .select('group_id, is_leader')
+          .eq('student_id', userId)
+          .maybeSingle();
+        if (memberRow) {
+          resolvedGroupId = memberRow.group_id;
+          setMyGroupId(memberRow.group_id);
+          setIsLeader(memberRow.is_leader ?? false);
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token ?? '';
+          const memberRes = await fetch(`/api/student/group-members?groupId=${memberRow.group_id}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          const memberJson = memberRes.ok ? await memberRes.json() : { members: [] };
+          const grpMembers = memberJson.members ?? [];
+          setGroupMembers(grpMembers);
+          if (memberRow.is_leader) {
+            setSelectedParticipants((grpMembers ?? []).map((m: any) => m.student_id as string));
+          }
+          const workspaceRes = await fetch(`/api/assignments/group-workspace?assignmentId=${assignment.id}&groupId=${memberRow.group_id}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (workspaceRes.ok) {
+            const workspaceJson = await workspaceRes.json();
+            const workspace = workspaceJson.workspace ?? {};
+            setWorkspaceNotes(workspace.notes ?? '');
+            const loadedLinks = Array.isArray(workspace.links) ? workspace.links : [];
+            setWorkspaceLinks(loadedLinks.length ? loadedLinks : [{ url: '', label: '' }]);
+          }
+        }
+      }
+
+      const subQuery = isGroupAssignment && resolvedGroupId
+        ? supabase.from('assignment_submissions')
+            .select('*, submitted_by_student:students!submitted_by(full_name)')
+            .eq('assignment_id', assignment.id)
+            .eq('group_id', resolvedGroupId)
+            .maybeSingle()
+        : supabase.from('assignment_submissions')
+            .select('*').eq('assignment_id', assignment.id).eq('student_id', userId).maybeSingle();
+
       const [{ data: sub }, { data: res }] = await Promise.all([
-        supabase.from('assignment_submissions')
-          .select('*').eq('assignment_id', assignment.id).eq('student_id', userId).maybeSingle(),
+        subQuery,
         supabase.from('assignment_resources')
           .select('id, name, url, resource_type').eq('assignment_id', assignment.id).order('created_at'),
       ]);
       if (sub) {
         setSubmission(sub);
         setResponseText(sub.response_text ?? '');
+        // Restore participant selection from saved submission
+        if (sub.participants?.length) setSelectedParticipants(sub.participants);
         const { data: files } = await supabase.from('assignment_submission_files')
           .select('*').eq('submission_id', sub.id).order('uploaded_at');
         setSavedFiles(files ?? []);
@@ -1376,6 +1439,40 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
     }
   }
 
+  async function saveWorkspace() {
+    if (!myGroupId) return;
+    setWorkspaceSaving(true);
+    setWorkspaceError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      const payload = {
+        assignmentId: assignment.id,
+        groupId: myGroupId,
+        notes: sanitizeRichText(workspaceNotes),
+        links: workspaceLinks.filter(l => l.url.trim()).map(l => ({ url: l.url.trim(), label: (l.label ?? '').trim() })),
+        files: [],
+      };
+      const res = await fetch('/api/assignments/group-workspace', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || 'Could not save workspace');
+      const workspace = json.workspace ?? {};
+      setWorkspaceNotes(workspace.notes ?? '');
+      const loadedLinks = Array.isArray(workspace.links) ? workspace.links : [];
+      setWorkspaceLinks(loadedLinks.length ? loadedLinks : [{ url: '', label: '' }]);
+    } catch (err: any) {
+      setWorkspaceError(err?.message || 'Could not save workspace. Please try again.');
+    } finally {
+      setWorkspaceSaving(false);
+    }
+  }
+
+  const removeWorkspaceLink = (i: number) => setWorkspaceLinks(prev => prev.filter((_, idx) => idx !== i));
+
   async function handleSubmit(asDraft: boolean) {
     setSubmitError('');
     setSubmitting(true);
@@ -1383,11 +1480,21 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
       const newStatus = asDraft ? 'draft' : 'submitted';
       const submittedAt = asDraft ? undefined : new Date().toISOString();
       let sub = submission;
+      const participantIds = isGroupAssignment
+        ? Array.from(new Set(selectedParticipants))
+        : selectedParticipants;
+      if (isGroupAssignment && !asDraft && participantIds.length === 0) {
+        throw new Error('Select at least one participant before submitting.');
+      }
 
       const sanitizedResponse = sanitizeRichText(responseText);
       if (sub) {
         const updatePayload: any = { response_text: sanitizedResponse, status: newStatus };
         if (submittedAt) updatePayload.submitted_at = submittedAt;
+        if (isGroupAssignment) {
+          updatePayload.submitted_by = userId;
+          updatePayload.participants = participantIds;
+        }
         const { error } = await supabase.from('assignment_submissions')
           .update(updatePayload)
           .eq('id', sub.id);
@@ -1396,6 +1503,11 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
       } else {
         const insertPayload: any = { assignment_id: assignment.id, student_id: userId, response_text: sanitizedResponse, status: newStatus };
         if (submittedAt) insertPayload.submitted_at = submittedAt;
+        if (isGroupAssignment && myGroupId) {
+          insertPayload.group_id = myGroupId;
+          insertPayload.submitted_by = userId;
+          insertPayload.participants = participantIds;
+        }
         const { data, error } = await supabase.from('assignment_submissions')
           .insert(insertPayload)
           .select().single();
@@ -1467,6 +1579,12 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
   }
 
   async function autoSubmit(aiScore: number | null, summaryText: string) {
+    const participantIds = Array.from(new Set(selectedParticipants));
+    if (isGroupAssignment && myGroupId && participantIds.length === 0) {
+      setSubmitError('Select at least one participant before submitting.');
+      return;
+    }
+
     const score = aiScore != null ? Math.round(aiScore) : null;
     const payload: any = {
       assignment_id: assignment.id,
@@ -1476,23 +1594,38 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
       submitted_at: new Date().toISOString(),
     };
     if (score != null) payload.score = score;
+    if (isGroupAssignment && myGroupId) {
+      payload.group_id = myGroupId;
+      payload.submitted_by = userId;
+      payload.participants = participantIds;
+    }
+    const conflictCol = isGroupAssignment && myGroupId ? 'group_id,assignment_id' : 'student_id,assignment_id';
     const { data, error } = await supabase.from('assignment_submissions')
-      .upsert(payload, { onConflict: 'student_id,assignment_id' })
+      .upsert(payload, { onConflict: conflictCol })
       .select().single();
-    if (!error && data) setSubmission(data);
+    if (error) {
+      setSubmitError(error.message || 'Failed to submit. Please try again.');
+      return;
+    }
+    if (data) setSubmission(data);
   }
 
-  const isGraded = submission?.status === 'graded';
-  const isSubmitted = submission?.status === 'submitted';
+  const isParticipant = !isGroupAssignment
+    || !submission
+    || submission.status === 'draft'
+    || (Array.isArray(submission.participants) && submission.participants.includes(userId));
+  const isGraded = submission?.status === 'graded' && isParticipant;
+  const isSubmitted = submission?.status === 'submitted' && isParticipant;
   const uploading = readyFiles.some(f => f.status === 'uploading');
   const hasContent = responseText.trim() || readyFiles.some(f => f.status === 'done') || links.some(l => l.trim()) || savedFiles.length > 0;
 
   return (
     <div>
-      <button onClick={onBack} className="flex items-center gap-2 mb-5 text-sm font-medium"
+      <button onClick={onBack} className="flex items-center gap-1.5 mb-3 text-xs font-medium"
         style={{ color: C.muted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-        <ArrowLeft className="w-4 h-4"/> Back to assignments
+        <ArrowLeft className="w-3.5 h-3.5"/> Back to assignments
       </button>
+      <h1 className="text-[22px] font-bold tracking-tight mb-5" style={{ color: C.text }}>{assignment.title}</h1>
 
       {submitSuccess && (
         <div className="flex items-center gap-3 rounded-2xl px-5 py-4 mb-5"
@@ -1505,7 +1638,8 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
         </div>
       )}
 
-      {/* Assignment brief */}
+      {/* Assignment brief -- only render card if there is content to show */}
+      {(assignment.cover_image || (submission && isParticipant) || assignment._course_title || assignment.scenario || assignment.brief || assignment.tasks || assignment.requirements || resources.length > 0) && (
       <div className="rounded-2xl mb-4 overflow-hidden" style={{ background: C.card }}>
         {/* Cover image */}
         {assignment.cover_image && (
@@ -1519,11 +1653,12 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
           </div>
         )}
 
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 px-6 pt-5 pb-4">
-          <h2 className="text-[15px] font-bold" style={{ color: C.text }}>{assignment.title}</h2>
-          {submission && <StatusBadge status={submission.status}/>}
-        </div>
+        {/* Status badge */}
+        {submission && isParticipant && (
+          <div className="px-6 pt-5 pb-4">
+            <StatusBadge status={submission.status}/>
+          </div>
+        )}
 
         {/* Related course card */}
         {assignment._course_title && (
@@ -1627,11 +1762,260 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
           </>
         )}
 
-        {/* Bottom padding if no last section */}
-        {!assignment.scenario && !assignment.brief && !assignment.tasks && !assignment.requirements && resources.length === 0 && (
-          <div className="pb-4"/>
-        )}
       </div>
+      )}
+
+      {/* Group panel */}
+      {isGroupAssignment && groupMembers.length > 0 && (
+        <div className="rounded-2xl px-4 py-3 mb-4" style={{ background: C.card }}>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="inline-flex rounded-xl p-1" style={{ background: C.pill }}>
+              {(['members', 'connect'] as const).map(tab => (
+                <button key={tab} onClick={() => setGroupPanelTab(tab)}
+                  className="px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
+                  style={{ background: groupPanelTab === tab ? C.card : 'transparent', color: groupPanelTab === tab ? C.text : C.muted, border: 'none', cursor: 'pointer', boxShadow: groupPanelTab === tab ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }}>
+                  {tab === 'members' ? 'Members' : 'Connect'}
+                </button>
+              ))}
+            </div>
+            {groupPanelTab === 'members' && (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: C.pill, color: C.muted }}>{groupMembers.length} members</span>
+            )}
+          </div>
+          {groupPanelTab === 'members' && (
+          <div className="flex items-center gap-3 flex-wrap pt-1">
+            {groupMembers.map((m: any) => {
+              const s = m.students ?? {};
+              const isMe = m.student_id === userId;
+              const initial = (s.full_name?.[0] ?? '?').toUpperCase();
+              const isHovered = hoveredMember === m.id;
+              return (
+                <div key={m.id} className="relative flex-shrink-0"
+                  onMouseEnter={(e) => { setHoveredMember(m.id); setPopupRect((e.currentTarget as HTMLElement).getBoundingClientRect()); }}
+                  onMouseLeave={() => { setHoveredMember(null); setPopupRect(null); }}
+                  onClick={(e) => {
+                    if (isHovered) { setHoveredMember(null); setPopupRect(null); }
+                    else { setHoveredMember(m.id); setPopupRect((e.currentTarget as HTMLElement).getBoundingClientRect()); }
+                  }}>
+                  {/* Avatar ring */}
+                  <div className="w-12 h-12 rounded-full p-[2px] cursor-pointer"
+                    style={{ background: isMe ? C.green : m.is_leader ? '#f59e0b' : C.pill }}>
+                    <div className="w-full h-full rounded-full overflow-hidden" style={{ background: C.card }}>
+                      {s.avatar_url
+                        ? <img src={s.avatar_url} alt="" className="w-full h-full object-cover rounded-full"/>
+                        : <div className="w-full h-full flex items-center justify-center text-sm font-bold rounded-full"
+                            style={{ background: isMe ? `${C.green}22` : C.pill, color: isMe ? C.green : C.muted }}>
+                            {initial}
+                          </div>
+                      }
+                    </div>
+                  </div>
+                  {/* Leader star badge */}
+                  {m.is_leader && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center z-10"
+                      style={{ background: '#f59e0b', boxShadow: '0 1px 4px rgba(245,158,11,0.5)' }}>
+                      <Star className="w-2 h-2 fill-white" style={{ color: 'white' }}/>
+                    </div>
+                  )}
+                  {/* Fixed-position profile popup - renders at viewport level, never clips */}
+                  {isHovered && popupRect && (() => {
+                    const POPUP_W = 176;
+                    const vw = window.innerWidth;
+                    const avatarCenterX = popupRect.left + popupRect.width / 2;
+                    const rawLeft = avatarCenterX - POPUP_W / 2;
+                    const left = Math.max(8, Math.min(vw - POPUP_W - 8, rawLeft));
+                    const caretLeft = Math.round(avatarCenterX - left - 7);
+                    return (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6, scale: 0.94 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ duration: 0.15, ease: 'easeOut' }}
+                        style={{ position: 'fixed', bottom: window.innerHeight - popupRect.top + 10, left, width: POPUP_W, zIndex: 9999, borderRadius: 16, padding: 12, background: C.card, border: `1px solid ${C.pill}`, boxShadow: '0 8px 32px rgba(0,0,0,0.18)', transformOrigin: 'bottom center' }}>
+                        <div className="flex flex-col items-center gap-1.5">
+                          <div className="w-14 h-14 rounded-full overflow-hidden border-2"
+                            style={{ borderColor: isMe ? C.green : m.is_leader ? '#f59e0b' : C.pill }}>
+                            {s.avatar_url
+                              ? <img src={s.avatar_url} alt="" className="w-full h-full object-cover"/>
+                              : <div className="w-full h-full flex items-center justify-center text-lg font-bold"
+                                  style={{ background: isMe ? `${C.green}22` : C.pill, color: isMe ? C.green : C.muted }}>
+                                  {initial}
+                                </div>
+                            }
+                          </div>
+                          <p className="text-sm font-semibold text-center leading-tight" style={{ color: C.text }}>{s.full_name ?? '--'}</p>
+                          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                            {m.is_leader && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#f59e0b18', color: '#f59e0b' }}>Leader</span>}
+                            {isMe && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: `${C.green}18`, color: C.green }}>you</span>}
+                          </div>
+                        </div>
+                        {/* Caret always points at the avatar center */}
+                        <div style={{ position: 'absolute', top: '100%', left: caretLeft, width: 0, height: 0, borderLeft: '7px solid transparent', borderRight: '7px solid transparent', borderTop: `7px solid ${C.pill}` }}/>
+                      </motion.div>
+                    );
+                  })()}
+                </div>
+              );
+            })}
+          </div>
+          )}
+          {groupPanelTab === 'connect' && (
+          <div className="pt-1">
+            {isLeader && <div className="flex justify-end mb-4">
+              <button
+                onClick={saveWorkspace}
+                disabled={workspaceSaving}
+                className="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 disabled:opacity-60"
+                style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: workspaceSaving ? 'not-allowed' : 'pointer' }}>
+                {workspaceSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Check className="w-3.5 h-3.5"/>}
+                Save Links
+              </button>
+            </div>}
+
+            <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: C.faint }}>Meeting & File Links</p>
+            <p className="text-sm mb-3 leading-relaxed" style={{ color: C.muted }}>{isLeader ? 'Add where the real collaboration will happen: WhatsApp, Google Meet, Zoom, Google Docs, Notion, GitHub, or similar.' : 'Use these links to join your group discussion or open the shared working document.'}</p>
+            <div className="space-y-2">
+              {isLeader ? workspaceLinks.map((link, i) => (
+                <div key={i} className="grid grid-cols-[1fr_1fr_28px] gap-2 items-center">
+                  <input value={link.label ?? ''} onChange={e => setWorkspaceLinks(prev => prev.map((l, idx) => idx === i ? { ...l, label: e.target.value } : l))} placeholder={i === 0 ? 'WhatsApp / meeting / file' : 'Label'} style={{ minWidth: 0, padding: '10px 12px', borderRadius: 10, background: C.input, color: C.text, fontSize: 14, outline: 'none' }}/>
+                  <input value={link.url} onChange={e => setWorkspaceLinks(prev => prev.map((l, idx) => idx === i ? { ...l, url: e.target.value } : l))} placeholder="https://..." style={{ minWidth: 0, padding: '10px 12px', borderRadius: 10, background: C.input, color: C.text, fontSize: 14, outline: 'none' }}/>
+                  <button onClick={() => removeWorkspaceLink(i)} disabled={workspaceLinks.length === 1} className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30" style={{ background: C.pill, color: C.faint, border: 'none', cursor: workspaceLinks.length === 1 ? 'not-allowed' : 'pointer' }}>
+                    <X className="w-3.5 h-3.5"/>
+                  </button>
+                </div>
+              )) : workspaceLinks.filter(link => link.url.trim()).length > 0 ? (
+                workspaceLinks.filter(link => link.url.trim()).map((link, i) => (
+                  <a key={`${link.url}-${i}`} href={link.url.trim()} target="_blank" rel="noreferrer" className="flex items-center gap-3 no-underline rounded-xl px-3 py-2 transition-all" style={{ background: C.pill, border: `1px solid ${C.divider}`, color: C.text }}>
+                    <ExternalLink className="w-4 h-4 flex-shrink-0" style={{ color: C.green }}/>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-base font-semibold truncate" style={{ color: C.text }}>{link.label || 'Open meeting or file link'}</p>
+                      <p className="text-sm truncate" style={{ color: C.faint }}>{link.url}</p>
+                    </div>
+                  </a>
+                ))
+              ) : (
+                <p className="text-xs rounded-lg px-3 py-2" style={{ background: C.thumbBg, color: C.muted }}>No meeting or file link has been shared yet.</p>
+              )}
+            </div>
+            {isLeader && <button onClick={() => setWorkspaceLinks(prev => [...prev, { url: '', label: '' }])} className="mt-2 text-xs font-medium flex items-center gap-1" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.green, padding: 0 }}>
+              <Plus className="w-3.5 h-3.5"/> Add meeting or file link
+            </button>}
+
+            <div className="mt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>Optional Draft Notes</p>
+              {isLeader ? (
+                <RichTextEditor value={workspaceNotes} onChange={setWorkspaceNotes} placeholder="Optional: summarize decisions, divide responsibilities, or draft the final response. This is not meant to replace your group conversation." />
+              ) : workspaceNotes ? (
+                <div className="rounded-xl p-4" style={{ background: C.input }}>
+                  <div className="rich-content text-sm" style={{ color: C.text }} dangerouslySetInnerHTML={{ __html: sanitizeRichText(workspaceNotes) }}/>
+                </div>
+              ) : (
+                <p className="text-xs rounded-lg px-3 py-2" style={{ background: C.thumbBg, color: C.muted }}>No draft notes have been shared yet.</p>
+              )}
+            </div>
+            {workspaceError && <p className="text-xs mt-3" style={{ color: '#ef4444' }}>{workspaceError}</p>}
+          </div>
+          )}
+        </div>
+      )}
+
+      {/* Group coordination */}
+      {false && isGroupAssignment && myGroupId && (
+        <div className="rounded-2xl mb-4 overflow-hidden" style={{ background: C.card }}>
+          <button
+            type="button"
+            onClick={() => setWorkspaceOpen(v => !v)}
+            className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left"
+            style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: C.faint }}>Group Coordination</p>
+              <p className="text-xs" style={{ color: C.muted }}>
+                {workspaceOpen
+                  ? isLeader ? 'Add meeting links, working document links, and optional draft notes for your group.' : 'Open meeting links and working documents shared by your group leader.'
+                  : `${workspaceLinks.filter(l => l.url.trim()).length} meeting/file link${workspaceLinks.filter(l => l.url.trim()).length === 1 ? '' : 's'} · ${workspaceNotes ? 'draft notes saved' : 'no draft notes'}`}
+              </p>
+            </div>
+            <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${workspaceOpen ? 'rotate-180' : ''}`} style={{ color: C.faint }}/>
+          </button>
+
+          {workspaceOpen && (
+          <div className="px-5 pb-5">
+            {isLeader && <div className="flex justify-end mb-4">
+              <button
+                onClick={saveWorkspace}
+                disabled={workspaceSaving}
+                className="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 disabled:opacity-60"
+                style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: workspaceSaving ? 'not-allowed' : 'pointer' }}>
+                {workspaceSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Check className="w-3.5 h-3.5"/>}
+                Save Links
+              </button>
+            </div>}
+
+          <div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: C.faint }}>Meeting & File Links</p>
+              <p className="text-sm mb-3 leading-relaxed" style={{ color: C.muted }}>{isLeader ? 'Add where the real collaboration will happen: WhatsApp, Google Meet, Zoom, Google Docs, Notion, GitHub, or similar.' : 'Use these links to join your group discussion or open the shared working document.'}</p>
+              <div className="space-y-2">
+                {isLeader ? workspaceLinks.map((link, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_1fr_28px] gap-2 items-center">
+                    <input
+                      value={link.label ?? ''}
+                      onChange={e => setWorkspaceLinks(prev => prev.map((l, idx) => idx === i ? { ...l, label: e.target.value } : l))}
+                      placeholder={i === 0 ? 'WhatsApp / meeting / file' : 'Label'}
+                      style={{ minWidth: 0, padding: '10px 12px', borderRadius: 10, background: C.input, color: C.text, fontSize: 14, outline: 'none' }}
+                    />
+                    <input
+                      value={link.url}
+                      onChange={e => setWorkspaceLinks(prev => prev.map((l, idx) => idx === i ? { ...l, url: e.target.value } : l))}
+                      placeholder="https://..."
+                      style={{ minWidth: 0, padding: '10px 12px', borderRadius: 10, background: C.input, color: C.text, fontSize: 14, outline: 'none' }}
+                    />
+                    <button onClick={() => removeWorkspaceLink(i)} disabled={workspaceLinks.length === 1}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30"
+                      style={{ background: C.pill, color: C.faint, border: 'none', cursor: workspaceLinks.length === 1 ? 'not-allowed' : 'pointer' }}>
+                      <X className="w-3.5 h-3.5"/>
+                    </button>
+                  </div>
+                )) : workspaceLinks.filter(link => link.url.trim()).length > 0 ? (
+                  workspaceLinks.filter(link => link.url.trim()).map((link, i) => (
+                    <a key={`${link.url}-${i}`} href={link.url.trim()} target="_blank" rel="noreferrer"
+                      className="flex items-center gap-3 no-underline rounded-xl px-3 py-2 transition-all"
+                      style={{ background: C.pill, border: `1px solid ${C.divider}`, color: C.text }}>
+                      <ExternalLink className="w-4 h-4 flex-shrink-0" style={{ color: C.green }}/>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-base font-semibold truncate" style={{ color: C.text }}>{link.label || 'Open meeting or file link'}</p>
+                        <p className="text-sm truncate" style={{ color: C.faint }}>{link.url}</p>
+                      </div>
+                    </a>
+                  ))
+                ) : (
+                  <p className="text-xs rounded-lg px-3 py-2" style={{ background: C.thumbBg, color: C.muted }}>No meeting or file link has been shared yet.</p>
+                )}
+              </div>
+              {isLeader && <button onClick={() => setWorkspaceLinks(prev => [...prev, { url: '', label: '' }])}
+                className="mt-2 text-xs font-medium flex items-center gap-1"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.green, padding: 0 }}>
+                <Plus className="w-3.5 h-3.5"/> Add meeting or file link
+              </button>}
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>Optional Draft Notes</p>
+            {isLeader ? (
+              <RichTextEditor value={workspaceNotes} onChange={setWorkspaceNotes} placeholder="Optional: summarize decisions, divide responsibilities, or draft the final response. This is not meant to replace your group conversation." />
+            ) : workspaceNotes ? (
+              <div className="rounded-xl p-4" style={{ background: C.input }}>
+                <div className="rich-content text-sm" style={{ color: C.text }} dangerouslySetInnerHTML={{ __html: sanitizeRichText(workspaceNotes) }}/>
+              </div>
+            ) : (
+              <p className="text-xs rounded-lg px-3 py-2" style={{ background: C.thumbBg, color: C.muted }}>No draft notes have been shared yet.</p>
+            )}
+          </div>
+          {workspaceError && <p className="text-xs mt-3" style={{ color: '#ef4444' }}>{workspaceError}</p>}
+          </div>
+          )}
+        </div>
+      )}
 
       {/* AI / VE tools -- rendered outside the card, full-width */}
       {!loadingSub && isAiType && (
@@ -1647,8 +2031,8 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
                     <div className="flex items-center gap-3 flex-wrap mb-2">
                       <StatusBadge status="graded"/>
                       {submission.score != null && <span className="text-sm font-semibold" style={{ color: passed ? '#10b981' : '#ef4444' }}>Score: {submission.score}</span>}
-                      {passed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>Passed</span>}
-                      {failed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.10)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}>Failed</span>}
+                      {passed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>Passed</span>}
+                      {failed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.10)', color: '#ef4444' }}>Failed</span>}
                     </div>
                     {submission.feedback && (
                       <div className="rounded-xl p-4" style={{ background: passed ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.07)', border: `1px solid ${passed ? 'rgba(16,185,129,0.22)' : 'rgba(239,68,68,0.22)'}` }}>
@@ -1670,6 +2054,11 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
             </div>
           )}
 
+          {isGroupAssignment && !isLeader && (
+            <p className="text-xs text-center py-2 px-4 rounded-xl mb-3" style={{ background: C.thumbBg, color: C.muted }}>
+              You can work through this assignment to prepare. Your group leader will submit for the group.
+            </p>
+          )}
           {assignmentType === 'code_review' && (
             <CodeReviewPlayer
               reqId={assignment.id}
@@ -1680,7 +2069,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               rubric={assignment.config?.rubric}
               schema={assignment.config?.schema}
               minScore={assignment.config?.minScore}
-              onComplete={(result: any, lean: any) => autoSubmit(result.overallScore, JSON.stringify(lean))}
+              onComplete={isGroupAssignment && !isLeader ? () => {} : (result: any, lean: any) => autoSubmit(result.overallScore, JSON.stringify(lean))}
             />
           )}
           {assignmentType === 'excel_review' && (
@@ -1693,7 +2082,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               rubric={assignment.config?.rubric}
               context={assignment.config?.context}
               minScore={assignment.config?.minScore}
-              onComplete={(result: any, lean: any) => autoSubmit(result.overallScore, JSON.stringify(lean))}
+              onComplete={isGroupAssignment && !isLeader ? () => {} : (result: any, lean: any) => autoSubmit(result.overallScore, JSON.stringify(lean))}
             />
           )}
           {assignmentType === 'dashboard_critique' && (
@@ -1704,7 +2093,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               completed={isGraded || isSubmitted}
               savedResult={(() => { try { return submission?.response_text ? JSON.parse(submission.response_text) : undefined; } catch { return undefined; } })()}
               rubric={assignment.config?.rubric}
-              onComplete={(result: any) => autoSubmit(result.audit?.overallScore ?? null, JSON.stringify(result))}
+              onComplete={isGroupAssignment && !isLeader ? () => {} : (result: any) => autoSubmit(result.audit?.overallScore ?? null, JSON.stringify(result))}
             />
           )}
         </div>
@@ -1717,10 +2106,10 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
             <div className="rounded-2xl p-5 mb-4" style={{ background: C.card }}>
               <div className="flex items-center gap-3">
                 <StatusBadge status="graded"/>
-                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>Completed</span>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>Completed</span>
               </div>
               {submission.feedback && (
-                <div className="mt-3 rounded-xl p-4" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.22)' }}>
+                <div className="mt-3 rounded-xl p-4" style={{ background: 'rgba(16,185,129,0.08)' }}>
                   <p className="text-xs font-semibold mb-1" style={{ color: '#10b981' }}>Instructor Feedback</p>
                   <div className="rich-content text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(submission.feedback) }}/>
                 </div>
@@ -1730,18 +2119,28 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
           {veLoading && <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.faint }}/></div>}
           {!veLoading && !veForm && <p className="text-sm text-center py-6" style={{ color: C.faint }}>Virtual Experience not found.</p>}
           {!veLoading && veForm && (
-            <AssignmentExperiencePlayer
-              formId={veForm.id}
-              config={veForm.config}
-              userId={userId}
-              studentName={studentName}
-              studentEmail={studentEmail}
-              sessionToken={sessionToken}
-              assignmentId={assignment.id}
-              initialProgress={veProgress}
-              isDark={isDark}
-              onComplete={(submission) => { if (submission) setSubmission(submission); }}
-            />
+            <>
+              {isGroupAssignment && !isLeader && (
+                <p className="text-xs text-center py-2 px-4 rounded-xl mb-3" style={{ background: C.thumbBg, color: C.muted }}>
+                  You can work through this experience to prepare. Your group leader will submit for the group.
+                </p>
+              )}
+              <AssignmentExperiencePlayer
+                formId={veForm.id}
+                config={veForm.config}
+                userId={userId}
+                studentName={studentName}
+                studentEmail={studentEmail}
+                sessionToken={sessionToken}
+                assignmentId={assignment.id}
+                initialProgress={veProgress}
+                isDark={isDark}
+                groupId={isGroupAssignment && isLeader ? myGroupId ?? undefined : undefined}
+                participants={isGroupAssignment && isLeader ? selectedParticipants : undefined}
+                canSubmit={!isGroupAssignment || isLeader}
+                onComplete={isGroupAssignment && !isLeader ? () => {} : (submission) => { if (submission) setSubmission(submission); }}
+              />
+            </>
           )}
         </div>
       )}
@@ -1749,10 +2148,48 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
       {/* Submission panel -- standard type only */}
       {assignmentType === 'standard' && (
       <div className="rounded-2xl p-6" style={{ background: C.card }}>
-        <h3 className="text-sm font-bold mb-4" style={{ color: C.text }}>Your Submission</h3>
-
+        <h3 className="text-sm font-bold mb-4" style={{ color: C.text }}>
+          {isGroupAssignment ? 'Group Submission' : 'Your Submission'}
+        </h3>
         {loadingSub ? (
           <div className="space-y-2"><Sk h={14} w="60%"/><Sk h={100}/></div>
+        ) : isGroupAssignment && !isLeader && !isGraded ? (
+          <div>
+            {submission ? (
+              <>
+                <div className="mb-4 px-3 py-2 rounded-lg text-xs font-medium" style={{ background: C.thumbBg, color: C.muted }}>
+                  Final group submission preview. Only selected participants receive the grade when this is graded.
+                </div>
+                {submission.response_text ? (
+                  <div className="rounded-xl p-4 mb-4" style={{ background: C.input }}>
+                    <div className="rich-content text-sm" style={{ color: C.text }} dangerouslySetInnerHTML={{ __html: sanitizeRichText(submission.response_text) }}/>
+                  </div>
+                ) : (
+                  <p className="text-sm mb-4" style={{ color: C.faint }}>No written response was included.</p>
+                )}
+                {savedFiles.length > 0 && (
+                  <div className="mb-4 flex flex-col gap-2">
+                    {savedFiles.map(f => (
+                      <a key={f.id} href={f.file_url} target="_blank" rel="noreferrer"
+                        className="group flex items-center gap-3 no-underline rounded-2xl px-4 py-3 transition-all"
+                        style={{ background: C.pill, border: `1px solid ${C.divider}` }}>
+                        <div className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center"
+                          style={{ background: f.file_name ? 'rgba(16,185,129,0.10)' : 'rgba(4,83,241,0.08)' }}>
+                          {f.file_name ? <FileText className="w-4 h-4" style={{ color: '#10b981' }}/> : <ExternalLink className="w-4 h-4" style={{ color: '#0453f1' }}/>}
+                        </div>
+                        <span className="text-[13px] font-medium flex-1 truncate" style={{ color: C.text }}>{f.file_name || f.file_url}</span>
+                        <ExternalLink className="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: C.faint }}/>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs rounded-lg px-3 py-2" style={{ background: C.thumbBg, color: C.muted }}>
+                Only your group leader can submit the final work. Use the shared workspace above to prepare with your group, and you can view the submission here once it has been made.
+              </p>
+            )}
+          </div>
         ) : isGraded ? (
           <div>
             {submission.response_text && (
@@ -1790,12 +2227,12 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
                         Score: {submission.score}
                       </span>
                     )}
-                    {passed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>Passed</span>}
-                    {failed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.10)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}>Failed</span>}
+                    {passed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>Passed</span>}
+                    {failed && <span className="text-xs font-bold px-2.5 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.10)', color: '#ef4444' }}>Failed</span>}
                   </div>
                   {submission.feedback && (
                     <div className="mt-3 rounded-xl p-4"
-                      style={{ background: passed ? 'rgba(16,185,129,0.08)' : failed ? 'rgba(239,68,68,0.07)' : C.thumbBg, border: `1px solid ${passed ? 'rgba(16,185,129,0.22)' : failed ? 'rgba(239,68,68,0.22)' : C.divider}` }}>
+                      style={{ background: passed ? 'rgba(16,185,129,0.08)' : failed ? 'rgba(239,68,68,0.07)' : C.thumbBg }}>
                       <p className="text-xs font-semibold mb-1" style={{ color: passed ? '#10b981' : failed ? '#ef4444' : C.faint }}>Instructor Feedback</p>
                       <div className="rich-content text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(submission.feedback) }}/>
                     </div>
@@ -1911,8 +2348,32 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               )}
             </div>
 
+            {/* Participant selection - leader only, before submitting */}
+            {isGroupAssignment && isLeader && groupMembers.length > 0 && !isGraded && (
+              <div className="mb-4">
+                <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Mark Participants</p>
+                <p className="text-xs mb-3" style={{ color: C.muted }}>Indicate the members who participated in this assignment. Only checked members will receive this grade.</p>
+                <div className="flex flex-col gap-2">
+                  {groupMembers.map((m: any) => {
+                    const s = m.students ?? {};
+                    return (
+                      <label key={m.student_id} className="flex items-center gap-3 cursor-pointer rounded-xl px-3 py-2"
+                        style={{ background: C.page, border: `1px solid ${C.divider}` }}>
+                        <input type="checkbox" checked={selectedParticipants.includes(m.student_id)}
+                          onChange={() => toggleParticipant(m.student_id)}
+                          style={{ width: 15, height: 15, accentColor: C.cta, cursor: 'pointer' }}/>
+                        <span className="text-sm" style={{ color: C.text }}>{s.full_name}</span>
+                        {m.is_leader && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#f59e0b22', color: '#f59e0b' }}>Leader</span>}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {submitError && <p className="text-xs mb-3" style={{ color: '#ef4444' }}>{submitError}</p>}
 
+            {(!isGroupAssignment || isLeader) && (
             <div className="flex gap-3">
               <button onClick={() => handleSubmit(true)} disabled={submitting}
                 className="px-4 py-2 rounded-xl text-sm font-semibold"
@@ -1925,6 +2386,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
                 {submitting ? 'Submitting...' : uploading ? 'Uploading...' : isSubmitted ? 'Resubmit' : 'Submit'}
               </button>
             </div>
+            )}
           </div>
         )}
       </div>
@@ -1942,17 +2404,41 @@ function AssignmentsSection({ userId, studentName, studentEmail, C }: { userId: 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const { data: student } = await supabase.from('students').select('cohort_id').eq('id', userId).single();
+      const [{ data: student }, { data: gmRow }] = await Promise.all([
+        supabase.from('students').select('cohort_id').eq('id', userId).maybeSingle(),
+        supabase.from('group_members').select('group_id').eq('student_id', userId).maybeSingle(),
+      ]);
       if (!student?.cohort_id) { setLoading(false); return; }
+
+      const myGroupId: string | null = gmRow?.group_id ?? null;
+
+      // Build assignment filter: cohort match OR group match
+      let assignmentQuery = supabase.from('assignments')
+        .select('id, title, scenario, brief, tasks, requirements, cover_image, status, created_at, deadline_date, related_course, type, config, group_ids')
+        .eq('status', 'published')
+        .order('created_at', { ascending: false });
+
+      if (myGroupId) {
+        assignmentQuery = assignmentQuery.or(
+          `cohort_ids.cs.{${student.cohort_id}},group_ids.cs.{${myGroupId}}`
+        );
+      } else {
+        assignmentQuery = assignmentQuery.contains('cohort_ids', [student.cohort_id]);
+      }
+
+      // Submissions: individual + any group submission for this student's group
+      let subsQuery = supabase
+        .from('assignment_submissions')
+        .select('assignment_id, status, score, group_id, participants');
+      if (myGroupId) {
+        subsQuery = subsQuery.or(`student_id.eq.${userId},group_id.eq.${myGroupId}`);
+      } else {
+        subsQuery = subsQuery.eq('student_id', userId);
+      }
+
       const [{ data: assignments }, { data: subs }] = await Promise.all([
-        supabase.from('assignments')
-          .select('id, title, scenario, brief, tasks, requirements, cover_image, status, created_at, deadline_date, related_course, type, config')
-          .contains('cohort_ids', [student.cohort_id])
-          .eq('status', 'published')
-          .order('created_at', { ascending: false }),
-        supabase.from('assignment_submissions')
-          .select('assignment_id, status, score')
-          .eq('student_id', userId),
+        assignmentQuery,
+        subsQuery,
       ]);
 
       // Resolve related course data from courses table
@@ -1967,7 +2453,9 @@ function AssignmentsSection({ userId, studentName, studentEmail, C }: { userId: 
         }]));
       }
 
-      const subMap = Object.fromEntries((subs ?? []).map(s => [s.assignment_id, s]));
+      const subMap = Object.fromEntries((subs ?? [])
+        .filter((s: any) => !s.group_id || (Array.isArray(s.participants) && s.participants.includes(userId)))
+        .map(s => [s.assignment_id, s]));
       setItems((assignments ?? []).map((a: any) => ({
         ...a,
         _sub: subMap[a.id] ?? null,
@@ -2020,6 +2508,14 @@ function AssignmentsSection({ userId, studentName, studentEmail, C }: { userId: 
         {item.cover_image
           ? <img src={item.cover_image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
           : <div className="w-full h-full flex items-center justify-center text-4xl font-black" style={{ color: C.green, opacity: 0.25 }}>{item.title?.[0]?.toUpperCase()}</div>}
+        {(item.group_ids?.length > 0) && (
+          <div className="absolute top-2 left-2">
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+              style={{ background: C.cta, color: C.ctaText, backdropFilter: 'blur(4px)' }}>
+              <Users className="w-3 h-3"/> Group
+            </span>
+          </div>
+        )}
         {item._sub && (
           <div className="absolute top-2 right-2">
             {item._sub.status === 'graded'
@@ -2078,6 +2574,9 @@ function AssignmentsSection({ userId, studentName, studentEmail, C }: { userId: 
 
   return (
     <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <h1 className="text-[22px] font-bold tracking-tight" style={{ color: C.text }}>Assignments</h1>
+      </div>
       {courseKeys.map(key => (
         <div key={key}>
           <div className="flex items-center gap-2 mb-4">
@@ -2969,11 +3468,13 @@ function VirtualExperiencesSection({ userId, userEmail, C }: { userId: string; u
       const { data: profile } = await supabase.from('students').select('cohort_id').eq('id', userId).maybeSingle();
       if (!profile?.cohort_id) { setLoading(false); return; }
 
-      const { data: veRows } = await supabase
+      const veQuery = supabase
         .from('virtual_experiences')
         .select('id, title, slug, cover_image, modules, industry, difficulty, role, company, duration, tools, tagline, deadline_days, cohort_ids, status')
-        .contains('cohort_ids', [profile.cohort_id])
-        .eq('status', 'published');
+        .eq('status', 'published')
+        .contains('cohort_ids', [profile.cohort_id]);
+
+      const { data: veRows } = await veQuery;
 
       const forms = (veRows ?? []).map((ve: any) => ({
         ...ve,
@@ -4243,10 +4744,9 @@ function ShareProfileCard({ username, C }: { username?: string; C: typeof LIGHT_
 }
 
 // --- Overview section ---
-function OverviewSection({ user, userEmail, username, profile, C, onNavigate }: {
-  user: any; userEmail: string; username?: string; profile?: any; C: typeof LIGHT_C; onNavigate: (id: SectionId) => void;
+function OverviewSection({ user, userEmail, C, onNavigate }: {
+  user: any; userEmail: string; C: typeof LIGHT_C; onNavigate: (id: SectionId) => void;
 }) {
-  const { emailBannerUrl } = useTenant();
   const [loading, setLoading]               = useState(true);
   const [courses, setCourses]               = useState<any[]>([]);
   const [courseAttempts, setCourseAttempts] = useState<Record<string, any>>({});
@@ -4263,7 +4763,6 @@ function OverviewSection({ user, userEmail, username, profile, C, onNavigate }: 
   const [allBadges, setAllBadges]             = useState<{ id: string; name: string; description: string; icon: string; color: string; image_url: string | null }[]>([]);
   const [earnedBadgeIds, setEarnedBadgeIds]   = useState<Set<string>>(new Set());
   const [streak, setStreak]                   = useState<{ current_streak: number; longest_streak: number } | null>(null);
-  const [studentInfo, setStudentInfo]         = useState<{ full_name: string | null; avatar_url: string | null; username: string | null }>({ full_name: null, avatar_url: null, username: null });
 
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === 'visible') setRefreshKey(k => k + 1); };
@@ -4279,11 +4778,14 @@ function OverviewSection({ user, userEmail, username, profile, C, onNavigate }: 
       const token = session?.access_token ?? '';
 
       const { data: student } = await supabase
-        .from('students').select('cohort_id, full_name, avatar_url, username').eq('id', user.id).single();
+        .from('students').select('cohort_id').eq('id', user.id).single();
       const cohort = student?.cohort_id ?? null;
-      setStudentInfo({ full_name: student?.full_name ?? null, avatar_url: student?.avatar_url ?? null, username: student?.username ?? null });
 
-      const [courseRes, veRes, attemptsRes, gpAttRes, cohortAssignCrsRes, cohortAssignVeRes, certsData, lbData, actData, gapsData, assignmentsRes, asmSubsRes, allBadgesRes, earnedBadgesRes, streakRes] =
+      // Fetch the student's group memberships so we can include group assignments below
+      const { data: gmRows } = await supabase.from('group_members').select('group_id').eq('student_id', user.id);
+      const myGroupIds = (gmRows ?? []).map((r: any) => r.group_id as string);
+
+      const [courseRes, veRes, attemptsRes, gpAttRes, cohortAssignCrsRes, cohortAssignVeRes, certsData, lbData, actData, gapsData, assignmentsRes, asmSubsRes, allBadgesRes, earnedBadgesRes, streakRes, groupAssignmentsRes, groupSubsRes] =
         await Promise.all([
           cohort
             ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes').contains('cohort_ids', [cohort]).eq('status', 'published')
@@ -4339,6 +4841,14 @@ function OverviewSection({ user, userEmail, username, profile, C, onNavigate }: 
             .select('current_streak, longest_streak')
             .eq('student_id', user.id)
             .maybeSingle(),
+          // Assignments targeting the student's groups
+          myGroupIds.length > 0
+            ? supabase.from('assignments').select('id, title, deadline_date').overlaps('group_ids', myGroupIds).eq('status', 'published')
+            : Promise.resolve({ data: [] as any[] }),
+          // Group submissions for the student's groups (covers non-leader members)
+          myGroupIds.length > 0
+            ? supabase.from('assignment_submissions').select('assignment_id, status, participants').in('group_id', myGroupIds)
+            : Promise.resolve({ data: [] as any[] }),
         ]);
 
       if (cancelled) return;
@@ -4392,10 +4902,23 @@ function OverviewSection({ user, userEmail, username, profile, C, onNavigate }: 
       const rankings: any[] = (lbData as any)?.rankings ?? [];
       const myEntry = rankings.find((r: any) => r.isMe);
 
-      // Include assignment deadlines in the deadline map
-      const asmRows  = (assignmentsRes as any)?.data ?? [];
-      const subRows  = (asmSubsRes as any)?.data ?? [];
-      const subMap   = new Map(subRows.map((s: any) => [s.assignment_id, s.status]));
+      // Merge cohort assignments + group assignments, deduplicate by id
+      const cohortAsmRows = (assignmentsRes as any)?.data ?? [];
+      const groupAsmRows  = (groupAssignmentsRes as any)?.data ?? [];
+      const asmById = new Map<string, any>();
+      for (const a of [...cohortAsmRows, ...groupAsmRows]) asmById.set(a.id, a);
+      const asmRows = Array.from(asmById.values());
+
+      // Merge individual submissions + group submissions (individual wins on conflict)
+      const individualSubRows = (asmSubsRes as any)?.data ?? [];
+      const groupSubRowsMerge = (groupSubsRes as any)?.data ?? [];
+      const subById = new Map<string, any>();
+      for (const s of [
+        ...groupSubRowsMerge.filter((s: any) => Array.isArray(s.participants) && s.participants.includes(user.id)),
+        ...individualSubRows,
+      ]) subById.set(s.assignment_id, s);
+      const subRows = Array.from(subById.values());
+      const subMap  = new Map(subRows.map((s: any) => [s.assignment_id, s.status]));
       for (const a of asmRows) {
         if (a.deadline_date) dlMap[a.id] = new Date(a.deadline_date);
       }
@@ -4527,13 +5050,6 @@ function OverviewSection({ user, userEmail, username, profile, C, onNavigate }: 
     </div>
   );
 
-  // Profile display values -- students table is the source of truth (settings page writes there)
-  const profileName     = studentInfo.full_name || profile?.name || profile?.full_name || userEmail?.split('@')[0] || 'Student';
-  const profileAvatar   = studentInfo.avatar_url || profile?.avatar_url || null;
-  const profileUsername = studentInfo.username || username || null;
-  const profileInitials = profileName.slice(0, 2).toUpperCase();
-  const profileUrl      = profileUsername ? `${typeof window !== 'undefined' ? window.location.origin : ''}/s/${profileUsername}` : '';
-
   return (
     <div className="space-y-4 lg:space-y-6">
 
@@ -4602,57 +5118,10 @@ function OverviewSection({ user, userEmail, username, profile, C, onNavigate }: 
         );
       })()}
 
-      {/* 3-column layout: profile | stats | donuts -- equal height on desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 lg:items-stretch">
+      {/* Overview cards -- equal height on desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 lg:items-stretch">
 
-        {/* LEFT -- Profile */}
-        <div className="lg:h-full">
-          <div className="lg:h-full rounded-2xl overflow-hidden flex flex-col items-center text-center"
-            style={{ background: C.card }}>
-            {/* Cover banner */}
-            <div className="w-full h-20 flex-shrink-0 overflow-hidden">
-              {emailBannerUrl
-                ? <img src={emailBannerUrl} alt="" className="w-full h-full object-cover"/>
-                : <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, #0e09dd 0%, #3b82f6 60%, #8b5cf6 100%)' }}/>
-              }
-            </div>
-            {/* Avatar */}
-            <div className="w-20 h-20 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-2xl font-black -mt-10"
-              style={{ background: profileAvatar ? 'transparent' : '#1e3a8a', color: 'white', outline: `4px solid ${C.card}` }}>
-              {profileAvatar
-                ? <img src={profileAvatar} alt={profileName} className="w-full h-full object-cover"/>
-                : profileInitials
-              }
-            </div>
-            {/* Name + handle */}
-            <div className="space-y-0.5 mt-2 px-5">
-              <p className="text-base font-black leading-tight" style={{ color: C.text }}>{profileName}</p>
-              {profileUsername && (
-                <p className="text-xs font-medium" style={{ color: C.muted }}>@{profileUsername}</p>
-              )}
-            </div>
-            {/* Spacer pushes button to bottom */}
-            <div className="flex-1"/>
-            {/* Profile link */}
-            <div className="w-full px-5 pb-5">
-              {profileUrl ? (
-                <a href={`/s/${profileUsername}`} target="_blank" rel="noreferrer"
-                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-70"
-                  style={{ background: C.lime, color: C.green }}>
-                  <ExternalLink className="w-3.5 h-3.5"/> View Profile
-                </a>
-              ) : (
-                <Link href="/settings"
-                  className="w-full flex items-center justify-center py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-70"
-                  style={{ background: C.lime, color: C.green }}>
-                  Complete your profile
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* MIDDLE -- Stat cards 2x2 */}
+        {/* Stat cards 2x2 */}
         <div className="lg:h-full grid grid-cols-2 gap-3" style={{ gridAutoRows: '1fr' }}>
           {([
             { icon: TrendingUp,  color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', value: inProgressCount,     label: 'In Progress',   nav: 'courses'      },
@@ -5740,8 +6209,8 @@ export default function StudentDashboard() {
         {/* -- Main content -- */}
         <main className="flex-1 min-w-0 overflow-y-auto px-5 md:px-8 py-7">
           <motion.div key={activeSection} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-            {/* Section header -- hidden on overview (has its own greeting) */}
-            {activeSection !== 'overview' && (
+            {/* Section header -- hidden on overview (has its own greeting) and assignments (manages its own title) */}
+            {activeSection !== 'overview' && activeSection !== 'assignments' && (
               <div className="flex items-center justify-between mb-6">
                 <h1 className="text-[22px] font-bold tracking-tight" style={{ color: C.text }}>{activeItem.label}</h1>
               </div>
@@ -5838,7 +6307,7 @@ export default function StudentDashboard() {
             )}
 
             {activeSection === 'overview' && user && (
-              <OverviewSection user={{ ...user, id: effectiveId, email: effectiveEmail }} userEmail={effectiveEmail} username={profile?.username} profile={profile} C={C} onNavigate={goSection}/>
+              <OverviewSection user={{ ...user, id: effectiveId, email: effectiveEmail }} userEmail={effectiveEmail} C={C} onNavigate={goSection}/>
             )}
             {activeSection === 'courses' && user && (
               <CoursesSection userEmail={effectiveEmail} userId={effectiveId} C={C} isOutstandingProp={isOutstanding}/>

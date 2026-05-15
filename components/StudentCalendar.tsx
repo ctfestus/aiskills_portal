@@ -617,7 +617,10 @@ export default function CalendarSection({ userId, onNavigate }: {
         const { data: student } = await supabase.from('students').select('cohort_id').eq('id', userId).single();
         if (!student?.cohort_id) return;
 
-        const [{ data: events }, { data: assignments }] = await Promise.all([
+        const { data: gmRows } = await supabase.from('group_members').select('group_id').eq('student_id', userId);
+        const myGroupIds = (gmRows ?? []).map((r: any) => r.group_id as string);
+
+        const [{ data: events }, { data: cohortAssignments }, { data: groupAssignments }] = await Promise.all([
           supabase
             .from('events')
             .select('id, title, description, slug, cover_image, event_date, event_time, event_type, location, meeting_link')
@@ -629,17 +632,37 @@ export default function CalendarSection({ userId, onNavigate }: {
             .contains('cohort_ids', [student.cohort_id])
             .eq('status', 'published')
             .not('deadline_date', 'is', null),
+          myGroupIds.length > 0
+            ? supabase
+                .from('assignments')
+                .select('id, title, scenario, cover_image, deadline_date')
+                .overlaps('group_ids', myGroupIds)
+                .eq('status', 'published')
+                .not('deadline_date', 'is', null)
+            : Promise.resolve({ data: [] as any[] }),
         ]);
 
-        const aIds = (assignments ?? []).map((a: any) => a.id as string);
-        const { data: subs } = aIds.length
-          ? await supabase
-              .from('assignment_submissions')
-              .select('assignment_id, status')
-              .eq('student_id', userId)
-              .in('assignment_id', aIds)
-          : { data: [] };
-        const subMap = Object.fromEntries((subs ?? []).map((s: any) => [s.assignment_id as string, s.status as string]));
+        // Deduplicate assignments by id
+        const asmById = new Map<string, any>();
+        for (const a of [...(cohortAssignments ?? []), ...(groupAssignments ?? [])]) asmById.set(a.id, a);
+        const assignments = Array.from(asmById.values());
+
+        const aIds = assignments.map((a: any) => a.id as string);
+
+        // Fetch both individual subs and group subs for complete status coverage
+        const [{ data: indivSubs }, { data: groupSubs }] = await Promise.all([
+          aIds.length
+            ? supabase.from('assignment_submissions').select('assignment_id, status').eq('student_id', userId).in('assignment_id', aIds)
+            : Promise.resolve({ data: [] as any[] }),
+          myGroupIds.length > 0 && aIds.length
+            ? supabase.from('assignment_submissions').select('assignment_id, status').in('group_id', myGroupIds).in('assignment_id', aIds)
+            : Promise.resolve({ data: [] as any[] }),
+        ]);
+
+        // Individual wins over group on conflict
+        const subById = new Map<string, string>();
+        for (const s of [...(groupSubs ?? []), ...(indivSubs ?? [])]) subById.set(s.assignment_id as string, s.status as string);
+        const subMap = Object.fromEntries(subById.entries());
 
         const calItems: CalItem[] = [];
 

@@ -21,9 +21,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { assignmentId, cohortIds } = body;
+  const { assignmentId, cohortIds, groupIds } = body;
   if (!assignmentId) return NextResponse.json({ error: 'assignmentId is required' }, { status: 400 });
-  if (!Array.isArray(cohortIds) || !cohortIds.length) {
+  const hasCohorts = Array.isArray(cohortIds) && cohortIds.length > 0;
+  const hasGroups  = Array.isArray(groupIds)  && groupIds.length  > 0;
+  if (!hasCohorts && !hasGroups) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
@@ -44,7 +46,8 @@ export async function POST(req: NextRequest) {
 
   try {
     await sendAssignmentNotifications({
-      cohortIds,
+      cohortIds: cohortIds ?? [],
+      groupIds:  groupIds  ?? [],
       title:       assignment.title,
       contentType: 'assignment',
       formUrl:     '/student#assignments',

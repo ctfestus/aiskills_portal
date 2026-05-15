@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   // Fetch the submission
   const { data: submission, error: fetchErr } = await db
     .from('assignment_submissions')
-    .select('id, student_id, status, score')
+    .select('id, student_id, group_id, status, score')
     .eq('id', submissionId)
     .maybeSingle();
 
@@ -43,9 +43,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
   }
 
-  // Must be the owner
+  // Must be the original submitter, or the current leader of a group submission
   if (submission.student_id !== user.id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (submission.group_id) {
+      const { data: membership } = await db
+        .from('group_members')
+        .select('is_leader')
+        .eq('group_id', submission.group_id)
+        .eq('student_id', user.id)
+        .maybeSingle();
+      if (!membership?.is_leader) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    } else {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   }
 
   // Must be graded and failed

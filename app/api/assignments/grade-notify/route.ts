@@ -47,20 +47,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'submissionId and assignmentTitle required' }, { status: 400 });
   }
 
-  // Fetch the submission + student email
+  // Fetch the submission including the participants array
   const { data: sub } = await adminClient()
     .from('assignment_submissions')
-    .select('id, score, feedback, student:students(full_name, email)')
+    .select('id, score, feedback, student_id, participants')
     .eq('id', submissionId)
     .maybeSingle();
 
-  if (!sub || !sub.student) return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+  if (!sub) return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
 
-  const student = Array.isArray(sub.student) ? sub.student[0] : sub.student;
-  const email   = (student.email ?? '').trim();
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json({ ok: true }); // no valid email, skip silently
-  }
+  // Resolve the set of student IDs to notify: participants array if present, otherwise just the submitter
+  const participantIds: string[] = Array.isArray(sub.participants) && sub.participants.length > 0
+    ? sub.participants
+    : [sub.student_id];
+
+  const { data: recipientRows } = await adminClient()
+    .from('students')
+    .select('id, full_name, email')
+    .in('id', participantIds);
+
+  const recipients = (recipientRows ?? []).filter(
+    (s: any) => s.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email.trim()),
+  );
+
+  if (recipients.length === 0) return NextResponse.json({ ok: true });
 
   try {
     const t        = await getTenantSettings();
@@ -68,23 +78,24 @@ export async function POST(req: NextRequest) {
     const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
     const passed   = sub.score != null && sub.score >= PASS_MARK;
 
-    const html = assignmentGradedEmail({
-      name:            student.full_name || 'there',
-      assignmentTitle,
-      score:           sub.score,
-      passed,
-      feedback:        sub.feedback,
-      studentUrl:      `${t.appUrl}/student`,
-      branding,
-    });
-
     const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({
-      from:    FROM,
-      to:      email,
-      subject: `Your assignment has been graded: ${assignmentTitle}`,
-      html,
-    });
+    await Promise.all(recipients.map((student: any) => {
+      const html = assignmentGradedEmail({
+        name:            student.full_name || 'there',
+        assignmentTitle,
+        score:           sub.score,
+        passed,
+        feedback:        sub.feedback,
+        studentUrl:      `${t.appUrl}/student`,
+        branding,
+      });
+      return resend.emails.send({
+        from:    FROM,
+        to:      student.email.trim(),
+        subject: `Your assignment has been graded: ${assignmentTitle}`,
+        html,
+      });
+    }));
   } catch (err) {
     console.error('[grade-notify]', err);
   }

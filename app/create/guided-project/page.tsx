@@ -273,6 +273,7 @@ function VirtualExperienceCreatePageInner() {
   const [title,       setTitle]       = useState('');
   const [cohorts,     setCohorts]     = useState<any[]>([]);
   const [selectedCohorts, setSelectedCohorts] = useState<string[]>([]);
+
   const [deadlineDays, setDeadlineDays] = useState<string>('');
   const [coverImage,  setCoverImage]  = useState('');
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -751,6 +752,7 @@ function VirtualExperienceCreatePageInner() {
           config,
           coverImage,
           cohort_ids: selectedCohorts,
+          group_ids:  [],
           deadline_days: deadlineDays ? Number(deadlineDays) : null,
           status,
           is_short_course: isShortCourse,
@@ -1894,25 +1896,26 @@ function VirtualExperienceCreatePageInner() {
                   <input ref={badgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleBadgeUpload} />
                 </div>
 
-                {/* Cohorts card */}
-                {cohorts.length > 0 && (
-                  <div style={card} className="p-5 space-y-3">
-                    <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Assign to Cohorts</p>
-                    <div className="flex flex-wrap gap-2">
-                      {cohorts.map(c => {
-                        const sel = selectedCohorts.includes(c.id);
-                        return (
-                          <button key={c.id}
-                            onClick={() => setSelectedCohorts(prev => sel ? prev.filter(x => x !== c.id) : [...prev, c.id])}
-                            className="px-3 py-1.5 rounded-full text-[13px] font-medium transition-all"
-                            style={{ border: `1.5px solid ${sel ? C.cta : C.cardBorder}`, background: sel ? `${C.cta}18` : 'transparent', color: sel ? C.cta : C.muted }}>
-                            {sel && <Check className="w-3 h-3 inline mr-1" />}{c.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                {/* Target Audience card */}
+                <div style={card} className="p-5 space-y-3">
+                  <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Target Audience</p>
+                  {cohorts.length === 0
+                    ? <p className="text-[13px]" style={{ color: C.faint }}>No cohorts available.</p>
+                    : <div className="flex flex-wrap gap-2">
+                        {cohorts.map(c => {
+                          const sel = selectedCohorts.includes(c.id);
+                          return (
+                            <button key={c.id}
+                              onClick={() => setSelectedCohorts(prev => sel ? prev.filter(x => x !== c.id) : [...prev, c.id])}
+                              className="px-3 py-1.5 rounded-full text-[13px] font-medium transition-all"
+                              style={{ border: `1.5px solid ${sel ? C.cta : C.cardBorder}`, background: sel ? `${C.cta}18` : 'transparent', color: sel ? C.cta : C.muted }}>
+                              {sel && <Check className="w-3 h-3 inline mr-1" />}{c.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                  }
+                </div>
 
                 {/* Deadline card */}
                 <div style={card} className="p-5 space-y-3">

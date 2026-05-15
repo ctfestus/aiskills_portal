@@ -1204,6 +1204,41 @@ export function submissionConfirmEmail(data: {
   return shell(content, branding);
 }
 
+export function groupSubmissionReceivedEmail(data: {
+  name: string;
+  assignmentTitle: string;
+  groupName: string;
+  submittedByName?: string | null;
+  isParticipant: boolean;
+  dashboardUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { name, assignmentTitle, groupName, submittedByName, isParticipant, dashboardUrl, branding } = data;
+  const participantBlock = isParticipant
+    ? `<div style="margin:20px 0;padding:16px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;">
+        <p style="margin:0;font-weight:700;color:#15803d;">You were marked as a participant</p>
+        <p style="margin:4px 0 0;font-size:13px;color:#166534;">When this assignment is graded, the grade will be added to your record.</p>
+      </div>`
+    : `<div style="margin:20px 0;padding:16px;background:#fffbeb;border-left:4px solid #f59e0b;border-radius:0;">
+        <p style="margin:0;font-weight:700;color:#92400e;">You were not marked as a participant</p>
+        <p style="margin:4px 0 0;font-size:13px;color:#78350f;">You can still view the group submission. If you believe this is incorrect, contact your group leader or instructor.</p>
+      </div>`;
+
+  const content = `
+    <p><b>Hi ${esc(name)},</b></p>
+    <p>Your group has submitted <b>${esc(assignmentTitle)}</b>.</p>
+    <div style="margin:20px 0;padding:16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:0;">
+      ${detailBlock('Group', esc(groupName))}
+      ${submittedByName ? detailBlock('Submitted by', esc(submittedByName)) : ''}
+    </div>
+    ${participantBlock}
+    ${cta('View Assignment', dashboardUrl)}
+    <br><p><b>Best regards,</b></p>
+  `;
+
+  return shell(content, branding);
+}
+
 // -- 17. At-Risk Student Digest (to instructors) ---
 export function atRiskDigestEmail(data: {
   instructorName: string;
@@ -1396,6 +1431,38 @@ export function openCertificateEmail(data: {
     ${cta('View Certificate', certUrl)}
     <br>
     <p><b>Congratulations,</b></p>
+  `;
+  return shell(content, branding);
+}
+
+export function groupAssignedEmail(data: {
+  recipientName: string;
+  groupName:     string;
+  cohortName:    string;
+  description?:  string;
+  members:       { full_name: string; is_leader: boolean }[];
+  dashboardUrl:  string;
+  branding?:     EmailBranding;
+}) {
+  const { recipientName, groupName, cohortName, description, members, dashboardUrl, branding } = data;
+
+  const leader = members.find(m => m.is_leader);
+  const memberRows = members
+    .map(m => `<li style="padding:4px 0;color:#374151;">${esc(m.full_name)}${m.is_leader ? ' <span style="font-size:11px;font-weight:700;color:#2563eb;text-transform:uppercase;">Leader</span>' : ''}</li>`)
+    .join('');
+
+  const content = `
+    <p><b>Hi ${esc(recipientName)},</b></p>
+    <p style="color:#374151;">You have been added to a group for <b>${esc(cohortName)}</b>.</p>
+    <h2 style="font-size:20px;font-weight:800;color:#111827;margin:16px 0 4px;">${esc(groupName)}</h2>
+    ${description ? `<p style="color:#6b7280;margin:0 0 16px;">${esc(description)}</p>` : ''}
+    ${leader ? `${detailBlock('Group Leader', esc(leader.full_name))}` : ''}
+    <p style="font-weight:600;color:#374151;margin:16px 0 8px;">Group Members</p>
+    <ul style="margin:0;padding-left:20px;">${memberRows}</ul>
+    <p style="color:#374151;margin-top:16px;">Your group assignments will appear on your student dashboard. The group leader will complete and submit on behalf of the group.</p>
+    ${cta('Go to Dashboard', dashboardUrl)}
+    <br>
+    <p><b>Good luck!</b></p>
   `;
   return shell(content, branding);
 }

@@ -3,6 +3,7 @@ import { adminClient } from '@/lib/admin-client';
 import { Resend } from 'resend';
 import { submissionConfirmEmail } from '@/lib/email-templates';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
+import { sendGroupSubmissionNotifications } from '@/lib/group-submission-notifications';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const { assignmentId, progress, currentModuleId, currentLessonId } = body;
+  const { assignmentId, progress, currentModuleId, currentLessonId, groupId, participants } = body;
 
   if (!assignmentId) return NextResponse.json({ error: 'assignmentId required' }, { status: 400 });
 
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
   // Fetch assignment and student profile in parallel
   const [{ data: assignment }, { data: studentRow }] = await Promise.all([
     supabase.from('assignments')
-      .select('id, title, config, cohort_ids, status, type')
+      .select('id, title, config, cohort_ids, group_ids, status, type')
       .eq('id', assignmentId)
       .single(),
     supabase.from('students')
@@ -47,9 +48,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Not a virtual experience assignment' }, { status: 400 });
   }
 
+  const groupIds: string[] = Array.isArray(assignment.group_ids) ? assignment.group_ids : [];
   const cohortIds: string[] = Array.isArray(assignment.cohort_ids) ? assignment.cohort_ids : [];
-  if (!studentRow?.cohort_id || !cohortIds.includes(studentRow.cohort_id)) {
-    return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+  const isGroupAssignment = groupIds.length > 0;
+
+  if (isGroupAssignment) {
+    // Must be a leader of a group that is targeted by this assignment
+    if (!groupId || !groupIds.includes(groupId)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+    const { data: membership } = await supabase
+      .from('group_members')
+      .select('is_leader')
+      .eq('group_id', groupId)
+      .eq('student_id', user.id)
+      .maybeSingle();
+    if (!membership?.is_leader) {
+      return NextResponse.json({ error: 'Only the group leader can submit' }, { status: 403 });
+    }
+
+    // Validate that all submitted participants are actual members of this group
+    if (!Array.isArray(participants) || participants.length === 0) {
+      return NextResponse.json({ error: 'At least one participant is required' }, { status: 400 });
+    }
+    const participantIds = [...new Set(participants as string[])];
+    const { data: groupMembers } = await supabase
+      .from('group_members')
+      .select('student_id')
+      .eq('group_id', groupId);
+    const validIds = new Set((groupMembers ?? []).map((m: any) => m.student_id as string));
+    const invalidIds = participantIds.filter(id => !validIds.has(id));
+    if (invalidIds.length > 0) {
+      return NextResponse.json({ error: 'Invalid participant IDs' }, { status: 400 });
+    }
+  } else {
+    if (!studentRow?.cohort_id || !cohortIds.includes(studentRow.cohort_id)) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
   }
 
   const veFormId: string | null = assignment.config?.ve_form_id ?? null;
@@ -95,14 +130,19 @@ export async function POST(req: NextRequest) {
   // Single atomic RPC: validates linkage and student access inside the transaction,
   // writes guided_project_attempts.completed_at, then upserts assignment_submissions.
   // Graded rows are not touched (WHERE clause in ON CONFLICT DO UPDATE).
-  const { data: rpcResult, error: rpcError } = await supabase.rpc('complete_ve_assignment', {
+  const rpcParams: any = {
     p_ve_id:             veFormId,
     p_assignment_id:     assignmentId,
     p_student_id:        user.id,
     p_progress:          progress || {},
     p_current_module_id: currentModuleId || null,
     p_current_lesson_id: currentLessonId || null,
-  });
+  };
+  if (isGroupAssignment && groupId) {
+    rpcParams.p_group_id    = groupId;
+    rpcParams.p_participants = [...new Set(participants as string[])];
+  }
+  const { data: rpcResult, error: rpcError } = await supabase.rpc('complete_ve_assignment', rpcParams);
 
   if (rpcError) {
     console.error('[complete-ve-assignment] rpc error:', rpcError);
@@ -111,10 +151,17 @@ export async function POST(req: NextRequest) {
 
   const submission = rpcResult?.submission ?? null;
 
+  if (isGroupAssignment && submission?.id) {
+    sendGroupSubmissionNotifications({
+      submissionId: submission.id,
+      assignmentTitle: assignment.title,
+    }).catch(err => console.error('[complete-ve-assignment] group notification error:', err));
+  }
+
   // Exactly-once confirmation email using email_dedup insert-as-lock.
   // Two concurrent calls both writing for the first time will race on the INSERT;
   // only one gets the row, the other hits 23505 and skips.
-  if (process.env.RESEND_API_KEY && studentRow?.email && submission?.id) {
+  if (!isGroupAssignment && process.env.RESEND_API_KEY && studentRow?.email && submission?.id) {
     (async () => {
       try {
         const dedupeKey = submission.id as string;

@@ -35,12 +35,14 @@ const TYPE_CTA: Record<string, string> = {
  */
 export async function sendAssignmentNotifications({
   cohortIds,
+  groupIds,
   title,
   slug,
   contentType,
   formUrl: formUrlOverride,
 }: {
   cohortIds: string[];
+  groupIds?: string[];
   title: string;
   slug?: string;
   contentType: string;
@@ -50,7 +52,9 @@ export async function sendAssignmentNotifications({
     console.error('[send-assignment-notification] RESEND_API_KEY is not set -- emails will not be sent.');
     throw new Error('RESEND_API_KEY is not configured');
   }
-  if (!cohortIds.length) return;
+  const hasGroups  = Array.isArray(groupIds)  && groupIds.length  > 0;
+  const hasCohorts = Array.isArray(cohortIds) && cohortIds.length > 0;
+  if (!hasCohorts && !hasGroups) return;
 
   try {
     const t        = await getTenantSettings();
@@ -58,10 +62,23 @@ export async function sendAssignmentNotifications({
     const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
 
     const supabase = adminClient();
-    const { data: students } = await supabase
-      .from('students')
-      .select('full_name, email')
-      .in('cohort_id', cohortIds);
+
+    // Fetch students from cohorts and/or groups, then merge + deduplicate by email
+    const [cohortStudents, groupMemberRows] = await Promise.all([
+      hasCohorts
+        ? supabase.from('students').select('full_name, email').in('cohort_id', cohortIds).then(r => r.data ?? [])
+        : Promise.resolve([] as { full_name: string | null; email: string | null }[]),
+      hasGroups
+        ? supabase.from('group_members').select('student_id').in('group_id', groupIds!).then(r => r.data ?? [])
+        : Promise.resolve([] as { student_id: string }[]),
+    ]);
+
+    const groupStudentIds = Array.from(new Set((groupMemberRows ?? []).map((m: any) => m.student_id).filter(Boolean)));
+    const groupStudents = groupStudentIds.length
+      ? await supabase.from('students').select('full_name, email').in('id', groupStudentIds).then(r => r.data ?? [])
+      : [];
+
+    const students = [...cohortStudents, ...groupStudents];
 
     if (!students?.length) return;
 

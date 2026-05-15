@@ -1682,6 +1682,34 @@ function exportCSV(rows: any[], title: string) {
   URL.revokeObjectURL(url);
 }
 
+function exportGroupCSV(rows: any[], title: string) {
+  const headers = ['Group', 'Leader', 'Members', 'Participants', 'Status', 'Score', 'Result', 'Submitted By', 'Submitted At'];
+  const csvRows = rows.map(row => {
+    const sub = row.sub;
+    const status = sub?.status ?? 'Not Started';
+    const score  = sub?.score != null ? sub.score : '';
+    const result = sub?.score != null ? (sub.score >= 85 ? 'Passed' : 'Failed') : '';
+    const date   = sub?.updated_at ? new Date(sub.updated_at).toLocaleDateString() : '';
+    return [
+      row.name || '',
+      row.leader?.full_name || row.leader?.email || '',
+      row.members.length,
+      sub ? `${row.participants.length}/${row.members.length}` : '',
+      status,
+      score,
+      result,
+      sub?.submitted_by_student?.full_name || sub?.student?.full_name || '',
+      date,
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+  });
+  const csv  = [headers.join(','), ...csvRows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `${title.replace(/\s+/g, '_')}_group_responses.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
 function StudentAvatar({ name, email, size = 32, C }: { name?: string; email?: string; size?: number; C: any }) {
   const label = (name || email || '?').slice(0, 2).toUpperCase();
   return (
@@ -1702,31 +1730,68 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   const [loadingSubs, setLoadingSubs]       = useState(false);
   const [viewingSub, setViewingSub]         = useState<any>(null);
   const [subFiles, setSubFiles]             = useState<any[]>([]);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [score, setScore]                   = useState('');
   const [feedback, setFeedback]             = useState('');
   const [grading, setGrading]               = useState(false);
   const [gradeError, setGradeError]         = useState('');
   const [gradeSuccess, setGradeSuccess]     = useState(false);
+  const [veAttemptProgress, setVeAttemptProgress] = useState<Record<string, any> | null>(null);
 
   useEffect(() => {
     supabase.from('assignments').select('*').order('created_at', { ascending: false })
-      .then(({ data }) => { setAssignments(data ?? []); setLoading(false); });
+      .then(({ data, error }) => { if (error) console.error('[assignments fetch]', error); setAssignments(data ?? []); setLoading(false); });
   }, []);
 
   async function openAssignment(a: any) {
     setSelected(a); setViewingSub(null); setSubFiles([]); setActiveTab('details'); setLoadingSubs(true);
-    const [{ data: subs }, { data: students }] = await Promise.all([
-      supabase.from('assignment_submissions').select('*, student:students(id, full_name, email)').eq('assignment_id', a.id).order('updated_at', { ascending: false }),
+    setExpandedGroups(new Set());
+    const groupIds: string[] = Array.isArray(a.group_ids) && a.group_ids.length > 0 ? a.group_ids : [];
+    const [{ data: subs }, { data: cohortStudents }, { data: groupMemberRows }] = await Promise.all([
+      supabase.from('assignment_submissions').select('*, student:students!student_id(id, full_name, email), submitted_by_student:students!submitted_by(full_name)').eq('assignment_id', a.id).order('updated_at', { ascending: false }),
       a.cohort_ids?.length ? supabase.from('students').select('id, full_name, email').in('cohort_id', a.cohort_ids) : Promise.resolve({ data: [] }),
+      groupIds.length ? supabase.from('group_members').select('group_id, is_leader, groups(id, name), students(id, full_name, email)').in('group_id', groupIds) : Promise.resolve({ data: [] }),
     ]);
-    setSubmissions(subs ?? []); setAssignedStudents(students ?? []); setLoadingSubs(false);
+    const groupStudents = (groupMemberRows ?? []).map((r: any) => ({ ...(r.students ?? {}), group_id: r.group_id, group_name: (r.groups as any)?.name ?? null, is_leader: !!r.is_leader })).filter((s: any) => s?.id);
+    const seen = new Set<string>();
+    const sourceStudents = groupIds.length > 0 ? [...groupStudents, ...(cohortStudents ?? [])] : [...(cohortStudents ?? []), ...groupStudents];
+    const allStudents = sourceStudents.filter((s: any) => {
+      if (!s?.id || seen.has(s.id)) return false;
+      seen.add(s.id); return true;
+    });
+    setSubmissions(subs ?? []); setAssignedStudents(allStudents); setLoadingSubs(false);
+  }
+
+  function toggleExpandedGroup(groupId: string) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      next.has(groupId) ? next.delete(groupId) : next.add(groupId);
+      return next;
+    });
   }
 
   async function openSubmission(sub: any) {
     setViewingSub(sub); setSubFiles([]); setScore(sub.score != null ? String(sub.score) : '');
     setFeedback(sub.feedback ?? ''); setGradeError(''); setGradeSuccess(false);
-    const { data, error } = await supabase.from('assignment_submission_files').select('*').eq('submission_id', sub.id).order('uploaded_at');
-    if (!error) setSubFiles(data ?? []);
+    setVeAttemptProgress(null);
+    const veFormId = selected?.config?.ve_form_id;
+    const isVe = selected?.type === 'virtual_experience' && veFormId && sub.student_id;
+
+    const [{ data: files }, session] = await Promise.all([
+      supabase.from('assignment_submission_files').select('*').eq('submission_id', sub.id).order('uploaded_at'),
+      isVe ? supabase.auth.getSession() : Promise.resolve({ data: { session: null } }),
+    ]);
+    if (files) setSubFiles(files);
+
+    if (isVe && session?.data?.session?.access_token) {
+      const res = await fetch(`/api/ve-attempt?veId=${veFormId}&studentId=${sub.student_id}`, {
+        headers: { Authorization: `Bearer ${session.data.session.access_token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.progress) setVeAttemptProgress(json.progress);
+      }
+    }
   }
 
   async function saveGrade() {
@@ -1765,7 +1830,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     const { id, created_at, updated_at, ...rest } = a;
     const { data, error } = await supabase
       .from('assignments')
-      .insert({ ...rest, title: `Copy of ${a.title}`, status: 'draft', cohort_ids: [], deadline_date: null })
+      .insert({ ...rest, title: `Copy of ${a.title}`, status: 'draft', cohort_ids: [], group_ids: [], deadline_date: null })
       .select('*')
       .single();
     if (error) { setDuplicatingId(null); window.alert(error.message); return; }
@@ -1805,7 +1870,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     const isFailed = viewingSub.score != null && viewingSub.score < 85;
     return (
       <div>
-        <button onClick={() => setViewingSub(null)} className="flex items-center gap-2 mb-6 text-sm font-medium hover:opacity-70 transition-opacity" style={{ color: C.muted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+        <button onClick={() => { setViewingSub(null); setVeAttemptProgress(null); }} className="flex items-center gap-2 mb-6 text-sm font-medium hover:opacity-70 transition-opacity" style={{ color: C.muted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
           <ArrowLeft className="w-4 h-4"/> Back to responses
         </button>
 
@@ -1817,7 +1882,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
         )}
 
         {/* Student card */}
-        <div className="rounded-2xl p-5 mb-4" style={{ background: C.card, border: `1px solid ${C.green}50`, boxShadow: C.cardShadow }}>
+        <div className="rounded-2xl p-5 mb-4" style={{ background: C.card }}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <StudentAvatar name={viewingSub.student?.full_name} email={viewingSub.student?.email} size={40} C={C}/>
@@ -1842,7 +1907,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                   const topRecs: string[] = parsed.topRecommendations ?? [];
                   const submittedDate = viewingSub.submitted_at ?? viewingSub.updated_at;
                   return (
-                    <div className="rounded-xl overflow-hidden mb-3" style={{ border: '1px solid rgba(0,0,0,0.08)' }}>
+                    <div className="rounded-xl overflow-hidden mb-3">
                       <div className="px-4 py-3 flex items-center justify-between" style={{ background: '#0f172a' }}>
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
@@ -1857,11 +1922,11 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                         </div>
                       </div>
                       {issueTitles.length > 0 && (
-                        <div className="px-4 py-3" style={{ borderTop: '1px solid rgba(0,0,0,0.07)', background: '#fafafa' }}>
-                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: '#888' }}>Issues Found</p>
+                        <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
+                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Issues Found</p>
                           <div className="space-y-1">
                             {issueTitles.map((t, i) => (
-                              <div key={i} className="flex items-start gap-2 text-sm" style={{ color: '#333' }}>
+                              <div key={i} className="flex items-start gap-2 text-sm" style={{ color: C.text }}>
                                 <span style={{ color: '#ef4444', flexShrink: 0 }}>•</span>
                                 <span>{t}</span>
                               </div>
@@ -1870,11 +1935,11 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                         </div>
                       )}
                       {topRecs.length > 0 && (
-                        <div className="px-4 py-3" style={{ borderTop: '1px solid rgba(0,0,0,0.07)', background: '#fafafa' }}>
-                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: '#888' }}>Top Recommendations</p>
+                        <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
+                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Top Recommendations</p>
                           <div className="space-y-1.5">
                             {topRecs.map((r, i) => (
-                              <div key={i} className="flex items-start gap-2 text-sm" style={{ color: '#333' }}>
+                              <div key={i} className="flex items-start gap-2 text-sm" style={{ color: C.text }}>
                                 <span className="font-bold flex-shrink-0" style={{ color: '#16a34a' }}>{i + 1}.</span>
                                 <span>{r}</span>
                               </div>
@@ -1889,7 +1954,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                 if (subAssignType === 'dashboard_critique' && parsed.audit) {
                   const audit = parsed.audit as { overallScore: number; executiveSummary: string; categories: { name: string; score: number }[] };
                   return (
-                    <div className="rounded-xl overflow-hidden mb-3" style={{ border: '1px solid rgba(0,0,0,0.08)' }}>
+                    <div className="rounded-xl overflow-hidden mb-3">
                       <div className="px-4 py-3 flex items-start justify-between gap-4" style={{ background: '#0f172a' }}>
                         <div className="flex-1 min-w-0">
                           <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>Dashboard Critique</p>
@@ -1901,11 +1966,11 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                         </div>
                       </div>
                       {audit.categories?.length > 0 && (
-                        <div className="px-4 py-3 space-y-2" style={{ background: '#fafafa' }}>
-                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: '#888' }}>Category Scores</p>
+                        <div className="px-4 py-3 space-y-2" style={{ background: C.input }}>
+                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Category Scores</p>
                           {audit.categories.map((cat, i) => (
                             <div key={i} className="flex items-center justify-between text-sm">
-                              <span style={{ color: '#333' }}>{cat.name}</span>
+                              <span style={{ color: C.text }}>{cat.name}</span>
                               <span className="text-xs font-bold px-2 py-0.5 rounded-full"
                                 style={{ background: cat.score >= 7 ? '#dcfce7' : cat.score >= 5 ? '#fef9c3' : '#fee2e2', color: cat.score >= 7 ? '#16a34a' : cat.score >= 5 ? '#ca8a04' : '#dc2626' }}>
                                 {cat.score}/10
@@ -1921,14 +1986,70 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
             }
 
             return (
-              <div className="rounded-xl p-4 mb-3" style={{ background: '#f5f5f5', border: '1px solid rgba(0,0,0,0.06)' }}>
-                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#888' }}>Response</p>
+              <div className="rounded-xl p-4 mb-3" style={{ background: C.input }}>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>Response</p>
                 <div className="rich-content text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(viewingSub.response_text) }}/>
               </div>
             );
           })() : (
             <p className="text-sm mb-3" style={{ color: C.faint }}>No written response.</p>
           )}
+
+          {veAttemptProgress && (() => {
+            const aiCards: React.ReactNode[] = [];
+            for (const [, entry] of Object.entries(veAttemptProgress)) {
+              const e = entry as any;
+              if (!e?.notes) continue;
+              let leans: any[];
+              try { leans = JSON.parse(e.notes); if (!Array.isArray(leans)) continue; } catch { continue; }
+              for (const lean of leans) {
+                if (lean?.overallScore == null) continue;
+                const isOutOf10 = lean.overallScore <= 10 && !lean.issues;
+                const issueTitles: string[] = lean.issueTitles ?? (lean.issues ?? []).map((i: any) => i.title);
+                const topRecs: string[] = lean.topRecommendations ?? [];
+                const label = lean.type === 'dashboard_critique' ? 'Dashboard Critique' : lean.issueTitles || lean.issues ? 'AI Excel Review' : 'AI Code Review';
+                aiCards.push(
+                  <div key={aiCards.length} className="rounded-xl overflow-hidden mb-3">
+                    <div className="px-4 py-3 flex items-center justify-between" style={{ background: '#0f172a' }}>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>{label}</p>
+                        {lean.executiveSummary && <p className="text-xs mt-1 max-w-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{lean.executiveSummary}</p>}
+                      </div>
+                      <div className="flex items-baseline gap-1 flex-shrink-0 ml-4">
+                        <span className="font-black" style={{ fontSize: 44, color: '#fff', lineHeight: 1 }}>{lean.overallScore?.toFixed(1)}</span>
+                        <span className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>/{isOutOf10 ? 10 : 100}</span>
+                      </div>
+                    </div>
+                    {issueTitles.length > 0 && (
+                      <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
+                        <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Issues Found</p>
+                        <div className="space-y-1">
+                          {issueTitles.map((t, i) => (
+                            <div key={i} className="flex items-start gap-2 text-sm" style={{ color: C.text }}>
+                              <span style={{ color: '#ef4444', flexShrink: 0 }}>•</span><span>{t}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {topRecs.length > 0 && (
+                      <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
+                        <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Top Recommendations</p>
+                        <div className="space-y-1.5">
+                          {topRecs.map((r, i) => (
+                            <div key={i} className="flex items-start gap-2 text-sm" style={{ color: C.text }}>
+                              <span className="font-bold flex-shrink-0" style={{ color: '#16a34a' }}>{i + 1}.</span><span>{r}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+            }
+            return aiCards.length > 0 ? <>{aiCards}</> : null;
+          })()}
 
           {subFiles.length > 0 && (
             <div className="space-y-2">
@@ -1946,7 +2067,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
         </div>
 
         {/* Grade panel */}
-        <div className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.green}50`, boxShadow: C.cardShadow }}>
+        <div className="rounded-2xl p-5" style={{ background: C.card }}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold" style={{ color: C.text }}>Grade Submission</h3>
             <span className="text-xs" style={{ color: C.faint }}>Passmark: 85%</span>
@@ -1966,7 +2087,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
 
           <div className="mb-5">
             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.faint }}>Feedback to student</label>
-            <RichTextEditor value={feedback} onChange={setFeedback} placeholder="Write feedback for the student…" bgOverride="#f5f5f5" fontFamily="var(--font-mono)"/>
+            <RichTextEditor value={feedback} onChange={setFeedback} placeholder="Write feedback for the student…" bgOverride={C.input} fontFamily="var(--font-mono)"/>
           </div>
 
           {gradeError && <p className="text-xs mb-3" style={{ color: '#ef4444' }}>{gradeError}</p>}
@@ -1983,11 +2104,39 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
 
   // -- Assignment detail with tabs ---
   if (selected) {
-    const subMap    = Object.fromEntries(submissions.map(s => [s.student_id, s]));
-    const rows      = assignedStudents.map(st => ({ ...st, sub: subMap[st.id] ?? null }));
-    const responded = submissions.length;
-    const graded    = submissions.filter(s => s.status === 'graded').length;
-    const passed    = submissions.filter(s => s.status === 'graded' && s.score >= 85).length;
+    const isGroupAssignment = (selected.group_ids?.length ?? 0) > 0;
+    const subMap: Record<string, any> = Object.fromEntries(submissions.map((s: any) => [s.student_id, s]));
+    const rows = assignedStudents.map((st: any) => ({ ...st, sub: subMap[st.id] ?? null }));
+    const groupSubByGroup = Object.fromEntries(submissions.filter((s: any) => s.group_id).map((s: any) => [s.group_id, s]));
+    const groupMap = new Map<string, { id: string; name: string; members: any[] }>();
+    if (isGroupAssignment) {
+      for (const st of assignedStudents as any[]) {
+        if (!st.group_id) continue;
+        if (!groupMap.has(st.group_id)) {
+          groupMap.set(st.group_id, { id: st.group_id, name: st.group_name || 'Group', members: [] });
+        }
+        groupMap.get(st.group_id)!.members.push(st);
+      }
+    }
+    const groupRows = Array.from(groupMap.values()).map(group => {
+      const sub = groupSubByGroup[group.id] ?? null;
+      const participantIds = new Set(Array.isArray(sub?.participants) ? sub.participants : []);
+      const participants = sub ? group.members.filter(member => participantIds.has(member.id)) : [];
+      const nonParticipants = sub ? group.members.filter(member => !participantIds.has(member.id)) : [];
+      const leader = group.members.find(member => member.is_leader) ?? group.members[0] ?? null;
+      return { ...group, sub, participants, nonParticipants, leader };
+    });
+    const responseRows = isGroupAssignment ? groupRows : rows;
+    const responded = isGroupAssignment
+      ? groupRows.filter((row: any) => row.sub != null).length
+      : submissions.length;
+    const gradedSubs = isGroupAssignment
+      ? groupRows.filter((row: any) => row.sub?.status === 'graded')
+      : submissions.filter(s => s.status === 'graded');
+    const graded    = gradedSubs.length;
+    const passed    = isGroupAssignment
+      ? gradedSubs.filter((r: any) => (r.sub?.score ?? 0) >= 85).length
+      : submissions.filter(s => s.status === 'graded' && s.score >= 85).length;
     const passRate  = graded > 0 ? Math.round((passed / graded) * 100) : 0;
 
     return (
@@ -2025,7 +2174,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
             <button key={tab} onClick={() => setActiveTab(tab)}
               className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
               style={{ background: activeTab === tab ? C.card : 'transparent', color: activeTab === tab ? C.text : C.faint, boxShadow: activeTab === tab ? '0 1px 4px rgba(0,0,0,0.08)' : 'none' }}>
-              {tab === 'responses' ? `Responses (${submissions.length})` : 'Details'}
+              {tab === 'responses' ? `Responses (${responded})` : 'Details'}
             </button>
           ))}
         </div>
@@ -2046,7 +2195,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
               </div>
             ))}
             {!selected.scenario && !selected.brief && !selected.tasks && !selected.requirements && (
-              <div className="text-center py-16 rounded-2xl" style={{ background: C.card, border: `1px solid ${C.green}50`, boxShadow: C.cardShadow }}>
+              <div className="text-center py-16 rounded-2xl" style={{ background: C.card }}>
                 <p className="text-sm" style={{ color: C.faint }}>No details added yet. <Link href={`/create/assignment?edit=${selected.id}`} style={{ color: C.green }}>Edit assignment</Link></p>
               </div>
             )}
@@ -2059,12 +2208,12 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
             {/* Stats */}
             <div className="grid grid-cols-4 gap-3 mb-5">
               {[
-                { label: 'Assigned',   value: assignedStudents.length, icon: Users,      color: C.text,    bg: C.card },
+                { label: isGroupAssignment ? 'Groups' : 'Assigned', value: isGroupAssignment ? groupRows.length : assignedStudents.length, icon: Users, color: C.text, bg: C.card },
                 { label: 'Responded',  value: responded,               icon: FileText,   color: '#2563eb', bg: '#eff6ff' },
                 { label: 'Graded',     value: graded,                  icon: CheckCircle2,color:'#7c3aed', bg: '#f5f3ff' },
                 { label: 'Pass Rate',  value: `${passRate}%`,          icon: TrendingUp, color: '#10b981', bg: 'rgba(16,185,129,0.08)' },
               ].map(s => (
-                <div key={s.label} className="rounded-2xl p-4" style={{ background: C.card, border: `1px solid ${C.green}50`, boxShadow: C.cardShadow }}>
+                <div key={s.label} className="rounded-2xl p-4" style={{ background: C.card }}>
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-semibold" style={{ color: C.faint }}>{s.label}</p>
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: s.bg }}>
@@ -2077,9 +2226,9 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
             </div>
 
             {/* Export button */}
-            {rows.length > 0 && (
+            {responseRows.length > 0 && (
               <div className="flex justify-end mb-3">
-                <button onClick={() => exportCSV(rows, selected.title)}
+                <button onClick={() => isGroupAssignment ? exportGroupCSV(groupRows, selected.title) : exportCSV(rows, selected.title)}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-80 transition-opacity"
                   style={{ background: C.pill, color: C.muted, border: `1px solid ${C.divider}` }}>
                   <Download className="w-3.5 h-3.5"/> Export CSV
@@ -2089,13 +2238,119 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
 
             {loadingSubs ? (
               <div className="space-y-2">{[0,1,2,3].map(i => <div key={i} className="h-16 rounded-2xl animate-pulse" style={{ background: C.card }}/>)}</div>
-            ) : rows.length === 0 ? (
-              <div className="text-center py-16 rounded-2xl" style={{ background: C.card, border: `1px solid ${C.green}50`, boxShadow: C.cardShadow }}>
-                <p className="text-sm font-medium mb-1" style={{ color: C.text }}>No students assigned</p>
-                <p className="text-xs" style={{ color: C.faint }}>Assign a cohort to this assignment first.</p>
+            ) : responseRows.length === 0 ? (
+              <div className="text-center py-16 rounded-2xl" style={{ background: C.card }}>
+                <p className="text-sm font-medium mb-1" style={{ color: C.text }}>{isGroupAssignment ? 'No groups assigned' : 'No students assigned'}</p>
+                <p className="text-xs" style={{ color: C.faint }}>{(selected.group_ids?.length ?? 0) > 0 ? 'No group members found for this assignment.' : 'Assign a cohort to this assignment first.'}</p>
+              </div>
+            ) : isGroupAssignment ? (
+              <div className="rounded-2xl overflow-hidden">
+                <div className="grid px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ background: C.pill, color: C.faint, gridTemplateColumns: '1.35fr 1fr 90px 120px 110px 70px 80px 80px' }}>
+                  <span>Group</span>
+                  <span>Leader</span>
+                  <span className="text-center">Members</span>
+                  <span className="text-center">Participants</span>
+                  <span>Status</span>
+                  <span className="text-center">Score</span>
+                  <span className="text-center">Result</span>
+                  <span></span>
+                </div>
+                {groupRows.map((row: any, i: number) => {
+                  const sub = row.sub;
+                  const status = sub?.status ?? 'not_started';
+                  const sc = sub?.score ?? null;
+                  const isPassed = sc != null && sc >= 85;
+                  const isExpanded = expandedGroups.has(row.id);
+                  const statusCfg = status === 'graded'    ? { label: 'Graded',      bg: '#f0fdf4', color: '#16a34a' }
+                                  : status === 'submitted' ? { label: 'Submitted',   bg: '#eff6ff', color: '#2563eb' }
+                                  : status === 'draft'     ? { label: 'Draft',       bg: C.pill,    color: C.muted   }
+                                  :                          { label: 'Not Started', bg: C.pill,    color: C.faint   };
+                  return (
+                    <div key={row.id} style={{ background: i % 2 === 0 ? C.card : C.page, borderTop: `1px solid ${C.divider}` }}>
+                      <div className="grid px-5 py-3.5 items-center" style={{ gridTemplateColumns: '1.35fr 1fr 90px 120px 110px 70px 80px 80px' }}>
+                        <button onClick={() => toggleExpandedGroup(row.id)} className="flex items-center gap-2 min-w-0 text-left hover:opacity-80"
+                          style={{ color: C.text, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                          <ChevronDown className="w-4 h-4 flex-shrink-0 transition-transform" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}/>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold truncate">{row.name}</p>
+                            <p className="text-xs truncate" style={{ color: C.faint }}>{sub ? `Submitted by ${sub.submitted_by_student?.full_name || sub.student?.full_name || 'group leader'}` : 'Awaiting submission'}</p>
+                          </div>
+                        </button>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{row.leader?.full_name || row.leader?.email || '--'}</p>
+                          <p className="text-xs truncate" style={{ color: C.faint }}>{row.leader?.email || ''}</p>
+                        </div>
+                        <span className="text-sm font-bold text-center" style={{ color: C.text }}>{row.members.length}</span>
+                        <span className="text-sm font-bold text-center" style={{ color: sub ? C.text : C.faint }}>{sub ? `${row.participants.length}/${row.members.length}` : '--'}</span>
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full text-center w-fit" style={{ background: statusCfg.bg, color: statusCfg.color }}>
+                          {statusCfg.label}
+                        </span>
+                        <span className="text-sm font-bold text-center" style={{ color: sc != null ? (isPassed ? '#10b981' : '#ef4444') : C.faint }}>
+                          {sc != null ? sc : '--'}
+                        </span>
+                        <span className="text-xs font-bold text-center px-2 py-1 rounded-full mx-auto"
+                          style={sc != null ? { background: isPassed ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: isPassed ? '#10b981' : '#ef4444' } : { color: C.faint }}>
+                          {sc != null ? (isPassed ? 'Passed' : 'Failed') : '--'}
+                        </span>
+                        <div className="flex justify-end">
+                          {sub ? (
+                            <button onClick={() => openSubmission(sub)}
+                              className="text-xs font-semibold px-3 py-1.5 rounded-lg hover:opacity-80 transition-opacity"
+                              style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: 'pointer' }}>
+                              {sub.status === 'graded' ? 'Regrade' : 'Grade'}
+                            </button>
+                          ) : (
+                            <span className="text-xs" style={{ color: C.faint }}>--</span>
+                          )}
+                        </div>
+                      </div>
+                      {isExpanded && (
+                        <div className="px-5 pb-4">
+                          <div className="rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4" style={{ background: C.input, border: `1px solid ${C.divider}` }}>
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: C.faint }}>Group Members</p>
+                              <div className="space-y-2">
+                                {row.members.map((member: any) => {
+                                  const participated = !!sub && row.participants.some((p: any) => p.id === member.id);
+                                  return (
+                                    <div key={member.id} className="flex items-center justify-between gap-3">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <StudentAvatar name={member.full_name} email={member.email} size={28} C={C}/>
+                                        <div className="min-w-0">
+                                          <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{member.full_name || member.email}</p>
+                                          <p className="text-xs truncate" style={{ color: C.faint }}>{member.email}</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                                        {member.is_leader && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#fff7ed', color: '#d97706' }}>Leader</span>}
+                                        {sub && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: participated ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.10)', color: participated ? '#10b981' : '#ef4444' }}>{participated ? 'Participant' : 'Not marked'}</span>}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: C.faint }}>Submission</p>
+                              {sub ? (
+                                <div className="space-y-1.5 text-sm" style={{ color: C.text }}>
+                                  <p><span className="font-semibold">Submitted by:</span> {sub.submitted_by_student?.full_name || sub.student?.full_name || 'Group leader'}</p>
+                                  <p><span className="font-semibold">Submitted:</span> {sub.updated_at ? new Date(sub.updated_at).toLocaleString() : '--'}</p>
+                                  <p style={{ color: C.faint }}>Only the marked participants receive this grade.</p>
+                                </div>
+                              ) : (
+                                <p className="text-sm" style={{ color: C.faint }}>No submission yet.</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.green}50`, boxShadow: C.cardShadow }}>
+              <div className="rounded-2xl overflow-hidden">
                 {/* Table head */}
                 <div className="grid px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ background: C.pill, color: C.faint, gridTemplateColumns: '1fr 110px 70px 80px 80px' }}>
                   <span>Student</span>
@@ -2120,11 +2375,19 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                         <div className="min-w-0">
                           <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{row.full_name || row.email}</p>
                           <p className="text-xs truncate" style={{ color: C.faint }}>{row.email}</p>
+                          {isGroupAssignment && row.group_name && (
+                            <p className="text-xs font-semibold mt-0.5 truncate" style={{ color: C.muted }}>Group: {row.group_name}</p>
+                          )}
                         </div>
                       </div>
-                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full text-center" style={{ background: statusCfg.bg, color: statusCfg.color }}>
-                        {statusCfg.label}
-                      </span>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full text-center" style={{ background: statusCfg.bg, color: statusCfg.color }}>
+                          {statusCfg.label}
+                        </span>
+                        {isGroupAssignment && sub?.submitted_by_student?.full_name && (
+                          <span className="text-xs" style={{ color: C.faint }}>by {(sub.submitted_by_student as any).full_name}</span>
+                        )}
+                      </div>
                       <span className="text-sm font-bold text-center" style={{ color: sc != null ? (isPassed ? '#10b981' : '#ef4444') : C.faint }}>
                         {sc != null ? sc : '--'}
                       </span>
@@ -2828,6 +3091,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
       supabase.from('learning_paths').select('id, title, status, cohort_ids').order('created_at', { ascending: false }),
       supabase.from('assignments').select('id, title, status, cohort_ids').order('created_at', { ascending: false }),
     ]);
+    if (asgnData === null) console.error('[assignments list fetch] returned null - check error in Promise.all');
     setCohorts(c ?? []);
     setStudents(s ?? []);
     setCourses(cr ?? []);
@@ -3203,11 +3467,18 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
               <h2 className="text-base font-bold" style={{ color: C.text }}>Cohorts</h2>
               <p className="text-xs mt-0.5" style={{ color: C.faint }}>{cohorts.length} cohort{cohorts.length !== 1 ? 's' : ''}</p>
             </div>
-            <button onClick={() => setShowCreate(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold"
-              style={{ background: C.cta, color: C.ctaText }}>
-              <Plus className="w-4 h-4"/> New Cohort
-            </button>
+            <div className="flex items-center gap-2">
+              <Link href="/admin/groups"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold no-underline"
+                style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+                <Users className="w-4 h-4"/> Groups
+              </Link>
+              <button onClick={() => setShowCreate(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold"
+                style={{ background: C.cta, color: C.ctaText }}>
+                <Plus className="w-4 h-4"/> New Cohort
+              </button>
+            </div>
           </div>
 
           {/* Cohort list */}

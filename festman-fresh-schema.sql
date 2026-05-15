@@ -210,9 +210,12 @@ CREATE TABLE public.virtual_experiences (
   dataset         jsonb,
   is_short_course boolean     NOT NULL DEFAULT false,
   badge_image_url text,
+  group_ids       uuid[]      NOT NULL DEFAULT '{}',
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE INDEX idx_ve_group_ids ON public.virtual_experiences USING GIN (group_ids);
 
 -- ── assignments ───────────────────────────────────────────────
 CREATE TABLE public.assignments (
@@ -226,6 +229,7 @@ CREATE TABLE public.assignments (
   related_course          uuid        REFERENCES public.courses(id) ON DELETE SET NULL,
   created_by              uuid        REFERENCES auth.users(id) ON DELETE SET NULL,
   cohort_ids              uuid[]      NOT NULL DEFAULT '{}',
+  group_ids               uuid[]      NOT NULL DEFAULT '{}',
   cover_image             text,
   status                  text        NOT NULL DEFAULT 'draft'
                                         CHECK (status IN ('draft','published','closed')),
@@ -247,11 +251,38 @@ CREATE TABLE public.assignment_resources (
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 
+-- ── groups ────────────────────────────────────────────────────
+CREATE TABLE public.groups (
+  id          uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name        text        NOT NULL,
+  cohort_id   uuid        NOT NULL REFERENCES public.cohorts(id) ON DELETE CASCADE,
+  description text,
+  created_by  uuid        NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER trg_groups_updated_at
+  BEFORE UPDATE ON public.groups FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- ── group_members ─────────────────────────────────────────────
+CREATE TABLE public.group_members (
+  id         uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  group_id   uuid        NOT NULL REFERENCES public.groups(id)   ON DELETE CASCADE,
+  student_id uuid        NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  is_leader  boolean     NOT NULL DEFAULT false,
+  joined_at  timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (student_id)
+);
+
 -- ── assignment_submissions ────────────────────────────────────
 CREATE TABLE public.assignment_submissions (
   id            uuid         PRIMARY KEY DEFAULT uuid_generate_v4(),
   student_id    uuid         NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
   assignment_id uuid         NOT NULL REFERENCES public.assignments(id) ON DELETE CASCADE,
+  group_id      uuid         REFERENCES public.groups(id)   ON DELETE SET NULL,
+  submitted_by  uuid         REFERENCES public.students(id) ON DELETE SET NULL,
+  participants  uuid[]       NOT NULL DEFAULT '{}',
   response_text text,
   status        text         NOT NULL DEFAULT 'draft'
                                CHECK (status IN ('draft','submitted','graded')),
@@ -261,9 +292,17 @@ CREATE TABLE public.assignment_submissions (
   graded_by     uuid         REFERENCES auth.users(id) ON DELETE SET NULL,
   graded_at     timestamptz,
   created_at    timestamptz  NOT NULL DEFAULT now(),
-  updated_at    timestamptz  NOT NULL DEFAULT now(),
-  UNIQUE (student_id, assignment_id)
+  updated_at    timestamptz  NOT NULL DEFAULT now()
 );
+
+-- Partial unique indexes replace the blanket UNIQUE (student_id, assignment_id)
+CREATE UNIQUE INDEX submissions_individual_unique
+  ON public.assignment_submissions (student_id, assignment_id)
+  WHERE group_id IS NULL;
+
+CREATE UNIQUE INDEX submissions_group_unique
+  ON public.assignment_submissions (group_id, assignment_id)
+  WHERE group_id IS NOT NULL;
 
 -- ── assignment_submission_files ───────────────────────────────
 CREATE TABLE public.assignment_submission_files (
@@ -272,6 +311,19 @@ CREATE TABLE public.assignment_submission_files (
   file_name     text,
   file_url      text        NOT NULL,
   uploaded_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE public.assignment_group_workspaces (
+  id            uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  assignment_id uuid        NOT NULL REFERENCES public.assignments(id) ON DELETE CASCADE,
+  group_id      uuid        NOT NULL REFERENCES public.groups(id) ON DELETE CASCADE,
+  notes         text,
+  links         jsonb       NOT NULL DEFAULT '[]'::jsonb,
+  files         jsonb       NOT NULL DEFAULT '[]'::jsonb,
+  updated_by    uuid        REFERENCES public.students(id) ON DELETE SET NULL,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (assignment_id, group_id)
 );
 
 -- ── communities ───────────────────────────────────────────────
@@ -601,14 +653,41 @@ RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS
   )
 $$;
 
+CREATE OR REPLACE FUNCTION public.my_group_ids()
+RETURNS uuid[]
+LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
+  SELECT ARRAY(SELECT group_id FROM public.group_members WHERE student_id = (SELECT auth.uid()))
+$$;
+
+CREATE OR REPLACE FUNCTION public.valid_group_participants(
+  p_group_id uuid,
+  p_participants uuid[]
+) RETURNS boolean
+LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
+  SELECT
+    p_group_id IS NULL
+    OR COALESCE(p_participants, '{}'::uuid[]) <@ COALESCE(
+      ARRAY(
+        SELECT gm.student_id
+        FROM public.group_members gm
+        WHERE gm.group_id = p_group_id
+      ),
+      '{}'::uuid[]
+    )
+$$;
+
 -- Restrict helper functions to authenticated users only.
 -- Prevents anon callers from probing role state via direct RPC calls.
 REVOKE EXECUTE ON FUNCTION public.get_my_role()            FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.is_admin()               FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.is_instructor_or_admin() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.my_group_ids()           FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.valid_group_participants(uuid, uuid[]) FROM PUBLIC;
 GRANT  EXECUTE ON FUNCTION public.get_my_role()            TO authenticated;
 GRANT  EXECUTE ON FUNCTION public.is_admin()               TO authenticated;
 GRANT  EXECUTE ON FUNCTION public.is_instructor_or_admin() TO authenticated;
+GRANT  EXECUTE ON FUNCTION public.my_group_ids()           TO authenticated;
+GRANT  EXECUTE ON FUNCTION public.valid_group_participants(uuid, uuid[]) TO authenticated;
 
 -- Returns only public profile fields (name + avatar) for staff — safe for students to call.
 CREATE OR REPLACE FUNCTION public.get_staff_profiles(p_ids uuid[])
@@ -635,6 +714,7 @@ ALTER TABLE public.assignments                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_resources       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_submissions     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_submission_files ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.assignment_group_workspaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.communities                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.announcements              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.schedules                  ENABLE ROW LEVEL SECURITY;
@@ -699,6 +779,8 @@ CREATE TRIGGER trg_assignments_updated_at
   BEFORE UPDATE ON public.assignments FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_assignment_submissions_updated_at
   BEFORE UPDATE ON public.assignment_submissions FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE TRIGGER trg_assignment_group_workspaces_updated_at
+  BEFORE UPDATE ON public.assignment_group_workspaces FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 -- Prevents students from modifying graded fields (replaces the recursive RLS WITH CHECK).
 -- NOTE: Do NOT put a subquery in the trigger WHEN clause — Postgres forbids it.
@@ -987,7 +1069,9 @@ CREATE OR REPLACE FUNCTION public.complete_ve_assignment(
   p_student_id         uuid,
   p_progress           jsonb,
   p_current_module_id  text,
-  p_current_lesson_id  text
+  p_current_lesson_id  text,
+  p_group_id           uuid    DEFAULT NULL,
+  p_participants       uuid[]  DEFAULT NULL
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -1007,12 +1091,33 @@ BEGIN
     RAISE EXCEPTION 'invalid_assignment_ve_linkage';
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM assignments a
-    JOIN   students s ON s.cohort_id = ANY(a.cohort_ids)
-    WHERE  a.id = p_assignment_id AND s.id = p_student_id
-  ) THEN
-    RAISE EXCEPTION 'student_access_denied';
+  IF p_group_id IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM group_members gm
+      JOIN   assignments a ON a.id = p_assignment_id
+      WHERE  gm.student_id = p_student_id
+        AND  gm.group_id   = p_group_id
+        AND  gm.is_leader  = true
+        AND  p_group_id    = ANY(a.group_ids)
+    ) THEN
+      RAISE EXCEPTION 'student_access_denied';
+    END IF;
+
+    IF cardinality(COALESCE(p_participants, '{}'::uuid[])) = 0 THEN
+      RAISE EXCEPTION 'participants_required';
+    END IF;
+
+    IF NOT public.valid_group_participants(p_group_id, p_participants) THEN
+      RAISE EXCEPTION 'invalid_participants';
+    END IF;
+  ELSE
+    IF NOT EXISTS (
+      SELECT 1 FROM assignments a
+      JOIN   students s ON s.cohort_id = ANY(a.cohort_ids)
+      WHERE  a.id = p_assignment_id AND s.id = p_student_id
+    ) THEN
+      RAISE EXCEPTION 'student_access_denied';
+    END IF;
   END IF;
 
   INSERT INTO guided_project_attempts (
@@ -1027,21 +1132,44 @@ BEGIN
     completed_at      = v_now,
     updated_at        = v_now;
 
-  INSERT INTO assignment_submissions (
-    assignment_id, student_id, response_text, status, submitted_at
-  ) VALUES (
-    p_assignment_id, p_student_id, 'Virtual experience completed.', 'submitted', v_now
-  )
-  ON CONFLICT (student_id, assignment_id) DO UPDATE SET
-    response_text = 'Virtual experience completed.',
-    status        = 'submitted',
-    submitted_at  = v_now,
-    updated_at    = v_now
-  WHERE assignment_submissions.status != 'graded';
+  IF p_group_id IS NOT NULL THEN
+    INSERT INTO assignment_submissions (
+      assignment_id, student_id, group_id, submitted_by, participants,
+      response_text, status, submitted_at
+    ) VALUES (
+      p_assignment_id, p_student_id, p_group_id, p_student_id,
+      p_participants,
+      'Virtual experience completed.', 'submitted', v_now
+    )
+    ON CONFLICT (group_id, assignment_id) WHERE group_id IS NOT NULL DO UPDATE SET
+      submitted_by  = p_student_id,
+      participants  = p_participants,
+      response_text = 'Virtual experience completed.',
+      status        = 'submitted',
+      submitted_at  = v_now,
+      updated_at    = v_now
+    WHERE assignment_submissions.status != 'graded';
 
-  SELECT to_jsonb(s) INTO v_submission
-  FROM assignment_submissions s
-  WHERE s.assignment_id = p_assignment_id AND s.student_id = p_student_id;
+    SELECT to_jsonb(s) INTO v_submission
+    FROM assignment_submissions s
+    WHERE s.assignment_id = p_assignment_id AND s.group_id = p_group_id;
+  ELSE
+    INSERT INTO assignment_submissions (
+      assignment_id, student_id, response_text, status, submitted_at
+    ) VALUES (
+      p_assignment_id, p_student_id, 'Virtual experience completed.', 'submitted', v_now
+    )
+    ON CONFLICT (student_id, assignment_id) WHERE group_id IS NULL DO UPDATE SET
+      response_text = 'Virtual experience completed.',
+      status        = 'submitted',
+      submitted_at  = v_now,
+      updated_at    = v_now
+    WHERE assignment_submissions.status != 'graded';
+
+    SELECT to_jsonb(s) INTO v_submission
+    FROM assignment_submissions s
+    WHERE s.assignment_id = p_assignment_id AND s.student_id = p_student_id AND s.group_id IS NULL;
+  END IF;
 
   RETURN jsonb_build_object('submission', v_submission);
 END;
@@ -1253,7 +1381,7 @@ CREATE POLICY "events: instructor delete"
     AND (user_id = (SELECT auth.uid()) OR (SELECT public.is_admin()))
   );
 
--- ── virtual_experiences (migration 046: includes learning_path access) ──
+-- ── virtual_experiences (migration 100: remove group_ids check; standalone VEs are cohort-only) ──
 CREATE POLICY "virtual_experiences: participants select"
   ON public.virtual_experiences FOR SELECT
   USING (
@@ -1293,15 +1421,17 @@ CREATE POLICY "virtual_experiences: instructor delete"
     AND (user_id = (SELECT auth.uid()) OR (SELECT public.is_admin()))
   );
 
--- ── assignments (migration 033: role check on writes) ──────────
+-- ── assignments (migration 097: use my_group_ids() helper for group check) ──
 CREATE POLICY "assignments: select"
   ON public.assignments FOR SELECT
   USING (
-    created_by = (SELECT auth.uid()) OR (SELECT public.is_admin())
+    (SELECT public.is_instructor_or_admin())
+    OR created_by = (SELECT auth.uid())
     OR EXISTS (
       SELECT 1 FROM public.students s
       WHERE s.id = (SELECT auth.uid()) AND s.cohort_id = ANY(cohort_ids)
     )
+    OR (group_ids && public.my_group_ids())
   );
 
 CREATE POLICY "assignments: instructor insert"
@@ -1354,11 +1484,36 @@ CREATE POLICY "assignment_resources: instructor manage"
     EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_id AND (a.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin())))
   );
 
--- ── assignment_submissions (migration 015: no recursive subquery) ──
+-- ── groups (migration 093) ────────────────────────────────────
+ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "groups: staff all"
+  ON public.groups FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.students WHERE id = (SELECT auth.uid()) AND role IN ('admin','instructor')))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.students WHERE id = (SELECT auth.uid()) AND role IN ('admin','instructor')));
+
+CREATE POLICY "groups: student select own"
+  ON public.groups FOR SELECT TO authenticated
+  USING (id IN (SELECT group_id FROM public.group_members WHERE student_id = (SELECT auth.uid())));
+
+-- ── group_members (migration 093) ────────────────────────────
+ALTER TABLE public.group_members ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "group_members: staff all"
+  ON public.group_members FOR ALL TO authenticated
+  USING (EXISTS (SELECT 1 FROM public.students WHERE id = (SELECT auth.uid()) AND role IN ('admin','instructor')))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.students WHERE id = (SELECT auth.uid()) AND role IN ('admin','instructor')));
+
+CREATE POLICY "group_members: student select own group"
+  ON public.group_members FOR SELECT TO authenticated
+  USING (group_id = ANY(public.my_group_ids()));
+
+-- ── assignment_submissions (migration 015 + 093) ──────────────
 CREATE POLICY "assignment_submissions: select"
   ON public.assignment_submissions FOR SELECT
   USING (
     student_id = (SELECT auth.uid())
+    OR group_id IN (SELECT group_id FROM public.group_members WHERE student_id = (SELECT auth.uid()))
     OR (SELECT public.is_admin())
     OR EXISTS (SELECT 1 FROM public.students WHERE id = (SELECT auth.uid()) AND role = 'instructor')
     OR EXISTS (SELECT 1 FROM public.assignments a WHERE a.id = assignment_id AND a.created_by = (SELECT auth.uid()))
@@ -1368,10 +1523,31 @@ CREATE POLICY "assignment_submissions: student insert"
   ON public.assignment_submissions FOR INSERT
   WITH CHECK (
     student_id = (SELECT auth.uid())
-    AND EXISTS (
-      SELECT 1 FROM public.assignments a
-      JOIN  public.students s ON s.id = (SELECT auth.uid())
-      WHERE a.id = assignment_submissions.assignment_id AND s.cohort_id = ANY(a.cohort_ids)
+    AND (
+      EXISTS (
+        SELECT 1 FROM public.assignments a
+        JOIN public.students s ON s.id = (SELECT auth.uid())
+        WHERE a.id = assignment_submissions.assignment_id
+          AND s.cohort_id = ANY(a.cohort_ids)
+          AND assignment_submissions.group_id IS NULL
+      )
+      OR
+      EXISTS (
+        SELECT 1 FROM public.group_members gm
+        JOIN public.assignments a ON a.id = assignment_submissions.assignment_id
+        WHERE gm.student_id = (SELECT auth.uid())
+          AND gm.group_id = assignment_submissions.group_id
+          AND gm.group_id = ANY(a.group_ids)
+          AND gm.is_leader = true
+          AND public.valid_group_participants(
+            assignment_submissions.group_id,
+            assignment_submissions.participants
+          )
+          AND (
+            assignment_submissions.status = 'draft'
+            OR cardinality(assignment_submissions.participants) > 0
+          )
+      )
     )
   );
 
@@ -1381,8 +1557,38 @@ CREATE POLICY "assignment_submissions: student insert"
 DROP POLICY IF EXISTS "assignment_submissions: student update" ON public.assignment_submissions;
 CREATE POLICY "assignment_submissions: student update"
   ON public.assignment_submissions FOR UPDATE
-  USING  (student_id = (SELECT auth.uid()) AND status IN ('draft','submitted'))
-  WITH CHECK (student_id = (SELECT auth.uid()) AND status IN ('draft','submitted'));
+  USING (
+    status IN ('draft','submitted')
+    AND (
+      (group_id IS NULL AND student_id = (SELECT auth.uid()))
+      OR EXISTS (
+        SELECT 1 FROM public.group_members
+        WHERE group_id = assignment_submissions.group_id
+          AND student_id = (SELECT auth.uid())
+          AND is_leader = true
+      )
+    )
+  )
+  WITH CHECK (
+    status IN ('draft','submitted')
+    AND (
+      (group_id IS NULL AND student_id = (SELECT auth.uid()))
+      OR EXISTS (
+        SELECT 1 FROM public.group_members
+        WHERE group_id = assignment_submissions.group_id
+          AND student_id = (SELECT auth.uid())
+          AND is_leader = true
+          AND public.valid_group_participants(
+            assignment_submissions.group_id,
+            assignment_submissions.participants
+          )
+          AND (
+            assignment_submissions.status = 'draft'
+            OR cardinality(assignment_submissions.participants) > 0
+          )
+      )
+    )
+  );
 
 CREATE POLICY "assignment_submissions: instructor grade"
   ON public.assignment_submissions FOR UPDATE
@@ -1431,6 +1637,21 @@ CREATE POLICY "assignment_submission_files: student delete own"
   );
 
 -- ── communities (migration 033) ───────────────────────────────
+CREATE POLICY "assignment_group_workspaces: staff all"
+  ON public.assignment_group_workspaces FOR ALL TO authenticated
+  USING ((SELECT public.is_instructor_or_admin()))
+  WITH CHECK ((SELECT public.is_instructor_or_admin()));
+
+CREATE POLICY "assignment_group_workspaces: group members select"
+  ON public.assignment_group_workspaces FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.group_members gm
+      WHERE gm.group_id = assignment_group_workspaces.group_id
+        AND gm.student_id = (SELECT auth.uid())
+    )
+  );
+
 CREATE POLICY "communities: select"
   ON public.communities FOR SELECT
   USING (
@@ -1824,12 +2045,18 @@ CREATE INDEX idx_assignments_related_course ON public.assignments(related_course
 CREATE INDEX idx_assignments_status         ON public.assignments(status);
 CREATE INDEX idx_assignments_cohort_ids     ON public.assignments USING GIN (cohort_ids);
 
+-- groups / group_members
+CREATE INDEX idx_groups_cohort_id         ON public.groups(cohort_id);
+CREATE INDEX idx_group_members_group_id   ON public.group_members(group_id);
+
 -- assignment_resources / submissions
 CREATE INDEX idx_assignment_resources_assignment ON public.assignment_resources(assignment_id);
 CREATE INDEX idx_assignment_submissions_student    ON public.assignment_submissions(student_id);
 CREATE INDEX idx_assignment_submissions_assignment ON public.assignment_submissions(assignment_id);
 CREATE INDEX idx_assignment_submissions_status     ON public.assignment_submissions(status);
+CREATE INDEX idx_assignment_submissions_group      ON public.assignment_submissions(group_id);
 CREATE INDEX idx_asub_files_submission ON public.assignment_submission_files(submission_id);
+CREATE INDEX idx_assignment_group_workspaces_lookup ON public.assignment_group_workspaces(assignment_id, group_id);
 
 -- communities / announcements
 CREATE INDEX idx_communities_created_by ON public.communities(created_by);

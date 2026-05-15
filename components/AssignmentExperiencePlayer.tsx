@@ -69,6 +69,9 @@ interface Props {
   isDark?: boolean;
   onComplete: (submission?: any) => void;
   previewMode?: boolean;
+  groupId?: string;
+  participants?: string[];
+  canSubmit?: boolean;
 }
 
 // -- Helpers ---
@@ -92,7 +95,7 @@ function normalize(s: string) { return s.toLowerCase().replace(/\s+/g, ' ').trim
 // -- Component ---
 
 export default function AssignmentExperiencePlayer({
-  formId, config, userId, studentName, studentEmail, sessionToken, assignmentId = '', initialProgress = {}, isDark = false, onComplete, previewMode = false,
+  formId, config, userId, studentName, studentEmail, sessionToken, assignmentId = '', initialProgress = {}, isDark = false, onComplete, previewMode = false, groupId, participants, canSubmit = true,
 }: Props) {
   const accent = '#00b95c';
   const modules = config.modules || [];
@@ -116,7 +119,7 @@ export default function AssignmentExperiencePlayer({
   const [activeLesson,  setActiveLesson]  = useState(modules[0]?.lessons[0]?.id ?? '');
   const [saving,        setSaving]        = useState(false);
   const [uploadingReq,  setUploadingReq]  = useState<string | null>(null);
-  const [done,          setDone]          = useState(() => allComplete(config, initialProgress ?? {}));
+  const [done,          setDone]          = useState(() => canSubmit && allComplete(config, initialProgress ?? {}));
   const [expandedMods,  setExpandedMods]  = useState<Set<string>>(new Set([modules[0]?.id]));
   const [completeError, setCompleteError] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -200,10 +203,20 @@ export default function AssignmentExperiencePlayer({
 
   if (done) {
     return (
-      <div className="rounded-2xl p-8 text-center" style={{ background: 'rgba(14,9,221,0.06)', border: '1px solid rgba(14,9,221,0.2)' }}>
+      <div className="rounded-2xl p-8 text-center" style={{ background: 'rgba(14,9,221,0.06)' }}>
         <CheckCircle className="w-10 h-10 mx-auto mb-3" style={{ color: accent }}/>
         <p className="text-base font-bold mb-1" style={{ color: accent }}>Experience Complete!</p>
         <p className="text-sm" style={{ color: muted }}>All missions finished. Your assignment has been submitted.</p>
+      </div>
+    );
+  }
+
+  if (!canSubmit && overallPct >= 100) {
+    return (
+      <div className="rounded-2xl p-8 text-center" style={{ background: 'rgba(14,9,221,0.06)' }}>
+        <CheckCircle className="w-10 h-10 mx-auto mb-3" style={{ color: accent }}/>
+        <p className="text-base font-bold mb-1" style={{ color: accent }}>Ready for Group Submission</p>
+        <p className="text-sm" style={{ color: muted }}>You have completed your preparation. Your group leader will submit the final work.</p>
       </div>
     );
   }
@@ -590,6 +603,14 @@ export default function AssignmentExperiencePlayer({
                     Next <ChevronRight className="w-4 h-4"/>
                   </button>
                 ) : (
+                  !canSubmit ? (
+                  <button
+                    disabled
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+                    style={{ background: prevBtnBg, color: prevBtnText, border: 'none', cursor: 'not-allowed' }}>
+                    Leader submits final work
+                  </button>
+                ) : (
                   <button
                     disabled={overallPct < 100 || saving}
                     onClick={async () => {
@@ -602,7 +623,7 @@ export default function AssignmentExperiencePlayer({
                         const res = await fetch('/api/assignments/complete-ve-assignment', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json', ...authHeader },
-                          body: JSON.stringify({ assignmentId, progress, currentModuleId: activeModule, currentLessonId: activeLesson }),
+                          body: JSON.stringify({ assignmentId, progress, currentModuleId: activeModule, currentLessonId: activeLesson, groupId: groupId || undefined, participants: participants?.length ? participants : undefined }),
                         });
                         let json: any = {};
                         try { json = await res.json(); } catch (_) {}
@@ -622,6 +643,7 @@ export default function AssignmentExperiencePlayer({
                     style={{ background: '#10b981', color: 'white', border: 'none', cursor: overallPct < 100 || saving ? 'not-allowed' : 'pointer' }}>
                     {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>} Complete
                   </button>
+                  )
                 )}
               </div>
             </div>

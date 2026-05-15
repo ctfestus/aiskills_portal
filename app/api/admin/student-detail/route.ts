@@ -26,22 +26,27 @@ export async function GET(req: NextRequest) {
     { data: courseAttempts },
     { data: gpAttempts },
     { data: submissions },
+    { data: groupMemberships },
     { data: certificates },
   ] = await Promise.all([
     supabase.from('students').select('id, full_name, email, cohort_id, created_at, last_login_at').eq('id', studentId).single(),
     supabase.from('course_attempts').select('course_id, score, passed, completed_at, updated_at').eq('student_id', studentId),
     supabase.from('guided_project_attempts').select('ve_id, progress, completed_at, updated_at').eq('student_id', studentId),
     supabase.from('assignment_submissions').select('assignment_id, status, score, submitted_at').eq('student_id', studentId),
+    supabase.from('group_members').select('group_id').eq('student_id', studentId),
     supabase.from('certificates').select('id, form_id, course_id, issued_at').eq('student_id', studentId),
   ]);
 
   if (!student) return NextResponse.json({ error: 'Student not found' }, { status: 404 });
 
   const cohortId = student.cohort_id;
-  const [{ data: cohort }, { data: cohortCourses }, { data: cohortAssignments }, { data: cohortVEs }] = await Promise.all([
+  const groupIds = (groupMemberships ?? []).map((m: any) => m.group_id as string);
+  const [{ data: cohort }, { data: cohortCourses }, { data: cohortAssignments }, { data: groupAssignments }, { data: groupSubmissions }, { data: cohortVEs }] = await Promise.all([
     cohortId ? supabase.from('cohorts').select('id, name').eq('id', cohortId).single() : Promise.resolve({ data: null }),
     cohortId ? supabase.from('courses').select('id, title, slug').contains('cohort_ids', [cohortId]).eq('status', 'published') : Promise.resolve({ data: [] as any[] }),
     cohortId ? supabase.from('assignments').select('id, title, type').contains('cohort_ids', [cohortId]) : Promise.resolve({ data: [] as any[] }),
+    groupIds.length ? supabase.from('assignments').select('id, title, type').overlaps('group_ids', groupIds) : Promise.resolve({ data: [] as any[] }),
+    groupIds.length ? supabase.from('assignment_submissions').select('assignment_id, status, score, submitted_at, participants').in('group_id', groupIds) : Promise.resolve({ data: [] as any[] }),
     cohortId ? supabase.from('virtual_experiences').select('id, title, slug, modules').contains('cohort_ids', [cohortId]).eq('status', 'published') : Promise.resolve({ data: [] as any[] }),
   ]);
 
@@ -54,7 +59,9 @@ export async function GET(req: NextRequest) {
     if (a.completed_at && (a.score ?? 0) > (ex.score ?? 0)) map[a.course_id] = a;
     return map;
   }, {} as Record<string, any>);
-  const submMap    = Object.fromEntries((submissions ?? []).map((s: any) => [s.assignment_id, s]));
+  const participantGroupSubmissions = (groupSubmissions ?? [])
+    .filter((s: any) => Array.isArray(s.participants) && s.participants.includes(studentId));
+  const submMap    = Object.fromEntries([...participantGroupSubmissions, ...(submissions ?? [])].map((s: any) => [s.assignment_id, s]));
   const gpMap      = Object.fromEntries((gpAttempts ?? []).map((a: any) => [a.ve_id, a]));
 
   const courses = (cohortCourses ?? []).map((c: any) => {
@@ -68,7 +75,9 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  const assignments = (cohortAssignments ?? []).map((a: any) => {
+  const assignmentById = new Map<string, any>();
+  for (const a of [...(cohortAssignments ?? []), ...(groupAssignments ?? [])]) assignmentById.set(a.id, a);
+  const assignments = Array.from(assignmentById.values()).map((a: any) => {
     const sub = submMap[a.id];
     return {
       id: a.id, title: a.title, type: a.type,

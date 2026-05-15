@@ -133,10 +133,15 @@ export default function CreateAssignmentPage() {
   const [relatedCourse, setRelatedCourse]         = useState('');
   const [coverImage, setCoverImage]               = useState('');
   const [status, setStatus]                       = useState<'draft' | 'published'>('draft');
+  const [originalStatus, setOriginalStatus]       = useState<'draft' | 'published'>('draft');
   const [resources, setResources]                 = useState<Resource[]>([]);
   const [cohorts, setCohorts]                     = useState<{ id: string; name: string }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
   const [originalCohortIds, setOriginalCohortIds] = useState<string[]>([]);
+  const [groups, setGroups]                       = useState<{ id: string; name: string; cohort_id: string }[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds]   = useState<string[]>([]);
+  const [originalGroupIds, setOriginalGroupIds]   = useState<string[]>([]);
+  const [audienceMode, setAudienceMode]           = useState<'cohorts' | 'groups'>('cohorts');
   const [deadlineDate, setDeadlineDate]           = useState('');
   const [coverUploading, setCoverUploading]       = useState(false);
   const [resourceUploading, setResourceUploading] = useState<Record<string, boolean>>({});
@@ -149,6 +154,8 @@ export default function CreateAssignmentPage() {
   const rubricFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const toggleCohort = (id: string) =>
     setSelectedCohortIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const toggleGroup = (id: string) =>
+    setSelectedGroupIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('edit');
@@ -164,14 +171,16 @@ export default function CreateAssignmentPage() {
         router.replace('/dashboard'); return;
       }
 
-      const [{ data: coursesData }, { data: cohortsData }, { data: veData }] = await Promise.all([
+      const [{ data: coursesData }, { data: cohortsData }, { data: veData }, groupsRes] = await Promise.all([
         supabase.from('courses').select('id, title').eq('user_id', session.user.id).order('title'),
         supabase.from('cohorts').select('id, name').order('name'),
         supabase.from('virtual_experiences').select('id, title, slug').eq('user_id', session.user.id).order('title'),
+        fetch('/api/groups', { headers: { Authorization: `Bearer ${session.access_token}` } }).then(r => r.json()),
       ]);
       if (coursesData) setCourses(coursesData);
       if (cohortsData) setCohorts(cohortsData);
       if (veData) setVeForms(veData.map((v: any) => ({ id: v.id, title: v.title || 'Untitled VE', slug: v.slug })));
+      if (groupsRes?.groups) setGroups(groupsRes.groups.map((g: any) => ({ id: g.id, name: g.name, cohort_id: g.cohort_id })));
 
       if (id) {
         const [{ data }, { data: resData }] = await Promise.all([
@@ -187,11 +196,18 @@ export default function CreateAssignmentPage() {
           setSubmissionInstructions(data.submission_instructions ?? '');
           setRelatedCourse(data.related_course ?? '');
           setCoverImage(data.cover_image ?? '');
-          setStatus(data.status ?? 'draft');
+          const loadedStatus = (data.status ?? 'draft') as 'draft' | 'published';
+          setStatus(loadedStatus);
+          setOriginalStatus(loadedStatus);
           if (data.deadline_date) setDeadlineDate(data.deadline_date);
           if (data.cohort_ids?.length) {
             setSelectedCohortIds(data.cohort_ids);
             setOriginalCohortIds(data.cohort_ids);
+          }
+          if (data.group_ids?.length) {
+            setSelectedGroupIds(data.group_ids);
+            setOriginalGroupIds(data.group_ids);
+            setAudienceMode('groups');
           }
           if (data.type) setAssignmentType(data.type);
           if (data.config) {
@@ -286,7 +302,8 @@ export default function CreateAssignmentPage() {
         related_course:           relatedCourse || null,
         cover_image:              coverImage.trim() || null,
         status,
-        cohort_ids:               selectedCohortIds,
+        cohort_ids:               audienceMode === 'cohorts' ? selectedCohortIds : [],
+        group_ids:                audienceMode === 'groups'  ? selectedGroupIds  : [],
         deadline_date:            deadlineDate || null,
         type:                     assignmentType,
         config:                   buildConfig(),
@@ -313,17 +330,25 @@ export default function CreateAssignmentPage() {
         if (resourcesError) throw resourcesError;
       }
 
-      // Send email to newly assigned cohorts (fire-and-forget)
-      if (status === 'published' && selectedCohortIds.length > 0) {
-        const cohortsToNotify = editId
-          ? selectedCohortIds.filter(id => !originalCohortIds.includes(id))
-          : selectedCohortIds;
-        if (cohortsToNotify.length > 0) {
-          fetch('/api/assignments/notify-cohorts', {
+      // Send notification emails before navigating away so the request is not cancelled.
+      if (status === 'published') {
+        const isPublishingNow = !editId || originalStatus !== 'published';
+        const cohortsToNotify = audienceMode === 'cohorts'
+          ? (isPublishingNow ? selectedCohortIds : selectedCohortIds.filter(id => !originalCohortIds.includes(id)))
+          : [];
+        const groupsToNotify = audienceMode === 'groups'
+          ? (isPublishingNow ? selectedGroupIds : selectedGroupIds.filter(id => !originalGroupIds.includes(id)))
+          : [];
+        if (cohortsToNotify.length > 0 || groupsToNotify.length > 0) {
+          const notifyRes = await fetch('/api/assignments/notify-cohorts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-            body: JSON.stringify({ assignmentId, cohortIds: cohortsToNotify }),
-          }).catch(() => {});
+            body: JSON.stringify({ assignmentId, cohortIds: cohortsToNotify, groupIds: groupsToNotify }),
+          });
+          if (!notifyRes.ok) {
+            const notifyJson = await notifyRes.json().catch(() => ({}));
+            throw new Error(notifyJson.error || 'Assignment saved but notification failed.');
+          }
         }
       }
 
@@ -744,21 +769,60 @@ export default function CreateAssignmentPage() {
             )}
           </section>
 
-          {/* -- Cohorts --- */}
-          {cohorts.length > 0 && (
-            <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginTop: 20 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16, marginTop: 0 }}>Assign to Cohorts</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {cohorts.map(c => (
-                  <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={selectedCohortIds.includes(c.id)} onChange={() => toggleCohort(c.id)}
-                      style={{ width: 16, height: 16, accentColor: C.cta, cursor: 'pointer' }}/>
-                    <span style={{ fontSize: 14, color: C.text }}>{c.name}</span>
-                  </label>
-                ))}
-              </div>
-            </section>
-          )}
+          {/* -- Target Audience --- */}
+          <section style={{ background: C.card, borderRadius: 16, boxShadow: C.cardShadow, padding: 24, marginTop: 20 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 14, marginTop: 0 }}>Target Audience</h2>
+            {/* Mode toggle */}
+            <div style={{ display: 'flex', gap: 0, marginBottom: 16, border: `1px solid ${C.cardBorder}`, borderRadius: 8, overflow: 'hidden', width: 'fit-content' }}>
+              {(['cohorts', 'groups'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setAudienceMode(mode)}
+                  style={{
+                    padding: '7px 20px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                    background: audienceMode === mode ? C.cta : C.pill,
+                    color: audienceMode === mode ? C.ctaText : C.muted,
+                    transition: 'background 0.15s',
+                    textTransform: 'capitalize',
+                  }}>
+                  {mode}
+                </button>
+              ))}
+            </div>
+
+            {audienceMode === 'cohorts' && (
+              cohorts.length === 0
+                ? <p style={{ fontSize: 13, color: C.faint }}>No cohorts available.</p>
+                : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {cohorts.map(c => (
+                      <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={selectedCohortIds.includes(c.id)} onChange={() => toggleCohort(c.id)}
+                          style={{ width: 16, height: 16, accentColor: C.cta, cursor: 'pointer' }}/>
+                        <span style={{ fontSize: 14, color: C.text }}>{c.name}</span>
+                      </label>
+                    ))}
+                  </div>
+            )}
+
+            {audienceMode === 'groups' && (
+              groups.length === 0
+                ? <p style={{ fontSize: 13, color: C.faint }}>No groups yet. Create groups from the <a href="/admin/groups" style={{ color: C.cta }}>Groups admin page</a>.</p>
+                : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {groups.map(g => {
+                      const cohortName = cohorts.find(c => c.id === g.cohort_id)?.name;
+                      return (
+                        <label key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={selectedGroupIds.includes(g.id)} onChange={() => toggleGroup(g.id)}
+                            style={{ width: 16, height: 16, accentColor: C.cta, cursor: 'pointer' }}/>
+                          <span style={{ fontSize: 14, color: C.text }}>{g.name}</span>
+                          {cohortName && <span style={{ fontSize: 12, color: C.faint }}>{cohortName}</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+            )}
+          </section>
 
         </form>
       </main>
