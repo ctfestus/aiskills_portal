@@ -359,12 +359,9 @@ export default function DataPlaygroundPage() {
               : <span style={{ fontWeight: 900, fontSize: 18, color: C.text }}>Data Playground</span>
             }
           </Link>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button onClick={toggleTheme} style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: C.input, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted }}>
-              {isDark ? <Sun size={16} /> : <Moon size={16} />}
-            </button>
-            <a href="/auth" style={{ padding: '8px 20px', borderRadius: 10, background: C.cta, color: C.ctaText, fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>Sign In</a>
-          </div>
+          <button onClick={toggleTheme} style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: C.input, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted }}>
+            {isDark ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
         </div>
       </nav>
 
