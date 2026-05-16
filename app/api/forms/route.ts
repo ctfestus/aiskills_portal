@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { adminClient } from '@/lib/admin-client';
 import { sendAssignmentNotifications } from '@/lib/send-assignment-notification';
+import { autoRegisterEventCohorts } from '@/lib/auto-register-event-cohorts';
 import { getVectorIndex } from '@/lib/vector';
 import { cloudinary, extractPublicId } from '@/lib/cloudinary-server';
 
@@ -172,12 +173,16 @@ export async function POST(req: NextRequest) {
       if (cohort_ids?.length && formStatus === 'published') {
         await upsertCohortAssignments(supabase, content_type, data.id, cohort_ids);
         try {
-          await sendAssignmentNotifications({
-            cohortIds:   cohort_ids,
-            title:       title || '',
-            slug:        data.slug,
-            contentType: content_type,
-          });
+          if (content_type === 'event') {
+            await autoRegisterEventCohorts(supabase, data.id, cohort_ids);
+          } else {
+            await sendAssignmentNotifications({
+              cohortIds:   cohort_ids,
+              title:       title || '',
+              slug:        data.slug,
+              contentType: content_type,
+            });
+          }
         } catch (err) {
           console.error('[api/forms] POST notification error:', err);
           return NextResponse.json({ error: 'Saved but notification emails failed to send.' }, { status: 500 });
@@ -319,6 +324,11 @@ export async function PUT(req: NextRequest) {
   }
   if (addedCohorts.length) {
     await upsertCohortAssignments(supabase, contentType, id, addedCohorts);
+    if (found.table === 'events' && formStatus === 'published') {
+      autoRegisterEventCohorts(supabase, id, addedCohorts).catch(err =>
+        console.error('[api/forms] event auto-register error:', err),
+      );
+    }
   }
 
   if (formStatus === 'published' && found.table === 'courses') {

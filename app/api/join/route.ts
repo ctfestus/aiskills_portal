@@ -45,14 +45,17 @@ export async function GET(req: NextRequest) {
     return new NextResponse('Internal error', { status: 500 });
   }
 
-  const meetingLink: string | null = event?.meeting_link ?? null;
-  if (!meetingLink) {
+  const rawLink: string | null = event?.meeting_link ?? null;
+  if (!rawLink) {
     return new NextResponse('No meeting link configured for this event', { status: 404 });
   }
 
+  // Normalize: add https:// if the stored link has no protocol
+  const normalized = /^https?:\/\//i.test(rawLink) ? rawLink : `https://${rawLink}`;
+
   let safeUrl: string;
   try {
-    const u = new URL(meetingLink);
+    const u = new URL(normalized);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') {
       return new NextResponse('Invalid meeting URL', { status: 400 });
     }

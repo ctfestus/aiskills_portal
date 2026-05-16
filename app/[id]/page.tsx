@@ -1839,12 +1839,35 @@ export default function PublicFormPage() {
                       {/* Join link for cohort members (no registration required) */}
                       {(joinToken || isCohortMember) && !isPast && ev.meetingLink && (() => {
                         const platform = detectPlatform(ev.meetingLink);
-                        const joinHref = joinToken ? `/api/join?token=${joinToken}` : ev.meetingLink;
                         return (
-                          <a href={joinHref} target="_blank" rel="noopener noreferrer"
-                            style={{ alignSelf: 'flex-start', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderRadius: 12, fontWeight: 600, fontSize: 14, background: platform?.color ?? accentColor, color: 'white', textDecoration: 'none' }}>
+                          <button
+                            style={{ alignSelf: 'flex-start', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderRadius: 12, fontWeight: 600, fontSize: 14, background: platform?.color ?? accentColor, color: 'white', border: 'none', cursor: 'pointer' }}
+                            onClick={async () => {
+                              if (joinToken) {
+                                window.open(`/api/join?token=${joinToken}`, '_blank', 'noopener,noreferrer');
+                                return;
+                              }
+                              const win = window.open('', '_blank', 'noopener,noreferrer');
+                              try {
+                                const { data: { session } } = await supabase.auth.getSession();
+                                if (session?.access_token) {
+                                  const res = await fetch('/api/event-register', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                                    body: JSON.stringify({ formId: form.id }),
+                                  });
+                                  const json = await res.json();
+                                  if (json.join_token) {
+                                    setJoinToken(json.join_token);
+                                    if (win) { win.location.href = `/api/join?token=${json.join_token}`; return; }
+                                  }
+                                }
+                              } catch {}
+                              const fallback = /^https?:\/\//i.test(ev.meetingLink) ? ev.meetingLink : `https://${ev.meetingLink}`;
+                              if (win) win.location.href = fallback;
+                            }}>
                             Join Meeting <ExternalLink style={{ width: 14, height: 14 }}/>
-                          </a>
+                          </button>
                         );
                       })()}
 

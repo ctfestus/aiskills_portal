@@ -985,8 +985,9 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
 
   const sanitizeHttpUrl = (value?: string | null) => {
     if (!value) return null;
+    const normalized = /^https?:\/\//i.test(value) ? value : `https://${value}`;
     try {
-      const u = new URL(value);
+      const u = new URL(normalized);
       return (u.protocol === 'http:' || u.protocol === 'https:') ? u.toString() : null;
     } catch {
       return null;
@@ -1172,14 +1173,32 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
 
             {/* Join button */}
             {(item.joinToken || item.meetingUrl) && (
-              <a
-                href={item.joinToken ? `/api/join?token=${item.joinToken}` : item.meetingUrl}
-                target="_blank" rel="noopener noreferrer"
+              <button
                 className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg w-fit dashboard-cta"
-                style={{ background: C.cta, color: C.ctaText, textDecoration: 'none' }}
-                onClick={e => e.stopPropagation()}>
+                style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: 'pointer' }}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (item.joinToken) {
+                    window.open(`/api/join?token=${item.joinToken}`, '_blank', 'noopener,noreferrer');
+                    return;
+                  }
+                  const win = window.open('', '_blank', 'noopener,noreferrer');
+                  try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session?.access_token) {
+                      const res = await fetch('/api/event-register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                        body: JSON.stringify({ formId: item.formId }),
+                      });
+                      const json = await res.json();
+                      if (json.join_token && win) { win.location.href = `/api/join?token=${json.join_token}`; return; }
+                    }
+                  } catch {}
+                  if (win) win.location.href = item.meetingUrl;
+                }}>
                 <Video className="w-3 h-3"/> Join
-              </a>
+              </button>
             )}
           </div>
         </div>

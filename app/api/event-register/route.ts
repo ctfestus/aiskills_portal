@@ -75,7 +75,13 @@ export async function POST(req: NextRequest) {
   }
 
   if (result?.error === 'already_registered') {
-    return NextResponse.json({ error: 'already_registered' }, { status: 409 });
+    const { data: existingReg } = await supabase
+      .from('event_registrations')
+      .select('join_token')
+      .eq('event_id', formId)
+      .eq('student_id', student.id)
+      .single();
+    return NextResponse.json({ success: true, join_token: existingReg?.join_token ?? null });
   }
 
   // Fetch the join_token assigned to this registration
