@@ -1171,7 +1171,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
             )}
 
             {/* Join button */}
-            {isRegistered && (item.joinToken || item.meetingUrl) && (
+            {(item.joinToken || item.meetingUrl) && (
               <a
                 href={item.joinToken ? `/api/join?token=${item.joinToken}` : item.meetingUrl}
                 target="_blank" rel="noopener noreferrer"

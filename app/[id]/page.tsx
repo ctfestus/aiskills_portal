@@ -333,6 +333,7 @@ export default function PublicFormPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [joinToken, setJoinToken] = useState<string | null>(null);
+  const [isCohortMember, setIsCohortMember] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [relatedForms, setRelatedForms] = useState<any[]>([]);
   const [relatedAssignment, setRelatedAssignment] = useState<{ id: string; title: string } | null>(null);
@@ -437,15 +438,16 @@ export default function PublicFormPage() {
         if (data.config?.eventDetails?.isEvent) {
           const { data: count } = await supabase.rpc('get_response_count', { p_form_id: data.id });
           if (count !== null) setAttendeeCount(Number(count));
-          // Fetch this student's join token if they are already enrolled
+          // Fetch join token and cohort membership for the logged-in student
           if (user) {
-            const { data: reg } = await supabase
-              .from('event_registrations')
-              .select('join_token')
-              .eq('event_id', data.id)
-              .eq('student_id', user.id)
-              .maybeSingle();
+            const [{ data: reg }, { data: student }] = await Promise.all([
+              supabase.from('event_registrations').select('join_token').eq('event_id', data.id).eq('student_id', user.id).maybeSingle(),
+              supabase.from('students').select('cohort_id').eq('id', user.id).maybeSingle(),
+            ]);
             if (reg?.join_token) setJoinToken(reg.join_token);
+            if (student?.cohort_id && (data.cohort_ids ?? []).includes(student.cohort_id)) {
+              setIsCohortMember(true);
+            }
           }
         }
         if (data.user_id) {
@@ -1834,10 +1836,10 @@ export default function PublicFormPage() {
                         );
                       })()}
 
-                      {/* Join link for enrolled students (no registration required) */}
-                      {joinToken && !isPast && ev.meetingLink && (() => {
+                      {/* Join link for cohort members (no registration required) */}
+                      {(joinToken || isCohortMember) && !isPast && ev.meetingLink && (() => {
                         const platform = detectPlatform(ev.meetingLink);
-                        const joinHref = `/api/join?token=${joinToken}`;
+                        const joinHref = joinToken ? `/api/join?token=${joinToken}` : ev.meetingLink;
                         return (
                           <a href={joinHref} target="_blank" rel="noopener noreferrer"
                             style={{ alignSelf: 'flex-start', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderRadius: 12, fontWeight: 600, fontSize: 14, background: platform?.color ?? accentColor, color: 'white', textDecoration: 'none' }}>
