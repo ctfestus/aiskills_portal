@@ -322,13 +322,24 @@ export async function PUT(req: NextRequest) {
       .in('cohort_id', removedCohorts);
     if (delErr) console.error('[api/forms] cohort_assignments delete error:', delErr);
   }
-  if (addedCohorts.length) {
-    await upsertCohortAssignments(supabase, contentType, id, addedCohorts);
-    if (found.table === 'events' && formStatus === 'published') {
-      autoRegisterEventCohorts(supabase, id, addedCohorts).catch(err =>
-        console.error('[api/forms] event auto-register error:', err),
-      );
+  if (found.table === 'events') {
+    // On first publish, all current cohorts need to be synced (not just newly added ones),
+    // because cohorts selected during draft never triggered registration.
+    const isFirstPublish = found.row.status !== 'published';
+    const cohortsToSync = formStatus === 'published' && isFirstPublish ? newCohorts : addedCohorts;
+    if (cohortsToSync.length) {
+      await upsertCohortAssignments(supabase, 'event', id, cohortsToSync);
     }
+    if (formStatus === 'published' && cohortsToSync.length) {
+      try {
+        await autoRegisterEventCohorts(supabase, id, cohortsToSync);
+      } catch (err) {
+        console.error('[api/forms] event auto-register error:', err);
+        return NextResponse.json({ ok: true, registrationWarning: 'Cohorts assigned but student auto-registration failed. Re-save to retry.' });
+      }
+    }
+  } else if (addedCohorts.length) {
+    await upsertCohortAssignments(supabase, contentType, id, addedCohorts);
   }
 
   if (formStatus === 'published' && found.table === 'courses') {
@@ -381,12 +392,25 @@ export async function PATCH(req: NextRequest) {
   const { error: updateError } = await supabase.from(found.table).update({ status }).eq('id', formId);
   if (updateError) return NextResponse.json({ error: 'Failed to update status' }, { status: 500 });
 
-  if (status === 'published' && found.table === 'courses') {
-    fetch(`${process.env.APP_URL || ''}/api/vector/index-course`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'x-reindex-secret': process.env.REINDEX_SECRET ?? '' },
-      body:    JSON.stringify({ formId, contentType: 'course' }),
-    }).catch(e => console.error('[vector/index-course] fire-and-forget failed on status change:', e?.message));
+  if (status === 'published') {
+    if (found.table === 'courses') {
+      fetch(`${process.env.APP_URL || ''}/api/vector/index-course`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'x-reindex-secret': process.env.REINDEX_SECRET ?? '' },
+        body:    JSON.stringify({ formId, contentType: 'course' }),
+      }).catch(e => console.error('[vector/index-course] fire-and-forget failed on status change:', e?.message));
+    } else if (found.table === 'events' && found.row.status !== 'published') {
+      const cohortIds = found.row.cohort_ids ?? [];
+      if (cohortIds.length) {
+        await upsertCohortAssignments(supabase, 'event', formId, cohortIds);
+        try {
+          await autoRegisterEventCohorts(supabase, formId, cohortIds);
+        } catch (err) {
+          console.error('[api/forms] PATCH event auto-register error:', err);
+          return NextResponse.json({ ok: true, registrationWarning: 'Published but student auto-registration failed. Toggle back to draft and re-publish to retry.' });
+        }
+      }
+    }
   }
 
   return NextResponse.json({ ok: true });

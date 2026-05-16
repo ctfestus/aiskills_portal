@@ -1012,27 +1012,31 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
           ...(slugValue ? { slug: slugValue } : {}),
         }),
       });
+      const resJson = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        if (err?.error?.includes('slug')) {
+        if (resJson?.error?.includes('slug')) {
           showToast('This URL slug is already taken. Try a different one.');
           return;
         }
-        throw new Error(err?.error || `Save failed (HTTP ${res.status})`);
+        throw new Error(resJson?.error || `Save failed (HTTP ${res.status})`);
       }
-      // Notify students in cohorts that were newly added in this edit
-      const addedCohortIds = selectedCohortIds.filter(id => !savedCohortIds.current.includes(id));
-      if (addedCohortIds.length) {
-        const { data: { session: notifySession } } = await supabase.auth.getSession();
-        if (notifySession?.access_token) {
-          const notifyRes = await fetch('/api/notify-assignment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${notifySession.access_token}` },
-            body: JSON.stringify({ formId, cohortIds: addedCohortIds }),
-          });
-          if (!notifyRes.ok) {
-            const notifyErr = await notifyRes.json().catch(() => ({}));
-            showToast(notifyErr.error || 'Saved, but notification emails failed to send.');
+      if (resJson.registrationWarning) showToast(resJson.registrationWarning, 'info');
+      // For events, PUT /api/forms handles auto-registration + notifications.
+      // For courses, call /api/notify-assignment for newly added cohorts.
+      if (contentType !== 'event') {
+        const addedCohortIds = selectedCohortIds.filter(id => !savedCohortIds.current.includes(id));
+        if (addedCohortIds.length) {
+          const { data: { session: notifySession } } = await supabase.auth.getSession();
+          if (notifySession?.access_token) {
+            const notifyRes = await fetch('/api/notify-assignment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${notifySession.access_token}` },
+              body: JSON.stringify({ formId, cohortIds: addedCohortIds }),
+            });
+            if (!notifyRes.ok) {
+              const notifyErr = await notifyRes.json().catch(() => ({}));
+              showToast(notifyErr.error || 'Saved, but notification emails failed to send.');
+            }
           }
         }
       }

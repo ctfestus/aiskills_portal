@@ -11,7 +11,7 @@ import {
   ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
   Users, Megaphone, Trophy, Menu, CheckCircle2, XCircle,
   UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
-  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw, Palette, Mail, Video, PlayCircle, MoreVertical,
+  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw, Palette, Mail, Video, PlayCircle, MoreVertical, Database, Sparkles,
 } from 'lucide-react';
 import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS, TextPositions, defaultTextPositions } from '@/components/CertificateTemplate';
 import Link from 'next/link';
@@ -23,6 +23,7 @@ import { RichTextEditor } from '@/components/RichTextEditor';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/uploadToCloudinary';
 import { TEMPLATES as SITE_TEMPLATES } from '@/lib/site-templates';
+import { PexelsImagePicker } from '@/components/PexelsImagePicker';
 
 // --- Design tokens ---
 const LIGHT_C = {
@@ -1162,6 +1163,7 @@ const NAV_ITEMS = [
   { id: 'schedule',         label: 'Schedule',         Icon: CalendarDays, adminOnly: false },
   { id: 'recordings',      label: 'Recordings',       Icon: PlayCircle,   adminOnly: false },
   { id: 'learning_paths', label: 'Learning Paths',  Icon: BookOpen,      adminOnly: false },
+  { id: 'data_center',   label: 'Data Playground', Icon: Database,      adminOnly: false },
   { id: 'certificates',  label: 'Certificates',   Icon: Award,         adminOnly: false },
   { id: 'leaderboard',   label: 'Leaderboard',    Icon: Trophy,        adminOnly: false },
   { id: 'badges',        label: 'Badges',         Icon: Award,         adminOnly: false },
@@ -1178,7 +1180,7 @@ type SectionId = typeof NAV_ITEMS[number]['id'];
 const COMING_SOON: SectionId[] = [];
 
 const NAV_GROUPS: { label: string; items: SectionId[] }[] = [
-  { label: 'Content',    items: ['courses', 'assignments', 'virtual_experiences', 'learning_paths'] },
+  { label: 'Content',    items: ['courses', 'assignments', 'virtual_experiences', 'learning_paths', 'data_center'] },
   { label: 'Engagement', items: ['events', 'community', 'announcements', 'schedule', 'recordings'] },
   { label: 'Insights',   items: ['tracking', 'attendance', 'leaderboard', 'badges', 'certificates'] },
   { label: 'Admin',      items: ['students', 'cohorts', 'payments', 'branding', 'site'] },
@@ -8663,6 +8665,684 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
   );
 }
 
+// -- Data Center Admin Section ---
+
+type DatasetRow = {
+  id: string; title: string; description: string | null; cover_image_url: string | null;
+  cover_image_alt: string | null; tags: string[]; category: string | null;
+  sample_questions: string[]; file_url: string | null; file_name: string | null;
+  row_count: number | null;
+  is_published: boolean; created_at: string;
+};
+
+const BLANK_DATASET: Omit<DatasetRow, 'id' | 'created_at'> = {
+  title: '', description: '', cover_image_url: null, cover_image_alt: null,
+  tags: [], category: '', sample_questions: [], file_url: '', file_name: '',
+  row_count: null, is_published: false,
+};
+
+function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
+  const [datasets, setDatasets]   = useState<DatasetRow[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [view, setView]           = useState<'list' | 'editor'>('list');
+  const [editing, setEditing]     = useState<DatasetRow | null>(null);
+  const [form, setForm]           = useState({ ...BLANK_DATASET });
+  const [saving, setSaving]       = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError]         = useState('');
+  const [tagInput, setTagInput]   = useState('');
+  const [fileMode, setFileMode]         = useState<'link' | 'upload'>('link');
+  const [fileUploading, setFileUploading] = useState(false);
+  const [sheetNames, setSheetNames]         = useState<string[]>([]);
+  const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
+  const [extraUrls, setExtraUrls]           = useState<{ name: string; url: string }[]>([]);
+  const [pendingWb, setPendingWb]           = useState<any>(null);
+  const [pendingFileName, setPendingFileName] = useState('');
+  const tagInputRef               = useRef<HTMLInputElement>(null);
+  const dataFileRef               = useRef<HTMLInputElement>(null);
+
+  async function getToken() {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? '';
+  }
+
+  async function load() {
+    setLoading(true);
+    const token = await getToken();
+    const res = await fetch('/api/data-center', { headers: { Authorization: `Bearer ${token}` } });
+    const json = await res.json();
+    setDatasets(json.datasets ?? []);
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function openCreate() {
+    setEditing(null);
+    setForm({ ...BLANK_DATASET });
+    setTagInput('');
+    setError('');
+    setView('editor');
+  }
+
+  function openEdit(d: DatasetRow) {
+    setEditing(d);
+    setForm({
+      title: d.title, description: d.description ?? '', cover_image_url: d.cover_image_url,
+      cover_image_alt: d.cover_image_alt, tags: d.tags, category: d.category ?? '',
+      sample_questions: d.sample_questions, file_url: d.file_url ?? '',
+      file_name: d.file_name ?? '', row_count: d.row_count,
+      is_published: d.is_published,
+    });
+    setTagInput('');
+    setError('');
+    setView('editor');
+  }
+
+  function commitTag(raw: string) {
+    const tag = raw.trim();
+    if (!tag) return;
+    setForm(f => ({ ...f, tags: f.tags.includes(tag) ? f.tags : [...f.tags, tag] }));
+    setTagInput('');
+  }
+
+  function removeTag(tag: string) {
+    setForm(f => ({ ...f, tags: f.tags.filter(t => t !== tag) }));
+  }
+
+  async function generateMetadata() {
+    if (!form.file_url) { setError('Upload or paste a file URL first before generating metadata.'); return; }
+    setGenerating(true);
+    setError('');
+    try {
+      const token = await getToken();
+      const res = await fetch('/api/data-center/generate-metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ file_url: form.file_url, file_name: form.file_name }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? 'Generation failed'); return; }
+      setForm(f => ({
+        ...f,
+        title:            data.title            ?? f.title,
+        description:      data.description      ?? f.description,
+        category:         data.category         ?? f.category,
+        tags:             data.tags?.length      ? data.tags : f.tags,
+        sample_questions: data.sample_questions?.length ? data.sample_questions : f.sample_questions,
+      }));
+    } catch {
+      setError('AI generation failed. Please try again.');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function save() {
+    if (!form.title.trim()) { setError('Title is required'); return; }
+    setSaving(true);
+    setError('');
+    const token = await getToken();
+    // Commit any partially typed tag before saving
+    const pendingTag = tagInput.trim();
+    const allTags = pendingTag && !form.tags.includes(pendingTag) ? [...form.tags, pendingTag] : form.tags;
+    const payload = {
+      ...form,
+      tags: allTags,
+      ...(editing ? { id: editing.id } : {}),
+    };
+    const res = await fetch('/api/data-center', {
+      method: editing ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!res.ok) { setError(json.error ?? 'Save failed'); setSaving(false); return; }
+    await load();
+    setView('list');
+    setSaving(false);
+  }
+
+  async function deleteDataset(id: string) {
+    if (!confirm('Delete this dataset?')) return;
+    const token = await getToken();
+    await fetch(`/api/data-center?id=${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    await load();
+  }
+
+  async function togglePublish(d: DatasetRow) {
+    const token = await getToken();
+    await fetch('/api/data-center', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: d.id, is_published: !d.is_published }),
+    });
+    await load();
+  }
+
+  async function uploadBlob(blob: Blob, fileName: string): Promise<string | null> {
+    const token = await getToken();
+    const fd = new FormData();
+    fd.append('file', new File([blob], fileName, { type: blob.type || 'application/octet-stream' }));
+    const res = await fetch('/api/data-center/github-upload', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    });
+    const json = await res.json();
+    if (!res.ok) { setError(json.error ?? 'Upload failed'); return null; }
+    setForm(f => ({ ...f, file_url: json.url, file_name: fileName }));
+    return json.url;
+  }
+
+  async function handleSheetsConfirm() {
+    if (!selectedSheets.length) return;
+    setFileUploading(true);
+    setError('');
+    const extras: { name: string; url: string }[] = [];
+    try {
+      const XLSX = await import('xlsx');
+      const baseName = pendingFileName.replace(/\.(xlsx|xls)$/i, '');
+      for (let i = 0; i < selectedSheets.length; i++) {
+        const sheetName = selectedSheets[i];
+        const csv = XLSX.utils.sheet_to_csv(pendingWb.Sheets[sheetName]);
+        const fileName = `${baseName} - ${sheetName}.csv`;
+        const url = await uploadBlob(new Blob([csv], { type: 'text/csv' }), fileName);
+        if (!url) break;
+        if (i > 0) extras.push({ name: sheetName, url });
+      }
+      setExtraUrls(extras);
+      setSheetNames([]);
+      setSelectedSheets([]);
+      setPendingWb(null);
+      setPendingFileName('');
+    } catch {
+      setError('Failed to process sheets.');
+    } finally {
+      setFileUploading(false);
+      if (dataFileRef.current) dataFileRef.current.value = '';
+    }
+  }
+
+  async function handleDataFileUpload(file: File) {
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+    setError('');
+
+    if (ext === 'xlsx' || ext === 'xls') {
+      setFileUploading(true);
+      try {
+        const XLSX = await import('xlsx');
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: 'array' });
+        if (wb.SheetNames.length === 1) {
+          const csv = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);
+          const fileName = file.name.replace(/\.(xlsx|xls)$/i, '.csv');
+          await uploadBlob(new Blob([csv], { type: 'text/csv' }), fileName);
+          await autoPopulateColumns(csv);
+        } else {
+          setPendingWb(wb);
+          setPendingFileName(file.name);
+          setSheetNames(wb.SheetNames);
+        }
+      } catch {
+        setError('Failed to read Excel file.');
+      } finally {
+        setFileUploading(false);
+        if (dataFileRef.current) dataFileRef.current.value = '';
+      }
+      return;
+    }
+
+    setFileUploading(true);
+    try {
+      await uploadBlob(file, file.name);
+    } catch {
+      setError('File upload failed.');
+    } finally {
+      setFileUploading(false);
+      if (dataFileRef.current) dataFileRef.current.value = '';
+    }
+  }
+
+  function addQuestion() {
+    setForm(f => ({ ...f, sample_questions: [...f.sample_questions, ''] }));
+  }
+
+  function setQuestion(idx: number, val: string) {
+    const qs = [...form.sample_questions];
+    qs[idx] = val;
+    setForm(f => ({ ...f, sample_questions: qs }));
+  }
+
+  function removeQuestion(idx: number) {
+    setForm(f => ({ ...f, sample_questions: f.sample_questions.filter((_, i) => i !== idx) }));
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '9px 12px', borderRadius: 10, fontSize: 14,
+    border: `1px solid ${C.cardBorder}`, background: C.input, color: C.text,
+    outline: 'none', boxSizing: 'border-box',
+  };
+
+  if (view === 'editor') {
+    const sectionHead = (icon: React.ReactNode, label: string, accent: string) => (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 9, background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {icon}
+        </div>
+        <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{label}</span>
+      </div>
+    );
+
+    const card = (children: React.ReactNode) => (
+      <div style={{ background: C.card, borderRadius: 18, padding: 24 }}>
+        {children}
+      </div>
+    );
+
+    return (
+      <div>
+        {/* Top bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
+          <div>
+            <h2 style={{ fontWeight: 800, fontSize: 23, color: C.text, margin: 0 }}>{editing ? 'Edit Dataset' : 'New Dataset'}</h2>
+            <p style={{ fontSize: 13, color: C.faint, margin: '2px 0 0' }}>Fill in the details below to {editing ? 'update this' : 'publish a new'} dataset.</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={() => setView('list')} style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 10, cursor: 'pointer', color: C.muted, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontWeight: 600 }}>
+              <ArrowLeft size={14} /> Back
+            </button>
+            <button
+              onClick={generateMetadata}
+              disabled={generating || !form.file_url}
+              title={!form.file_url ? 'Add a file URL or upload a file first' : 'Auto-fill title, description, tags, category and sample questions using AI'}
+              style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: form.file_url ? '#f59e0b' : C.input, color: form.file_url ? 'white' : C.faint, fontWeight: 700, fontSize: 14, cursor: form.file_url && !generating ? 'pointer' : 'default', opacity: generating ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 7 }}>
+              {generating ? <><Loader2 size={14} className="animate-spin" /> Generating...</> : <><Sparkles size={14} /> Generate with AI</>}
+            </button>
+            {/* Publish toggle inline */}
+            <button onClick={() => setForm(f => ({ ...f, is_published: !f.is_published }))}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: form.is_published ? 'rgba(22,163,74,0.1)' : C.card, cursor: 'pointer', fontSize: 14, fontWeight: 700, color: form.is_published ? '#16a34a' : C.muted }}>
+              <div style={{ width: 36, height: 20, borderRadius: 10, background: form.is_published ? '#16a34a' : C.cardBorder, position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                <span style={{ position: 'absolute', top: 2, left: form.is_published ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
+              </div>
+              {form.is_published ? 'Published' : 'Draft'}
+            </button>
+            <button onClick={save} disabled={saving}
+              style={{ padding: '9px 22px', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontWeight: 700, fontSize: 15, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 7 }}>
+              {saving && <Loader2 size={14} className="animate-spin" />}
+              {saving ? 'Saving...' : editing ? 'Save Changes' : 'Create Dataset'}
+            </button>
+          </div>
+        </div>
+
+        {error && <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', fontSize: 14, color: '#ef4444', fontWeight: 600 }}>{error}</div>}
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
+          {/* LEFT COLUMN */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* Basics card */}
+            {card(<>
+              {sectionHead(<FileText size={16} color="white" />, 'Basic Info', '#374151')}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Title *</label>
+                  <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. West Africa Retail Sales 2020-2023" style={{ ...inputStyle, fontSize: 16, fontWeight: 600, padding: '11px 14px' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Category</label>
+                    {(() => {
+                      const CATEGORIES = ['Finance', 'Human Resources', 'Fintech', 'E-Commerce', 'Marketing', 'Health Care', 'Hospitality', 'Sport', 'Retail', 'Banking', 'Telecom', 'Other'];
+                      const isOther = !!form.category && !CATEGORIES.slice(0, -1).includes(form.category);
+                      const selectVal = isOther ? 'Other' : (form.category ?? '');
+                      return (
+                        <>
+                          <select
+                            value={selectVal}
+                            onChange={e => {
+                              if (e.target.value === 'Other') setForm(f => ({ ...f, category: '' }));
+                              else setForm(f => ({ ...f, category: e.target.value }));
+                            }}
+                            style={{ ...inputStyle, background: 'none', backgroundColor: C.input, appearance: 'none', WebkitAppearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: 34, cursor: 'pointer' }}
+                          >
+                            <option value="">Select category...</option>
+                            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                          {(selectVal === 'Other' || isOther) && (
+                            <input
+                              autoFocus
+                              value={isOther ? form.category ?? '' : ''}
+                              onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                              placeholder="Specify category..."
+                              style={{ ...inputStyle, marginTop: 8 }}
+                            />
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Tags</label>
+                    <div
+                      onClick={() => tagInputRef.current?.focus()}
+                      style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', padding: '7px 10px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.input, cursor: 'text', minHeight: 42 }}
+                    >
+                      {form.tags.map(tag => (
+                        <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px 4px 12px', borderRadius: 20, background: 'white', border: `1px solid ${C.cardBorder}`, color: '#111', fontSize: 13, fontWeight: 600, flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                          {tag}
+                          <button onClick={e => { e.stopPropagation(); removeTag(tag); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, display: 'flex', alignItems: 'center', color: '#999' }}>
+                            <X size={11} />
+                          </button>
+                        </span>
+                      ))}
+                      <input
+                        ref={tagInputRef}
+                        value={tagInput}
+                        onChange={e => setTagInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commitTag(tagInput); }
+                          if (e.key === 'Backspace' && !tagInput && form.tags.length) removeTag(form.tags[form.tags.length - 1]);
+                        }}
+                        onBlur={() => commitTag(tagInput)}
+                        placeholder={form.tags.length === 0 ? 'Type and press Enter...' : ''}
+                        style={{ flex: 1, minWidth: 80, border: 'none', background: 'transparent', outline: 'none', fontSize: 13, color: C.text, padding: '2px 2px' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Description</label>
+                  <textarea value={form.description ?? ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={4} placeholder="Describe the dataset, its source, and what students can learn from it." style={{ ...inputStyle, resize: 'vertical' }} />
+                </div>
+              </div>
+            </>)}
+
+            {/* File card */}
+            {card(<>
+              {sectionHead(<Download size={16} color="white" />, 'Dataset File', '#0891b2')}
+
+              {/* Mode toggle */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 16, background: C.page, borderRadius: 10, padding: 4 }}>
+                {(['link', 'upload'] as const).map(mode => (
+                  <button key={mode} onClick={() => setFileMode(mode)}
+                    style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, transition: 'all 0.15s',
+                      background: fileMode === mode ? C.card : 'transparent',
+                      color: fileMode === mode ? C.text : C.faint,
+                      boxShadow: fileMode === mode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+                    }}>
+                    {mode === 'link' ? 'Paste URL' : 'Upload File'}
+                  </button>
+                ))}
+              </div>
+
+              {fileMode === 'link' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>File URL</label>
+                    <input
+                      value={form.file_url ?? ''}
+                      placeholder="https://..."
+                      style={inputStyle}
+                      onChange={e => {
+                        let url = e.target.value;
+                        // Auto-convert GitHub blob URLs to raw URLs
+                        if (/github\.com\/.+\/blob\//i.test(url)) {
+                          url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
+                        }
+                        setForm(f => ({ ...f, file_url: url }));
+                      }}
+                    />
+                    {/github\.com|raw\.githubusercontent\.com/i.test(form.file_url ?? '') && (
+                      <div style={{ marginTop: 8, padding: '10px 14px', borderRadius: 10, background: '#f0fdf4', border: '1px solid #86efac', fontSize: 12.5, color: '#166534', lineHeight: 1.6 }}>
+                        <strong>GitHub link detected.</strong> {/raw\.githubusercontent\.com/i.test(form.file_url ?? '') ? 'Raw URL confirmed - AI systems can fetch this file directly.' : 'Converted to raw URL automatically so AI systems can fetch the file directly.'}
+                      </div>
+                    )}
+                    {/box\.com/i.test(form.file_url ?? '') && (
+                      <div style={{ marginTop: 8, padding: '10px 14px', borderRadius: 10, background: '#fef3c7', border: '1px solid #fbbf24', fontSize: 12.5, color: '#92400e', lineHeight: 1.6 }}>
+                        <strong>Box link detected.</strong> Box direct download links require a paid plan and are not available on free accounts. AI systems cannot read a standard Box shared link.<br /><br />
+                        <strong>Free alternatives that work:</strong><br />
+                        - <strong>GitHub (recommended):</strong> Upload to a public repo, copy the file URL - it will be auto-converted to a raw link here<br />
+                        - <strong>Google Drive:</strong> Share publicly, change <code style={{ background: 'rgba(0,0,0,0.08)', padding: '1px 4px', borderRadius: 4 }}>/file/d/ID/view</code> to <code style={{ background: 'rgba(0,0,0,0.08)', padding: '1px 4px', borderRadius: 4 }}>/uc?export=download&id=ID</code><br />
+                        - <strong>Dropbox:</strong> Share the file, change <code style={{ background: 'rgba(0,0,0,0.08)', padding: '1px 4px', borderRadius: 4 }}>?dl=0</code> to <code style={{ background: 'rgba(0,0,0,0.08)', padding: '1px 4px', borderRadius: 4 }}>?dl=1</code><br />
+                        - <strong>Upload directly</strong> using the Upload File option above
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>File Name</label>
+                    <input value={form.file_name ?? ''} onChange={e => setForm(f => ({ ...f, file_name: e.target.value }))} placeholder="sales_data.csv" style={inputStyle} />
+                  </div>
+                </div>
+              )}
+
+              {fileMode === 'upload' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {/* Drop zone - hidden when sheet picker is active */}
+                  {sheetNames.length === 0 && (
+                    <div
+                      onClick={() => !fileUploading && dataFileRef.current?.click()}
+                      onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = C.cta; }}
+                      onDragLeave={e => { e.currentTarget.style.borderColor = C.cardBorder; }}
+                      onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = C.cardBorder; const f = e.dataTransfer.files[0]; if (f) handleDataFileUpload(f); }}
+                      style={{ border: `2px dashed ${C.cardBorder}`, borderRadius: 12, padding: '28px 20px', textAlign: 'center', cursor: fileUploading ? 'default' : 'pointer', background: C.page, transition: 'border-color 0.15s' }}
+                    >
+                      {fileUploading
+                        ? <><Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: C.cta, display: 'block' }} /><p style={{ fontSize: 14, color: C.faint, margin: 0 }}>Uploading...</p></>
+                        : <>
+                            <Upload size={24} style={{ margin: '0 auto 8px', color: C.faint, display: 'block' }} />
+                            <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: '0 0 4px' }}>Click to upload or drag and drop</p>
+                            <p style={{ fontSize: 12, color: C.faint, margin: 0 }}>CSV, Excel (.xlsx), JSON, ZIP (multiple CSVs) - max 50 MB</p>
+                          </>
+                      }
+                      <input ref={dataFileRef} type="file" accept=".csv,.xlsx,.xls,.json,.zip" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleDataFileUpload(f); }} />
+                    </div>
+                  )}
+
+                  {/* Multi-sheet picker */}
+                  {sheetNames.length > 0 && (
+                    <div style={{ border: `1px solid ${C.cardBorder}`, borderRadius: 12, overflow: 'hidden' }}>
+                      {/* Header */}
+                      <div style={{ padding: '12px 16px', background: C.page, borderBottom: `1px solid ${C.cardBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text }}>Select sheets to upload</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 12, color: C.faint }}>{pendingFileName} -- {sheetNames.length} sheets found</p>
+                        </div>
+                        <button onClick={() => { setSheetNames([]); setSelectedSheets([]); setPendingWb(null); setPendingFileName(''); if (dataFileRef.current) dataFileRef.current.value = ''; }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint, display: 'flex', alignItems: 'center' }}>
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      {/* Select all row */}
+                      <div style={{ padding: '8px 16px', borderBottom: `1px solid ${C.divider}`, display: 'flex', alignItems: 'center', gap: 10, background: C.input }}>
+                        <input type="checkbox"
+                          checked={selectedSheets.length === sheetNames.length}
+                          onChange={e => setSelectedSheets(e.target.checked ? [...sheetNames] : [])}
+                          style={{ width: 15, height: 15, cursor: 'pointer', accentColor: C.cta }} />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.4 }}>Select All</span>
+                      </div>
+
+                      {/* Sheet rows */}
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        {sheetNames.map((name, i) => {
+                          const checked = selectedSheets.includes(name);
+                          return (
+                            <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', borderBottom: i < sheetNames.length - 1 ? `1px solid ${C.divider}` : 'none', cursor: 'pointer' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = C.page)}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                            >
+                              <input type="checkbox" checked={checked}
+                                onChange={e => setSelectedSheets(prev => e.target.checked ? [...prev, name] : prev.filter(s => s !== name))}
+                                style={{ width: 15, height: 15, cursor: 'pointer', accentColor: C.cta, flexShrink: 0 }} />
+                              <FileText size={14} style={{ color: checked ? C.cta : C.faint, flexShrink: 0 }} />
+                              <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{name}</span>
+                              {i === 0 && selectedSheets.includes(name) && (
+                                <span style={{ fontSize: 11, color: C.faint, marginLeft: 'auto' }}>primary</span>
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+
+                      {/* Confirm button */}
+                      <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.cardBorder}`, background: C.page }}>
+                        <button onClick={handleSheetsConfirm} disabled={!selectedSheets.length || fileUploading}
+                          style={{ width: '100%', padding: '9px 0', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontSize: 13, fontWeight: 700, cursor: !selectedSheets.length || fileUploading ? 'default' : 'pointer', opacity: !selectedSheets.length || fileUploading ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+                          {fileUploading ? <><Loader2 size={13} className="animate-spin" /> Uploading...</> : `Upload ${selectedSheets.length || ''} Sheet${selectedSheets.length !== 1 ? 's' : ''}`}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Extra sheet URLs (non-primary uploaded sheets) */}
+                  {extraUrls.length > 0 && (
+                    <div style={{ border: `1px solid ${C.cardBorder}`, borderRadius: 10, overflow: 'hidden' }}>
+                      <p style={{ margin: 0, padding: '8px 14px', fontSize: 12, fontWeight: 700, color: C.muted, background: C.page, borderBottom: `1px solid ${C.cardBorder}` }}>Additional uploaded sheets</p>
+                      {extraUrls.map((e, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderBottom: i < extraUrls.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
+                          <FileText size={13} style={{ color: C.cta, flexShrink: 0 }} />
+                          <span style={{ fontSize: 12, color: C.text, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
+                          <button onClick={() => navigator.clipboard.writeText(e.url)} style={{ fontSize: 11, color: C.cta, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, flexShrink: 0 }}>Copy URL</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Show uploaded file */}
+                  {form.file_url && sheetNames.length === 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                      <FileText size={16} style={{ color: C.cta, flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, color: C.text, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{form.file_name || form.file_url}</span>
+                      <button onClick={() => setForm(f => ({ ...f, file_url: '', file_name: '' }))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{ marginTop: 16 }}>
+                <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Number of Rows</label>
+                <input type="number" value={form.row_count ?? ''} onChange={e => setForm(f => ({ ...f, row_count: e.target.value ? Number(e.target.value) : null }))} placeholder="e.g. 5000" style={{ ...inputStyle, width: 180 }} />
+              </div>
+            </>)}
+
+
+            {/* Sample Questions card */}
+            {card(<>
+              {sectionHead(<Search size={16} color="white" />, 'Sample Questions', '#d97706')}
+              {form.sample_questions.length === 0 && (
+                <div style={{ padding: '16px', borderRadius: 10, background: C.page, textAlign: 'center', marginBottom: 12 }}>
+                  <p style={{ fontSize: 13, color: C.faint, margin: 0 }}>No questions yet. Help students know what to explore with this dataset.</p>
+                </div>
+              )}
+              {form.sample_questions.map((q, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                  <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: 'rgba(217,119,6,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#d97706' }}>{idx + 1}</span>
+                  <input value={q} onChange={e => setQuestion(idx, e.target.value)} placeholder={`e.g. Which region had the highest sales?`} style={{ ...inputStyle, flex: 1, fontSize: 14 }} />
+                  <button onClick={() => removeQuestion(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint, flexShrink: 0 }}>
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+              <button onClick={addQuestion} style={{ marginTop: 4, fontSize: 14, color: '#d97706', background: 'rgba(217,119,6,0.08)', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700, padding: '7px 12px' }}>
+                <Plus size={14} /> Add Question
+              </button>
+            </>)}
+          </div>
+
+          {/* RIGHT COLUMN - Cover image */}
+          <div style={{ position: 'sticky', top: 20 }}>
+            {card(<>
+              {sectionHead(<Upload size={16} color="white" />, 'Cover Image', '#10a37f')}
+              <PexelsImagePicker
+                value={form.cover_image_url}
+                altValue={form.cover_image_alt}
+                onChange={(url, alt) => setForm(f => ({ ...f, cover_image_url: url, cover_image_alt: alt }))}
+                onClear={() => setForm(f => ({ ...f, cover_image_url: null, cover_image_alt: null }))}
+                C={C}
+                token=""
+              />
+            </>)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ fontWeight: 700, fontSize: 18, color: C.text, margin: 0 }}>Data Playground</h2>
+          <p style={{ fontSize: 13, color: C.faint, margin: '4px 0 0' }}>Manage datasets for students to explore and practice with.</p>
+        </div>
+        <button onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+          <Plus size={15} /> New Dataset
+        </button>
+      </div>
+
+      {loading && (
+        <div style={{ textAlign: 'center', padding: 60, color: C.faint }}>
+          <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 8px' }} />
+          <p style={{ fontSize: 13 }}>Loading datasets...</p>
+        </div>
+      )}
+
+      {!loading && datasets.length === 0 && (
+        <div style={{ textAlign: 'center', padding: 60, background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}` }}>
+          <Database size={36} style={{ color: C.faint, margin: '0 auto 12px' }} />
+          <p style={{ fontWeight: 600, color: C.text, marginBottom: 4 }}>No datasets yet</p>
+          <p style={{ fontSize: 13, color: C.faint, marginBottom: 16 }}>Create your first dataset to share with students.</p>
+          <button onClick={openCreate} style={{ padding: '9px 18px', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            New Dataset
+          </button>
+        </div>
+      )}
+
+      {!loading && datasets.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {datasets.map(d => (
+            <div key={d.id} style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              {d.cover_image_url && (
+                <img src={d.cover_image_url} alt={d.cover_image_alt ?? ''} style={{ width: 72, height: 48, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
+              )}
+              {!d.cover_image_url && (
+                <div style={{ width: 72, height: 48, borderRadius: 8, background: C.lime, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Database size={22} style={{ color: C.green }} />
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontWeight: 600, fontSize: 14, color: C.text, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title}</p>
+                <p style={{ fontSize: 12, color: C.faint, margin: 0 }}>
+                  {d.category && <>{d.category}</>}
+                  {d.row_count ? `${d.category ? ' · ' : ''}${d.row_count.toLocaleString()} rows` : ''}
+                </p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <button onClick={() => togglePublish(d)} style={{
+                  padding: '4px 12px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  background: d.is_published ? 'rgba(22,163,74,0.12)' : C.pill,
+                  color: d.is_published ? '#16a34a' : C.muted,
+                }}>
+                  {d.is_published ? 'Published' : 'Draft'}
+                </button>
+                <button onClick={() => openEdit(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: 4 }}>
+                  <Edit2 size={15} />
+                </button>
+                <button onClick={() => deleteDataset(d.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: 4 }}>
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFormToDelete, onDuplicated, C }: {
   section: SectionId; forms: any[]; shareMenuOpen: string | null;
   setShareMenuOpen: (id: string | null) => void; setFormToDelete: (id: string) => void;
@@ -8676,6 +9356,7 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
   if (section === 'branding')     return <BrandingSection C={C} />;
   if (section === 'site')         return <SiteSettingsSection C={C} />;
   if (section === 'learning_paths') return <LearningPathsSection C={C} forms={forms} />;
+  if (section === 'data_center')    return <DataCenterAdminSection C={C} />;
   if (section === 'certificates') return <CertificatesSection C={C} />;
   if (section === 'students')     return <StudentsSection C={C} />;
   if (section === 'cohorts')      return <CohortsSection C={C} />;

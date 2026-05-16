@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   // Confirm they are a student
   const { data: student } = await supabase
     .from('students')
-    .select('id, email, full_name')
+    .select('id, email, full_name, cohort_id')
     .eq('id', user.id)
     .single();
 
@@ -54,14 +54,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'formId is required' }, { status: 400 });
   }
 
-  // Confirm the event exists
+  // Confirm the event exists, is published, and the student's cohort is assigned
   const { data: event } = await supabase
     .from('events')
-    .select('id, title, slug, event_date, event_time, timezone, location, meeting_link')
+    .select('id, title, slug, event_date, event_time, timezone, location, meeting_link, status, cohort_ids')
     .eq('id', formId)
     .maybeSingle();
 
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+  if (event.status !== 'published') return NextResponse.json({ error: 'Event not available' }, { status: 403 });
+  if (!student.cohort_id || !(event.cohort_ids ?? []).includes(student.cohort_id)) {
+    return NextResponse.json({ error: 'Not enrolled in this event' }, { status: 403 });
+  }
 
   // Register via RPC
   const { data: result, error: rpcError } = await supabase.rpc('register_event_attendee', {

@@ -217,6 +217,26 @@ CREATE TABLE public.virtual_experiences (
 
 CREATE INDEX idx_ve_group_ids ON public.virtual_experiences USING GIN (group_ids);
 
+-- ── data_center_datasets (migration 106) ──────────────────────
+CREATE TABLE IF NOT EXISTS public.data_center_datasets (
+  id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  title            text        NOT NULL,
+  description      text,
+  cover_image_url  text,
+  cover_image_alt  text,
+  tags             text[]      NOT NULL DEFAULT '{}',
+  category         text,
+  sample_questions text[]      NOT NULL DEFAULT '{}',
+  file_url         text,
+  file_name        text,
+  row_count        int,
+  column_info      jsonb       NOT NULL DEFAULT '[]',
+  is_published     boolean     NOT NULL DEFAULT false,
+  created_by       uuid        REFERENCES public.students(id) ON DELETE SET NULL,
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  updated_at       timestamptz NOT NULL DEFAULT now()
+);
+
 -- ── assignments ───────────────────────────────────────────────
 CREATE TABLE public.assignments (
   id                      uuid        PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -710,6 +730,7 @@ ALTER TABLE public.responses                  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.courses                    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events                     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.virtual_experiences        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.data_center_datasets       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignments                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_resources       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignment_submissions     ENABLE ROW LEVEL SECURITY;
@@ -775,6 +796,8 @@ CREATE TRIGGER trg_events_updated_at
   BEFORE UPDATE ON public.events FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_virtual_experiences_updated_at
   BEFORE UPDATE ON public.virtual_experiences FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+CREATE TRIGGER trg_data_center_datasets_updated_at
+  BEFORE UPDATE ON public.data_center_datasets FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_assignments_updated_at
   BEFORE UPDATE ON public.assignments FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_assignment_submissions_updated_at
@@ -1379,6 +1402,28 @@ CREATE POLICY "events: instructor delete"
   USING (
     (SELECT public.is_instructor_or_admin())
     AND (user_id = (SELECT auth.uid()) OR (SELECT public.is_admin()))
+  );
+
+-- ── data_center_datasets (migration 106) ──────────────────────
+CREATE POLICY "Students read published data center datasets"
+  ON public.data_center_datasets FOR SELECT
+  TO authenticated
+  USING (is_published = true);
+
+CREATE POLICY "Instructors manage data center datasets"
+  ON public.data_center_datasets FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.students
+      WHERE id = auth.uid() AND role IN ('admin', 'instructor')
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.students
+      WHERE id = auth.uid() AND role IN ('admin', 'instructor')
+    )
   );
 
 -- ── virtual_experiences (migration 100: remove group_ids check; standalone VEs are cohort-only) ──

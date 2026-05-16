@@ -13,7 +13,7 @@ import {
   ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase, Search, LayoutDashboard,
   Copy, Check, Layers, Repeat, Film,
   CreditCard, XCircle, Send, Wallet, TrendingDown, CalendarCheck,
-  Lock, Flame, Medal, Download,
+  Lock, Flame, Medal, Download, Database, Table2, Wand2,
 } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -199,6 +199,7 @@ const NAV_ITEMS = [
   { id: 'courses',           label: 'My Courses',          Icon: Film            },
   { id: 'learning_paths',    label: 'Learning Paths',      Icon: Layers          },
   { id: 'virtual_experiences', label: 'Virtual Experiences', Icon: Briefcase     },
+  { id: 'data_center',       label: 'Data Playground',      Icon: Database        },
   { id: 'events',            label: 'Live Sessions',        Icon: CalendarDays    },
   { id: 'assignments',       label: 'Assignments',         Icon: ClipboardList   },
   { id: 'calendar',          label: 'Calendar',            Icon: CalendarCheck   },
@@ -214,7 +215,7 @@ const NAV_ITEMS = [
 type SectionId = typeof NAV_ITEMS[number]['id'];
 
 const NAV_GROUPS: { label: string; items: SectionId[] }[] = [
-  { label: 'Learn',       items: ['overview', 'courses', 'learning_paths', 'virtual_experiences'] },
+  { label: 'Learn',       items: ['overview', 'courses', 'learning_paths', 'virtual_experiences', 'data_center'] },
   { label: 'Activities',  items: ['events', 'assignments', 'calendar', 'schedule', 'recordings'] },
   { label: 'Community',   items: ['community', 'announcements'] },
   { label: 'Achievements', items: ['leaderboard', 'certificates', 'badges'] },
@@ -1067,6 +1068,7 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   };
 
   const EventCard = ({ item, past: isPast, index, isLast }: { item: any; past?: boolean; index: number; isLast?: boolean }) => {
+    const [joinErr, setJoinErr] = useState('');
     const showImage = item.imageUrl && !imgErrors.has(item.id);
     const dateLabel = item.startsAt
       ? item.startsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -1173,32 +1175,37 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
 
             {/* Join button */}
             {(item.joinToken || item.meetingUrl) && (
-              <button
-                className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg w-fit dashboard-cta"
-                style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: 'pointer' }}
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  if (item.joinToken) {
-                    window.open(`/api/join?token=${item.joinToken}`, '_blank', 'noopener,noreferrer');
-                    return;
-                  }
-                  const win = window.open('', '_blank', 'noopener,noreferrer');
-                  try {
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (session?.access_token) {
-                      const res = await fetch('/api/event-register', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-                        body: JSON.stringify({ formId: item.formId }),
-                      });
-                      const json = await res.json();
-                      if (json.join_token && win) { win.location.href = `/api/join?token=${json.join_token}`; return; }
+              <>
+                <button
+                  className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg w-fit dashboard-cta"
+                  style={{ background: C.cta, color: C.ctaText, border: 'none', cursor: 'pointer' }}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setJoinErr('');
+                    if (item.joinToken) {
+                      window.open(`/api/join?token=${item.joinToken}`, '_blank', 'noopener,noreferrer');
+                      return;
                     }
-                  } catch {}
-                  if (win) win.location.href = item.meetingUrl;
-                }}>
-                <Video className="w-3 h-3"/> Join
-              </button>
+                    const win = window.open('', '_blank', 'noopener,noreferrer');
+                    try {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      if (session?.access_token) {
+                        const res = await fetch('/api/event-register', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                          body: JSON.stringify({ formId: item.formId }),
+                        });
+                        const json = await res.json();
+                        if (json.join_token && win) { win.location.href = `/api/join?token=${json.join_token}`; return; }
+                      }
+                    } catch {}
+                    win?.close();
+                    setJoinErr('Could not get your join link. Please refresh and try again.');
+                  }}>
+                  <Video className="w-3 h-3"/> Join
+                </button>
+                {joinErr && <p className="text-xs mt-1" style={{ color: '#ef4444', margin: 0 }}>{joinErr}</p>}
+              </>
             )}
           </div>
         </div>
@@ -3592,6 +3599,569 @@ function VirtualExperiencesSection({ userId, userEmail, C }: { userId: string; u
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// --- Data Center section ---
+
+type DCDataset = {
+  id: string; title: string; description: string | null; cover_image_url: string | null;
+  cover_image_alt: string | null; tags: string[]; category: string | null;
+  sample_questions: string[]; file_url: string | null; file_name: string | null;
+  row_count: number | null;
+};
+
+function buildAIPrompt(d: DCDataset): string {
+  const qs = d.sample_questions.length > 0
+    ? d.sample_questions.map(q => `- ${q}`).join('\n')
+    : '(no sample questions provided)';
+  const isBox    = /box\.com/i.test(d.file_url ?? '');
+  const isGitHub = /raw\.githubusercontent\.com|github\.com/i.test(d.file_url ?? '');
+  const urlNote = isBox
+    ? `Dataset file URL: ${d.file_url}
+
+Note: This is a Box shared link which cannot be fetched directly (Box direct links require a paid plan). Please ask the user to provide the file via Google Drive (share publicly, use /uc?export=download&id=FILE_ID) or Dropbox (change ?dl=0 to ?dl=1), or paste the file contents directly into this chat.`
+    : isGitHub
+    ? `Dataset file URL: ${d.file_url}
+
+This is a GitHub raw file URL. Please fetch it directly and analyse the contents. The file may be a CSV, Excel spreadsheet, or a ZIP archive containing multiple CSV tables.`
+    : `Dataset file URL: ${d.file_url ?? 'not provided'}
+
+Please fetch the file from the URL above and use it directly. The file may be a CSV, Excel spreadsheet, or a ZIP archive containing multiple CSV tables. Analyse the actual data to understand the schema and content.`;
+
+  return `I have a dataset called "${d.title}".
+
+${d.description ? 'Description: ' + d.description + '\n' : ''}
+${urlNote}
+
+Sample questions to explore:
+${qs}
+
+Based on the actual data, please generate:
+1) A SQL CREATE TABLE statement that matches the real columns and data types, with 10 representative INSERT rows.
+2) A Python pandas script to load, clean, and explore this dataset.
+3) Suggested SQL queries and pandas code to answer the sample questions above.`;
+}
+
+function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typeof LIGHT_C; onClose: () => void }) {
+  const [copied, setCopied]             = useState(false);
+  const [colabCopied, setColabCopied]   = useState(false);
+  const [showPreview, setShowPreview]   = useState(false);
+  const [preview, setPreview]           = useState<string[][] | null>(null);
+  const [headers, setHeaders]           = useState<string[]>([]);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [zipTables, setZipTables]       = useState<{ name: string; content: string }[]>([]);
+  const [activeTable, setActiveTable]   = useState('');
+  const prompt = buildAIPrompt(dataset);
+
+  async function openPreview() {
+    setShowPreview(true);
+    if (preview !== null || zipTables.length > 0) return;
+    setLoadingPreview(true);
+    try {
+      const proxyUrl = `/api/data-center/proxy?url=${encodeURIComponent(dataset.file_url!)}`;
+      const isZip = dataset.file_url?.toLowerCase().endsWith('.zip');
+      if (isZip) {
+        const JSZip = (await import('jszip')).default;
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error(`Proxy error ${res.status}`);
+        const buf = await res.arrayBuffer();
+        const zip = await JSZip.loadAsync(buf);
+        const csvFiles = Object.keys(zip.files).filter(n => !zip.files[n].dir && n.toLowerCase().endsWith('.csv'));
+        const tables = await Promise.all(
+          csvFiles.map(async name => ({ name: name.replace(/^.*\//, ''), content: await zip.files[name].async('string') }))
+        );
+        setZipTables(tables);
+        setActiveTable(tables[0]?.name ?? '');
+        if (tables[0]) parseCSVContent(tables[0].content);
+      } else {
+        const Papa = (await import('papaparse')).default;
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error(`Proxy error ${res.status}`);
+        const text = await res.text();
+        const result = Papa.parse(text, { header: true, preview: 10 });
+        setHeaders((result.meta as any).fields ?? []);
+        setPreview(result.data.map((row: any) => ((result.meta as any).fields ?? []).map((f: string) => String(row[f] ?? ''))));
+      }
+    } catch (err) {
+      console.error('Preview failed:', err);
+      setPreview([]);
+    }
+    setLoadingPreview(false);
+  }
+
+  function parseCSVContent(csv: string) {
+    import('papaparse').then(({ default: Papa }) => {
+      const result = Papa.parse(csv, { header: true, preview: 10 });
+      setHeaders((result.meta as any).fields ?? []);
+      setPreview(result.data.map((row: any) => ((result.meta as any).fields ?? []).map((f: string) => String(row[f] ?? ''))));
+    });
+  }
+
+  function switchTable(name: string) {
+    const table = zipTables.find(t => t.name === name);
+    if (!table) return;
+    setActiveTable(name);
+    setHeaders([]);
+    setPreview(null);
+    parseCSVContent(table.content);
+  }
+
+  function copyPrompt() {
+    navigator.clipboard.writeText(prompt).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  const colabCode = (() => {
+    const url = dataset.file_url;
+    if (!url) return null;
+    const lower = url.toLowerCase();
+    if (lower.endsWith('.zip')) {
+      return `import pandas as pd
+import zipfile
+import requests
+import io
+
+url = "${url}"
+response = requests.get(url)
+
+dataframes = {}
+with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+    csv_files = [f for f in z.namelist() if f.lower().endswith('.csv')]
+    for csv_file in csv_files:
+        with z.open(csv_file) as f:
+            name = csv_file.split('/')[-1].replace('.csv', '').replace(' ', '_')
+            dataframes[name] = pd.read_csv(f)
+
+# Make each table available as a direct variable
+for name, df in dataframes.items():
+    globals()[name] = df
+
+# Display each table
+for name, df in dataframes.items():
+    print(f"\\n{'='*60}")
+    print(f"Table: {name}  |  {len(df):,} rows  x  {len(df.columns)} columns")
+    print('='*60)
+    display(df.head(10))
+
+print("\\nAvailable tables:", list(dataframes.keys()))
+print("Access any table directly, e.g.:")
+for name in list(dataframes.keys())[:3]:
+    print(f"  {name}.head()")`;
+    }
+    if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
+      return `import pandas as pd
+
+url = "${url}"
+sheets = pd.read_excel(url, sheet_name=None)
+
+# Make each sheet available as a direct variable
+for name, df in sheets.items():
+    globals()[name.replace(' ', '_')] = df
+
+# Display each sheet
+for name, df in sheets.items():
+    print(f"\\n{'='*60}")
+    print(f"Sheet: {name}  |  {len(df):,} rows  x  {len(df.columns)} columns")
+    print('='*60)
+    display(df.head(10))
+
+print("\\nAvailable sheets:", list(sheets.keys()))
+print("Access any sheet directly, e.g.:")
+for name in list(sheets.keys())[:3]:
+    print(f"  {name.replace(' ', '_')}.head()")`;
+    }
+    return `import pandas as pd
+
+url = "${url}"
+df = pd.read_csv(url)
+
+print(f"{len(df):,} rows  x  {len(df.columns)} columns")
+display(df.head(10))`;
+  })();
+
+  function copyPython() {
+    if (!colabCode) return;
+    navigator.clipboard.writeText(colabCode).then(() => {
+      setColabCopied(true);
+      setTimeout(() => setColabCopied(false), 2000);
+    });
+  }
+
+  const font = 'var(--font-lato, Lato, sans-serif)';
+
+  return (
+    <div
+      className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-8"
+      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full flex flex-col"
+        style={{ maxWidth: 760, maxHeight: '94vh', background: C.card, borderRadius: 20, overflow: 'hidden', fontFamily: font, boxShadow: '0 32px 80px rgba(0,0,0,0.28)' }}
+      >
+        {/* Cover */}
+        <div style={{ position: 'relative', height: 190, flexShrink: 0, background: C.input }}>
+          {dataset.cover_image_url
+            ? <img src={dataset.cover_image_url} alt={dataset.cover_image_alt ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Database size={48} style={{ color: C.faint }} /></div>
+          }
+          {/* Gradient overlay */}
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.15) 50%, transparent 100%)' }} />
+
+          {/* Title overlaid on cover */}
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '14px 18px' }}>
+            {dataset.tags.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                {dataset.tags.map(t => (
+                  <span key={t} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 20, background: 'rgba(255,255,255,0.18)', color: 'white', fontWeight: 700, backdropFilter: 'blur(4px)', letterSpacing: 0.3 }}>{t}</span>
+                ))}
+              </div>
+            )}
+            <h2 style={{ fontWeight: 900, fontSize: 22, color: 'white', margin: 0, lineHeight: 1.25, textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{dataset.title}</h2>
+          </div>
+
+          {/* Close button */}
+          <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.45)', border: 'none', borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'white', backdropFilter: 'blur(4px)', transition: 'background 0.2s' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.7)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.45)')}>
+            <X size={17} />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '22px 20px 28px' }}>
+
+          {/* Meta row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+            {dataset.category && (
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.muted, padding: '4px 12px', borderRadius: 20, background: C.pill }}>{dataset.category}</span>
+            )}
+            {dataset.row_count && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 700, color: C.muted, padding: '4px 12px', borderRadius: 20, background: C.pill }}>
+                <Database size={13} /> {dataset.row_count.toLocaleString()} rows
+              </span>
+            )}
+          </div>
+
+          {/* Description */}
+          {dataset.description && (
+            <p style={{ fontSize: 16, color: C.muted, lineHeight: 1.75, marginBottom: 28, marginTop: 0 }}>{dataset.description}</p>
+          )}
+
+          {/* Sample questions */}
+          {dataset.sample_questions.length > 0 && (
+            <div style={{ marginBottom: 28, background: C.input, borderRadius: 16, padding: '16px 16px' }}>
+              <p style={{ fontWeight: 800, fontSize: 16.5, color: C.text, marginBottom: 14, marginTop: 0 }}>Sample Questions to Explore</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {dataset.sample_questions.map((q, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: C.pill, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: C.muted, marginTop: 1 }}>{i + 1}</span>
+                    <span style={{ fontSize: 15, color: C.muted, lineHeight: 1.55 }}>{q}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Preview Dataset button */}
+          {dataset.file_url && (
+            <button onClick={openPreview} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 0', borderRadius: 12, border: 'none', background: C.input, color: C.text, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: font, marginBottom: 24 }}>
+              <Table2 size={14} /> Preview Dataset
+            </button>
+          )}
+
+          {/* Action buttons */}
+          <div style={{ borderTop: `1px solid ${C.divider}`, paddingTop: 24 }}>
+            <p style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 12, marginTop: 0, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <Wand2 size={16} style={{ color: C.muted, flexShrink: 0 }} />
+              Generate and Analyse with AI
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
+              <a href={`https://chatgpt.com/?q=${encodeURIComponent(prompt)}`} target="_blank" rel="noreferrer"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 8px', borderRadius: 12, background: C.input, border: 'none', color: C.text, fontSize: 14, fontWeight: 700, textDecoration: 'none', fontFamily: font }}>
+                <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/openai-chatgpt-logo-icon-free-png.webp" alt="ChatGPT" style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0 }} />
+                ChatGPT
+              </a>
+              <a href={`https://claude.ai/new?q=${encodeURIComponent(prompt)}`} target="_blank" rel="noreferrer"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 8px', borderRadius: 12, background: C.input, border: 'none', color: C.text, fontSize: 14, fontWeight: 700, textDecoration: 'none', fontFamily: font }}>
+                <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/claude-color.png" alt="Claude" style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0 }} />
+                Claude
+              </a>
+              {colabCode && (
+                <button onClick={copyPython}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 8px', borderRadius: 12, background: C.input, border: 'none', color: C.text, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: font }}>
+                  {colabCopied
+                    ? <><Check size={14} /> Copied!</>
+                    : <><img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/Python.png" alt="Python" style={{ width: 20, height: 20, objectFit: 'contain', flexShrink: 0 }} /> Python</>
+                  }
+                </button>
+              )}
+              <button onClick={copyPrompt}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 8px', borderRadius: 12, border: 'none', background: C.input, color: C.text, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: font }}>
+                {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'Copied!' : 'Copy Prompt'}
+              </button>
+            </div>
+
+            {/* Download row */}
+            {dataset.file_url && (
+              <div style={{ marginTop: 12 }}>
+                <a href={dataset.file_url} download={dataset.file_name ?? true} target="_blank" rel="noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 0', borderRadius: 12, border: 'none', background: C.input, color: C.text, fontSize: 14, fontWeight: 700, textDecoration: 'none', fontFamily: font }}>
+                  <Download size={14} /> Download
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Dataset preview modal */}
+      {showPreview && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowPreview(false); }}
+        >
+          <div style={{ background: C.card, borderRadius: 16, width: '100%', maxWidth: 900, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 32px 80px rgba(0,0,0,0.35)', fontFamily: font }}>
+            {/* Header */}
+            <div style={{ padding: '14px 16px 0', borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: zipTables.length > 1 ? 12 : 18 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Table2 size={18} style={{ color: C.cta }} />
+                  <div>
+                    <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: C.text }}>{dataset.title}</p>
+                    <p style={{ margin: 0, fontSize: 14, color: C.faint }}>
+                      {zipTables.length > 1 ? `${zipTables.length} tables in zip - first 10 rows each` : 'First 10 rows preview'}
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setShowPreview(false)} style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: C.input, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted }}>
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Table tabs for zip files */}
+              {zipTables.length > 1 && (
+                <div style={{ display: 'flex', gap: 4, overflowX: 'auto', paddingBottom: 0 }} className="hide-scrollbar">
+                  {zipTables.map(t => (
+                    <button key={t.name} onClick={() => switchTable(t.name)}
+                      style={{ padding: '7px 14px', borderRadius: '8px 8px 0 0', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.15s',
+                        background: activeTable === t.name ? C.card : 'transparent',
+                        color: activeTable === t.name ? C.text : C.faint,
+                        borderBottom: activeTable === t.name ? `2px solid ${C.cta}` : '2px solid transparent',
+                      }}>
+                      {t.name.replace('.csv', '')}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Table body */}
+            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: '12px 16px' }}>
+              {loadingPreview && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: C.faint }}>
+                  <Loader2 size={28} className="animate-spin" style={{ marginRight: 10 }} /> Loading preview...
+                </div>
+              )}
+              {!loadingPreview && preview && preview.length > 0 && (
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: C.input }}>
+                      {headers.map(h => <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: C.muted, fontWeight: 700, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.cardBorder}`, fontFamily: font }}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.map((row, i) => (
+                      <tr key={i} style={{ borderBottom: `1px solid ${C.divider}` }}>
+                        {row.map((cell, j) => <td key={j} style={{ padding: '9px 16px', color: C.text, whiteSpace: 'nowrap', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: font }}>{cell}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {!loadingPreview && (!preview || preview.length === 0) && (
+                <p style={{ fontSize: 14, color: C.faint, textAlign: 'center', padding: 40 }}>Preview not available for this file.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DataCenterSection({ C }: { C: typeof LIGHT_C }) {
+  const [datasets, setDatasets]   = useState<DCDataset[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [selected, setSelected]   = useState<DCDataset | null>(null);
+  const [search, setSearch]       = useState('');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return;
+      const res = await fetch('/api/data-center', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      setDatasets(json.datasets ?? []);
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 16 }}>
+        {[1, 2, 3].map(i => (
+          <div key={i} style={{ borderRadius: 16, overflow: 'hidden', background: C.card, border: `1px solid ${C.cardBorder}` }}>
+            <Sk h={160} r={0} />
+            <div style={{ padding: 16 }}>
+              <Sk h={14} w="60%" />
+              <div style={{ marginTop: 8 }}><Sk h={12} /></div>
+              <div style={{ marginTop: 4 }}><Sk h={12} w="80%" /></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (datasets.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+        <Database size={40} style={{ color: C.faint, margin: '0 auto 12px' }} />
+        <p style={{ fontWeight: 600, fontSize: 16, color: C.text, marginBottom: 4 }}>No datasets available yet</p>
+        <p style={{ fontSize: 13, color: C.faint }}>Datasets will appear here once published by instructors.</p>
+      </div>
+    );
+  }
+
+  const font = 'var(--font-lato, Lato, sans-serif)';
+  const categories = Array.from(new Set(datasets.map(d => d.category).filter(Boolean))) as string[];
+  const filtered = datasets.filter(d => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || d.title.toLowerCase().includes(q) || d.description?.toLowerCase().includes(q) || d.tags.some(t => t.toLowerCase().includes(q));
+    const matchCat = !activeCategory || d.category === activeCategory;
+    return matchSearch && matchCat;
+  });
+
+  return (
+    <>
+      <p style={{ fontSize: 16.5, color: C.muted, margin: '0 0 20px', lineHeight: 1.6, fontFamily: font }}>Explore real-world datasets and sharpen your skills in data analysis, visualization, and storytelling. Each dataset comes with business questions designed to challenge how you think with data.</p>
+
+      {/* Search + filters */}
+      <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ position: 'relative' }}>
+          <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: C.faint, pointerEvents: 'none' }} />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search datasets..."
+            style={{ width: '100%', padding: '11px 14px 11px 42px', borderRadius: 12, border: 'none', background: C.card, color: C.text, fontSize: 15, fontFamily: font, outline: 'none', boxSizing: 'border-box' }}
+          />
+        </div>
+
+        {categories.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <button
+              onClick={() => setActiveCategory(null)}
+              style={{ padding: '6px 16px', borderRadius: 20, border: 'none', background: !activeCategory ? C.cta : C.card, color: !activeCategory ? C.ctaText : C.muted, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: font, transition: 'all 0.15s' }}>
+              All
+            </button>
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+                style={{ padding: '6px 16px', borderRadius: 20, border: 'none', background: activeCategory === cat ? C.cta : C.card, color: activeCategory === cat ? C.ctaText : C.muted, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: font, transition: 'all 0.15s' }}>
+                {cat}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {filtered.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '48px 20px', color: C.faint, fontFamily: font }}>
+          <p style={{ fontSize: 15, fontWeight: 600 }}>No datasets match your search.</p>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 16 }}>
+        {filtered.map(d => (
+          <div key={d.id}
+            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 18, overflow: 'hidden', textAlign: 'left', fontFamily: 'var(--font-lato, Lato, sans-serif)', minHeight: 420, display: 'flex', flexDirection: 'column' }}
+          >
+            {/* Cover */}
+            {d.cover_image_url ? (
+              <div style={{ padding: '14px 14px 0', overflow: 'hidden', borderRadius: 12 }}>
+                <img src={d.cover_image_url} alt={d.cover_image_alt ?? ''} style={{ width: '100%', aspectRatio: '16/7', objectFit: 'cover', display: 'block', borderRadius: 12, transition: 'transform 0.35s ease, filter 0.35s ease' }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.filter = 'brightness(1.08)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.filter = 'brightness(1)'; }}
+                />
+              </div>
+            ) : (
+              <div style={{ padding: '14px 14px 0' }}>
+                <div style={{ width: '100%', aspectRatio: '16/7', background: C.lime, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}>
+                  <Database size={36} style={{ color: C.green }} />
+                </div>
+              </div>
+            )}
+
+            {/* Body */}
+            <div style={{ padding: '16px 18px 0', flex: 1 }}>
+              {/* Tags */}
+              {d.tags.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+                  {d.tags.slice(0, 3).map(t => (
+                    <span key={t} style={{ fontSize: 13, padding: '3px 9px', borderRadius: 20, background: C.pill, color: C.muted, fontWeight: 700, letterSpacing: 0.2 }}>{t}</span>
+                  ))}
+                </div>
+              )}
+              <p style={{ fontWeight: 700, fontSize: 18, color: C.text, margin: '0 0 6px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }}>{d.title}</p>
+              {d.description && (
+                <p style={{ fontSize: 15, color: C.faint, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', lineHeight: 1.6 }}>{d.description}</p>
+              )}
+              {/* Row count pill */}
+              {d.row_count && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10, padding: '4px 10px', borderRadius: 20, background: C.pill }}>
+                  <Database size={12} style={{ color: C.muted }} />
+                  <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{d.row_count.toLocaleString()} rows</span>
+                </div>
+              )}
+            </div>
+
+            {/* Footer buttons */}
+            <div style={{ padding: '14px 18px 18px', display: 'flex', gap: 8, borderTop: `1px solid ${C.divider}`, marginTop: 14 }}>
+              <button
+                onClick={() => setSelected(d)}
+                style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                View Details
+              </button>
+              {d.file_url && (
+                <a
+                  href={d.file_url} download={d.file_name ?? true} target="_blank" rel="noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 0', borderRadius: 10, border: 'none', background: C.input, color: C.text, fontSize: 15, fontWeight: 700, textDecoration: 'none', fontFamily: 'inherit' }}
+                >
+                  <Download size={14} /> Download
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <AnimatePresence>
+        {selected && (
+          <DatasetDetailPane dataset={selected} C={C} onClose={() => setSelected(null)} />
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -6351,6 +6921,9 @@ export default function StudentDashboard() {
             )}
             {activeSection === 'virtual_experiences' && user && (
               <VirtualExperiencesSection userId={effectiveId} userEmail={effectiveEmail} C={C}/>
+            )}
+            {activeSection === 'data_center' && user && (
+              <DataCenterSection C={C} />
             )}
             {activeSection === 'recordings' && user && (
               <RecordingsSection userId={effectiveId} C={C}/>

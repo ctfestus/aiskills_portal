@@ -62,6 +62,9 @@ interface CalItem {
   deadlineLabel?: string;
   submissionStatus?: string | null;
   hasTime: boolean;
+  recurrence?: string | null;
+  recurrenceEndDate?: string | null;
+  joinToken?: string | null;
 }
 
 /* --- kind metadata --- */
@@ -104,8 +107,16 @@ function groupLabel(d: Date): string {
 
 function sanitizeUrl(v?: string | null) {
   if (!v) return null;
-  try { const u = new URL(v); return (u.protocol === 'http:' || u.protocol === 'https:') ? u.toString() : null; }
-  catch { return null; }
+  const normalized = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+  try {
+    const u = new URL(normalized);
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? u.toString() : null;
+  } catch { return null; }
+}
+
+function localEndOfDay(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d, 23, 59, 59, 999);
 }
 
 /* --- Skeleton --- */
@@ -127,6 +138,8 @@ function ItemModal({ item, onClose, onNavigate }: {
   const isDark = theme === 'dark';
   const meta = KIND_META[item.kind];
   const [imgErr, setImgErr] = useState(false);
+  const [localToken, setLocalToken] = useState<string | null>(item.joinToken ?? null);
+  const [joinErr, setJoinErr] = useState('');
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -134,7 +147,10 @@ function ItemModal({ item, onClose, onNavigate }: {
     return () => document.removeEventListener('keydown', h);
   }, [onClose]);
 
-  const isPast = item.date < new Date();
+  const now = new Date();
+  const isPast = item.kind === 'event' && item.recurrence && item.recurrence !== 'once' && item.recurrenceEndDate
+    ? localEndOfDay(item.recurrenceEndDate) < now
+    : item.date < now;
 
   return (
     <motion.div
@@ -243,14 +259,44 @@ function ItemModal({ item, onClose, onNavigate }: {
           )}
 
           <div className="pt-2 space-y-2">
-            {item.kind === 'event' && item.meetingLink && !isPast && (
-              <a
-                href={item.meetingLink} target="_blank" rel="noreferrer"
-                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
-                style={{ background: meta.dot, color: '#fff' }}
-              >
-                <ExternalLink className="w-4 h-4" /> Join Session
-              </a>
+            {item.kind === 'event' && (localToken || item.meetingLink) && !isPast && (
+              <>
+                <button
+                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
+                  style={{ background: meta.dot, color: '#fff', border: 'none', cursor: 'pointer' }}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setJoinErr('');
+                    if (localToken) {
+                      window.open(`/api/join?token=${localToken}`, '_blank', 'noopener,noreferrer');
+                      return;
+                    }
+                    const win = window.open('', '_blank', 'noopener,noreferrer');
+                    try {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      if (session?.access_token) {
+                        const res = await fetch('/api/event-register', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                          body: JSON.stringify({ formId: item.id }),
+                        });
+                        const json = await res.json();
+                        if (json.join_token) {
+                          setLocalToken(json.join_token);
+                          if (win) { win.location.href = `/api/join?token=${json.join_token}`; return; }
+                        }
+                      }
+                    } catch {}
+                    win?.close();
+                    setJoinErr('Could not get your join link. Please refresh and try again.');
+                  }}
+                >
+                  <ExternalLink className="w-4 h-4" /> Join Session
+                </button>
+                {joinErr && (
+                  <p className="text-xs text-center" style={{ color: '#ef4444', margin: 0 }}>{joinErr}</p>
+                )}
+              </>
             )}
             <button
               onClick={() => { onClose(); onNavigate(item.kind === 'event' ? 'events' : 'assignments'); }}
@@ -498,7 +544,10 @@ function ListRow({ item, onSelect }: { item: CalItem; onSelect: (i: CalItem) => 
   const C = useColors();
   const meta = KIND_META[item.kind];
   const [imgErr, setImgErr] = useState(false);
-  const isPast = item.date < new Date();
+  const now = new Date();
+  const isPast = item.kind === 'event' && item.recurrence && item.recurrence !== 'once' && item.recurrenceEndDate
+    ? localEndOfDay(item.recurrenceEndDate) < now
+    : item.date < now;
 
   return (
     <button
@@ -623,7 +672,7 @@ export default function CalendarSection({ userId, onNavigate }: {
         const [{ data: events }, { data: cohortAssignments }, { data: groupAssignments }] = await Promise.all([
           supabase
             .from('events')
-            .select('id, title, description, slug, cover_image, event_date, event_time, event_type, location, meeting_link')
+            .select('id, title, description, slug, cover_image, event_date, event_time, event_type, location, meeting_link, recurrence, recurrence_end_date')
             .contains('cohort_ids', [student.cohort_id])
             .eq('status', 'published'),
           supabase
@@ -664,6 +713,13 @@ export default function CalendarSection({ userId, onNavigate }: {
         for (const s of [...(groupSubs ?? []), ...(indivSubs ?? [])]) subById.set(s.assignment_id as string, s.status as string);
         const subMap = Object.fromEntries(subById.entries());
 
+        const eventIds = (events ?? []).map((e: any) => e.id as string).filter(Boolean);
+        const { data: regRows } = eventIds.length
+          ? await supabase.from('event_registrations').select('event_id, join_token').eq('student_id', userId).in('event_id', eventIds)
+          : { data: [] as any[] };
+        const tokenMap = new Map<string, string>();
+        for (const r of regRows ?? []) if (r.join_token) tokenMap.set(r.event_id as string, r.join_token as string);
+
         const calItems: CalItem[] = [];
 
         for (const e of events ?? []) {
@@ -682,6 +738,9 @@ export default function CalendarSection({ userId, onNavigate }: {
             meetingLink: sanitizeUrl(e.meeting_link),
             slug: e.slug || null,
             hasTime: !!timeStr,
+            recurrence: e.recurrence || null,
+            recurrenceEndDate: e.recurrence_end_date || null,
+            joinToken: tokenMap.get(e.id) ?? null,
           });
         }
 

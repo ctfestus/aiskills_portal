@@ -1141,6 +1141,7 @@ const [isSaving, setIsSaving] = useState(false);
         const error = patchRes.ok ? null : patchData;
         if (!error) setFormStatus(saveStatus);
         if (error) { if (patchRes.status === 409 || error.error?.includes('slug')) { showToast('This URL slug is already taken. Try a different one.'); setIsSaving(false); return; } throw new Error(error.error ?? 'Update failed'); }
+        if (patchData.registrationWarning) showToast(patchData.registrationWarning);
         // Re-index via authenticated proxy -- secret stays server-side
         if (saveStatus === 'published') {
           supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1153,20 +1154,22 @@ const [isSaving, setIsSaving] = useState(false);
           });
         }
         const { data: { session: editSession } } = await supabase.auth.getSession();
-        // Compute notification cohorts from the pre-save snapshot; pass to route so it doesn't infer from cohort_assignments
-        const oldCohortIds: string[] = Array.isArray(existingForm?.cohort_ids) ? existingForm.cohort_ids : [];
-        const isFirstPublish = existingForm?.status !== 'published' && saveStatus === 'published';
-        const addedCohortIds = selectedCohortIds.filter((id: string) => !oldCohortIds.includes(id));
-        const notifyCohortIds = isFirstPublish ? selectedCohortIds : addedCohortIds;
-        // Always call even when empty so removed-cohort rows are cleaned up
-        const caRes = await fetch('/api/cohort-assignments', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${editSession?.access_token}` },
-          body: JSON.stringify({ formId, cohortIds: selectedCohortIds, newCohortIds: notifyCohortIds }),
-        });
-        if (!caRes.ok) {
-          const caErr = await caRes.json().catch(() => ({}));
-          showToast(caErr.error || 'Saved, but notification emails failed to send.');
+        // For events, PUT /api/forms handles cohort sync + auto-registration in one place.
+        // Only call /api/cohort-assignments for non-event content (courses, VEs).
+        if (!existingEvent) {
+          const oldCohortIds: string[] = Array.isArray(existingForm?.cohort_ids) ? existingForm.cohort_ids : [];
+          const isFirstPublish = existingForm?.status !== 'published' && saveStatus === 'published';
+          const addedCohortIds = selectedCohortIds.filter((id: string) => !oldCohortIds.includes(id));
+          const notifyCohortIds = isFirstPublish ? selectedCohortIds : addedCohortIds;
+          const caRes = await fetch('/api/cohort-assignments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${editSession?.access_token}` },
+            body: JSON.stringify({ formId, cohortIds: selectedCohortIds, newCohortIds: notifyCohortIds }),
+          });
+          if (!caRes.ok) {
+            const caErr = await caRes.json().catch(() => ({}));
+            showToast(caErr.error || 'Saved, but notification emails failed to send.');
+          }
         }
       }
       const url = `${window.location.origin}/${slugValue}`;

@@ -1659,6 +1659,7 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
   const [cloning, setCloning] = useState(false);
   const [cloned, setCloned] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [statusWarning, setStatusWarning] = useState('');
   const [currentStatus, setCurrentStatus] = useState<'draft' | 'published'>(form?.status ?? 'published');
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -1724,6 +1725,7 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
   const handleStatusToggle = async (newStatus: 'draft' | 'published') => {
     if (newStatus === currentStatus || statusUpdating) return;
     setStatusUpdating(true);
+    setStatusWarning('');
     const { data: { session } } = await supabase.auth.getSession();
     const res = await fetch('/api/forms', {
       method:  'PATCH',
@@ -1733,9 +1735,11 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
       },
       body: JSON.stringify({ formId: form.id, status: newStatus }),
     });
+    const json = await res.json().catch(() => ({}));
     if (res.ok) {
       setCurrentStatus(newStatus);
       onStatusChange?.(newStatus);
+      if (json.registrationWarning) setStatusWarning(json.registrationWarning);
     }
     setStatusUpdating(false);
   };
@@ -1782,6 +1786,9 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
               : 'Publish'}
         </button>
       </div>
+      {statusWarning && (
+        <p className="text-xs px-1 pt-2 pb-1" style={{ color: '#f59e0b' }}>{statusWarning}</p>
+      )}
 
       {/* Clone */}
       <div className="py-6 flex items-center justify-between gap-4" style={{ borderBottom: `1px solid ${divider}` }}>

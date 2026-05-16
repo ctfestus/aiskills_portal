@@ -333,6 +333,7 @@ export default function PublicFormPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [joinToken, setJoinToken] = useState<string | null>(null);
+  const [joinErr, setJoinErr] = useState('');
   const [isCohortMember, setIsCohortMember] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [relatedForms, setRelatedForms] = useState<any[]>([]);
@@ -1286,16 +1287,15 @@ export default function PublicFormPage() {
               {/* Meeting link / address on success for events */}
               {config.eventDetails?.isEvent && config.postSubmission?.type !== 'redirect' && (() => {
                 const ev = config.eventDetails;
-                if (ev.eventType === 'virtual' && ev.meetingLink) {
-                  const platform = detectPlatform(ev.meetingLink);
-                  const joinHref = joinToken ? `/api/join?token=${joinToken}` : ev.meetingLink;
+                if (ev.eventType === 'virtual' && joinToken) {
+                  const platform = detectPlatform(ev.meetingLink ?? '');
                   return (
                     <div style={{ marginBottom: 20, padding: '16px 20px', borderRadius: 14, background: dark ? 'rgba(16,185,129,0.06)' : '#edf7f1', border: `1px solid ${dark ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.2)'}`, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {platform?.icon}
                         <span style={{ fontSize: 13, fontWeight: 600, color: t.title }}>{platform?.name ?? 'Meeting Link'}</span>
                       </div>
-                      <a href={joinHref} target="_blank" rel="noopener noreferrer"
+                      <a href={`/api/join?token=${joinToken}`} target="_blank" rel="noopener noreferrer"
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, fontSize: 13, fontWeight: 600, background: platform?.color ?? accentColor, color: 'white', textDecoration: 'none' }}>
                         Join Meeting <ExternalLink style={{ width: 13, height: 13 }}/>
                       </a>
@@ -1316,10 +1316,10 @@ export default function PublicFormPage() {
               {/* Add to calendar on success for events */}
               {config.eventDetails?.isEvent && config.eventDetails.date && config.postSubmission?.type !== 'redirect' && (() => {
                 const ev = config.eventDetails;
-                const isVirtual = ev.eventType === 'virtual' && ev.meetingLink;
-                const joinHref = joinToken ? `/api/join?token=${joinToken}` : (ev.meetingLink ?? '');
+                const isVirtual = ev.eventType === 'virtual';
+                const joinHref = joinToken ? `/api/join?token=${joinToken}` : '';
                 const calLocation = isVirtual ? joinHref : (ev.location ?? '');
-                const calDescription = [config.description ?? '', isVirtual ? `Join: ${joinHref}` : ''].filter(Boolean).join('\n\n');
+                const calDescription = [config.description ?? '', isVirtual && joinHref ? `Join: ${joinHref}` : ''].filter(Boolean).join('\n\n');
                 const googleUrl  = buildGoogleCalUrl(config.title, ev.date, ev.time, calLocation, calDescription, form.recurrence, form.recurrence_end_date, form.recurrence_days);
                 const outlookUrl = buildOutlookCalUrl(config.title, ev.date, ev.time, calLocation, calDescription);
                 const yahooUrl   = buildYahooCalUrl(config.title, ev.date, ev.time, calLocation, calDescription);
@@ -1840,34 +1840,40 @@ export default function PublicFormPage() {
                       {(joinToken || isCohortMember) && !isPast && ev.meetingLink && (() => {
                         const platform = detectPlatform(ev.meetingLink);
                         return (
-                          <button
-                            style={{ alignSelf: 'flex-start', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderRadius: 12, fontWeight: 600, fontSize: 14, background: platform?.color ?? accentColor, color: 'white', border: 'none', cursor: 'pointer' }}
-                            onClick={async () => {
-                              if (joinToken) {
-                                window.open(`/api/join?token=${joinToken}`, '_blank', 'noopener,noreferrer');
-                                return;
-                              }
-                              const win = window.open('', '_blank', 'noopener,noreferrer');
-                              try {
-                                const { data: { session } } = await supabase.auth.getSession();
-                                if (session?.access_token) {
-                                  const res = await fetch('/api/event-register', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-                                    body: JSON.stringify({ formId: form.id }),
-                                  });
-                                  const json = await res.json();
-                                  if (json.join_token) {
-                                    setJoinToken(json.join_token);
-                                    if (win) { win.location.href = `/api/join?token=${json.join_token}`; return; }
-                                  }
+                          <>
+                            <button
+                              style={{ alignSelf: 'flex-start', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderRadius: 12, fontWeight: 600, fontSize: 14, background: platform?.color ?? accentColor, color: 'white', border: 'none', cursor: 'pointer' }}
+                              onClick={async () => {
+                                setJoinErr('');
+                                if (joinToken) {
+                                  window.open(`/api/join?token=${joinToken}`, '_blank', 'noopener,noreferrer');
+                                  return;
                                 }
-                              } catch {}
-                              const fallback = /^https?:\/\//i.test(ev.meetingLink) ? ev.meetingLink : `https://${ev.meetingLink}`;
-                              if (win) win.location.href = fallback;
-                            }}>
-                            Join Meeting <ExternalLink style={{ width: 14, height: 14 }}/>
-                          </button>
+                                const win = window.open('', '_blank', 'noopener,noreferrer');
+                                try {
+                                  const { data: { session } } = await supabase.auth.getSession();
+                                  if (session?.access_token) {
+                                    const res = await fetch('/api/event-register', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                                      body: JSON.stringify({ formId: form.id }),
+                                    });
+                                    const json = await res.json();
+                                    if (json.join_token) {
+                                      setJoinToken(json.join_token);
+                                      if (win) { win.location.href = `/api/join?token=${json.join_token}`; return; }
+                                    }
+                                  }
+                                } catch {}
+                                win?.close();
+                                setJoinErr('Could not get your join link. Please refresh and try again.');
+                              }}>
+                              Join Meeting <ExternalLink style={{ width: 14, height: 14 }}/>
+                            </button>
+                            {joinErr && (
+                              <p style={{ margin: 0, fontSize: 12, color: '#ef4444' }}>{joinErr}</p>
+                            )}
+                          </>
                         );
                       })()}
 
