@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, Loader2, Check, Image as ImageIcon } from 'lucide-react';
+import { Search, X, Loader2, Check, Image as ImageIcon, Upload } from 'lucide-react';
+import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 
 interface Photo {
   id: number;
@@ -30,16 +31,27 @@ interface Props {
   token: string;
 }
 
+type Tab = 'pexels' | 'upload';
+
 const DEFAULT_QUERY = 'data technology africa business';
 
 export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Props) {
-  const [open, setOpen]           = useState(false);
-  const [query, setQuery]         = useState('');
-  const [photos, setPhotos]       = useState<Photo[]>([]);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState('');
+  const [open, setOpen]             = useState(false);
+  const [tab, setTab]               = useState<Tab>('pexels');
+  const [query, setQuery]           = useState('');
+  const [photos, setPhotos]         = useState<Photo[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Upload tab state
+  const [uploadFile, setUploadFile]     = useState<File | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [uploading, setUploading]       = useState(false);
+  const [uploadError, setUploadError]   = useState('');
+  const [dragOver, setDragOver]         = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   async function fetchPhotos(q: string) {
     setLoading(true);
@@ -56,15 +68,13 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Pro
     }
   }
 
-  // Load defaults when modal opens
   useEffect(() => {
-    if (open) fetchPhotos(DEFAULT_QUERY);
+    if (open && tab === 'pexels') fetchPhotos(DEFAULT_QUERY);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Debounced live search
   useEffect(() => {
-    if (!open) return;
+    if (!open || tab !== 'pexels') return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       fetchPhotos(query.trim() || DEFAULT_QUERY);
@@ -83,8 +93,50 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Pro
     setQuery('');
     setPhotos([]);
     setError('');
+    setUploadFile(null);
+    setUploadPreview(null);
+    setUploadError('');
+    setDragOver(false);
     setOpen(true);
   }
+
+  function handleFileSelect(file: File) {
+    if (!file.type.startsWith('image/')) { setUploadError('Please select an image file.'); return; }
+    if (file.size > 20 * 1024 * 1024) { setUploadError('File is too large (max 20 MB).'); return; }
+    setUploadFile(file);
+    setUploadError('');
+    const prev = URL.createObjectURL(file);
+    setUploadPreview(prev);
+  }
+
+  async function handleUpload() {
+    if (!uploadFile) return;
+    setUploading(true);
+    setUploadError('');
+    try {
+      const url = await uploadToCloudinary(uploadFile, 'datasets/covers');
+      onChange(url, '');
+      setOpen(false);
+    } catch (err) {
+      setUploadError((err as Error).message || 'Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const isPexels = value?.includes('pexels.com');
+
+  const TAB_STYLE = (active: boolean) => ({
+    padding: '8px 20px',
+    borderRadius: 10,
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 700,
+    transition: 'all 0.15s',
+    background: active ? C.cta : 'transparent',
+    color: active ? C.ctaText : C.muted,
+  });
 
   return (
     <>
@@ -111,7 +163,7 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Pro
               <X size={12} /> Remove
             </button>
           </div>
-          {altValue && (
+          {isPexels && altValue && (
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.5)', color: 'white', fontSize: 11, padding: '5px 10px', pointerEvents: 'none' }}>
               Photo by {altValue} on Pexels
             </div>
@@ -125,12 +177,12 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Pro
           onMouseLeave={e => { e.currentTarget.style.borderColor = C.cardBorder; e.currentTarget.style.color = C.faint; }}
         >
           <ImageIcon size={30} />
-          <span style={{ fontSize: 14, fontWeight: 700 }}>Browse Pexels photos</span>
-          <span style={{ fontSize: 12 }}>Click to search and select a cover image</span>
+          <span style={{ fontSize: 14, fontWeight: 700 }}>Add cover image</span>
+          <span style={{ fontSize: 12 }}>Browse Pexels or upload your own</span>
         </button>
       )}
 
-      {/* Modal - rendered in a portal so parent overflow/transform cannot clip it */}
+      {/* Modal */}
       {open && createPortal(
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
@@ -138,20 +190,15 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Pro
         >
           <div style={{ background: C.card, borderRadius: 22, width: '100%', maxWidth: 820, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 32px 80px rgba(0,0,0,0.4)' }}>
 
-            {/* Header */}
-            <div style={{ padding: '20px 24px', borderBottom: `1px solid ${C.divider}`, display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-              <div style={{ flex: 1, position: 'relative' }}>
-                <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: C.faint, pointerEvents: 'none' }} />
-                {loading && (
-                  <Loader2 size={14} className="animate-spin" style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: C.faint }} />
-                )}
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  placeholder="Type to search... e.g. sales, africa, technology, finance"
-                  style={{ width: '100%', padding: '12px 42px 12px 42px', borderRadius: 12, border: `1.5px solid ${C.cardBorder}`, background: C.input, color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
-                />
+            {/* Header: tabs + close */}
+            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.divider}`, display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: 4, background: C.input, borderRadius: 12, padding: 3, flex: 1 }}>
+                <button style={TAB_STYLE(tab === 'pexels')} onClick={() => setTab('pexels')}>
+                  Pexels Photos
+                </button>
+                <button style={TAB_STYLE(tab === 'upload')} onClick={() => setTab('upload')}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Upload size={13} /> Upload Image</span>
+                </button>
               </div>
               <button
                 onClick={() => setOpen(false)}
@@ -161,73 +208,151 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Pro
               </button>
             </div>
 
-            {/* Label row */}
-            <div style={{ padding: '12px 24px 0', flexShrink: 0 }}>
-              <p style={{ margin: 0, fontSize: 12, color: C.faint, fontWeight: 600 }}>
-                {query.trim() ? `Results for "${query.trim()}"` : 'Suggested photos -- type above to search'}
-              </p>
-            </div>
-
-            {/* Grid body */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 24px 20px' }}>
-              {error && <p style={{ fontSize: 13, color: '#ef4444', textAlign: 'center', padding: 20 }}>{error}</p>}
-
-              {!error && loading && photos.length === 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: C.faint }}>
-                  <Loader2 size={30} className="animate-spin" />
+            {/* Pexels tab: search bar */}
+            {tab === 'pexels' && (
+              <div style={{ padding: '12px 20px 0', flexShrink: 0 }}>
+                <div style={{ position: 'relative' }}>
+                  <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: C.faint, pointerEvents: 'none' }} />
+                  {loading && (
+                    <Loader2 size={14} className="animate-spin" style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: C.faint }} />
+                  )}
+                  <input
+                    autoFocus
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="Type to search... e.g. sales, africa, technology, finance"
+                    style={{ width: '100%', padding: '11px 42px 11px 42px', borderRadius: 12, border: `1.5px solid ${C.cardBorder}`, background: C.input, color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+                  />
                 </div>
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: C.faint, fontWeight: 600 }}>
+                  {query.trim() ? `Results for "${query.trim()}"` : 'Suggested photos -- type above to search'}
+                </p>
+              </div>
+            )}
+
+            {/* Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px 20px' }}>
+
+              {/* Pexels grid */}
+              {tab === 'pexels' && (
+                <>
+                  {error && <p style={{ fontSize: 13, color: '#ef4444', textAlign: 'center', padding: 20 }}>{error}</p>}
+                  {!error && loading && photos.length === 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: C.faint }}>
+                      <Loader2 size={30} className="animate-spin" />
+                    </div>
+                  )}
+                  {!error && photos.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                      {photos.map(photo => {
+                        const isSel = selectedId === photo.id;
+                        return (
+                          <button
+                            key={photo.id}
+                            onClick={() => select(photo)}
+                            style={{
+                              position: 'relative', padding: 0, margin: 0,
+                              border: isSel ? `3px solid ${C.cta}` : '3px solid transparent',
+                              borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+                              background: C.input, display: 'block', width: '100%',
+                              transition: 'border-color 0.15s, transform 0.15s',
+                            }}
+                            onMouseEnter={e => { if (!isSel) e.currentTarget.style.borderColor = `${C.cta}80`; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                            onMouseLeave={e => { if (!isSel) e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}
+                          >
+                            <img
+                              src={photo.src.medium}
+                              alt={photo.alt || photo.photographer}
+                              style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block' }}
+                            />
+                            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.62))', padding: '18px 8px 6px', color: 'white', fontSize: 11, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {photo.photographer}
+                            </div>
+                            {isSel && (
+                              <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <div style={{ background: C.cta, borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Check size={18} color="white" strokeWidth={3} />
+                                </div>
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
 
-              {!error && photos.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                  {photos.map(photo => {
-                    const isSel = selectedId === photo.id;
-                    return (
+              {/* Upload tab */}
+              {tab === 'upload' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {/* Drop zone */}
+                  <div
+                    onClick={() => uploadInputRef.current?.click()}
+                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={e => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFileSelect(f); }}
+                    style={{
+                      border: `2px dashed ${dragOver ? C.cta : C.cardBorder}`,
+                      borderRadius: 16,
+                      padding: '40px 20px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      background: dragOver ? `${C.cta}10` : C.input,
+                      transition: 'all 0.2s',
+                      color: dragOver ? C.cta : C.faint,
+                    }}
+                  >
+                    <Upload size={32} style={{ marginBottom: 10, display: 'block', margin: '0 auto 10px' }} />
+                    <p style={{ fontWeight: 700, fontSize: 15, margin: '0 0 4px', color: dragOver ? C.cta : C.text }}>
+                      {uploadFile ? uploadFile.name : 'Click or drag an image here'}
+                    </p>
+                    <p style={{ fontSize: 12, margin: 0 }}>PNG, JPG, WEBP up to 20 MB</p>
+                  </div>
+                  <input
+                    ref={uploadInputRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
+                  />
+
+                  {/* Preview */}
+                  {uploadPreview && (
+                    <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', aspectRatio: '16/9' }}>
+                      <img src={uploadPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                       <button
-                        key={photo.id}
-                        onClick={() => select(photo)}
-                        style={{
-                          position: 'relative', padding: 0, margin: 0,
-                          border: isSel ? `3px solid ${C.cta}` : '3px solid transparent',
-                          borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
-                          background: C.input, display: 'block', width: '100%',
-                          transition: 'border-color 0.15s, transform 0.15s',
-                        }}
-                        onMouseEnter={e => { if (!isSel) e.currentTarget.style.borderColor = `${C.cta}80`; e.currentTarget.style.transform = 'scale(1.02)'; }}
-                        onMouseLeave={e => { if (!isSel) e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}
+                        onClick={() => { setUploadFile(null); setUploadPreview(null); setUploadError(''); }}
+                        style={{ position: 'absolute', top: 10, right: 10, background: 'rgba(0,0,0,0.55)', border: 'none', borderRadius: '50%', width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'white' }}
                       >
-                        <img
-                          src={photo.src.medium}
-                          alt={photo.alt || photo.photographer}
-                          style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block' }}
-                        />
-                        {/* Photographer credit */}
-                        <div style={{
-                          position: 'absolute', bottom: 0, left: 0, right: 0,
-                          background: 'linear-gradient(transparent, rgba(0,0,0,0.62))',
-                          padding: '18px 8px 6px', color: 'white', fontSize: 11,
-                          textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }}>
-                          {photo.photographer}
-                        </div>
-                        {/* Selected overlay */}
-                        {isSel && (
-                          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <div style={{ background: C.cta, borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <Check size={18} color="white" strokeWidth={3} />
-                            </div>
-                          </div>
-                        )}
+                        <X size={14} />
                       </button>
-                    );
-                  })}
+                    </div>
+                  )}
+
+                  {uploadError && (
+                    <p style={{ fontSize: 13, color: '#ef4444', margin: 0, textAlign: 'center' }}>{uploadError}</p>
+                  )}
+
+                  {uploadFile && (
+                    <button
+                      onClick={handleUpload}
+                      disabled={uploading}
+                      style={{ padding: '13px 0', borderRadius: 12, border: 'none', background: uploading ? C.input : C.cta, color: uploading ? C.muted : C.ctaText, fontSize: 15, fontWeight: 700, cursor: uploading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s' }}
+                    >
+                      {uploading ? <><Loader2 size={16} className="animate-spin" /> Uploading...</> : <><Upload size={15} /> Upload to Cloudinary</>}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
 
             {/* Footer */}
-            <div style={{ padding: '10px 24px', borderTop: `1px solid ${C.divider}`, fontSize: 11, color: C.faint, textAlign: 'center', flexShrink: 0 }}>
-              Photos provided by <strong>Pexels</strong> - free to use, no attribution required
+            <div style={{ padding: '10px 20px', borderTop: `1px solid ${C.divider}`, fontSize: 11, color: C.faint, textAlign: 'center', flexShrink: 0 }}>
+              {tab === 'pexels'
+                ? <>Photos provided by <strong>Pexels</strong> - free to use, no attribution required</>
+                : <>Images are stored securely on Cloudinary</>
+              }
             </div>
           </div>
         </div>,

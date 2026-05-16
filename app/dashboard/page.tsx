@@ -8878,7 +8878,6 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
           const csv = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);
           const fileName = file.name.replace(/\.(xlsx|xls)$/i, '.csv');
           await uploadBlob(new Blob([csv], { type: 'text/csv' }), fileName);
-          await autoPopulateColumns(csv);
         } else {
           setPendingWb(wb);
           setPendingFileName(file.name);
