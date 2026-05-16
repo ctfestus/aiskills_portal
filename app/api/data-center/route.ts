@@ -28,10 +28,12 @@ function isStaff(role: string) {
   return role === 'admin' || role === 'instructor';
 }
 
-// GET - list datasets (published only for students; all for staff)
+// GET - list datasets
+// Public (no auth): published only
+// Authenticated student: published only
+// Authenticated staff: all (including drafts)
 export async function GET(req: NextRequest) {
   const sessionUser = await getSessionUser(req);
-  if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const db = adminClient();
   let query = db
@@ -39,7 +41,8 @@ export async function GET(req: NextRequest) {
     .select('*')
     .order('created_at', { ascending: false });
 
-  if (!isStaff(sessionUser.role)) {
+  const showAll = sessionUser && isStaff(sessionUser.role);
+  if (!showAll) {
     query = query.eq('is_published', true);
   }
 
