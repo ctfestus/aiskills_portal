@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence } from 'motion/react';
 import {
@@ -165,8 +165,6 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
   function copyPrompt() { navigator.clipboard.writeText(prompt).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }
   function copyPython() { if (!colabCode) return; navigator.clipboard.writeText(colabCode).then(() => { setColabCopied(true); setTimeout(() => setColabCopied(false), 2000); }); }
 
-  const isPexels = dataset.cover_image_url?.includes('pexels.com');
-
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-8" style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="w-full flex flex-col" style={{ maxWidth: 760, maxHeight: '94vh', background: C.card, borderRadius: 20, overflow: 'hidden', fontFamily: font, boxShadow: '0 32px 80px rgba(0,0,0,0.28)' }}>
@@ -263,11 +261,11 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
             )}
           </div>
 
-          {/* Sign-up CTA */}
+          {/* CTA */}
           <div style={{ marginTop: 24, padding: '18px 20px', borderRadius: 16, background: `${C.cta}12`, textAlign: 'center' }}>
             <p style={{ fontWeight: 800, fontSize: 15, color: C.text, margin: '0 0 4px' }}>Want to go deeper?</p>
-            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 14px', lineHeight: 1.5 }}>Join the platform to access structured courses, cohorts, and expert-guided projects.</p>
-            <a href="/auth" style={{ display: 'inline-flex', alignItems: 'center', padding: '10px 28px', borderRadius: 10, background: C.cta, color: C.ctaText, fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>Get Started - It's Free</a>
+            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 14px', lineHeight: 1.5 }}>Join our bootcamp to access structured courses, cohorts, and expert-guided projects.</p>
+            <a href="https://festman.io" target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', padding: '10px 28px', borderRadius: 10, background: C.cta, color: C.ctaText, fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>Learn More</a>
           </div>
         </div>
       </div>

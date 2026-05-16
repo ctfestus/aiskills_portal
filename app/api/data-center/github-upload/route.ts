@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import path from 'path';
 
 export const dynamic = 'force-dynamic';
+
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+const ALLOWED_EXTENSIONS = new Set(['.csv', '.tsv', '.json', '.xlsx', '.xls', '.zip']);
 
 function adminClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -16,6 +20,13 @@ async function getSessionUser(req: NextRequest) {
   const role = s?.role ?? 'student';
   if (role !== 'admin' && role !== 'instructor') return null;
   return user;
+}
+
+function sanitizeFilename(raw: string): string {
+  // Keep only the basename (strip any path components)
+  const base = path.basename(raw);
+  // Replace unsafe characters; ensure no leading dots
+  return base.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, 'file');
 }
 
 export async function POST(req: NextRequest) {
@@ -35,13 +46,24 @@ export async function POST(req: NextRequest) {
   const file = form.get('file') as File | null;
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
 
-  const originalName = file.name.replace(/\s+/g, '_');
-  const path = `${Date.now()}_${originalName}`;
+  // Validate file size before reading into memory
+  if (file.size > MAX_FILE_SIZE) {
+    return NextResponse.json({ error: 'File too large (max 100 MB)' }, { status: 413 });
+  }
+
+  // Validate file extension
+  const ext = path.extname(file.name).toLowerCase();
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
+    return NextResponse.json({ error: `File type not allowed. Accepted: ${[...ALLOWED_EXTENSIONS].join(', ')}` }, { status: 400 });
+  }
+
+  const safeName = sanitizeFilename(file.name);
+  const filePath = `${Date.now()}_${safeName}`;
 
   const buffer = await file.arrayBuffer();
   const base64 = Buffer.from(buffer).toString('base64');
 
-  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`;
   const ghRes = await fetch(apiUrl, {
     method: 'PUT',
     headers: {
@@ -51,7 +73,7 @@ export async function POST(req: NextRequest) {
       'X-GitHub-Api-Version': '2022-11-28',
     },
     body: JSON.stringify({
-      message: `Upload dataset: ${file.name}`,
+      message: `Upload dataset: ${safeName}`,
       content: base64,
       branch,
     }),
@@ -62,6 +84,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err.message ?? `GitHub API error ${ghRes.status}` }, { status: 502 });
   }
 
-  const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+  const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`;
   return NextResponse.json({ url: rawUrl, name: file.name });
 }

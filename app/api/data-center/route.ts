@@ -10,6 +10,13 @@ function adminClient() {
   return createClient(url, key);
 }
 
+function publicClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  if (!url || !key) throw new Error('Supabase anon key not configured');
+  return createClient(url, key);
+}
+
 async function getSessionUser(req: NextRequest): Promise<{ id: string; role: string } | null> {
   const authHeader = req.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) return null;
@@ -35,13 +42,14 @@ function isStaff(role: string) {
 export async function GET(req: NextRequest) {
   const sessionUser = await getSessionUser(req);
 
-  const db = adminClient();
+  const FIELDS = 'id,title,description,cover_image_url,cover_image_alt,tags,category,sample_questions,file_url,file_name,row_count,is_published,created_at,created_by';
+  const showAll = sessionUser && isStaff(sessionUser.role);
+  const db = showAll ? adminClient() : publicClient();
   let query = db
     .from('data_center_datasets')
-    .select('*')
+    .select(FIELDS)
     .order('created_at', { ascending: false });
 
-  const showAll = sessionUser && isStaff(sessionUser.role);
   if (!showAll) {
     query = query.eq('is_published', true);
   }

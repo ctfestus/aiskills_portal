@@ -30,10 +30,10 @@ CREATE TRIGGER trg_data_center_datasets_updated_at
 
 ALTER TABLE public.data_center_datasets ENABLE ROW LEVEL SECURITY;
 
--- Students: read published datasets only
-CREATE POLICY "Students read published data center datasets"
+-- Public/students: read published datasets only
+CREATE POLICY "Public read published data center datasets"
   ON public.data_center_datasets FOR SELECT
-  TO authenticated
+  TO anon, authenticated
   USING (is_published = true);
 
 -- Admins/instructors: full access (inline role check for reliability)
@@ -52,3 +52,8 @@ CREATE POLICY "Instructors manage data center datasets"
       WHERE id = auth.uid() AND role IN ('admin', 'instructor')
     )
   );
+
+-- Index for the common public listing query: published datasets ordered by newest first
+CREATE INDEX IF NOT EXISTS idx_data_center_datasets_published_at
+  ON public.data_center_datasets (is_published, created_at DESC)
+  WHERE is_published = true;

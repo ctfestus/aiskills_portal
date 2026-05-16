@@ -1426,6 +1426,10 @@ CREATE POLICY "Instructors manage data center datasets"
     )
   );
 
+CREATE INDEX IF NOT EXISTS idx_data_center_datasets_published_at
+  ON public.data_center_datasets (is_published, created_at DESC)
+  WHERE is_published = true;
+
 -- ── virtual_experiences (migration 100: remove group_ids check; standalone VEs are cohort-only) ──
 CREATE POLICY "virtual_experiences: participants select"
   ON public.virtual_experiences FOR SELECT
