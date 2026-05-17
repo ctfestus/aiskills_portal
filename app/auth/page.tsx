@@ -112,7 +112,7 @@ export default function AuthPage() {
         const res = await fetch(`/api/cohort-allowlist?email=${encodeURIComponent(email)}`);
         const { allowed } = await res.json();
         if (!allowed) {
-          throw new Error('You do not have access to this portal. Contact your Learning Advisor.');
+          throw new Error('This email is not eligible for a new signup. If you already have an account, please use the sign in option below. If you are a new student, contact your Learning Advisor.');
         }
         const { data: signUpData, error } = await supabase.auth.signUp({
           email,
@@ -127,7 +127,7 @@ export default function AuthPage() {
           setTimeout(() => { setIsLogin(true); setMessage(''); }, 3000);
           return;
         }
-        setMessage('Check your email for the confirmation link.');
+        setMessage('Check your email for the confirmation link. If you do not see it in your inbox, please check your spam.');
       }
     } catch (err: any) {
       setMessage(err.message || 'Something went wrong. Please try again.');
