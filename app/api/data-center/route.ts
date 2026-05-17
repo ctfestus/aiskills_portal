@@ -42,7 +42,7 @@ function isStaff(role: string) {
 export async function GET(req: NextRequest) {
   const sessionUser = await getSessionUser(req);
 
-  const FIELDS = 'id,title,description,cover_image_url,cover_image_alt,tags,category,sample_questions,file_url,file_name,row_count,is_published,created_at,created_by';
+  const FIELDS = 'id,title,description,cover_image_url,cover_image_alt,tags,category,sample_questions,file_url,file_name,row_count,source,source_url,disclaimer,table_type,is_published,created_at,created_by';
   const showAll = sessionUser && isStaff(sessionUser.role);
   const db = showAll ? adminClient() : publicClient();
   let query = db
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
   const {
     title, description, cover_image_url, cover_image_alt,
     tags, category, sample_questions, file_url, file_name,
-    row_count, column_info, is_published,
+    row_count, column_info, source, source_url, disclaimer, table_type, is_published,
   } = body;
 
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
@@ -88,6 +88,10 @@ export async function POST(req: NextRequest) {
       file_name: file_name?.trim() ?? null,
       row_count: row_count ?? null,
       column_info: column_info ?? [],
+      source: source?.trim() ?? null,
+      source_url: source_url?.trim() ?? null,
+      disclaimer: disclaimer?.trim() ?? null,
+      table_type: table_type ?? null,
       is_published: is_published ?? false,
       created_by: sessionUser.id,
     })
@@ -111,7 +115,7 @@ export async function PUT(req: NextRequest) {
   const allowed = [
     'title', 'description', 'cover_image_url', 'cover_image_alt',
     'tags', 'category', 'sample_questions', 'file_url', 'file_name',
-    'row_count', 'column_info', 'is_published',
+    'row_count', 'column_info', 'source', 'source_url', 'disclaimer', 'table_type', 'is_published',
   ];
   const update: Record<string, unknown> = {};
   for (const key of allowed) {

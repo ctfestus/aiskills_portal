@@ -69,6 +69,10 @@ interface DCDataset {
   file_url: string | null;
   file_name: string | null;
   row_count: number | null;
+  source: string | null;
+  source_url: string | null;
+  disclaimer: string | null;
+  table_type: 'single' | 'multiple' | null;
 }
 
 // --- AI Prompt builder ---
@@ -194,10 +198,15 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
           {/* Meta */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             {dataset.category && <span style={{ fontSize: 13, fontWeight: 700, color: C.muted, padding: '4px 12px', borderRadius: 20, background: C.pill }}>{dataset.category}</span>}
-            {dataset.row_count && (
+            {dataset.table_type && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 700, color: C.muted, padding: '4px 12px', borderRadius: 20, background: C.pill }}>
-                <Database size={13} /> {dataset.row_count.toLocaleString()} rows
+                <Database size={13} /> {dataset.table_type === 'single' ? 'Single Table' : 'Multiple Tables'}
               </span>
+            )}
+            {dataset.source && (
+              dataset.source_url
+                ? <a href={dataset.source_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: C.cta, fontWeight: 600, textDecoration: 'none' }}>Source: {dataset.source}</a>
+                : <span style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>Source: {dataset.source}</span>
             )}
           </div>
 
@@ -223,6 +232,14 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
             <button onClick={openPreview} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 0', borderRadius: 12, border: 'none', background: C.input, color: C.text, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: font, marginBottom: 24 }}>
               <Table2 size={14} /> Preview Dataset
             </button>
+          )}
+
+          {/* Disclaimer */}
+          {dataset.disclaimer && (
+            <div style={{ marginBottom: 24, padding: '12px 14px', borderRadius: 12, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>!</span>
+              <p style={{ fontSize: 13, color: C.muted, margin: 0, lineHeight: 1.55 }}>{dataset.disclaimer}</p>
+            </div>
           )}
 
           {/* AI tools */}
@@ -435,10 +452,10 @@ export default function DataPlaygroundPage() {
                   )}
                   <p style={{ fontWeight: 700, fontSize: 18, color: C.text, margin: '0 0 6px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }}>{d.title}</p>
                   {d.description && <p style={{ fontSize: 15, color: C.faint, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', lineHeight: 1.6 }}>{d.description}</p>}
-                  {d.row_count && (
+                  {d.table_type && (
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10, padding: '4px 10px', borderRadius: 20, background: C.pill }}>
                       <Database size={12} style={{ color: C.muted }} />
-                      <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{d.row_count.toLocaleString()} rows</span>
+                      <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{d.table_type === 'single' ? 'Single Table' : 'Multiple Tables'}</span>
                     </div>
                   )}
                 </div>

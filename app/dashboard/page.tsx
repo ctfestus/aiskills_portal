@@ -8671,14 +8671,15 @@ type DatasetRow = {
   id: string; title: string; description: string | null; cover_image_url: string | null;
   cover_image_alt: string | null; tags: string[]; category: string | null;
   sample_questions: string[]; file_url: string | null; file_name: string | null;
-  row_count: number | null;
+  row_count: number | null; source: string | null; source_url: string | null; disclaimer: string | null;
+  table_type: 'single' | 'multiple' | null;
   is_published: boolean; created_at: string;
 };
 
 const BLANK_DATASET: Omit<DatasetRow, 'id' | 'created_at'> = {
   title: '', description: '', cover_image_url: null, cover_image_alt: null,
   tags: [], category: '', sample_questions: [], file_url: '', file_name: '',
-  row_count: null, is_published: false,
+  row_count: null, source: null, source_url: null, disclaimer: null, table_type: null, is_published: false,
 };
 
 function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
@@ -8732,6 +8733,8 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
       cover_image_alt: d.cover_image_alt, tags: d.tags, category: d.category ?? '',
       sample_questions: d.sample_questions, file_url: d.file_url ?? '',
       file_name: d.file_name ?? '', row_count: d.row_count,
+      source: d.source ?? '', source_url: d.source_url ?? '', disclaimer: d.disclaimer ?? '',
+      table_type: d.table_type ?? null,
       is_published: d.is_published,
     });
     setTagInput('');
@@ -9054,6 +9057,14 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                   <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Description</label>
                   <textarea value={form.description ?? ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={4} placeholder="Describe the dataset, its source, and what students can learn from it." style={{ ...inputStyle, resize: 'vertical' }} />
                 </div>
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Source</label>
+                  <input value={form.source ?? ''} onChange={e => setForm(f => ({ ...f, source: e.target.value }))} placeholder="e.g. World Bank, Kaggle, Government of Ghana" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Source URL <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 12 }}>(optional)</span></label>
+                  <input value={form.source_url ?? ''} onChange={e => setForm(f => ({ ...f, source_url: e.target.value }))} placeholder="https://data.worldbank.org/..." style={inputStyle} />
+                </div>
               </div>
             </>)}
 
@@ -9222,8 +9233,16 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
               )}
 
               <div style={{ marginTop: 16 }}>
-                <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Number of Rows</label>
-                <input type="number" value={form.row_count ?? ''} onChange={e => setForm(f => ({ ...f, row_count: e.target.value ? Number(e.target.value) : null }))} placeholder="e.g. 5000" style={{ ...inputStyle, width: 180 }} />
+                <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Table Structure</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {(['single', 'multiple'] as const).map(opt => (
+                    <button key={opt} onClick={() => setForm(f => ({ ...f, table_type: f.table_type === opt ? null : opt }))}
+                      style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: `1px solid ${form.table_type === opt ? C.cta : C.cardBorder}`, background: form.table_type === opt ? `${C.cta}15` : C.input, color: form.table_type === opt ? C.cta : C.muted, fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s' }}>
+                      {opt === 'single' ? 'Single Table' : 'Multiple Tables'}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: C.faint }}>Single = one CSV/sheet. Multiple = ZIP or workbook with several related tables.</p>
               </div>
             </>)}
 
@@ -9248,6 +9267,18 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
               <button onClick={addQuestion} style={{ marginTop: 4, fontSize: 14, color: '#d97706', background: 'rgba(217,119,6,0.08)', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700, padding: '7px 12px' }}>
                 <Plus size={14} /> Add Question
               </button>
+            </>)}
+
+            {/* Disclaimer card */}
+            {card(<>
+              {sectionHead(<AlertTriangle size={16} color="white" />, 'Disclaimer', '#7c3aed')}
+              <textarea
+                value={form.disclaimer ?? ''}
+                onChange={e => setForm(f => ({ ...f, disclaimer: e.target.value }))}
+                rows={3}
+                placeholder="Optional. Note any usage restrictions, data accuracy limitations, or attribution requirements."
+                style={{ ...inputStyle, resize: 'vertical' }}
+              />
             </>)}
           </div>
 
