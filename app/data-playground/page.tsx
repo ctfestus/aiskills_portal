@@ -414,7 +414,7 @@ export default function DataPlaygroundPage() {
         {loading ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 16 }}>
             {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} style={{ borderRadius: 16, overflow: 'hidden', background: C.card, border: `1px solid ${C.cardBorder}` }}>
+              <div key={i} style={{ borderRadius: 16, overflow: 'hidden', background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
                 <Sk h={160} r={0} />
                 <div style={{ padding: 16 }}><Sk h={14} w="60%" /><div style={{ marginTop: 8 }}><Sk h={12} /></div></div>
               </div>
@@ -429,7 +429,7 @@ export default function DataPlaygroundPage() {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 16 }}>
             {filtered.map(d => (
-              <div key={d.id} style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 18, overflow: 'hidden', fontFamily: font, minHeight: 420, display: 'flex', flexDirection: 'column' }}>
+              <div key={d.id} style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, borderRadius: 18, overflow: 'hidden', fontFamily: font, minHeight: 420, display: 'flex', flexDirection: 'column' }}>
                 {/* Cover */}
                 {d.cover_image_url ? (
                   <div style={{ padding: '14px 14px 0', overflow: 'hidden' }}>

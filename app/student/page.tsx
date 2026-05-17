@@ -4009,6 +4009,8 @@ display(df.head(10))`;
 }
 
 function DataCenterSection({ C }: { C: typeof LIGHT_C }) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const [datasets, setDatasets]   = useState<DCDataset[]>([]);
   const [loading, setLoading]     = useState(true);
   const [selected, setSelected]   = useState<DCDataset | null>(null);
@@ -4031,7 +4033,7 @@ function DataCenterSection({ C }: { C: typeof LIGHT_C }) {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 16 }}>
         {[1, 2, 3].map(i => (
-          <div key={i} style={{ borderRadius: 16, overflow: 'hidden', background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <div key={i} style={{ borderRadius: 16, overflow: 'hidden', background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
             <Sk h={160} r={0} />
             <div style={{ padding: 16 }}>
               <Sk h={14} w="60%" />
@@ -4107,7 +4109,7 @@ function DataCenterSection({ C }: { C: typeof LIGHT_C }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 16 }}>
         {filtered.map(d => (
           <div key={d.id}
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 18, overflow: 'hidden', textAlign: 'left', fontFamily: 'var(--font-lato, Lato, sans-serif)', minHeight: 420, display: 'flex', flexDirection: 'column' }}
+            style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, borderRadius: 18, overflow: 'hidden', textAlign: 'left', fontFamily: 'var(--font-lato, Lato, sans-serif)', minHeight: 420, display: 'flex', flexDirection: 'column' }}
           >
             {/* Cover */}
             {d.cover_image_url ? (
