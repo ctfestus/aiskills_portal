@@ -45,7 +45,7 @@ export async function middleware(req: NextRequest) {
     "img-src https: data: blob:",
     `connect-src 'self' ${supabaseUrl} https://*.supabase.co https://api.resend.com wss://*.supabase.co https://challenges.cloudflare.com`,
     "media-src 'self' blob:",
-    "frame-src 'self' https://www.youtube.com https://player.vimeo.com https://iframe.mediadelivery.net https://player.mediadelivery.net https://video.bunnycdn.com https://www.canva.com https://challenges.cloudflare.com",
+    "frame-src 'self' blob: https://www.youtube.com https://player.vimeo.com https://iframe.mediadelivery.net https://player.mediadelivery.net https://video.bunnycdn.com https://www.canva.com https://challenges.cloudflare.com",
     "base-uri 'self'",
     "form-action 'self'",
     ...(isAppRoute ? ["frame-ancestors 'none'"] : []),

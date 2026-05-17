@@ -12,8 +12,10 @@ export const FONTS: FontOption[] = [
   { id: 'inter',   name: 'Inter',             category: 'sans',  googleFamily: 'Inter:wght@400;500;600;700',             cssFamily: "'Inter', sans-serif" },
   { id: 'lato',    name: 'Lato',              category: 'sans',  googleFamily: 'Lato:wght@400;700',                      cssFamily: "'Lato', sans-serif" },
   { id: 'poppins', name: 'Poppins',           category: 'sans',  googleFamily: 'Poppins:wght@400;500;600;700',           cssFamily: "'Poppins', sans-serif" },
-  { id: 'nunito',  name: 'Nunito',            category: 'sans',  googleFamily: 'Nunito:wght@400;500;600;700',            cssFamily: "'Nunito', sans-serif" },
-  { id: 'outfit',  name: 'Outfit',            category: 'sans',  googleFamily: 'Outfit:wght@400;500;600;700',            cssFamily: "'Outfit', sans-serif" },
+  { id: 'nunito',      name: 'Nunito',       category: 'sans',  googleFamily: 'Nunito:wght@400;500;600;700',            cssFamily: "'Nunito', sans-serif" },
+  { id: 'outfit',      name: 'Outfit',       category: 'sans',  googleFamily: 'Outfit:wght@400;500;600;700',            cssFamily: "'Outfit', sans-serif" },
+  { id: 'montserrat',   name: 'Montserrat',   category: 'sans',  googleFamily: 'Montserrat:wght@400;500;600;700',          cssFamily: "'Montserrat', sans-serif" },
+  { id: 'nunito-sans',  name: 'Nunito Sans',  category: 'sans',  googleFamily: 'Nunito+Sans:wght@400;500;600;700',         cssFamily: "'Nunito Sans', sans-serif" },
   // Serif
   { id: 'serif',     name: 'System Serif',     category: 'serif', cssFamily: 'ui-serif, Georgia, serif' },
   { id: 'lora',      name: 'Lora',             category: 'serif', googleFamily: 'Lora:wght@400;500;600;700',             cssFamily: "'Lora', serif" },
@@ -22,7 +24,8 @@ export const FONTS: FontOption[] = [
   // Monospace
   { id: 'mono',       name: 'System Mono',      category: 'mono',  cssFamily: 'ui-monospace, monospace' },
   { id: 'jetbrains',  name: 'JetBrains Mono',   category: 'mono',  googleFamily: 'JetBrains+Mono:wght@400;500;700',      cssFamily: "'JetBrains Mono', monospace" },
-  { id: 'fira',       name: 'Fira Code',         category: 'mono',  googleFamily: 'Fira+Code:wght@400;500;700',           cssFamily: "'Fira Code', monospace" },
+  { id: 'fira',        name: 'Fira Code',    category: 'mono',  googleFamily: 'Fira+Code:wght@400;500;700',            cssFamily: "'Fira Code', monospace" },
+  { id: 'roboto-mono', name: 'Roboto Mono',  category: 'mono',  googleFamily: 'Roboto+Mono:wght@400;500;700',          cssFamily: "'Roboto Mono', monospace" },
 ];
 
 export function getFontById(id: string): FontOption {

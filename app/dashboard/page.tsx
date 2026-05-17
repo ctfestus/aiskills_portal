@@ -24,6 +24,7 @@ import { sanitizeRichText } from '@/lib/sanitize';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/uploadToCloudinary';
 import { TEMPLATES as SITE_TEMPLATES } from '@/lib/site-templates';
 import { PexelsImagePicker } from '@/components/PexelsImagePicker';
+import { loadGoogleFont, getFontById } from '@/lib/fonts';
 
 // --- Design tokens ---
 const LIGHT_C = {
@@ -377,11 +378,15 @@ function PushAllButton({ items, C }: { items: { type: string; id: string }[]; C:
 }
 
 // --- ProfileMenu ---
+const MONTSERRAT_CSS = "'Montserrat', sans-serif";
+
 function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; onSignOut: () => void }) {
   const C = useC();
   const [open, setOpen] = useState(false);
   const btnRef  = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { loadGoogleFont(getFontById('montserrat')); }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -398,12 +403,12 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
   const avatar   = profile?.avatar_url;
 
   return (
-    <div className="relative">
+    <div className="relative" style={{ fontFamily: MONTSERRAT_CSS }}>
       <button
         ref={btnRef}
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-all hover:shadow-sm"
-        style={{ background: C.card, borderColor: C.cardBorder }}
+        style={{ background: C.card, borderColor: C.cardBorder, fontFamily: MONTSERRAT_CSS }}
       >
         <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold flex-shrink-0"
           style={{ background: C.lime, color: C.green }}>
@@ -421,7 +426,7 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
             exit={{ opacity: 0, scale: 0.95, y: -4 }}
             transition={{ duration: 0.15 }}
             className="absolute right-0 top-full mt-2 w-56 rounded-2xl overflow-hidden z-50"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}
+            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', fontFamily: MONTSERRAT_CSS }}
           >
             <div className="px-4 py-3.5 border-b" style={{ borderColor: C.divider }}>
               <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{name}</p>
@@ -8690,6 +8695,9 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
   const [form, setForm]           = useState({ ...BLANK_DATASET });
   const [saving, setSaving]       = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
   const [error, setError]         = useState('');
   const [tagInput, setTagInput]   = useState('');
   const [fileMode, setFileMode]         = useState<'link' | 'upload'>('link');
@@ -8821,6 +8829,68 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
       body: JSON.stringify({ id: d.id, is_published: !d.is_published }),
     });
     await load();
+  }
+
+  function datasetPayload(d: DatasetRow | typeof BLANK_DATASET) {
+    return {
+      title: d.title, description: d.description, cover_image_url: d.cover_image_url,
+      cover_image_alt: d.cover_image_alt, tags: d.tags, category: d.category,
+      sample_questions: d.sample_questions, file_url: d.file_url, file_name: d.file_name,
+      source: d.source, source_url: (d as any).source_url ?? null, disclaimer: d.disclaimer,
+      table_type: d.table_type, is_published: d.is_published,
+    };
+  }
+
+  function exportDataset(d: DatasetRow) {
+    downloadJSON({ exportVersion: 1, type: 'dataset', exportedAt: new Date().toISOString(), data: datasetPayload(d) }, d.title);
+  }
+
+  function exportAllDatasets() {
+    const items = datasets.map(d => ({ exportVersion: 1, type: 'dataset', exportedAt: new Date().toISOString(), data: datasetPayload(d) }));
+    downloadJSON({ exportVersion: 1, bulkExport: true, type: 'dataset', exportedAt: new Date().toISOString(), items }, 'all_datasets');
+  }
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportMsg(null);
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text);
+      if (payload.exportVersion !== 1) throw new Error('Unrecognised export file.');
+      const token = await getToken();
+      const items: any[] = payload.bulkExport ? (payload.items ?? []) : [payload];
+      const invalid = items.find(it => it.type !== 'dataset');
+      if (invalid) throw new Error(`File contains "${invalid.type}" items, expected dataset.`);
+      let created = 0; let failed = 0; let lastError = '';
+      for (const item of items) {
+        const res = await fetch('/api/data-center', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(item.data),
+        });
+        if (res.ok) {
+          created++;
+        } else {
+          failed++;
+          const j = await res.json().catch(() => ({}));
+          lastError = j.error ?? `HTTP ${res.status}`;
+        }
+      }
+      await load();
+      if (failed === 0) {
+        setImportMsg({ ok: true, text: `${created} dataset${created !== 1 ? 's' : ''} imported` });
+      } else {
+        setImportMsg({ ok: false, text: `${created} imported, ${failed} failed${lastError ? ': ' + lastError : ''}` });
+      }
+      setTimeout(() => setImportMsg(null), 4000);
+    } catch (err: any) {
+      setImportMsg({ ok: false, text: err.message || 'Import failed.' });
+    } finally {
+      setImporting(false);
+      if (importRef.current) importRef.current.value = '';
+    }
   }
 
   async function uploadBlob(blob: Blob, fileName: string): Promise<string | null> {
@@ -9142,10 +9212,10 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                         : <>
                             <Upload size={24} style={{ margin: '0 auto 8px', color: C.faint, display: 'block' }} />
                             <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: '0 0 4px' }}>Click to upload or drag and drop</p>
-                            <p style={{ fontSize: 12, color: C.faint, margin: 0 }}>CSV, Excel (.xlsx), JSON, ZIP (multiple CSVs) - max 50 MB</p>
+                            <p style={{ fontSize: 12, color: C.faint, margin: 0 }}>CSV, Excel (.xlsx), JSON, ZIP (multiple CSVs), PDF - max 50 MB</p>
                           </>
                       }
-                      <input ref={dataFileRef} type="file" accept=".csv,.xlsx,.xls,.json,.zip" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleDataFileUpload(f); }} />
+                      <input ref={dataFileRef} type="file" accept=".csv,.xlsx,.xls,.json,.zip,.pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleDataFileUpload(f); }} />
                     </div>
                   )}
 
@@ -9308,9 +9378,21 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
           <h2 style={{ fontWeight: 700, fontSize: 18, color: C.text, margin: 0 }}>Data Playground</h2>
           <p style={{ fontSize: 13, color: C.faint, margin: '4px 0 0' }}>Manage datasets for students to explore and practice with.</p>
         </div>
-        <button onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-          <Plus size={15} /> New Dataset
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input ref={importRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
+          {datasets.length > 0 && (
+            <button onClick={exportAllDatasets} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+              <Download size={14} /> Export All
+            </button>
+          )}
+          <button onClick={() => { setImportMsg(null); importRef.current?.click(); }} disabled={importing}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.card, color: importMsg ? (importMsg.ok ? '#16a34a' : '#ef4444') : C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            <Upload size={14} /> {importing ? 'Importing...' : importMsg ? importMsg.text : 'Import'}
+          </button>
+          <button onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            <Plus size={15} /> New Dataset
+          </button>
+        </div>
       </div>
 
       {loading && (
@@ -9357,6 +9439,9 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                   color: d.is_published ? '#16a34a' : C.muted,
                 }}>
                   {d.is_published ? 'Published' : 'Draft'}
+                </button>
+                <button onClick={() => exportDataset(d)} title="Export" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: 4 }}>
+                  <Download size={15} />
                 </button>
                 <button onClick={() => openEdit(d)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: 4 }}>
                   <Edit2 size={15} />

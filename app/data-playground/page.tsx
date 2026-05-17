@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence } from 'motion/react';
 import {
@@ -100,29 +100,52 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
   const [preview, setPreview]         = useState<string[][] | null>(null);
   const [headers, setHeaders]         = useState<string[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
-  const [zipTables, setZipTables]     = useState<{ name: string; content: string }[]>([]);
+  const [pdfUrl, setPdfUrl]           = useState<string | null>(null);
+  const [zipTables, setZipTables]     = useState<{ name: string; type: 'csv' | 'pdf'; content: string; blobUrl?: string }[]>([]);
   const [activeTable, setActiveTable] = useState('');
+  const blobUrlsRef = useRef<string[]>([]);
+  useEffect(() => () => { blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u)); }, []);
   const prompt = buildAIPrompt(dataset);
   const font = 'var(--font-lato, Lato, sans-serif)';
 
   async function openPreview() {
     setShowPreview(true);
-    if (preview !== null || zipTables.length > 0) return;
+    if (preview !== null || zipTables.length > 0 || pdfUrl) return;
     setLoadingPreview(true);
     try {
+      const lower = dataset.file_url?.toLowerCase() ?? '';
       const proxyUrl = `/api/data-center/proxy?url=${encodeURIComponent(dataset.file_url!)}`;
-      const isZip = dataset.file_url?.toLowerCase().endsWith('.zip');
-      if (isZip) {
+      if (lower.endsWith('.zip')) {
         const JSZip = (await import('jszip')).default;
         const res = await fetch(proxyUrl);
         if (!res.ok) throw new Error(`Proxy error ${res.status}`);
         const buf = await res.arrayBuffer();
         const zip = await JSZip.loadAsync(buf);
-        const csvFiles = Object.keys(zip.files).filter(n => !zip.files[n].dir && n.toLowerCase().endsWith('.csv'));
-        const tables = await Promise.all(csvFiles.map(async name => ({ name: name.replace(/^.*\//, ''), content: await zip.files[name].async('string') })));
-        setZipTables(tables);
-        setActiveTable(tables[0]?.name ?? '');
-        if (tables[0]) parseCSVContent(tables[0].content);
+        const entries = await Promise.all(
+          Object.keys(zip.files)
+            .filter(n => !zip.files[n].dir && (n.toLowerCase().endsWith('.csv') || n.toLowerCase().endsWith('.pdf')))
+            .map(async n => {
+              const base = n.replace(/^.*\//, '');
+              if (n.toLowerCase().endsWith('.pdf')) {
+                const bytes = await zip.files[n].async('arraybuffer');
+                const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+                blobUrlsRef.current.push(url);
+                return { name: base, type: 'pdf' as const, content: '', blobUrl: url };
+              }
+              return { name: base, type: 'csv' as const, content: await zip.files[n].async('string'), blobUrl: undefined };
+            })
+        );
+        setZipTables(entries);
+        setActiveTable(entries[0]?.name ?? '');
+        const firstCsv = entries.find(e => e.type === 'csv');
+        if (firstCsv) parseCSVContent(firstCsv.content);
+      } else if (lower.endsWith('.pdf')) {
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error(`Proxy error ${res.status}`);
+        const bytes = await res.arrayBuffer();
+        const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        blobUrlsRef.current.push(url);
+        setPdfUrl(url);
       } else {
         const Papa = (await import('papaparse')).default;
         const res = await fetch(proxyUrl);
@@ -148,6 +171,7 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
     const table = zipTables.find(t => t.name === name);
     if (!table) return;
     setActiveTable(name);
+    if (table.type === 'pdf') return;
     setHeaders([]);
     setPreview(null);
     parseCSVContent(table.content);
@@ -298,7 +322,7 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
                   <Table2 size={18} style={{ color: C.cta }} />
                   <div>
                     <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: C.text }}>{dataset.title}</p>
-                    <p style={{ margin: 0, fontSize: 14, color: C.faint }}>{zipTables.length > 1 ? `${zipTables.length} tables - first 10 rows each` : 'First 10 rows preview'}</p>
+                    <p style={{ margin: 0, fontSize: 14, color: C.faint }}>{pdfUrl ? 'PDF preview' : zipTables.length > 1 ? `${zipTables.length} files in zip` : 'First 10 rows preview'}</p>
                   </div>
                 </div>
                 <button onClick={() => setShowPreview(false)} style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: C.input, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted }}>
@@ -310,7 +334,7 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
                   {zipTables.map(t => (
                     <button key={t.name} onClick={() => switchTable(t.name)}
                       style={{ padding: '7px 14px', borderRadius: '8px 8px 0 0', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.15s', background: activeTable === t.name ? C.card : 'transparent', color: activeTable === t.name ? C.text : C.faint, borderBottom: activeTable === t.name ? `2px solid ${C.cta}` : '2px solid transparent' }}>
-                      {t.name.replace('.csv', '')}
+                      {t.name.replace(/\.(csv|pdf)$/i, '')}
                     </button>
                   ))}
                 </div>
@@ -318,13 +342,24 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
             </div>
             <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', padding: '12px 16px' }}>
               {loadingPreview && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: C.faint }}><Loader2 size={28} className="animate-spin" style={{ marginRight: 10 }} /> Loading...</div>}
-              {!loadingPreview && preview && preview.length > 0 && (
+              {/* Direct PDF */}
+              {!loadingPreview && pdfUrl && (
+                <iframe src={pdfUrl} style={{ width: '100%', height: 560, border: 'none', borderRadius: 8, display: 'block' }} title="PDF Preview" />
+              )}
+              {/* ZIP PDF tab */}
+              {!loadingPreview && !pdfUrl && (() => { const e = zipTables.find(t => t.name === activeTable); return e?.type === 'pdf' ? e.blobUrl : null; })() && (
+                <iframe src={zipTables.find(t => t.name === activeTable)?.blobUrl} style={{ width: '100%', height: 560, border: 'none', borderRadius: 8, display: 'block' }} title="PDF Preview" />
+              )}
+              {/* CSV table */}
+              {!loadingPreview && !pdfUrl && zipTables.find(t => t.name === activeTable)?.type !== 'pdf' && preview && preview.length > 0 && (
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
                   <thead><tr style={{ background: C.input }}>{headers.map(h => <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: C.muted, fontWeight: 700, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.cardBorder}`, fontFamily: font }}>{h}</th>)}</tr></thead>
                   <tbody>{preview.map((row, i) => <tr key={i} style={{ borderBottom: `1px solid ${C.divider}` }}>{row.map((cell, j) => <td key={j} style={{ padding: '9px 16px', color: C.text, whiteSpace: 'nowrap', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: font }}>{cell}</td>)}</tr>)}</tbody>
                 </table>
               )}
-              {!loadingPreview && (!preview || preview.length === 0) && <p style={{ fontSize: 14, color: C.faint, textAlign: 'center', padding: 40 }}>Preview not available for this file.</p>}
+              {!loadingPreview && !pdfUrl && zipTables.find(t => t.name === activeTable)?.type !== 'pdf' && (!preview || preview.length === 0) && (
+                <p style={{ fontSize: 14, color: C.faint, textAlign: 'center', padding: 40 }}>Preview not available for this file.</p>
+              )}
             </div>
           </div>
         </div>

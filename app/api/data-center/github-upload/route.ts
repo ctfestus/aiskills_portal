@@ -5,7 +5,7 @@ import path from 'path';
 export const dynamic = 'force-dynamic';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
-const ALLOWED_EXTENSIONS = new Set(['.csv', '.tsv', '.json', '.xlsx', '.xls', '.zip']);
+const ALLOWED_EXTENSIONS = new Set(['.csv', '.tsv', '.json', '.xlsx', '.xls', '.zip', '.pdf']);
 
 function adminClient() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -84,6 +84,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err.message ?? `GitHub API error ${ghRes.status}` }, { status: 502 });
   }
 
+  // raw.githubusercontent.com is only publicly accessible when the repo is public.
+  // GITHUB_DATASET_REPO must point to a public repository.
   const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`;
   return NextResponse.json({ url: rawUrl, name: file.name });
 }

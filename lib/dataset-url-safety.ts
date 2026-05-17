@@ -1,7 +1,7 @@
 import dns from 'dns/promises';
 import net from 'net';
 
-const ALLOWED_DATASET_EXTENSIONS = new Set(['.csv', '.tsv', '.txt', '.json', '.zip', '.xlsx', '.xls']);
+const ALLOWED_DATASET_EXTENSIONS = new Set(['.csv', '.tsv', '.txt', '.json', '.zip', '.xlsx', '.xls', '.pdf']);
 const ALLOWED_PROXY_TYPES = new Set([
   'text/csv',
   'text/plain',
@@ -11,6 +11,7 @@ const ALLOWED_PROXY_TYPES = new Set([
   'application/x-zip-compressed',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/pdf',
   'application/octet-stream',
 ]);
 
