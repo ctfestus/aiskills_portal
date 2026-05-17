@@ -3847,7 +3847,7 @@ display(df.head(10))`;
             )}
             {dataset.source && (
               dataset.source_url
-                ? <a href={dataset.source_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: C.cta, fontWeight: 600, textDecoration: 'none' }}>Source: {dataset.source}</a>
+                ? <a href={dataset.source_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: C.faint, fontWeight: 600, textDecoration: 'none' }}>Source: {dataset.source}</a>
                 : <span style={{ fontSize: 13, color: C.faint, fontWeight: 600 }}>Source: {dataset.source}</span>
             )}
           </div>
