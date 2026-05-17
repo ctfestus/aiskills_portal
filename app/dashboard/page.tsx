@@ -8676,7 +8676,8 @@ type DatasetRow = {
   id: string; title: string; description: string | null; cover_image_url: string | null;
   cover_image_alt: string | null; tags: string[]; category: string | null;
   sample_questions: string[]; file_url: string | null; file_name: string | null;
-  row_count: number | null; source: string | null; source_url: string | null; disclaimer: string | null;
+  row_count: number | null; source: string | null; source_url: string | null;
+  scenario: string | null; disclaimer: string | null;
   table_type: 'single' | 'multiple' | null;
   is_published: boolean; created_at: string;
 };
@@ -8684,7 +8685,7 @@ type DatasetRow = {
 const BLANK_DATASET: Omit<DatasetRow, 'id' | 'created_at'> = {
   title: '', description: '', cover_image_url: null, cover_image_alt: null,
   tags: [], category: '', sample_questions: [], file_url: '', file_name: '',
-  row_count: null, source: null, source_url: null, disclaimer: null, table_type: null, is_published: false,
+  row_count: null, source: null, source_url: null, scenario: null, disclaimer: null, table_type: null, is_published: false,
 };
 
 function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
@@ -8741,7 +8742,7 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
       cover_image_alt: d.cover_image_alt, tags: d.tags, category: d.category ?? '',
       sample_questions: d.sample_questions, file_url: d.file_url ?? '',
       file_name: d.file_name ?? '', row_count: d.row_count,
-      source: d.source ?? '', source_url: d.source_url ?? '', disclaimer: d.disclaimer ?? '',
+      source: d.source ?? '', source_url: d.source_url ?? '', scenario: d.scenario ?? '', disclaimer: d.disclaimer ?? '',
       table_type: d.table_type ?? null,
       is_published: d.is_published,
     });
@@ -8836,7 +8837,7 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
       title: d.title, description: d.description, cover_image_url: d.cover_image_url,
       cover_image_alt: d.cover_image_alt, tags: d.tags, category: d.category,
       sample_questions: d.sample_questions, file_url: d.file_url, file_name: d.file_name,
-      source: d.source, source_url: (d as any).source_url ?? null, disclaimer: d.disclaimer,
+      source: d.source, source_url: (d as any).source_url ?? null, scenario: (d as any).scenario ?? null, disclaimer: d.disclaimer,
       table_type: d.table_type, is_published: d.is_published,
     };
   }
@@ -9135,6 +9136,22 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                   <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Source URL <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 12 }}>(optional)</span></label>
                   <input value={form.source_url ?? ''} onChange={e => setForm(f => ({ ...f, source_url: e.target.value }))} placeholder="https://data.worldbank.org/..." style={inputStyle} />
                 </div>
+              </div>
+            </>)}
+
+            {/* Scenario card */}
+            {card(<>
+              {sectionHead(<FileText size={16} color="white" />, 'Scenario / Background', '#7c3aed')}
+              <div>
+                <p style={{ fontSize: 12, color: C.faint, marginTop: 0, marginBottom: 10 }}>
+                  Describe the real-world context or story behind this dataset. Supports rich text, headings, lists, and links.
+                </p>
+                <RichTextEditor
+                  value={form.scenario ?? ''}
+                  onChange={v => setForm(f => ({ ...f, scenario: v }))}
+                  placeholder="e.g. A local health clinic collected patient visit records over 5 years to track disease trends..."
+                  bgOverride={C.input}
+                />
               </div>
             </>)}
 

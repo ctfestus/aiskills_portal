@@ -233,6 +233,7 @@ CREATE TABLE IF NOT EXISTS public.data_center_datasets (
   column_info      jsonb       NOT NULL DEFAULT '[]',
   source           text,
   source_url       text,
+  scenario         text,
   disclaimer       text,
   table_type       text CHECK (table_type IN ('single', 'multiple')),
   is_published     boolean     NOT NULL DEFAULT false,

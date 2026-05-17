@@ -3608,7 +3608,8 @@ type DCDataset = {
   id: string; title: string; description: string | null; cover_image_url: string | null;
   cover_image_alt: string | null; tags: string[]; category: string | null;
   sample_questions: string[]; file_url: string | null; file_name: string | null;
-  row_count: number | null; source: string | null; source_url: string | null; disclaimer: string | null;
+  row_count: number | null; source: string | null; source_url: string | null;
+  scenario: string | null; disclaimer: string | null;
   table_type: 'single' | 'multiple' | null;
 };
 
@@ -3823,42 +3824,39 @@ display(df.head(10))`;
     >
       <div
         className="w-full flex flex-col"
-        style={{ maxWidth: 760, maxHeight: '94vh', background: C.card, borderRadius: 20, overflow: 'hidden', fontFamily: font, boxShadow: '0 32px 80px rgba(0,0,0,0.28)' }}
+        style={{ maxWidth: 980, maxHeight: '94vh', background: C.card, borderRadius: 20, overflow: 'hidden', fontFamily: font, boxShadow: '0 32px 80px rgba(0,0,0,0.28)' }}
       >
         {/* Cover */}
-        <div style={{ position: 'relative', height: 190, flexShrink: 0, background: C.input }}>
-          {dataset.cover_image_url
-            ? <img src={dataset.cover_image_url} alt={dataset.cover_image_alt ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-            : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Database size={48} style={{ color: C.faint }} /></div>
-          }
-          {/* Gradient overlay */}
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.15) 50%, transparent 100%)' }} />
-
-          {/* Title overlaid on cover */}
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '14px 18px' }}>
-            {dataset.tags.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-                {dataset.tags.map(t => (
-                  <span key={t} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 20, background: 'rgba(255,255,255,0.18)', color: 'white', fontWeight: 700, backdropFilter: 'blur(4px)', letterSpacing: 0.3 }}>{t}</span>
-                ))}
-              </div>
-            )}
-            <h2 style={{ fontWeight: 900, fontSize: 22, color: 'white', margin: 0, lineHeight: 1.25, textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{dataset.title}</h2>
+        <div style={{ padding: '16px 16px 0', flexShrink: 0, background: C.card }}>
+          <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', height: 240, background: C.input }}>
+            {dataset.cover_image_url
+              ? <img src={dataset.cover_image_url} alt={dataset.cover_image_alt ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Database size={56} style={{ color: C.faint }} /></div>
+            }
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.15) 55%, transparent 100%)' }} />
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '20px 24px' }}>
+              {dataset.tags.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                  {dataset.tags.map(t => (
+                    <span key={t} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 20, background: 'rgba(255,255,255,0.18)', color: 'white', fontWeight: 700, backdropFilter: 'blur(4px)', letterSpacing: 0.3 }}>{t}</span>
+                  ))}
+                </div>
+              )}
+              <h2 style={{ fontWeight: 900, fontSize: 22, color: 'white', margin: 0, lineHeight: 1.25, textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{dataset.title}</h2>
+            </div>
+            <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.45)', border: 'none', borderRadius: '50%', width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'white', backdropFilter: 'blur(4px)', transition: 'background 0.2s' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.7)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.45)')}>
+              <X size={17} />
+            </button>
           </div>
-
-          {/* Close button */}
-          <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.45)', border: 'none', borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'white', backdropFilter: 'blur(4px)', transition: 'background 0.2s' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.7)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.45)')}>
-            <X size={17} />
-          </button>
         </div>
 
         {/* Scrollable body */}
-        <div style={{ overflowY: 'auto', flex: 1, padding: '22px 20px 28px' }}>
+        <div style={{ overflowY: 'auto', flex: 1, padding: '32px 36px 40px' }}>
 
           {/* Meta row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
             {dataset.category && (
               <span style={{ fontSize: 13, fontWeight: 700, color: C.muted, padding: '4px 12px', borderRadius: 20, background: C.pill }}>{dataset.category}</span>
             )}
@@ -3876,7 +3874,16 @@ display(df.head(10))`;
 
           {/* Description */}
           {dataset.description && (
-            <p style={{ fontSize: 16, color: C.muted, lineHeight: 1.75, marginBottom: 28, marginTop: 0 }}>{dataset.description}</p>
+            <p style={{ fontSize: 16, color: C.muted, lineHeight: 1.8, marginBottom: 32, marginTop: 0 }}>{dataset.description}</p>
+          )}
+
+          {/* Scenario / Background */}
+          {dataset.scenario && (
+            <div style={{ marginBottom: 32, padding: '20px 24px', borderRadius: 16, background: C.input }}>
+              <p style={{ fontWeight: 800, fontSize: 13, color: C.muted, margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 0.6 }}>Scenario / Background</p>
+              <div className="rich-content" style={{ fontSize: 15, color: C.text, lineHeight: 1.7 }}
+                dangerouslySetInnerHTML={{ __html: sanitizeRichText(dataset.scenario) }} />
+            </div>
           )}
 
           {/* Sample questions */}
