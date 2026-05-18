@@ -241,7 +241,7 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
           {dataset.description && <p style={{ fontSize: 16, color: C.muted, lineHeight: 1.8, marginBottom: 32, marginTop: 0 }}>{dataset.description}</p>}
 
           {/* Scenario / Background */}
-          {dataset.scenario && (
+          {dataset.scenario && dataset.scenario.replace(/<[^>]*>/g, '').trim() && (
             <div style={{ marginBottom: 32, padding: '20px 24px', borderRadius: 16, background: C.input }}>
               <p style={{ fontWeight: 800, fontSize: 13, color: C.muted, margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 0.6 }}>Scenario / Background</p>
               <div className="rich-content" style={{ fontSize: 15, color: C.text, lineHeight: 1.7 }}
