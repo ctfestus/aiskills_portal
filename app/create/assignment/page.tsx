@@ -365,11 +365,18 @@ export default function CreateAssignmentPage() {
     if (!file) return;
     setResourceUploading(prev => ({ ...prev, [resourceId]: true }));
     try {
-      const path = `assignment-resources/${resourceId}/${Date.now()}-${file.name}`;
-      const { error: upErr } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
-      if (upErr) throw upErr;
-      const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
-      updateResource(resourceId, 'url', publicUrl);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/assignments/github-upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'File upload failed.');
+      updateResource(resourceId, 'url', json.url);
       if (!resources.find(r => r.id === resourceId)?.name) updateResource(resourceId, 'name', file.name);
     } catch (err: any) {
       setError(err?.message || 'File upload failed.');

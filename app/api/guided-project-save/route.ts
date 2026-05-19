@@ -72,28 +72,49 @@ export async function POST(req: NextRequest) {
     manager_title:  config.managerTitle  ?? 'Manager',
     is_short_course: is_short_course ?? false,
     badge_image_url: config.badgeImageUrl ?? null,
-    dataset:        null, // set below after optional storage upload
+    dataset:        null, // set below after optional GitHub upload
   };
 
-  // Upload CSV to Supabase Storage if csvContent is present, then strip it from DB payload
+  // Upload CSV to GitHub if csvContent is present, then strip it from DB payload
   if (config.dataset) {
     const { csvContent, ...datasetMeta } = config.dataset as any;
-    if (csvContent?.trim() && !datasetMeta.url && Buffer.byteLength(csvContent, 'utf-8') <= 50 * 1024 * 1024) {
+    if (csvContent?.trim() && !datasetMeta.url) {
+      if (Buffer.byteLength(csvContent, 'utf-8') > 50 * 1024 * 1024) {
+        return NextResponse.json({ error: 'Dataset file too large (max 50 MB).' }, { status: 413 });
+      }
       try {
-        const safeName = (datasetMeta.filename || 'dataset.csv').replace(/[^a-zA-Z0-9._-]/g, '_');
-        const path = `${Date.now()}_${safeName}`;
-        const buffer = Buffer.from(csvContent, 'utf-8');
-        const { error: uploadError } = await supabase.storage
-          .from('datasets')
-          .upload(path, buffer, { contentType: 'text/csv', upsert: false });
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage.from('datasets').getPublicUrl(path);
-          datasetMeta.url = urlData.publicUrl;
+        const ghToken  = process.env.GITHUB_TOKEN;
+        const ghOwner  = process.env.GITHUB_REPO_OWNER;
+        const ghRepo   = process.env.GITHUB_REPO_NAME;
+        const ghBranch = process.env.GITHUB_REPO_BRANCH ?? 'main';
+        if (ghToken && ghOwner && ghRepo) {
+          const safeName = (datasetMeta.filename || 'dataset.csv').replace(/[^a-zA-Z0-9._-]/g, '_');
+          const filePath = `ve-datasets/${Date.now()}_${safeName}`;
+          const base64   = Buffer.from(csvContent, 'utf-8').toString('base64');
+          const ghRes = await fetch(`https://api.github.com/repos/${ghOwner}/${ghRepo}/contents/${filePath}`, {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${ghToken}`,
+              'Content-Type': 'application/json',
+              Accept: 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+            body: JSON.stringify({ message: `Upload VE dataset: ${safeName}`, content: base64, branch: ghBranch }),
+          });
+          if (ghRes.ok) {
+            datasetMeta.url = `https://raw.githubusercontent.com/${ghOwner}/${ghRepo}/${ghBranch}/${filePath}`;
+          } else {
+            const err = await ghRes.json().catch(() => ({}));
+            console.error('[guided-project-save] GitHub dataset upload error:', err.message ?? ghRes.status);
+            return NextResponse.json({ error: err.message || 'Dataset upload to GitHub failed.' }, { status: 502 });
+          }
         } else {
-          console.error('[guided-project-save] dataset storage upload error:', uploadError.message);
+          console.error('[guided-project-save] GitHub env vars not configured; dataset not uploaded.');
+          return NextResponse.json({ error: 'GitHub integration not configured. Add GITHUB_TOKEN, GITHUB_REPO_OWNER and GITHUB_REPO_NAME to .env' }, { status: 500 });
         }
       } catch (e) {
-        console.error('[guided-project-save] dataset storage upload exception:', e);
+        console.error('[guided-project-save] dataset upload exception:', e);
+        return NextResponse.json({ error: 'Dataset upload to GitHub failed.' }, { status: 500 });
       }
     }
     payload.dataset = Object.keys(datasetMeta).length ? datasetMeta : null;
