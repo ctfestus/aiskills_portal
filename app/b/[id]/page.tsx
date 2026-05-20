@@ -82,7 +82,11 @@ export default function BadgePage() {
             style={{ background: `${data.badgeColor}18`, boxShadow: `0 8px 40px ${data.badgeColor}30` }}
           >
             {data.badgeImageUrl
-              ? <img src={data.badgeImageUrl} alt={data.badgeName} className="w-40 h-40 object-contain drop-shadow-lg" />
+              ? (
+                <div className="drop-shadow-lg">
+                  <img src={data.badgeImageUrl} alt={data.badgeName} className="w-40 h-40 object-contain" />
+                </div>
+              )
               : <span className="text-8xl leading-none">{data.badgeIcon}</span>
             }
           </div>

@@ -232,8 +232,10 @@ export default function OpenCertPageClient({
                 {activeView === 'badge' && showBadge && (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 0' }}>
                     {badgeImageUrl ? (
-                      <img src={badgeImageUrl} alt={`${programName} badge`}
-                        style={{ maxWidth: 200, maxHeight: 200, objectFit: 'contain', filter: 'drop-shadow(0 6px 18px rgba(0,0,0,0.18))' }} />
+                      <div style={{ filter: 'drop-shadow(0 6px 18px rgba(0,0,0,0.18))' }}>
+                        <img src={badgeImageUrl} alt={`${programName} badge`}
+                          style={{ width: 'min(180px, 70vw)', height: 'auto', maxWidth: '100%', maxHeight: 200, objectFit: 'contain', display: 'block' }} />
+                      </div>
                     ) : (
                       <div style={{ width: 160, height: 160, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 24px rgba(99,102,241,0.35)' }}>
                         <span style={{ fontSize: 52 }}>🏅</span>
@@ -261,8 +263,10 @@ export default function OpenCertPageClient({
                 {activeView === 'badge' && showBadge && (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 0' }}>
                     {badgeImageUrl ? (
-                      <img src={badgeImageUrl} alt={`${programName} badge`}
-                        style={{ maxWidth: Math.min(previewW * 0.6, 280), maxHeight: 280, objectFit: 'contain', filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.18))' }} />
+                      <div style={{ filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.18))' }}>
+                        <img src={badgeImageUrl} alt={`${programName} badge`}
+                          style={{ width: Math.min(previewW * 0.5, 220), height: 'auto', maxWidth: '100%', maxHeight: 260, objectFit: 'contain', display: 'block' }} />
+                      </div>
                     ) : (
                       <div style={{ width: 200, height: 200, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px rgba(99,102,241,0.35)' }}>
                         <span style={{ fontSize: 64 }}>🏅</span>

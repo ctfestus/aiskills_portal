@@ -235,12 +235,13 @@ export default function CertificatePageClient({
                 }}
               >
                 {badgeImageUrl && (
-                  <img
-                    src={badgeImageUrl}
-                    alt={`${courseName} badge`}
-                    style={{ maxWidth: 300, maxHeight: 300, width: '60%', objectFit: 'contain' }}
-                    className="drop-shadow-xl"
-                  />
+                  <div style={{ filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.18))' }}>
+                    <img
+                      src={badgeImageUrl}
+                      alt={`${courseName} badge`}
+                      style={{ width: 'min(220px, 70vw)', height: 'auto', maxWidth: '100%', maxHeight: 260, objectFit: 'contain', display: 'block' }}
+                    />
+                  </div>
                 )}
               </div>
             )}

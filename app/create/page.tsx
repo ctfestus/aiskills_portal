@@ -408,6 +408,24 @@ const parseJsonResponse = async (res: Response) => {
   return data;
 };
 
+const MIN_BADGE_IMAGE_SIZE = 400;
+const RECOMMENDED_BADGE_IMAGE_SIZE = 800;
+
+const getImageDimensions = (file: File): Promise<{ width: number; height: number }> =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read image dimensions'));
+    };
+    img.src = url;
+  });
+
 const normalizeGeneratedQuestion = (question: any): CourseQuestion => ({
   id: question?.id || Math.random().toString(36).slice(2, 9),
   type: question?.type || 'multiple_choice',
@@ -953,6 +971,16 @@ const [isSaving, setIsSaving] = useState(false);
     e.target.value = '';
     setUploadingBadge(true);
     try {
+      const { width, height } = await getImageDimensions(file);
+      const shortestSide = Math.min(width, height);
+      if (shortestSide < MIN_BADGE_IMAGE_SIZE) {
+        alert(`Please upload a sharper badge image. Badges should be at least ${MIN_BADGE_IMAGE_SIZE} x ${MIN_BADGE_IMAGE_SIZE}px.`);
+        return;
+      }
+      if (shortestSide < RECOMMENDED_BADGE_IMAGE_SIZE) {
+        const shouldContinue = window.confirm(`This badge is ${width} x ${height}px. It will work, but ${RECOMMENDED_BADGE_IMAGE_SIZE} x ${RECOMMENDED_BADGE_IMAGE_SIZE}px or higher will look sharper on student screens. Continue with this image?`);
+        if (!shouldContinue) return;
+      }
       const { data: { session } } = await supabase.auth.getSession();
       const ext  = file.name.split('.').pop() ?? 'png';
       const path = `badges/${session?.user.id ?? 'anon'}/${Date.now()}.${ext}`;
@@ -962,8 +990,9 @@ const [isSaving, setIsSaving] = useState(false);
       updateConfig({ badgeImageUrl: publicUrl });
     } catch {
       alert('Badge upload failed. Please try again.');
+    } finally {
+      setUploadingBadge(false);
     }
-    setUploadingBadge(false);
   };
 
 

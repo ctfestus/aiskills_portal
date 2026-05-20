@@ -4845,7 +4845,11 @@ function StudentBadgesSection({ userId, C }: { userId: string; C: typeof LIGHT_C
                 {/* Badge image */}
                 <div className="w-28 h-28 flex items-center justify-center flex-shrink-0">
                   {earned && b.image_url
-                    ? <img src={b.image_url} alt={b.name} className="w-28 h-28 object-contain drop-shadow-md"/>
+                    ? (
+                      <div className="drop-shadow-md">
+                        <img src={b.image_url} alt={b.name} className="w-28 h-28 object-contain"/>
+                      </div>
+                    )
                     : earned
                       ? <span className="text-6xl leading-none">{b.icon}</span>
                       : <div className="w-28 h-28 rounded-full flex items-center justify-center" style={{ background: C.pill }}>
