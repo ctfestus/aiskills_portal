@@ -189,6 +189,11 @@ export default function OpenCertPageClient({
         @import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;600;700;800;900&display=swap');
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         * { box-sizing: border-box; }
+        .cert-desc p { margin: 0 0 6px; }
+        .cert-desc ul { list-style-type: disc; padding-left: 22px; margin: 0 0 6px; }
+        .cert-desc ol { list-style-type: decimal; padding-left: 22px; margin: 0 0 6px; }
+        .cert-desc li { margin-bottom: 2px; display: list-item; }
+        .cert-desc p:last-child, .cert-desc li:last-child { margin-bottom: 0; }
       `}</style>
 
       {/* -- Viewer section: grey background -- */}
@@ -361,7 +366,11 @@ export default function OpenCertPageClient({
 
           {/* 5. Description */}
           {description && (
-            <p style={{ margin: '0 0 20px', fontSize: isMobile ? 14 : 15, color: '#475569', lineHeight: 1.75 }}>{description}</p>
+            <div
+              className="cert-desc"
+              style={{ margin: '0 0 20px', fontSize: isMobile ? 14 : 15, color: '#475569', lineHeight: 1.75 }}
+              dangerouslySetInnerHTML={{ __html: description.includes('<') ? description : description.replace(/\n/g, '<br/>') }}
+            />
           )}
 
           {/* 6. Skills */}

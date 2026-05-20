@@ -200,7 +200,9 @@ export async function POST(req: NextRequest) {
         supabase.from('course_attempts').select('*')
           .eq('course_id', course_id).eq('student_id', sessionUser.id)
           .is('completed_at', null)
-          .order('started_at', { ascending: false }).limit(1).maybeSingle(),
+          .order('current_question_index', { ascending: false })
+          .order('updated_at', { ascending: false })
+          .limit(1).maybeSingle(),
         supabase.from('course_attempts').select('id', { count: 'exact', head: true })
           .eq('course_id', course_id).eq('student_id', sessionUser.id)
           .not('completed_at', 'is', null),
@@ -231,24 +233,59 @@ export async function POST(req: NextRequest) {
       const { data: course } = await supabase.from('courses').select('id').eq('id', course_id).single();
       if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
 
-      const payload = {
-        current_question_index: current_question_index ?? 0,
-        answers:                answers    ?? {},
-        streak:                 streak     ?? 0,
-        hints_used:             hints_used ?? [],
-        points:                 points     ?? 0,
-        updated_at:             new Date().toISOString(),
+      const incomingIndex = Number.isFinite(Number(current_question_index))
+        ? Number(current_question_index)
+        : 0;
+      const incomingAnswers = answers && typeof answers === 'object' && !Array.isArray(answers) ? answers : {};
+      const incomingHints = Array.isArray(hints_used) ? hints_used : [];
+      const incomingPoints = Number.isFinite(Number(points)) ? Number(points) : 0;
+      const incomingStreak = Number.isFinite(Number(streak)) ? Number(streak) : 0;
+
+      const buildPayload = (existing?: {
+        current_question_index?: number | null;
+        answers?: Record<string, string> | null;
+        hints_used?: string[] | null;
+        points?: number | null;
+        streak?: number | null;
+      }) => {
+        const existingIndex = existing?.current_question_index ?? 0;
+        const existingAnswers = existing?.answers && typeof existing.answers === 'object' ? existing.answers : {};
+        const existingHints = Array.isArray(existing?.hints_used) ? existing.hints_used : [];
+        return {
+          current_question_index: Math.max(existingIndex, incomingIndex),
+          // Existing answers win on conflicts so an older tab cannot rewrite completed work.
+          answers:                { ...incomingAnswers, ...existingAnswers },
+          streak:                 Math.max(existing?.streak ?? 0, incomingStreak),
+          hints_used:             [...new Set([...existingHints, ...incomingHints])],
+          points:                 Math.max(existing?.points ?? 0, incomingPoints),
+          updated_at:             new Date().toISOString(),
+        };
       };
 
-      const { data: existing } = await supabase.from('course_attempts').select('id')
+      const { data: existing } = await supabase.from('course_attempts')
+        .select('id, current_question_index, answers, hints_used, points, streak')
         .eq('course_id', course_id).eq('student_id', sessionUser.id)
         .is('completed_at', null)
-        .order('started_at', { ascending: false }).limit(1).maybeSingle();
+        .order('current_question_index', { ascending: false })
+        .order('updated_at', { ascending: false })
+        .limit(1).maybeSingle();
 
       if (existing) {
+        const payload = buildPayload(existing);
         const { error } = await supabase.from('course_attempts').update(payload).eq('id', existing.id);
         if (error) { console.error('[course/save-progress] update', error); return NextResponse.json({ error: 'Failed to save progress.' }, { status: 500 }); }
       } else {
+        const { data: completedPass } = await supabase.from('course_attempts')
+          .select('id')
+          .eq('course_id', course_id).eq('student_id', sessionUser.id)
+          .eq('passed', true)
+          .not('completed_at', 'is', null)
+          .limit(1).maybeSingle();
+
+        if (completedPass) {
+          return NextResponse.json({ ok: true, ignored: 'already_completed' });
+        }
+
         const { data: last } = await supabase.from('course_attempts').select('attempt_number')
           .eq('course_id', course_id).eq('student_id', sessionUser.id)
           .order('attempt_number', { ascending: false }).limit(1).maybeSingle();
@@ -257,18 +294,22 @@ export async function POST(req: NextRequest) {
           student_id:     sessionUser.id,
           course_id,
           attempt_number: (last?.attempt_number ?? 0) + 1,
-          ...payload,
+          ...buildPayload(),
         });
 
         if (error) {
           // Unique constraint violation: another concurrent request already created the attempt.
           // Re-fetch it and update instead.
           if (error.code === '23505') {
-            const { data: race } = await supabase.from('course_attempts').select('id')
+            const { data: race } = await supabase.from('course_attempts')
+              .select('id, current_question_index, answers, hints_used, points, streak')
               .eq('course_id', course_id).eq('student_id', sessionUser.id)
-              .is('completed_at', null).limit(1).maybeSingle();
+              .is('completed_at', null)
+              .order('current_question_index', { ascending: false })
+              .order('updated_at', { ascending: false })
+              .limit(1).maybeSingle();
             if (race) {
-              await supabase.from('course_attempts').update(payload).eq('id', race.id);
+              await supabase.from('course_attempts').update(buildPayload(race)).eq('id', race.id);
             }
           } else {
             console.error('[course/save-progress] insert', error);
@@ -302,7 +343,9 @@ export async function POST(req: NextRequest) {
           .select('id, answers, hints_used')
           .eq('course_id', course_id).eq('student_id', sessionUser.id)
           .is('completed_at', null)
-          .order('started_at', { ascending: false }).limit(1).maybeSingle(),
+          .order('current_question_index', { ascending: false })
+          .order('updated_at', { ascending: false })
+          .limit(1).maybeSingle(),
         supabase.from('students').select('full_name').eq('id', sessionUser.id).single(),
       ]);
 

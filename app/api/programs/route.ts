@@ -92,6 +92,15 @@ export async function PATCH(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: 'Failed to update program' }, { status: 500 });
+
+  // Cascade name change to all issued certificates for this program
+  if (update.name) {
+    await adminClient()
+      .from('open_certificates')
+      .update({ program_name: update.name })
+      .eq('program_id', id);
+  }
+
   return NextResponse.json({ data });
 }
 

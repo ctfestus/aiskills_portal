@@ -10,6 +10,72 @@ export const dynamic = 'force-dynamic';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+function mergeProgress(existing: any, incoming: any) {
+  const base = existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {};
+  const next = incoming && typeof incoming === 'object' && !Array.isArray(incoming) ? incoming : {};
+  const merged: Record<string, any> = { ...base };
+
+  for (const [reqId, incomingEntry] of Object.entries(next)) {
+    const existingEntry = merged[reqId];
+    if (existingEntry?.completed && !(incomingEntry as any)?.completed) continue;
+    merged[reqId] = {
+      ...(existingEntry && typeof existingEntry === 'object' ? existingEntry : {}),
+      ...(incomingEntry && typeof incomingEntry === 'object' ? incomingEntry : {}),
+      completed: Boolean(existingEntry?.completed || (incomingEntry as any)?.completed),
+    };
+  }
+
+  return merged;
+}
+
+function lessonIndexMap(modules: any[]) {
+  const map = new Map<string, number>();
+  let idx = 0;
+  for (const mod of modules) {
+    for (const lesson of mod.lessons ?? []) map.set(lesson.id, idx++);
+  }
+  return map;
+}
+
+function chooseCurrentLesson(modules: any[], existing: any, incomingModuleId?: string, incomingLessonId?: string) {
+  const indexes = lessonIndexMap(modules);
+  const existingIdx = existing?.current_lesson_id ? indexes.get(existing.current_lesson_id) : undefined;
+  const incomingIdx = incomingLessonId ? indexes.get(incomingLessonId) : undefined;
+
+  if (incomingIdx == null) {
+    return {
+      moduleId: existing?.current_module_id ?? incomingModuleId ?? null,
+      lessonId: existing?.current_lesson_id ?? incomingLessonId ?? null,
+    };
+  }
+
+  if (existingIdx != null && existingIdx > incomingIdx) {
+    return { moduleId: existing.current_module_id ?? null, lessonId: existing.current_lesson_id ?? null };
+  }
+
+  return { moduleId: incomingModuleId || null, lessonId: incomingLessonId || null };
+}
+
+function countCompletedRequirements(modules: any[], progress: any) {
+  let totalReqs = 0;
+  let doneReqs  = 0;
+  for (const mod of modules) {
+    for (const lesson of mod.lessons ?? []) {
+      for (const req of lesson.requirements ?? []) {
+        totalReqs++;
+        const entry = (progress ?? {})[req.id];
+        if (!entry) continue;
+        if (req.type === 'mcq') {
+          if (entry.selectedAnswer === req.correctAnswer) doneReqs++;
+        } else {
+          if (entry.completed) doneReqs++;
+        }
+      }
+    }
+  }
+  return { totalReqs, doneReqs };
+}
+
 const adminClient = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
@@ -327,24 +393,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
 
+  const modules = Array.isArray(ve.modules) ? ve.modules : [];
+  const { data: existingAttempt } = await supabase
+    .from('guided_project_attempts')
+    .select('progress, current_module_id, current_lesson_id, completed_at')
+    .eq('ve_id', resolvedVeId)
+    .eq('student_id', progressUser.id)
+    .maybeSingle();
+
+  const mergedProgress = mergeProgress(existingAttempt?.progress, progress);
+  const current = chooseCurrentLesson(modules, existingAttempt, currentModuleId, currentLessonId);
+
   // Completion derived server-side. MCQ requirements are validated against correctAnswer;
   // honor-system types (task, upload, reflection, etc.) trust the completed flag.
-  let totalReqs = 0;
-  let doneReqs  = 0;
-  for (const mod of (Array.isArray(ve.modules) ? ve.modules : [])) {
-    for (const lesson of mod.lessons ?? []) {
-      for (const req of lesson.requirements ?? []) {
-        totalReqs++;
-        const entry = (progress ?? {})[req.id];
-        if (!entry) continue;
-        if (req.type === 'mcq') {
-          if (entry.selectedAnswer === req.correctAnswer) doneReqs++;
-        } else {
-          if (entry.completed) doneReqs++;
-        }
-      }
-    }
-  }
+  const { totalReqs, doneReqs } = countCompletedRequirements(modules, mergedProgress);
   const resolvedCompletedAt = (totalReqs > 0 && doneReqs >= totalReqs) ? new Date().toISOString() : null;
 
   const { error } = await supabase
@@ -353,10 +415,10 @@ export async function POST(req: NextRequest) {
       {
         ve_id:             resolvedVeId,
         student_id:        progressUser.id,
-        progress:          progress || {},
-        current_module_id: currentModuleId || null,
-        current_lesson_id: currentLessonId || null,
-        completed_at:      resolvedCompletedAt,
+        progress:          mergedProgress,
+        current_module_id: current.moduleId,
+        current_lesson_id: current.lessonId,
+        completed_at:      existingAttempt?.completed_at ?? resolvedCompletedAt,
       },
       { onConflict: 'student_id,ve_id' },
     );

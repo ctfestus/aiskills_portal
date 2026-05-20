@@ -117,7 +117,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
         const passed = !minScore || score >= minScore;
         onComplete(json, dataUrl, passed);
       } catch (err: any) {
-        setError(err.message || 'Analysis failed. Please try again.');
+        setError(err.message || 'The AI review service is busy right now. Please wait a moment and try again. Your work has not been lost.');
       } finally {
         setAnalyzing(false);
       }

@@ -217,7 +217,7 @@ export default function OnboardingPage() {
       // Trigger onboarding email sequence (fire-and-forget)
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.email) {
-        fetch('/api/workflows/onboarding', {
+        fetch('/api/trigger/onboarding', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({

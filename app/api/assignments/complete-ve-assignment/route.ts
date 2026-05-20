@@ -9,6 +9,52 @@ export const dynamic = 'force-dynamic';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+function mergeProgress(existing: any, incoming: any) {
+  const base = existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {};
+  const next = incoming && typeof incoming === 'object' && !Array.isArray(incoming) ? incoming : {};
+  const merged: Record<string, any> = { ...base };
+
+  for (const [reqId, incomingEntry] of Object.entries(next)) {
+    const existingEntry = merged[reqId];
+    if (existingEntry?.completed && !(incomingEntry as any)?.completed) continue;
+    merged[reqId] = {
+      ...(existingEntry && typeof existingEntry === 'object' ? existingEntry : {}),
+      ...(incomingEntry && typeof incomingEntry === 'object' ? incomingEntry : {}),
+      completed: Boolean(existingEntry?.completed || (incomingEntry as any)?.completed),
+    };
+  }
+
+  return merged;
+}
+
+function lessonIndexMap(modules: any[]) {
+  const map = new Map<string, number>();
+  let idx = 0;
+  for (const mod of modules) {
+    for (const lesson of mod.lessons ?? []) map.set(lesson.id, idx++);
+  }
+  return map;
+}
+
+function chooseCurrentLesson(modules: any[], existing: any, incomingModuleId?: string, incomingLessonId?: string) {
+  const indexes = lessonIndexMap(modules);
+  const existingIdx = existing?.current_lesson_id ? indexes.get(existing.current_lesson_id) : undefined;
+  const incomingIdx = incomingLessonId ? indexes.get(incomingLessonId) : undefined;
+
+  if (incomingIdx == null) {
+    return {
+      moduleId: existing?.current_module_id ?? incomingModuleId ?? null,
+      lessonId: existing?.current_lesson_id ?? incomingLessonId ?? null,
+    };
+  }
+
+  if (existingIdx != null && existingIdx > incomingIdx) {
+    return { moduleId: existing.current_module_id ?? null, lessonId: existing.current_lesson_id ?? null };
+  }
+
+  return { moduleId: incomingModuleId || null, lessonId: incomingLessonId || null };
+}
+
 async function getUser(req: NextRequest) {
   const auth = req.headers.get('authorization');
   if (!auth?.startsWith('Bearer ')) return null;
@@ -92,24 +138,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Assignment has no linked virtual experience' }, { status: 400 });
   }
 
-  // Fetch VE for server-side completion validation
-  const { data: ve } = await supabase.from('virtual_experiences')
-    .select('id, modules, status')
-    .eq('id', veFormId)
-    .single();
+  // Fetch VE and existing attempt for server-side completion validation.
+  const [{ data: ve }, { data: existingAttempt }] = await Promise.all([
+    supabase.from('virtual_experiences')
+      .select('id, modules, status')
+      .eq('id', veFormId)
+      .single(),
+    supabase.from('guided_project_attempts')
+      .select('progress, current_module_id, current_lesson_id')
+      .eq('ve_id', veFormId)
+      .eq('student_id', user.id)
+      .maybeSingle(),
+  ]);
 
   if (!ve || ve.status !== 'published') {
     return NextResponse.json({ error: 'Virtual experience not found' }, { status: 404 });
   }
 
+  const modules = Array.isArray(ve.modules) ? ve.modules : [];
+  const mergedProgress = mergeProgress(existingAttempt?.progress, progress);
+  const current = chooseCurrentLesson(modules, existingAttempt, currentModuleId, currentLessonId);
+
   // Server-validate completion. MCQ requires correct answer; all other types trust the completed flag.
   let totalReqs = 0;
   let doneReqs = 0;
-  for (const mod of (Array.isArray(ve.modules) ? ve.modules : [])) {
+  for (const mod of modules) {
     for (const lesson of mod.lessons ?? []) {
       for (const req of lesson.requirements ?? []) {
         totalReqs++;
-        const entry = (progress ?? {})[req.id];
+        const entry = (mergedProgress ?? {})[req.id];
         if (!entry) continue;
         if (req.type === 'mcq') {
           if (entry.selectedAnswer === req.correctAnswer) doneReqs++;
@@ -134,9 +191,9 @@ export async function POST(req: NextRequest) {
     p_ve_id:             veFormId,
     p_assignment_id:     assignmentId,
     p_student_id:        user.id,
-    p_progress:          progress || {},
-    p_current_module_id: currentModuleId || null,
-    p_current_lesson_id: currentLessonId || null,
+    p_progress:          mergedProgress,
+    p_current_module_id: current.moduleId,
+    p_current_lesson_id: current.lessonId,
   };
   if (isGroupAssignment && groupId) {
     rpcParams.p_group_id    = groupId;

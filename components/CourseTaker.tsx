@@ -274,6 +274,7 @@ export function CourseTaker({
   // Anti-cheat state
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [attemptError, setAttemptError] = useState('');
+  const [submitError, setSubmitError] = useState('');
   const [checkingAttempts, setCheckingAttempts] = useState(!!initialStudentName);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const confettiRef   = useRef<HTMLCanvasElement | null>(null);
@@ -689,7 +690,7 @@ export function CourseTaker({
     const { data: { session } } = await supabase.auth.getSession();
     // Pass the final answers so complete-attempt writes them atomically with completed_at,
     // avoiding a race where save-progress loses the last lessonOnly 'viewed' entry.
-    await fetch('/api/course', {
+    const res = await fetch('/api/course', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -704,8 +705,19 @@ export function CourseTaker({
         current_question_index: totalQuestions,
         final_answers:          answersRef.current,
       }),
-    }).catch(err => console.error('[clearProgress] failed:', err));
+    });
+    if (!res.ok) throw new Error(`complete-attempt failed: ${res.status}`);
   }, [formId, studentEmail, totalQuestions, passmark, totalPoints, reviewMode]);
+
+  const finishCourse = useCallback(async (finalScore: number) => {
+    setSubmitError('');
+    try {
+      await clearProgress(finalScore);
+      setPhase('complete');
+    } catch {
+      setSubmitError('Could not save your result. Please check your connection and try again.');
+    }
+  }, [clearProgress]);
 
   // Resume from saved progress
   const handleResume = useCallback(() => {
@@ -876,7 +888,7 @@ export function CourseTaker({
   // Detect on mount/resume and auto-transition to the completion screen.
   useEffect(() => {
     if (phase === 'course' && !reviewMode && totalSlides > 0 && currentQuestionIndex >= totalSlides) {
-      clearProgress(score).then(() => setPhase('complete'));
+      finishCourse(score);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, currentQuestionIndex, totalSlides, reviewMode]);
@@ -1875,7 +1887,7 @@ export function CourseTaker({
     if (!reviewMode && pending.length > 0) {
       setFinishPending(pending);
     } else {
-      clearProgress(finalScore).then(() => setPhase('complete'));
+      finishCourse(finalScore);
     }
   };
 
@@ -1958,7 +1970,7 @@ export function CourseTaker({
         setIsChecking(false);
         setIsCorrect(null);
       } else {
-        clearProgress(score).then(() => setPhase('complete'));
+        finishCourse(score);
       }
     }
   };
@@ -2228,7 +2240,7 @@ export function CourseTaker({
           </div>
           <div className="flex gap-2 pt-1">
             <button
-              onClick={() => { setFinishPending(null); clearProgress(score).then(() => setPhase('complete')); }}
+              onClick={() => { setFinishPending(null); finishCourse(score); }}
               className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
             >
               Submit anyway
@@ -2276,6 +2288,30 @@ export function CourseTaker({
         )}
       </AnimatePresence>
 
+      {/* -- Submit error banner -- */}
+      <AnimatePresence>
+        {submitError && (
+          <motion.div
+            key="submit-error"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl"
+            style={{ background: '#18181b', border: '1px solid rgba(239,68,68,0.4)', maxWidth: 420, width: 'calc(100vw - 32px)' }}
+          >
+            <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+            <p className="flex-1 text-xs text-zinc-300">{submitError}</p>
+            <button
+              onClick={() => finishCourse(score)}
+              className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-opacity hover:opacity-80"
+              style={{ background: '#ef4444' }}
+            >
+              Retry
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* -- Main container (split layout for full-screen, single column for inline) -- */}
       <div

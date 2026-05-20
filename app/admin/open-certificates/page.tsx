@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback, useMemo, type ReactNode } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/components/ThemeProvider';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
@@ -8,7 +10,7 @@ import {
   Plus, Loader2, Award, Upload, X, Check, Copy, ExternalLink,
   Download, AlertTriangle, Search, BadgeCheck, ArrowLeft, Edit2,
   MoreVertical, Trash2, ChevronLeft, ChevronRight, Image as ImageIcon,
-  Calendar,
+  Calendar, Bold, Italic, List, ListOrdered,
 } from 'lucide-react';
 
 const LIGHT_C = {
@@ -89,6 +91,10 @@ const ISSUE_MODES: { value: IssueMode; label: string; desc: string }[] = [
 const PAGE_SIZE = 20;
 const AVATAR_COLORS = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777'];
 
+function stripHtml(html: string) {
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function parseCsv(text: string): ManualRow[] {
   const lines = text.trim().split('\n').filter(l => l.trim());
   if (!lines.length) return [];
@@ -153,6 +159,74 @@ function Modal({ title, onClose, children, C, width = 560 }: {
           </button>
         </div>
         {children}
+      </div>
+    </div>
+  );
+}
+
+// --- Rich Text Editor ---
+const RICH_TEXT_CSS = `
+  .rte-wrap .ProseMirror {
+    outline: none;
+    min-height: 120px;
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.65;
+    color: inherit;
+  }
+  .rte-wrap .ProseMirror p { margin: 0 0 6px; }
+  .rte-wrap .ProseMirror ul { list-style-type: disc; padding-left: 22px; margin: 0 0 6px; }
+  .rte-wrap .ProseMirror ol { list-style-type: decimal; padding-left: 22px; margin: 0 0 6px; }
+  .rte-wrap .ProseMirror li { display: list-item; margin-bottom: 2px; }
+  .rte-wrap .ProseMirror p:last-child,
+  .rte-wrap .ProseMirror li:last-child { margin-bottom: 0; }
+  .rte-wrap .ProseMirror.ProseMirror-focused { outline: none; }
+`;
+
+function RichTextEditor({ value, onChange, C, placeholder, rows }: {
+  value: string; onChange: (html: string) => void;
+  C: typeof LIGHT_C; placeholder?: string; rows?: number;
+}) {
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: value,
+    onUpdate: ({ editor }) => onChange(editor.getHTML()),
+  });
+
+  if (!editor) return null;
+
+  const btnStyle = (active: boolean): React.CSSProperties => ({
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: 28, height: 28, borderRadius: 5, cursor: 'pointer', border: 'none',
+    background: active ? C.cta : 'transparent',
+    color: active ? C.ctaText : C.muted,
+    transition: 'background 0.12s, color 0.12s',
+  });
+
+  const minH = rows ? `${rows * 24 + 20}px` : '120px';
+
+  return (
+    <div className="rte-wrap" style={{ border: `1px solid ${C.cardBorder}`, borderRadius: 8, background: C.input, overflow: 'hidden' }}>
+      <style>{RICH_TEXT_CSS}</style>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', gap: 2, padding: '6px 8px', borderBottom: `1px solid ${C.cardBorder}`, background: C.card }}>
+        <button type="button" onClick={() => editor.chain().focus().toggleBold().run()} style={btnStyle(editor.isActive('bold'))} title="Bold">
+          <Bold style={{ width: 13, height: 13 }} />
+        </button>
+        <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} style={btnStyle(editor.isActive('italic'))} title="Italic">
+          <Italic style={{ width: 13, height: 13 }} />
+        </button>
+        <div style={{ width: 1, background: C.cardBorder, margin: '0 4px' }} />
+        <button type="button" onClick={() => editor.chain().focus().toggleBulletList().run()} style={btnStyle(editor.isActive('bulletList'))} title="Bullet list">
+          <List style={{ width: 13, height: 13 }} />
+        </button>
+        <button type="button" onClick={() => editor.chain().focus().toggleOrderedList().run()} style={btnStyle(editor.isActive('orderedList'))} title="Numbered list">
+          <ListOrdered style={{ width: 13, height: 13 }} />
+        </button>
+      </div>
+      {/* Editor area */}
+      <div style={{ minHeight: minH, color: C.text }}>
+        <EditorContent editor={editor} />
       </div>
     </div>
   );
@@ -232,8 +306,7 @@ function ProgramForm({ initial, onSave, onCancel, C }: {
 
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>Description</label>
-            <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="What did participants learn or achieve?" rows={isMobile ? 3 : 5}
-              style={{ width: '100%', background: C.input, border: `1px solid ${C.cardBorder}`, borderRadius: 8, padding: '10px 12px', fontSize: 14, color: C.text, resize: 'vertical', boxSizing: 'border-box' }} />
+            <RichTextEditor value={desc} onChange={setDesc} C={C} rows={isMobile ? 3 : 5} />
           </div>
 
           <div>
@@ -806,7 +879,7 @@ export default function OpenCertificatesPage() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <h3 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{p.name}</h3>
                         {p.description && (
-                          <p style={{ margin: '0 0 10px', fontSize: 14, color: C.muted, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{p.description}</p>
+                          <p style={{ margin: '0 0 10px', fontSize: 14, color: C.muted, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{stripHtml(p.description)}</p>
                         )}
                         {/* Stats row */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>

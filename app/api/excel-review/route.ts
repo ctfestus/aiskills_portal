@@ -245,6 +245,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(parsed);
   } catch (err: any) {
     console.error('excel-review error:', err);
-    return NextResponse.json({ error: err.message || 'Review failed' }, { status: 500 });
+    return NextResponse.json({
+      error: 'The AI review service is busy right now. Please wait a moment and try again. Your work has not been lost.',
+    }, { status: 503 });
   }
 }

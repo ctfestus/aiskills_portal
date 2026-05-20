@@ -31,6 +31,20 @@ export const { POST } = serve<{ email: string; name: string; userId: string }>(
       const t        = await getTenantSettings();
       const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
       const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
+
+      // Add to Resend Audience if configured
+      const audienceId = process.env.RESEND_AUDIENCE_ID;
+      if (audienceId) {
+        const [firstName, ...rest] = name.trim().split(' ');
+        await resend.contacts.create({
+          audienceId,
+          email,
+          firstName: firstName || name,
+          lastName:  rest.join(' ') || undefined,
+          unsubscribed: false,
+        }).catch((err: any) => console.error('[onboarding] resend contact create failed', err?.message ?? err));
+      }
+
       await resend.emails.send({
         from:    FROM,
         to:      email,

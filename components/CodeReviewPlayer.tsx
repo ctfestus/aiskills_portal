@@ -133,7 +133,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
       const passed = !minScore || json.overallScore >= minScore;
       onComplete(json, lean, passed);
     } catch (err: any) {
-      setError(err.message || 'Review failed. Please try again.');
+      setError(err.message || 'The AI review service is busy right now. Please wait a moment and try again. Your work has not been lost.');
     } finally {
       setAnalyzing(false);
     }

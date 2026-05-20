@@ -322,7 +322,7 @@ export default function VirtualExperienceTaker({
     const now = new Date().toISOString();
     setSaving(true);
     try {
-      await fetch('/api/guided-project-progress', {
+      const res = await fetch('/api/guided-project-progress', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeader },
         body: JSON.stringify({
@@ -331,7 +331,11 @@ export default function VirtualExperienceTaker({
           currentLessonId: currentLesId, completedAt: now,
         }),
       });
+      if (!res.ok) throw new Error(`complete failed: ${res.status}`);
       setCompleted(true);
+    } catch (err) {
+      alert('Could not save your completion. Please check your connection and try again.');
+      console.error('[VE complete]', err);
     } finally {
       setSaving(false);
     }
