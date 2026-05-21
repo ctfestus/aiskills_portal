@@ -202,8 +202,8 @@ function CohortTimelineBadge({ cohort }: { cohort: CohortTimeline | null }) {
                 <div className="absolute left-0 top-1/2 h-[3px] rounded-full"
                   style={{ width: `${pct}%`, background: greenGrad, transform: 'translateY(-50%)' }}/>
                 {/* Start dot */}
-                <div className="absolute left-0 top-1/2 w-2.5 h-2.5 rounded-full"
-                  style={{ background: green, transform: 'translate(-1px, -50%)' }}/>
+                <div className="absolute left-0 top-1/2 w-3 h-3 rounded-full border-2"
+                  style={{ background: C.card, borderColor: green, transform: 'translate(-1px, -50%)' }}/>
                 {/* End node */}
                 <div className="absolute right-0 top-1/2 w-6 h-6 rounded-full border-2 flex items-center justify-center"
                   style={{ background: C.card, borderColor: green, transform: 'translate(4px, -50%)', boxShadow: `0 0 0 4px ${greenDim}` }}>
