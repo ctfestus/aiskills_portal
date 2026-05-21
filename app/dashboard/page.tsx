@@ -8672,10 +8672,13 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
 
 // -- Data Center Admin Section ---
 
+type DatasetFile = { name: string; url: string };
+
 type DatasetRow = {
   id: string; title: string; description: string | null; cover_image_url: string | null;
   cover_image_alt: string | null; tags: string[]; category: string | null;
   sample_questions: string[]; file_url: string | null; file_name: string | null;
+  files: DatasetFile[];
   row_count: number | null; source: string | null; source_url: string | null;
   scenario: string | null; disclaimer: string | null;
   table_type: 'single' | 'multiple' | null;
@@ -8685,6 +8688,7 @@ type DatasetRow = {
 const BLANK_DATASET: Omit<DatasetRow, 'id' | 'created_at'> = {
   title: '', description: '', cover_image_url: null, cover_image_alt: null,
   tags: [], category: '', sample_questions: [], file_url: '', file_name: '',
+  files: [],
   row_count: null, source: null, source_url: null, scenario: null, disclaimer: null, table_type: null, is_published: false,
 };
 
@@ -8703,11 +8707,6 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
   const [tagInput, setTagInput]   = useState('');
   const [fileMode, setFileMode]         = useState<'link' | 'upload'>('link');
   const [fileUploading, setFileUploading] = useState(false);
-  const [sheetNames, setSheetNames]         = useState<string[]>([]);
-  const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
-  const [extraUrls, setExtraUrls]           = useState<{ name: string; url: string }[]>([]);
-  const [pendingWb, setPendingWb]           = useState<any>(null);
-  const [pendingFileName, setPendingFileName] = useState('');
   const tagInputRef               = useRef<HTMLInputElement>(null);
   const dataFileRef               = useRef<HTMLInputElement>(null);
 
@@ -8736,12 +8735,14 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
   }
 
   function openEdit(d: DatasetRow) {
+    const files = normalizeDatasetFiles(d);
     setEditing(d);
     setForm({
       title: d.title, description: d.description ?? '', cover_image_url: d.cover_image_url,
       cover_image_alt: d.cover_image_alt, tags: d.tags, category: d.category ?? '',
       sample_questions: d.sample_questions, file_url: d.file_url ?? '',
       file_name: d.file_name ?? '', row_count: d.row_count,
+      files,
       source: d.source ?? '', source_url: d.source_url ?? '', scenario: d.scenario ?? '', disclaimer: d.disclaimer ?? '',
       table_type: d.table_type ?? null,
       is_published: d.is_published,
@@ -8762,6 +8763,58 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     setForm(f => ({ ...f, tags: f.tags.filter(t => t !== tag) }));
   }
 
+  function normalizeDatasetFiles(d: { file_url?: string | null; file_name?: string | null; files?: DatasetFile[] | null }) {
+    const seen = new Set<string>();
+    const files: DatasetFile[] = [];
+    const add = (name: string | null | undefined, url: string | null | undefined) => {
+      const cleanUrl = url?.trim();
+      if (!cleanUrl || seen.has(cleanUrl)) return;
+      seen.add(cleanUrl);
+      files.push({ name: name?.trim() || cleanUrl.split('/').pop() || 'Dataset file', url: cleanUrl });
+    };
+    add(d.file_name, d.file_url);
+    (d.files ?? []).forEach(file => add(file.name, file.url));
+    return files;
+  }
+
+  function setPrimaryFile(file: DatasetFile | null) {
+    setForm(f => ({ ...f, file_url: file?.url ?? '', file_name: file?.name ?? '' }));
+  }
+
+  function unlinkDatasetFile(url: string) {
+    setForm(f => {
+      const files = normalizeDatasetFiles(f).filter(file => file.url !== url);
+      const currentPrimaryRemoved = f.file_url === url;
+      const nextPrimary = currentPrimaryRemoved ? files[0] : files.find(file => file.url === f.file_url) ?? files[0];
+      return {
+        ...f,
+        files,
+        file_url: nextPrimary?.url ?? '',
+        file_name: nextPrimary?.name ?? '',
+      };
+    });
+  }
+
+  async function removeDatasetFile(url: string) {
+    setError('');
+    try {
+      const token = await getToken();
+      const res = await fetch('/api/data-center/github-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(json.error ?? 'Could not delete file from storage.');
+        return;
+      }
+      unlinkDatasetFile(url);
+    } catch {
+      setError('Could not delete file from storage.');
+    }
+  }
+
   async function generateMetadata() {
     if (!form.file_url) { setError('Upload or paste a file URL first before generating metadata.'); return; }
     setGenerating(true);
@@ -8779,6 +8832,7 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
         ...f,
         title:            data.title            ?? f.title,
         description:      data.description      ?? f.description,
+        scenario:         data.scenario         ?? f.scenario,
         category:         data.category         ?? f.category,
         tags:             data.tags?.length      ? data.tags : f.tags,
         sample_questions: data.sample_questions?.length ? data.sample_questions : f.sample_questions,
@@ -8798,9 +8852,14 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     // Commit any partially typed tag before saving
     const pendingTag = tagInput.trim();
     const allTags = pendingTag && !form.tags.includes(pendingTag) ? [...form.tags, pendingTag] : form.tags;
+    const files = normalizeDatasetFiles(form);
+    const primary = files.find(file => file.url === form.file_url) ?? files[0];
     const payload = {
       ...form,
       tags: allTags,
+      files,
+      file_url: primary?.url ?? '',
+      file_name: primary?.name ?? '',
       ...(editing ? { id: editing.id } : {}),
     };
     const res = await fetch('/api/data-center', {
@@ -8837,6 +8896,7 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
       title: d.title, description: d.description, cover_image_url: d.cover_image_url,
       cover_image_alt: d.cover_image_alt, tags: d.tags, category: d.category,
       sample_questions: d.sample_questions, file_url: d.file_url, file_name: d.file_name,
+      files: normalizeDatasetFiles(d),
       source: d.source, source_url: (d as any).source_url ?? null, scenario: (d as any).scenario ?? null, disclaimer: d.disclaimer,
       table_type: d.table_type, is_published: d.is_published,
     };
@@ -8894,7 +8954,7 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     }
   }
 
-  async function uploadBlob(blob: Blob, fileName: string): Promise<string | null> {
+  async function uploadBlob(blob: Blob, fileName: string): Promise<DatasetFile | null> {
     const token = await getToken();
     const fd = new FormData();
     fd.append('file', new File([blob], fileName, { type: blob.type || 'application/octet-stream' }));
@@ -8905,67 +8965,17 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     });
     const json = await res.json();
     if (!res.ok) { setError(json.error ?? 'Upload failed'); return null; }
-    setForm(f => ({ ...f, file_url: json.url, file_name: fileName }));
-    return json.url;
-  }
-
-  async function handleSheetsConfirm() {
-    if (!selectedSheets.length) return;
-    setFileUploading(true);
-    setError('');
-    const extras: { name: string; url: string }[] = [];
-    try {
-      const XLSX = await import('xlsx');
-      const baseName = pendingFileName.replace(/\.(xlsx|xls)$/i, '');
-      for (let i = 0; i < selectedSheets.length; i++) {
-        const sheetName = selectedSheets[i];
-        const csv = XLSX.utils.sheet_to_csv(pendingWb.Sheets[sheetName]);
-        const fileName = `${baseName} - ${sheetName}.csv`;
-        const url = await uploadBlob(new Blob([csv], { type: 'text/csv' }), fileName);
-        if (!url) break;
-        if (i > 0) extras.push({ name: sheetName, url });
-      }
-      setExtraUrls(extras);
-      setSheetNames([]);
-      setSelectedSheets([]);
-      setPendingWb(null);
-      setPendingFileName('');
-    } catch {
-      setError('Failed to process sheets.');
-    } finally {
-      setFileUploading(false);
-      if (dataFileRef.current) dataFileRef.current.value = '';
-    }
+    const record = { name: json.name ?? fileName, url: json.url };
+    setForm(f => {
+      const files = normalizeDatasetFiles({ ...f, files: [...normalizeDatasetFiles(f), record] });
+      const primary = f.file_url ? files.find(file => file.url === f.file_url) : record;
+      return { ...f, files, file_url: primary?.url ?? '', file_name: primary?.name ?? '' };
+    });
+    return record;
   }
 
   async function handleDataFileUpload(file: File) {
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
     setError('');
-
-    if (ext === 'xlsx' || ext === 'xls') {
-      setFileUploading(true);
-      try {
-        const XLSX = await import('xlsx');
-        const buffer = await file.arrayBuffer();
-        const wb = XLSX.read(buffer, { type: 'array' });
-        if (wb.SheetNames.length === 1) {
-          const csv = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);
-          const fileName = file.name.replace(/\.(xlsx|xls)$/i, '.csv');
-          await uploadBlob(new Blob([csv], { type: 'text/csv' }), fileName);
-        } else {
-          setPendingWb(wb);
-          setPendingFileName(file.name);
-          setSheetNames(wb.SheetNames);
-        }
-      } catch {
-        setError('Failed to read Excel file.');
-      } finally {
-        setFileUploading(false);
-        if (dataFileRef.current) dataFileRef.current.value = '';
-      }
-      return;
-    }
-
     setFileUploading(true);
     try {
       await uploadBlob(file, file.name);
@@ -8974,6 +8984,14 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     } finally {
       setFileUploading(false);
       if (dataFileRef.current) dataFileRef.current.value = '';
+    }
+  }
+
+  async function handleDataFilesUpload(files: FileList | File[]) {
+    const list = Array.from(files);
+    if (!list.length) return;
+    for (const file of list) {
+      await handleDataFileUpload(file);
     }
   }
 
@@ -8996,6 +9014,7 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     border: `1px solid ${C.cardBorder}`, background: C.input, color: C.text,
     outline: 'none', boxSizing: 'border-box',
   };
+  const font = 'var(--font-sans, Inter, sans-serif)';
 
   if (view === 'editor') {
     const sectionHead = (icon: React.ReactNode, label: string, accent: string) => (
@@ -9014,7 +9033,7 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     );
 
     return (
-      <div>
+      <div style={{ fontFamily: font }}>
         {/* Top bar */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
           <div>
@@ -9215,105 +9234,46 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
 
               {fileMode === 'upload' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {/* Drop zone - hidden when sheet picker is active */}
-                  {sheetNames.length === 0 && (
-                    <div
-                      onClick={() => !fileUploading && dataFileRef.current?.click()}
-                      onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = C.cta; }}
-                      onDragLeave={e => { e.currentTarget.style.borderColor = C.cardBorder; }}
-                      onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = C.cardBorder; const f = e.dataTransfer.files[0]; if (f) handleDataFileUpload(f); }}
-                      style={{ border: `2px dashed ${C.cardBorder}`, borderRadius: 12, padding: '28px 20px', textAlign: 'center', cursor: fileUploading ? 'default' : 'pointer', background: C.page, transition: 'border-color 0.15s' }}
-                    >
-                      {fileUploading
-                        ? <><Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: C.cta, display: 'block' }} /><p style={{ fontSize: 14, color: C.faint, margin: 0 }}>Uploading...</p></>
-                        : <>
-                            <Upload size={24} style={{ margin: '0 auto 8px', color: C.faint, display: 'block' }} />
-                            <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: '0 0 4px' }}>Click to upload or drag and drop</p>
-                            <p style={{ fontSize: 12, color: C.faint, margin: 0 }}>CSV, Excel (.xlsx), JSON, ZIP (multiple CSVs), PDF - max 50 MB</p>
-                          </>
-                      }
-                      <input ref={dataFileRef} type="file" accept=".csv,.xlsx,.xls,.json,.zip,.pdf" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleDataFileUpload(f); }} />
-                    </div>
-                  )}
+                  <div
+                    onClick={() => !fileUploading && dataFileRef.current?.click()}
+                    onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = C.cta; }}
+                    onDragLeave={e => { e.currentTarget.style.borderColor = C.cardBorder; }}
+                    onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = C.cardBorder; if (e.dataTransfer.files.length) handleDataFilesUpload(e.dataTransfer.files); }}
+                    style={{ border: `2px dashed ${C.cardBorder}`, borderRadius: 12, padding: '28px 20px', textAlign: 'center', cursor: fileUploading ? 'default' : 'pointer', background: C.page, transition: 'border-color 0.15s' }}
+                  >
+                    {fileUploading
+                      ? <><Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 8px', color: C.cta, display: 'block' }} /><p style={{ fontSize: 14, color: C.faint, margin: 0 }}>Uploading...</p></>
+                      : <>
+                          <Upload size={24} style={{ margin: '0 auto 8px', color: C.faint, display: 'block' }} />
+                          <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: '0 0 4px' }}>Click to upload or drag and drop</p>
+                          <p style={{ fontSize: 12, color: C.faint, margin: 0 }}>CSV, Excel (.xlsx), JSON, ZIP, PDF - max 50 MB</p>
+                        </>
+                    }
+                    <input ref={dataFileRef} type="file" multiple accept=".csv,.xlsx,.xls,.json,.zip,.pdf" style={{ display: 'none' }} onChange={e => { if (e.target.files?.length) handleDataFilesUpload(e.target.files); }} />
+                  </div>
 
-                  {/* Multi-sheet picker */}
-                  {sheetNames.length > 0 && (
-                    <div style={{ border: `1px solid ${C.cardBorder}`, borderRadius: 12, overflow: 'hidden' }}>
-                      {/* Header */}
-                      <div style={{ padding: '12px 16px', background: C.page, borderBottom: `1px solid ${C.cardBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text }}>Select sheets to upload</p>
-                          <p style={{ margin: '2px 0 0', fontSize: 12, color: C.faint }}>{pendingFileName} -- {sheetNames.length} sheets found</p>
-                        </div>
-                        <button onClick={() => { setSheetNames([]); setSelectedSheets([]); setPendingWb(null); setPendingFileName(''); if (dataFileRef.current) dataFileRef.current.value = ''; }}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint, display: 'flex', alignItems: 'center' }}>
-                          <X size={14} />
-                        </button>
-                      </div>
-
-                      {/* Select all row */}
-                      <div style={{ padding: '8px 16px', borderBottom: `1px solid ${C.divider}`, display: 'flex', alignItems: 'center', gap: 10, background: C.input }}>
-                        <input type="checkbox"
-                          checked={selectedSheets.length === sheetNames.length}
-                          onChange={e => setSelectedSheets(e.target.checked ? [...sheetNames] : [])}
-                          style={{ width: 15, height: 15, cursor: 'pointer', accentColor: C.cta }} />
-                        <span style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.4 }}>Select All</span>
-                      </div>
-
-                      {/* Sheet rows */}
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        {sheetNames.map((name, i) => {
-                          const checked = selectedSheets.includes(name);
-                          return (
-                            <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', borderBottom: i < sheetNames.length - 1 ? `1px solid ${C.divider}` : 'none', cursor: 'pointer' }}
-                              onMouseEnter={e => (e.currentTarget.style.background = C.page)}
-                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                            >
-                              <input type="checkbox" checked={checked}
-                                onChange={e => setSelectedSheets(prev => e.target.checked ? [...prev, name] : prev.filter(s => s !== name))}
-                                style={{ width: 15, height: 15, cursor: 'pointer', accentColor: C.cta, flexShrink: 0 }} />
-                              <FileText size={14} style={{ color: checked ? C.cta : C.faint, flexShrink: 0 }} />
-                              <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{name}</span>
-                              {i === 0 && selectedSheets.includes(name) && (
-                                <span style={{ fontSize: 11, color: C.faint, marginLeft: 'auto' }}>primary</span>
-                              )}
-                            </label>
-                          );
-                        })}
-                      </div>
-
-                      {/* Confirm button */}
-                      <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.cardBorder}`, background: C.page }}>
-                        <button onClick={handleSheetsConfirm} disabled={!selectedSheets.length || fileUploading}
-                          style={{ width: '100%', padding: '9px 0', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontSize: 13, fontWeight: 700, cursor: !selectedSheets.length || fileUploading ? 'default' : 'pointer', opacity: !selectedSheets.length || fileUploading ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-                          {fileUploading ? <><Loader2 size={13} className="animate-spin" /> Uploading...</> : `Upload ${selectedSheets.length || ''} Sheet${selectedSheets.length !== 1 ? 's' : ''}`}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Extra sheet URLs (non-primary uploaded sheets) */}
-                  {extraUrls.length > 0 && (
+                  {/* Uploaded files */}
+                  {normalizeDatasetFiles(form).length > 0 && (
                     <div style={{ border: `1px solid ${C.cardBorder}`, borderRadius: 10, overflow: 'hidden' }}>
-                      <p style={{ margin: 0, padding: '8px 14px', fontSize: 12, fontWeight: 700, color: C.muted, background: C.page, borderBottom: `1px solid ${C.cardBorder}` }}>Additional uploaded sheets</p>
-                      {extraUrls.map((e, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderBottom: i < extraUrls.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
-                          <FileText size={13} style={{ color: C.cta, flexShrink: 0 }} />
-                          <span style={{ fontSize: 12, color: C.text, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
-                          <button onClick={() => navigator.clipboard.writeText(e.url)} style={{ fontSize: 11, color: C.cta, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, flexShrink: 0 }}>Copy URL</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Show uploaded file */}
-                  {form.file_url && sheetNames.length === 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, background: C.pill, border: `1px solid ${C.cardBorder}` }}>
-                      <FileText size={16} style={{ color: C.cta, flexShrink: 0 }} />
-                      <span style={{ fontSize: 13, color: C.text, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{form.file_name || form.file_url}</span>
-                      <button onClick={() => setForm(f => ({ ...f, file_url: '', file_name: '' }))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-                        <X size={14} />
-                      </button>
+                      <p style={{ margin: 0, padding: '8px 14px', fontSize: 12, fontWeight: 700, color: C.muted, background: C.page, borderBottom: `1px solid ${C.cardBorder}` }}>Uploaded files</p>
+                      {normalizeDatasetFiles(form).map((file, i, files) => {
+                        const isPrimary = file.url === form.file_url;
+                        return (
+                          <div key={file.url} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderBottom: i < files.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
+                            <FileText size={13} style={{ color: isPrimary ? C.cta : C.faint, flexShrink: 0 }} />
+                            <span style={{ fontSize: 12, color: C.text, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+                            {isPrimary ? (
+                              <span style={{ fontSize: 11, color: C.cta, fontWeight: 800, flexShrink: 0 }}>Primary</span>
+                            ) : (
+                              <button onClick={() => setPrimaryFile(file)} style={{ fontSize: 11, color: C.cta, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, flexShrink: 0 }}>Make primary</button>
+                            )}
+                            <button onClick={() => navigator.clipboard.writeText(file.url)} style={{ fontSize: 11, color: C.faint, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, flexShrink: 0 }}>Copy URL</button>
+                            <button onClick={() => removeDatasetFile(file.url)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                              <X size={14} />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -9389,7 +9349,7 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
   }
 
   return (
-    <div>
+    <div style={{ fontFamily: font }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
           <h2 style={{ fontWeight: 700, fontSize: 18, color: C.text, margin: 0 }}>Data Playground</h2>

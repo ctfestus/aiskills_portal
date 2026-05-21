@@ -58,6 +58,9 @@ function Sk({ w = '100%', h = 16, r = 8 }: { w?: string | number; h?: number; r?
 }
 
 // --- Types ---
+type DatasetFile = { name: string; url: string };
+type PreviewEntry = { name: string; type: 'csv' | 'pdf' | 'xlsx'; content: string; blobUrl?: string; xlsxBuf?: ArrayBuffer; sheetName?: string };
+
 interface DCDataset {
   id: string;
   title: string;
@@ -69,6 +72,7 @@ interface DCDataset {
   sample_questions: string[];
   file_url: string | null;
   file_name: string | null;
+  files?: DatasetFile[] | null;
   row_count: number | null;
   source: string | null;
   source_url: string | null;
@@ -79,12 +83,14 @@ interface DCDataset {
 
 // --- AI Prompt builder ---
 function buildAIPrompt(d: DCDataset): string {
+  const files = getDatasetFiles(d);
   const lines: string[] = [
     `I have a dataset called "${d.title}".`,
     '',
     d.description ? `Description: ${d.description}` : '',
     '',
-    d.file_url ? `Data URL: ${d.file_url}` : '',
+    files.length === 1 ? `Data URL: ${files[0].url}` : '',
+    files.length > 1 ? `Data files:\n${files.map(file => `- ${file.name}: ${file.url}`).join('\n')}` : '',
   ];
   if (d.sample_questions.length > 0) {
     lines.push('', 'Sample questions to explore:');
@@ -92,6 +98,20 @@ function buildAIPrompt(d: DCDataset): string {
   }
   lines.push('', 'Please generate:', '1) A SQL CREATE TABLE statement with 10 sample INSERT rows.', '2) A Python pandas script to load and explore this data.', '3) Suggested SQL queries to answer the sample questions above.');
   return lines.filter(l => l !== undefined).join('\n');
+}
+
+function getDatasetFiles(d: DCDataset): DatasetFile[] {
+  const seen = new Set<string>();
+  const files: DatasetFile[] = [];
+  const add = (name: string | null | undefined, url: string | null | undefined) => {
+    const cleanUrl = url?.trim();
+    if (!cleanUrl || seen.has(cleanUrl)) return;
+    seen.add(cleanUrl);
+    files.push({ name: name?.trim() || cleanUrl.split('/').pop() || 'Dataset file', url: cleanUrl });
+  };
+  add(d.file_name, d.file_url);
+  (d.files ?? []).forEach(file => add(file.name, file.url));
+  return files;
 }
 
 // --- Dataset detail pane ---
@@ -103,62 +123,91 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
   const [headers, setHeaders]         = useState<string[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [pdfUrl, setPdfUrl]           = useState<string | null>(null);
-  const [zipTables, setZipTables]     = useState<{ name: string; type: 'csv' | 'pdf'; content: string; blobUrl?: string }[]>([]);
+  const [zipTables, setZipTables]     = useState<PreviewEntry[]>([]);
   const [activeTable, setActiveTable] = useState('');
   const blobUrlsRef = useRef<string[]>([]);
   useEffect(() => () => { blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u)); }, []);
+  const datasetFiles = getDatasetFiles(dataset);
   const prompt = buildAIPrompt(dataset);
-  const font = 'var(--font-lato, Lato, sans-serif)';
+  const font = 'var(--font-sans, Inter, sans-serif)';
 
   async function openPreview() {
     setShowPreview(true);
     if (preview !== null || zipTables.length > 0 || pdfUrl) return;
     setLoadingPreview(true);
     try {
-      const lower = dataset.file_url?.toLowerCase() ?? '';
-      const proxyUrl = `/api/data-center/proxy?url=${encodeURIComponent(dataset.file_url!)}`;
-      if (lower.endsWith('.zip')) {
-        const JSZip = (await import('jszip')).default;
-        const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error(`Proxy error ${res.status}`);
-        const buf = await res.arrayBuffer();
-        const zip = await JSZip.loadAsync(buf);
-        const entries = await Promise.all(
-          Object.keys(zip.files)
-            .filter(n => !zip.files[n].dir && (n.toLowerCase().endsWith('.csv') || n.toLowerCase().endsWith('.pdf')))
-            .map(async n => {
-              const base = n.replace(/^.*\//, '');
-              if (n.toLowerCase().endsWith('.pdf')) {
-                const bytes = await zip.files[n].async('arraybuffer');
-                const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-                blobUrlsRef.current.push(url);
-                return { name: base, type: 'pdf' as const, content: '', blobUrl: url };
-              }
-              return { name: base, type: 'csv' as const, content: await zip.files[n].async('string'), blobUrl: undefined };
-            })
-        );
-        setZipTables(entries);
-        setActiveTable(entries[0]?.name ?? '');
-        const firstCsv = entries.find(e => e.type === 'csv');
-        if (firstCsv) parseCSVContent(firstCsv.content);
-      } else if (lower.endsWith('.pdf')) {
-        const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error(`Proxy error ${res.status}`);
-        const bytes = await res.arrayBuffer();
-        const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-        blobUrlsRef.current.push(url);
-        setPdfUrl(url);
-      } else {
-        const Papa = (await import('papaparse')).default;
-        const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error(`Proxy error ${res.status}`);
-        const text = await res.text();
-        const result = Papa.parse(text, { header: true, preview: 10 });
-        setHeaders((result.meta as any).fields ?? []);
-        setPreview(result.data.map((row: any) => ((result.meta as any).fields ?? []).map((f: string) => String(row[f] ?? ''))));
-      }
+      const entries = (await Promise.all(datasetFiles.map(file => loadPreviewEntries(file, datasetFiles.length > 1)))).flat();
+      setZipTables(entries);
+      const firstPreviewable = entries.find(e => e.type === 'csv' || e.type === 'xlsx') ?? entries[0];
+      setActiveTable(firstPreviewable?.name ?? '');
+      if (firstPreviewable?.type === 'csv') parseCSVContent(firstPreviewable.content);
+      if (firstPreviewable?.type === 'xlsx' && firstPreviewable.xlsxBuf) parseXLSXBuffer(firstPreviewable.xlsxBuf, firstPreviewable.sheetName);
+      if (!firstPreviewable) setPreview([]);
     } catch { setPreview([]); }
     setLoadingPreview(false);
+  }
+
+  async function loadPreviewEntries(file: DatasetFile, includeFilePrefix: boolean): Promise<PreviewEntry[]> {
+    const lower = file.url.toLowerCase();
+    const proxyUrl = `/api/data-center/proxy?url=${encodeURIComponent(file.url)}`;
+    const displayName = (name: string) => includeFilePrefix ? `${file.name}: ${name}` : name;
+    if (lower.endsWith('.zip')) {
+      const JSZip = (await import('jszip')).default;
+      const res = await fetch(proxyUrl);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(`Proxy error ${res.status}${err.error ? `: ${err.error}` : ''}`);
+      }
+      const buf = await res.arrayBuffer();
+      const zip = await JSZip.loadAsync(buf);
+      return Promise.all(
+        Object.keys(zip.files)
+          .filter(n => !zip.files[n].dir && (n.toLowerCase().endsWith('.csv') || n.toLowerCase().endsWith('.pdf') || n.toLowerCase().endsWith('.xlsx') || n.toLowerCase().endsWith('.xls')))
+          .map(async n => {
+            const base = n.replace(/^.*\//, '');
+            if (n.toLowerCase().endsWith('.pdf')) {
+              const bytes = await zip.files[n].async('arraybuffer');
+              const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+              blobUrlsRef.current.push(url);
+              return { name: displayName(base), type: 'pdf' as const, content: '', blobUrl: url };
+            }
+            if (n.toLowerCase().endsWith('.xlsx') || n.toLowerCase().endsWith('.xls')) {
+              const bytes = await zip.files[n].async('arraybuffer');
+              return expandXLSXEntries(bytes, displayName(base), true);
+            }
+            return { name: displayName(base), type: 'csv' as const, content: await zip.files[n].async('string') };
+          })
+      ).then(items => items.flat());
+    }
+
+    const res = await fetch(proxyUrl);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`Proxy error ${res.status}${err.error ? `: ${err.error}` : ''}`);
+    }
+    if (lower.endsWith('.pdf')) {
+      const bytes = await res.arrayBuffer();
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      blobUrlsRef.current.push(url);
+      return [{ name: file.name, type: 'pdf', content: '', blobUrl: url }];
+    }
+    if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
+      return expandXLSXEntries(await res.arrayBuffer(), file.name, includeFilePrefix);
+    }
+    return [{ name: file.name, type: 'csv', content: await res.text() }];
+  }
+
+  async function expandXLSXEntries(buf: ArrayBuffer, fileName: string, includeFilePrefix: boolean): Promise<PreviewEntry[]> {
+    const XLSX = await import('xlsx');
+    const wb = XLSX.read(buf, { type: 'array', bookSheets: true });
+    const sheets = wb.SheetNames.length ? wb.SheetNames : ['Sheet 1'];
+    return sheets.map(sheetName => ({
+      name: sheets.length > 1 ? (includeFilePrefix ? `${fileName}: ${sheetName}` : sheetName) : fileName,
+      type: 'xlsx' as const,
+      content: '',
+      xlsxBuf: buf,
+      sheetName,
+    }));
   }
 
   function parseCSVContent(csv: string) {
@@ -169,6 +218,18 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
     });
   }
 
+  function parseXLSXBuffer(buf: ArrayBuffer, sheetName?: string) {
+    import('xlsx').then(XLSX => {
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[sheetName || wb.SheetNames[0]];
+      const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as string[][];
+      if (rows.length === 0) { setHeaders([]); setPreview([]); return; }
+      const hdrs = rows[0].map(String);
+      setHeaders(hdrs);
+      setPreview(rows.slice(1, 11).map(r => hdrs.map((_, i) => String(r[i] ?? ''))));
+    });
+  }
+
   function switchTable(name: string) {
     const table = zipTables.find(t => t.name === name);
     if (!table) return;
@@ -176,11 +237,12 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
     if (table.type === 'pdf') return;
     setHeaders([]);
     setPreview(null);
+    if (table.type === 'xlsx' && table.xlsxBuf) { parseXLSXBuffer(table.xlsxBuf, table.sheetName); return; }
     parseCSVContent(table.content);
   }
 
   const colabCode = (() => {
-    const url = dataset.file_url;
+    const url = datasetFiles[0]?.url;
     if (!url) return null;
     const lower = url.toLowerCase();
     if (lower.endsWith('.zip')) {
@@ -238,26 +300,26 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
             )}
           </div>
 
-          {dataset.description && <p style={{ fontSize: 16, color: C.muted, lineHeight: 1.8, marginBottom: 32, marginTop: 0 }}>{dataset.description}</p>}
+          {dataset.description && <p style={{ fontSize: 15, color: C.muted, lineHeight: 1.42, marginBottom: 24, marginTop: 0 }}>{dataset.description}</p>}
 
           {/* Scenario / Background */}
           {dataset.scenario && dataset.scenario.replace(/<[^>]*>/g, '').trim() && (
-            <div style={{ marginBottom: 32, padding: '20px 24px', borderRadius: 16, background: C.input }}>
+            <div style={{ marginBottom: 24, padding: '18px 22px', borderRadius: 16, background: C.input }}>
               <p style={{ fontWeight: 800, fontSize: 13, color: C.muted, margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 0.6 }}>Scenario / Background</p>
-              <div className="rich-content" style={{ fontSize: 15, color: C.text, lineHeight: 1.7 }}
+              <div className="rich-content" style={{ fontSize: 15, color: C.text, lineHeight: 1.42 }}
                 dangerouslySetInnerHTML={{ __html: sanitizeRichText(dataset.scenario) }} />
             </div>
           )}
 
           {/* Sample questions */}
           {dataset.sample_questions.length > 0 && (
-            <div style={{ marginBottom: 28, background: C.input, borderRadius: 16, padding: '16px 16px' }}>
+            <div style={{ marginBottom: 24, background: C.input, borderRadius: 16, padding: '14px 16px' }}>
               <p style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14, marginTop: 0 }}>Sample Questions to Explore</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {dataset.sample_questions.map((q, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                     <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: C.pill, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: C.muted, marginTop: 1 }}>{i + 1}</span>
-                    <span style={{ fontSize: 15, color: C.muted, lineHeight: 1.55 }}>{q}</span>
+                    <span style={{ fontSize: 15, color: C.muted, lineHeight: 1.42 }}>{q}</span>
                   </div>
                 ))}
               </div>
@@ -265,7 +327,7 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
           )}
 
           {/* Preview button */}
-          {dataset.file_url && (
+          {datasetFiles.length > 0 && (
             <button onClick={openPreview} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 0', borderRadius: 12, border: 'none', background: C.input, color: C.text, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: font, marginBottom: 24 }}>
               <Table2 size={14} /> Preview Dataset
             </button>
@@ -305,11 +367,11 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
               </button>
             </div>
 
-            {dataset.file_url && (
+            {datasetFiles.length > 0 && (
               <div style={{ marginTop: 12 }}>
-                <a href={dataset.file_url} download={dataset.file_name ?? true} target="_blank" rel="noreferrer"
+                <a href={datasetFiles[0].url} download={datasetFiles[0].name ?? true} target="_blank" rel="noreferrer"
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 0', borderRadius: 12, border: 'none', background: C.input, color: C.text, fontSize: 14, fontWeight: 700, textDecoration: 'none', fontFamily: font }}>
-                  <Download size={14} /> Download
+                  <Download size={14} /> Download{datasetFiles.length > 1 ? ' Primary File' : ''}
                 </a>
               </div>
             )}
@@ -335,7 +397,7 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
                   <Table2 size={18} style={{ color: C.cta }} />
                   <div>
                     <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: C.text }}>{dataset.title}</p>
-                    <p style={{ margin: 0, fontSize: 14, color: C.faint }}>{pdfUrl ? 'PDF preview' : zipTables.length > 1 ? `${zipTables.length} files in zip` : 'First 10 rows preview'}</p>
+                    <p style={{ margin: 0, fontSize: 14, color: C.faint }}>{zipTables.length > 1 ? `${zipTables.length} files available` : (zipTables.find(t => t.name === activeTable)?.type === 'pdf' ? 'PDF preview' : 'First 10 rows preview')}</p>
                   </div>
                 </div>
                 <button onClick={() => setShowPreview(false)} style={{ width: 34, height: 34, borderRadius: 10, border: 'none', background: C.input, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted }}>
@@ -347,7 +409,7 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
                   {zipTables.map(t => (
                     <button key={t.name} onClick={() => switchTable(t.name)}
                       style={{ padding: '7px 14px', borderRadius: '8px 8px 0 0', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.15s', background: activeTable === t.name ? C.card : 'transparent', color: activeTable === t.name ? C.text : C.faint, borderBottom: activeTable === t.name ? `2px solid ${C.cta}` : '2px solid transparent' }}>
-                      {t.name.replace(/\.(csv|pdf)$/i, '')}
+                      {t.name.replace(/\.(csv|pdf|xlsx|xls)$/i, '')}
                     </button>
                   ))}
                 </div>
@@ -363,14 +425,14 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
               {!loadingPreview && !pdfUrl && (() => { const e = zipTables.find(t => t.name === activeTable); return e?.type === 'pdf' ? e.blobUrl : null; })() && (
                 <iframe src={zipTables.find(t => t.name === activeTable)?.blobUrl} style={{ width: '100%', height: 560, border: 'none', borderRadius: 8, display: 'block' }} title="PDF Preview" />
               )}
-              {/* CSV table */}
-              {!loadingPreview && !pdfUrl && zipTables.find(t => t.name === activeTable)?.type !== 'pdf' && preview && preview.length > 0 && (
+              {/* CSV / XLSX table */}
+              {!loadingPreview && !pdfUrl && !['pdf'].includes(zipTables.find(t => t.name === activeTable)?.type ?? '') && preview && preview.length > 0 && (
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
-                  <thead><tr style={{ background: C.input }}>{headers.map(h => <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: C.muted, fontWeight: 700, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.cardBorder}`, fontFamily: font }}>{h}</th>)}</tr></thead>
+                  <thead><tr style={{ background: C.input }}>{headers.map((h, j) => <th key={`${j}-${h}`} style={{ padding: '10px 16px', textAlign: 'left', color: C.muted, fontWeight: 700, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.cardBorder}`, fontFamily: font }}>{h || `Column ${j + 1}`}</th>)}</tr></thead>
                   <tbody>{preview.map((row, i) => <tr key={i} style={{ borderBottom: `1px solid ${C.divider}` }}>{row.map((cell, j) => <td key={j} style={{ padding: '9px 16px', color: C.text, whiteSpace: 'nowrap', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: font }}>{cell}</td>)}</tr>)}</tbody>
                 </table>
               )}
-              {!loadingPreview && !pdfUrl && zipTables.find(t => t.name === activeTable)?.type !== 'pdf' && (!preview || preview.length === 0) && (
+              {!loadingPreview && !pdfUrl && !['pdf'].includes(zipTables.find(t => t.name === activeTable)?.type ?? '') && (!preview || preview.length === 0) && (
                 <p style={{ fontSize: 14, color: C.faint, textAlign: 'center', padding: 40 }}>Preview not available for this file.</p>
               )}
             </div>
@@ -387,7 +449,7 @@ export default function DataPlaygroundPage() {
   const { theme, toggle: toggleTheme } = useTheme();
   const { logoUrl } = useTenant();
   const isDark = theme === 'dark';
-  const font = 'var(--font-lato, Lato, sans-serif)';
+  const font = 'var(--font-sans, Inter, sans-serif)';
 
   const [datasets, setDatasets]       = useState<DCDataset[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -498,8 +560,8 @@ export default function DataPlaygroundPage() {
                       {d.tags.slice(0, 3).map(t => <span key={t} style={{ fontSize: 13, padding: '3px 9px', borderRadius: 20, background: C.pill, color: C.muted, fontWeight: 700 }}>{t}</span>)}
                     </div>
                   )}
-                  <p style={{ fontWeight: 700, fontSize: 18, color: C.text, margin: '0 0 6px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }}>{d.title}</p>
-                  {d.description && <p style={{ fontSize: 15, color: C.faint, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', lineHeight: 1.6 }}>{d.description}</p>}
+                  <p style={{ fontWeight: 700, fontSize: 18, color: C.text, margin: '0 0 5px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.22 }}>{d.title}</p>
+                  {d.description && <p style={{ fontSize: 14, color: C.faint, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', lineHeight: 1.32 }}>{d.description}</p>}
                   {d.table_type && (
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10, padding: '4px 10px', borderRadius: 20, background: C.pill }}>
                       <Database size={12} style={{ color: C.muted }} />
@@ -513,8 +575,8 @@ export default function DataPlaygroundPage() {
                   <button onClick={() => setSelected(d)} style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                     View Details
                   </button>
-                  {d.file_url && (
-                    <a href={d.file_url} download={d.file_name ?? true} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 0', borderRadius: 10, background: C.input, color: C.text, fontSize: 14, fontWeight: 700, textDecoration: 'none', fontFamily: 'inherit' }}>
+                  {getDatasetFiles(d).length > 0 && (
+                    <a href={getDatasetFiles(d)[0].url} download={getDatasetFiles(d)[0].name ?? true} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 0', borderRadius: 10, background: C.input, color: C.text, fontSize: 14, fontWeight: 700, textDecoration: 'none', fontFamily: 'inherit' }}>
                       <Download size={14} /> Download
                     </a>
                   )}

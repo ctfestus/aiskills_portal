@@ -81,6 +81,180 @@ function Sk({ w = '100%', h = 16, r = 8 }: { w?: string | number; h?: number; r?
   return <div style={{ width: w, height: h, borderRadius: r, background: C.skeleton, flexShrink: 0 }} className="animate-pulse"/>;
 }
 
+type CohortTimeline = {
+  id: string;
+  name: string;
+  start_date: string | null;
+  end_date: string | null;
+};
+
+function parseDateOnly(value: string | null | undefined) {
+  if (!value) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function diffDays(from: Date, to: Date) {
+  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime();
+  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate()).getTime();
+  return Math.round((end - start) / 86400000);
+}
+
+function formatTimelineDate(value: Date) {
+  return value.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function CohortTimelineBadge({ cohort }: { cohort: CohortTimeline | null }) {
+  const C = useC();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const [open, setOpen] = useState(false);
+
+  const green     = '#22c55e';
+  const greenDim  = isDark ? 'rgba(34,197,94,0.14)' : 'rgba(34,197,94,0.12)';
+  const greenGrad = 'linear-gradient(90deg,#16a34a 0%,#22c55e 55%,#4ade80 100%)';
+
+  const start = parseDateOnly(cohort?.start_date);
+  const end   = parseDateOnly(cohort?.end_date);
+  if (!cohort || !start || !end) return null;
+
+  const today       = new Date();
+  const totalDays   = Math.max(diffDays(start, end), 1);
+  const elapsed     = diffDays(start, today);
+  const bounded     = Math.min(Math.max(elapsed, 0), totalDays);
+  const pct         = Math.round((bounded / totalDays) * 100);
+  const daysLeft    = Math.max(diffDays(today, end), 0);
+  const daysToStart = Math.max(diffDays(today, start), 0);
+  const totalWeeks  = Math.max(Math.ceil(totalDays / 7), 1);
+  const weekNum     = Math.min(Math.max(Math.floor(bounded / 7) + 1, 1), totalWeeks);
+
+  const isUpcoming = elapsed < 0;
+  const isDone     = elapsed > totalDays;
+  const isActive   = !isUpcoming && !isDone;
+
+  const chipLabel   = isUpcoming ? 'Soon' : isDone ? 'Done' : 'Active';
+  const badgeStatus = isUpcoming ? `Starts in ${daysToStart}d` : isDone ? 'Completed' : `Wk ${weekNum}/${totalWeeks}`;
+  const detailLine  = isUpcoming
+    ? `Starts ${formatTimelineDate(start)}`
+    : isDone ? 'This cohort has ended'
+    : `${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining`;
+
+  // circular ring: r=9 in viewBox 0 0 24 24 => circ ~56.55
+  const r    = 9;
+  const circ = 2 * Math.PI * r;
+  const dash = (pct / 100) * circ;
+
+
+  return (
+    <div
+      className="relative hidden md:block"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}>
+      <button
+        type="button"
+        className="flex items-center gap-2.5 rounded-full border px-3.5 py-1.5 transition-all hover:shadow-md"
+        style={{ background: C.card, borderColor: C.cardBorder }}>
+        {/* Circular progress ring */}
+        <div className="relative w-8 h-8 flex-shrink-0">
+          <svg viewBox="0 0 24 24" className="absolute inset-0 w-full h-full" style={{ transform: 'rotate(-90deg)' }}>
+            <circle cx="12" cy="12" r={r} fill="none" stroke={greenDim} strokeWidth="2.5"/>
+            <circle cx="12" cy="12" r={r} fill="none" stroke={green} strokeWidth="2.5"
+              strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"/>
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <TrendingUp className="w-3 h-3" style={{ color: green }}/>
+          </div>
+        </div>
+        <div className="text-left leading-none pr-0.5">
+          <p className="text-[11px] font-bold truncate max-w-[160px]" style={{ color: C.text }}>{cohort.name}</p>
+          <p className="text-[10px] font-semibold mt-0.5" style={{ color: C.faint }}>{badgeStatus}</p>
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute right-0 top-full mt-2 w-72 rounded-2xl z-50"
+            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.hoverShadow }}>
+
+            {/* Header */}
+            <div className="px-4 pt-4 pb-3 flex items-start gap-2.5">
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-black truncate leading-tight" style={{ color: C.text }}>{cohort.name}</p>
+                <p className="text-xs mt-0.5 font-medium" style={{ color: C.muted }}>{detailLine}</p>
+              </div>
+              <span className="flex-shrink-0 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full mt-0.5"
+                style={{ background: greenDim, color: green }}>{chipLabel}</span>
+            </div>
+
+            {/* Timeline track */}
+            <div className="px-4 pb-4">
+              <div className="relative h-16">
+                {/* Track bg */}
+                <div className="absolute inset-x-0 top-1/2 h-[3px] rounded-full"
+                  style={{ background: greenDim, transform: 'translateY(-50%)' }}/>
+                {/* Progress fill */}
+                <div className="absolute left-0 top-1/2 h-[3px] rounded-full"
+                  style={{ width: `${pct}%`, background: greenGrad, transform: 'translateY(-50%)' }}/>
+                {/* Start dot */}
+                <div className="absolute left-0 top-1/2 w-2.5 h-2.5 rounded-full"
+                  style={{ background: green, transform: 'translate(-1px, -50%)' }}/>
+                {/* End node */}
+                <div className="absolute right-0 top-1/2 w-6 h-6 rounded-full border-2 flex items-center justify-center"
+                  style={{ background: C.card, borderColor: green, transform: 'translate(4px, -50%)', boxShadow: `0 0 0 4px ${greenDim}` }}>
+                  <Award className="w-3 h-3" style={{ color: green }}/>
+                </div>
+                {/* Today: 3D pencil writing, tip planted on track */}
+                {isActive && (
+                  <div className="absolute pointer-events-none z-10"
+                    style={{ left: `${pct}%`, bottom: '50%', transform: 'translateX(-50%)' }}>
+                    <svg
+                      viewBox="0 0 14 34"
+                      width="13"
+                      height="32"
+                      style={{
+                        transform: 'rotate(-15deg)',
+                        transformOrigin: '50% 100%',
+                        filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.32))',
+                        display: 'block',
+                      }}>
+                      {/* Eraser */}
+                      <rect x="3" y="0.5" width="8" height="4" rx="1.5" fill="#fda4af"/>
+                      {/* Ferrule highlight */}
+                      <rect x="2.5" y="4.5" width="9" height="1" fill="#e5e7eb"/>
+                      {/* Ferrule band */}
+                      <rect x="2.5" y="5.5" width="9" height="2.5" fill="#9ca3af"/>
+                      {/* Body: light left / amber center / dark right = 3D barrel */}
+                      <rect x="2.5" y="8"   width="2.5" height="14.5" fill="#fde68a"/>
+                      <rect x="5"   y="8"   width="4.5" height="14.5" fill="#fbbf24"/>
+                      <rect x="9.5" y="8"   width="2"   height="14.5" fill="#d97706"/>
+                      {/* Tip wood: left face lighter, right face darker */}
+                      <polygon points="2.5,22.5 7,22.5 7,29.5" fill="#f59e0b"/>
+                      <polygon points="7,22.5 11.5,22.5 7,29.5" fill="#b45309"/>
+                      {/* Lead tip */}
+                      <polygon points="5.8,29.5 7,33 8.2,29.5" fill="#1f2937"/>
+                    </svg>
+                  </div>
+                )}
+              </div>
+              {/* Date labels */}
+              <div className="flex justify-between mt-1">
+                <span className="text-xs font-semibold" style={{ color: C.faint }}>{formatTimelineDate(start)}</span>
+                <span className="text-xs font-semibold" style={{ color: C.faint }}>{formatTimelineDate(end)}</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // --- ProfileMenu ---
 function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; onSignOut: () => void }) {
   const C = useC();
@@ -3604,30 +3778,53 @@ function VirtualExperiencesSection({ userId, userEmail, C }: { userId: string; u
 
 // --- Data Center section ---
 
+type DatasetFile = { name: string; url: string };
+type PreviewEntry = { name: string; type: 'csv' | 'pdf' | 'xlsx'; content: string; blobUrl?: string; xlsxBuf?: ArrayBuffer; sheetName?: string };
+
 type DCDataset = {
   id: string; title: string; description: string | null; cover_image_url: string | null;
   cover_image_alt: string | null; tags: string[]; category: string | null;
   sample_questions: string[]; file_url: string | null; file_name: string | null;
+  files?: DatasetFile[] | null;
   row_count: number | null; source: string | null; source_url: string | null;
   scenario: string | null; disclaimer: string | null;
   table_type: 'single' | 'multiple' | null;
 };
 
+function getDatasetFiles(d: DCDataset): DatasetFile[] {
+  const seen = new Set<string>();
+  const files: DatasetFile[] = [];
+  const add = (name: string | null | undefined, url: string | null | undefined) => {
+    const cleanUrl = url?.trim();
+    if (!cleanUrl || seen.has(cleanUrl)) return;
+    seen.add(cleanUrl);
+    files.push({ name: name?.trim() || cleanUrl.split('/').pop() || 'Dataset file', url: cleanUrl });
+  };
+  add(d.file_name, d.file_url);
+  (d.files ?? []).forEach(file => add(file.name, file.url));
+  return files;
+}
+
 function buildAIPrompt(d: DCDataset): string {
+  const files = getDatasetFiles(d);
+  const primaryUrl = files[0]?.url ?? d.file_url;
   const qs = d.sample_questions.length > 0
     ? d.sample_questions.map(q => `- ${q}`).join('\n')
     : '(no sample questions provided)';
-  const isBox    = /box\.com/i.test(d.file_url ?? '');
-  const isGitHub = /raw\.githubusercontent\.com|github\.com/i.test(d.file_url ?? '');
+  const isBox    = /box\.com/i.test(primaryUrl ?? '');
+  const isGitHub = /raw\.githubusercontent\.com|github\.com/i.test(primaryUrl ?? '');
+  const fileLines = files.length > 1
+    ? `Dataset files:\n${files.map(file => `- ${file.name}: ${file.url}`).join('\n')}`
+    : `Dataset file URL: ${primaryUrl ?? 'not provided'}`;
   const urlNote = isBox
-    ? `Dataset file URL: ${d.file_url}
+    ? `${fileLines}
 
 Note: This is a Box shared link which cannot be fetched directly (Box direct links require a paid plan). Please ask the user to provide the file via Google Drive (share publicly, use /uc?export=download&id=FILE_ID) or Dropbox (change ?dl=0 to ?dl=1), or paste the file contents directly into this chat.`
     : isGitHub
-    ? `Dataset file URL: ${d.file_url}
+    ? `${fileLines}
 
 This is a GitHub raw file URL. Please fetch it directly and analyse the contents. The file may be a CSV, Excel spreadsheet, or a ZIP archive containing multiple CSV tables.`
-    : `Dataset file URL: ${d.file_url ?? 'not provided'}
+    : `${fileLines}
 
 Please fetch the file from the URL above and use it directly. The file may be a CSV, Excel spreadsheet, or a ZIP archive containing multiple CSV tables. Analyse the actual data to understand the schema and content.`;
 
@@ -3653,10 +3850,11 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
   const [headers, setHeaders]           = useState<string[]>([]);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [pdfUrl, setPdfUrl]             = useState<string | null>(null);
-  const [zipTables, setZipTables]       = useState<{ name: string; type: 'csv' | 'pdf'; content: string; blobUrl?: string }[]>([]);
+  const [zipTables, setZipTables]       = useState<PreviewEntry[]>([]);
   const [activeTable, setActiveTable]   = useState('');
   const blobUrlsRef = useRef<string[]>([]);
   useEffect(() => () => { blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u)); }, []);
+  const datasetFiles = getDatasetFiles(dataset);
   const prompt = buildAIPrompt(dataset);
 
   async function openPreview() {
@@ -3664,53 +3862,81 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
     if (preview !== null || zipTables.length > 0 || pdfUrl) return;
     setLoadingPreview(true);
     try {
-      const lower = dataset.file_url?.toLowerCase() ?? '';
-      const proxyUrl = `/api/data-center/proxy?url=${encodeURIComponent(dataset.file_url!)}`;
-      if (lower.endsWith('.zip')) {
-        const JSZip = (await import('jszip')).default;
-        const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error(`Proxy error ${res.status}`);
-        const buf = await res.arrayBuffer();
-        const zip = await JSZip.loadAsync(buf);
-        const entries = await Promise.all(
-          Object.keys(zip.files)
-            .filter(n => !zip.files[n].dir && (n.toLowerCase().endsWith('.csv') || n.toLowerCase().endsWith('.pdf')))
-            .map(async n => {
-              const base = n.replace(/^.*\//, '');
-              if (n.toLowerCase().endsWith('.pdf')) {
-                const bytes = await zip.files[n].async('arraybuffer');
-                const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-                blobUrlsRef.current.push(url);
-                return { name: base, type: 'pdf' as const, content: '', blobUrl: url };
-              }
-              return { name: base, type: 'csv' as const, content: await zip.files[n].async('string'), blobUrl: undefined };
-            })
-        );
-        setZipTables(entries);
-        setActiveTable(entries[0]?.name ?? '');
-        const firstCsv = entries.find(e => e.type === 'csv');
-        if (firstCsv) parseCSVContent(firstCsv.content);
-      } else if (lower.endsWith('.pdf')) {
-        const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error(`Proxy error ${res.status}`);
-        const bytes = await res.arrayBuffer();
-        const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-        blobUrlsRef.current.push(url);
-        setPdfUrl(url);
-      } else {
-        const Papa = (await import('papaparse')).default;
-        const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error(`Proxy error ${res.status}`);
-        const text = await res.text();
-        const result = Papa.parse(text, { header: true, preview: 10 });
-        setHeaders((result.meta as any).fields ?? []);
-        setPreview(result.data.map((row: any) => ((result.meta as any).fields ?? []).map((f: string) => String(row[f] ?? ''))));
-      }
+      const entries = (await Promise.all(datasetFiles.map(file => loadPreviewEntries(file, datasetFiles.length > 1)))).flat();
+      setZipTables(entries);
+      const firstPreviewable = entries.find(e => e.type === 'csv' || e.type === 'xlsx') ?? entries[0];
+      setActiveTable(firstPreviewable?.name ?? '');
+      if (firstPreviewable?.type === 'csv') parseCSVContent(firstPreviewable.content);
+      if (firstPreviewable?.type === 'xlsx' && firstPreviewable.xlsxBuf) parseXLSXBuffer(firstPreviewable.xlsxBuf, firstPreviewable.sheetName);
+      if (!firstPreviewable) setPreview([]);
     } catch (err) {
       console.error('Preview failed:', err);
       setPreview([]);
     }
     setLoadingPreview(false);
+  }
+
+  async function loadPreviewEntries(file: DatasetFile, includeFilePrefix: boolean): Promise<PreviewEntry[]> {
+    const lower = file.url.toLowerCase();
+    const proxyUrl = `/api/data-center/proxy?url=${encodeURIComponent(file.url)}`;
+    const displayName = (name: string) => includeFilePrefix ? `${file.name}: ${name}` : name;
+    if (lower.endsWith('.zip')) {
+      const JSZip = (await import('jszip')).default;
+      const res = await fetch(proxyUrl);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(`Proxy error ${res.status}${err.error ? `: ${err.error}` : ''}`);
+      }
+      const buf = await res.arrayBuffer();
+      const zip = await JSZip.loadAsync(buf);
+      return Promise.all(
+        Object.keys(zip.files)
+          .filter(n => !zip.files[n].dir && (n.toLowerCase().endsWith('.csv') || n.toLowerCase().endsWith('.pdf') || n.toLowerCase().endsWith('.xlsx') || n.toLowerCase().endsWith('.xls')))
+          .map(async n => {
+            const base = n.replace(/^.*\//, '');
+            if (n.toLowerCase().endsWith('.pdf')) {
+              const bytes = await zip.files[n].async('arraybuffer');
+              const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+              blobUrlsRef.current.push(url);
+              return { name: displayName(base), type: 'pdf' as const, content: '', blobUrl: url };
+            }
+            if (n.toLowerCase().endsWith('.xlsx') || n.toLowerCase().endsWith('.xls')) {
+              const bytes = await zip.files[n].async('arraybuffer');
+              return expandXLSXEntries(bytes, displayName(base), true);
+            }
+            return { name: displayName(base), type: 'csv' as const, content: await zip.files[n].async('string') };
+          })
+      ).then(items => items.flat());
+    }
+
+    const res = await fetch(proxyUrl);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`Proxy error ${res.status}${err.error ? `: ${err.error}` : ''}`);
+    }
+    if (lower.endsWith('.pdf')) {
+      const bytes = await res.arrayBuffer();
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      blobUrlsRef.current.push(url);
+      return [{ name: file.name, type: 'pdf', content: '', blobUrl: url }];
+    }
+    if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
+      return expandXLSXEntries(await res.arrayBuffer(), file.name, includeFilePrefix);
+    }
+    return [{ name: file.name, type: 'csv', content: await res.text() }];
+  }
+
+  async function expandXLSXEntries(buf: ArrayBuffer, fileName: string, includeFilePrefix: boolean): Promise<PreviewEntry[]> {
+    const XLSX = await import('xlsx');
+    const wb = XLSX.read(buf, { type: 'array', bookSheets: true });
+    const sheets = wb.SheetNames.length ? wb.SheetNames : ['Sheet 1'];
+    return sheets.map(sheetName => ({
+      name: sheets.length > 1 ? (includeFilePrefix ? `${fileName}: ${sheetName}` : sheetName) : fileName,
+      type: 'xlsx' as const,
+      content: '',
+      xlsxBuf: buf,
+      sheetName,
+    }));
   }
 
   function parseCSVContent(csv: string) {
@@ -3721,6 +3947,18 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
     });
   }
 
+  function parseXLSXBuffer(buf: ArrayBuffer, sheetName?: string) {
+    import('xlsx').then(XLSX => {
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[sheetName || wb.SheetNames[0]];
+      const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as string[][];
+      if (rows.length === 0) { setHeaders([]); setPreview([]); return; }
+      const hdrs = rows[0].map(String);
+      setHeaders(hdrs);
+      setPreview(rows.slice(1, 11).map(r => hdrs.map((_, i) => String(r[i] ?? ''))));
+    });
+  }
+
   function switchTable(name: string) {
     const table = zipTables.find(t => t.name === name);
     if (!table) return;
@@ -3728,6 +3966,7 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
     if (table.type === 'pdf') return;
     setHeaders([]);
     setPreview(null);
+    if (table.type === 'xlsx' && table.xlsxBuf) { parseXLSXBuffer(table.xlsxBuf, table.sheetName); return; }
     parseCSVContent(table.content);
   }
 
@@ -3739,7 +3978,7 @@ function DatasetDetailPane({ dataset, C, onClose }: { dataset: DCDataset; C: typ
   }
 
   const colabCode = (() => {
-    const url = dataset.file_url;
+    const url = datasetFiles[0]?.url;
     if (!url) return null;
     const lower = url.toLowerCase();
     if (lower.endsWith('.zip')) {
@@ -3814,7 +4053,7 @@ display(df.head(10))`;
     });
   }
 
-  const font = 'var(--font-lato, Lato, sans-serif)';
+  const font = 'var(--font-sans, Inter, sans-serif)';
 
   return (
     <div
@@ -3874,27 +4113,27 @@ display(df.head(10))`;
 
           {/* Description */}
           {dataset.description && (
-            <p style={{ fontSize: 16, color: C.muted, lineHeight: 1.8, marginBottom: 32, marginTop: 0 }}>{dataset.description}</p>
+            <p style={{ fontSize: 15, color: C.muted, lineHeight: 1.42, marginBottom: 24, marginTop: 0 }}>{dataset.description}</p>
           )}
 
           {/* Scenario / Background */}
           {dataset.scenario && dataset.scenario.replace(/<[^>]*>/g, '').trim() && (
-            <div style={{ marginBottom: 32, padding: '20px 24px', borderRadius: 16, background: C.input }}>
+            <div style={{ marginBottom: 24, padding: '18px 22px', borderRadius: 16, background: C.input }}>
               <p style={{ fontWeight: 800, fontSize: 13, color: C.muted, margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 0.6 }}>Scenario / Background</p>
-              <div className="rich-content" style={{ fontSize: 15, color: C.text, lineHeight: 1.7 }}
+              <div className="rich-content" style={{ fontSize: 15, color: C.text, lineHeight: 1.42 }}
                 dangerouslySetInnerHTML={{ __html: sanitizeRichText(dataset.scenario) }} />
             </div>
           )}
 
           {/* Sample questions */}
           {dataset.sample_questions.length > 0 && (
-            <div style={{ marginBottom: 28, background: C.input, borderRadius: 16, padding: '16px 16px' }}>
-              <p style={{ fontWeight: 800, fontSize: 16.5, color: C.text, marginBottom: 14, marginTop: 0 }}>Sample Questions to Explore</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ marginBottom: 24, background: C.input, borderRadius: 16, padding: '14px 16px' }}>
+              <p style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 14, marginTop: 0 }}>Sample Questions to Explore</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {dataset.sample_questions.map((q, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                     <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: C.pill, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: C.muted, marginTop: 1 }}>{i + 1}</span>
-                    <span style={{ fontSize: 15, color: C.muted, lineHeight: 1.55 }}>{q}</span>
+                    <span style={{ fontSize: 15, color: C.muted, lineHeight: 1.42 }}>{q}</span>
                   </div>
                 ))}
               </div>
@@ -3902,7 +4141,7 @@ display(df.head(10))`;
           )}
 
           {/* Preview Dataset button */}
-          {dataset.file_url && (
+          {datasetFiles.length > 0 && (
             <button onClick={openPreview} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 0', borderRadius: 12, border: 'none', background: C.input, color: C.text, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: font, marginBottom: 24 }}>
               <Table2 size={14} /> Preview Dataset
             </button>
@@ -3950,11 +4189,11 @@ display(df.head(10))`;
             </div>
 
             {/* Download row */}
-            {dataset.file_url && (
+            {datasetFiles.length > 0 && (
               <div style={{ marginTop: 12 }}>
-                <a href={dataset.file_url} download={dataset.file_name ?? true} target="_blank" rel="noreferrer"
+                <a href={datasetFiles[0].url} download={datasetFiles[0].name ?? true} target="_blank" rel="noreferrer"
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 0', borderRadius: 12, border: 'none', background: C.input, color: C.text, fontSize: 14, fontWeight: 700, textDecoration: 'none', fontFamily: font }}>
-                  <Download size={14} /> Download
+                  <Download size={14} /> Download{datasetFiles.length > 1 ? ' Primary File' : ''}
                 </a>
               </div>
             )}
@@ -3977,7 +4216,7 @@ display(df.head(10))`;
                   <div>
                     <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: C.text }}>{dataset.title}</p>
                     <p style={{ margin: 0, fontSize: 14, color: C.faint }}>
-                      {pdfUrl ? 'PDF preview' : zipTables.length > 1 ? `${zipTables.length} files in zip` : 'First 10 rows preview'}
+                      {zipTables.length > 1 ? `${zipTables.length} files available` : (zipTables.find(t => t.name === activeTable)?.type === 'pdf' ? 'PDF preview' : 'First 10 rows preview')}
                     </p>
                   </div>
                 </div>
@@ -3996,7 +4235,7 @@ display(df.head(10))`;
                         color: activeTable === t.name ? C.text : C.faint,
                         borderBottom: activeTable === t.name ? `2px solid ${C.cta}` : '2px solid transparent',
                       }}>
-                      {t.name.replace(/\.(csv|pdf)$/i, '')}
+                      {t.name.replace(/\.(csv|pdf|xlsx|xls)$/i, '')}
                     </button>
                   ))}
                 </div>
@@ -4018,12 +4257,12 @@ display(df.head(10))`;
               {!loadingPreview && !pdfUrl && (() => { const e = zipTables.find(t => t.name === activeTable); return e?.type === 'pdf' ? e.blobUrl : null; })() && (
                 <iframe src={zipTables.find(t => t.name === activeTable)?.blobUrl} style={{ width: '100%', height: 560, border: 'none', borderRadius: 8, display: 'block' }} title="PDF Preview" />
               )}
-              {/* CSV table */}
-              {!loadingPreview && !pdfUrl && zipTables.find(t => t.name === activeTable)?.type !== 'pdf' && preview && preview.length > 0 && (
+              {/* CSV / XLSX table */}
+              {!loadingPreview && !pdfUrl && !['pdf'].includes(zipTables.find(t => t.name === activeTable)?.type ?? '') && preview && preview.length > 0 && (
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: C.input }}>
-                      {headers.map(h => <th key={h} style={{ padding: '10px 16px', textAlign: 'left', color: C.muted, fontWeight: 700, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.cardBorder}`, fontFamily: font }}>{h}</th>)}
+                      {headers.map((h, j) => <th key={`${j}-${h}`} style={{ padding: '10px 16px', textAlign: 'left', color: C.muted, fontWeight: 700, whiteSpace: 'nowrap', borderBottom: `1px solid ${C.cardBorder}`, fontFamily: font }}>{h || `Column ${j + 1}`}</th>)}
                     </tr>
                   </thead>
                   <tbody>
@@ -4035,7 +4274,7 @@ display(df.head(10))`;
                   </tbody>
                 </table>
               )}
-              {!loadingPreview && !pdfUrl && zipTables.find(t => t.name === activeTable)?.type !== 'pdf' && (!preview || preview.length === 0) && (
+              {!loadingPreview && !pdfUrl && !['pdf'].includes(zipTables.find(t => t.name === activeTable)?.type ?? '') && (!preview || preview.length === 0) && (
                 <p style={{ fontSize: 14, color: C.faint, textAlign: 'center', padding: 40 }}>Preview not available for this file.</p>
               )}
             </div>
@@ -4094,7 +4333,7 @@ function DataCenterSection({ C }: { C: typeof LIGHT_C }) {
     );
   }
 
-  const font = 'var(--font-lato, Lato, sans-serif)';
+  const font = 'var(--font-sans, Inter, sans-serif)';
   const categories = Array.from(new Set(datasets.map(d => d.category).filter(Boolean))) as string[];
   const filtered = datasets.filter(d => {
     const q = search.toLowerCase();
@@ -4147,7 +4386,7 @@ function DataCenterSection({ C }: { C: typeof LIGHT_C }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 16 }}>
         {filtered.map(d => (
           <div key={d.id}
-            style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, borderRadius: 18, overflow: 'hidden', textAlign: 'left', fontFamily: 'var(--font-lato, Lato, sans-serif)', minHeight: 420, display: 'flex', flexDirection: 'column' }}
+            style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, borderRadius: 18, overflow: 'hidden', textAlign: 'left', fontFamily: font, minHeight: 420, display: 'flex', flexDirection: 'column' }}
           >
             {/* Cover */}
             {d.cover_image_url ? (
@@ -4175,9 +4414,9 @@ function DataCenterSection({ C }: { C: typeof LIGHT_C }) {
                   ))}
                 </div>
               )}
-              <p style={{ fontWeight: 700, fontSize: 18, color: C.text, margin: '0 0 6px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }}>{d.title}</p>
+              <p style={{ fontWeight: 700, fontSize: 18, color: C.text, margin: '0 0 5px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.22 }}>{d.title}</p>
               {d.description && (
-                <p style={{ fontSize: 15, color: C.faint, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', lineHeight: 1.6 }}>{d.description}</p>
+                <p style={{ fontSize: 14, color: C.faint, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', lineHeight: 1.32 }}>{d.description}</p>
               )}
               {d.table_type && (
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10, padding: '4px 10px', borderRadius: 20, background: C.pill }}>
@@ -4195,9 +4434,9 @@ function DataCenterSection({ C }: { C: typeof LIGHT_C }) {
               >
                 View Details
               </button>
-              {d.file_url && (
+              {getDatasetFiles(d).length > 0 && (
                 <a
-                  href={d.file_url} download={d.file_name ?? true} target="_blank" rel="noreferrer"
+                  href={getDatasetFiles(d)[0].url} download={getDatasetFiles(d)[0].name ?? true} target="_blank" rel="noreferrer"
                   onClick={e => e.stopPropagation()}
                   style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 0', borderRadius: 10, border: 'none', background: C.input, color: C.text, fontSize: 15, fontWeight: 700, textDecoration: 'none', fontFamily: 'inherit' }}
                 >
@@ -6553,6 +6792,7 @@ export default function StudentDashboard() {
   const [showOutstandingModal, setShowOutstandingModal] = useState(false);
   const [isInGracePeriod,      setIsInGracePeriod]      = useState(false);
   const [graceAccessUntil,     setGraceAccessUntil]     = useState<string | null>(null);
+  const [cohortTimeline,       setCohortTimeline]       = useState<CohortTimeline | null>(null);
 
   // Live activity ticker (persists across all tabs)
   const [activeTicker,       setActiveTicker]       = useState<{ name: string; title: string } | null>(null);
@@ -6658,7 +6898,17 @@ export default function StudentDashboard() {
       // Fetch cohort for global activity ticker + outstanding check
       supabase.from('students').select('cohort_id, original_cohort_id, payment_exempt').eq('id', resolvedViewingAs?.id ?? authUser.id).single()
         .then(async ({ data: s }) => {
-          if (s?.cohort_id) setCohortIdForTicker(s.cohort_id);
+          if (s?.cohort_id) {
+            setCohortIdForTicker(s.cohort_id);
+            const { data: cohortDates } = await supabase
+              .from('cohorts')
+              .select('id, name, start_date, end_date')
+              .eq('id', s.cohort_id)
+              .maybeSingle();
+            setCohortTimeline(cohortDates ?? null);
+          } else {
+            setCohortTimeline(null);
+          }
           const { data: enroll } = await supabase
             .from('bootcamp_enrollments')
             .select('access_status, total_fee, deposit_required, paid_total, payment_plan, bootcamp_ends_at, cohort_id, payment_installments ( due_date, status )')
@@ -6753,6 +7003,7 @@ export default function StudentDashboard() {
           </Link>
         </div>
         <div className="flex items-center gap-2">
+          <CohortTimelineBadge cohort={cohortTimeline}/>
           <button onClick={toggleTheme}
             className="p-2 rounded-xl transition-all hover:opacity-70"
             style={{ background: C.pill }}>

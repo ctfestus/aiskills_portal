@@ -42,7 +42,7 @@ function isStaff(role: string) {
 export async function GET(req: NextRequest) {
   const sessionUser = await getSessionUser(req);
 
-  const FIELDS = 'id,title,description,cover_image_url,cover_image_alt,tags,category,sample_questions,file_url,file_name,row_count,source,source_url,scenario,disclaimer,table_type,is_published,created_at,created_by';
+  const FIELDS = 'id,title,description,cover_image_url,cover_image_alt,tags,category,sample_questions,file_url,file_name,files,row_count,source,source_url,scenario,disclaimer,table_type,is_published,created_at,created_by';
   const showAll = sessionUser && isStaff(sessionUser.role);
   const db = showAll ? adminClient() : publicClient();
   let query = db
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
     title, description, cover_image_url, cover_image_alt,
-    tags, category, sample_questions, file_url, file_name,
+    tags, category, sample_questions, file_url, file_name, files,
     row_count, column_info, source, source_url, scenario, disclaimer, table_type, is_published,
   } = body;
 
@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
       sample_questions: sample_questions ?? [],
       file_url: file_url?.trim() ?? null,
       file_name: file_name?.trim() ?? null,
+      files: Array.isArray(files) ? files : [],
       row_count: row_count ?? null,
       column_info: column_info ?? [],
       source: source?.trim() ?? null,
@@ -115,7 +116,7 @@ export async function PUT(req: NextRequest) {
 
   const allowed = [
     'title', 'description', 'cover_image_url', 'cover_image_alt',
-    'tags', 'category', 'sample_questions', 'file_url', 'file_name',
+    'tags', 'category', 'sample_questions', 'file_url', 'file_name', 'files',
     'row_count', 'column_info', 'source', 'source_url', 'scenario', 'disclaimer', 'table_type', 'is_published',
   ];
   const update: Record<string, unknown> = {};

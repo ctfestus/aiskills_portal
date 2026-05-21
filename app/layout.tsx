@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import './globals.css';
 import ThemeProvider from '@/components/ThemeProvider';
 import NavigationProgress from '@/components/NavigationProgress';
+import SessionInactivityGuard from '@/components/SessionInactivityGuard';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { TenantProvider } from '@/components/TenantProvider';
 
@@ -44,6 +45,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <NavigationProgress />
         <TenantProvider>
           <ThemeProvider>
+            <SessionInactivityGuard />
             {children}
           </ThemeProvider>
         </TenantProvider>
