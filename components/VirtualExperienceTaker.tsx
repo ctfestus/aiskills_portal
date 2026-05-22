@@ -13,6 +13,7 @@ import { sanitizeRichText } from '@/lib/sanitize';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
 import CodeReviewPlayer, { LeanSubmission } from '@/components/CodeReviewPlayer';
 import ExcelReviewPlayer, { ExcelLeanSubmission } from '@/components/ExcelReviewPlayer';
+import AiReviewDisclaimer from '@/components/AiReviewDisclaimer';
 
 // Types
 interface Requirement {
@@ -1198,6 +1199,7 @@ export default function VirtualExperienceTaker({
                                 </div>
                                 {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
                               </div>
+                              <AiReviewDisclaimer isDark={isDark ?? false} />
                               <textarea
                                 value={noteVal}
                                 onChange={e => {

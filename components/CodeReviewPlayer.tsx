@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { Loader2, CheckCircle2, Zap, RotateCcw, Code2, Download, Upload, FileCode, Lock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { downloadReviewPdf } from '@/lib/downloadReviewPdf';
+import AiReviewDisclaimer from '@/components/AiReviewDisclaimer';
 
 const LANGUAGES = ['Python', 'SQL', 'JavaScript', 'TypeScript', 'R', 'Java', 'C#', 'Other'];
 const SQL_DIALECTS = ['PostgreSQL', 'MySQL', 'SQLite', 'SQL Server'];
@@ -220,6 +221,9 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
             </div>
           </div>
         )}
+        <div className="px-5 py-3" style={{ borderTop: `1px solid ${border}`, background: card }}>
+          <AiReviewDisclaimer isDark={isDark} />
+        </div>
       </div>
     );
   }
@@ -240,6 +244,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
     const lastAttempt = submissions.length > 0 ? submissions[submissions.length - 1] : null;
     return (
       <div className="space-y-3">
+        <AiReviewDisclaimer isDark={isDark} />
         {lastAttempt && (
           <div className="flex items-center justify-between px-4 py-2.5 rounded-lg" style={{ background: inner, border: `1px solid ${border}` }}>
             <span style={{ fontSize: 12, color: muted }}>
@@ -390,6 +395,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
 
   return (
     <div ref={resultsRef} className="space-y-4" style={{ fontFamily: 'var(--font-sans)' }}>
+      <AiReviewDisclaimer isDark={isDark} />
 
       {/* Diff panel */}
       {prev && (

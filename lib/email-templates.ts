@@ -283,12 +283,12 @@ export function otpEmail(data: { code: string; courseName?: string; branding?: E
   return shell(content, branding);
 }
 
-// -- 5. Student Nudge (not started / stalled) ---
+// -- 5. Student Nudge (not started / in_progress / stalled) ---
 export function nudgeEmail(data: {
   name: string;
   contentTitle: string;
   contentType: string;
-  status: 'not_started' | 'stalled';
+  status: 'not_started' | 'stalled' | 'in_progress';
   formUrl: string;
   coverImage?: string | null;
   relatedAssignmentTitle?: string;
@@ -300,6 +300,8 @@ export function nudgeEmail(data: {
 
   const intro = status === 'not_started'
     ? `We noticed you have not started <b>${contentTitle}</b> yet. We just wanted to reach out with a little encouragement.`
+    : status === 'in_progress'
+    ? `You are making progress on <b>${contentTitle}</b> -- great work so far! We are reaching out because we want to make sure you do not miss the deadline. Now is the time to push through and finish strong.`
     : `We noticed you have not visited <b>${contentTitle}</b> in a while. We are checking in because we believe in you and do not want you to miss out.`;
 
   const content = `
@@ -319,6 +321,10 @@ export function nudgeEmail(data: {
     <p style="color:#374151;">
       <b>You've already taken the first step</b> -- which is the hardest part. Getting back on track is easier than you think.
       Remember why you started, and know that each module you complete brings you closer to a real skill you can use.
+    </p>` : status === 'in_progress' ? `
+    <p style="color:#374151;">
+      <b>You are already on your way</b> -- do not let the momentum slip. Even 20 minutes a day can get you across the finish line.
+      The effort you have already put in is worth protecting. Keep going.
     </p>` : `
     <p style="color:#374151;">
       It only takes a few minutes to begin. Once you start, you will find the content is practical, relevant, and designed

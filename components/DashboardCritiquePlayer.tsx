@@ -4,6 +4,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Loader2, UploadIcon, Eye, EyeOff, RotateCcw, CheckCircle2, Zap, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { downloadReviewPdf } from '@/lib/downloadReviewPdf';
+import AiReviewDisclaimer from '@/components/AiReviewDisclaimer';
 
 interface Bounds { x: number; y: number; w: number; h: number; }
 interface CritiqueElement {
@@ -202,6 +203,9 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
           <p className="text-xs mt-1" style={{ color: muted }}>or click to browse · PNG or JPG</p>
         </div>
         {error && <p className="text-xs font-medium text-red-400">{error}</p>}
+        <div className="max-w-xl text-center">
+          <AiReviewDisclaimer isDark={isDark} />
+        </div>
         <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/jpg" className="hidden"
           onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); }} />
       </div>
@@ -229,6 +233,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
   // Interactive result state
   return (
     <div ref={resultsRef} className="space-y-3">
+      <AiReviewDisclaimer isDark={isDark} />
       {/* Toolbar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
