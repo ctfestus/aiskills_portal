@@ -3,6 +3,7 @@ import { Resend } from 'resend';
 import { adminClient } from '@/lib/admin-client';
 import { openCertificateEmail } from '@/lib/email-templates';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
+import { absolutePath, normalizeAbsoluteBaseUrl } from '@/lib/public-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -159,7 +160,8 @@ export async function POST(req: NextRequest) {
   if (body.send_email && inserted?.length) {
     const t   = await getTenantSettings();
     const FROM = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
-    const appUrl = t.appUrl;
+    const requestOrigin = new URL(req.url).origin;
+    const appUrl = normalizeAbsoluteBaseUrl(t.appUrl, process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL, requestOrigin);
 
     const emailRows = (inserted as { id: string; recipient_name: string; recipient_email: string | null; program_name: string; issued_date: string }[])
       .filter(r => r.recipient_email);
@@ -188,8 +190,8 @@ export async function POST(req: NextRequest) {
             recipientName: r.recipient_name,
             programName:   r.program_name,
             issuedDate:    r.issued_date,
-            certUrl:       `${appUrl}/credential/${r.id}`,
-            branding:      { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl },
+            certUrl:       absolutePath(appUrl, `/credential/${r.id}`),
+            branding:      { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl },
           }),
         })));
         emailResult.sent += batch.length;

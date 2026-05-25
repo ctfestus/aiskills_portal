@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Metadata } from 'next';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
+import { absolutePath, normalizeAbsoluteBaseUrl } from '@/lib/public-url';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,7 +17,7 @@ export async function generateMetadata({
 
   const { data: cert } = await supabase
     .from('open_certificates')
-    .select('recipient_name, program_name, revoked, issued_by')
+    .select('recipient_name, program_name, revoked, issued_by, programs ( badge_image_url )')
     .eq('id', id)
     .maybeSingle();
 
@@ -24,19 +25,19 @@ export async function generateMetadata({
 
   const t        = await getTenantSettings();
   const platform = t.appName || t.orgName || 'the platform';
-  const appUrl   = t.appUrl;
+  const appUrl   = normalizeAbsoluteBaseUrl(t.appUrl, process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL);
 
-  let logoUrl: string | undefined;
   const { data: defaults } = await supabase
     .from('certificate_defaults')
-    .select('logo_url')
+    .select('background_image_url')
     .eq('user_id', cert.issued_by)
     .maybeSingle();
-  logoUrl = defaults?.logo_url ?? t.logoUrl ?? undefined;
+  const program = Array.isArray((cert as any).programs) ? (cert as any).programs[0] : (cert as any).programs;
+  const previewImageUrl = program?.badge_image_url ?? defaults?.background_image_url ?? undefined;
 
   const title       = `${cert.program_name} Credential issued to ${cert.recipient_name} by ${platform}`;
   const description = `${cert.recipient_name} participated in ${cert.program_name} on ${platform} and earned this credential.`;
-  const ogImage     = logoUrl?.startsWith('http') ? logoUrl : undefined;
+  const ogImage     = previewImageUrl?.startsWith('http') ? previewImageUrl : undefined;
 
   return {
     title,
@@ -44,11 +45,11 @@ export async function generateMetadata({
     openGraph: {
       title,
       description,
-      url: `${appUrl}/credential/${id}`,
+      url: absolutePath(appUrl, `/credential/${id}`),
       images: ogImage ? [{ url: ogImage }] : [],
     },
     twitter: {
-      card:        'summary',
+      card:        ogImage ? 'summary_large_image' : 'summary',
       title,
       description,
       images: ogImage ? [ogImage] : [],
