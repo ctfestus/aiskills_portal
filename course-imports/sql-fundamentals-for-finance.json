@@ -1,0 +1,674 @@
+{
+  "exportVersion": 1,
+  "type": "course",
+  "title": "Applied SQL Fundamentals for Finance",
+  "exportedAt": "2026-05-25T00:00:00.000Z",
+  "config": {
+    "title": "Applied SQL Fundamentals for Finance",
+    "description": "Learn SQL fundamentals through practical finance analytics tasks. Students query account, balance, risk, interest, and advisor data while building job-ready SQL skills for finance, fintech, banking, and business analytics roles.",
+    "isCourse": true,
+    "theme": "forest",
+    "mode": "dark",
+    "font": "inter",
+    "customAccent": "#10b981",
+    "passmark": 70,
+    "courseTimer": null,
+    "deadline_days": null,
+    "learnOutcomes": [
+      "Retrieve finance records using SELECT statements.",
+      "Filter account data by status, balance, region, type, and missing values.",
+      "Sort and limit financial records for reporting and review.",
+      "Create readable financial outputs using aliases, calculations, string functions, date functions, and CASE logic.",
+      "Aggregate finance data to calculate portfolio summaries by category.",
+      "Apply SQL fundamentals to realistic finance analyst workflows."
+    ],
+    "pointsSystem": {
+      "enabled": true,
+      "basePoints": 50
+    },
+    "questions": [
+      {
+        "id": "finance-section-basic-retrieval",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "isSection": true,
+        "sectionTitle": "Basic Retrieval",
+        "sectionDescription": "Start by retrieving finance account records and shaping outputs for stakeholders."
+      },
+      {
+        "id": "finance-lesson-dataset",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Finance Account Dataset",
+          "body": "<p>You are working as a junior finance analyst. Your team manages customer accounts across savings, current, investment, and loan products.</p><p>You will use the <strong>finance_accounts</strong> table. It contains account balances, product types, regions, account dates, risk ratings, account status, and assigned advisors.</p><p>Your job is to turn business questions into SQL queries that a finance team could use for reporting, review, and decision-making.</p>"
+        }
+      },
+      {
+        "id": "finance-sql-001-select-one-column",
+        "type": "sql_exercise",
+        "question": "Select one column. The client reporting team needs a simple list of customer names. Return only the `customer_name` column from `finance_accounts`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Select One Column",
+          "body": "<p>The most basic finance query retrieves one field from a table. In reporting work, this is useful when you need a quick customer, account, advisor, or product list.</p>"
+        },
+        "sqlTables": [
+          {
+            "id": "finance-accounts-seed",
+            "tableName": "finance_accounts",
+            "seedSql": "CREATE TABLE finance_accounts (\n  account_id INTEGER,\n  customer_name VARCHAR,\n  account_type VARCHAR,\n  region VARCHAR,\n  opened_date DATE,\n  closed_date DATE,\n  balance INTEGER,\n  interest_rate DOUBLE,\n  risk_rating VARCHAR,\n  status VARCHAR,\n  advisor VARCHAR\n);\n\nINSERT INTO finance_accounts VALUES\n  (1, 'Ada Okafor', 'Savings', 'Lagos', '2026-01-05', NULL, 85000, 0.035, 'Low', 'Active', 'Ngozi'),\n  (2, 'Kojo Mensah', 'Investment', 'Accra', '2025-11-12', NULL, 250000, 0.075, 'Medium', 'Active', 'Mensah'),\n  (3, 'Amina Bello', 'Loan', 'Abuja', '2025-08-21', NULL, -120000, 0.14, 'High', 'Active', 'Chidi'),\n  (4, 'Tunde Balogun', 'Current', 'Lagos', '2026-02-10', NULL, 45000, 0.0, 'Low', 'Active', 'Ngozi'),\n  (5, 'Grace Njeri', 'Investment', 'Nairobi', '2025-12-01', NULL, 320000, 0.082, 'Medium', 'Active', 'Achieng'),\n  (6, 'Fatima Yusuf', 'Savings', 'Kano', '2026-03-15', NULL, 150000, 0.04, 'Low', 'Active', 'Chidi'),\n  (7, 'Samuel Otieno', 'Loan', 'Nairobi', '2024-07-20', '2026-01-31', 0, 0.13, 'Medium', 'Closed', 'Achieng'),\n  (8, 'Zainab Musa', 'Savings', 'Abuja', '2026-04-02', NULL, 60000, 0.035, 'Low', 'Active', 'Chidi');"
+          }
+        ],
+        "sqlStarterCode": "SELECT\n  _ _ _\nFROM finance_accounts;",
+        "sqlSolution": "SELECT\n  customer_name\nFROM finance_accounts;",
+        "sqlExpectedResult": {
+          "columns": ["customer_name"],
+          "rows": [["Ada Okafor"], ["Kojo Mensah"], ["Amina Bello"], ["Tunde Balogun"], ["Grace Njeri"], ["Fatima Yusuf"], ["Samuel Otieno"], ["Zainab Musa"]]
+        },
+        "sqlHints": [
+          "The table is `finance_accounts`.",
+          "Your SELECT list should include only one column:\n- customer_name",
+          "Do not include account_id, balance, or any other column."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["SELECT"]
+      },
+      {
+        "id": "finance-sql-002-select-multiple-columns",
+        "type": "sql_exercise",
+        "question": "Select multiple columns. The portfolio review team wants to see the customer, account product, and balance for each account. Return `customer_name`, `account_type`, and `balance`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Select Multiple Columns",
+          "body": "<p>Finance reports usually need several fields together: who the account belongs to, what product it is, and what value is attached to it.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  customer_name,\n  _ _ _,\n  _ _ _\nFROM finance_accounts;",
+        "sqlSolution": "SELECT\n  customer_name,\n  account_type,\n  balance\nFROM finance_accounts;",
+        "sqlExpectedResult": {
+          "columns": ["customer_name", "account_type", "balance"],
+          "rows": [["Ada Okafor", "Savings", 85000], ["Kojo Mensah", "Investment", 250000], ["Amina Bello", "Loan", -120000], ["Tunde Balogun", "Current", 45000], ["Grace Njeri", "Investment", 320000], ["Fatima Yusuf", "Savings", 150000], ["Samuel Otieno", "Loan", 0], ["Zainab Musa", "Savings", 60000]]
+        },
+        "sqlHints": [
+          "Use the same table: `finance_accounts`.",
+          "The output should include:\n- customer_name\n- account_type\n- balance",
+          "Keep the columns in the requested order."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": []
+      },
+      {
+        "id": "finance-sql-003-select-top-rows",
+        "type": "sql_exercise",
+        "question": "Select top rows. The finance manager wants a quick preview of the account table. Return all columns for the first 3 rows only.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Select Top Rows",
+          "body": "<p>Before writing a full analysis, analysts often preview a small number of rows to understand the table structure and data quality.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "-- Preview the first few account records\nSELECT *\nFROM finance_accounts\nLIMIT _ _ _;",
+        "sqlSolution": "SELECT *\nFROM finance_accounts\nLIMIT 3;",
+        "sqlExpectedResult": {
+          "columns": ["account_id", "customer_name", "account_type", "region", "opened_date", "closed_date", "balance", "interest_rate", "risk_rating", "status", "advisor"],
+          "rows": [[1, "Ada Okafor", "Savings", "Lagos", "2026-01-05", null, 85000, 0.035, "Low", "Active", "Ngozi"], [2, "Kojo Mensah", "Investment", "Accra", "2025-11-12", null, 250000, 0.075, "Medium", "Active", "Mensah"], [3, "Amina Bello", "Loan", "Abuja", "2025-08-21", null, -120000, 0.14, "High", "Active", "Chidi"]]
+        },
+        "sqlHints": [
+          "Use `SELECT *` when you want to inspect every column.",
+          "Use LIMIT to control how many rows are returned.",
+          "The manager asked for exactly 3 rows."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["LIMIT"]
+      },
+      {
+        "id": "finance-sql-004-aliases",
+        "type": "sql_exercise",
+        "question": "Rename columns using aliases. The reporting dashboard needs clearer column labels. Return `customer_name` as `client`, `account_type` as `product`, and `balance` as `current_balance`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Rename Columns With Aliases",
+          "body": "<p>Aliases make SQL output easier for business users to read. In finance reporting, clear names reduce confusion when results are exported to dashboards or spreadsheets.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  customer_name AS _ _ _,\n  account_type AS _ _ _,\n  balance AS _ _ _\nFROM finance_accounts;",
+        "sqlSolution": "SELECT\n  customer_name AS client,\n  account_type AS product,\n  balance AS current_balance\nFROM finance_accounts;",
+        "sqlExpectedResult": {
+          "columns": ["client", "product", "current_balance"],
+          "rows": [["Ada Okafor", "Savings", 85000], ["Kojo Mensah", "Investment", 250000], ["Amina Bello", "Loan", -120000], ["Tunde Balogun", "Current", 45000], ["Grace Njeri", "Investment", 320000], ["Fatima Yusuf", "Savings", 150000], ["Samuel Otieno", "Loan", 0], ["Zainab Musa", "Savings", 60000]]
+        },
+        "sqlHints": [
+          "Use `AS` after each selected column.",
+          "The required aliases are:\n- client\n- product\n- current_balance",
+          "Column aliases affect the result headers, so spelling matters."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["AS"]
+      },
+      {
+        "id": "finance-sql-005-distinct",
+        "type": "sql_exercise",
+        "question": "Remove duplicate rows. The product strategy team wants to know which account products exist. Return the unique `account_type` values from the table.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Remove Duplicates With DISTINCT",
+          "body": "<p><code>DISTINCT</code> removes duplicate values. This is useful for checking product types, regions, advisors, currencies, channels, or risk categories.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT _ _ _ account_type\nFROM finance_accounts;",
+        "sqlSolution": "SELECT DISTINCT account_type\nFROM finance_accounts;",
+        "sqlExpectedResult": {
+          "columns": ["account_type"],
+          "rows": [["Savings"], ["Investment"], ["Loan"], ["Current"]]
+        },
+        "sqlHints": [
+          "You need only one column: account_type.",
+          "Use DISTINCT immediately after SELECT.",
+          "The result should list each account type once."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["DISTINCT"]
+      },
+      {
+        "id": "finance-section-filtering",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "isSection": true,
+        "sectionTitle": "Data Filtering",
+        "sectionDescription": "Use WHERE conditions to answer targeted finance questions."
+      },
+      {
+        "id": "finance-sql-006-single-condition",
+        "type": "sql_exercise",
+        "question": "Filter by single condition. The account operations team wants only active accounts. Return `account_id`, `customer_name`, and `status` where `status` is `Active`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Filter by Single Condition",
+          "body": "<p>A single <code>WHERE</code> condition lets you focus a report on one business state, such as active accounts, completed payments, approved loans, or open invoices.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  account_id,\n  customer_name,\n  status\nFROM finance_accounts\nWHERE _ _ _ = 'Active';",
+        "sqlSolution": "SELECT\n  account_id,\n  customer_name,\n  status\nFROM finance_accounts\nWHERE status = 'Active';",
+        "sqlExpectedResult": {
+          "columns": ["account_id", "customer_name", "status"],
+          "rows": [[1, "Ada Okafor", "Active"], [2, "Kojo Mensah", "Active"], [3, "Amina Bello", "Active"], [4, "Tunde Balogun", "Active"], [5, "Grace Njeri", "Active"], [6, "Fatima Yusuf", "Active"], [8, "Zainab Musa", "Active"]]
+        },
+        "sqlHints": [
+          "The condition belongs in the WHERE clause.",
+          "Filter the `status` column.",
+          "The value must be `Active`."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["WHERE"]
+      },
+      {
+        "id": "finance-sql-007-multiple-conditions",
+        "type": "sql_exercise",
+        "question": "Filter by multiple conditions. The Lagos investment team wants active investment accounts in Lagos. Return `account_id`, `customer_name`, `account_type`, and `region`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Filter by Multiple Conditions",
+          "body": "<p>Finance questions often combine conditions: a product, a region, a status, a balance threshold, or a risk category. Use <code>AND</code> when all conditions must be true.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  account_id,\n  customer_name,\n  account_type,\n  region\nFROM finance_accounts\nWHERE account_type = _ _ _\n  AND region = _ _ _;",
+        "sqlSolution": "SELECT\n  account_id,\n  customer_name,\n  account_type,\n  region\nFROM finance_accounts\nWHERE account_type = 'Investment'\n  AND region = 'Lagos';",
+        "sqlExpectedResult": {
+          "columns": ["account_id", "customer_name", "account_type", "region"],
+          "rows": []
+        },
+        "sqlHints": [
+          "Use two WHERE conditions joined by AND.",
+          "The product condition is account_type = 'Investment'.",
+          "The region condition is region = 'Lagos'. This task may return no rows if no matching account exists."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["AND"]
+      },
+      {
+        "id": "finance-sql-008-ranges",
+        "type": "sql_exercise",
+        "question": "Filter by ranges. The relationship managers want accounts with balances between 50000 and 200000 inclusive. Return `customer_name`, `account_type`, and `balance`, ordered by `balance` ascending.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Filter by Ranges",
+          "body": "<p>Range filters are common in finance: balance bands, credit score ranges, transaction amount ranges, interest-rate ranges, and date ranges.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "-- Return accounts whose balance falls inside the requested range\nSELECT\n  customer_name,\n  account_type,\n  balance\nFROM finance_accounts\nWHERE balance BETWEEN _ _ _ AND _ _ _\nORDER BY balance ASC;",
+        "sqlSolution": "SELECT\n  customer_name,\n  account_type,\n  balance\nFROM finance_accounts\nWHERE balance BETWEEN 50000 AND 200000\nORDER BY balance ASC;",
+        "sqlExpectedResult": {
+          "columns": ["customer_name", "account_type", "balance"],
+          "rows": [["Zainab Musa", "Savings", 60000], ["Ada Okafor", "Savings", 85000], ["Fatima Yusuf", "Savings", 150000]]
+        },
+        "sqlHints": [
+          "BETWEEN includes the lower and upper values.",
+          "The lower balance is 50000.",
+          "The upper balance is 200000."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["BETWEEN"]
+      },
+      {
+        "id": "finance-sql-009-list-membership",
+        "type": "sql_exercise",
+        "question": "Filter by list membership. The product head wants all Savings and Investment accounts. Return `customer_name`, `account_type`, and `balance`, ordered by `account_type` then `customer_name`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Filter by List Membership",
+          "body": "<p>Use <code>IN</code> when a filter can match several allowed values. This is useful for product groups, regions, risk categories, currencies, or transaction types.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  customer_name,\n  account_type,\n  balance\nFROM finance_accounts\nWHERE account_type IN (_ _ _, _ _ _)\nORDER BY account_type, customer_name;",
+        "sqlSolution": "SELECT\n  customer_name,\n  account_type,\n  balance\nFROM finance_accounts\nWHERE account_type IN ('Savings', 'Investment')\nORDER BY account_type, customer_name;",
+        "sqlExpectedResult": {
+          "columns": ["customer_name", "account_type", "balance"],
+          "rows": [["Grace Njeri", "Investment", 320000], ["Kojo Mensah", "Investment", 250000], ["Ada Okafor", "Savings", 85000], ["Fatima Yusuf", "Savings", 150000], ["Zainab Musa", "Savings", 60000]]
+        },
+        "sqlHints": [
+          "Use the IN operator.",
+          "The list should contain:\n- 'Savings'\n- 'Investment'",
+          "Sort first by account_type, then by customer_name."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["IN"]
+      },
+      {
+        "id": "finance-sql-010-pattern-matching",
+        "type": "sql_exercise",
+        "question": "Filter by pattern matching. The client support team wants customers whose names start with `A`. Return `customer_name` and `region`, ordered by `customer_name`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Filter by Pattern Matching",
+          "body": "<p><code>LIKE</code> is useful when matching part of a text value. It can help with customer search, advisor names, descriptions, transaction references, or product labels.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  customer_name,\n  region\nFROM finance_accounts\nWHERE customer_name LIKE _ _ _\nORDER BY customer_name;",
+        "sqlSolution": "SELECT\n  customer_name,\n  region\nFROM finance_accounts\nWHERE customer_name LIKE 'A%'\nORDER BY customer_name;",
+        "sqlExpectedResult": {
+          "columns": ["customer_name", "region"],
+          "rows": [["Ada Okafor", "Lagos"], ["Amina Bello", "Abuja"]]
+        },
+        "sqlHints": [
+          "Use LIKE for text pattern matching.",
+          "The percent sign means any characters after the first letter.",
+          "Names that start with A match the pattern 'A%'."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["LIKE"]
+      },
+      {
+        "id": "finance-sql-011-missing-values",
+        "type": "sql_exercise",
+        "question": "Filter for missing values. Compliance wants accounts that have not been closed. Return `account_id`, `customer_name`, and `closed_date` where `closed_date` is missing.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Filter Missing Values",
+          "body": "<p>Missing values are represented as <code>NULL</code>. In finance data, missing close dates can mean an account is still open, while missing payment dates can mean an invoice has not been paid.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  account_id,\n  customer_name,\n  closed_date\nFROM finance_accounts\nWHERE closed_date _ _ _;",
+        "sqlSolution": "SELECT\n  account_id,\n  customer_name,\n  closed_date\nFROM finance_accounts\nWHERE closed_date IS NULL;",
+        "sqlExpectedResult": {
+          "columns": ["account_id", "customer_name", "closed_date"],
+          "rows": [[1, "Ada Okafor", null], [2, "Kojo Mensah", null], [3, "Amina Bello", null], [4, "Tunde Balogun", null], [5, "Grace Njeri", null], [6, "Fatima Yusuf", null], [8, "Zainab Musa", null]]
+        },
+        "sqlHints": [
+          "Do not use `= NULL`.",
+          "SQL checks missing values with IS NULL.",
+          "The missing field is closed_date."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["IS NULL"]
+      },
+      {
+        "id": "finance-section-sorting",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "isSection": true,
+        "sectionTitle": "Data Sorting and Limiting",
+        "sectionDescription": "Control the order and size of finance query outputs."
+      },
+      {
+        "id": "finance-sql-012-sort-single",
+        "type": "sql_exercise",
+        "question": "Sort by single column. The finance director wants accounts listed from highest balance to lowest balance. Return `customer_name` and `balance`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Sort by a Single Column",
+          "body": "<p>Sorting makes query results useful for review. Finance teams often sort by balance, exposure, interest rate, revenue, risk, or date.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  customer_name,\n  balance\nFROM finance_accounts\nORDER BY _ _ _ DESC;",
+        "sqlSolution": "SELECT\n  customer_name,\n  balance\nFROM finance_accounts\nORDER BY balance DESC;",
+        "sqlExpectedResult": {
+          "columns": ["customer_name", "balance"],
+          "rows": [["Grace Njeri", 320000], ["Kojo Mensah", 250000], ["Fatima Yusuf", 150000], ["Ada Okafor", 85000], ["Zainab Musa", 60000], ["Tunde Balogun", 45000], ["Samuel Otieno", 0], ["Amina Bello", -120000]]
+        },
+        "sqlHints": [
+          "The sort column is balance.",
+          "Highest to lowest requires DESC.",
+          "Only return customer_name and balance."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["ORDER BY"]
+      },
+      {
+        "id": "finance-sql-013-sort-multiple",
+        "type": "sql_exercise",
+        "question": "Sort by multiple columns. The regional team wants accounts grouped by region, and within each region, highest balances first. Return `region`, `customer_name`, and `balance`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Sort by Multiple Columns",
+          "body": "<p>Multi-column sorting is common in reports. You might sort by region first, then balance; or by advisor first, then risk rating; or by month first, then revenue.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "-- Sort by region first, then balance from high to low\nSELECT\n  region,\n  customer_name,\n  balance\nFROM finance_accounts\nORDER BY _ _ _, _ _ _ DESC;",
+        "sqlSolution": "SELECT\n  region,\n  customer_name,\n  balance\nFROM finance_accounts\nORDER BY region, balance DESC;",
+        "sqlExpectedResult": {
+          "columns": ["region", "customer_name", "balance"],
+          "rows": [["Abuja", "Zainab Musa", 60000], ["Abuja", "Amina Bello", -120000], ["Accra", "Kojo Mensah", 250000], ["Kano", "Fatima Yusuf", 150000], ["Lagos", "Ada Okafor", 85000], ["Lagos", "Tunde Balogun", 45000], ["Nairobi", "Grace Njeri", 320000], ["Nairobi", "Samuel Otieno", 0]]
+        },
+        "sqlHints": [
+          "ORDER BY can accept more than one column.",
+          "The first sort should group rows by region.",
+          "The second sort should put higher balances first within each region."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["ORDER BY"]
+      },
+      {
+        "id": "finance-sql-014-sort-direction",
+        "type": "sql_exercise",
+        "question": "Specify sort direction. The onboarding team wants the newest accounts first. Return `customer_name`, `opened_date`, and `account_type`, ordered by `opened_date` descending.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Specify Sort Direction",
+          "body": "<p><code>ASC</code> sorts from smallest to largest or oldest to newest. <code>DESC</code> sorts from largest to smallest or newest to oldest.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  customer_name,\n  opened_date,\n  account_type\nFROM finance_accounts\nORDER BY opened_date _ _ _;",
+        "sqlSolution": "SELECT\n  customer_name,\n  opened_date,\n  account_type\nFROM finance_accounts\nORDER BY opened_date DESC;",
+        "sqlExpectedResult": {
+          "columns": ["customer_name", "opened_date", "account_type"],
+          "rows": [["Zainab Musa", "2026-04-02", "Savings"], ["Fatima Yusuf", "2026-03-15", "Savings"], ["Tunde Balogun", "2026-02-10", "Current"], ["Ada Okafor", "2026-01-05", "Savings"], ["Grace Njeri", "2025-12-01", "Investment"], ["Kojo Mensah", "2025-11-12", "Investment"], ["Amina Bello", "2025-08-21", "Loan"], ["Samuel Otieno", "2024-07-20", "Loan"]]
+        },
+        "sqlHints": [
+          "Newest dates come first when you sort descending.",
+          "Use ORDER BY opened_date DESC.",
+          "Return only the three requested columns."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["DESC"]
+      },
+      {
+        "id": "finance-sql-015-limit",
+        "type": "sql_exercise",
+        "question": "Limit number of rows returned. Risk leadership wants the 3 accounts with the highest balances. Return `customer_name`, `account_type`, and `balance`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Limit Rows Returned",
+          "body": "<p><code>LIMIT</code> is often used for top-N reporting, such as top customers, highest balances, largest transactions, or newest accounts.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "-- Find the top 3 balances\nSELECT\n  customer_name,\n  account_type,\n  balance\nFROM finance_accounts\nORDER BY balance DESC\nLIMIT _ _ _;",
+        "sqlSolution": "SELECT\n  customer_name,\n  account_type,\n  balance\nFROM finance_accounts\nORDER BY balance DESC\nLIMIT 3;",
+        "sqlExpectedResult": {
+          "columns": ["customer_name", "account_type", "balance"],
+          "rows": [["Grace Njeri", "Investment", 320000], ["Kojo Mensah", "Investment", 250000], ["Fatima Yusuf", "Savings", 150000]]
+        },
+        "sqlHints": [
+          "First sort balances from highest to lowest.",
+          "Then limit the output to 3 rows.",
+          "The result should show only the top accounts."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["LIMIT"]
+      },
+      {
+        "id": "finance-section-calculations",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "isSection": true,
+        "sectionTitle": "Calculations and Formatting",
+        "sectionDescription": "Create calculated fields and readable finance outputs."
+      },
+      {
+        "id": "finance-sql-016-arithmetic",
+        "type": "sql_exercise",
+        "question": "Perform arithmetic operations. The treasury team wants estimated annual interest for positive-balance accounts. Return `customer_name`, `balance`, `interest_rate`, and `estimated_annual_interest` as `balance * interest_rate`. Order by `estimated_annual_interest` descending.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Arithmetic in SQL",
+          "body": "<p>Finance analysis frequently requires calculated fields: interest, fees, margins, exposure, repayment amounts, revenue, variance, and growth rates.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  customer_name,\n  balance,\n  interest_rate,\n  _ _ _ AS estimated_annual_interest\nFROM finance_accounts\nWHERE balance > 0\nORDER BY estimated_annual_interest DESC;",
+        "sqlSolution": "SELECT\n  customer_name,\n  balance,\n  interest_rate,\n  balance * interest_rate AS estimated_annual_interest\nFROM finance_accounts\nWHERE balance > 0\nORDER BY estimated_annual_interest DESC;",
+        "sqlExpectedResult": {
+          "columns": ["customer_name", "balance", "interest_rate", "estimated_annual_interest"],
+          "rows": [["Grace Njeri", 320000, 0.082, 26240], ["Kojo Mensah", 250000, 0.075, 18750], ["Fatima Yusuf", 150000, 0.04, 6000], ["Ada Okafor", 85000, 0.035, 2975], ["Zainab Musa", 60000, 0.035, 2100], ["Tunde Balogun", 45000, 0, 0]]
+        },
+        "sqlHints": [
+          "The calculated field is balance multiplied by interest_rate.",
+          "Only positive balances should be included.",
+          "Alias the calculation as estimated_annual_interest."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0.001,
+        "sqlRequiredPatterns": []
+      },
+      {
+        "id": "finance-sql-017-string-functions",
+        "type": "sql_exercise",
+        "question": "Apply string functions. The CRM export needs standardized text labels. Return `customer_name` as `client_name`, `upper(account_type)` as `product_label`, and `lower(region)` as `region_key`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "String Functions",
+          "body": "<p>String functions clean and standardize text fields. Analysts use them for customer names, product labels, transaction descriptions, region codes, and campaign tags.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  customer_name AS client_name,\n  upper(_ _ _) AS product_label,\n  lower(_ _ _) AS region_key\nFROM finance_accounts;",
+        "sqlSolution": "SELECT\n  customer_name AS client_name,\n  upper(account_type) AS product_label,\n  lower(region) AS region_key\nFROM finance_accounts;",
+        "sqlExpectedResult": {
+          "columns": ["client_name", "product_label", "region_key"],
+          "rows": [["Ada Okafor", "SAVINGS", "lagos"], ["Kojo Mensah", "INVESTMENT", "accra"], ["Amina Bello", "LOAN", "abuja"], ["Tunde Balogun", "CURRENT", "lagos"], ["Grace Njeri", "INVESTMENT", "nairobi"], ["Fatima Yusuf", "SAVINGS", "kano"], ["Samuel Otieno", "LOAN", "nairobi"], ["Zainab Musa", "SAVINGS", "abuja"]]
+        },
+        "sqlHints": [
+          "Use upper() for product labels.",
+          "Use lower() for region keys.",
+          "Aliases should be:\n- client_name\n- product_label\n- region_key"
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["upper", "lower"]
+      },
+      {
+        "id": "finance-sql-018-date-functions",
+        "type": "sql_exercise",
+        "question": "Apply date/time functions. The onboarding team wants to group accounts by opening month. Return `account_id`, `customer_name`, and `opened_month` using `strftime(opened_date, '%Y-%m')`. Order by `account_id`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Date Functions",
+          "body": "<p>Date functions help create monthly, quarterly, and yearly finance reports. They are useful for account openings, loan start dates, payment dates, invoice due dates, and transaction timestamps.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  account_id,\n  customer_name,\n  strftime(_ _ _, '%Y-%m') AS opened_month\nFROM finance_accounts\nORDER BY account_id;",
+        "sqlSolution": "SELECT\n  account_id,\n  customer_name,\n  strftime(opened_date, '%Y-%m') AS opened_month\nFROM finance_accounts\nORDER BY account_id;",
+        "sqlExpectedResult": {
+          "columns": ["account_id", "customer_name", "opened_month"],
+          "rows": [[1, "Ada Okafor", "2026-01"], [2, "Kojo Mensah", "2025-11"], [3, "Amina Bello", "2025-08"], [4, "Tunde Balogun", "2026-02"], [5, "Grace Njeri", "2025-12"], [6, "Fatima Yusuf", "2026-03"], [7, "Samuel Otieno", "2024-07"], [8, "Zainab Musa", "2026-04"]]
+        },
+        "sqlHints": [
+          "The date column is opened_date.",
+          "Use the format '%Y-%m' to return year and month.",
+          "Sort by account_id to keep the output easy to verify."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["strftime"]
+      },
+      {
+        "id": "finance-sql-019-conditional-logic",
+        "type": "sql_exercise",
+        "question": "Apply conditional logic. The finance team wants to segment accounts by balance. Return `customer_name`, `balance`, and `balance_segment`. Use `High` for balances >= 200000, `Medium` for balances >= 50000, `Low` for balances >= 0, and `Debt` for negative balances. Order by `balance` descending.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Conditional Logic With CASE",
+          "body": "<p><code>CASE</code> turns raw numbers into business labels. In finance, this is useful for value bands, risk categories, delinquency stages, profitability groups, and account health labels.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "-- Create a finance-friendly label for each balance\nSELECT\n  customer_name,\n  balance,\n  CASE\n    WHEN balance >= _ _ _ THEN 'High'\n    WHEN balance >= _ _ _ THEN 'Medium'\n    WHEN balance >= _ _ _ THEN 'Low'\n    ELSE 'Debt'\n  END AS balance_segment\nFROM finance_accounts\nORDER BY balance DESC;",
+        "sqlSolution": "SELECT\n  customer_name,\n  balance,\n  CASE\n    WHEN balance >= 200000 THEN 'High'\n    WHEN balance >= 50000 THEN 'Medium'\n    WHEN balance >= 0 THEN 'Low'\n    ELSE 'Debt'\n  END AS balance_segment\nFROM finance_accounts\nORDER BY balance DESC;",
+        "sqlExpectedResult": {
+          "columns": ["customer_name", "balance", "balance_segment"],
+          "rows": [["Grace Njeri", 320000, "High"], ["Kojo Mensah", 250000, "High"], ["Fatima Yusuf", 150000, "Medium"], ["Ada Okafor", 85000, "Medium"], ["Zainab Musa", 60000, "Medium"], ["Tunde Balogun", 45000, "Low"], ["Samuel Otieno", 0, "Low"], ["Amina Bello", -120000, "Debt"]]
+        },
+        "sqlHints": [
+          "CASE checks conditions from top to bottom.",
+          "Use these thresholds:\n- 200000 for High\n- 50000 for Medium\n- 0 for Low",
+          "Use ELSE for negative balances."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["CASE"]
+      },
+      {
+        "id": "finance-section-aggregation",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "isSection": true,
+        "sectionTitle": "Aggregation",
+        "sectionDescription": "Summarize finance records into useful management metrics."
+      },
+      {
+        "id": "finance-sql-020-column-summaries",
+        "type": "sql_exercise",
+        "question": "Calculate column summaries. The CFO wants a quick summary of active account balances. Return `active_accounts`, `total_balance`, and `average_balance` for active accounts only.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Calculate Column Summaries",
+          "body": "<p>Aggregations summarize many records into a few metrics. Finance teams use them for total balances, average exposure, count of accounts, total revenue, and average loan size.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  COUNT(*) AS active_accounts,\n  SUM(_ _ _) AS total_balance,\n  AVG(_ _ _) AS average_balance\nFROM finance_accounts\nWHERE status = 'Active';",
+        "sqlSolution": "SELECT\n  COUNT(*) AS active_accounts,\n  SUM(balance) AS total_balance,\n  AVG(balance) AS average_balance\nFROM finance_accounts\nWHERE status = 'Active';",
+        "sqlExpectedResult": {
+          "columns": ["active_accounts", "total_balance", "average_balance"],
+          "rows": [[7, 790000, 112857.14285714286]]
+        },
+        "sqlHints": [
+          "Filter to active accounts first.",
+          "Use COUNT(*) for the number of active accounts.",
+          "Use SUM(balance) and AVG(balance) for the balance summaries."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0.001,
+        "sqlRequiredPatterns": ["COUNT", "SUM", "AVG"]
+      },
+      {
+        "id": "finance-sql-021-group-by-categories",
+        "type": "sql_exercise",
+        "question": "Group data by categories. Product leadership wants balance totals by account type. Return `account_type`, `account_count`, and `total_balance`, ordered by `total_balance` descending.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Group Data by Categories",
+          "body": "<p><code>GROUP BY</code> creates category-level summaries. In finance, grouping by product, region, risk rating, advisor, or status is central to management reporting.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  account_type,\n  COUNT(*) AS account_count,\n  SUM(balance) AS total_balance\nFROM finance_accounts\nGROUP BY _ _ _\nORDER BY total_balance DESC;",
+        "sqlSolution": "SELECT\n  account_type,\n  COUNT(*) AS account_count,\n  SUM(balance) AS total_balance\nFROM finance_accounts\nGROUP BY account_type\nORDER BY total_balance DESC;",
+        "sqlExpectedResult": {
+          "columns": ["account_type", "account_count", "total_balance"],
+          "rows": [["Investment", 2, 570000], ["Savings", 3, 295000], ["Current", 1, 45000], ["Loan", 2, -120000]]
+        },
+        "sqlHints": [
+          "The category is account_type.",
+          "COUNT(*) gives the number of accounts in each product group.",
+          "SUM(balance) gives the total balance for each product group."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["GROUP BY"]
+      },
+      {
+        "id": "finance-sql-022-filter-aggregated-results",
+        "type": "sql_exercise",
+        "question": "Filter aggregated results. The finance director only wants product groups with total balances above 200000. Return `account_type` and `total_balance`, ordered by `total_balance` descending.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Filter Aggregated Results With HAVING",
+          "body": "<p><code>WHERE</code> filters individual rows before aggregation. <code>HAVING</code> filters grouped results after aggregation. Use HAVING for questions like product groups above a balance threshold or regions with more than 100 accounts.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "-- Use HAVING because the filter depends on SUM(balance)\nSELECT\n  account_type,\n  SUM(balance) AS total_balance\nFROM finance_accounts\nGROUP BY account_type\nHAVING _ _ _ > 200000\nORDER BY total_balance DESC;",
+        "sqlSolution": "SELECT\n  account_type,\n  SUM(balance) AS total_balance\nFROM finance_accounts\nGROUP BY account_type\nHAVING SUM(balance) > 200000\nORDER BY total_balance DESC;",
+        "sqlExpectedResult": {
+          "columns": ["account_type", "total_balance"],
+          "rows": [["Investment", 570000], ["Savings", 295000]]
+        },
+        "sqlHints": [
+          "Use GROUP BY account_type first.",
+          "The aggregate filter should use SUM(balance).",
+          "Use HAVING, not WHERE, because the condition depends on the grouped total."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["HAVING"]
+      }
+    ],
+    "fields": [],
+    "postSubmission": null
+  }
+}

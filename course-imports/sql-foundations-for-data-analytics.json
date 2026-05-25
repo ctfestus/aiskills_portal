@@ -1,0 +1,321 @@
+{
+  "exportVersion": 1,
+  "type": "course",
+  "title": "SQL Foundations for Data Analytics",
+  "exportedAt": "2026-05-25T00:00:00.000Z",
+  "config": {
+    "title": "SQL Foundations for Data Analytics",
+    "description": "Learn SQL through realistic business analytics tasks across e-commerce, finance, marketing, education, healthcare, and operations. Students practice querying customer, order, product, and revenue data the way analysts do at work.",
+    "isCourse": true,
+    "theme": "forest",
+    "mode": "dark",
+    "font": "inter",
+    "customAccent": "#10b981",
+    "passmark": 70,
+    "courseTimer": null,
+    "deadline_days": null,
+    "learnOutcomes": [
+      "Write SELECT queries that retrieve business-ready data.",
+      "Filter and sort records using WHERE, ORDER BY, and LIMIT.",
+      "Join customer, order, item, and product tables.",
+      "Calculate KPIs such as revenue, order value, units sold, and customer value.",
+      "Use GROUP BY, HAVING, CASE, CTEs, and window functions in realistic analyst tasks.",
+      "Translate business questions into SQL queries."
+    ],
+    "pointsSystem": {
+      "enabled": true,
+      "basePoints": 50
+    },
+    "questions": [
+      {
+        "id": "section-sql-foundations",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "isSection": true,
+        "sectionTitle": "SQL Foundations With Business Data",
+        "sectionDescription": "Use SQL to answer practical data questions from a realistic company dataset."
+      },
+      {
+        "id": "lesson-intro-business-schema",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Meet the Business Dataset",
+          "body": "<p>You are working as a junior data analyst for a growing digital services company. The company sells products and services used across several industries, including education, healthcare, marketing, fintech, and general business operations.</p><p>Your job is to answer business questions using SQL. You will work with four tables:</p><ul><li><strong>customers</strong>: customer profile and industry interest</li><li><strong>orders</strong>: order date, order status, and sales channel</li><li><strong>order_items</strong>: products inside each order</li><li><strong>products</strong>: product names, categories, and list prices</li></ul><p>The goal is not just to write SQL syntax. The goal is to think like an analyst: understand the business question, choose the right tables, join them correctly, and return useful results.</p>"
+        }
+      },
+      {
+        "id": "sql-001-select-customers",
+        "type": "sql_exercise",
+        "question": "The customer success team wants a quick list of the first customers in the database so they can inspect the profile data. Return `customer_id`, `full_name`, `city`, and `industry_interest` for the first 5 customers ordered by `customer_id`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Selecting Business Columns",
+          "body": "<p>Most analysis starts by selecting only the columns needed for the task. In real work, avoid returning every column unless you need to inspect the raw table.</p><p>Use <code>SELECT</code> to choose columns, <code>FROM</code> to choose a table, <code>ORDER BY</code> to make the output predictable, and <code>LIMIT</code> to preview a manageable number of rows.</p>"
+        },
+        "sqlTables": [
+          {
+            "id": "business-analytics-seed",
+            "tableName": "customers",
+            "seedSql": "CREATE TABLE customers (\n  customer_id INTEGER,\n  full_name VARCHAR,\n  city VARCHAR,\n  country VARCHAR,\n  industry_interest VARCHAR,\n  signup_date DATE\n);\n\nINSERT INTO customers VALUES\n  (1, 'Ada Okafor', 'Lagos', 'Nigeria', 'fintech', '2026-01-02'),\n  (2, 'Kojo Mensah', 'Accra', 'Ghana', 'e-commerce', '2026-01-04'),\n  (3, 'Amina Bello', 'Abuja', 'Nigeria', 'healthcare', '2026-01-12'),\n  (4, 'Tunde Balogun', 'Lagos', 'Nigeria', 'education', '2026-01-20'),\n  (5, 'Grace Njeri', 'Nairobi', 'Kenya', 'marketing', '2026-02-01'),\n  (6, 'Fatima Yusuf', 'Kano', 'Nigeria', 'finance', '2026-02-08'),\n  (7, 'Samuel Otieno', 'Nairobi', 'Kenya', 'healthcare', '2026-02-15'),\n  (8, 'Zainab Musa', 'Abuja', 'Nigeria', 'marketing', '2026-03-01');\n\nCREATE TABLE orders (\n  order_id INTEGER,\n  customer_id INTEGER,\n  order_date DATE,\n  status VARCHAR,\n  sales_channel VARCHAR\n);\n\nINSERT INTO orders VALUES\n  (101, 1, '2026-01-05', 'completed', 'web'),\n  (102, 2, '2026-01-07', 'completed', 'mobile'),\n  (103, 1, '2026-02-10', 'completed', 'web'),\n  (104, 3, '2026-02-14', 'returned', 'mobile'),\n  (105, 4, '2026-02-20', 'completed', 'partner'),\n  (106, 5, '2026-03-02', 'cancelled', 'web'),\n  (107, 2, '2026-03-04', 'completed', 'mobile'),\n  (108, 6, '2026-03-10', 'completed', 'web'),\n  (109, 7, '2026-03-12', 'completed', 'partner'),\n  (110, 8, '2026-03-18', 'completed', 'web');\n\nCREATE TABLE products (\n  product_id INTEGER,\n  product_name VARCHAR,\n  category VARCHAR,\n  list_price INTEGER\n);\n\nINSERT INTO products VALUES\n  (1, 'Laptop', 'Hardware', 250000),\n  (2, 'Smartphone', 'Hardware', 120000),\n  (3, 'Headphones', 'Accessories', 15000),\n  (4, 'Notebook', 'Education', 8000),\n  (5, 'Desk Chair', 'Office', 45000),\n  (6, 'Data Course', 'Education', 6000),\n  (7, 'WiFi Router', 'Hardware', 30000),\n  (8, 'Blood Pressure Monitor', 'Healthcare', 12000),\n  (9, 'Ad Campaign Credit', 'Marketing', 50000);\n\nCREATE TABLE order_items (\n  order_id INTEGER,\n  product_id INTEGER,\n  quantity INTEGER,\n  unit_price INTEGER\n);\n\nINSERT INTO order_items VALUES\n  (101, 1, 1, 250000),\n  (101, 3, 2, 15000),\n  (102, 2, 1, 120000),\n  (102, 4, 3, 8000),\n  (103, 5, 1, 45000),\n  (104, 2, 1, 120000),\n  (105, 6, 5, 6000),\n  (106, 3, 1, 15000),\n  (107, 4, 2, 8000),\n  (107, 7, 1, 30000),\n  (108, 1, 1, 250000),\n  (109, 8, 4, 12000),\n  (110, 9, 2, 50000);"
+          }
+        ],
+        "sqlStarterCode": "SELECT\n  customer_id,\n  full_name,\n  city,\n  industry_interest\nFROM customers\nORDER BY customer_id\nLIMIT 5;",
+        "sqlSolution": "SELECT\n  customer_id,\n  full_name,\n  city,\n  industry_interest\nFROM customers\nORDER BY customer_id\nLIMIT 5;",
+        "sqlExpectedResult": {
+          "columns": ["customer_id", "full_name", "city", "industry_interest"],
+          "rows": [
+            [1, "Ada Okafor", "Lagos", "fintech"],
+            [2, "Kojo Mensah", "Accra", "e-commerce"],
+            [3, "Amina Bello", "Abuja", "healthcare"],
+            [4, "Tunde Balogun", "Lagos", "education"],
+            [5, "Grace Njeri", "Nairobi", "marketing"]
+          ]
+        },
+        "sqlHints": [
+          "Start with the customers table.",
+          "Select only the four requested columns.",
+          "Use ORDER BY customer_id and LIMIT 5."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": []
+      },
+      {
+        "id": "sql-002-filter-completed-orders",
+        "type": "sql_exercise",
+        "question": "The operations team wants to review successful orders from February onward. Return `order_id`, `customer_id`, `order_date`, and `status` for completed orders on or after `2026-02-01`, ordered by `order_date`.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Filtering Operational Data",
+          "body": "<p>Analysts rarely use every row in a table. You usually filter to the business condition that matters: completed payments, active students, approved claims, successful campaigns, or orders within a period.</p><p>Use <code>WHERE</code> for conditions and combine conditions with <code>AND</code>.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  order_id,\n  customer_id,\n  order_date,\n  status\nFROM orders\nWHERE status = 'completed'\nORDER BY order_date;",
+        "sqlSolution": "SELECT\n  order_id,\n  customer_id,\n  order_date,\n  status\nFROM orders\nWHERE status = 'completed'\n  AND order_date >= '2026-02-01'\nORDER BY order_date;",
+        "sqlExpectedResult": {
+          "columns": ["order_id", "customer_id", "order_date", "status"],
+          "rows": [
+            [103, 1, "2026-02-10", "completed"],
+            [105, 4, "2026-02-20", "completed"],
+            [107, 2, "2026-03-04", "completed"],
+            [108, 6, "2026-03-10", "completed"],
+            [109, 7, "2026-03-12", "completed"],
+            [110, 8, "2026-03-18", "completed"]
+          ]
+        },
+        "sqlHints": [
+          "Filter `status` to completed.",
+          "Add a second condition for `order_date >= '2026-02-01'`.",
+          "Use ORDER BY order_date."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["WHERE"]
+      },
+      {
+        "id": "sql-003-order-revenue",
+        "type": "sql_exercise",
+        "question": "The revenue team wants to know how much each completed order is worth. Return `order_id`, `full_name`, and `order_revenue` for completed orders. Calculate revenue as `quantity * unit_price`. Sort from highest to lowest revenue.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Joining Tables for Revenue Analysis",
+          "body": "<p>Revenue usually lives across multiple tables. The order tells you who bought and when. The order item tells you what was bought and how much it cost. The customer table tells you who the customer is.</p><p>Use <code>JOIN</code> to connect related tables and <code>SUM</code> to calculate order revenue.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  o.order_id,\n  c.full_name,\n  SUM(oi.quantity * oi.unit_price) AS order_revenue\nFROM orders o\nJOIN customers c ON o.customer_id = c.customer_id\nJOIN order_items oi ON o.order_id = oi.order_id\nWHERE o.status = 'completed'\nGROUP BY o.order_id, c.full_name\nORDER BY order_revenue DESC;",
+        "sqlSolution": "SELECT\n  o.order_id,\n  c.full_name,\n  SUM(oi.quantity * oi.unit_price) AS order_revenue\nFROM orders o\nJOIN customers c ON o.customer_id = c.customer_id\nJOIN order_items oi ON o.order_id = oi.order_id\nWHERE o.status = 'completed'\nGROUP BY o.order_id, c.full_name\nORDER BY order_revenue DESC;",
+        "sqlExpectedResult": {
+          "columns": ["order_id", "full_name", "order_revenue"],
+          "rows": [
+            [101, "Ada Okafor", 280000],
+            [108, "Fatima Yusuf", 250000],
+            [102, "Kojo Mensah", 144000],
+            [110, "Zainab Musa", 100000],
+            [109, "Samuel Otieno", 48000],
+            [107, "Kojo Mensah", 46000],
+            [103, "Ada Okafor", 45000],
+            [105, "Tunde Balogun", 30000]
+          ]
+        },
+        "sqlHints": [
+          "Join orders to customers using customer_id.",
+          "Join orders to order_items using order_id.",
+          "Use SUM(quantity * unit_price) and GROUP BY order_id and full_name."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["JOIN", "GROUP BY"]
+      },
+      {
+        "id": "sql-004-category-revenue",
+        "type": "sql_exercise",
+        "question": "The leadership team wants to understand which product categories drive revenue. Return `category` and `total_revenue` for completed orders, sorted from highest to lowest revenue.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Aggregating by Business Category",
+          "body": "<p>Category-level metrics help teams compare performance across business lines. This same idea appears in e-commerce categories, fintech transaction types, healthcare service lines, marketing channels, and education programs.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  p.category,\n  SUM(oi.quantity * oi.unit_price) AS total_revenue\nFROM orders o\nJOIN order_items oi ON o.order_id = oi.order_id\nJOIN products p ON oi.product_id = p.product_id\nWHERE o.status = 'completed'\nGROUP BY p.category\nORDER BY total_revenue DESC;",
+        "sqlSolution": "SELECT\n  p.category,\n  SUM(oi.quantity * oi.unit_price) AS total_revenue\nFROM orders o\nJOIN order_items oi ON o.order_id = oi.order_id\nJOIN products p ON oi.product_id = p.product_id\nWHERE o.status = 'completed'\nGROUP BY p.category\nORDER BY total_revenue DESC;",
+        "sqlExpectedResult": {
+          "columns": ["category", "total_revenue"],
+          "rows": [
+            ["Hardware", 650000],
+            ["Marketing", 100000],
+            ["Education", 70000],
+            ["Healthcare", 48000],
+            ["Office", 45000],
+            ["Accessories", 30000]
+          ]
+        },
+        "sqlHints": [
+          "Products contains the category.",
+          "Revenue comes from order_items.",
+          "Only include completed orders."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["GROUP BY"]
+      },
+      {
+        "id": "sql-005-repeat-customers",
+        "type": "sql_exercise",
+        "question": "The growth team wants to identify repeat customers. Return `customer_id`, `full_name`, and `completed_orders` for customers with at least 2 completed orders. Sort by `completed_orders` descending, then `customer_id` ascending.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Finding Repeat Customers With HAVING",
+          "body": "<p><code>WHERE</code> filters rows before aggregation. <code>HAVING</code> filters groups after aggregation. When the business question says \"customers with at least 2 orders\" or \"campaigns with more than 100 leads\", you often need <code>HAVING</code>.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  c.customer_id,\n  c.full_name,\n  COUNT(o.order_id) AS completed_orders\nFROM customers c\nJOIN orders o ON c.customer_id = o.customer_id\nWHERE o.status = 'completed'\nGROUP BY c.customer_id, c.full_name\nHAVING COUNT(o.order_id) >= 2\nORDER BY completed_orders DESC, c.customer_id ASC;",
+        "sqlSolution": "SELECT\n  c.customer_id,\n  c.full_name,\n  COUNT(o.order_id) AS completed_orders\nFROM customers c\nJOIN orders o ON c.customer_id = o.customer_id\nWHERE o.status = 'completed'\nGROUP BY c.customer_id, c.full_name\nHAVING COUNT(o.order_id) >= 2\nORDER BY completed_orders DESC, c.customer_id ASC;",
+        "sqlExpectedResult": {
+          "columns": ["customer_id", "full_name", "completed_orders"],
+          "rows": [
+            [1, "Ada Okafor", 2],
+            [2, "Kojo Mensah", 2]
+          ]
+        },
+        "sqlHints": [
+          "Count completed orders per customer.",
+          "Use HAVING after GROUP BY.",
+          "The threshold is at least 2 completed orders."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["HAVING"]
+      },
+      {
+        "id": "sql-006-customer-value-segments",
+        "type": "sql_exercise",
+        "question": "The CRM team wants to segment customers by lifetime revenue. Return `customer_id`, `full_name`, `total_revenue`, and `value_segment`. Use these rules: revenue >= 200000 is `High value`, revenue >= 50000 is `Growth`, otherwise `Emerging`. Include customers with no completed revenue. Sort by `total_revenue` descending.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Using CASE for Business Segmentation",
+          "body": "<p>Business teams often need labels, not just numbers. <code>CASE</code> lets analysts convert raw metrics into meaningful business categories such as risk level, customer value, student status, campaign quality, or payment health.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "WITH customer_revenue AS (\n  SELECT\n    c.customer_id,\n    c.full_name,\n    COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS total_revenue\n  FROM customers c\n  LEFT JOIN orders o ON c.customer_id = o.customer_id AND o.status = 'completed'\n  LEFT JOIN order_items oi ON o.order_id = oi.order_id\n  GROUP BY c.customer_id, c.full_name\n)\nSELECT\n  customer_id,\n  full_name,\n  total_revenue,\n  CASE\n    WHEN total_revenue >= 200000 THEN 'High value'\n    WHEN total_revenue >= 50000 THEN 'Growth'\n    ELSE 'Emerging'\n  END AS value_segment\nFROM customer_revenue\nORDER BY total_revenue DESC;",
+        "sqlSolution": "WITH customer_revenue AS (\n  SELECT\n    c.customer_id,\n    c.full_name,\n    COALESCE(SUM(oi.quantity * oi.unit_price), 0) AS total_revenue\n  FROM customers c\n  LEFT JOIN orders o ON c.customer_id = o.customer_id AND o.status = 'completed'\n  LEFT JOIN order_items oi ON o.order_id = oi.order_id\n  GROUP BY c.customer_id, c.full_name\n)\nSELECT\n  customer_id,\n  full_name,\n  total_revenue,\n  CASE\n    WHEN total_revenue >= 200000 THEN 'High value'\n    WHEN total_revenue >= 50000 THEN 'Growth'\n    ELSE 'Emerging'\n  END AS value_segment\nFROM customer_revenue\nORDER BY total_revenue DESC;",
+        "sqlExpectedResult": {
+          "columns": ["customer_id", "full_name", "total_revenue", "value_segment"],
+          "rows": [
+            [1, "Ada Okafor", 325000, "High value"],
+            [6, "Fatima Yusuf", 250000, "High value"],
+            [2, "Kojo Mensah", 190000, "Growth"],
+            [8, "Zainab Musa", 100000, "Growth"],
+            [7, "Samuel Otieno", 48000, "Emerging"],
+            [4, "Tunde Balogun", 30000, "Emerging"],
+            [3, "Amina Bello", 0, "Emerging"],
+            [5, "Grace Njeri", 0, "Emerging"]
+          ]
+        },
+        "sqlHints": [
+          "Use a CTE to calculate total revenue per customer.",
+          "Use LEFT JOIN so customers with no completed revenue still appear.",
+          "Use CASE to create the value_segment label."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["CASE", "WITH"]
+      },
+      {
+        "id": "sql-007-monthly-revenue",
+        "type": "sql_exercise",
+        "question": "The finance team wants a monthly revenue trend. Return `order_month` and `monthly_revenue` for completed orders. Use `strftime(order_date, '%Y-%m')` for the month and sort by month.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Date-Based Reporting",
+          "body": "<p>Monthly reporting is one of the most common SQL tasks in analytics. Finance teams track revenue by month. Marketing teams track leads by month. Education teams track enrollments by month. Healthcare teams track appointments by month.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  strftime(order_date, '%Y-%m') AS order_month,\n  SUM(oi.quantity * oi.unit_price) AS monthly_revenue\nFROM orders o\nJOIN order_items oi ON o.order_id = oi.order_id\nWHERE o.status = 'completed'\nGROUP BY order_month\nORDER BY order_month;",
+        "sqlSolution": "SELECT\n  strftime(order_date, '%Y-%m') AS order_month,\n  SUM(oi.quantity * oi.unit_price) AS monthly_revenue\nFROM orders o\nJOIN order_items oi ON o.order_id = oi.order_id\nWHERE o.status = 'completed'\nGROUP BY order_month\nORDER BY order_month;",
+        "sqlExpectedResult": {
+          "columns": ["order_month", "monthly_revenue"],
+          "rows": [
+            ["2026-01", 424000],
+            ["2026-02", 75000],
+            ["2026-03", 444000]
+          ]
+        },
+        "sqlHints": [
+          "Use strftime(order_date, '%Y-%m') to group dates by month.",
+          "Join orders to order_items.",
+          "Only completed orders should count."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["strftime", "GROUP BY"]
+      },
+      {
+        "id": "sql-008-product-ranking",
+        "type": "sql_exercise",
+        "question": "The product team wants the top products by revenue. Return `product_name`, `category`, `units_sold`, `revenue`, and `revenue_rank` for completed orders. Use `RANK()` and return the top 5 rows ordered by revenue rank.",
+        "options": [],
+        "correctAnswer": "",
+        "lesson": {
+          "title": "Ranking With Window Functions",
+          "body": "<p>Window functions help analysts rank, compare, and calculate running metrics without collapsing all detail too early. Rankings are useful for top products, highest-risk accounts, best campaigns, most active students, or busiest providers.</p>"
+        },
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  p.product_name,\n  p.category,\n  SUM(oi.quantity) AS units_sold,\n  SUM(oi.quantity * oi.unit_price) AS revenue,\n  RANK() OVER (ORDER BY SUM(oi.quantity * oi.unit_price) DESC) AS revenue_rank\nFROM orders o\nJOIN order_items oi ON o.order_id = oi.order_id\nJOIN products p ON oi.product_id = p.product_id\nWHERE o.status = 'completed'\nGROUP BY p.product_name, p.category\nORDER BY revenue_rank\nLIMIT 5;",
+        "sqlSolution": "SELECT\n  p.product_name,\n  p.category,\n  SUM(oi.quantity) AS units_sold,\n  SUM(oi.quantity * oi.unit_price) AS revenue,\n  RANK() OVER (ORDER BY SUM(oi.quantity * oi.unit_price) DESC) AS revenue_rank\nFROM orders o\nJOIN order_items oi ON o.order_id = oi.order_id\nJOIN products p ON oi.product_id = p.product_id\nWHERE o.status = 'completed'\nGROUP BY p.product_name, p.category\nORDER BY revenue_rank\nLIMIT 5;",
+        "sqlExpectedResult": {
+          "columns": ["product_name", "category", "units_sold", "revenue", "revenue_rank"],
+          "rows": [
+            ["Laptop", "Hardware", 2, 500000, 1],
+            ["Smartphone", "Hardware", 1, 120000, 2],
+            ["Ad Campaign Credit", "Marketing", 2, 100000, 3],
+            ["Blood Pressure Monitor", "Healthcare", 4, 48000, 4],
+            ["Desk Chair", "Office", 1, 45000, 5]
+          ]
+        },
+        "sqlHints": [
+          "Aggregate revenue per product first.",
+          "Use RANK() OVER (ORDER BY revenue expression DESC).",
+          "Limit the final result to 5 rows."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["RANK", "OVER"]
+      }
+    ],
+    "fields": [],
+    "postSubmission": null
+  }
+}

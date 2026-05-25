@@ -75,6 +75,14 @@ const DARK_C = {
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
+function stripSqlSolutions(questions: any[] = []) {
+  return questions.map(q => {
+    if (!q || typeof q !== 'object') return q;
+    const { sqlSolution, ...safeQuestion } = q;
+    return safeQuestion;
+  });
+}
+
 // --- Skeleton ---
 function Sk({ w = '100%', h = 16, r = 8 }: { w?: string | number; h?: number; r?: number }) {
   const C = useC();
@@ -958,7 +966,7 @@ function CoursesSection({ userEmail, userId: userIdProp, C, isOutstandingProp }:
       const normalizeCourse = (c: any) => ({
         ...c, content_type: 'course',
         config: { isCourse: true, title: c.title, coverImage: c.cover_image,
-          questions: c.questions ?? [], deadline_days: c.deadline_days, passmark: c.passmark,
+          questions: stripSqlSolutions(c.questions ?? []), deadline_days: c.deadline_days, passmark: c.passmark,
           description: c.description ?? '', learnOutcomes: c.learn_outcomes ?? [] },
       });
       const cohortCourses = (cohortCourseRows ?? []).map(normalizeCourse);
@@ -5741,7 +5749,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
       // Normalize courses and VEs into a unified shape with config reconstruction
       const normalizedCourses = (courseRes.data ?? []).map((c: any) => ({
         ...c, content_type: 'course',
-        config: { isCourse: true, title: c.title, coverImage: c.cover_image, questions: c.questions ?? [], deadline_days: c.deadline_days, passmark: c.passmark, description: c.description ?? '', learnOutcomes: c.learn_outcomes ?? [] },
+        config: { isCourse: true, title: c.title, coverImage: c.cover_image, questions: stripSqlSolutions(c.questions ?? []), deadline_days: c.deadline_days, passmark: c.passmark, description: c.description ?? '', learnOutcomes: c.learn_outcomes ?? [] },
       }));
       const normalizedVEs = (veRes.data ?? []).map((ve: any) => ({
         ...ve, content_type: 'virtual_experience',

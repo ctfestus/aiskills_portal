@@ -87,6 +87,14 @@ const buttonThemes: Record<ThemeColor, string> = {
   amber:   'bg-amber-500 hover:bg-amber-600 text-white',
 };
 
+function stripSqlSolutions(questions: any[] = []) {
+  return questions.map(q => {
+    if (!q || typeof q !== 'object') return q;
+    const { sqlSolution, ...safeQuestion } = q;
+    return safeQuestion;
+  });
+}
+
 /* --- Theme tokens (mirrors profile page) --- */
 const LIGHT_P = {
   page:         '#ffffff',
@@ -402,7 +410,7 @@ export default function PublicFormPage() {
       if (course) {
         data = { ...course, content_type: 'course', config: {
           title: course.title, description: course.description,
-          isCourse: true, questions: course.questions ?? [], fields: course.fields ?? [],
+          isCourse: true, questions: stripSqlSolutions(course.questions ?? []), fields: course.fields ?? [],
           passmark: course.passmark, course_timer: course.course_timer,
           learnOutcomes: course.learn_outcomes, points_enabled: course.points_enabled,
           points_base: course.points_base,

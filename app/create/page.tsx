@@ -25,6 +25,7 @@ import { getFontById, loadGoogleFont } from '@/lib/fonts';
 import { FontPickerModal } from '@/components/FontPickerModal';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import { executeQuery, initSQLRuntime } from '@/lib/sql-engine';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -50,7 +51,7 @@ interface FormField {
   description?: string;
 }
 
-type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique';
+type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise';
 
 interface DownloadItem {
   id: string;
@@ -93,6 +94,14 @@ interface CourseQuestion {
   context?: string;
   minScore?: number;
   reviewLanguage?: string;
+  sqlTables?: { id?: string; tableName: string; fileName?: string; fileUrl?: string; csvUrl?: string; seedSql?: string }[];
+  sqlStarterCode?: string;
+  sqlSolution?: string;
+  sqlExpectedResult?: { columns: string[]; rows: unknown[][] };
+  sqlHints?: string[];
+  sqlResultOrdered?: boolean;
+  sqlNumericTolerance?: number;
+  sqlRequiredPatterns?: string[];
 }
 
 interface Speaker {
@@ -1109,6 +1118,59 @@ const [isSaving, setIsSaving] = useState(false);
     })();
   }, [formConfig?.postSubmission?.type, savedFormId]);
 
+  const prepareSqlExpectedResultsForSave = async (config: FormConfig, requireComplete: boolean): Promise<FormConfig | null> => {
+    if (!config.isCourse) return config;
+    const questions = config.questions ?? [];
+    const sqlQuestions = questions.filter(q => q.type === 'sql_exercise');
+    const missingExpected = sqlQuestions.filter(q => !q.sqlExpectedResult);
+    if (!missingExpected.length) return config;
+
+    const missingSolution = missingExpected.find(q => !q.sqlSolution?.trim());
+    if (missingSolution) {
+      if (requireComplete) {
+        showToast('Add a solution query and compute the expected result before publishing SQL exercises.', 'error');
+        return null;
+      }
+      showToast('Draft saved without SQL expected results. Compute them before publishing.', 'info');
+      return config;
+    }
+
+    const tableMap = new Map<string, NonNullable<CourseQuestion['sqlTables']>[number]>();
+    for (const question of sqlQuestions) {
+      for (const table of question.sqlTables ?? []) {
+        const key = `${table.tableName}|${table.fileUrl || table.csvUrl || table.seedSql || ''}`;
+        if (table.tableName && !tableMap.has(key)) tableMap.set(key, table);
+      }
+    }
+
+    try {
+      showToast('Computing missing SQL expected results...', 'info');
+      const runtime = await initSQLRuntime(Array.from(tableMap.values()));
+      try {
+        let computed = 0;
+        const updatedQuestions = [...questions];
+        for (let i = 0; i < updatedQuestions.length; i += 1) {
+          const question = updatedQuestions[i];
+          if (question.type !== 'sql_exercise' || question.sqlExpectedResult || !question.sqlSolution?.trim()) continue;
+          const expected = await executeQuery(runtime.conn, question.sqlSolution, false, { limit: null });
+          updatedQuestions[i] = { ...question, sqlExpectedResult: expected };
+          computed += 1;
+        }
+        if (!computed) return config;
+        const nextConfig = { ...config, questions: updatedQuestions };
+        setFormConfig(nextConfig);
+        showToast(`Computed expected results for ${computed} SQL exercise${computed === 1 ? '' : 's'}.`, 'success');
+        return nextConfig;
+      } finally {
+        await runtime.close();
+      }
+    } catch (err: any) {
+      console.error('[sql-exercise] save-time expected result compute failed', err);
+      showToast(err?.message || 'Could not compute SQL expected results. Fix the data setup or solution query first.', 'error');
+      return requireComplete ? null : config;
+    }
+  };
+
   // -- Supabase save/share --
   const handleShare = async (saveStatus: 'draft' | 'published' = 'published') => {
     if (!formConfig) return;
@@ -1116,6 +1178,8 @@ const [isSaving, setIsSaving] = useState(false);
     setIsSaving(true);
     setSavingAs(saveStatus);
     try {
+      const configToSave = await prepareSqlExpectedResultsForSave(formConfig, saveStatus === 'published');
+      if (!configToSave) return;
       let formId = savedFormId;
       // Use custom slug if provided, otherwise auto-generate a 5-char alphanumeric slug
       const shortSlug = () => Math.random().toString(36).slice(2, 7);
@@ -1131,12 +1195,12 @@ const [isSaving, setIsSaving] = useState(false);
             Authorization: `Bearer ${session?.access_token}`,
           },
           body: JSON.stringify({
-            title: formConfig.title,
-            description: formConfig.description,
-            config: formConfig,
+            title: configToSave.title,
+            description: configToSave.description,
+            config: configToSave,
             slug: slugValue,
             cohort_ids: selectedCohortIds,
-            deadline_days: formConfig.deadline_days ?? null,
+            deadline_days: configToSave.deadline_days ?? null,
             status: saveStatus,
           }),
         });
@@ -1164,7 +1228,7 @@ const [isSaving, setIsSaving] = useState(false);
         const patchRes = await fetch('/api/forms', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${fetchSession?.access_token}` },
-          body: JSON.stringify({ id: formId, title: formConfig.title, description: formConfig.description, config: formConfig, slug: slugValue, cohort_ids: selectedCohortIds, status: saveStatus }),
+          body: JSON.stringify({ id: formId, title: configToSave.title, description: configToSave.description, config: configToSave, slug: slugValue, cohort_ids: selectedCohortIds, status: saveStatus }),
         });
         const patchData = await patchRes.json();
         const error = patchRes.ok ? null : patchData;
@@ -1566,6 +1630,7 @@ const [isSaving, setIsSaving] = useState(false);
       code_review:         { options: [], correctAnswer: '', rubric: ['Code runs without errors', 'Follows naming conventions', 'Logic is correct'], reviewLanguage: 'javascript', minScore: 70 },
       excel_review:        { options: [], correctAnswer: '', rubric: ['Correct formulas used', 'Data is accurate', 'Formatting is clean'], context: '', minScore: 70 },
       dashboard_critique:  { options: [], correctAnswer: '', rubric: ['Visuals are appropriate', 'Insights are accurate', 'Layout is clear'], context: '', minScore: 70 },
+      sql_exercise:        { options: [], correctAnswer: '', sqlTables: [], sqlStarterCode: 'SELECT * FROM table_name LIMIT 10;', sqlSolution: '', sqlExpectedResult: undefined, sqlHints: [], sqlResultOrdered: false, sqlNumericTolerance: 0, sqlRequiredPatterns: [] },
     };
     updateConfig({
       questions: [...(formConfig.questions || []), {
@@ -1626,6 +1691,7 @@ const [isSaving, setIsSaving] = useState(false);
       code_review:         { options: [], correctAnswer: '', rubric: ['Code runs without errors', 'Follows naming conventions', 'Logic is correct'], reviewLanguage: 'javascript', minScore: 70 },
       excel_review:        { options: [], correctAnswer: '', rubric: ['Correct formulas used', 'Data is accurate', 'Formatting is clean'], context: '', minScore: 70 },
       dashboard_critique:  { options: [], correctAnswer: '', rubric: ['Visuals are appropriate', 'Insights are accurate', 'Layout is clear'], context: '', minScore: 70 },
+      sql_exercise:        { options: [], correctAnswer: '', sqlTables: [], sqlStarterCode: 'SELECT * FROM table_name LIMIT 10;', sqlSolution: '', sqlExpectedResult: undefined, sqlHints: [], sqlResultOrdered: false, sqlNumericTolerance: 0, sqlRequiredPatterns: [] },
     };
     const qs = [...(formConfig.questions || [])];
     qs.splice(afterIndex + 1, 0, {
@@ -1670,6 +1736,63 @@ const [isSaving, setIsSaving] = useState(false);
   const handleUpdateQuestion = (id: string, updates: Partial<CourseQuestion>) => {
     if (!formConfig) return;
     updateConfig({ questions: formConfig.questions?.map(q => q.id === id ? { ...q, ...updates } : q) || [] });
+  };
+
+  const handleSqlDatasetUpload = async (questionId: string, tableId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/\.(csv|tsv|xlsx|xls)$/i.test(file.name)) {
+      showToast('Upload a CSV, TSV, or Excel file for SQL exercises.', 'error');
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      showToast('Dataset too large. Keep SQL exercise files under 25MB.', 'error');
+      return;
+    }
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `sql-course/${Date.now()}_${safeName}`;
+      const { error } = await supabase.storage.from('datasets').upload(path, file, { upsert: false });
+      if (error) throw error;
+      const { data } = supabase.storage.from('datasets').getPublicUrl(path);
+      const q = formConfig?.questions?.find(q => q.id === questionId);
+      const tables = (q?.sqlTables ?? []).map(t => t.id === tableId ? { ...t, fileName: file.name, fileUrl: data.publicUrl, csvUrl: data.publicUrl } : t);
+      handleUpdateQuestion(questionId, { sqlTables: tables, sqlExpectedResult: undefined });
+      showToast('Dataset uploaded.', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Dataset upload failed.', 'error');
+    }
+  };
+
+  const computeSqlExpectedResult = async (questionId: string) => {
+    const q = formConfig?.questions?.find(q => q.id === questionId);
+    if (!q?.sqlSolution?.trim()) {
+      showToast('Add a solution query first.', 'error');
+      return;
+    }
+    try {
+      showToast('Computing expected SQL result...');
+      const tableMap = new Map<string, NonNullable<CourseQuestion['sqlTables']>[number]>();
+      for (const question of formConfig?.questions ?? []) {
+        if (question.type !== 'sql_exercise') continue;
+        for (const table of question.sqlTables ?? []) {
+          const key = `${table.tableName}|${table.fileUrl || table.csvUrl || table.seedSql || ''}`;
+          if (table.tableName && !tableMap.has(key)) tableMap.set(key, table);
+        }
+      }
+      const runtime = await initSQLRuntime(Array.from(tableMap.values()));
+      try {
+        const expected = await executeQuery(runtime.conn, q.sqlSolution, false, { limit: null });
+        handleUpdateQuestion(questionId, { sqlExpectedResult: expected });
+        showToast(`Expected result saved (${expected.rows.length} rows).`, 'success');
+      } finally {
+        await runtime.close();
+      }
+    } catch (err: any) {
+      console.error('[sql-exercise] compute expected result failed', err);
+      showToast(err?.message || 'Could not compute expected result.', 'error');
+    }
   };
 
   const handleExtractRubric = async (questionId: string, label: string, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2790,6 +2913,7 @@ const [isSaving, setIsSaving] = useState(false);
                           <option value="code_review">AI Code Review</option>
                           <option value="excel_review">AI Excel Review</option>
                           <option value="dashboard_critique">AI Dashboard Critique</option>
+                          <option value="sql_exercise">SQL Exercise</option>
                           <option value="downloads">Downloads</option>
                         </select>
                         <button
@@ -3024,11 +3148,13 @@ const [isSaving, setIsSaving] = useState(false);
                             onChange={e => {
                               const v = e.target.value as QuestionType;
                               const isReview = ['code_review', 'excel_review', 'dashboard_critique'].includes(v);
+                              const isSql = v === 'sql_exercise';
                               handleUpdateQuestion(q.id, {
                                 type: v,
-                                ...(isReview ? { options: [], correctAnswer: '' } : {}),
-                                ...(!isReview && v === 'fill_blank' ? { options: [] } : {}),
-                                ...(!isReview && v === 'arrange' && qType !== 'arrange' ? { correctAnswer: q.options.join('|||') } : {}),
+                                ...(isReview || isSql ? { options: [], correctAnswer: '' } : {}),
+                                ...(isSql ? { sqlTables: q.sqlTables ?? [], sqlStarterCode: q.sqlStarterCode ?? 'SELECT * FROM table_name LIMIT 10;', sqlSolution: q.sqlSolution ?? '', sqlHints: q.sqlHints ?? [], sqlResultOrdered: q.sqlResultOrdered ?? false, sqlNumericTolerance: q.sqlNumericTolerance ?? 0, sqlRequiredPatterns: q.sqlRequiredPatterns ?? [] } : {}),
+                                ...(!isReview && !isSql && v === 'fill_blank' ? { options: [] } : {}),
+                                ...(!isReview && !isSql && v === 'arrange' && qType !== 'arrange' ? { correctAnswer: q.options.join('|||') } : {}),
                               });
                             }}
                             className="text-[11px] font-semibold rounded-lg px-2 py-1 outline-none cursor-pointer"
@@ -3042,6 +3168,7 @@ const [isSaving, setIsSaving] = useState(false);
                             <option value="code_review">AI Code Review</option>
                             <option value="excel_review">AI Excel Review</option>
                             <option value="dashboard_critique">AI Dashboard Critique</option>
+                            <option value="sql_exercise">SQL Exercise</option>
                           </select>
                           <button
                             type="button"
@@ -3084,7 +3211,7 @@ const [isSaving, setIsSaving] = useState(false);
                           >
                             {busyQuestionId === q.id && aiLoadingLabel === 'Generating lesson...' ? 'Generating…' : 'AI Lesson'}
                           </button>
-                          {!q.lessonOnly && !(['code_review', 'excel_review', 'dashboard_critique'] as const).includes(qType as any) && (<>
+                          {!q.lessonOnly && !(['code_review', 'excel_review', 'dashboard_critique', 'sql_exercise'] as const).includes(qType as any) && (<>
                           <button
                             type="button"
                             onClick={() => generateQuestionAsset(q, 'generate_hint')}
@@ -3108,7 +3235,7 @@ const [isSaving, setIsSaving] = useState(false);
                         {!q.lessonOnly && (<>
 
                         {/* Question text -- hidden for review types; they use the project brief field inside the config panel */}
-                        {!(['code_review', 'excel_review', 'dashboard_critique'] as const).includes(qType as any) && (
+                        {!(['code_review', 'excel_review', 'dashboard_critique', 'sql_exercise'] as const).includes(qType as any) && (
                         <div>
                           <label className={labelCls} style={labelStyle}>Question</label>
                           <input type="text" value={q.question} onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })} className={inputCls} style={inputStyle}
@@ -3425,8 +3552,158 @@ const [isSaving, setIsSaving] = useState(false);
                           </div>
                         )}
 
+                        {qType === 'sql_exercise' && (
+                          <div className="space-y-3 rounded-xl p-3" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
+                            <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentColor }}>SQL Exercise Config</p>
+
+                            <div>
+                              <label className={labelCls} style={labelStyle}>Student task</label>
+                              <textarea
+                                value={q.question}
+                                onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })}
+                                className={`${inputCls} min-h-[72px] resize-y`}
+                                style={inputStyle}
+                                placeholder="Ask the student to write a query..."
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <label className={labelCls} style={labelStyle}>Tables</label>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateQuestion(q.id, { sqlTables: [...(q.sqlTables ?? []), { id: Math.random().toString(36).slice(2, 9), tableName: 'table_name', fileName: '', fileUrl: '', csvUrl: '' }] })}
+                                  className="text-xs font-semibold px-2.5 py-1 rounded-lg"
+                                  style={{ background: C.pill, color: C.muted }}
+                                >
+                                  <Plus className="w-3 h-3 inline mr-1" /> Add table
+                                </button>
+                              </div>
+                              {(q.sqlTables ?? []).map((table, tableIdx) => (
+                                <div key={table.id ?? tableIdx} className="grid gap-2 rounded-lg p-2" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                                  <div className="flex gap-2">
+                                    <input
+                                      value={table.tableName}
+                                      onChange={e => {
+                                        const tables = [...(q.sqlTables ?? [])];
+                                        tables[tableIdx] = { ...table, tableName: e.target.value };
+                                        handleUpdateQuestion(q.id, { sqlTables: tables });
+                                      }}
+                                      className={`${inputCls} flex-1 py-1.5`}
+                                      style={inputStyle}
+                                      placeholder="orders"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateQuestion(q.id, { sqlTables: (q.sqlTables ?? []).filter((_, i) => i !== tableIdx) })}
+                                      className="px-2 rounded-lg hover:text-red-400"
+                                      style={{ color: C.faint }}
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="inline-flex rounded-lg overflow-hidden" style={{ border: `1px solid ${C.inputBorder}` }}>
+                                      {(['upload', 'seed'] as const).map(mode => {
+                                        const active = (table.seedSql?.trim() ? 'seed' : 'upload') === mode;
+                                        return (
+                                          <button
+                                            key={mode}
+                                            type="button"
+                                            onClick={() => {
+                                              const tables = [...(q.sqlTables ?? [])];
+                                              tables[tableIdx] = mode === 'seed'
+                                                ? { ...table, seedSql: table.seedSql ?? '', fileName: '', fileUrl: '', csvUrl: '' }
+                                                : { ...table, seedSql: '' };
+                                              handleUpdateQuestion(q.id, { sqlTables: tables, sqlExpectedResult: undefined });
+                                            }}
+                                            className="px-2.5 py-1.5 text-xs font-semibold"
+                                            style={{ background: active ? accentColor : C.pill, color: active ? C.ctaText : C.muted }}
+                                          >
+                                            {mode === 'upload' ? 'Upload' : 'Seed SQL'}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer" style={{ background: C.pill, color: C.muted }}>
+                                      <Upload className="w-3 h-3" /> Upload CSV/XLSX
+                                      <input type="file" className="hidden" accept=".csv,.tsv,.xlsx,.xls" onChange={e => handleSqlDatasetUpload(q.id, table.id ?? String(tableIdx), e)} />
+                                    </label>
+                                    <span className="text-xs truncate" style={{ color: C.faint }}>{table.fileName || table.fileUrl || 'No file uploaded'}</span>
+                                  </div>
+                                  {table.seedSql?.trim() || (!table.fileUrl && !table.csvUrl && !table.fileName) ? (
+                                    <div>
+                                      <label className={labelCls} style={labelStyle}>CREATE TABLE / INSERT seed SQL</label>
+                                      <textarea
+                                        value={table.seedSql ?? ''}
+                                        onChange={e => {
+                                          const tables = [...(q.sqlTables ?? [])];
+                                          tables[tableIdx] = { ...table, seedSql: e.target.value, fileName: '', fileUrl: '', csvUrl: '' };
+                                          handleUpdateQuestion(q.id, { sqlTables: tables, sqlExpectedResult: undefined });
+                                        }}
+                                        className={`${inputCls} min-h-[120px] resize-y font-mono text-xs`}
+                                        style={inputStyle}
+                                        placeholder={`CREATE TABLE ${table.tableName || 'orders'} (...);\nINSERT INTO ${table.tableName || 'orders'} VALUES (...);`}
+                                      />
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+
+                            <div>
+                              <label className={labelCls} style={labelStyle}>Starter SQL</label>
+                              <textarea value={q.sqlStarterCode ?? ''} onChange={e => handleUpdateQuestion(q.id, { sqlStarterCode: e.target.value })} className={`${inputCls} min-h-[84px] resize-y font-mono text-xs`} style={inputStyle} />
+                            </div>
+
+                            <div>
+                              <label className={labelCls} style={labelStyle}>Solution SQL <span style={{ color: C.faint }}>(hidden from students)</span></label>
+                              <textarea value={q.sqlSolution ?? ''} onChange={e => handleUpdateQuestion(q.id, { sqlSolution: e.target.value, sqlExpectedResult: undefined })} className={`${inputCls} min-h-[96px] resize-y font-mono text-xs`} style={inputStyle} placeholder="SELECT ..." />
+                              <div className="flex flex-wrap items-center gap-2 mt-2">
+                                <button type="button" onClick={() => computeSqlExpectedResult(q.id)} className="px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: accentColor, color: C.ctaText }}>
+                                  Compute expected result
+                                </button>
+                                <span className="text-xs" style={{ color: q.sqlExpectedResult ? '#10b981' : C.faint }}>
+                                  {q.sqlExpectedResult ? `${q.sqlExpectedResult.rows.length} expected row(s) saved` : 'Expected result not computed'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="grid sm:grid-cols-2 gap-2">
+                              <label className="flex items-center gap-2 text-xs" style={{ color: C.muted }}>
+                                <input type="checkbox" checked={!!q.sqlResultOrdered} onChange={e => handleUpdateQuestion(q.id, { sqlResultOrdered: e.target.checked })} />
+                                Require row order
+                              </label>
+                              <input type="number" value={q.sqlNumericTolerance ?? 0} onChange={e => handleUpdateQuestion(q.id, { sqlNumericTolerance: Number(e.target.value) })} className={`${inputCls} py-1.5`} style={inputStyle} placeholder="Numeric tolerance" />
+                            </div>
+
+                            <div>
+                              <label className={labelCls} style={labelStyle}>Required SQL patterns <span style={{ color: C.faint }}>(optional)</span></label>
+                              <textarea
+                                value={(q.sqlRequiredPatterns ?? []).join('\n')}
+                                onChange={e => handleUpdateQuestion(q.id, { sqlRequiredPatterns: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
+                                className={`${inputCls} min-h-[64px] resize-y font-mono text-xs`}
+                                style={inputStyle}
+                                placeholder={`LIMIT\nORDER BY\n/^SELECT\\s+\\*\\s+FROM\\s+employees\\s+LIMIT\\s+10\\s*;?$/i`}
+                              />
+                              <p className="mt-1 text-[11px]" style={{ color: C.faint }}>One per line. Plain words must appear as SQL keywords; /regex/i is also supported.</p>
+                            </div>
+
+                            <div>
+                              <label className={labelCls} style={labelStyle}>Hints</label>
+                              <textarea
+                                value={(q.sqlHints ?? []).join('\n')}
+                                onChange={e => handleUpdateQuestion(q.id, { sqlHints: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
+                                className={`${inputCls} min-h-[70px] resize-y`}
+                                style={inputStyle}
+                                placeholder="One hint per line"
+                              />
+                            </div>
+                          </div>
+                        )}
+
                         {/* Hint and explanation -- not shown for AI review types */}
-                        {!(['code_review', 'excel_review', 'dashboard_critique'] as const).includes(qType as any) && (<>
+                        {!(['code_review', 'excel_review', 'dashboard_critique', 'sql_exercise'] as const).includes(qType as any) && (<>
                         <div>
                           <label className={labelCls} style={labelStyle}>Hint <span style={{ color: C.faint }}>(optional)</span></label>
                           <input
@@ -3580,6 +3857,7 @@ const [isSaving, setIsSaving] = useState(false);
                       <option value="code_review">AI Code Review</option>
                       <option value="excel_review">AI Excel Review</option>
                       <option value="dashboard_critique">AI Dashboard Critique</option>
+                      <option value="sql_exercise">SQL Exercise</option>
                       <option value="downloads">Downloads</option>
                     </select>
                     <button type="button" onClick={handleAddQuestion} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all flex-shrink-0 hover:opacity-80" style={{ background: accentColor, color: C.ctaText }}>

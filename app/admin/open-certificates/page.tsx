@@ -696,23 +696,35 @@ export default function OpenCertificatesPage() {
     Authorization: `Bearer ${token}`,
   }), [token]);
 
+  const freshAuthHeader = useCallback(async (): Promise<HeadersInit> => {
+    const { data } = await supabase.auth.getSession();
+    const t = data.session?.access_token ?? token ?? '';
+    return { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` };
+  }, [token]);
+
   useEffect(() => {
     if (!token) return;
     setLoading(true);
-    fetch('/api/programs', { headers: headers() as any })
-      .then(r => r.json())
-      .then(d => setPrograms(d.data ?? []))
-      .finally(() => setLoading(false));
+    freshAuthHeader().then(h =>
+      fetch('/api/programs', { headers: h as any })
+        .then(r => r.json())
+        .then(d => setPrograms(d.data ?? []))
+        .finally(() => setLoading(false))
+    );
   }, [token]);
 
   const loadAllCerts = useCallback(async () => {
     if (!token) return;
     setCertsLoading(true);
-    const res  = await fetch('/api/open-certificates', { headers: headers() as any });
-    const data = await res.json();
-    setAllCerts(data.data ?? []);
+    try {
+      const h = await freshAuthHeader();
+      const res  = await fetch('/api/open-certificates', { headers: h as any });
+      const data = await res.json();
+      if (!res.ok) { setCertsLoading(false); return; }
+      setAllCerts(data.data ?? []);
+    } catch { /* non-blocking */ }
     setCertsLoading(false);
-  }, [token, headers]);
+  }, [token, freshAuthHeader]);
 
   useEffect(() => { if (token) loadAllCerts(); }, [token]);
 
@@ -1287,7 +1299,7 @@ export default function OpenCertificatesPage() {
             onCancel={() => setPanel('none')}
             onDone={async () => {
               setPanel('none');
-              await loadAllCerts();
+              await loadAllCerts().catch(() => {});
             }}
           />
         </Modal>

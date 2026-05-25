@@ -1,0 +1,692 @@
+{
+  "exportVersion": 1,
+  "type": "course",
+  "title": "SQL Fundamentals for HR Analytics",
+  "exportedAt": "2026-05-25T20:27:34.7029297+00:00",
+  "config": {
+    "title": "SQL Fundamentals for HR Analytics",
+    "description": "Learn beginner SQL through realistic HR analytics tasks focused on payroll and performance data. Students practice selecting salary records, filtering review data, sorting compensation reports, calculating pay metrics, and summarizing workforce performance with `salary`, `performance`, and supporting `staff` data.",
+    "isCourse": true,
+    "theme": "forest",
+    "mode": "dark",
+    "font": "inter",
+    "customAccent": "#10b981",
+    "passmark": 70,
+    "courseTimer": null,
+    "deadline_days": null,
+    "learnOutcomes": [
+      "Select the right payroll and performance columns with SELECT.",
+      "Filter HR data with single conditions, AND, and BETWEEN.",
+      "Sort and limit salary and review reports with ORDER BY and LIMIT.",
+      "Calculate pay and label performance using arithmetic and CASE.",
+      "Summarize HR metrics with aggregate functions, GROUP BY, and HAVING."
+    ],
+    "pointsSystem": {
+      "enabled": true,
+      "basePoints": 50
+    },
+    "questions": [
+      {
+        "id": "section-basic-retrieval",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "isSection": true,
+        "sectionTitle": "Basic Retrieval",
+        "sectionDescription": "Start by retrieving the right payroll and performance fields without mixing in later topics too early."
+      },
+      {
+        "id": "lesson-select-one-column",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Select One Column",
+          "body": "<p>You are working with HR payroll data. The first SQL skill is learning how to return just one field from one table.</p><p>Use <code>SELECT</code> to choose the column and <code>FROM</code> to choose the table.</p><pre><code>SELECT base_salary\nFROM salary;</code></pre>"
+        }
+      },
+      {
+        "id": "sql-001-select-one-column",
+        "type": "sql_exercise",
+        "question": "You are supporting the payroll officer who wants to inspect the base salary values recorded for the current payroll month. Return only the `base_salary` column from `salary`.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [
+          {
+            "id": "hr-analytics-seed",
+            "tableName": "salary",
+            "seedSql": "CREATE TABLE staff (\n  staff_id INTEGER,\n  first_name VARCHAR,\n  last_name VARCHAR,\n  department VARCHAR,\n  job_title VARCHAR,\n  hire_date DATE,\n  city VARCHAR,\n  manager_id INTEGER,\n  employment_status VARCHAR,\n  work_email VARCHAR\n);\n\nINSERT INTO staff VALUES\n  (1, 'Amina', 'Bello', 'HR', 'HR Analyst', '2021-03-15', 'Lagos', 6, 'Active', 'amina.bello@hr.demo'),\n  (2, 'David', 'Mensah', 'Finance', 'Payroll Officer', '2020-07-01', 'Accra', 6, 'Active', 'david.mensah@hr.demo'),\n  (3, 'Grace', 'Njeri', 'HR', 'Recruiter', '2022-01-10', 'Nairobi', 1, 'Active', 'grace.njeri@hr.demo'),\n  (4, 'Samuel', 'Okoro', 'IT', 'HR Systems Specialist', '2019-11-25', 'Abuja', 6, 'Active', 'samuel.okoro@hr.demo'),\n  (5, 'Lydia', 'Hassan', 'Operations', 'Learning Coordinator', '2023-05-08', 'Lagos', 1, 'Leave', 'lydia.hassan@hr.demo'),\n  (6, 'Peter', 'Adeyemi', 'HR', 'HR Manager', '2018-02-12', 'Lagos', NULL, 'Active', 'peter.adeyemi@hr.demo'),\n  (7, 'Ruth', 'Mwangi', 'Finance', 'Compensation Analyst', '2021-09-20', 'Nairobi', 2, 'Active', 'ruth.mwangi@hr.demo'),\n  (8, 'John', 'Musa', 'Operations', 'People Operations Associate', '2024-01-05', 'Abuja', 6, 'Probation', NULL);\n\nCREATE TABLE salary (\n  staff_id INTEGER,\n  salary_month DATE,\n  base_salary INTEGER,\n  bonus INTEGER\n);\n\nINSERT INTO salary VALUES\n  (1, '2026-04-01', 4200, 300),\n  (2, '2026-04-01', 3900, 250),\n  (3, '2026-04-01', 3100, 150),\n  (4, '2026-04-01', 4800, 400),\n  (5, '2026-04-01', 3300, 0),\n  (6, '2026-04-01', 6500, 800),\n  (7, '2026-04-01', 4100, 350),\n  (8, '2026-04-01', 2800, 100);\n\nCREATE TABLE performance (\n  review_id INTEGER,\n  staff_id INTEGER,\n  review_period DATE,\n  performance_score REAL,\n  training_hours INTEGER,\n  absence_days INTEGER,\n  promotion_ready VARCHAR\n);\n\nINSERT INTO performance VALUES\n  (1001, 1, '2026-03-31', 4.6, 18, 1, 'Yes'),\n  (1002, 2, '2026-03-31', 3.8, 12, 2, 'No'),\n  (1003, 3, '2026-03-31', 4.2, 20, 0, 'Yes'),\n  (1004, 4, '2026-03-31', 3.5, 10, 3, 'No'),\n  (1005, 5, '2026-03-31', 3.9, 14, 4, 'No'),\n  (1006, 6, '2026-03-31', 4.8, 8, 0, 'Yes'),\n  (1007, 7, '2026-03-31', 4.1, 16, 1, 'Yes'),\n  (1008, 8, '2026-03-31', 3.2, 24, 2, 'No');"
+          }
+        ],
+        "sqlStarterCode": "SELECT _ _ _\nFROM salary;",
+        "sqlSolution": "SELECT base_salary\nFROM salary;",
+        "sqlExpectedResult": {
+          "columns": ["base_salary"],
+          "rows": [
+            [4200],
+            [3900],
+            [3100],
+            [4800],
+            [3300],
+            [6500],
+            [4100],
+            [2800]
+          ]
+        },
+        "sqlHints": [
+          "Select only one column from the `salary` table.",
+          "The requested column is `base_salary`."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["SELECT"]
+      },
+      {
+        "id": "lesson-select-multiple-columns",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Select Multiple Columns",
+          "body": "<p>Once you can return one field, the next step is returning several related fields from the same table.</p><pre><code>SELECT staff_id, salary_month, bonus\nFROM salary;</code></pre>"
+        }
+      },
+      {
+        "id": "sql-002-select-multiple-columns",
+        "type": "sql_exercise",
+        "question": "You are helping the compensation analyst review the current payroll file. Return `staff_id`, `salary_month`, and `bonus` from `salary`.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  _ _ _,\n  _ _ _,\n  _ _ _\nFROM salary;",
+        "sqlSolution": "SELECT\n  staff_id,\n  salary_month,\n  bonus\nFROM salary;",
+        "sqlExpectedResult": {
+          "columns": ["staff_id", "salary_month", "bonus"],
+          "rows": [
+            [1, "2026-04-01", 300],
+            [2, "2026-04-01", 250],
+            [3, "2026-04-01", 150],
+            [4, "2026-04-01", 400],
+            [5, "2026-04-01", 0],
+            [6, "2026-04-01", 800],
+            [7, "2026-04-01", 350],
+            [8, "2026-04-01", 100]
+          ]
+        },
+        "sqlHints": [
+          "All requested columns come from the `salary` table.",
+          "List the columns in the same order as the business request."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["SELECT"]
+      },
+      {
+        "id": "lesson-distinct-values",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Return Unique Values",
+          "body": "<p>HR teams often want a list of unique categories, such as departments, review outcomes, or promotion readiness values. Use <code>DISTINCT</code> when repeated values should appear once.</p><pre><code>SELECT DISTINCT promotion_ready\nFROM performance;</code></pre>"
+        }
+      },
+      {
+        "id": "sql-003-select-distinct-values",
+        "type": "sql_exercise",
+        "question": "You are supporting the talent manager, who wants to see the distinct promotion readiness categories used in the review table. Return unique `promotion_ready` values from `performance`.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "-- Return each promotion_ready value only once",
+        "sqlSolution": "SELECT DISTINCT promotion_ready\nFROM performance;",
+        "sqlExpectedResult": {
+          "columns": ["promotion_ready"],
+          "rows": [
+            ["Yes"],
+            ["No"]
+          ]
+        },
+        "sqlHints": [
+          "Use `DISTINCT` so duplicate values are removed.",
+          "The table is `performance`."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["DISTINCT"]
+      },
+      {
+        "id": "section-data-filtering",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "isSection": true,
+        "sectionTitle": "Data Filtering",
+        "sectionDescription": "Learn one filtering pattern at a time before combining anything more advanced."
+      },
+      {
+        "id": "lesson-where-single-condition",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Filter With One Condition",
+          "body": "<p>Start filtering with one clear rule in the <code>WHERE</code> clause.</p><pre><code>SELECT staff_id, performance_score\nFROM performance\nWHERE promotion_ready = 'Yes';</code></pre>"
+        }
+      },
+      {
+        "id": "sql-004-filter-single-condition",
+        "type": "sql_exercise",
+        "question": "You are an HR analyst preparing a shortlist for promotion review. Return `staff_id`, `performance_score`, and `promotion_ready` from `performance` for employees where `promotion_ready` is `Yes`.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  staff_id,\n  performance_score,\n  promotion_ready\nFROM performance\nWHERE promotion_ready = '_ _ _';",
+        "sqlSolution": "SELECT\n  staff_id,\n  performance_score,\n  promotion_ready\nFROM performance\nWHERE promotion_ready = 'Yes';",
+        "sqlExpectedResult": {
+          "columns": ["staff_id", "performance_score", "promotion_ready"],
+          "rows": [
+            [1, 4.6, "Yes"],
+            [3, 4.2, "Yes"],
+            [6, 4.8, "Yes"],
+            [7, 4.1, "Yes"]
+          ]
+        },
+        "sqlHints": [
+          "Use one `WHERE` condition.",
+          "The required value is `Yes`."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["WHERE"]
+      },
+      {
+        "id": "lesson-where-and",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Filter With AND",
+          "body": "<p>Use <code>AND</code> when both conditions must be true.</p><pre><code>SELECT staff_id, base_salary\nFROM salary\nWHERE base_salary >= 4000\n  AND bonus >= 300;</code></pre>"
+        }
+      },
+      {
+        "id": "sql-005-filter-and",
+        "type": "sql_exercise",
+        "question": "You are helping the payroll officer identify stronger earners for a bonus review. Return `staff_id`, `base_salary`, and `bonus` from `salary` where `base_salary` is at least `4000` and `bonus` is at least `300`.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  staff_id,\n  base_salary,\n  bonus\nFROM salary\nWHERE base_salary >= 4000\n  AND bonus >= _ _ _;",
+        "sqlSolution": "SELECT\n  staff_id,\n  base_salary,\n  bonus\nFROM salary\nWHERE base_salary >= 4000\n  AND bonus >= 300;",
+        "sqlExpectedResult": {
+          "columns": ["staff_id", "base_salary", "bonus"],
+          "rows": [
+            [1, 4200, 300],
+            [4, 4800, 400],
+            [6, 6500, 800],
+            [7, 4100, 350]
+          ]
+        },
+        "sqlHints": [
+          "Both conditions must be true, so use `AND`.",
+          "The bonus threshold is `300`."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["AND"]
+      },
+      {
+        "id": "lesson-between",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Filter a Range With BETWEEN",
+          "body": "<p>Use <code>BETWEEN</code> when a value needs to fall inside a range.</p><pre><code>SELECT staff_id, performance_score\nFROM performance\nWHERE performance_score BETWEEN 4.0 AND 5.0;</code></pre>"
+        }
+      },
+      {
+        "id": "sql-006-filter-between",
+        "type": "sql_exercise",
+        "question": "You are supporting the performance manager, who wants employees with strong review scores for calibration. Return `staff_id`, `performance_score`, and `training_hours` from `performance` where `performance_score` is between `4.0` and `5.0`.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "-- Filter the performance table to the requested score range",
+        "sqlSolution": "SELECT\n  staff_id,\n  performance_score,\n  training_hours\nFROM performance\nWHERE performance_score BETWEEN 4.0 AND 5.0;",
+        "sqlExpectedResult": {
+          "columns": ["staff_id", "performance_score", "training_hours"],
+          "rows": [
+            [1, 4.6, 18],
+            [3, 4.2, 20],
+            [6, 4.8, 8],
+            [7, 4.1, 16]
+          ]
+        },
+        "sqlHints": [
+          "Use `BETWEEN 4.0 AND 5.0`.",
+          "The data comes from `performance`."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0.01,
+        "sqlRequiredPatterns": ["BETWEEN"]
+      },
+      {
+        "id": "section-sorting-limiting",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "isSection": true,
+        "sectionTitle": "Data Sorting and Limiting",
+        "sectionDescription": "Only after retrieval and filtering do we introduce ordering and row limits."
+      },
+      {
+        "id": "lesson-order-by-one-column",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Sort by One Column",
+          "body": "<p>Use <code>ORDER BY</code> to control the sequence of the rows returned.</p><pre><code>SELECT staff_id, base_salary\nFROM salary\nORDER BY base_salary DESC;</code></pre>"
+        }
+      },
+      {
+        "id": "sql-007-sort-one-column",
+        "type": "sql_exercise",
+        "question": "You are helping the compensation analyst rank current salaries from highest to lowest. Return `staff_id` and `base_salary` from `salary`, ordered by `base_salary` descending.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  staff_id,\n  base_salary\nFROM salary\nORDER BY base_salary _ _ _;",
+        "sqlSolution": "SELECT\n  staff_id,\n  base_salary\nFROM salary\nORDER BY base_salary DESC;",
+        "sqlExpectedResult": {
+          "columns": ["staff_id", "base_salary"],
+          "rows": [
+            [6, 6500],
+            [4, 4800],
+            [1, 4200],
+            [7, 4100],
+            [2, 3900],
+            [5, 3300],
+            [3, 3100],
+            [8, 2800]
+          ]
+        },
+        "sqlHints": [
+          "Use `ORDER BY`.",
+          "Descending order is required."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["ORDER BY"]
+      },
+      {
+        "id": "lesson-order-by-multiple-columns",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Sort by Multiple Columns",
+          "body": "<p>When two rows may tie on one metric, add another sort rule after a comma.</p><pre><code>SELECT staff_id, performance_score, absence_days\nFROM performance\nORDER BY performance_score DESC, absence_days ASC;</code></pre>"
+        }
+      },
+      {
+        "id": "sql-008-sort-multiple-columns",
+        "type": "sql_exercise",
+        "question": "You are supporting the performance manager, who wants the review file sorted so the strongest scores appear first and, when scores are close, lower absence days appear first. Return `staff_id`, `performance_score`, and `absence_days` from `performance`, ordered by `performance_score` descending and `absence_days` ascending.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  staff_id,\n  performance_score,\n  absence_days\nFROM performance\nORDER BY performance_score DESC, absence_days ASC;",
+        "sqlSolution": "SELECT\n  staff_id,\n  performance_score,\n  absence_days\nFROM performance\nORDER BY performance_score DESC, absence_days ASC;",
+        "sqlExpectedResult": {
+          "columns": ["staff_id", "performance_score", "absence_days"],
+          "rows": [
+            [6, 4.8, 0],
+            [1, 4.6, 1],
+            [3, 4.2, 0],
+            [7, 4.1, 1],
+            [5, 3.9, 4],
+            [2, 3.8, 2],
+            [4, 3.5, 3],
+            [8, 3.2, 2]
+          ]
+        },
+        "sqlHints": [
+          "The first sort key is `performance_score DESC`.",
+          "The second sort key is `absence_days ASC`."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0.01,
+        "sqlRequiredPatterns": ["ORDER BY"]
+      },
+      {
+        "id": "lesson-limit",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Limit the Number of Rows",
+          "body": "<p>Use <code>LIMIT</code> when the business only wants the top few rows after sorting.</p><pre><code>SELECT staff_id, base_salary\nFROM salary\nORDER BY base_salary DESC\nLIMIT 3;</code></pre>"
+        }
+      },
+      {
+        "id": "sql-009-limit-results",
+        "type": "sql_exercise",
+        "question": "You are helping the HR director prepare a quick briefing on the top earners. Return `staff_id` and `base_salary` for the top 3 salaries in `salary`, ordered from highest to lowest base salary.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "-- Return the three highest base salaries",
+        "sqlSolution": "SELECT\n  staff_id,\n  base_salary\nFROM salary\nORDER BY base_salary DESC\nLIMIT 3;",
+        "sqlExpectedResult": {
+          "columns": ["staff_id", "base_salary"],
+          "rows": [
+            [6, 6500],
+            [4, 4800],
+            [1, 4200]
+          ]
+        },
+        "sqlHints": [
+          "Sort before you limit.",
+          "The required number of rows is 3."
+        ],
+        "sqlResultOrdered": true,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["LIMIT"]
+      },
+      {
+        "id": "section-calculations-formatting",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "isSection": true,
+        "sectionTitle": "Calculations and Formatting",
+        "sectionDescription": "Turn raw HR values into payroll metrics and business-friendly labels."
+      },
+      {
+        "id": "lesson-arithmetic",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Perform Arithmetic Operations",
+          "body": "<p>SQL can calculate new HR metrics directly in the result.</p><pre><code>SELECT staff_id, base_salary + bonus AS total_pay\nFROM salary;</code></pre>"
+        }
+      },
+      {
+        "id": "sql-010-arithmetic-total-pay",
+        "type": "sql_exercise",
+        "question": "You are supporting the payroll officer who wants a total monthly pay figure for each employee. Return `staff_id`, `base_salary`, `bonus`, and a calculated `total_pay` from `salary`.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  staff_id,\n  base_salary,\n  bonus,\n  base_salary + _ _ _ AS total_pay\nFROM salary;",
+        "sqlSolution": "SELECT\n  staff_id,\n  base_salary,\n  bonus,\n  base_salary + bonus AS total_pay\nFROM salary;",
+        "sqlExpectedResult": {
+          "columns": ["staff_id", "base_salary", "bonus", "total_pay"],
+          "rows": [
+            [1, 4200, 300, 4500],
+            [2, 3900, 250, 4150],
+            [3, 3100, 150, 3250],
+            [4, 4800, 400, 5200],
+            [5, 3300, 0, 3300],
+            [6, 6500, 800, 7300],
+            [7, 4100, 350, 4450],
+            [8, 2800, 100, 2900]
+          ]
+        },
+        "sqlHints": [
+          "Add `base_salary` and `bonus`.",
+          "Return the calculated value as `total_pay`."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["+"]
+      },
+      {
+        "id": "lesson-string-functions",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Apply String Functions",
+          "body": "<p>You can format text in SQL so HR reports are easier to read.</p><pre><code>SELECT\n  first_name || ' ' || last_name AS full_name,\n  UPPER(department) AS department_upper\nFROM staff;</code></pre>"
+        }
+      },
+      {
+        "id": "sql-011-string-formatting",
+        "type": "sql_exercise",
+        "question": "You are helping the HR business partner prepare a cleaner employee directory. Return `staff_id`, a `full_name` column built from `first_name` and `last_name`, and `department_upper` using uppercase department names from `staff`.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "-- Build a full name and uppercase department field",
+        "sqlSolution": "SELECT\n  staff_id,\n  first_name || ' ' || last_name AS full_name,\n  UPPER(department) AS department_upper\nFROM staff;",
+        "sqlExpectedResult": {
+          "columns": ["staff_id", "full_name", "department_upper"],
+          "rows": [
+            [1, "Amina Bello", "HR"],
+            [2, "David Mensah", "FINANCE"],
+            [3, "Grace Njeri", "HR"],
+            [4, "Samuel Okoro", "IT"],
+            [5, "Lydia Hassan", "OPERATIONS"],
+            [6, "Peter Adeyemi", "HR"],
+            [7, "Ruth Mwangi", "FINANCE"],
+            [8, "John Musa", "OPERATIONS"]
+          ]
+        },
+        "sqlHints": [
+          "Use `||` to join the names with a space.",
+          "Use `UPPER(department)` for the uppercase version."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0,
+        "sqlRequiredPatterns": ["UPPER", "||"]
+      },
+      {
+        "id": "lesson-case",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Apply Conditional Logic",
+          "body": "<p>Use <code>CASE</code> when you need to convert a numeric HR metric into a simple business label.</p><pre><code>SELECT\n  staff_id,\n  CASE\n    WHEN performance_score >= 4.5 THEN 'Outstanding'\n    ELSE 'Developing'\n  END AS review_band\nFROM performance;</code></pre>"
+        }
+      },
+      {
+        "id": "sql-012-case-performance-band",
+        "type": "sql_exercise",
+        "question": "You are supporting the performance manager, who wants each review score grouped into a simple label. Return `staff_id`, `performance_score`, and `review_band` from `performance`. Use `Outstanding` for scores at least `4.5`, `Strong` for scores at least `4.0`, and `Developing` for all other scores.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "",
+        "sqlSolution": "SELECT\n  staff_id,\n  performance_score,\n  CASE\n    WHEN performance_score >= 4.5 THEN 'Outstanding'\n    WHEN performance_score >= 4.0 THEN 'Strong'\n    ELSE 'Developing'\n  END AS review_band\nFROM performance;",
+        "sqlExpectedResult": {
+          "columns": ["staff_id", "performance_score", "review_band"],
+          "rows": [
+            [1, 4.6, "Outstanding"],
+            [2, 3.8, "Developing"],
+            [3, 4.2, "Strong"],
+            [4, 3.5, "Developing"],
+            [5, 3.9, "Developing"],
+            [6, 4.8, "Outstanding"],
+            [7, 4.1, "Strong"],
+            [8, 3.2, "Developing"]
+          ]
+        },
+        "sqlHints": [
+          "Use a `CASE` expression.",
+          "Check the highest threshold first."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0.01,
+        "sqlRequiredPatterns": ["CASE"]
+      },
+      {
+        "id": "section-aggregation",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "isSection": true,
+        "sectionTitle": "Aggregation",
+        "sectionDescription": "Summarize salary and performance data once the learner is ready for grouped analysis."
+      },
+      {
+        "id": "lesson-column-summaries",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Calculate Column Summaries",
+          "body": "<p>Aggregate functions summarize a whole column into one answer.</p><pre><code>SELECT\n  AVG(base_salary) AS avg_base_salary,\n  MAX(base_salary) AS max_base_salary,\n  MIN(base_salary) AS min_base_salary\nFROM salary;</code></pre>"
+        }
+      },
+      {
+        "id": "sql-013-column-summaries",
+        "type": "sql_exercise",
+        "question": "You are helping the finance lead review the overall payroll picture. Return `avg_base_salary`, `max_base_salary`, and `min_base_salary` from `salary`. Round the average to 2 decimal places.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "SELECT\n  ROUND(AVG(base_salary), 2) AS avg_base_salary,\n  MAX(base_salary) AS max_base_salary,\n  MIN(base_salary) AS min_base_salary\nFROM salary;",
+        "sqlSolution": "SELECT\n  ROUND(AVG(base_salary), 2) AS avg_base_salary,\n  MAX(base_salary) AS max_base_salary,\n  MIN(base_salary) AS min_base_salary\nFROM salary;",
+        "sqlExpectedResult": {
+          "columns": ["avg_base_salary", "max_base_salary", "min_base_salary"],
+          "rows": [
+            [4087.5, 6500, 2800]
+          ]
+        },
+        "sqlHints": [
+          "Use `AVG`, `MAX`, and `MIN`.",
+          "Round the average to 2 decimal places."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0.01,
+        "sqlRequiredPatterns": ["AVG", "MAX", "MIN"]
+      },
+      {
+        "id": "lesson-group-by",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Group Data by Category",
+          "body": "<p>Use <code>GROUP BY</code> when you need one summary per category, such as department.</p><pre><code>SELECT st.department, ROUND(AVG(p.performance_score), 2)\nFROM staff st\nJOIN performance p ON st.staff_id = p.staff_id\nGROUP BY st.department;</code></pre>"
+        }
+      },
+      {
+        "id": "sql-014-group-by-department",
+        "type": "sql_exercise",
+        "question": "You are supporting the HR manager, who wants average performance by department. Return `department` and `avg_performance_score`, rounded to 2 decimal places, by joining `staff` and `performance` and grouping by department.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "-- Join staff to performance and calculate one average per department",
+        "sqlSolution": "SELECT\n  st.department,\n  ROUND(AVG(p.performance_score), 2) AS avg_performance_score\nFROM staff st\nJOIN performance p ON st.staff_id = p.staff_id\nGROUP BY st.department;",
+        "sqlExpectedResult": {
+          "columns": ["department", "avg_performance_score"],
+          "rows": [
+            ["Finance", 3.95],
+            ["HR", 4.53],
+            ["IT", 3.5],
+            ["Operations", 3.55]
+          ]
+        },
+        "sqlHints": [
+          "Join on `staff_id`.",
+          "Use `AVG(performance_score)` and `GROUP BY department`."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0.01,
+        "sqlRequiredPatterns": ["GROUP BY", "JOIN"]
+      },
+      {
+        "id": "lesson-having",
+        "type": "multiple_choice",
+        "question": "",
+        "options": [],
+        "correctAnswer": "",
+        "lessonOnly": true,
+        "lesson": {
+          "title": "Filter Aggregated Results With HAVING",
+          "body": "<p>After you group data, use <code>HAVING</code> to filter the grouped results.</p><pre><code>SELECT st.department, AVG(p.performance_score)\nFROM staff st\nJOIN performance p ON st.staff_id = p.staff_id\nGROUP BY st.department\nHAVING AVG(p.performance_score) >= 4.0;</code></pre>"
+        }
+      },
+      {
+        "id": "mcq-001-having-clause",
+        "type": "multiple_choice",
+        "question": "Which clause should you use to keep only grouped results where an aggregate like `AVG(performance_score)` meets a threshold?",
+        "options": [
+          "HAVING",
+          "WHERE",
+          "ORDER BY",
+          "LIMIT"
+        ],
+        "correctAnswer": "HAVING",
+        "explanation": "`HAVING` filters results after groups and aggregate values have already been calculated.",
+        "hint": "This clause is usually written after `GROUP BY`."
+      },
+      {
+        "id": "sql-015-having-filtered-groups",
+        "type": "sql_exercise",
+        "question": "You are preparing a summary for HR leadership and need only departments with an average performance score of at least `4.0`. Return `department` and `avg_performance_score`, rounded to 2 decimal places, from joined `staff` and `performance` data.",
+        "options": [],
+        "correctAnswer": "",
+        "sqlTables": [],
+        "sqlStarterCode": "",
+        "sqlSolution": "SELECT\n  st.department,\n  ROUND(AVG(p.performance_score), 2) AS avg_performance_score\nFROM staff st\nJOIN performance p ON st.staff_id = p.staff_id\nGROUP BY st.department\nHAVING AVG(p.performance_score) >= 4.0;",
+        "sqlExpectedResult": {
+          "columns": ["department", "avg_performance_score"],
+          "rows": [
+            ["HR", 4.53]
+          ]
+        },
+        "sqlHints": [
+          "Build the grouped result first with `GROUP BY`.",
+          "Use `HAVING` for the average-score threshold."
+        ],
+        "sqlResultOrdered": false,
+        "sqlNumericTolerance": 0.01,
+        "sqlRequiredPatterns": ["HAVING", "AVG"]
+      }
+    ],
+    "fields": [],
+    "postSubmission": null
+  }
+}

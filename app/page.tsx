@@ -322,7 +322,10 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
           {user ? <NavProfileMenu user={user} profile={profile} /> : (
             <>
               <Link href="/auth" className="text-sm font-medium hidden sm:block transition-opacity hover:opacity-60" style={{ color: nav_text }}>Log in</Link>
-              <Link href="/auth?mode=signup" className="px-5 py-2.5 rounded-full text-sm font-bold transition-all hover:opacity-90" style={{ background: nav_text, color: nav_bg }}>
+              <Link href="/auth" className="px-5 py-2.5 rounded-full text-sm font-bold transition-all hover:opacity-90 sm:hidden" style={{ background: nav_text, color: nav_bg }}>
+                Sign In
+              </Link>
+              <Link href="/auth?mode=signup" className="px-5 py-2.5 rounded-full text-sm font-bold transition-all hover:opacity-90 hidden sm:block" style={{ background: nav_text, color: nav_bg }}>
                 Get started
               </Link>
             </>

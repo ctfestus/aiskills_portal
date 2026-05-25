@@ -16,6 +16,7 @@ function adminClient() {
 }
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 async function getSessionUser(req: NextRequest): Promise<{ id: string; email: string } | null> {
   const authHeader = req.headers.get('authorization');
@@ -220,6 +221,50 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // -- Reveal SQL solution after enough failed attempts ---
+  if (action === 'get-sql-solution') {
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { course_id, question_id, attempts } = body;
+    if (!course_id) return NextResponse.json({ error: 'course_id required' }, { status: 400 });
+    if (!question_id) return NextResponse.json({ error: 'question_id required' }, { status: 400 });
+
+    try {
+      const supabase = adminClient();
+      const [{ data: course }, { data: attempt }] = await Promise.all([
+        supabase.from('courses').select('questions').eq('id', course_id).single(),
+        supabase.from('course_attempts').select('answers')
+          .eq('course_id', course_id).eq('student_id', sessionUser.id)
+          .is('completed_at', null)
+          .order('current_question_index', { ascending: false })
+          .order('updated_at', { ascending: false })
+          .limit(1).maybeSingle(),
+      ]);
+
+      const question = (Array.isArray(course?.questions) ? course.questions : [])
+        .find((q: any) => q?.id === question_id && q?.type === 'sql_exercise');
+      if (!question) return NextResponse.json({ error: 'SQL exercise not found.' }, { status: 404 });
+
+      let savedAttempts = 0;
+      const savedAnswer = attempt?.answers?.[question_id];
+      if (typeof savedAnswer === 'string') {
+        try { savedAttempts = Number(JSON.parse(savedAnswer)?.attempts ?? 0); } catch {}
+      } else if (savedAnswer && typeof savedAnswer === 'object') {
+        savedAttempts = Number((savedAnswer as any).attempts ?? 0);
+      }
+
+      const allowedAttempts = Math.max(savedAttempts, Number(attempts ?? 0));
+      if (allowedAttempts < 3) {
+        return NextResponse.json({ error: 'Solution is available after 3 failed attempts.' }, { status: 403 });
+      }
+
+      return NextResponse.json({ solution: String(question.sqlSolution ?? '') });
+    } catch (err: any) {
+      console.error('[course/get-sql-solution]', err);
+      return NextResponse.json({ error: 'Failed to load SQL solution.' }, { status: 500 });
+    }
+  }
+
   // -- Save in-progress attempt (create if needed) ---
   if (action === 'save-progress') {
     const sessionUser = await getSessionUser(req);
@@ -362,6 +407,15 @@ export async function POST(req: NextRequest) {
         const passmark                      = courseData.passmark ?? 50;
 
         const scorable = questions.filter(q => !q.lessonOnly && !q.isSection);
+        const sqlTableMap = new Map<string, any>();
+        for (const question of questions) {
+          if (question?.type !== 'sql_exercise') continue;
+          for (const table of question.sqlTables ?? []) {
+            const key = `${table.tableName}|${table.fileUrl || table.csvUrl || table.seedSql || ''}`;
+            if (table.tableName && !sqlTableMap.has(key)) sqlTableMap.set(key, table);
+          }
+        }
+        const sqlTables = Array.from(sqlTableMap.values());
         let correct = 0;
         for (const q of scorable) {
           const ua = storedAnswers[q.id];
@@ -369,6 +423,26 @@ export async function POST(req: NextRequest) {
           const type = q.type ?? 'multiple_choice';
           if (['code_review', 'excel_review', 'dashboard_critique'].includes(type)) {
             if (ua === 'completed') correct++;
+          } else if (type === 'sql_exercise') {
+            try {
+              const parsed = typeof ua === 'string' ? JSON.parse(ua) : ua;
+              const expected = q.sqlExpectedResult;
+              if (parsed?.skipped || parsed?.solutionViewed) continue;
+              if (!parsed?.query || !Array.isArray(expected?.columns) || !Array.isArray(expected?.rows)) continue;
+              const { verifyServerSqlAnswer } = await import('@/lib/sql-engine-server');
+              const verified = await verifyServerSqlAnswer({
+                tables: sqlTables,
+                query: parsed.query,
+                expected,
+                ordered: !!q.sqlResultOrdered,
+                numericTolerance: Number(q.sqlNumericTolerance ?? 0),
+                requiredPatterns: q.sqlRequiredPatterns,
+              });
+              if (verified.passed) correct++;
+            } catch (err) {
+              console.error('[course/complete-attempt] SQL server verification failed', err);
+              // Invalid stored SQL answer payloads are scored as incorrect.
+            }
           } else if (type === 'fill_blank') {
             const accepted = (q.correctAnswer ?? '').split('|').map((s: string) => s.trim().toLowerCase());
             if (accepted.includes(ua.trim().toLowerCase())) correct++;

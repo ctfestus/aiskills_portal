@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import { Bold, Italic, Underline, List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote, Youtube } from 'lucide-react';
+import { Bold, Code2, FileCode2, Italic, RemoveFormatting, Underline, List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote, Youtube } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
 interface RichTextEditorProps {
@@ -157,10 +157,137 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
     onChange(editor.innerHTML);
   }, [onChange, rebuildYtPreviews]);
 
+  const handleInlineCode = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+    const selected = range.toString();
+    const code = document.createElement('code');
+    code.textContent = selected || 'code';
+    range.deleteContents();
+    range.insertNode(code);
+    // Place cursor after the code tag if text was replaced, or select placeholder
+    if (!selected) {
+      range.selectNodeContents(code);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      range.setStartAfter(code);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    isInternalChange.current = true;
+    onChange(editor.innerHTML);
+  }, [onChange]);
+
+  const handleCodeBlock = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+    const selected = range.toString();
+    const pre = document.createElement('pre');
+    const code = document.createElement('code');
+    code.textContent = selected || 'code here';
+    pre.appendChild(code);
+    range.deleteContents();
+    range.insertNode(pre);
+    // Insert a paragraph after so cursor can exit the block
+    const p = document.createElement('p');
+    p.innerHTML = '<br>';
+    pre.after(p);
+    if (!selected) {
+      range.selectNodeContents(code);
+    } else {
+      range.setStartAfter(pre);
+      range.collapse(true);
+    }
+    sel.removeAllRanges();
+    sel.addRange(range);
+    isInternalChange.current = true;
+    onChange(editor.innerHTML);
+  }, [onChange]);
+
+  const handleClearFormat = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    // Remove inline styles (bold, italic, underline, inline code)
+    document.execCommand('removeFormat');
+    // Remove block-level formatting: pre, blockquote, headings -> p
+    const anchor = sel.anchorNode;
+    const anchorEl = anchor?.nodeType === Node.TEXT_NODE ? anchor.parentElement : anchor as HTMLElement;
+    const blockEl = anchorEl?.closest?.('pre, blockquote, h1, h2, h3, h4');
+    if (blockEl && editor.contains(blockEl)) {
+      const p = document.createElement('p');
+      p.innerHTML = blockEl.innerHTML;
+      blockEl.replaceWith(p);
+      const range = document.createRange();
+      range.setStart(p, 0);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    isInternalChange.current = true;
+    onChange(editor.innerHTML);
+  }, [onChange]);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'b' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); exec('bold'); }
     if (e.key === 'i' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); exec('italic'); }
-  }, [exec]);
+    if (e.key === '`' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleInlineCode(); }
+    // Exit code block or inline code on Enter when cursor is at the end
+    if (e.key === 'Enter' && !e.shiftKey) {
+      const editor = editorRef.current;
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !editor) return;
+      const anchor = sel.anchorNode;
+      const anchorEl = anchor?.nodeType === Node.TEXT_NODE ? anchor.parentElement : anchor as HTMLElement;
+      // Exit <pre> block: press Enter on an empty last line
+      const preEl = anchorEl?.closest?.('pre');
+      if (preEl && editor.contains(preEl)) {
+        const codeEl = preEl.querySelector('code') ?? preEl;
+        const text = codeEl.textContent ?? '';
+        if (text.endsWith('\n') || text === '') {
+          e.preventDefault();
+          // Trim trailing newline
+          if (text.endsWith('\n')) codeEl.textContent = text.slice(0, -1);
+          const p = document.createElement('p');
+          p.innerHTML = '<br>';
+          preEl.after(p);
+          const range = document.createRange();
+          range.setStart(p, 0);
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          isInternalChange.current = true;
+          onChange(editor.innerHTML);
+          return;
+        }
+      }
+      // Exit inline <code> on Enter
+      const codeEl = anchorEl?.closest?.('code:not(pre code)');
+      if (codeEl && editor.contains(codeEl)) {
+        e.preventDefault();
+        const range = document.createRange();
+        range.setStartAfter(codeEl);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        document.execCommand('insertHTML', false, ' ');
+      }
+    }
+  }, [exec, handleInlineCode, onChange]);
 
   return (
     <div
@@ -185,6 +312,12 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         <ToolbarButton onClick={() => exec('underline')} title="Underline (Ctrl+U)" dark={dark}>
           <Underline className="w-3.5 h-3.5" />
         </ToolbarButton>
+        <ToolbarButton onClick={handleInlineCode} title="Inline code (Ctrl+`)" dark={dark}>
+          <Code2 className="w-3.5 h-3.5" />
+        </ToolbarButton>
+        <ToolbarButton onClick={handleCodeBlock} title="Code block" dark={dark}>
+          <FileCode2 className="w-3.5 h-3.5" />
+        </ToolbarButton>
         <div className="w-px h-4 mx-1" style={{ background: toolDiv }} />
         <ToolbarButton onClick={() => exec('insertUnorderedList')} title="Bullet list" dark={dark}>
           <List className="w-3.5 h-3.5" />
@@ -197,6 +330,10 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         </ToolbarButton>
         <ToolbarButton onClick={handleLink} title="Insert link" dark={dark}>
           <LinkIcon className="w-3.5 h-3.5" />
+        </ToolbarButton>
+        <div className="w-px h-4 mx-1" style={{ background: toolDiv }} />
+        <ToolbarButton onClick={handleClearFormat} title="Clear formatting" dark={dark}>
+          <RemoveFormatting className="w-3.5 h-3.5" />
         </ToolbarButton>
         <div className="w-px h-4 mx-1" style={{ background: toolDiv }} />
         <ToolbarButton onClick={handleInsertVideo} title="Embed YouTube video" dark={dark}>
@@ -236,6 +373,9 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         .rich-editor h2 { font-size: 1.75rem; font-weight: 700; margin: 1.25rem 0 0.4rem; letter-spacing: -0.02em; }
         .rich-editor h3 { font-size: 1.25rem; font-weight: 600; margin: 1rem 0 0.3rem; letter-spacing: -0.01em; }
         .rich-editor h2:first-child, .rich-editor h3:first-child { margin-top: 0; }
+        .rich-editor code { font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 0.85em; background: ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}; color: ${dark ? '#86efac' : '#166534'}; border-radius: 4px; padding: 1px 5px; }
+        .rich-editor pre { font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 0.85em; background: ${dark ? '#0f1120' : '#f1f3f8'}; color: ${dark ? '#c9d1d9' : '#1a1d2e'}; border-radius: 6px; padding: 12px 16px; margin: 0.75rem 0; overflow-x: auto; white-space: pre; }
+        .rich-editor pre code { background: none; padding: 0; border-radius: 0; color: inherit; font-size: inherit; }
         .rich-editor blockquote { border-left: 3px solid #10b981; padding-left: 0.875rem; margin: 0.75rem 0; color: ${dark ? '#a1a1aa' : '#444444'}; font-style: normal; }
         .rich-editor .yt-embed { width: 100%; margin: 8px 0; border-radius: 8px; overflow: hidden; position: relative; cursor: default; display: block; }
         .rich-editor .yt-embed img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }

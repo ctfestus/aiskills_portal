@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef, useCallback, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -5919,6 +5919,7 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
   const [error,      setError]      = useState('');
   const [search,     setSearch]     = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [cohortFilter, setCohortFilter] = useState('all');
 
   const [outstandingCohortId, setOutstandingCohortId] = useState<string>('');
 
@@ -6265,8 +6266,19 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
       r.student_name?.toLowerCase().includes(search.toLowerCase()) ||
       r.cohort_name?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || r.access_status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchCohort = cohortFilter === 'all' || r.cohort_id === cohortFilter;
+    return matchSearch && matchStatus && matchCohort;
   });
+
+  const groupedRows: { cohort_id: string; cohort_name: string; rows: any[] }[] = (() => {
+    const map: Record<string, { cohort_id: string; cohort_name: string; rows: any[] }> = {};
+    for (const r of filtered) {
+      const key = r.cohort_id ?? '__none__';
+      if (!map[key]) map[key] = { cohort_id: key, cohort_name: r.cohort_name ?? '--', rows: [] };
+      map[key].rows.push(r);
+    }
+    return Object.values(map);
+  })();
 
   const withBalance      = rows.filter(r => r.access_status === 'overdue' || r.access_status === 'pending_deposit').length;
   const totalOutstanding = rows.reduce((s: number, r: any) => s + (r.balance ?? 0), 0);
@@ -6408,6 +6420,12 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
         <input placeholder="Search by email, name, or cohort..." value={search} onChange={e => setSearch(e.target.value)}
           className="flex-1 min-w-[180px] text-sm px-3 py-2 rounded-lg outline-none"
           style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+        <select value={cohortFilter} onChange={e => setCohortFilter(e.target.value)}
+          className="text-sm px-3 py-2 rounded-lg outline-none"
+          style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
+          <option value="all">All Cohorts</option>
+          {cohorts.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
           className="text-sm px-3 py-2 rounded-lg outline-none"
           style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
@@ -6448,67 +6466,93 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r: any, i: number) => {
-                const isOutstanding = outstandingCohortId && r.cohort_id === outstandingCohortId;
-                const accentColor = ACCESS_COLORS[r.access_status] ?? C.muted;
+              {groupedRows.map(group => {
+                const isOutstandingGroup = outstandingCohortId && group.cohort_id === outstandingCohortId;
+                const groupBalance = group.rows.reduce((s: number, r: any) => s + (r.balance ?? 0), 0);
                 return (
-                  <tr key={r.enrollment_id ?? i} style={{ borderTop: `1px solid ${C.divider}`, background: i % 2 === 0 ? C.card : (C === DARK_C ? '#161616' : '#fafafa') }}>
-                    <td style={{ padding: '8px 10px', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      <div className="flex items-center gap-1.5">
-                        <p style={{ color: C.text, fontWeight: 500 }} title={r.student_name}>{r.student_name || '--'}</p>
-                        {r.is_presignup && (
-                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(245,158,11,0.15)', color: '#b45309' }}>Pending Signup</span>
-                        )}
-                        {!r.is_presignup && r.payment_exempt && (
-                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(234,179,8,0.12)', color: '#a16207' }}>Exempt</span>
-                        )}
-                      </div>
-                      <p style={{ color: C.faint, fontSize: 10 }} title={r.email}>{r.email}</p>
-                    </td>
-                    <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: isOutstanding ? '#dc2626' : C.muted, fontWeight: isOutstanding ? 600 : 400, whiteSpace: 'nowrap' }}>
-                      {r.cohort_name ?? '--'}
-                    </td>
-                    <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r.currency} {Number(r.total_fee).toLocaleString()}</td>
-                    <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{Number(r.paid_total).toLocaleString()}</td>
-                    <td style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap', color: r.balance > 0 ? '#dc2626' : '#16a34a' }}>
-                      {r.balance > 0 ? r.balance.toLocaleString() : '--'}
-                    </td>
-                    <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.muted, whiteSpace: 'nowrap', textTransform: 'capitalize' }}>{r.payment_plan}</td>
-                    <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md" style={{ background: `${accentColor}18`, color: accentColor }}>
-                        {r.access_status?.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-                    <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.muted, whiteSpace: 'nowrap', fontSize: 11 }}>
-                      {r.next_due_date ? new Date(r.next_due_date).toLocaleDateString() : '--'}
-                    </td>
-                    <td style={{ padding: '8px 10px' }}>
-                      {r.enrollment_id && (
-                        <div className="flex justify-end">
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              if (menuRow?.enrollment_id === r.enrollment_id) {
-                                setMenuRow(null); setMenuPos(null);
-                              } else {
-                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                const right = Math.max(8, window.innerWidth - rect.right);
-                                if (window.innerHeight - rect.bottom >= 270) {
-                                  setMenuPos({ top: rect.bottom + 4, right });
-                                } else {
-                                  setMenuPos({ bottom: window.innerHeight - rect.top + 4, right });
-                                }
-                                setMenuRow(r);
-                              }
-                            }}
-                            className="p-1.5 rounded-lg transition-opacity hover:opacity-70"
-                            style={{ color: C.muted, background: menuRow?.enrollment_id === r.enrollment_id ? C.pill : 'transparent' }}>
-                            <MoreVertical className="w-4 h-4"/>
-                          </button>
+                  <Fragment key={group.cohort_id}>
+                    <tr style={{ background: isOutstandingGroup ? 'rgba(220,38,38,0.06)' : (C === DARK_C ? 'rgba(255,255,255,0.04)' : '#f1f3f5') }}>
+                      <td colSpan={9} style={{ padding: '6px 10px' }}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span style={{ fontSize: 11, fontWeight: 700, color: isOutstandingGroup ? '#dc2626' : C.text, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            {group.cohort_name}
+                          </span>
+                          <span style={{ fontSize: 10, color: C.faint }}>{group.rows.length} student{group.rows.length !== 1 ? 's' : ''}</span>
+                          {groupBalance > 0 && (
+                            <span style={{ fontSize: 10, fontWeight: 600, color: '#dc2626' }}>
+                              Outstanding: {group.rows[0]?.currency ?? ''} {groupBalance.toLocaleString()}
+                            </span>
+                          )}
+                          {isOutstandingGroup && (
+                            <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', background: 'rgba(220,38,38,0.12)', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' }}>Outstanding Cohort</span>
+                          )}
                         </div>
-                      )}
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+                    {group.rows.map((r: any, i: number) => {
+                      const isOutstanding = outstandingCohortId && r.cohort_id === outstandingCohortId;
+                      const accentColor = ACCESS_COLORS[r.access_status] ?? C.muted;
+                      return (
+                        <tr key={r.enrollment_id ?? i} style={{ borderTop: `1px solid ${C.divider}`, background: i % 2 === 0 ? C.card : (C === DARK_C ? '#161616' : '#fafafa') }}>
+                          <td style={{ padding: '8px 10px', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div className="flex items-center gap-1.5">
+                              <p style={{ color: C.text, fontWeight: 500 }} title={r.student_name}>{r.student_name || '--'}</p>
+                              {r.is_presignup && (
+                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(245,158,11,0.15)', color: '#b45309' }}>Pending Signup</span>
+                              )}
+                              {!r.is_presignup && r.payment_exempt && (
+                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(234,179,8,0.12)', color: '#a16207' }}>Exempt</span>
+                              )}
+                            </div>
+                            <p style={{ color: C.faint, fontSize: 10 }} title={r.email}>{r.email}</p>
+                          </td>
+                          <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: isOutstanding ? '#dc2626' : C.muted, fontWeight: isOutstanding ? 600 : 400, whiteSpace: 'nowrap' }}>
+                            {r.cohort_name ?? '--'}
+                          </td>
+                          <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r.currency} {Number(r.total_fee).toLocaleString()}</td>
+                          <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{Number(r.paid_total).toLocaleString()}</td>
+                          <td style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap', color: r.balance > 0 ? '#dc2626' : '#16a34a' }}>
+                            {r.balance > 0 ? r.balance.toLocaleString() : '--'}
+                          </td>
+                          <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.muted, whiteSpace: 'nowrap', textTransform: 'capitalize' }}>{r.payment_plan}</td>
+                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md" style={{ background: `${accentColor}18`, color: accentColor }}>
+                              {r.access_status?.replace(/_/g, ' ')}
+                            </span>
+                          </td>
+                          <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.muted, whiteSpace: 'nowrap', fontSize: 11 }}>
+                            {r.next_due_date ? new Date(r.next_due_date).toLocaleDateString() : '--'}
+                          </td>
+                          <td style={{ padding: '8px 10px' }}>
+                            {r.enrollment_id && (
+                              <div className="flex justify-end">
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    if (menuRow?.enrollment_id === r.enrollment_id) {
+                                      setMenuRow(null); setMenuPos(null);
+                                    } else {
+                                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                      const right = Math.max(8, window.innerWidth - rect.right);
+                                      if (window.innerHeight - rect.bottom >= 270) {
+                                        setMenuPos({ top: rect.bottom + 4, right });
+                                      } else {
+                                        setMenuPos({ bottom: window.innerHeight - rect.top + 4, right });
+                                      }
+                                      setMenuRow(r);
+                                    }
+                                  }}
+                                  className="p-1.5 rounded-lg transition-opacity hover:opacity-70"
+                                  style={{ color: C.muted, background: menuRow?.enrollment_id === r.enrollment_id ? C.pill : 'transparent' }}>
+                                  <MoreVertical className="w-4 h-4"/>
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
                 );
               })}
             </tbody>

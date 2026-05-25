@@ -172,8 +172,6 @@ export default function AuthPage() {
               alt=""
               className="w-full h-full object-cover object-center"
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/5 to-black/30" />
-
 
           </div>
         )}

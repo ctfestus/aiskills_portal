@@ -24,6 +24,8 @@ const appHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: process.cwd(),
+  serverExternalPackages: ['@duckdb/duckdb-wasm'],
   async redirects() {
     return [
       { source: '/favicon.ico', destination: 'https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png', permanent: false },

@@ -37,9 +37,13 @@ import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
 import CodeReviewPlayer, { LeanSubmission } from '@/components/CodeReviewPlayer';
 import ExcelReviewPlayer, { ExcelLeanSubmission } from '@/components/ExcelReviewPlayer';
+import dynamic from 'next/dynamic';
+import { initSQLRuntime, SQLRuntime } from '@/lib/sql-engine';
+
+const SQLExercisePlayer = dynamic(() => import('@/components/sql-course/SQLExercisePlayer'), { ssr: false });
 
 type ShowAnswers = 'per_question' | 'after_quiz' | 'none';
-type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique';
+type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise';
 
 const REVIEW_TYPES: QuestionType[] = ['code_review', 'excel_review', 'dashboard_critique'];
 
@@ -84,6 +88,14 @@ interface CourseQuestion {
   context?: string;
   minScore?: number;
   reviewLanguage?: string;
+  sqlTables?: { id?: string; tableName: string; fileName?: string; fileUrl?: string; csvUrl?: string; seedSql?: string }[];
+  sqlStarterCode?: string;
+  sqlSolution?: string;
+  sqlExpectedResult?: { columns: string[]; rows: unknown[][] };
+  sqlHints?: string[];
+  sqlResultOrdered?: boolean;
+  sqlNumericTolerance?: number;
+  sqlRequiredPatterns?: string[];
 }
 
 
@@ -270,6 +282,8 @@ export function CourseTaker({
   const [showMenu, setShowMenu] = useState(false);
   const [xpNotify, setXpNotify] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [showOutline, setShowOutline] = useState(false);
+  const outlineRef = useRef<HTMLDivElement>(null);
 
   // Anti-cheat state
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -343,6 +357,22 @@ export function CourseTaker({
   const courseTimerMins: number = config.courseTimer ?? 0;
   const maxAttempts: number = config.maxAttempts ?? 0;
   const questionType: QuestionType = currentQuestion?.type ?? 'multiple_choice';
+  const [sqlRuntime, setSqlRuntime] = useState<SQLRuntime | null>(null);
+  const [sqlPreparing, setSqlPreparing] = useState(false);
+  const [sqlPrepareError, setSqlPrepareError] = useState('');
+  const sqlRuntimeRef = useRef<SQLRuntime | null>(null);
+  const sqlInitStartedRef = useRef(false);
+  const sqlTables = useMemo(() => {
+    const byKey = new Map<string, any>();
+    for (const q of questions) {
+      if ((q as any)?.type !== 'sql_exercise') continue;
+      for (const table of ((q as any).sqlTables ?? [])) {
+        const key = `${table.tableName}|${table.fileUrl || table.csvUrl || table.seedSql || ''}`;
+        if (table.tableName && !byKey.has(key)) byKey.set(key, table);
+      }
+    }
+    return Array.from(byKey.values());
+  }, [questions]);
 
   const accentColors: Record<string, string> = {
     forest: '#006128', lime: '#ADEE66', emerald: '#10b981', rose: '#f43f5e', amber: '#f59e0b',
@@ -351,6 +381,47 @@ export function CourseTaker({
 
   const fontOption = getFontById(config.font ?? 'sans');
   useEffect(() => { loadGoogleFont(fontOption); }, [fontOption]);
+
+  useEffect(() => {
+    if (questionType !== 'sql_exercise' || sqlRuntimeRef.current || sqlInitStartedRef.current || sqlTables.length === 0) return;
+    let cancelled = false;
+    sqlInitStartedRef.current = true;
+    setSqlPreparing(true);
+    setSqlPrepareError('');
+    initSQLRuntime(sqlTables)
+      .then(runtime => {
+        if (cancelled) {
+          runtime.close();
+          return;
+        }
+        sqlRuntimeRef.current = runtime;
+        setSqlRuntime(runtime);
+      })
+      .catch(err => {
+        if (!cancelled) setSqlPrepareError(err?.message || 'Could not prepare the SQL environment.');
+      })
+      .finally(() => {
+        if (!cancelled) setSqlPreparing(false);
+        if (!sqlRuntimeRef.current) sqlInitStartedRef.current = false;
+      });
+    return () => { cancelled = true; };
+  }, [questionType, sqlTables]);
+
+  useEffect(() => {
+    return () => {
+      sqlRuntimeRef.current?.close();
+      sqlRuntimeRef.current = null;
+      sqlInitStartedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (phase !== 'complete') return;
+    sqlRuntimeRef.current?.close();
+    sqlRuntimeRef.current = null;
+    sqlInitStartedRef.current = false;
+    setSqlRuntime(null);
+  }, [phase]);
 
   // Close 3-dot menu on outside click
   useEffect(() => {
@@ -361,6 +432,16 @@ export function CourseTaker({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showMenu]);
+
+  // Close course outline on outside click
+  useEffect(() => {
+    if (!showOutline) return;
+    const handler = (e: MouseEvent) => {
+      if (outlineRef.current && !outlineRef.current.contains(e.target as Node)) setShowOutline(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showOutline]);
   const fontStyle = { fontFamily: fontOption.cssFamily };
   const isDark = (config.mode ?? 'dark') === 'auto' ? systemDark : (config.mode ?? 'dark') !== 'light';
   const cardBg = isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm';
@@ -774,6 +855,9 @@ export function CourseTaker({
   };
 
   const isAnswered = () => {
+    if (questionType === 'sql_exercise') {
+      try { return !!JSON.parse(answers[currentQuestion.id] ?? '')?.passed; } catch { return false; }
+    }
     if (REVIEW_TYPES.includes(questionType)) return reviewCompleted.has(currentQuestion.id);
     if (questionType === 'fill_blank') return fillBlankAnswer.trim().length > 0;
     if (questionType === 'arrange') return arrangeOrder.length > 0;
@@ -784,6 +868,12 @@ export function CourseTaker({
   const formatAnswer = (q: any, answer: string) => {
     if (!answer) return null;
     const qType: QuestionType = q.type ?? 'multiple_choice';
+    if (qType === 'sql_exercise') {
+      try {
+        const parsed = JSON.parse(answer);
+        return parsed?.passed ? 'SQL answer passed' : (parsed?.query || answer);
+      } catch { return answer; }
+    }
     if (qType === 'arrange') return answer.split('|||').join(' -> ');
     if (qType === 'image') {
       const idx = q.options.indexOf(answer);
@@ -794,6 +884,9 @@ export function CourseTaker({
 
   const isAnswerCorrect = (q: any, answer: string) => {
     const qType: QuestionType = q.type ?? 'multiple_choice';
+    if (qType === 'sql_exercise') {
+      try { return !!JSON.parse(answer)?.passed; } catch { return false; }
+    }
     if (REVIEW_TYPES.includes(qType)) return answer === 'completed';
     if (qType === 'fill_blank') return checkFillBlank(answer, q.correctAnswer);
     if (qType === 'arrange') return answer === q.correctAnswer;
@@ -2023,6 +2116,53 @@ export function CourseTaker({
     }
   };
 
+  const handleSqlComplete = (payload: any) => {
+    const alreadyAnswered = !!answersRef.current[currentQuestion.id];
+    const previousCorrect = alreadyAnswered ? isAnswerCorrect(currentQuestion, answersRef.current[currentQuestion.id]) : false;
+    const countsAsPassed = !!payload.passed && !payload.skipped && !payload.solutionViewed;
+    const answer = JSON.stringify({
+      query: payload.query,
+      result: payload.result,
+      passed: countsAsPassed,
+      feedback: payload.feedback,
+      skipped: !!payload.skipped,
+      attempts: Number(payload.attempts ?? 0),
+      solutionViewed: !!payload.solutionViewed,
+      checkedAt: new Date().toISOString(),
+    }, (_, v) => typeof v === 'bigint' ? Number(v) : v);
+    const newAnswers = { ...answersRef.current, [currentQuestion.id]: answer };
+    answersRef.current = newAnswers;
+    setAnswers(newAnswers);
+    const shouldAward = countsAsPassed && !previousCorrect && !reviewMode;
+    const hintWasUsed = hintsUsed.has(currentQuestion.id);
+    const newScore = shouldAward ? score + (hintWasUsed ? 0.9 : 1) : score;
+    let newPoints = totalPoints;
+    let newStreak = streak;
+    if (shouldAward) {
+      setScore(newScore);
+      if (confettiRef.current) burstConfetti(confettiRef.current, accent);
+      if (pointsEnabled) {
+        const { earned, label, isStreak } = calcPoints(hintWasUsed);
+        newPoints = totalPoints + earned;
+        newStreak = streak + 1;
+        setTotalPoints(newPoints);
+        setStreak(newStreak);
+        setFloatingPoints({ id: Date.now(), text: label, x: 50, y: 60 });
+        setTimeout(() => setFloatingPoints(null), 1200);
+        setXpNotify(true);
+        setTimeout(() => setXpNotify(false), 2500);
+        if (isStreak) {
+          setStreakToast(`${newStreak} in a row! 1.2x XP`);
+          setTimeout(() => setStreakToast(null), 2200);
+        }
+      }
+    } else if (pointsEnabled && !reviewMode) {
+      setStreak(0);
+      newStreak = 0;
+    }
+    saveProgress(newAnswers, (countsAsPassed || payload.skipped) ? currentQuestionIndex + 1 : currentQuestionIndex, newScore, newPoints, newStreak, hintsUsed);
+  };
+
   const countableSlides = questions.filter((q: any) => !q.isSection);
   const completedSlides = countableSlides.filter((q: any) => !!answers[q.id]).length;
   const progressPct = countableSlides.length > 0 ? (completedSlides / countableSlides.length) * 100 : 0;
@@ -2324,83 +2464,315 @@ export function CourseTaker({
 
         {/* Nav bar -- full width */}
         <div
-          className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-2"
+          className={`flex-shrink-0 flex items-center px-4 sm:px-6 ${questionType === 'sql_exercise' ? 'gap-4' : 'justify-between py-2'}`}
           style={{
             background: isDark ? '#111113' : '#ffffff',
             borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
             minHeight: 44,
           }}
         >
-          {/* Left: logo */}
-          <div className="flex items-center flex-shrink-0">
-            {(isDark ? (logoDarkUrl || logoUrl) : logoUrl) && (
-              <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
-                <img src={(isDark ? (logoDarkUrl || logoUrl) : logoUrl) || undefined} alt="" style={{ height: 30, width: 'auto', objectFit: 'contain' }} />
-              </Link>
-            )}
-          </div>
-          {/* Right: controls */}
-          <div className="flex items-center gap-1">
-          {timeLeft !== null && (
-            <span className={`flex items-center gap-1 text-xs font-semibold tabular-nums mr-2 ${timerWarning ? 'text-rose-400' : mutedColor}`}>
-              <Clock className="w-3 h-3" />
-              {formatTime(timeLeft)}
-            </span>
-          )}
-          {reviewMode && (
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full mr-2"
-              style={{ background: isDark ? 'rgba(99,102,241,0.2)' : '#ede9fe', color: isDark ? '#a5b4fc' : '#6d28d9' }}>
-              Review Mode
-            </span>
-          )}
-          <div ref={menuRef} className="relative">
-            <button
-              onClick={() => setShowMenu(v => !v)}
-              className={`relative p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
-              title="Course info"
-            >
-              <MoreHorizontal className="w-4 h-4" />
-              {xpNotify && (
-                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              )}
-            </button>
-            <AnimatePresence>
-              {showMenu && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                  transition={{ duration: 0.12 }}
-                  className={`absolute right-0 top-9 z-50 w-52 rounded-xl shadow-xl border overflow-hidden ${isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-white border-zinc-200'}`}
-                  onMouseLeave={() => setShowMenu(false)}
-                >
-                  <div className={`px-4 py-3 border-b ${isDark ? 'border-zinc-800' : 'border-zinc-100'}`}>
-                    <p className={`text-[10px] font-semibold uppercase tracking-widest ${mutedColor}`}>Course Progress</p>
-                  </div>
-                  <div className="px-4 py-3 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className={`text-xs ${mutedColor}`}>Current</span>
-                      <span className="text-xs font-semibold" style={{ color: accent }}>{currentQuestionIndex + 1} of {totalSlides}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className={`text-xs ${mutedColor}`}>Total slides</span>
-                      <span className="text-xs font-semibold" style={{ color: isDark ? '#fff' : '#18181b' }}>{totalSlides}</span>
-                    </div>
-                    {pointsEnabled && (
-                      <div className="flex justify-between items-center">
-                        <span className={`text-xs ${mutedColor}`}>XP earned</span>
-                        <span className="text-xs font-bold tabular-nums flex items-center gap-1" style={{ color: isDark ? '#facc15' : '#10b981' }}>
-                          ⭐ {displayedPoints.toLocaleString()}
-                          {streak >= 2 && <span className="text-orange-400">🔥{streak}</span>}
-                        </span>
-                      </div>
+          {questionType === 'sql_exercise' ? (
+            <>
+              {/* SQL nav -- left: logo + breadcrumb */}
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                {(isDark ? (logoDarkUrl || logoUrl) : logoUrl) && (
+                  <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                    <img src={(isDark ? (logoDarkUrl || logoUrl) : logoUrl) || undefined} alt="" style={{ height: 30, width: 'auto', objectFit: 'contain' }} />
+                  </Link>
+                )}
+                {config.title && (
+                  <>
+                    {(isDark ? (logoDarkUrl || logoUrl) : logoUrl) && (
+                      <span className="flex-shrink-0 text-[13px]" style={{ color: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.22)' }}>/</span>
                     )}
+                    <span className="text-[12px] font-medium truncate max-w-[140px] flex-shrink-0" style={{ color: isDark ? '#6b7280' : '#9ca3af' }}>
+                      {config.title}
+                    </span>
+                  </>
+                )}
+                {currentQuestion.lesson?.title && (
+                  <>
+                    <span className="flex-shrink-0 text-[13px]" style={{ color: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.22)' }}>/</span>
+                    <span className="text-[12px] font-medium truncate" style={{ color: isDark ? '#d4d4d8' : '#374151' }}>{currentQuestion.lesson.title}</span>
+                  </>
+                )}
+              </div>
+
+              {/* SQL nav -- center: prev / course outline / next */}
+              <div className="flex-shrink-0 relative" ref={outlineRef}>
+                <div
+                  className="flex items-center rounded-lg border overflow-hidden"
+                  style={{ borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.14)' }}
+                >
+                  <button
+                    type="button"
+                    onClick={handleBack}
+                    disabled={currentQuestionIndex === 0}
+                    className="flex items-center justify-center transition-opacity hover:opacity-70 disabled:opacity-30"
+                    style={{ width: 36, height: 32, background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}
+                    title="Previous"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" style={{ color: isDark ? '#9ca3af' : '#6b7280' }} />
+                  </button>
+                  <div style={{ width: 1, alignSelf: 'stretch', background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }} />
+                  <button
+                    type="button"
+                    onClick={() => setShowOutline(v => !v)}
+                    className="flex items-center gap-1.5 px-3 text-[12px] font-semibold transition-opacity hover:opacity-70"
+                    style={{ height: 32, background: showOutline ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)') : isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', color: isDark ? '#d4d4d8' : '#374151' }}
+                  >
+                    <List className="w-3.5 h-3.5" style={{ color: isDark ? '#9ca3af' : '#6b7280' }} />
+                    Course Outline
+                  </button>
+                  <div style={{ width: 1, alignSelf: 'stretch', background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }} />
+                  <button
+                    type="button"
+                    onClick={handleNextDirect}
+                    disabled={currentQuestionIndex >= totalSlides - 1}
+                    className="flex items-center justify-center transition-opacity hover:opacity-70 disabled:opacity-30"
+                    style={{ width: 36, height: 32, background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}
+                    title="Next"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" style={{ color: isDark ? '#9ca3af' : '#6b7280' }} />
+                  </button>
+                </div>
+
+                {/* Course outline dropdown */}
+                {showOutline && (
+                  <div
+                    className="fixed left-1/2 -translate-x-1/2 z-[300] rounded-xl shadow-2xl border overflow-hidden"
+                    style={{
+                      top: 52,
+                      width: 320,
+                      background: isDark ? '#1a1b26' : '#ffffff',
+                      borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.10)',
+                    }}
+                  >
+                    <div
+                      className="flex items-center justify-between px-4 py-3 border-b"
+                      style={{ borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' }}
+                    >
+                      <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: isDark ? '#6b7280' : '#9ca3af' }}>
+                        Course Outline
+                      </span>
+                      <span className="text-[11px] font-semibold tabular-nums" style={{ color: accent }}>
+                        {currentQuestionIndex + 1} / {totalSlides}
+                      </span>
+                    </div>
+                    <div className="overflow-y-auto px-3 py-2" style={{ maxHeight: '65vh' }}>
+                      {chapters.map((group, gi) => (
+                        <div key={gi} className="mb-1">
+                          <p
+                            className="px-2 pt-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest"
+                            style={{ color: isDark ? '#4b5563' : '#9ca3af' }}
+                          >
+                            {group.sectionTitle}
+                          </p>
+                          {group.slides.map(({ q, idx }) => {
+                            const userAnswer = answers[q.id] ?? '';
+                            const isAnsweredQ = !!userAnswer;
+                            const isCorrectQ = isAnsweredQ && isAnswerCorrect(q, userAnswer);
+                            const isSkippedQ = isAnsweredQ && !isCorrectQ;
+                            const isCurrent = idx === currentQuestionIndex;
+                            const label = (q as any).isSection
+                              ? (q as any).sectionTitle
+                              : (q as any).isDownloads
+                              ? ((q as any).downloadsTitle || 'Downloads')
+                              : (q as any).lessonOnly
+                              ? ((q as any).lesson?.title || 'Lesson')
+                              : (q as any).lesson?.title || `Slide ${idx + 1}`;
+                            return (
+                              <button
+                                key={q.id}
+                                type="button"
+                                onClick={() => {
+                                  setDirection(idx > currentQuestionIndex ? 1 : -1);
+                                  setCurrentQuestionIndex(idx);
+                                  setShowOutline(false);
+                                }}
+                                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-opacity hover:opacity-80"
+                                style={{ background: isCurrent ? `${accent}18` : 'transparent' }}
+                              >
+                                <div
+                                  className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                                  style={{
+                                    background: isCurrent ? accent : isCorrectQ ? `${accent}22` : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+                                    border: `1.5px solid ${isCurrent ? accent : isCorrectQ ? `${accent}50` : isSkippedQ ? (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)') : isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)'}`,
+                                  }}
+                                >
+                                  {isCurrent ? (
+                                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                                  ) : isCorrectQ ? (
+                                    <CheckCircle2 className="w-3 h-3" style={{ color: accent }} />
+                                  ) : isSkippedQ ? (
+                                    <span className="text-[9px] font-bold leading-none" style={{ color: isDark ? '#6b7280' : '#9ca3af' }}>-</span>
+                                  ) : (
+                                    <span className="text-[9px] font-medium" style={{ color: isDark ? '#6b7280' : '#9ca3af' }}>{idx + 1}</span>
+                                  )}
+                                </div>
+                                <span
+                                  className="text-[12.5px] font-medium leading-snug truncate flex-1"
+                                  style={{ color: isCurrent ? (isDark ? '#f0f0f0' : '#111') : isDark ? '#9ca3af' : '#6b7280' }}
+                                >
+                                  {label}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-          </div>
+                )}
+              </div>
+
+              {/* SQL nav -- right: XP + menu */}
+              <div className="flex items-center gap-2 flex-1 justify-end">
+                {pointsEnabled && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[14px]">🏆</span>
+                    <span className="text-[11px] font-medium" style={{ color: isDark ? '#6b7280' : '#9ca3af' }}>XP</span>
+                    <span className="text-[13px] font-bold tabular-nums" style={{ color: accent }}>
+                      {displayedPoints.toLocaleString()}
+                    </span>
+                    {streak >= 2 && <span className="text-[12px] text-orange-400">🔥{streak}</span>}
+                  </div>
+                )}
+                {timeLeft !== null && (
+                  <span className={`flex items-center gap-1 text-xs font-semibold tabular-nums ${timerWarning ? 'text-rose-400' : mutedColor}`}>
+                    <Clock className="w-3 h-3" />
+                    {formatTime(timeLeft)}
+                  </span>
+                )}
+                {reviewMode && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                    style={{ background: isDark ? 'rgba(99,102,241,0.2)' : '#ede9fe', color: isDark ? '#a5b4fc' : '#6d28d9' }}>
+                    Review Mode
+                  </span>
+                )}
+                <div ref={menuRef} className="relative">
+                  <button
+                    onClick={() => setShowMenu(v => !v)}
+                    className={`relative p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
+                    title="Course info"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                    {xpNotify && (
+                      <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    )}
+                  </button>
+                  <AnimatePresence>
+                    {showMenu && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                        transition={{ duration: 0.12 }}
+                        className={`absolute right-0 top-9 z-50 w-52 rounded-xl shadow-xl border overflow-hidden ${isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-white border-zinc-200'}`}
+                        onMouseLeave={() => setShowMenu(false)}
+                      >
+                        <div className={`px-4 py-3 border-b ${isDark ? 'border-zinc-800' : 'border-zinc-100'}`}>
+                          <p className={`text-[10px] font-semibold uppercase tracking-widest ${mutedColor}`}>Course Progress</p>
+                        </div>
+                        <div className="px-4 py-3 space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className={`text-xs ${mutedColor}`}>Current</span>
+                            <span className="text-xs font-semibold" style={{ color: accent }}>{currentQuestionIndex + 1} of {totalSlides}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className={`text-xs ${mutedColor}`}>Total slides</span>
+                            <span className="text-xs font-semibold" style={{ color: isDark ? '#fff' : '#18181b' }}>{totalSlides}</span>
+                          </div>
+                          {pointsEnabled && (
+                            <div className="flex justify-between items-center">
+                              <span className={`text-xs ${mutedColor}`}>XP earned</span>
+                              <span className="text-xs font-bold tabular-nums flex items-center gap-1" style={{ color: isDark ? '#facc15' : '#10b981' }}>
+                                ⭐ {displayedPoints.toLocaleString()}
+                                {streak >= 2 && <span className="text-orange-400">🔥{streak}</span>}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Default nav -- left: logo */}
+              <div className="flex items-center flex-shrink-0">
+                {(isDark ? (logoDarkUrl || logoUrl) : logoUrl) && (
+                  <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
+                    <img src={(isDark ? (logoDarkUrl || logoUrl) : logoUrl) || undefined} alt="" style={{ height: 30, width: 'auto', objectFit: 'contain' }} />
+                  </Link>
+                )}
+              </div>
+              {/* Default nav -- right: controls */}
+              <div className="flex items-center gap-1">
+                {timeLeft !== null && (
+                  <span className={`flex items-center gap-1 text-xs font-semibold tabular-nums mr-2 ${timerWarning ? 'text-rose-400' : mutedColor}`}>
+                    <Clock className="w-3 h-3" />
+                    {formatTime(timeLeft)}
+                  </span>
+                )}
+                {reviewMode && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full mr-2"
+                    style={{ background: isDark ? 'rgba(99,102,241,0.2)' : '#ede9fe', color: isDark ? '#a5b4fc' : '#6d28d9' }}>
+                    Review Mode
+                  </span>
+                )}
+                <div ref={menuRef} className="relative">
+                  <button
+                    onClick={() => setShowMenu(v => !v)}
+                    className={`relative p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'}`}
+                    title="Course info"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                    {xpNotify && (
+                      <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    )}
+                  </button>
+                  <AnimatePresence>
+                    {showMenu && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                        transition={{ duration: 0.12 }}
+                        className={`absolute right-0 top-9 z-50 w-52 rounded-xl shadow-xl border overflow-hidden ${isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-white border-zinc-200'}`}
+                        onMouseLeave={() => setShowMenu(false)}
+                      >
+                        <div className={`px-4 py-3 border-b ${isDark ? 'border-zinc-800' : 'border-zinc-100'}`}>
+                          <p className={`text-[10px] font-semibold uppercase tracking-widest ${mutedColor}`}>Course Progress</p>
+                        </div>
+                        <div className="px-4 py-3 space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className={`text-xs ${mutedColor}`}>Current</span>
+                            <span className="text-xs font-semibold" style={{ color: accent }}>{currentQuestionIndex + 1} of {totalSlides}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className={`text-xs ${mutedColor}`}>Total slides</span>
+                            <span className="text-xs font-semibold" style={{ color: isDark ? '#fff' : '#18181b' }}>{totalSlides}</span>
+                          </div>
+                          {pointsEnabled && (
+                            <div className="flex justify-between items-center">
+                              <span className={`text-xs ${mutedColor}`}>XP earned</span>
+                              <span className="text-xs font-bold tabular-nums flex items-center gap-1" style={{ color: isDark ? '#facc15' : '#10b981' }}>
+                                ⭐ {displayedPoints.toLocaleString()}
+                                {streak >= 2 && <span className="text-orange-400">🔥{streak}</span>}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Body row: sidebar + content */}
@@ -2648,6 +3020,40 @@ export function CourseTaker({
           style={{ background: isDark ? '#0f0f10' : '#F2F5FA' }}
         >
 
+          {/* SQL exercise player -- rendered outside AnimatePresence so CSS transforms from motion.div don't break its fixed positioning during slide transitions */}
+          {questionType === 'sql_exercise' && (
+            <SQLExercisePlayer
+              key={currentQuestion.id}
+              question={currentQuestion}
+              runtime={sqlRuntime}
+              isPreparing={sqlPreparing}
+              prepareError={sqlPrepareError}
+              isDark={isDark}
+              accentColor={accent}
+              savedAnswer={answers[currentQuestion.id]}
+              completed={isAnswerCorrect(currentQuestion, answers[currentQuestion.id] ?? '')}
+              topOffset={44}
+              onComplete={handleSqlComplete}
+              hintPenalty={pointsEnabled ? (ps?.hintPenalty ?? 20) : undefined}
+              onHintUsed={() => setHintsUsed(prev => new Set(prev).add(currentQuestion.id))}
+              onRevealSolution={async (questionId, attempts) => {
+                const res = await fetch('/api/course', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(sessionTokenRef.current ? { Authorization: `Bearer ${sessionTokenRef.current}` } : {}),
+                  },
+                  body: JSON.stringify({ action: 'get-sql-solution', course_id: formId, question_id: questionId, attempts }),
+                });
+                const d = await res.json();
+                if (!res.ok) throw new Error(d.error || 'Failed to load solution.');
+                return d.solution ?? '';
+              }}
+              onNext={handleNext}
+              isLastQuestion={currentQuestionIndex >= totalSlides - 1}
+            />
+          )}
+
           {/* Question content - scrollable */}
           <div
             className={`flex-1 overflow-y-auto px-2 sm:px-4 pt-4 sm:pt-8 pb-4 sm:pb-6 w-full ${isDark ? 'course-scroll' : 'course-scroll course-scroll-light'}`}
@@ -2867,6 +3273,7 @@ export function CourseTaker({
                   <h2 className={`text-lg sm:text-2xl font-semibold leading-snug mb-5 sm:mb-8 ${textColor}`}>
                     {currentQuestion.question}
                   </h2>
+
 
                   {/* -- Fill in the blank -- */}
                   {questionType === 'fill_blank' && (
@@ -3175,6 +3582,10 @@ export function CourseTaker({
 
                   {/* -- Card footer: action bar -- */}
                   {(() => {
+                    if (questionType === 'sql_exercise') {
+                      // Footer is handled inside SQLExercisePlayer (full-screen overlay)
+                      return null;
+                    }
                     // Review type footer: just a Continue button enabled once the review is submitted
                     if (REVIEW_TYPES.includes(questionType)) {
                       const done = reviewCompleted.has(currentQuestion.id);
