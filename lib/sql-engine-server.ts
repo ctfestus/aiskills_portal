@@ -29,6 +29,25 @@ export async function verifyServerSqlAnswer({
   numericTolerance,
   requiredPatterns,
 }: VerifyServerSqlAnswerArgs): Promise<{ passed: boolean; actual?: SQLResult; feedback: SQLCompareResult }> {
+  const actual = await computeServerSqlResult(tables, query);
+  const patternCheck = checkRequiredSqlPatterns(query, requiredPatterns);
+  if (!patternCheck.passed) {
+    return {
+      passed: false,
+      actual,
+      feedback: {
+        passed: false,
+        matchedRows: 0,
+        totalRows: expected.rows.length,
+        message: patternCheck.message,
+      },
+    };
+  }
+  const feedback = compareResults(actual, expected, { ordered, numericTolerance });
+  return { passed: feedback.passed, actual, feedback };
+}
+
+export async function computeServerSqlResult(tables: SQLTableConfig[], query: string): Promise<SQLResult> {
   const duckdb = require('@duckdb/duckdb-wasm/dist/duckdb-node-blocking.cjs');
   const duckdbDist = path.join(process.cwd(), 'node_modules', '@duckdb', 'duckdb-wasm', 'dist');
   const bundles = {
@@ -42,22 +61,7 @@ export async function verifyServerSqlAnswer({
 
   try {
     await loadSQLTables(conn, tables);
-    const actual = await executeQuery(conn, query, false, { limit: null });
-    const patternCheck = checkRequiredSqlPatterns(query, requiredPatterns);
-    if (!patternCheck.passed) {
-      return {
-        passed: false,
-        actual,
-        feedback: {
-          passed: false,
-          matchedRows: 0,
-          totalRows: expected.rows.length,
-          message: patternCheck.message,
-        },
-      };
-    }
-    const feedback = compareResults(actual, expected, { ordered, numericTolerance });
-    return { passed: feedback.passed, actual, feedback };
+    return await executeQuery(conn, query, false, { limit: null });
   } finally {
     try { conn.close(); } catch {}
     try { db.dropFiles?.(); } catch {}

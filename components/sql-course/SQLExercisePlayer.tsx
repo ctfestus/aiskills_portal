@@ -455,7 +455,7 @@ export default function SQLExercisePlayer({
   const muted     = isDark ? '#52525b' : '#64748b';
   const subtle    = isDark ? '#1c1c1e' : '#f1f5f9';
 
-  const tables     = runtime?.tables ?? [];
+  const tables     = useMemo(() => runtime?.tables ?? [], [runtime?.tables]);
   const editorSchema = useMemo<SQLNamespace>(() => {
     const schema: Record<string, string[]> = {};
     for (const table of tables) {

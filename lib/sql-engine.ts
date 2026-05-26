@@ -154,6 +154,22 @@ function normalizeQueryValue(value: unknown, columnName: string): unknown {
   return normalized;
 }
 
+function formatScaledDecimal(value: unknown, scale: number): string | null {
+  const text = stripWrappedQuotes(String(value).trim());
+  if (/^-?\d+$/.test(text)) {
+    const negative = text.startsWith('-');
+    const digits = negative ? text.slice(1) : text;
+    const padded = digits.padStart(scale + 1, '0');
+    const whole = padded.slice(0, -scale) || '0';
+    const fractional = padded.slice(-scale);
+    return `${negative ? '-' : ''}${whole}.${fractional}`;
+  }
+
+  const numeric = Number(text);
+  if (!Number.isFinite(numeric)) return null;
+  return (numeric / (10 ** scale)).toFixed(scale);
+}
+
 function stripSqlForValidation(sql: string): string {
   let out = '';
   let quote: '"' | "'" | '`' | null = null;
@@ -401,15 +417,8 @@ export async function executeQuery(conn: any, sql: string, trusted = false, opti
     // Arrow Decimal (DECIMAL columns) -- preserve scale
     const scale: number | undefined = field.type?.scale;
     if (scale != null && scale > 0) {
-      if (typeof val === 'bigint') {
-        const factor = BigInt(10 ** scale);
-        const intPart = val / factor;
-        const fracPart = val < BigInt(0) ? -(val % factor) : val % factor;
-        return `${intPart}.${String(fracPart).padStart(scale, '0')}`;
-      }
-      if (typeof val === 'number' && Number.isFinite(val)) {
-        return val.toFixed(scale);
-      }
+      const scaled = formatScaledDecimal(val, scale);
+      if (scaled != null) return scaled;
     }
 
     // Any remaining BigInt (plain INTEGER/BIGINT columns not caught above) -- convert to
@@ -457,6 +466,22 @@ export function compareResults(actual: SQLResult, expected: SQLResult, options: 
     return normalizeComparableValue(a, tolerance, columnName) === normalizeComparableValue(b, tolerance, columnName);
   };
   const rowEq = (a: unknown[], b: unknown[]) => a.length === b.length && a.every((v, i) => eq(v, b[i], expected.columns[i] ?? actual.columns[i] ?? ''));
+  const firstOrderedMismatch = () => {
+    for (let rowIndex = 0; rowIndex < expected.rows.length; rowIndex += 1) {
+      const actualRow = actual.rows[rowIndex] ?? [];
+      const expectedRow = expected.rows[rowIndex] ?? [];
+      if (actualRow.length !== expectedRow.length) {
+        return `First mismatch is row ${rowIndex + 1}: expected ${expectedRow.length} values, got ${actualRow.length}.`;
+      }
+      for (let colIndex = 0; colIndex < expectedRow.length; colIndex += 1) {
+        const column = expected.columns[colIndex] ?? actual.columns[colIndex] ?? `column ${colIndex + 1}`;
+        if (!eq(actualRow[colIndex], expectedRow[colIndex], column)) {
+          return `First mismatch is row ${rowIndex + 1}, ${column}: expected ${String(expectedRow[colIndex] ?? 'NULL')}, got ${String(actualRow[colIndex] ?? 'NULL')}.`;
+        }
+      }
+    }
+    return 'Rows contain the same count but values do not match the expected result.';
+  };
   const ordered = options.ordered ?? false;
   if (ordered) {
     const matchedRows = actual.rows.filter((row, i) => rowEq(row, expected.rows[i] ?? [])).length;
@@ -464,7 +489,7 @@ export function compareResults(actual: SQLResult, expected: SQLResult, options: 
       passed: matchedRows === expected.rows.length,
       matchedRows,
       totalRows: expected.rows.length,
-      message: matchedRows === expected.rows.length ? 'Result matches.' : `${matchedRows}/${expected.rows.length} rows matched in order.`,
+      message: matchedRows === expected.rows.length ? 'Result matches.' : `${matchedRows}/${expected.rows.length} rows matched in order. ${firstOrderedMismatch()}`,
     };
   }
   const actualCounts = rowsMultiset(actual.rows, tolerance, actual.columns);
@@ -477,7 +502,9 @@ export function compareResults(actual: SQLResult, expected: SQLResult, options: 
     passed: matchedRows === expected.rows.length,
     matchedRows,
     totalRows: expected.rows.length,
-    message: matchedRows === expected.rows.length ? 'Result matches.' : `${matchedRows}/${expected.rows.length} rows matched.`,
+    message: matchedRows === expected.rows.length
+      ? 'Result matches.'
+      : `${matchedRows}/${expected.rows.length} rows matched. Check that every returned value matches the expected result, not just the row count.`,
   };
 }
 

@@ -26,6 +26,7 @@ import { FontPickerModal } from '@/components/FontPickerModal';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { executeQuery, initSQLRuntime } from '@/lib/sql-engine';
+import { formatSQLPreflightIssue, preflightSQLExercises } from '@/lib/sql-exercise-preflight';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -1122,52 +1123,33 @@ const [isSaving, setIsSaving] = useState(false);
   const prepareSqlExpectedResultsForSave = async (config: FormConfig, requireComplete: boolean): Promise<FormConfig | null> => {
     if (!config.isCourse) return config;
     const questions = config.questions ?? [];
-    const sqlQuestions = questions.filter(q => q.type === 'sql_exercise');
-    const missingExpected = sqlQuestions.filter(q => !q.sqlExpectedResult);
-    if (!missingExpected.length) return config;
-
-    const missingSolution = missingExpected.find(q => !q.sqlSolution?.trim());
-    if (missingSolution) {
-      if (requireComplete) {
-        showToast('Add a solution query and compute the expected result before publishing SQL exercises.', 'error');
-        return null;
-      }
-      showToast('Draft saved without SQL expected results. Compute them before publishing.', 'info');
-      return config;
-    }
-
-    const tableMap = new Map<string, NonNullable<CourseQuestion['sqlTables']>[number]>();
-    for (const question of sqlQuestions) {
-      for (const table of question.sqlTables ?? []) {
-        const key = `${table.tableName}|${table.fileUrl || table.csvUrl || table.seedSql || ''}`;
-        if (table.tableName && !tableMap.has(key)) tableMap.set(key, table);
-      }
-    }
+    if (!questions.some(q => q.type === 'sql_exercise')) return config;
 
     try {
-      showToast('Computing missing SQL expected results...', 'info');
-      const runtime = await initSQLRuntime(Array.from(tableMap.values()));
-      try {
-        let computed = 0;
-        const updatedQuestions = [...questions];
-        for (let i = 0; i < updatedQuestions.length; i += 1) {
-          const question = updatedQuestions[i];
-          if (question.type !== 'sql_exercise' || question.sqlExpectedResult || !question.sqlSolution?.trim()) continue;
-          const expected = await executeQuery(runtime.conn, question.sqlSolution, false, { limit: null });
-          updatedQuestions[i] = { ...question, sqlExpectedResult: expected };
-          computed += 1;
-        }
-        if (!computed) return config;
-        const nextConfig = { ...config, questions: updatedQuestions };
-        setFormConfig(nextConfig);
-        showToast(`Computed expected results for ${computed} SQL exercise${computed === 1 ? '' : 's'}.`, 'success');
-        return nextConfig;
-      } finally {
-        await runtime.close();
+      showToast('Checking SQL exercises...', 'info');
+      const preflight = await preflightSQLExercises(questions, { requireComplete });
+      const errors = preflight.issues.filter(issue => issue.severity === 'error');
+      if (errors.length) {
+        showToast(`Cannot publish yet. ${formatSQLPreflightIssue(errors[0])}`, 'error');
+        return null;
       }
+
+      const warnings = preflight.issues.filter(issue => issue.severity === 'warning');
+      if (warnings.length) {
+        showToast(formatSQLPreflightIssue(warnings[0]), 'info');
+      }
+
+      if (preflight.computedCount) {
+        const nextConfig = { ...config, questions: preflight.questions };
+        setFormConfig(nextConfig);
+        showToast(`Computed expected results for ${preflight.computedCount} SQL exercise${preflight.computedCount === 1 ? '' : 's'}.`, 'success');
+        return nextConfig;
+      }
+
+      return config;
     } catch (err: any) {
-      console.error('[sql-exercise] save-time expected result compute failed', err);
-      showToast(err?.message || 'Could not compute SQL expected results. Fix the data setup or solution query first.', 'error');
+      console.error('[sql-exercise] save-time preflight failed', err);
+      showToast(err?.message || 'Could not validate SQL exercises. Fix the data setup or solution query first.', 'error');
       return requireComplete ? null : config;
     }
   };
