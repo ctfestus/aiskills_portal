@@ -17,7 +17,7 @@ import {
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
 import { defaultKeymap } from '@codemirror/commands';
-import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
+import { acceptCompletion, autocompletion, completionKeymap, completionStatus, moveCompletionSelection } from '@codemirror/autocomplete';
 import { PostgreSQL, sql, type SQLNamespace } from '@codemirror/lang-sql';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
@@ -198,6 +198,14 @@ function DataGrid({
   );
 }
 
+// Accepts the highlighted completion on Tab; if nothing is state-selected yet,
+// selects the first item first so acceptCompletion doesn't return false.
+const tabAcceptCompletion = (view: EditorView): boolean => {
+  if (!completionStatus(view.state)) return false;
+  moveCompletionSelection(true)(view);
+  return acceptCompletion(view);
+};
+
 // ---- CodeMirror ----
 function CodeMirrorEditor({
   value,
@@ -227,7 +235,11 @@ function CodeMirrorEditor({
         doc: value,
         extensions: [
           lineNumbers(),
-          keymap.of([...completionKeymap, ...defaultKeymap]),
+          keymap.of([
+            { key: 'Tab', run: tabAcceptCompletion },
+            ...completionKeymap.filter(b => b.key !== 'Tab'),
+            ...defaultKeymap,
+          ]),
           sql({
             dialect: PostgreSQL,
             schema,

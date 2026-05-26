@@ -199,7 +199,11 @@ function normalizeComparableValue(value: unknown, tolerance = 0, columnName = ''
   const dateColumn = nameSuggestsDate(columnName);
   if (dateColumn && typeof value === 'number') return formatEpochDate(value) ?? value;
   if (dateColumn && typeof value === 'bigint') return formatEpochDate(Number(value)) ?? value.toString();
-  if (typeof value === 'bigint') return value.toString();
+  if (typeof value === 'bigint') {
+    const n = Number(value);
+    if (Number.isFinite(n)) return tolerance > 0 ? n : Number(n.toFixed(10));
+    return value.toString();
+  }
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return String(value);
     return tolerance > 0 ? value : Number(value.toFixed(10));
