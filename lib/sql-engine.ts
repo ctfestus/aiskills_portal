@@ -412,6 +412,13 @@ export async function executeQuery(conn: any, sql: string, trusted = false, opti
       }
     }
 
+    // Any remaining BigInt (plain INTEGER/BIGINT columns not caught above) -- convert to
+    // number so rows are JSON-serializable and compare equal to pre-stored numeric values.
+    if (typeof val === 'bigint') {
+      const n = Number(val);
+      return Number.isFinite(n) ? n : val.toString();
+    }
+
     return normalizeQueryValue(val, field.name);
   }));
   let totalRows = rows.length;
