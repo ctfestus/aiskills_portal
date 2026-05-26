@@ -227,7 +227,7 @@ function CodeMirrorEditor({
         doc: value,
         extensions: [
           lineNumbers(),
-          keymap.of([...defaultKeymap, ...completionKeymap]),
+          keymap.of([...completionKeymap, ...defaultKeymap]),
           sql({
             dialect: PostgreSQL,
             schema,

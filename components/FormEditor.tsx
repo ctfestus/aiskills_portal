@@ -149,6 +149,7 @@ interface PointsSystem {
   streakCount: number;
   streakBonus: number;
   hintPenalty: number;
+  solutionPenalty: number;
   milestones: PointsMilestone[];
 }
 
@@ -162,6 +163,7 @@ const DEFAULT_POINTS: PointsSystem = {
   streakCount: 3,
   streakBonus: 50,
   hintPenalty: 20,
+  solutionPenalty: 30,
   milestones: [],
 };
 
@@ -3561,6 +3563,25 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                             onClick={() => updateConfig({ pointsSystem: { ...defaultPoints, ...formConfig.pointsSystem, hintPenalty: n } })}
                             className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
                             style={(formConfig.pointsSystem?.hintPenalty ?? 20) === n
+                              ? { background: accentColor, color: 'white', border: '1px solid transparent' }
+                              : { background: FE.groupBg, border: `1px solid ${FE.groupBorder}`, color: FE.muted }}
+                          >{n}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Solution penalty */}
+                    <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
+                      <div className="flex items-center justify-between">
+                        <label className={labelCls} style={{ ...labelStyle, marginBottom: 0 }}>View solution cost (XP)</label>
+                        <span className="text-xs font-semibold text-rose-400">-{formConfig.pointsSystem?.solutionPenalty ?? 30} XP</span>
+                      </div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {[10, 20, 30, 50].map(n => (
+                          <button key={n} type="button"
+                            onClick={() => updateConfig({ pointsSystem: { ...defaultPoints, ...formConfig.pointsSystem, solutionPenalty: n } })}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                            style={(formConfig.pointsSystem?.solutionPenalty ?? 30) === n
                               ? { background: accentColor, color: 'white', border: '1px solid transparent' }
                               : { background: FE.groupBg, border: `1px solid ${FE.groupBorder}`, color: FE.muted }}
                           >{n}</button>

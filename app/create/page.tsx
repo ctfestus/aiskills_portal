@@ -157,6 +157,7 @@ interface PointsSystem {
   streakCount: number;
   streakBonus: number;
   hintPenalty: number;
+  solutionPenalty: number;
   milestones: PointsMilestone[];
 }
 
@@ -2015,6 +2016,7 @@ const [isSaving, setIsSaving] = useState(false);
     streakCount: 3,
     streakBonus: 0,
     hintPenalty: 20,
+    solutionPenalty: 30,
     milestones: [],
   };
 
@@ -4085,6 +4087,23 @@ const [isSaving, setIsSaving] = useState(false);
                             onClick={() => updateConfig({ pointsSystem: { ...defaultPoints, ...formConfig.pointsSystem, hintPenalty: n } })}
                             className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
                             style={(formConfig.pointsSystem?.hintPenalty ?? 20) === n ? { background: accentColor, color: 'white' } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.muted }}
+                          >{n}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Solution penalty */}
+                    <div className="p-3 rounded-xl space-y-2" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
+                      <div className="flex items-center justify-between">
+                        <label className={`${labelCls} mb-0`} style={labelStyle}>View solution cost (XP)</label>
+                        <span className="text-xs font-semibold text-rose-500">-{formConfig.pointsSystem?.solutionPenalty ?? 30} XP</span>
+                      </div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {[10, 20, 30, 50].map(n => (
+                          <button key={n} type="button"
+                            onClick={() => updateConfig({ pointsSystem: { ...defaultPoints, ...formConfig.pointsSystem, solutionPenalty: n } })}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                            style={(formConfig.pointsSystem?.solutionPenalty ?? 30) === n ? { background: accentColor, color: 'white' } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.muted }}
                           >{n}</button>
                         ))}
                       </div>
