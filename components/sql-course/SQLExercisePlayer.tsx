@@ -17,7 +17,7 @@ import {
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
 import { defaultKeymap } from '@codemirror/commands';
-import { acceptCompletion, autocompletion, completionKeymap, completionStatus, moveCompletionSelection } from '@codemirror/autocomplete';
+import { acceptCompletion, autocompletion, completionKeymap, completionStatus, moveCompletionSelection, selectedCompletion } from '@codemirror/autocomplete';
 import { PostgreSQL, sql, type SQLNamespace } from '@codemirror/lang-sql';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
@@ -202,7 +202,7 @@ function DataGrid({
 // selects the first item first so acceptCompletion doesn't return false.
 const tabAcceptCompletion = (view: EditorView): boolean => {
   if (!completionStatus(view.state)) return false;
-  moveCompletionSelection(true)(view);
+  if (selectedCompletion(view.state) === null) moveCompletionSelection(true)(view);
   return acceptCompletion(view);
 };
 
