@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   CheckCircle2, XCircle, Loader2, ChevronRight, RotateCcw,
   Clock, EyeOff, AlertTriangle, ShieldAlert, GripVertical,
-  ChevronLeft, BookOpen, X, ExternalLink, ArrowRight, MoreHorizontal, List, Zap,
+  ChevronLeft, BookOpen, X, ExternalLink, ArrowRight, MoreHorizontal, Zap,
   ArrowLeftToLine, ArrowRightFromLine, Download, ArrowDownToLine,
 } from 'lucide-react';
 import { AnimatedField } from '@/components/AnimatedField';
@@ -233,8 +233,6 @@ export function CourseTaker({
   // Feature 1: direction tracking
   const [direction, setDirection] = useState(1);
 
-  // Feature 2: skip & return
-  const [skippedQuestions, setSkippedQuestions] = useState<Set<string>>(new Set());
   // AI review questions -- tracks which have been completed
   const [reviewCompleted, setReviewCompleted] = useState<Set<string>>(new Set());
   // Stores lean summaries/results for completed review questions (in-session only)
@@ -282,8 +280,6 @@ export function CourseTaker({
   const [showMenu, setShowMenu] = useState(false);
   const [xpNotify, setXpNotify] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [showOutline, setShowOutline] = useState(false);
-  const outlineRef = useRef<HTMLDivElement>(null);
 
   // Anti-cheat state
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -433,15 +429,14 @@ export function CourseTaker({
     return () => document.removeEventListener('mousedown', handler);
   }, [showMenu]);
 
-  // Close course outline on outside click
+  // Auto-collapse sidebar when entering SQL exercise questions to give the editor more space
   useEffect(() => {
-    if (!showOutline) return;
-    const handler = (e: MouseEvent) => {
-      if (outlineRef.current && !outlineRef.current.contains(e.target as Node)) setShowOutline(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showOutline]);
+    if (questionType === 'sql_exercise') {
+      setSidebarOpen(false);
+    } else {
+      if (typeof window !== 'undefined' && window.innerWidth >= 640) setSidebarOpen(true);
+    }
+  }, [questionType]);
   const fontStyle = { fontFamily: fontOption.cssFamily };
   const isDark = (config.mode ?? 'dark') === 'auto' ? systemDark : (config.mode ?? 'dark') !== 'light';
   const cardBg = isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm';
@@ -893,6 +888,31 @@ export function CourseTaker({
     return answer === q.correctAnswer;
   };
 
+  const getSlideProgressStatus = useCallback((q: any) => {
+    const rawAnswer = answers[q.id] ?? '';
+    const answered = !!rawAnswer;
+    if ((q.type ?? '') === 'sql_exercise') {
+      if (!answered) {
+        return { answered: false, completed: false, skipped: false, failed: false };
+      }
+      try {
+        const parsed = JSON.parse(rawAnswer);
+        const passed = !!parsed?.passed;
+        const skipped = !!parsed?.skipped || !!parsed?.solutionViewed;
+        return { answered, completed: answered, skipped, failed: !passed && !skipped };
+      } catch {
+        return { answered, completed: answered, skipped: false, failed: true };
+      }
+    }
+
+    return {
+      answered,
+      completed: answered,
+      skipped: false,
+      failed: false,
+    };
+  }, [answers]);
+
   // -- Points system --
   const ps = (config as any).pointsSystem;
   const pointsEnabled = ps?.enabled !== false;
@@ -900,9 +920,14 @@ export function CourseTaker({
   // -- Animated points counter --
   useEffect(() => {
     if (displayedPoints === totalPoints) return;
-    const step = Math.ceil(Math.abs(totalPoints - displayedPoints) / 20);
+    const diff = totalPoints - displayedPoints;
+    const step = Math.ceil(Math.abs(diff) / 20);
     const timer = setTimeout(() => {
-      setDisplayedPoints(prev => Math.abs(totalPoints - prev) <= step ? totalPoints : prev + step);
+      setDisplayedPoints(prev => {
+        const d = totalPoints - prev;
+        if (Math.abs(d) <= step) return totalPoints;
+        return prev + (d > 0 ? step : -step);
+      });
     }, 16);
     return () => clearTimeout(timer);
   }, [totalPoints, displayedPoints]);
@@ -1976,7 +2001,9 @@ export function CourseTaker({
   };
 
   const doFinish = (finalScore: number) => {
-    const pending = questions.filter((q: any) => !q.lessonOnly && !q.isSection && !q.isDownloads && !answers[q.id]);
+    const pending = questions.filter((q: any) =>
+      !q.lessonOnly && !q.isSection && !q.isDownloads && !getSlideProgressStatus(q).completed
+    );
     if (!reviewMode && pending.length > 0) {
       setFinishPending(pending);
     } else {
@@ -2035,38 +2062,6 @@ export function CourseTaker({
     }
   };
 
-  const handleSkip = () => {
-    // Mark current question as skipped
-    setSkippedQuestions(prev => new Set(prev).add(currentQuestion.id));
-    // Find next unanswered or skipped question (wrapping)
-    let next = -1;
-    for (let i = 1; i <= totalSlides; i++) {
-      const idx = (currentQuestionIndex + i) % totalSlides;
-      const q = questions[idx];
-      if (!answers[q.id]) { next = idx; break; }
-    }
-    if (next >= 0 && next !== currentQuestionIndex) {
-      setDirection(1);
-      setCurrentQuestionIndex(next);
-      setSelectedOption(null);
-      setFillBlankAnswer('');
-      setIsChecking(false);
-      setIsCorrect(null);
-    } else {
-      if (reviewMode) {
-        // Review complete -- reset to start, same as handleNext/handleNextDirect
-        setCurrentQuestionIndex(0);
-        answersRef.current = {};
-        setAnswers({});
-        setSelectedOption(null);
-        setFillBlankAnswer('');
-        setIsChecking(false);
-        setIsCorrect(null);
-      } else {
-        finishCourse(score);
-      }
-    }
-  };
 
   const handleNextDirect = () => {
     setLessonOpen(false);
@@ -2119,6 +2114,7 @@ export function CourseTaker({
   const handleSqlComplete = (payload: any) => {
     const alreadyAnswered = !!answersRef.current[currentQuestion.id];
     const previousCorrect = alreadyAnswered ? isAnswerCorrect(currentQuestion, answersRef.current[currentQuestion.id]) : false;
+    const previousSolutionViewed = alreadyAnswered ? (() => { try { return !!JSON.parse(answersRef.current[currentQuestion.id])?.solutionViewed; } catch { return false; } })() : false;
     const countsAsPassed = !!payload.passed && !payload.skipped && !payload.solutionViewed;
     const answer = JSON.stringify({
       query: payload.query,
@@ -2159,12 +2155,19 @@ export function CourseTaker({
     } else if (pointsEnabled && !reviewMode) {
       setStreak(0);
       newStreak = 0;
+      if (payload.solutionViewed && !previousCorrect && !previousSolutionViewed) {
+        const penalty = ps?.solutionPenalty ?? 30;
+        newPoints = Math.max(0, totalPoints - penalty);
+        setTotalPoints(newPoints);
+        setFloatingPoints({ id: Date.now(), text: `-${penalty} XP`, x: 50, y: 60 });
+        setTimeout(() => setFloatingPoints(null), 1200);
+      }
     }
     saveProgress(newAnswers, (countsAsPassed || payload.skipped) ? currentQuestionIndex + 1 : currentQuestionIndex, newScore, newPoints, newStreak, hintsUsed);
   };
 
   const countableSlides = questions.filter((q: any) => !q.isSection);
-  const completedSlides = countableSlides.filter((q: any) => !!answers[q.id]).length;
+  const completedSlides = countableSlides.filter((q: any) => getSlideProgressStatus(q).completed).length;
   const progressPct = countableSlides.length > 0 ? (completedSlides / countableSlides.length) * 100 : 0;
   const timerWarning = timeLeft !== null && timeLeft <= 60;
 
@@ -2498,8 +2501,8 @@ export function CourseTaker({
                 )}
               </div>
 
-              {/* SQL nav -- center: prev / course outline / next */}
-              <div className="flex-shrink-0 relative" ref={outlineRef}>
+              {/* SQL nav -- center: prev / next */}
+              <div className="flex-shrink-0">
                 <div
                   className="flex items-center rounded-lg border overflow-hidden"
                   style={{ borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.14)' }}
@@ -2517,16 +2520,6 @@ export function CourseTaker({
                   <div style={{ width: 1, alignSelf: 'stretch', background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }} />
                   <button
                     type="button"
-                    onClick={() => setShowOutline(v => !v)}
-                    className="flex items-center gap-1.5 px-3 text-[12px] font-semibold transition-opacity hover:opacity-70"
-                    style={{ height: 32, background: showOutline ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)') : isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', color: isDark ? '#d4d4d8' : '#374151' }}
-                  >
-                    <List className="w-3.5 h-3.5" style={{ color: isDark ? '#9ca3af' : '#6b7280' }} />
-                    Course Outline
-                  </button>
-                  <div style={{ width: 1, alignSelf: 'stretch', background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }} />
-                  <button
-                    type="button"
                     onClick={handleNextDirect}
                     disabled={currentQuestionIndex >= totalSlides - 1}
                     className="flex items-center justify-center transition-opacity hover:opacity-70 disabled:opacity-30"
@@ -2536,94 +2529,6 @@ export function CourseTaker({
                     <ChevronRight className="w-3.5 h-3.5" style={{ color: isDark ? '#9ca3af' : '#6b7280' }} />
                   </button>
                 </div>
-
-                {/* Course outline dropdown */}
-                {showOutline && (
-                  <div
-                    className="fixed left-1/2 -translate-x-1/2 z-[300] rounded-xl shadow-2xl border overflow-hidden"
-                    style={{
-                      top: 52,
-                      width: 320,
-                      background: isDark ? '#1a1b26' : '#ffffff',
-                      borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.10)',
-                    }}
-                  >
-                    <div
-                      className="flex items-center justify-between px-4 py-3 border-b"
-                      style={{ borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' }}
-                    >
-                      <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: isDark ? '#6b7280' : '#9ca3af' }}>
-                        Course Outline
-                      </span>
-                      <span className="text-[11px] font-semibold tabular-nums" style={{ color: accent }}>
-                        {currentQuestionIndex + 1} / {totalSlides}
-                      </span>
-                    </div>
-                    <div className="overflow-y-auto px-3 py-2" style={{ maxHeight: '65vh' }}>
-                      {chapters.map((group, gi) => (
-                        <div key={gi} className="mb-1">
-                          <p
-                            className="px-2 pt-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest"
-                            style={{ color: isDark ? '#4b5563' : '#9ca3af' }}
-                          >
-                            {group.sectionTitle}
-                          </p>
-                          {group.slides.map(({ q, idx }) => {
-                            const userAnswer = answers[q.id] ?? '';
-                            const isAnsweredQ = !!userAnswer;
-                            const isCorrectQ = isAnsweredQ && isAnswerCorrect(q, userAnswer);
-                            const isSkippedQ = isAnsweredQ && !isCorrectQ;
-                            const isCurrent = idx === currentQuestionIndex;
-                            const label = (q as any).isSection
-                              ? (q as any).sectionTitle
-                              : (q as any).isDownloads
-                              ? ((q as any).downloadsTitle || 'Downloads')
-                              : (q as any).lessonOnly
-                              ? ((q as any).lesson?.title || 'Lesson')
-                              : (q as any).lesson?.title || `Slide ${idx + 1}`;
-                            return (
-                              <button
-                                key={q.id}
-                                type="button"
-                                onClick={() => {
-                                  setDirection(idx > currentQuestionIndex ? 1 : -1);
-                                  setCurrentQuestionIndex(idx);
-                                  setShowOutline(false);
-                                }}
-                                className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-opacity hover:opacity-80"
-                                style={{ background: isCurrent ? `${accent}18` : 'transparent' }}
-                              >
-                                <div
-                                  className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-                                  style={{
-                                    background: isCurrent ? accent : isCorrectQ ? `${accent}22` : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-                                    border: `1.5px solid ${isCurrent ? accent : isCorrectQ ? `${accent}50` : isSkippedQ ? (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)') : isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)'}`,
-                                  }}
-                                >
-                                  {isCurrent ? (
-                                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                                  ) : isCorrectQ ? (
-                                    <CheckCircle2 className="w-3 h-3" style={{ color: accent }} />
-                                  ) : isSkippedQ ? (
-                                    <span className="text-[9px] font-bold leading-none" style={{ color: isDark ? '#6b7280' : '#9ca3af' }}>-</span>
-                                  ) : (
-                                    <span className="text-[9px] font-medium" style={{ color: isDark ? '#6b7280' : '#9ca3af' }}>{idx + 1}</span>
-                                  )}
-                                </div>
-                                <span
-                                  className="text-[12.5px] font-medium leading-snug truncate flex-1"
-                                  style={{ color: isCurrent ? (isDark ? '#f0f0f0' : '#111') : isDark ? '#9ca3af' : '#6b7280' }}
-                                >
-                                  {label}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* SQL nav -- right: XP + menu */}
@@ -2909,7 +2814,8 @@ export function CourseTaker({
 
                         {/* Slides */}
                         {!isCollapsed && group.slides.map(({ q, idx }, si) => {
-                          const isAnsweredQ = !!answers[q.id];
+                          const progressStatus = getSlideProgressStatus(q);
+                          const isDoneQ = progressStatus.completed;
                           const isCurrent = idx === currentQuestionIndex;
                           const isLastItem = si === totalGroupSlides - 1 && gi === chapters.length - 1;
 
@@ -2930,15 +2836,15 @@ export function CourseTaker({
                                   style={{
                                     background: isCurrent
                                       ? accent
-                                      : isAnsweredQ
+                                      : isDoneQ
                                         ? `${accent}22`
                                         : isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
-                                    border: `2px solid ${isCurrent ? accent : isAnsweredQ ? `${accent}50` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                                    border: `2px solid ${isCurrent ? accent : isDoneQ ? `${accent}50` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
                                   }}
                                 >
                                   {isCurrent ? (
                                     <div className="w-2 h-2 rounded-full bg-white" />
-                                  ) : isAnsweredQ ? (
+                                  ) : isDoneQ ? (
                                     <CheckCircle2 className="w-3.5 h-3.5" style={{ color: accent }} />
                                   ) : (q as any).isDownloads ? (
                                     <Download className="w-3 h-3" style={{ color: isDark ? '#777' : '#888' }} />
@@ -3033,8 +2939,11 @@ export function CourseTaker({
               savedAnswer={answers[currentQuestion.id]}
               completed={isAnswerCorrect(currentQuestion, answers[currentQuestion.id] ?? '')}
               topOffset={44}
+              leftOffset={!inlineMode && typeof window !== 'undefined' && window.innerWidth >= 640 ? (sidebarOpen ? 288 : 44) : 0}
+              sessionToken={sessionTokenRef.current ?? undefined}
               onComplete={handleSqlComplete}
               hintPenalty={pointsEnabled ? (ps?.hintPenalty ?? 20) : undefined}
+              solutionPenalty={pointsEnabled ? (ps?.solutionPenalty ?? 30) : undefined}
               onHintUsed={() => setHintsUsed(prev => new Set(prev).add(currentQuestion.id))}
               onRevealSolution={async (questionId, attempts) => {
                 const res = await fetch('/api/course', {
@@ -3631,12 +3540,7 @@ export function CourseTaker({
                               {isCorrect ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                               {isCorrect ? 'Correct!' : 'Incorrect!'}
                             </div>
-                          ) : (
-                            <button onClick={handleSkip}
-                              className={`text-sm font-medium transition-colors flex-shrink-0 ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}>
-                              Skip
-                            </button>
-                          )}
+                          ) : null}
                           <div className="flex items-center gap-2 sm:gap-3">
                             {showAnswers === 'per_question' ? (
                               isChecking ? (

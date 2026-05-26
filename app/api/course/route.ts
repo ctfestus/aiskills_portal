@@ -231,32 +231,11 @@ export async function POST(req: NextRequest) {
 
     try {
       const supabase = adminClient();
-      const [{ data: course }, { data: attempt }] = await Promise.all([
-        supabase.from('courses').select('questions').eq('id', course_id).single(),
-        supabase.from('course_attempts').select('answers')
-          .eq('course_id', course_id).eq('student_id', sessionUser.id)
-          .is('completed_at', null)
-          .order('current_question_index', { ascending: false })
-          .order('updated_at', { ascending: false })
-          .limit(1).maybeSingle(),
-      ]);
+      const { data: course } = await supabase.from('courses').select('questions').eq('id', course_id).single();
 
       const question = (Array.isArray(course?.questions) ? course.questions : [])
         .find((q: any) => q?.id === question_id && q?.type === 'sql_exercise');
       if (!question) return NextResponse.json({ error: 'SQL exercise not found.' }, { status: 404 });
-
-      let savedAttempts = 0;
-      const savedAnswer = attempt?.answers?.[question_id];
-      if (typeof savedAnswer === 'string') {
-        try { savedAttempts = Number(JSON.parse(savedAnswer)?.attempts ?? 0); } catch {}
-      } else if (savedAnswer && typeof savedAnswer === 'object') {
-        savedAttempts = Number((savedAnswer as any).attempts ?? 0);
-      }
-
-      const allowedAttempts = Math.max(savedAttempts, Number(attempts ?? 0));
-      if (allowedAttempts < 3) {
-        return NextResponse.json({ error: 'Solution is available after 3 failed attempts.' }, { status: 403 });
-      }
 
       return NextResponse.json({ solution: String(question.sqlSolution ?? '') });
     } catch (err: any) {

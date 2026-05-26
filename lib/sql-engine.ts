@@ -253,8 +253,15 @@ export async function initSQLRuntime(tables: SQLTableConfig[]): Promise<SQLRunti
   const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
   await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
   URL.revokeObjectURL(workerUrl);
+
+  // Use a dedicated setup connection for loading data + metadata queries so that
+  // any abandoned Promise.race timeouts in safeMetadataQuery never contaminate
+  // the student query connection.
+  const setupConn = await db.connect();
+  const loadedTables = await loadSQLTables(setupConn, tables);
+  await setupConn.close().catch(() => {});
+
   const conn = await db.connect();
-  const loadedTables = await loadSQLTables(conn, tables);
 
   return {
     db,

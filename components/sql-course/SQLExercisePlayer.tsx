@@ -68,12 +68,15 @@ interface Props {
   savedAnswer?: string;
   completed: boolean;
   topOffset?: number;
+  leftOffset?: number;
+  sessionToken?: string;
   hintPenalty?: number;
   onComplete: (payload: { query: string; result: SQLResult; passed: boolean; feedback: SQLCompareResult; skipped?: boolean; attempts?: number; solutionViewed?: boolean }) => void;
   onHintUsed: () => void;
   onRevealSolution?: (questionId: string, attempts: number) => Promise<string>;
   onNext?: () => void;
   isLastQuestion?: boolean;
+  solutionPenalty?: number;
 }
 
 type DetailModal =
@@ -131,8 +134,8 @@ function DataGrid({
   onCellOpen: (title: string, value: unknown) => void;
 }) {
   const divider = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)';
-  const headerBg = isDark ? '#181a2c' : '#f8fafc';
-  const rowBg = isDark ? '#0f1120' : '#ffffff';
+  const headerBg = isDark ? '#141416' : '#f8fafc';
+  const rowBg = isDark ? '#0f0f10' : '#ffffff';
   const numColor = isDark ? '#2e3355' : '#cbd5e1';
   const visibleRows = result?.rows.slice(0, 100) ?? [];
 
@@ -154,8 +157,8 @@ function DataGrid({
               style={{ background: headerBg, borderBottom: `1px solid ${divider}`, color: numColor }}>
               #
             </th>
-            {result.columns.map(col => (
-              <th key={col}
+            {result.columns.map((col, ci) => (
+              <th key={`${ci}:${col}`}
                 className="sticky top-0 z-10 px-4 py-2.5 text-left text-[10px] font-bold tracking-widest uppercase whitespace-nowrap"
                 style={{ background: headerBg, borderBottom: `1px solid ${divider}`, color: isDark ? '#7c85b8' : '#475569' }}>
                 {col}
@@ -335,7 +338,10 @@ export default function SQLExercisePlayer({
   question, runtime, isPreparing, prepareError,
   isDark, accentColor, savedAnswer, completed,
   topOffset = 0,
+  leftOffset = 0,
+  sessionToken,
   hintPenalty,
+  solutionPenalty,
   onComplete, onHintUsed, onRevealSolution, onNext, isLastQuestion,
 }: Props) {
   const saved = useMemo(() => parseSaved(savedAnswer), [savedAnswer]);
@@ -351,7 +357,9 @@ export default function SQLExercisePlayer({
   const [running, setRunning]   = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError]       = useState('');
-  const [feedback, setFeedback] = useState<SQLCompareResult | null>(saved?.feedback ?? null);
+  const [feedback, setFeedback] = useState<SQLCompareResult | null>(
+    (saved?.skipped || saved?.solutionViewed) ? null : (saved?.feedback ?? null)
+  );
   const [failedAttempts, setFailedAttempts] = useState<number>(Number(saved?.attempts ?? 0));
   const [solutionRevealed, setSolutionRevealed] = useState<boolean>(!!saved?.solutionViewed);
   const [revealedSolution, setRevealedSolution] = useState<string>('');
@@ -425,15 +433,15 @@ export default function SQLExercisePlayer({
   }
 
   // ---- Tokens ----
-  const leftBg    = isDark ? '#181a2c' : '#ffffff';
-  const leftHdr   = isDark ? '#121422' : '#f8fafc';
-  const editorBg  = isDark ? '#0f1120' : '#ffffff';
-  const resultsBg = isDark ? '#0c0d18' : '#f8fafc';
-  const stripBg   = isDark ? '#0d0e1c' : '#f8fafc';
-  const border    = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.07)';
-  const text      = isDark ? '#e2e8f6' : '#1a1d2e';
-  const muted     = isDark ? '#404870' : '#64748b';
-  const subtle    = isDark ? '#1e2038' : '#f1f5f9';
+  const leftBg    = isDark ? '#141416' : '#ffffff';
+  const leftHdr   = isDark ? '#111113' : '#f8fafc';
+  const editorBg  = isDark ? '#0f0f10' : '#ffffff';
+  const resultsBg = isDark ? '#0c0c0d' : '#f8fafc';
+  const stripBg   = isDark ? '#0d0d0e' : '#f8fafc';
+  const border    = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.07)';
+  const text      = isDark ? '#e4e4e7' : '#1a1d2e';
+  const muted     = isDark ? '#52525b' : '#64748b';
+  const subtle    = isDark ? '#1c1c1e' : '#f1f5f9';
 
   const tables     = runtime?.tables ?? [];
   const editorSchema = useMemo<SQLNamespace>(() => {
@@ -451,7 +459,7 @@ export default function SQLExercisePlayer({
   const hasChecker = !!question.sqlExpectedResult || !!question.sqlSolution?.trim();
   const availableHints: string[] = (question.sqlHints?.length ? question.sqlHints : question.hint ? [question.hint] : []);
   const hasHints = availableHints.length > 0;
-  const canRevealSolution = failedAttempts >= 3 && !completed;
+  const canRevealSolution = hasChecker && !completed;
   const solutionText = (revealedSolution || String(question.sqlSolution ?? '')).trim();
   const rowCount   = visibleResult?.rows.length ?? 0;
   const displayedRowCount = Math.min(rowCount, 100);
@@ -489,9 +497,25 @@ export default function SQLExercisePlayer({
   }
 
   async function runQuery() {
-    if (!runtime) return;
-    setRunning(true); setError(''); setFeedback(null); setActiveTab('result'); setErrorExplain('');
-    try { setResult(await executeQuery(runtime.conn, query)); }
+    if (!runtime) {
+      setActiveTab('result');
+      setError('SQL workspace is still preparing. Please try again in a moment.');
+      if (isMobile) setMobileTab('result');
+      return;
+    }
+    setRunning(true); setError(''); setResult(null); setFeedback(null); setActiveTab('result'); setErrorExplain('');
+    try {
+      // Run query directly (same as checkAnswer) to avoid subquery-wrapping issues with malformed/placeholder SQL.
+      // Cap rows in JS after the fact so the browser doesn't choke on huge result sets.
+      const res = await executeQuery(runtime.conn, query, false, { limit: null });
+      const capped = res.rows.length > STUDENT_RESULT_LIMIT;
+      setResult({
+        ...res,
+        rows: capped ? res.rows.slice(0, STUDENT_RESULT_LIMIT) : res.rows,
+        totalRows: res.rows.length,
+        capped,
+      });
+    }
     catch (e: any) { setError(e?.message || 'Query failed.'); }
     finally {
       setRunning(false);
@@ -582,7 +606,10 @@ export default function SQLExercisePlayer({
     try {
       const res = await fetch('/api/sql-ai', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+        },
         body: JSON.stringify({
           action: 'explain-error',
           query,
@@ -624,9 +651,11 @@ export default function SQLExercisePlayer({
     <>
       {/* ══════════════════════════════════════════════ FULL-SCREEN OVERLAY -- escapes the card ══════════════════════════════════════════════ */}
       <div
-        className="fixed inset-x-0 bottom-0 z-40 flex flex-col overflow-hidden"
+        className="fixed bottom-0 right-0 z-40 flex flex-col overflow-hidden"
         style={{
           top: topOffset,
+          left: leftOffset,
+          transition: 'left 300ms ease',
           border: 'none',
           borderRadius: 0,
           color: text,
@@ -880,9 +909,11 @@ export default function SQLExercisePlayer({
                 >
                   {solutionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                   View Solution
+                  {solutionPenalty ? <span className="ml-1 text-[10px] font-semibold opacity-70">-{solutionPenalty} XP</span> : null}
                 </button>
               )}
               <button
+                type="button"
                 onClick={runQuery}
                 disabled={!runtime || busy}
                 className="inline-flex items-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold border transition-opacity disabled:opacity-40"
@@ -893,6 +924,7 @@ export default function SQLExercisePlayer({
               </button>
               {hasChecker && !completed && !solutionRevealed && (
                 <button
+                  type="button"
                   onClick={checkAnswer}
                   disabled={!runtime || busy}
                   className="inline-flex items-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40"
@@ -904,6 +936,7 @@ export default function SQLExercisePlayer({
               )}
               {solutionRevealed && !completed && onNext && (
                 <button
+                  type="button"
                   onClick={continueIncorrect}
                   disabled={busy}
                   className="inline-flex items-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40"
@@ -913,18 +946,9 @@ export default function SQLExercisePlayer({
                   {isLastQuestion ? 'Finish Course' : 'Continue'}
                 </button>
               )}
-              {!solutionRevealed && !completed && onNext && (
-                <button
-                  onClick={continueIncorrect}
-                  disabled={busy}
-                  className="inline-flex items-center gap-2 h-9 px-4 rounded-lg text-[13px] font-semibold border transition-opacity disabled:opacity-40"
-                  style={{ borderColor: border, background: editorBg, color: muted }}
-                >
-                  Skip
-                </button>
-              )}
               {completed && onNext && (
                 <button
+                  type="button"
                   onClick={onNext}
                   className="inline-flex items-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold"
                   style={{ background: accentColor, color: '#052033' }}

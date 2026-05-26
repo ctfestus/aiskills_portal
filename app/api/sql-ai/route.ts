@@ -1,10 +1,27 @@
 import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 interface ColumnInfo { name: string; type?: string }
 interface TableInfo  { tableName: string; columns: ColumnInfo[] }
+
+function adminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  if (!url || !key) throw new Error('Supabase service role key not configured');
+  return createClient(url, key);
+}
+
+async function getSessionUser(req: NextRequest): Promise<{ id: string } | null> {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7);
+  const { data: { user } } = await adminClient().auth.getUser(token);
+  return user?.id ? { id: user.id } : null;
+}
 
 function schemaText(tables: TableInfo[]): string {
   if (!tables?.length) return '';
@@ -19,6 +36,9 @@ function stripHtml(html: string): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const { action, query, error, task, tables, lessonContext } = await req.json();
     const schema = schemaText(tables ?? []);
 
