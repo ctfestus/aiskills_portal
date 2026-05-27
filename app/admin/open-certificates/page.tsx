@@ -714,19 +714,22 @@ export default function OpenCertificatesPage() {
   }, [token]);
 
   const loadAllCerts = useCallback(async () => {
-    if (!token) return;
     setCertsLoading(true);
     try {
-      const h = await freshAuthHeader();
-      const res  = await fetch('/api/open-certificates', { headers: h as any });
+      const { data: sessionData } = await supabase.auth.getSession();
+      const t = sessionData.session?.access_token;
+      if (!t) { setCertsLoading(false); return; }
+      const res = await fetch('/api/open-certificates', {
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+      });
       const data = await res.json();
       if (!res.ok) { setCertsLoading(false); return; }
       setAllCerts(data.data ?? []);
     } catch { /* non-blocking */ }
     setCertsLoading(false);
-  }, [token, freshAuthHeader]);
+  }, []);
 
-  useEffect(() => { if (token) loadAllCerts(); }, [token]);
+  useEffect(() => { if (authChecked) loadAllCerts(); }, [authChecked, loadAllCerts]);
 
   const certCounts = useMemo(() => {
     const map: Record<string, number> = {};

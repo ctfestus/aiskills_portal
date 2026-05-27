@@ -48,17 +48,68 @@ function getOrderByExpressions(sql: string): string[] {
   return match ? splitOrderExpressions(match[1]) : [];
 }
 
-function hasAmbiguousLimit(sql: string) {
-  if (!/\blimit\s+\d+\b/i.test(sql) || !/\border\s+by\b/i.test(sql)) return false;
-  const expressions = getOrderByExpressions(sql);
-  if (expressions.length >= 2) return false;
-  return !/\b(id|_id|uuid|key)\b/i.test(expressions[0] ?? '');
+function getLimitValue(sql: string): number | null {
+  const match = sql.match(/\blimit\s+(\d+)\b/i);
+  if (!match) return null;
+  const limit = Number(match[1]);
+  return Number.isFinite(limit) && limit > 0 ? limit : null;
 }
 
-async function preflightImportedCourseSql(cfg: any): Promise<{ config?: any; error?: string; issues?: string[] }> {
+function withoutLimit(sql: string) {
+  return sql.replace(/\blimit\s+\d+\b/i, '').replace(/;\s*$/, '');
+}
+
+function orderExpressionColumn(expression: string) {
+  const cleaned = expression
+    .replace(/\s+(asc|desc)\b/ig, '')
+    .replace(/\s+nulls\s+(first|last)\b/ig, '')
+    .trim();
+  const match = cleaned.match(/^(?:"?([a-z_][a-z0-9_]*)"?\.)?"?([a-z_][a-z0-9_]*)"?$/i);
+  return match?.[2] ?? null;
+}
+
+function valuesTie(a: unknown, b: unknown) {
+  if (a == null || b == null) return a == null && b == null;
+  if (Number.isFinite(Number(a)) && Number.isFinite(Number(b))) return Number(a) === Number(b);
+  return String(a).trim() === String(b).trim();
+}
+
+function questionLabel(question: any, index: number) {
+  const preview = question.question?.replace(/\s+/g, ' ').trim().slice(0, 80);
+  return `Q${index + 1}${preview ? `: ${preview}` : ''}`;
+}
+
+async function cutoffTieWarning(tables: SQLTableConfig[], question: any, index: number): Promise<string | null> {
+  const sql = question.sqlSolution ?? '';
+  const limit = getLimitValue(sql);
+  if (!limit || !/\border\s+by\b/i.test(sql)) return null;
+
+  const expressions = getOrderByExpressions(sql);
+  if (expressions.length !== 1) return null;
+
+  const orderColumn = orderExpressionColumn(expressions[0]);
+  if (!orderColumn) return null;
+
+  try {
+    const fullResult = await computeServerSqlResult(tables, withoutLimit(sql));
+    if (fullResult.rows.length <= limit) return null;
+    const columnIndex = fullResult.columns.findIndex(column => column.toLowerCase() === orderColumn.toLowerCase());
+    if (columnIndex < 0) return null;
+    const cutoffRow = fullResult.rows[limit - 1];
+    const nextRow = fullResult.rows[limit];
+    if (!valuesTie(cutoffRow?.[columnIndex], nextRow?.[columnIndex])) return null;
+
+    const idColumn = fullResult.columns.find(column => /\b(id|_id)\b/i.test(column)) ?? fullResult.columns[0] ?? 'an id column';
+    return `${questionLabel(question, index)}: rows ${limit} and ${limit + 1} tie on ${orderColumn}, so LIMIT ${limit} may select different rows depending on database row order. Consider adding a secondary sort such as ORDER BY ${expressions[0]}, ${idColumn} ASC, then recompute the expected result.`;
+  } catch {
+    return null;
+  }
+}
+
+async function preflightImportedCourseSql(cfg: any): Promise<{ config: any; warnings: string[] }> {
   const questions = Array.isArray(cfg?.questions) ? cfg.questions : [];
   const sqlQuestions = questions.filter((question: any) => question?.type === 'sql_exercise');
-  if (!sqlQuestions.length) return { config: cfg };
+  if (!sqlQuestions.length) return { config: cfg, warnings: [] };
 
   const tableMap = new Map<string, SQLTableConfig>();
   for (const question of sqlQuestions) {
@@ -69,28 +120,26 @@ async function preflightImportedCourseSql(cfg: any): Promise<{ config?: any; err
   }
   const tables = Array.from(tableMap.values());
   const updatedQuestions = [...questions];
-  const issues: string[] = [];
+  const warnings: string[] = [];
 
   for (let i = 0; i < updatedQuestions.length; i += 1) {
     const question = updatedQuestions[i];
     if (question?.type !== 'sql_exercise') continue;
-    const label = question.id || question.question?.slice(0, 70) || `SQL exercise ${i + 1}`;
+    const label = questionLabel(question, i);
 
     if (!question.sqlSolution?.trim()) {
-      issues.push(`${label}: missing solution query. Add a solution query so student answers can be validated.`);
+      warnings.push(`${label}: missing solution query. Student SQL answers cannot be validated until a solution query is added.`);
       continue;
     }
 
-    if (hasAmbiguousLimit(question.sqlSolution)) {
-      issues.push(`${label}: solution uses LIMIT after ORDER BY without a clear tie-breaker. Add a stable secondary sort, such as an id column, then recompute the expected result.`);
-      continue;
-    }
+    const tieWarning = await cutoffTieWarning(tables, question, i);
+    if (tieWarning) warnings.push(tieWarning);
 
     let recomputed: SQLResult;
     try {
       recomputed = await computeServerSqlResult(tables, question.sqlSolution);
     } catch (err: any) {
-      issues.push(`${label}: solution query failed: ${err?.message || 'unknown SQL error'}`);
+      warnings.push(`${label}: solution query failed during import preflight: ${err?.message || 'unknown SQL error'}. The course was imported, but review this SQL exercise before assigning it.`);
       continue;
     }
 
@@ -104,15 +153,11 @@ async function preflightImportedCourseSql(cfg: any): Promise<{ config?: any; err
       numericTolerance: Number(question.sqlNumericTolerance ?? 0),
     });
     if (!comparison.passed) {
-      issues.push(`${label}: saved expected result does not match the current solution query. ${comparison.message} Recompute the expected result before importing.`);
+      warnings.push(`${label}: saved expected result does not match the current solution query. ${comparison.message} Recompute the expected result before assigning this course.`);
     }
   }
 
-  if (issues.length) {
-    return { error: 'SQL exercise validation failed.', issues };
-  }
-
-  return { config: { ...cfg, questions: updatedQuestions } };
+  return { config: { ...cfg, questions: updatedQuestions }, warnings };
 }
 
 export async function POST(req: NextRequest) {
@@ -148,10 +193,8 @@ export async function POST(req: NextRequest) {
     if (!cfg) return NextResponse.json({ error: 'config required' }, { status: 400 });
 
     const sqlPreflight = await preflightImportedCourseSql(cfg);
-    if (sqlPreflight.error) {
-      return NextResponse.json({ error: sqlPreflight.error, issues: sqlPreflight.issues }, { status: 400 });
-    }
     cfg = sqlPreflight.config;
+    const sqlWarnings = sqlPreflight.warnings;
 
     const title = body.title || cfg.title || 'Imported Course';
 
@@ -180,7 +223,7 @@ export async function POST(req: NextRequest) {
           console.error('[content-import] course update:', upErr.message);
           return NextResponse.json({ error: 'Failed to update course.' }, { status: 500 });
         }
-        return NextResponse.json({ id: existing.id, slug: existing.slug, type: 'course', action: 'updated' });
+        return NextResponse.json({ id: existing.id, slug: existing.slug, type: 'course', action: 'updated', sqlWarnings });
       }
     }
 
@@ -209,10 +252,10 @@ export async function POST(req: NextRequest) {
         points_base:     cfg.pointsSystem?.basePoints ?? cfg.points_base ?? 50,
         post_submission: cfg.postSubmission ?? null,
       }).select('id, slug').single();
-      if (!error) return NextResponse.json({ id: data.id, slug: data.slug, type: 'course', action: 'created' });
+      if (!error) return NextResponse.json({ id: data.id, slug: data.slug, type: 'course', action: 'created', sqlWarnings });
       if (error.code === '23505') { attempt++; continue; }
       console.error('[content-import] course:', error.message);
-      return NextResponse.json({ error: 'Failed to import course.' }, { status: 500 });
+      return NextResponse.json({ error: `Failed to import course: ${error.message}` }, { status: 500 });
     }
     return NextResponse.json({ error: 'Could not generate unique slug.' }, { status: 409 });
   }

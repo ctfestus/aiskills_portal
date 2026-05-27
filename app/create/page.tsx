@@ -13,7 +13,7 @@ import {
   ArrowUpRight, ChevronDown, ChevronUp,
   Building2, Share2, GripVertical,
   CalendarDays, HelpCircle, ClipboardList, Video, BookOpen, Search, Zap, Settings, Upload,
-  Download, Link2, FileText,
+  Download, Link2, FileText, Database, ArrowLeft,
 } from 'lucide-react';
 import { AnimatedField, ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import dynamic from 'next/dynamic';
@@ -911,12 +911,12 @@ export default function Page() {
 const [isSaving, setIsSaving] = useState(false);
   const [savingAs, setSavingAs] = useState<'draft' | 'published' | null>(null);
   const [formStatus, setFormStatus] = useState<'draft' | 'published'>('published');
-  const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' | 'info'; persistent?: boolean } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showToast = (message: string, type: 'error' | 'success' | 'info' = 'error') => {
+  const showToast = (message: string, type: 'error' | 'success' | 'info' = 'error', options?: { persistent?: boolean }) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ message, type });
-    toastTimer.current = setTimeout(() => setToast(null), 5000);
+    setToast({ message, type, persistent: options?.persistent });
+    toastTimer.current = options?.persistent ? null : setTimeout(() => setToast(null), 5000);
   };
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
   const [savedFormId, setSavedFormId] = useState<string | null>(null);
@@ -947,6 +947,12 @@ const [isSaving, setIsSaving] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiSuccess, setAiSuccess] = useState('');
   const [aiFailed, setAiFailed] = useState(false);
+  // SQL Course AI Wizard
+  const [sqlWizardStep, setSqlWizardStep] = useState<null | 'brief' | 'outline'>(null);
+  const [sqlBrief, setSqlBrief] = useState({ title: '', industry: 'Finance', role: '', level: 'Beginner', promptText: '' });
+  const [sqlOutline, setSqlOutline] = useState<any | null>(null);
+  const [sqlModuleLoading, setSqlModuleLoading] = useState<number | null>(null);
+  const [sqlExpandedTables, setSqlExpandedTables] = useState<Set<number>>(new Set());
   const [busyQuestionId, setBusyQuestionId] = useState<string | null>(null);
   const [lessonPrompts, setLessonPrompts] = useState<Record<string, string>>({});
   const [lessonPromptModal, setLessonPromptModal] = useState<{ q: CourseQuestion } | null>(null);
@@ -1089,7 +1095,9 @@ const [isSaving, setIsSaving] = useState(false);
       });
     } else {
       const type = params.get('type');
-      if (type) {
+      if (type === 'sql-course') {
+        setSqlWizardStep('brief');
+      } else if (type) {
         const match = TEMPLATES.find(t => t.key === type);
         if (match) setFormConfig({ ...match.config });
       }
@@ -1128,15 +1136,8 @@ const [isSaving, setIsSaving] = useState(false);
     try {
       showToast('Checking SQL exercises...', 'info');
       const preflight = await preflightSQLExercises(questions, { requireComplete });
-      const errors = preflight.issues.filter(issue => issue.severity === 'error');
-      if (errors.length) {
-        showToast(`Cannot publish yet. ${formatSQLPreflightIssue(errors[0])}`, 'error');
-        return null;
-      }
-
-      const warnings = preflight.issues.filter(issue => issue.severity === 'warning');
-      if (warnings.length) {
-        showToast(formatSQLPreflightIssue(warnings[0]), 'info');
+      if (preflight.issues.length) {
+        showToast(`SQL warning: ${formatSQLPreflightIssue(preflight.issues[0])}`, 'info', { persistent: true });
       }
 
       if (preflight.computedCount) {
@@ -1149,8 +1150,8 @@ const [isSaving, setIsSaving] = useState(false);
       return config;
     } catch (err: any) {
       console.error('[sql-exercise] save-time preflight failed', err);
-      showToast(err?.message || 'Could not validate SQL exercises. Fix the data setup or solution query first.', 'error');
-      return requireComplete ? null : config;
+      showToast(err?.message || 'Could not validate SQL exercises before saving. Saving will continue, but review SQL expected results before assigning this course.', 'info', { persistent: true });
+      return config;
     }
   };
 
@@ -1305,6 +1306,101 @@ const [isSaving, setIsSaving] = useState(false);
       console.error('Failed to generate form:', error);
       showToast('Failed to generate. Please try again.');
     } finally { setIsGenerating(false); }
+  };
+
+  const handleGenerateSqlOutline = async () => {
+    if (!sqlBrief.title.trim()) { showToast('Please enter a course title.', 'error'); return; }
+    setAiLoadingLabel('Building your SQL course outline...');
+    setAiFailed(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/ai-course', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ action: 'generate_sql_course_outline', ...sqlBrief }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate outline.');
+      setSqlOutline(data);
+      setSqlBrief(prev => ({ ...prev, title: data.courseTitle || prev.title }));
+      setSqlWizardStep('outline');
+    } catch (err: any) {
+      setAiFailed(true);
+      showToast(err.message || 'Failed to generate outline. Please try again.', 'error');
+    } finally {
+      setAiLoadingLabel('');
+    }
+  };
+
+  const handleRegenerateSqlModule = async (modIdx: number) => {
+    if (!sqlOutline) return;
+    setSqlModuleLoading(modIdx);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/ai-course', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({
+          action: 'generate_sql_course_outline',
+          ...sqlBrief,
+          moduleIndex: modIdx,
+          existingOutline: sqlOutline,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to regenerate module.');
+      setSqlOutline((prev: any) => ({
+        ...prev,
+        modules: prev.modules.map((m: any, i: number) => i === modIdx ? data.module ?? m : m),
+      }));
+    } catch (err: any) {
+      showToast(err.message || 'Failed to regenerate module.', 'error');
+    } finally {
+      setSqlModuleLoading(null);
+    }
+  };
+
+  const handleGenerateSqlFullCourse = async () => {
+    if (!sqlOutline) return;
+    setAiLoadingLabel('Generating SQL exercises...');
+    setAiFailed(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/ai-course', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({
+          action: 'generate_sql_course_full',
+          outline: sqlOutline,
+          title: sqlBrief.title,
+          industry: sqlBrief.industry,
+          role: sqlBrief.role,
+          level: sqlBrief.level,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate course.');
+      setFormConfig({
+        title: data.title || sqlBrief.title,
+        description: data.description || '',
+        isCourse: true,
+        coverImage: '',
+        theme: 'forest',
+        mode: 'dark',
+        font: 'sans',
+        fields: [],
+        questions: data.questions || [],
+        learnOutcomes: data.learnOutcomes || [],
+      });
+      setSqlWizardStep(null);
+      // Keep sqlOutline so the user can return to it from the editor
+      showToast('SQL course generated! Review and publish when ready.', 'success');
+    } catch (err: any) {
+      setAiFailed(true);
+      showToast(err.message || 'Failed to generate course. Please try again.', 'error');
+    } finally {
+      setAiLoadingLabel('');
+    }
   };
 
   const handleSubmitForm = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1902,83 +1998,229 @@ const [isSaving, setIsSaving] = useState(false);
           )}
         </nav>
 
-        <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-20 max-w-3xl mx-auto w-full">
-          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="text-center space-y-5 mb-12">
-            <h1 className="text-3xl sm:text-5xl md:text-6xl font-semibold tracking-tight leading-[1.1]" style={{ color: C.text }}>
-              Build forms in<br /><span style={{ color: C.green, fontStyle: 'italic', fontFamily: 'Georgia, serif' }}>seconds</span>, not <span style={{ color: '#d97706', fontStyle: 'italic', fontFamily: 'Georgia, serif' }}>hours.</span>
-            </h1>
-            <p className="text-lg max-w-md mx-auto leading-relaxed" style={{ color: C.muted }}>
-              Describe what you need. We generate a polished, interactive form instantly.
-            </p>
-          </motion.div>
+        <div className={`relative z-10 flex-1 flex flex-col items-center ${sqlWizardStep ? 'justify-start pt-8 sm:pt-12' : 'justify-center py-20'} px-4 sm:px-6 ${sqlWizardStep === 'outline' ? 'max-w-5xl' : 'max-w-3xl'} mx-auto w-full`}>
 
-          <motion.form initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} onSubmit={handleGenerate} className="w-full">
-            <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}>
-              <div className="p-3 flex flex-col gap-3">
-                <textarea
-                  ref={promptRef}
-                  value={prompt}
-                  onChange={e => setPrompt(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate(e as any); } }}
-                  placeholder="e.g. A registration form for a 3-day music festival with t-shirt size and meal preference..."
-                  className="w-full border-none outline-none text-sm px-2 py-1 resize-none min-h-[72px] leading-relaxed bg-transparent"
-                  style={{ color: C.text }}
-                  disabled={isGenerating}
-                />
-                <div className="flex items-center justify-between">
-                  <span className="text-xs hidden sm:inline" style={{ color: C.faint }}>Enter to generate · Shift+Enter for new line</span>
-                  <button type="submit" disabled={isGenerating || !prompt.trim()} className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: C.cta, color: C.ctaText }}>
-                    {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</> : <><Sparkles className="w-4 h-4" /> Generate</>}
-                  </button>
+          {/* SQL Course Wizard -- Brief step */}
+          {sqlWizardStep === 'brief' && (
+            <motion.div key="sql-brief" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-xl mx-auto">
+              <button type="button" onClick={() => setSqlWizardStep(null)} className="flex items-center gap-1.5 text-sm mb-6 transition-opacity hover:opacity-60" style={{ color: C.muted }}>
+                <ArrowLeft className="w-4 h-4" /> Back
+              </button>
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#3b82f618' }}>
+                  <Database className="w-5 h-5" style={{ color: '#3b82f6' }} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold" style={{ color: C.text }}>SQL Course with AI</h2>
+                  <p className="text-sm" style={{ color: C.muted }}>Describe your course and we will generate a full outline for review.</p>
                 </div>
               </div>
-            </div>
-          </motion.form>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Course Title</label>
+                  <input type="text" value={sqlBrief.title} onChange={e => setSqlBrief(p => ({ ...p, title: e.target.value }))} placeholder="e.g. SQL for Financial Analysts" className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Industry</label>
+                    <select value={sqlBrief.industry} onChange={e => setSqlBrief(p => ({ ...p, industry: e.target.value }))} className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle}>
+                      {['Finance', 'Healthcare', 'Retail', 'Marketing', 'HR', 'EdTech', 'Logistics', 'Consulting'].map(ind => <option key={ind} value={ind}>{ind}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Skill Level</label>
+                    <select value={sqlBrief.level} onChange={e => setSqlBrief(p => ({ ...p, level: e.target.value }))} className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle}>
+                      {['Beginner', 'Intermediate', 'Advanced'].map(lv => <option key={lv} value={lv}>{lv}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Target Role</label>
+                  <input type="text" value={sqlBrief.role} onChange={e => setSqlBrief(p => ({ ...p, role: e.target.value }))} placeholder="e.g. Data Analyst, Business Intelligence Developer" className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Specific Focus <span style={{ color: C.faint }}>(optional)</span></label>
+                  <textarea value={sqlBrief.promptText} onChange={e => setSqlBrief(p => ({ ...p, promptText: e.target.value }))} placeholder="Any specific topics, datasets, or skills to focus on..." rows={3} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
+                </div>
+                <button type="button" onClick={handleGenerateSqlOutline} disabled={!!aiLoadingLabel || !sqlBrief.title.trim()} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: C.cta, color: C.ctaText }}>
+                  <Sparkles className="w-4 h-4" /> Generate Outline
+                </button>
+              </div>
+            </motion.div>
+          )}
 
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="flex flex-wrap gap-2 mt-5 justify-center">
-            {EXAMPLE_PROMPTS.map(ex => (
-              <button key={ex} type="button" onClick={() => { setPrompt(ex); promptRef.current?.focus(); }} className="px-3 py-1.5 rounded-full text-xs transition-all hover:opacity-70" style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
-                {ex}
-              </button>
-            ))}
-          </motion.div>
+          {/* SQL Course Wizard -- Outline review step */}
+          {sqlWizardStep === 'outline' && sqlOutline && (
+            <motion.div key="sql-outline" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full pb-12">
+              <div className="flex items-center justify-between mb-6">
+                <button type="button" onClick={() => setSqlWizardStep('brief')} className="flex items-center gap-1.5 text-sm transition-opacity hover:opacity-60" style={{ color: C.muted }}>
+                  <ArrowLeft className="w-4 h-4" /> Back
+                </button>
+                <div className="text-center">
+                  <h2 className="text-base font-semibold" style={{ color: C.text }}>Review Outline</h2>
+                  <p className="text-xs" style={{ color: C.faint }}>Edit inline, then generate the full course.</p>
+                </div>
+                <button type="button" onClick={handleGenerateSqlFullCourse} disabled={!!aiLoadingLabel} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: C.cta, color: C.ctaText }}>
+                  <Sparkles className="w-3.5 h-3.5" /> Generate Full Course
+                </button>
+              </div>
 
-          {/* Templates */}
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} className="w-full mt-10">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex-1 h-px" style={{ background: C.divider }} />
-              <span className="text-xs font-medium tracking-wider uppercase" style={{ color: C.faint }}>or start from a template</span>
-              <div className="flex-1 h-px" style={{ background: C.divider }} />
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {TEMPLATES.map((t, i) => {
-                const Icon = t.icon;
-                return (
-                  <motion.button
-                    key={t.key}
-                    type="button"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 + i * 0.07 }}
-                    onClick={() => handleSelectTemplate(t)}
-                    className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md"
-                    style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}
-                  >
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${t.color}18` }}>
-                      <Icon className="w-4.5 h-4.5" style={{ color: t.color, width: 18, height: 18 }} />
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                {/* Modules -- 2/3 width */}
+                <div className="lg:col-span-2 flex flex-col gap-3">
+                  {(sqlOutline.modules ?? []).map((mod: any, modIdx: number) => (
+                    <div key={mod.id || modIdx} className="rounded-xl p-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                      <div className="flex items-start gap-2 mb-1">
+                        <span className="text-xs font-bold mt-2 flex-shrink-0" style={{ color: C.faint }}>M{modIdx + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <input value={mod.title} onChange={e => setSqlOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, i: number) => i === modIdx ? { ...m, title: e.target.value } : m) }))} className="w-full text-sm font-semibold bg-transparent border-none outline-none py-1" style={{ color: C.text }} />
+                          <input value={mod.description} onChange={e => setSqlOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, i: number) => i === modIdx ? { ...m, description: e.target.value } : m) }))} className="w-full text-xs bg-transparent border-none outline-none pb-1" style={{ color: C.muted }} />
+                        </div>
+                        <button type="button" onClick={() => handleRegenerateSqlModule(modIdx)} disabled={sqlModuleLoading !== null} className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg flex-shrink-0 transition-opacity disabled:opacity-40" style={{ background: C.pill, color: C.muted }}>
+                          {sqlModuleLoading === modIdx ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                          Regenerate
+                        </button>
+                        <button type="button" onClick={() => setSqlOutline((prev: any) => ({ ...prev, modules: prev.modules.filter((_: any, i: number) => i !== modIdx) }))} className="flex-shrink-0 transition-opacity hover:opacity-70" title="Delete module" style={{ color: C.faint }}>
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex flex-col gap-1.5 mt-2 ml-5">
+                        {(mod.lessons ?? []).map((lesson: any, lessonIdx: number) => {
+                          const typeBg: Record<string, string> = { sql: '#3b82f6', mcq: '#475569', debug: '#d97706', completion: '#16a34a' };
+                          const col = typeBg[lesson.questionType] ?? '#475569';
+                          return (
+                            <div key={lesson.id || lessonIdx} className="flex items-center gap-2 group">
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex-shrink-0" style={{ background: col, color: '#fff' }}>{lesson.questionType}</span>
+                              <input value={lesson.title} onChange={e => setSqlOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, mi: number) => mi !== modIdx ? m : { ...m, lessons: m.lessons.map((l: any, li: number) => li === lessonIdx ? { ...l, title: e.target.value } : l) }) }))} className="flex-1 text-xs bg-transparent border-none outline-none" style={{ color: C.text }} />
+                              <select value={lesson.questionType} onChange={e => setSqlOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, mi: number) => mi !== modIdx ? m : { ...m, lessons: m.lessons.map((l: any, li: number) => li === lessonIdx ? { ...l, questionType: e.target.value } : l) }) }))} className="text-[10px] rounded px-1 py-0.5 flex-shrink-0" style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.text }}>
+                                {['sql', 'mcq', 'debug', 'completion'].map(qt => <option key={qt} value={qt}>{qt}</option>)}
+                              </select>
+                              <button type="button" onClick={() => setSqlOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, mi: number) => mi !== modIdx ? m : { ...m, lessons: m.lessons.filter((_: any, li: number) => li !== lessonIdx) }) }))} className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" style={{ color: C.faint }}>
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                        <button type="button" onClick={() => setSqlOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, mi: number) => mi !== modIdx ? m : { ...m, lessons: [...m.lessons, { id: Math.random().toString(36).slice(2, 9), title: 'New lesson', skillFocus: '', questionType: 'sql', questionSummary: '' }] }) }))} className="flex items-center gap-1 text-xs mt-1 transition-opacity hover:opacity-60" style={{ color: C.faint }}>
+                          <Plus className="w-3 h-3" /> Add lesson
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Shared Dataset -- 1/3 width */}
+                <div className="flex flex-col gap-3">
+                  <div className="rounded-xl p-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Database className="w-4 h-4" style={{ color: '#3b82f6' }} />
+                      <h3 className="text-sm font-semibold" style={{ color: C.text }}>Shared Dataset</h3>
+                    </div>
+                    <p className="text-xs mb-3" style={{ color: C.muted }}>{sqlOutline.sharedDataset?.description ?? ''}</p>
+                    <div className="flex flex-col gap-2">
+                      {(sqlOutline.sharedDataset?.tables ?? []).map((table: any, tableIdx: number) => (
+                        <div key={tableIdx} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+                          <div className="flex items-center gap-2 px-3 py-2">
+                            <div className="flex-1 min-w-0">
+                              <input value={table.tableName} onChange={e => setSqlOutline((prev: any) => ({ ...prev, sharedDataset: { ...prev.sharedDataset, tables: prev.sharedDataset.tables.map((t: any, i: number) => i === tableIdx ? { ...t, tableName: e.target.value } : t) } }))} className="text-xs font-mono font-semibold bg-transparent border-none outline-none w-full" style={{ color: C.text }} />
+                              <input value={table.description} onChange={e => setSqlOutline((prev: any) => ({ ...prev, sharedDataset: { ...prev.sharedDataset, tables: prev.sharedDataset.tables.map((t: any, i: number) => i === tableIdx ? { ...t, description: e.target.value } : t) } }))} className="text-[10px] bg-transparent border-none outline-none w-full mt-0.5" style={{ color: C.faint }} />
+                            </div>
+                            <button type="button" onClick={() => setSqlExpandedTables(prev => { const next = new Set(prev); next.has(tableIdx) ? next.delete(tableIdx) : next.add(tableIdx); return next; })} className="flex-shrink-0 transition-opacity hover:opacity-60" style={{ color: C.faint }}>
+                              {sqlExpandedTables.has(tableIdx) ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
+                            <button type="button" onClick={() => setSqlOutline((prev: any) => ({ ...prev, sharedDataset: { ...prev.sharedDataset, tables: prev.sharedDataset.tables.filter((_: any, i: number) => i !== tableIdx) } }))} className="flex-shrink-0 transition-opacity hover:opacity-60 ml-0.5" style={{ color: '#ef4444' }}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          {sqlExpandedTables.has(tableIdx) && (
+                            <textarea value={table.seedSql} onChange={e => setSqlOutline((prev: any) => ({ ...prev, sharedDataset: { ...prev.sharedDataset, tables: prev.sharedDataset.tables.map((t: any, i: number) => i === tableIdx ? { ...t, seedSql: e.target.value } : t) } }))} rows={8} className="w-full text-[11px] font-mono px-3 py-2 resize-none border-t outline-none" style={{ background: C.input, borderColor: C.cardBorder, color: C.text }} />
+                          )}
+                        </div>
+                      ))}
+                      <button type="button" onClick={() => setSqlOutline((prev: any) => ({ ...prev, sharedDataset: { ...prev.sharedDataset, tables: [...(prev.sharedDataset?.tables ?? []), { tableName: 'new_table', description: '', seedSql: 'CREATE TABLE new_table (\n  id INTEGER\n);\n' }] } }))} className="flex items-center gap-1 text-xs mt-1 transition-opacity hover:opacity-60" style={{ color: C.faint }}>
+                        <Plus className="w-3 h-3" /> Add table
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Normal landing page */}
+          {!sqlWizardStep && (
+            <>
+              <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="text-center space-y-5 mb-12">
+                <h1 className="text-3xl sm:text-5xl md:text-6xl font-semibold tracking-tight leading-[1.1]" style={{ color: C.text }}>
+                  Build forms in<br /><span style={{ color: C.green, fontStyle: 'italic', fontFamily: 'Georgia, serif' }}>seconds</span>, not <span style={{ color: '#d97706', fontStyle: 'italic', fontFamily: 'Georgia, serif' }}>hours.</span>
+                </h1>
+                <p className="text-lg max-w-md mx-auto leading-relaxed" style={{ color: C.muted }}>
+                  Describe what you need. We generate a polished, interactive form instantly.
+                </p>
+              </motion.div>
+
+              <motion.form initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} onSubmit={handleGenerate} className="w-full">
+                <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}>
+                  <div className="p-3 flex flex-col gap-3">
+                    <textarea ref={promptRef} value={prompt} onChange={e => setPrompt(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate(e as any); } }} placeholder="e.g. A registration form for a 3-day music festival with t-shirt size and meal preference..." className="w-full border-none outline-none text-sm px-2 py-1 resize-none min-h-[72px] leading-relaxed bg-transparent" style={{ color: C.text }} disabled={isGenerating} />
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs hidden sm:inline" style={{ color: C.faint }}>Enter to generate · Shift+Enter for new line</span>
+                      <button type="submit" disabled={isGenerating || !prompt.trim()} className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: C.cta, color: C.ctaText }}>
+                        {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</> : <><Sparkles className="w-4 h-4" /> Generate</>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </motion.form>
+
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="flex flex-wrap gap-2 mt-5 justify-center">
+                {EXAMPLE_PROMPTS.map(ex => (
+                  <button key={ex} type="button" onClick={() => { setPrompt(ex); promptRef.current?.focus(); }} className="px-3 py-1.5 rounded-full text-xs transition-all hover:opacity-70" style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+                    {ex}
+                  </button>
+                ))}
+              </motion.div>
+
+              {/* Templates */}
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} className="w-full mt-10">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex-1 h-px" style={{ background: C.divider }} />
+                  <span className="text-xs font-medium tracking-wider uppercase" style={{ color: C.faint }}>or start from a template</span>
+                  <div className="flex-1 h-px" style={{ background: C.divider }} />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {TEMPLATES.map((t, i) => {
+                    const Icon = t.icon;
+                    return (
+                      <motion.button key={t.key} type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 + i * 0.07 }} onClick={() => handleSelectTemplate(t)} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${t.color}18` }}>
+                          <Icon className="w-4.5 h-4.5" style={{ color: t.color, width: 18, height: 18 }} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold leading-tight" style={{ color: C.text }}>{t.label}</p>
+                          <p className="text-xs mt-0.5 leading-snug" style={{ color: C.faint }}>{t.description}</p>
+                        </div>
+                        <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>Use</span>
+                      </motion.button>
+                    );
+                  })}
+                  {/* SQL Course with AI */}
+                  <motion.button key="sql-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 + TEMPLATES.length * 0.07 }} onClick={() => setSqlWizardStep('brief')} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#3b82f618' }}>
+                      <Database className="w-4.5 h-4.5" style={{ color: '#3b82f6', width: 18, height: 18 }} />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold leading-tight" style={{ color: C.text }}>{t.label}</p>
-                      <p className="text-xs mt-0.5 leading-snug" style={{ color: C.faint }}>{t.description}</p>
+                      <p className="text-sm font-semibold leading-tight" style={{ color: C.text }}>SQL Course AI</p>
+                      <p className="text-xs mt-0.5 leading-snug" style={{ color: C.faint }}>Generate a full SQL course with exercises, schema, and solutions.</p>
                     </div>
-                    <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>
-                      Use
-                    </span>
+                    <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#3b82f618', color: '#3b82f6' }}>AI</span>
+                    <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>Use</span>
                   </motion.button>
-                );
-              })}
-            </div>
-          </motion.div>
+                </div>
+              </motion.div>
+            </>
+          )}
+
         </div>
         <GeneratingOverlay visible={isGenerating || !!aiLoadingLabel} label={aiLoadingLabel || (isGenerating ? 'Generating your form' : undefined)} failed={aiFailed} />
       </main>
@@ -2026,6 +2268,16 @@ const [isSaving, setIsSaving] = useState(false);
             {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
           <div className="flex items-center gap-2">
+            {sqlOutline && (
+              <button
+                type="button"
+                onClick={() => { setFormConfig(null); setSqlWizardStep('outline'); }}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-opacity hover:opacity-80"
+                style={{ background: '#3b82f618', color: '#3b82f6', border: '1px solid #3b82f630' }}
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> Edit Outline
+              </button>
+            )}
             {/* Draft status pill -- only shown when form is already saved as draft */}
             {savedFormId && formStatus === 'draft' && (
               <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: C.pill, color: C.muted }}>Draft</span>
@@ -4483,7 +4735,7 @@ const [isSaving, setIsSaving] = useState(false);
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.97 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-6 left-1/2 z-[200] -translate-x-1/2 max-w-sm w-[calc(100%-2rem)] rounded-2xl px-4 py-3.5 flex items-start gap-3 shadow-xl"
+            className="fixed bottom-6 left-1/2 z-[200] -translate-x-1/2 max-w-xl w-[calc(100%-2rem)] max-h-[45vh] overflow-auto rounded-2xl px-4 py-3.5 flex items-start gap-3 shadow-xl"
             style={{
               background: C.card,
               border: `1px solid ${toast.type === 'error' ? 'rgba(239,68,68,0.25)' : toast.type === 'success' ? 'rgba(16,185,129,0.25)' : C.cardBorder}`,
@@ -4494,7 +4746,7 @@ const [isSaving, setIsSaving] = useState(false);
               style={{ background: toast.type === 'error' ? '#ef4444' : toast.type === 'success' ? '#10b981' : '#3b82f6' }}
             />
             <p className="text-sm leading-snug flex-1" style={{ color: C.text }}>{toast.message}</p>
-            <button onClick={() => setToast(null)} className="flex-shrink-0 mt-0.5 hover:opacity-60 transition-opacity" style={{ color: C.faint }}>
+            <button onClick={() => { if (toastTimer.current) clearTimeout(toastTimer.current); setToast(null); }} className="flex-shrink-0 mt-0.5 hover:opacity-60 transition-opacity" style={{ color: C.faint }}>
               <X className="w-3.5 h-3.5" />
             </button>
           </motion.div>

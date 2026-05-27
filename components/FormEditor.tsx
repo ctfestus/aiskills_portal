@@ -644,12 +644,12 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const [bunnyLoading, setBunnyLoading] = useState(false);
   const [bunnySearch, setBunnySearch] = useState('');
   const [bunnyError, setBunnyError] = useState('');
-  const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' | 'info' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' | 'info'; persistent?: boolean } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showToast = (message: string, type: 'error' | 'success' | 'info' = 'error') => {
+  const showToast = (message: string, type: 'error' | 'success' | 'info' = 'error', options?: { persistent?: boolean }) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ message, type });
-    toastTimer.current = setTimeout(() => setToast(null), 5000);
+    setToast({ message, type, persistent: options?.persistent });
+    toastTimer.current = options?.persistent ? null : setTimeout(() => setToast(null), 5000);
   };
   const [busyQuestionId, setBusyQuestionId] = useState<string | null>(null);
   const [extractingRubric, setExtractingRubric] = useState<string | null>(null);
@@ -1040,10 +1040,8 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     try {
       showToast('Checking SQL exercises...', 'info');
       const preflight = await preflightSQLExercises(questions, { requireComplete: true });
-      const errors = preflight.issues.filter(issue => issue.severity === 'error');
-      if (errors.length) {
-        showToast(`Cannot save yet. ${formatSQLPreflightIssue(errors[0])}`, 'error');
-        return null;
+      if (preflight.issues.length) {
+        showToast(`SQL warning: ${formatSQLPreflightIssue(preflight.issues[0])}`, 'info', { persistent: true });
       }
 
       if (preflight.computedCount) {
@@ -1056,8 +1054,8 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
       return config;
     } catch (err: any) {
       console.error('[sql-exercise] save-time preflight failed', err);
-      showToast(err?.message || 'Could not validate SQL exercises. Fix the data setup or solution query first.', 'error');
-      return null;
+      showToast(err?.message || 'Could not validate SQL exercises before saving. Saving will continue, but review SQL expected results before assigning this course.', 'info', { persistent: true });
+      return config;
     }
   };
 
@@ -4107,7 +4105,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.97 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-6 left-1/2 z-[200] -translate-x-1/2 max-w-sm w-[calc(100%-2rem)] rounded-2xl px-4 py-3.5 flex items-start gap-3"
+            className="fixed bottom-6 left-1/2 z-[200] -translate-x-1/2 max-w-xl w-[calc(100%-2rem)] max-h-[45vh] overflow-auto rounded-2xl px-4 py-3.5 flex items-start gap-3"
             style={{
               background: FE.card,
               border: `1px solid ${toast.type === 'error' ? 'rgba(239,68,68,0.25)' : toast.type === 'success' ? 'rgba(16,185,129,0.25)' : FE.cardBorder}`,
@@ -4118,7 +4116,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
               style={{ background: toast.type === 'error' ? '#ef4444' : toast.type === 'success' ? '#10b981' : '#3b82f6' }}
             />
             <p className="text-sm leading-snug flex-1" style={{ color: FE.text }}>{toast.message}</p>
-            <button onClick={() => setToast(null)} className="flex-shrink-0 mt-0.5 hover:opacity-60 transition-opacity" style={{ color: FE.faint }}>
+            <button onClick={() => { if (toastTimer.current) clearTimeout(toastTimer.current); setToast(null); }} className="flex-shrink-0 mt-0.5 hover:opacity-60 transition-opacity" style={{ color: FE.faint }}>
               <X className="w-3.5 h-3.5" />
             </button>
           </motion.div>

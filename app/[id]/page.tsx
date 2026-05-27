@@ -411,13 +411,16 @@ export default function PublicFormPage() {
         data = { ...course, content_type: 'course', config: {
           title: course.title, description: course.description,
           isCourse: true, questions: stripSqlSolutions(course.questions ?? []), fields: course.fields ?? [],
-          passmark: course.passmark, course_timer: course.course_timer,
+          passmark: course.passmark, courseTimer: course.course_timer,
           learnOutcomes: course.learn_outcomes, points_enabled: course.points_enabled,
           points_base: course.points_base,
           pointsSystem: { enabled: course.points_enabled ?? false, basePoints: course.points_base ?? 100 },
           postSubmission: course.post_submission,
           coverImage: course.cover_image, deadline_days: course.deadline_days,
           theme: course.theme, mode: course.mode, font: course.font, customAccent: course.custom_accent,
+          lessonTiming: course.lesson_timing ?? undefined,
+          showAnswers:  course.show_answers  ?? 'per_question',
+          maxAttempts:  course.max_attempts  ?? 0,
         }};
       } else if (event) {
         data = { ...event, content_type: 'event', config: {

@@ -191,11 +191,12 @@ async function exportAllAssignments(assignments: any[], label: string) {
   downloadJSON({ exportVersion: 1, bulkExport: true, exportedAt: new Date().toISOString(), items }, label);
 }
 
-type BulkSummary = { created: number; updated: number; failed: number };
+type BulkSummary = { created: number; updated: number; failed: number; warnings: number };
 type ImportState =
   | { status: 'idle' }
   | { status: 'importing'; current: number; total: number }
   | { status: 'done'; summary: BulkSummary }
+  | { status: 'warning'; message: string }
   | { status: 'error'; message: string };
 
 function ImportButton({ types, onImported, onBulkDone, C }: {
@@ -232,13 +233,18 @@ function ImportButton({ types, onImported, onBulkDone, C }: {
         const items: any[] = payload.items ?? [];
         const invalid = items.filter(it => !types.includes(it.type));
         if (invalid.length) throw new Error(`Bulk file contains "${invalid[0].type}" which is not allowed here.`);
-        const summary: BulkSummary = { created: 0, updated: 0, failed: 0 };
+        const summary: BulkSummary = { created: 0, updated: 0, failed: 0, warnings: 0 };
         setState({ status: 'importing', current: 0, total: items.length });
         for (let i = 0; i < items.length; i++) {
           setState({ status: 'importing', current: i + 1, total: items.length });
           try {
             const result = await postItem(items[i], token);
-            if (result.error) { summary.failed++; } else if (result.action === 'updated') { summary.updated++; } else { summary.created++; }
+            if (result.error) {
+              summary.failed++;
+            } else {
+              if (Array.isArray(result.sqlWarnings) && result.sqlWarnings.length) summary.warnings += result.sqlWarnings.length;
+              if (result.action === 'updated') { summary.updated++; } else { summary.created++; }
+            }
           } catch { summary.failed++; }
         }
         setState({ status: 'done', summary });
@@ -251,9 +257,14 @@ function ImportButton({ types, onImported, onBulkDone, C }: {
           body: JSON.stringify(payload),
         });
         const result = await res.json();
-        if (result.error) throw new Error(result.error);
-        setState({ status: 'idle' });
+        if (result.error) {
+          const issueText = Array.isArray(result.issues) && result.issues.length ? ` ${result.issues[0]}` : '';
+          throw new Error(`${result.error}${issueText}`);
+        }
+        const warning = Array.isArray(result.sqlWarnings) && result.sqlWarnings.length ? result.sqlWarnings[0] : '';
+        setState(warning ? { status: 'warning', message: `Imported with SQL warning: ${warning}` } : { status: 'idle' });
         onImported(result);
+        if (warning) setTimeout(() => setState({ status: 'idle' }), 5000);
       }
     } catch (err: any) {
       setState({ status: 'error', message: err.message || 'Import failed.' });
@@ -266,7 +277,7 @@ function ImportButton({ types, onImported, onBulkDone, C }: {
   const label = state.status === 'importing'
     ? `${state.current}/${state.total}`
     : state.status === 'done'
-    ? `+${state.summary.created} ~${state.summary.updated} x${state.summary.failed}`
+    ? `+${state.summary.created} ~${state.summary.updated} !${state.summary.warnings} x${state.summary.failed}`
     : 'Import';
 
   return (
@@ -274,12 +285,14 @@ function ImportButton({ types, onImported, onBulkDone, C }: {
       <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFile} />
       <button onClick={() => { setState({ status: 'idle' }); fileRef.current?.click(); }} disabled={busy}
         className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
-        style={{ background: C.card, color: state.status === 'done' ? C.green : C.muted }}>
+        style={{ background: C.card, color: state.status === 'done' ? C.green : state.status === 'warning' ? '#f59e0b' : C.muted }}>
         <Upload className="w-3.5 h-3.5" /> {label}
       </button>
-      {state.status === 'error' && (
+      {(state.status === 'error' || state.status === 'warning') && (
         <p className="absolute top-full left-0 mt-1 text-xs px-2.5 py-1.5 rounded-xl z-10 whitespace-nowrap"
-          style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}` }}>
+          style={state.status === 'error'
+            ? { background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}` }
+            : { background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.30)' }}>
           {state.message}
         </p>
       )}
@@ -9538,10 +9551,18 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
         </div>
         <h2 className="text-base font-semibold mb-1" style={{ color: C.text }}>No {label}s yet</h2>
         <p className="text-sm mb-5" style={{ color: C.faint }}>Create your first {label} to get started.</p>
-        <Link href={href} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
-          style={{ background: C.cta, color: C.ctaText }}>
-          <Plus className="w-4 h-4"/> New {label}
-        </Link>
+        <div className="flex items-center justify-center gap-3 flex-wrap">
+          {section === 'courses' && (
+            <Link href="/create?type=sql-course" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+              style={{ background: '#3b82f618', color: '#3b82f6', border: '1px solid #3b82f630' }}>
+              <Database className="w-4 h-4"/> SQL Course AI
+            </Link>
+          )}
+          <Link href={href} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+            style={{ background: C.cta, color: C.ctaText }}>
+            <Plus className="w-4 h-4"/> New {label}
+          </Link>
+        </div>
       </div>
     );
   }
@@ -10004,6 +10025,14 @@ export default function DashboardPage() {
                       onImported={r => router.push(`/dashboard/${r.id}`)}
                       onBulkDone={() => window.location.reload()}
                     />
+                  )}
+                  {activeSection === 'courses' && (
+                    <Link
+                      href="/create?type=sql-course"
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+                      style={{ background: '#3b82f618', color: '#3b82f6', border: '1px solid #3b82f630' }}>
+                      <Database className="w-4 h-4"/> SQL Course AI
+                    </Link>
                   )}
                   <Link
                     href={activeSection === 'courses' ? '/create?type=course' : '/create?type=event'}

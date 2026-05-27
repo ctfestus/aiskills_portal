@@ -333,6 +333,18 @@ export function CourseTaker({
   }, [questions, currentQuestionIndex]);
   const totalSections = useMemo(() => questions.filter((q: any) => q.isSection).length, [questions]);
 
+  // True when the current SQL exercise is the first task using this lesson title
+  const isFirstTaskForLesson = useMemo(() => {
+    if ((currentQuestion as any)?.type !== 'sql_exercise') return true;
+    const lessonTitle = (currentQuestion as any)?.lesson?.title;
+    if (!lessonTitle) return true;
+    for (let i = 0; i < currentQuestionIndex; i++) {
+      const q = questions[i] as any;
+      if (q.type === 'sql_exercise' && q.lesson?.title === lessonTitle) return false;
+    }
+    return true;
+  }, [questions, currentQuestionIndex, currentQuestion]);
+
   // Group questions into sections for the chapters drawer
   const chapters = useMemo(() => {
     const groups: { sectionTitle: string; sectionIdx: number | null; slides: { q: CourseQuestion; idx: number }[] }[] = [];
@@ -2695,7 +2707,8 @@ export function CourseTaker({
             )}
 
             {/* Mobile open button -- tab anchored to left edge of content when sidebar is closed */}
-            {!sidebarOpen && (
+            {/* Hidden during SQL exercises: the player provides its own Lesson tab */}
+            {!sidebarOpen && questionType !== 'sql_exercise' && (
               <div className="absolute top-4 left-0 z-50 sm:hidden group">
                 <button
                   onClick={() => setSidebarOpen(true)}
@@ -2960,6 +2973,7 @@ export function CourseTaker({
               }}
               onNext={handleNext}
               isLastQuestion={currentQuestionIndex >= totalSlides - 1}
+              isFirstTaskForLesson={isFirstTaskForLesson}
             />
           )}
 

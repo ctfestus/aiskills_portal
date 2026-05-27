@@ -139,6 +139,10 @@ CREATE TABLE public.courses (
   post_submission jsonb,
   category        text,
   badge_image_url text,
+  lesson_timing   text        CHECK (lesson_timing IN ('before', 'after')),
+  show_answers    text        NOT NULL DEFAULT 'per_question'
+                              CHECK (show_answers IN ('per_question', 'after_quiz', 'none')),
+  max_attempts    integer     CHECK (max_attempts IS NULL OR max_attempts > 0),
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );

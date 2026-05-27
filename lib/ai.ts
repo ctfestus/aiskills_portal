@@ -20,27 +20,63 @@ function openaiClient() {
 const safeJSON = (text: string) =>
   JSON.parse(text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim());
 
+function isRetryableGeminiError(err: unknown) {
+  const error = err as { message?: string; cause?: { code?: string; errno?: number; message?: string } };
+  const message = String(error?.message ?? '').toLowerCase();
+  const causeMessage = String(error?.cause?.message ?? '').toLowerCase();
+  const code = String(error?.cause?.code ?? '');
+  return (
+    message.includes('fetch failed') ||
+    message.includes('econnreset') ||
+    causeMessage.includes('econnreset') ||
+    code === 'ECONNRESET'
+  );
+}
+
+async function generateGeminiJSON(
+  prompt: string,
+  geminiSchema?: any,
+  opts: { temperature?: number; geminiRetries?: number } = {},
+) {
+  const retries = Math.max(0, opts.geminiRetries ?? 1);
+  const config: any = { responseMimeType: 'application/json' };
+  if (geminiSchema) config.responseSchema = geminiSchema;
+  if (opts.temperature !== undefined) config.temperature = opts.temperature;
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const result = await geminiClient().models.generateContent({
+        model: GEMINI_MODEL,
+        contents: prompt,
+        config,
+      });
+      return safeJSON(result.text ?? '{}');
+    } catch (err) {
+      lastError = err;
+      if (attempt >= retries || !isRetryableGeminiError(err)) throw err;
+      await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+    }
+  }
+
+  throw lastError;
+}
+
 // ---- 1. Text JSON (primary: Gemini, fallback: OpenAI) ----
 export async function generateJSON(
   prompt: string,
   geminiSchema?: any,
-  opts: { temperature?: number } = {},
+  opts: { temperature?: number; geminiRetries?: number } = {},
 ): Promise<any> {
   try {
-    const config: any = { responseMimeType: 'application/json' };
-    if (geminiSchema) config.responseSchema = geminiSchema;
-    if (opts.temperature !== undefined) config.temperature = opts.temperature;
-
-    const result = await geminiClient().models.generateContent({
-      model: GEMINI_MODEL,
-      contents: prompt,
-      config,
-    });
-    return safeJSON(result.text ?? '{}');
+    return await generateGeminiJSON(prompt, geminiSchema, opts);
   } catch (err) {
-    console.warn('[AI] Gemini failed, falling back to OpenAI:', (err as Error).message);
     const client = openaiClient();
-    if (!client) throw err;
+    if (!client) {
+      console.warn('[AI] Gemini failed and no OpenAI fallback is configured:', (err as Error).message);
+      throw err;
+    }
+    console.warn('[AI] Gemini failed, falling back to OpenAI:', (err as Error).message);
     const res = await client.chat.completions.create({
       model: OPENAI_MODEL,
       response_format: { type: 'json_object' },

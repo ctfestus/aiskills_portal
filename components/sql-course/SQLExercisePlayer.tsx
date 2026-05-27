@@ -31,6 +31,7 @@ import {
   STUDENT_RESULT_LIMIT,
 } from '@/lib/sql-engine';
 import { sanitizeRichText } from '@/lib/sanitize';
+import { safeEmbedUrl } from '@/lib/safe-embed-url';
 
 const vscDarkHighlight = syntaxHighlighting(HighlightStyle.define([
   { tag: tags.keyword,             color: '#569cd6', fontWeight: '600' },
@@ -77,6 +78,7 @@ interface Props {
   onNext?: () => void;
   isLastQuestion?: boolean;
   solutionPenalty?: number;
+  isFirstTaskForLesson?: boolean;
 }
 
 type DetailModal =
@@ -355,6 +357,7 @@ export default function SQLExercisePlayer({
   hintPenalty,
   solutionPenalty,
   onComplete, onHintUsed, onRevealSolution, onNext, isLastQuestion,
+  isFirstTaskForLesson = true,
 }: Props) {
   const saved = useMemo(() => parseSaved(savedAnswer), [savedAnswer]);
   const firstTableName = runtime?.tables?.[0]?.tableName ?? '';
@@ -477,7 +480,7 @@ export default function SQLExercisePlayer({
   const displayedRowCount = Math.min(rowCount, 100);
   const totalRowCount = visibleResult?.totalRows ?? rowCount;
   const busy       = running || checking;
-  const lesson     = question.lesson as { title?: string; body?: string } | undefined;
+  const lesson     = question.lesson as { title?: string; body?: string; imageUrl?: string; videoUrl?: string } | undefined;
 
   useEffect(() => {
     if (saved?.query || !firstTableName) return;
@@ -681,7 +684,7 @@ export default function SQLExercisePlayer({
             className="flex-shrink-0 flex items-stretch border-b"
             style={{ height: 44, background: stripBg, borderColor: border }}
           >
-            {(lesson?.title || lesson?.body || question.question) && (
+            {(lesson?.title || lesson?.body || lesson?.videoUrl || lesson?.imageUrl || question.question) && (
               <button
                 type="button"
                 onClick={() => setMobileTab('lesson')}
@@ -760,10 +763,25 @@ export default function SQLExercisePlayer({
             {/* Lesson tab */}
             {leftTab === 'lesson' && (
             <div className="flex-1 min-h-0 overflow-y-auto px-5 py-5">
-              {lesson?.title && (
+              {isFirstTaskForLesson && lesson?.title && (
                 <h2 className="text-[18px] font-bold leading-snug mb-3" style={{ color: text }}>
                   {lesson.title}
                 </h2>
+              )}
+              {lesson?.videoUrl && safeEmbedUrl(lesson.videoUrl) && (
+                <div className="mb-4 rounded-lg overflow-hidden" style={{ aspectRatio: '16/9', border: `1px solid ${border}` }}>
+                  <iframe
+                    src={safeEmbedUrl(lesson.videoUrl)!}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              )}
+              {lesson?.imageUrl && (
+                <div className="mb-4 rounded-lg overflow-hidden" style={{ border: `1px solid ${border}` }}>
+                  <img src={lesson.imageUrl} alt="" className="w-full object-cover" />
+                </div>
               )}
               {lesson?.body && (
                 <div
@@ -784,7 +802,7 @@ export default function SQLExercisePlayer({
               {/* Task / question instructions */}
               {question.question && (
                 <>
-                  {(lesson?.body || lesson?.title) && (
+                  {(lesson?.body || (isFirstTaskForLesson && lesson?.title)) && (
                     <hr className="my-4" style={{ borderColor: border }} />
                   )}
                   <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>

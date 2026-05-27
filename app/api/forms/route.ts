@@ -141,6 +141,9 @@ export async function POST(req: NextRequest) {
           points_base:    config.pointsSystem?.basePoints ?? config.pointsBase      ?? 50,
           post_submission: config.postSubmission ?? null,
           category:       config.category        ?? null,
+          lesson_timing:  config.lessonTiming    ?? null,
+          show_answers:   config.showAnswers      ?? 'per_question',
+          max_attempts:   config.maxAttempts      ?? null,
         })
         .select('id, slug, status')
         .single());
@@ -274,6 +277,9 @@ export async function PUT(req: NextRequest) {
       points_base:    config.pointsSystem?.basePoints ?? config.pointsBase      ?? 50,
       post_submission: config.postSubmission ?? null,
       category:       config.category        ?? null,
+      lesson_timing:  config.lessonTiming    ?? null,
+      show_answers:   config.showAnswers      ?? 'per_question',
+      max_attempts:   config.maxAttempts      ?? null,
     };
   } else if (found.table === 'events') {
     updatePayload = {

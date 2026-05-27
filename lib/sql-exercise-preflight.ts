@@ -34,7 +34,8 @@ export interface SQLPreflightResult<T extends SQLExerciseQuestion> {
 }
 
 function questionLabel(question: SQLExerciseQuestion, index: number) {
-  return question.id || question.question?.slice(0, 70) || `SQL exercise ${index + 1}`;
+  const preview = question.question?.replace(/\s+/g, ' ').trim().slice(0, 80);
+  return `Q${index + 1}${preview ? `: ${preview}` : ''}`;
 }
 
 function sameResult(actual: SQLResult, expected: SQLResult, question: SQLExerciseQuestion): SQLCompareResult {
@@ -86,30 +87,70 @@ function hasLimit(sql: string) {
   return /\blimit\s+\d+\b/i.test(sql);
 }
 
-function hasOrderBy(sql: string) {
-  return /\border\s+by\b/i.test(sql);
+function getLimitValue(sql: string): number | null {
+  const match = sql.match(/\blimit\s+(\d+)\b/i);
+  if (!match) return null;
+  const limit = Number(match[1]);
+  return Number.isFinite(limit) && limit > 0 ? limit : null;
 }
 
-function hasLikelyTieBreaker(expressions: string[]) {
-  if (expressions.length >= 2) return true;
-  const onlyExpression = expressions[0]?.toLowerCase() ?? '';
-  return /\b(id|_id|uuid|key)\b/.test(onlyExpression);
+function withoutLimit(sql: string) {
+  return sql.replace(/\blimit\s+\d+\b/i, '').replace(/;\s*$/, '');
 }
 
-function ambiguityIssue(question: SQLExerciseQuestion, index: number): SQLPreflightIssue | null {
+function orderExpressionColumn(expression: string) {
+  const cleaned = expression
+    .replace(/\s+(asc|desc)\b/ig, '')
+    .replace(/\s+nulls\s+(first|last)\b/ig, '')
+    .trim();
+  const match = cleaned.match(/^(?:"?([a-z_][a-z0-9_]*)"?\.)?"?([a-z_][a-z0-9_]*)"?$/i);
+  return match?.[2] ?? null;
+}
+
+function valuesTie(a: unknown, b: unknown) {
+  if (a == null || b == null) return a == null && b == null;
+  if (Number.isFinite(Number(a)) && Number.isFinite(Number(b))) return Number(a) === Number(b);
+  return String(a).trim() === String(b).trim();
+}
+
+function addSecondarySort(sql: string, tiebreakerColumn: string): string {
+  // Inject ", tiebreakerColumn ASC" immediately before the LIMIT clause
+  return sql.replace(/(\blimit\s+\d+\b)/i, `, ${tiebreakerColumn} ASC $1`);
+}
+
+// Returns the fixed SQL with a secondary sort injected, or null if no fix is needed.
+async function autoFixTieOrder(question: SQLExerciseQuestion, conn: any): Promise<string | null> {
   const sql = question.sqlSolution ?? '';
-  if (!hasLimit(sql) || !hasOrderBy(sql)) return null;
+  const limit = getLimitValue(sql);
+  if (!limit || !/\border\s+by\b/i.test(sql)) return null;
 
   const expressions = getOrderByExpressions(sql);
-  if (hasLikelyTieBreaker(expressions)) return null;
+  if (expressions.length !== 1) return null; // already has a compound sort key
 
-  return {
-    questionId: question.id || `sql-${index + 1}`,
-    questionLabel: questionLabel(question, index),
-    severity: 'error',
-    message: 'The solution uses LIMIT after ORDER BY without a clear tie-breaker, so tied rows near the cutoff can be graded unpredictably.',
-    suggestion: 'Add a stable secondary sort such as an id column, for example ORDER BY metric DESC, id ASC, then recompute the expected result.',
-  };
+  const orderColumn = orderExpressionColumn(expressions[0]);
+  if (!orderColumn) return null;
+
+  try {
+    const fullResult = await executeQuery(conn, withoutLimit(sql), false, { limit: null });
+    if (fullResult.rows.length <= limit) return null;
+
+    const columnIndex = fullResult.columns.findIndex(c => c.toLowerCase() === orderColumn.toLowerCase());
+    if (columnIndex < 0) return null;
+
+    const cutoffRow = fullResult.rows[limit - 1];
+    const nextRow   = fullResult.rows[limit];
+    if (!valuesTie(cutoffRow?.[columnIndex], nextRow?.[columnIndex])) return null;
+
+    // Pick the best tiebreaker: prefer *_id / id columns, must differ from the sort column
+    const tiebreaker =
+      fullResult.columns.find(c => /^(id|.*_id)$/i.test(c) && c.toLowerCase() !== orderColumn.toLowerCase()) ??
+      fullResult.columns.find(c => c.toLowerCase() !== orderColumn.toLowerCase());
+    if (!tiebreaker) return null;
+
+    return addSecondarySort(sql, tiebreaker);
+  } catch {
+    return null;
+  }
 }
 
 export async function preflightSQLExercises<T extends SQLExerciseQuestion>(
@@ -142,15 +183,12 @@ export async function preflightSQLExercises<T extends SQLExerciseQuestion>(
         issues.push({
           questionId: question.id || `sql-${i + 1}`,
           questionLabel: label,
-          severity: options.requireComplete ? 'error' : 'warning',
+          severity: 'warning',
           message: 'This SQL exercise has no solution query, so the platform cannot validate student answers.',
           suggestion: 'Add a solution query and compute the expected result before publishing.',
         });
         continue;
       }
-
-      const ambiguous = ambiguityIssue(question, i);
-      if (ambiguous) issues.push(ambiguous);
 
       let recomputed: SQLResult;
       try {
@@ -159,11 +197,25 @@ export async function preflightSQLExercises<T extends SQLExerciseQuestion>(
         issues.push({
           questionId: question.id || `sql-${i + 1}`,
           questionLabel: label,
-          severity: 'error',
+          severity: 'warning',
           message: `The solution query could not run: ${err?.message || 'unknown SQL error'}`,
           suggestion: 'Fix the solution query or dataset setup, then compute the expected result again.',
         });
         continue;
+      }
+
+      // Auto-fix tie-breaking: if the ORDER BY cutoff row ties with the next row,
+      // inject a secondary sort (a unique/id column) and recompute silently.
+      const fixedSql = await autoFixTieOrder(question, runtime.conn);
+      if (fixedSql) {
+        try {
+          recomputed = await executeQuery(runtime.conn, fixedSql, false, { limit: null });
+          updatedQuestions[i] = { ...question, sqlSolution: fixedSql, sqlExpectedResult: recomputed };
+          computedCount += 1;
+          continue;
+        } catch {
+          // Fixed SQL failed for some reason; fall through to normal handling
+        }
       }
 
       if (!question.sqlExpectedResult) {
@@ -177,7 +229,7 @@ export async function preflightSQLExercises<T extends SQLExerciseQuestion>(
         issues.push({
           questionId: question.id || `sql-${i + 1}`,
           questionLabel: label,
-          severity: options.requireComplete ? 'error' : 'warning',
+          severity: 'warning',
           message: `The saved expected result is stale or inconsistent: ${comparison.message}`,
           suggestion: `Recompute the expected result from the current solution query. Current solution returns ${recomputed.rows.length} row${recomputed.rows.length === 1 ? '' : 's'}.`,
         });
