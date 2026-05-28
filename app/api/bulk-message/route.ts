@@ -104,8 +104,10 @@ export async function POST(req: NextRequest) {
     if (!existing) { attemptMap.set(key, { completed: !!a.completed_at, passed: !!a.passed, lastActive: a.updated_at ?? null }); continue; }
     if (a.passed && a.completed_at && !existing.completed) { attemptMap.set(key, { completed: true, passed: true, lastActive: a.updated_at ?? null }); continue; }
     if (existing.passed && existing.completed && !a.completed_at) continue;
+    if (!a.completed_at && existing.completed && !existing.passed) { attemptMap.set(key, { completed: false, passed: false, lastActive: a.updated_at ?? null }); continue; }
+    if (a.completed_at && !a.passed && !existing.completed) continue;
     const isNewer = a.updated_at && (!existing.lastActive || a.updated_at > existing.lastActive);
-    if (isNewer && !existing.completed) attemptMap.set(key, { completed: !!a.completed_at, passed: !!a.passed, lastActive: a.updated_at ?? null });
+    if (isNewer && (!existing.completed || (a.completed_at && !a.passed))) attemptMap.set(key, { completed: !!a.completed_at, passed: !!a.passed, lastActive: a.updated_at ?? null });
   }
   for (const a of gpAttempts ?? []) {
     const key = `${a.student_id}|${a.ve_id}`;
@@ -131,7 +133,7 @@ export async function POST(req: NextRequest) {
       if (!attempt) {
         status = 'not_started';
       } else if (attempt.completed) {
-        status = 'completed';
+        status = attempt.passed ? 'completed' : 'failed';
       } else {
         const days = daysSince(attempt.lastActive);
         status = days !== null && days >= STALL_DAYS ? 'stalled' : 'in_progress';

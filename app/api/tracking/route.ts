@@ -131,9 +131,12 @@ export async function GET(req: NextRequest) {
     const key = `${a.student_id}|${a.course_id}`;
     const existing = courseAttemptMap.get(key);
     if (!existing) { courseAttemptMap.set(key, a); continue; }
-    // Passed+completed always wins over in-progress
+    // Passed+completed always wins over in-progress.
     if (a.passed && a.completed_at && !existing.completed_at) { courseAttemptMap.set(key, a); continue; }
     if (existing.passed && existing.completed_at && !a.completed_at) continue;
+    // A current retake should beat an older completed-but-failed attempt.
+    if (!a.completed_at && existing.completed_at && !existing.passed) { courseAttemptMap.set(key, a); continue; }
+    if (a.completed_at && !a.passed && !existing.completed_at) continue;
     // Among completed, prefer higher score
     if (a.completed_at && existing.completed_at && (a.score ?? 0) > (existing.score ?? 0)) { courseAttemptMap.set(key, a); continue; }
     // Among in-progress, prefer most recently updated
@@ -190,7 +193,7 @@ export async function GET(req: NextRequest) {
     for (const student of itemStudents) {
       const key = `${student.id}|${item.id}`;
 
-      let status: 'not_started' | 'in_progress' | 'stalled' | 'completed' = 'not_started';
+      let status: 'not_started' | 'in_progress' | 'stalled' | 'completed' | 'failed' = 'not_started';
       let progressPct = 0;
       let lastActive: string | null = null;
       let score: number | null = null;
@@ -233,7 +236,7 @@ export async function GET(req: NextRequest) {
         if (!attempt) {
           status = 'not_started';
         } else if (attempt.completed_at) {
-          status = 'completed';
+          status = attempt.passed === false ? 'failed' : 'completed';
           progressPct = 100;
           lastActive = attempt.updated_at ?? attempt.completed_at;
           score  = attempt.score ?? null;
@@ -269,7 +272,7 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      const isAtRisk = status !== 'completed' && daysUntilDeadline !== null && daysUntilDeadline <= 3;
+      const isAtRisk = status === 'failed' || (status !== 'completed' && daysUntilDeadline !== null && daysUntilDeadline <= 3);
 
       rows.push({
         studentEmail:      student.email,

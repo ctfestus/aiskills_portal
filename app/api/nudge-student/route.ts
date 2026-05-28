@@ -35,8 +35,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  if (!['not_started', 'stalled', 'in_progress'].includes(status)) {
-    return NextResponse.json({ error: 'status must be not_started, stalled, or in_progress' }, { status: 400 });
+  if (!['not_started', 'stalled', 'in_progress', 'failed'].includes(status)) {
+    return NextResponse.json({ error: 'status must be not_started, stalled, in_progress, or failed' }, { status: 400 });
   }
 
   // Look up content across courses, events, virtual_experiences, and assignments
@@ -75,6 +75,8 @@ export async function POST(req: NextRequest) {
     ? `Your learning journey is waiting, ${studentName || 'there'}!`
     : status === 'in_progress'
     ? `Keep going, ${studentName || 'there'}! You are almost there.`
+    : status === 'failed'
+    ? `You can still pass this, ${studentName || 'there'}!`
     : `Do not stop now. You started something great, ${studentName || 'there'}!`;
 
   const html = nudgeEmail({

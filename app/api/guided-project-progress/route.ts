@@ -353,7 +353,7 @@ export async function POST(req: NextRequest) {
   }
 
   // -- Student progress save --
-  const { veId, formId, studentName, progress, currentModuleId, currentLessonId } = body;
+  const { veId, formId, assignmentId, studentName, progress, currentModuleId, currentLessonId } = body;
   // completedAt is intentionally excluded - completion is always computed server-side
   const resolvedVeId = veId ?? formId; // formId kept for backward compat
 
@@ -389,7 +389,32 @@ export async function POST(req: NextRequest) {
     hasLpAccess = !!lpRow;
   }
 
-  if (!hasDirectAccess && !hasLpAccess) {
+  let hasAssignmentAccess = false;
+  if (!hasDirectAccess && !hasLpAccess && assignmentId) {
+    const { data: asgn } = await supabase
+      .from('assignments')
+      .select('status, config, cohort_ids, group_ids')
+      .eq('id', assignmentId)
+      .maybeSingle();
+    if (asgn?.status === 'published' && asgn.config?.ve_form_id === resolvedVeId) {
+      const cohortIds: string[] = Array.isArray(asgn.cohort_ids) ? asgn.cohort_ids : [];
+      const groupIds: string[]  = Array.isArray(asgn.group_ids)  ? asgn.group_ids  : [];
+      if (progressStudentRow?.cohort_id && cohortIds.includes(progressStudentRow.cohort_id)) {
+        hasAssignmentAccess = true;
+      } else if (groupIds.length > 0) {
+        const { data: membership } = await supabase
+          .from('group_members')
+          .select('group_id')
+          .eq('student_id', progressUser.id)
+          .in('group_id', groupIds)
+          .limit(1)
+          .maybeSingle();
+        hasAssignmentAccess = !!membership;
+      }
+    }
+  }
+
+  if (!hasDirectAccess && !hasLpAccess && !hasAssignmentAccess) {
     return NextResponse.json({ error: 'Access denied' }, { status: 403 });
   }
 

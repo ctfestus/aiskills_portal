@@ -181,21 +181,38 @@ function ResponsesTab({
 
   if (isCourse) {
     const questions = form.config?.questions || [];
-    const attempts = totalCount;
-    const scores = responses.map((r: any) => r.data?.score ?? 0);
-    const totals = responses.map((r: any) => r.data?.total ?? questions.length);
     const passmark = form.config?.passmark ?? 50;
-    const passed = responses.filter((r: any) => (r.data?.percentage ?? 0) >= passmark).length;
-    const passRate = attempts ? Math.round((passed / attempts) * 100) : 0;
-    const avgScore = attempts ? (scores.reduce((a: number, b: number) => a + b, 0) / attempts).toFixed(1) : '--';
-    const topScore = attempts ? Math.max(...scores.map((s: number, i: number) => Math.round((s / (totals[i] || 1)) * 100))) : 0;
+    const completedAttempts = courseProgress.filter((p: any) => p.completed);
+    const passedAttempts = completedAttempts.filter((p: any) => p.passed);
+    const passRate = completedAttempts.length ? Math.round((passedAttempts.length / completedAttempts.length) * 100) : 0;
+    const avgScore = completedAttempts.length
+      ? Math.round(completedAttempts.reduce((sum: number, p: any) => sum + (p.score ?? 0), 0) / completedAttempts.length)
+      : null;
+    const topScore = completedAttempts.length ? Math.max(...completedAttempts.map((p: any) => p.score ?? 0)) : 0;
 
     const questionStats = questions.map((q: any) => {
-      const answered = responses.filter((r: any) => r.data?.answers?.[q.id]);
-      const correct = answered.filter((r: any) => r.data.answers[q.id] === q.correctAnswer).length;
+      const answered = completedAttempts.filter((p: any) => p.answers?.[q.id]);
+      const correct = answered.filter((p: any) => {
+        const answer = p.answers?.[q.id];
+        if ((q.type ?? '') === 'sql_exercise') {
+          try {
+            const parsed = typeof answer === 'string' ? JSON.parse(answer) : answer;
+            return !!parsed?.passed && !parsed?.skipped && !parsed?.solutionViewed;
+          } catch {
+            return false;
+          }
+        }
+        if (['code_review', 'excel_review', 'dashboard_critique'].includes(q.type)) return answer === 'completed';
+        if (q.type === 'fill_blank') {
+          const accepted = (q.correctAnswer ?? '').split('|').map((s: string) => s.trim().toLowerCase());
+          return accepted.includes(String(answer).trim().toLowerCase());
+        }
+        return answer === q.correctAnswer;
+      }).length;
+      const label = q.question || q.title || q.lesson?.title || 'Lesson';
       return {
-        question: q.question.length > 30 ? q.question.slice(0, 30) + '…' : q.question,
-        fullQuestion: q.question,
+        question: label.length > 30 ? `${label.slice(0, 30)}...` : label,
+        fullQuestion: label,
         correct, incorrect: answered.length - correct, total: answered.length,
         pct: answered.length ? Math.round((correct / answered.length) * 100) : 0,
       };
@@ -224,9 +241,9 @@ function ResponsesTab({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: 'Started',    value: totalEnrolled || '--',                                Icon: Users,      color: '#8b5cf6' },
-            { label: 'Avg Score',  value: attempts ? `${avgScore} / ${questions.length}` : '--', Icon: BarChart2,   color: '#00a4ef' },
-            { label: 'Pass Rate',  value: attempts ? `${passRate}%` : '--',                    Icon: TrendingUp,  color: '#10b981' },
-            { label: 'Top Score',  value: attempts ? `${topScore}%` : '--',                    Icon: Trophy,      color: '#f59e0b' },
+            { label: 'Avg Score',  value: avgScore !== null ? `${avgScore}%` : '--',             Icon: BarChart2,   color: '#00a4ef' },
+            { label: 'Pass Rate',  value: completedAttempts.length ? `${passRate}%` : '--',      Icon: TrendingUp,  color: '#10b981' },
+            { label: 'Top Score',  value: completedAttempts.length ? `${topScore}%` : '--',      Icon: Trophy,      color: '#f59e0b' },
           ].map(({ label, value, Icon, color }) => (
             <div key={label} className={`border rounded-2xl p-5 ${card}`}>
               <div className="flex items-center gap-2 mb-3">
@@ -239,7 +256,7 @@ function ResponsesTab({
         </div>
 
         {/* Per-question breakdown */}
-        {attempts > 0 && (
+        {completedAttempts.length > 0 && (
           <div className={`border rounded-3xl overflow-hidden ${card}`}>
             <div className={`px-6 py-4 border-b flex items-center justify-between ${cardHeader}`}>
               <h3 className={`text-base font-semibold ${textPrim}`}>Question Breakdown</h3>
@@ -281,26 +298,15 @@ function ResponsesTab({
               </thead>
               <tbody className={`divide-y ${dividerCls}`}>
                 {(() => {
-                  // Keep only the most recent attempt per student email
-                  const byEmail = new Map<string, any>();
-                  for (const r of responses) {
-                    const key = (r.data?.email || '').trim().toLowerCase() || `anon_${r.data?.name || r.id}`;
-                    const existing = byEmail.get(key);
-                    if (!existing || new Date(r.created_at) > new Date(existing.created_at)) {
-                      byEmail.set(key, r);
-                    }
-                  }
-                  return [...byEmail.values()].map((r: any) => {
-                    const pct = r.data?.percentage ?? (r.data?.total ? Math.round((r.data.score / r.data.total) * 100) : 0);
-                    const pass = pct >= passmark;
+                  return completedAttempts.map((p: any) => {
+                    const pct = p.score ?? 0;
+                    const pass = p.passed ?? pct >= passmark;
                     return (
-                      <tr key={r.id} className={`transition-colors ${tableRow}`}>
-                        <td className={`px-3 sm:px-6 py-3 font-medium ${textPrim}`}>{r.data?.name || <span className={`italic ${textMut}`}>Anonymous</span>}</td>
-                        <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 ${textMut}`}>{r.data?.email || '--'}</td>
+                      <tr key={`${p.student_id}_${p.attempt_number}`} className={`transition-colors ${tableRow}`}>
+                        <td className={`px-3 sm:px-6 py-3 font-medium ${textPrim}`}>{p.student_name || <span className={`italic ${textMut}`}>Unknown</span>}</td>
+                        <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 ${textMut}`}>{p.student_email || '--'}</td>
                         <td className="px-3 sm:px-6 py-3">
-                          <span className={`font-semibold ${textPrim}`}>{r.data?.score ?? '--'}</span>
-                          <span className={textMut}> / {r.data?.total ?? questions.length}</span>
-                          <span className={`ml-2 text-xs ${textMut}`}>({pct}%)</span>
+                          <span className={`font-semibold ${textPrim}`}>{pct}%</span>
                         </td>
                         <td className="px-3 sm:px-6 py-3">
                           <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${pass ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
@@ -308,18 +314,17 @@ function ResponsesTab({
                             {pass ? 'Passed' : 'Failed'}
                           </span>
                         </td>
-                        <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>{new Date(r.created_at).toLocaleString()}</td>
+                        <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>{p.updated_at ? new Date(p.updated_at).toLocaleString() : '--'}</td>
                       </tr>
                     );
                   });
                 })()}
-                {responses.length === 0 && (
-                  <tr><td colSpan={5} className={`px-6 py-12 text-center ${textMut}`}>No submissions yet. Share the course link to get started!</td></tr>
+                {completedAttempts.length === 0 && (
+                  <tr><td colSpan={5} className={`px-6 py-12 text-center ${textMut}`}>No completed attempts yet. Share the course link to get started!</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-          <Pagination totalCount={totalCount} page={page} pageLoading={pageLoading} onPageChange={onPageChange} isDark={isDark} />
         </div>
 
         {/* Enrolled Students */}

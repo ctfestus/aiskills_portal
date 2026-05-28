@@ -2225,6 +2225,29 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
         </div>
       )}
 
+      {/* Participant selection -- all group assignment types, leader only */}
+      {!loadingSub && isGroupAssignment && isLeader && groupMembers.length > 0 && !isGraded && (
+        <div className="rounded-2xl p-4 mb-4" style={{ background: C.card }}>
+          <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Mark Participants</p>
+          <p className="text-xs mb-3" style={{ color: C.muted }}>Indicate the members who participated in this assignment. Only checked members will receive this grade.</p>
+          <div className="flex flex-col gap-2">
+            {groupMembers.map((m: any) => {
+              const s = m.students ?? {};
+              return (
+                <label key={m.student_id} className="flex items-center gap-3 cursor-pointer rounded-xl px-3 py-2"
+                  style={{ background: C.page, border: `1px solid ${C.divider}` }}>
+                  <input type="checkbox" checked={selectedParticipants.includes(m.student_id)}
+                    onChange={() => toggleParticipant(m.student_id)}
+                    style={{ width: 15, height: 15, accentColor: C.cta, cursor: 'pointer' }}/>
+                  <span className="text-sm" style={{ color: C.text }}>{s.full_name}</span>
+                  {m.is_leader && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#f59e0b22', color: '#f59e0b' }}>Leader</span>}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* AI / VE tools -- rendered outside the card, full-width */}
       {!loadingSub && isAiType && (
         <div className="mb-4">
@@ -2555,29 +2578,6 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
                 </div>
               )}
             </div>
-
-            {/* Participant selection - leader only, before submitting */}
-            {isGroupAssignment && isLeader && groupMembers.length > 0 && !isGraded && (
-              <div className="mb-4">
-                <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Mark Participants</p>
-                <p className="text-xs mb-3" style={{ color: C.muted }}>Indicate the members who participated in this assignment. Only checked members will receive this grade.</p>
-                <div className="flex flex-col gap-2">
-                  {groupMembers.map((m: any) => {
-                    const s = m.students ?? {};
-                    return (
-                      <label key={m.student_id} className="flex items-center gap-3 cursor-pointer rounded-xl px-3 py-2"
-                        style={{ background: C.page, border: `1px solid ${C.divider}` }}>
-                        <input type="checkbox" checked={selectedParticipants.includes(m.student_id)}
-                          onChange={() => toggleParticipant(m.student_id)}
-                          style={{ width: 15, height: 15, accentColor: C.cta, cursor: 'pointer' }}/>
-                        <span className="text-sm" style={{ color: C.text }}>{s.full_name}</span>
-                        {m.is_leader && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#f59e0b22', color: '#f59e0b' }}>Leader</span>}
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
             {submitError && <p className="text-xs mb-3" style={{ color: '#ef4444' }}>{submitError}</p>}
 

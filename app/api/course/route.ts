@@ -7,6 +7,7 @@ import { publishActivity } from '@/lib/activity';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { updateLearningPathProgress } from '@/lib/learning-path-progress';
 import { courseResultEmail } from '@/lib/email-templates';
+import { verifyServerSqlAnswerOnConnection, withServerSqlRuntime } from '@/lib/sql-engine-server';
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -373,6 +374,9 @@ export async function POST(req: NextRequest) {
         supabase.from('students').select('full_name').eq('id', sessionUser.id).single(),
       ]);
 
+      if (!courseData) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+      if (!attempt) return NextResponse.json({ ok: true, ignored: 'no_active_attempt' });
+
       if (attempt && courseData) {
         // Server-side scoring - client-supplied score/passed/points are ignored.
         // Merge final_answers (sent by client) over stored answers so that the last
@@ -396,39 +400,49 @@ export async function POST(req: NextRequest) {
         }
         const sqlTables = Array.from(sqlTableMap.values());
         let correct = 0;
-        for (const q of scorable) {
+        const scoreQuestion = async (q: any, sqlConn?: any) => {
           const ua = storedAnswers[q.id];
-          if (ua == null) continue;
+          if (ua == null) return false;
           const type = q.type ?? 'multiple_choice';
-          if (['code_review', 'excel_review', 'dashboard_critique'].includes(type)) {
-            if (ua === 'completed') correct++;
-          } else if (type === 'sql_exercise') {
+          if (['code_review', 'excel_review', 'dashboard_critique'].includes(type)) return ua === 'completed';
+          if (type === 'sql_exercise') {
+            if (!sqlConn) return false;
             try {
               const parsed = typeof ua === 'string' ? JSON.parse(ua) : ua;
               const expected = q.sqlExpectedResult;
-              if (parsed?.skipped || parsed?.solutionViewed) continue;
-              if (!parsed?.query || !Array.isArray(expected?.columns) || !Array.isArray(expected?.rows)) continue;
-              const { verifyServerSqlAnswer } = await import('@/lib/sql-engine-server');
-              const verified = await verifyServerSqlAnswer({
-                tables: sqlTables,
+              if (parsed?.skipped || parsed?.solutionViewed) return false;
+              if (!parsed?.query || !Array.isArray(expected?.columns) || !Array.isArray(expected?.rows)) return false;
+              const verified = await verifyServerSqlAnswerOnConnection({
+                conn: sqlConn,
                 query: parsed.query,
                 expected,
                 ordered: !!q.sqlResultOrdered,
                 numericTolerance: Number(q.sqlNumericTolerance ?? 0),
                 requiredPatterns: q.sqlRequiredPatterns,
               });
-              if (verified.passed) correct++;
+              return verified.passed;
             } catch (err) {
               console.error('[course/complete-attempt] SQL server verification failed', err);
-              // Invalid stored SQL answer payloads are scored as incorrect.
+              return false;
             }
-          } else if (type === 'fill_blank') {
+          }
+          if (type === 'fill_blank') {
             const accepted = (q.correctAnswer ?? '').split('|').map((s: string) => s.trim().toLowerCase());
-            if (accepted.includes(ua.trim().toLowerCase())) correct++;
-          } else if (type === 'arrange') {
-            if (ua === q.correctAnswer) correct++;
-          } else {
-            if (ua === q.correctAnswer) correct++;
+            return accepted.includes(String(ua).trim().toLowerCase());
+          }
+          if (type === 'arrange') return ua === q.correctAnswer;
+          return ua === q.correctAnswer;
+        };
+
+        if (sqlTables.length) {
+          await withServerSqlRuntime(sqlTables, async sqlConn => {
+            for (const q of scorable) {
+              if (await scoreQuestion(q, sqlConn)) correct++;
+            }
+          });
+        } else {
+          for (const q of scorable) {
+            if (await scoreQuestion(q)) correct++;
           }
         }
 
@@ -444,7 +458,7 @@ export async function POST(req: NextRequest) {
           passed,
           score:                  scorePct,
           points:                 computed_points,
-          current_question_index: current_question_index ?? 0,
+          current_question_index: Math.max(Number(current_question_index) || 0, questions.length),
           answers:                storedAnswers,
           updated_at:             new Date().toISOString(),
         }).eq('id', attempt.id);

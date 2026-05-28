@@ -21,6 +21,15 @@ interface VerifyServerSqlAnswerArgs {
   requiredPatterns?: string[];
 }
 
+interface VerifyServerSqlAnswerOnConnectionArgs {
+  conn: any;
+  query: string;
+  expected: SQLResult;
+  ordered?: boolean;
+  numericTolerance?: number;
+  requiredPatterns?: string[];
+}
+
 export async function verifyServerSqlAnswer({
   tables,
   query,
@@ -29,7 +38,25 @@ export async function verifyServerSqlAnswer({
   numericTolerance,
   requiredPatterns,
 }: VerifyServerSqlAnswerArgs): Promise<{ passed: boolean; actual?: SQLResult; feedback: SQLCompareResult }> {
-  const actual = await computeServerSqlResult(tables, query);
+  return withServerSqlRuntime(tables, conn => verifyServerSqlAnswerOnConnection({
+    conn,
+    query,
+    expected,
+    ordered,
+    numericTolerance,
+    requiredPatterns,
+  }));
+}
+
+export async function verifyServerSqlAnswerOnConnection({
+  conn,
+  query,
+  expected,
+  ordered,
+  numericTolerance,
+  requiredPatterns,
+}: VerifyServerSqlAnswerOnConnectionArgs): Promise<{ passed: boolean; actual?: SQLResult; feedback: SQLCompareResult }> {
+  const actual = await executeQuery(conn, query, false, { limit: null });
   const patternCheck = checkRequiredSqlPatterns(query, requiredPatterns);
   if (!patternCheck.passed) {
     return {
@@ -47,7 +74,7 @@ export async function verifyServerSqlAnswer({
   return { passed: feedback.passed, actual, feedback };
 }
 
-export async function computeServerSqlResult(tables: SQLTableConfig[], query: string): Promise<SQLResult> {
+export async function withServerSqlRuntime<T>(tables: SQLTableConfig[], fn: (conn: any) => Promise<T>): Promise<T> {
   const duckdb = require('@duckdb/duckdb-wasm/dist/duckdb-node-blocking.cjs');
   const duckdbDist = path.join(process.cwd(), 'node_modules', '@duckdb', 'duckdb-wasm', 'dist');
   const bundles = {
@@ -61,10 +88,14 @@ export async function computeServerSqlResult(tables: SQLTableConfig[], query: st
 
   try {
     await loadSQLTables(conn, tables);
-    return await executeQuery(conn, query, false, { limit: null });
+    return await fn(conn);
   } finally {
     try { conn.close(); } catch {}
     try { db.dropFiles?.(); } catch {}
     try { db.reset?.(); } catch {}
   }
+}
+
+export async function computeServerSqlResult(tables: SQLTableConfig[], query: string): Promise<SQLResult> {
+  return withServerSqlRuntime(tables, conn => executeQuery(conn, query, false, { limit: null }));
 }

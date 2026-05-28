@@ -288,7 +288,7 @@ export function nudgeEmail(data: {
   name: string;
   contentTitle: string;
   contentType: string;
-  status: 'not_started' | 'stalled' | 'in_progress';
+  status: 'not_started' | 'stalled' | 'in_progress' | 'failed';
   formUrl: string;
   coverImage?: string | null;
   relatedAssignmentTitle?: string;
@@ -296,12 +296,14 @@ export function nudgeEmail(data: {
 }) {
   const { name, contentTitle, contentType, status, formUrl, coverImage, relatedAssignmentTitle, branding } = data;
   const typeLabel = contentType === 'virtual_experience' ? 'virtual experience' : contentType;
-  const ctaLabel  = status === 'not_started' ? `Start ${typeLabel}` : 'Continue where you left off';
+  const ctaLabel  = status === 'not_started' ? `Start ${typeLabel}` : status === 'failed' ? `Review and retake ${typeLabel}` : 'Continue where you left off';
 
   const intro = status === 'not_started'
     ? `We noticed you have not started <b>${contentTitle}</b> yet. We just wanted to reach out with a little encouragement.`
     : status === 'in_progress'
     ? `You are making progress on <b>${contentTitle}</b> -- great work so far! We are reaching out because we want to make sure you do not miss the deadline. Now is the time to push through and finish strong.`
+    : status === 'failed'
+    ? `You submitted <b>${contentTitle}</b>, but did not pass yet. That is not the end of the road -- review the material, try again, and use this as feedback for your next attempt.`
     : `We noticed you have not visited <b>${contentTitle}</b> in a while. We are checking in because we believe in you and do not want you to miss out.`;
 
   const content = `
@@ -325,6 +327,9 @@ export function nudgeEmail(data: {
     <p style="color:#374151;">
       <b>You are already on your way</b> -- do not let the momentum slip. Even 20 minutes a day can get you across the finish line.
       The effort you have already put in is worth protecting. Keep going.
+    </p>` : status === 'failed' ? `
+    <p style="color:#374151;">
+      <b>A failed attempt is useful data</b> -- it shows exactly where to focus next. Revisit the feedback, strengthen the weak spots, and retake when ready.
     </p>` : `
     <p style="color:#374151;">
       It only takes a few minutes to begin. Once you start, you will find the content is practical, relevant, and designed

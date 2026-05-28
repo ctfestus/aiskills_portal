@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
   // Use admin client for cross-student data -- ownership already verified above via user-scoped RLS.
   const { data: attempts } = await adminClient()
     .from('course_attempts')
-    .select('course_id, student_id, current_question_index, score, points, passed, completed_at, attempt_number, updated_at, students!inner(email, full_name)')
+    .select('course_id, student_id, current_question_index, score, points, passed, completed_at, attempt_number, updated_at, answers, students!inner(email, full_name)')
     .in('course_id', ownedIds)
     .order('student_id').order('attempt_number', { ascending: false });
 
@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
     points:                 a.points,
     completed:              !!a.completed_at,
     passed:                 a.passed ?? false,
+    answers:                a.answers ?? {},
     attempt_number:         a.attempt_number,
     updated_at:             a.updated_at,
   }));

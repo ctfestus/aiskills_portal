@@ -4552,6 +4552,7 @@ const STATUS_META = {
   not_started: { label: 'Not Started', color: '#6b7280', bg: 'rgba(107,114,128,0.12)', Icon: MinusCircle },
   in_progress:  { label: 'In Progress', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  Icon: Clock },
   stalled:      { label: 'Stalled',     color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   Icon: AlertTriangle },
+  failed:       { label: 'Failed',      color: '#dc2626', bg: 'rgba(220,38,38,0.12)',   Icon: XCircle },
   completed:    { label: 'Completed',   color: '#22c55e', bg: 'rgba(34,197,94,0.12)',   Icon: CheckCircle },
 } as const;
 
@@ -4611,6 +4612,7 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
     total:       rows.length,
     not_started: rows.filter(r => r.status === 'not_started').length,
     stalled:     rows.filter(r => r.status === 'stalled').length,
+    failed:      rows.filter(r => r.status === 'failed').length,
     in_progress: rows.filter(r => r.status === 'in_progress').length,
     completed:   rows.filter(r => r.status === 'completed').length,
     at_risk:     rows.filter(r => r.isAtRisk).length,
@@ -4735,6 +4737,7 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
           { key: 'not_started', label: 'Not Started', value: stats.not_started, color: '#6b7280', bg: C.card },
           { key: 'in_progress', label: 'In Progress', value: stats.in_progress, color: '#f59e0b', bg: C.card },
           { key: 'stalled',     label: 'Stalled',     value: stats.stalled,     color: '#ef4444', bg: C.card },
+          { key: 'failed',      label: 'Failed',      value: stats.failed,      color: '#dc2626', bg: C.card },
           { key: 'completed',   label: 'Completed',   value: stats.completed,   color: '#22c55e', bg: C.card },
           { key: 'at_risk',     label: 'At Risk',     value: stats.at_risk,     color: '#dc2626', bg: C.card },
         ] as const).map(s => (
@@ -4777,6 +4780,7 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
               { key: 'not_started', label: 'Not Started', color: '#6b7280' },
               { key: 'in_progress', label: 'In Progress', color: '#f59e0b' },
               { key: 'stalled',     label: 'Stalled',     color: '#ef4444' },
+              { key: 'failed',      label: 'Failed',      color: '#dc2626' },
               { key: 'completed',   label: 'Completed',   color: '#22c55e' },
               { key: 'all',         label: 'Everyone',    color: C.cta    },
             ] as const).map(s => {
@@ -4858,6 +4862,7 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
           <option value="not_started">Not Started</option>
           <option value="in_progress">In Progress</option>
           <option value="stalled">Stalled (7+ days)</option>
+          <option value="failed">Failed</option>
           <option value="completed">Completed</option>
         </select>
       </div>
@@ -4885,7 +4890,7 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
             const meta = STATUS_META[row.status as keyof typeof STATUS_META];
             const nudgeKey = `${row.studentEmail}|${row.formId}`;
             const isNudged = nudged.has(nudgeKey);
-            const canNudge = row.status === 'not_started' || row.status === 'stalled' || row.status === 'in_progress';
+            const canNudge = row.status === 'not_started' || row.status === 'stalled' || row.status === 'in_progress' || row.status === 'failed';
             return (
               <div key={nudgeKey}
                 className="grid grid-cols-[1fr_110px_90px] sm:grid-cols-[1fr_1fr_70px_110px_110px_90px]"
@@ -4900,7 +4905,7 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
                 <div className="hidden sm:block" style={{ fontSize: 13, color: C.text, paddingRight: 8, wordBreak: 'break-word' }}>{row.formTitle}</div>
                 {/* Progress % */}
                 <div className="hidden sm:block">
-                  <span style={{ fontSize: 13, fontWeight: 700, color: row.progressPct === 100 ? C.green : row.progressPct > 0 ? '#f59e0b' : C.faint }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: row.status === 'failed' ? '#dc2626' : row.progressPct === 100 ? C.green : row.progressPct > 0 ? '#f59e0b' : C.faint }}>
                     {row.progressPct}%
                   </span>
                 </div>

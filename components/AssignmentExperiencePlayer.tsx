@@ -158,7 +158,7 @@ export default function AssignmentExperiencePlayer({
         await fetch('/api/guided-project-progress', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...await getAuthHeader() },
-          body: JSON.stringify({ formId, userId, progress: prog, currentModuleId: activeModule, currentLessonId: activeLesson }),
+          body: JSON.stringify({ formId, userId, progress: prog, currentModuleId: activeModule, currentLessonId: activeLesson, assignmentId: assignmentId || undefined }),
         });
       } finally { setSaving(false); }
     }, 800);
