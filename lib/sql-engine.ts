@@ -306,12 +306,14 @@ export async function loadSQLTables(conn: any, tables: SQLTableConfig[]): Promis
       if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
         const XLSX = await import('xlsx');
         const res = await fetch(url);
+        if (!res.ok) throw new Error(`Dataset fetch failed: ${url} (HTTP ${res.status})`);
         const wb = XLSX.read(await res.arrayBuffer(), { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][];
         await loadRows(conn, tableName, rows);
       } else {
         const res = await fetch(url);
+        if (!res.ok) throw new Error(`Dataset fetch failed: ${url} (HTTP ${res.status})`);
         const csv = await res.text();
         const Papa = await import('papaparse');
         const parsed = Papa.parse<string[]>(csv, {

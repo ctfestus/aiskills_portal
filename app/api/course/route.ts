@@ -435,11 +435,21 @@ export async function POST(req: NextRequest) {
         };
 
         if (sqlTables.length) {
-          await withServerSqlRuntime(sqlTables, async sqlConn => {
+          try {
+            await withServerSqlRuntime(sqlTables, async sqlConn => {
+              for (const q of scorable) {
+                if (await scoreQuestion(q, sqlConn)) correct++;
+              }
+            });
+          } catch (sqlRuntimeErr) {
+            // Dataset fetch failed or DuckDB could not initialise.
+            // SQL questions score 0; non-SQL questions are scored in the fallback pass.
+            // The error message (including HTTP status) is logged for diagnosis.
+            console.error('[course/complete-attempt] SQL runtime failed, SQL exercises scored 0:', sqlRuntimeErr);
             for (const q of scorable) {
-              if (await scoreQuestion(q, sqlConn)) correct++;
+              if (q.type !== 'sql_exercise' && await scoreQuestion(q)) correct++;
             }
-          });
+          }
         } else {
           for (const q of scorable) {
             if (await scoreQuestion(q)) correct++;
