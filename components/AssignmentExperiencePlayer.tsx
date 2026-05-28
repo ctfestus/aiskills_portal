@@ -123,7 +123,11 @@ export default function AssignmentExperiencePlayer({
   const [expandedMods,  setExpandedMods]  = useState<Set<string>>(new Set([modules[0]?.id]));
   const [completeError, setCompleteError] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const authHeader = sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {} as Record<string, string>;
+  async function getAuthHeader(): Promise<Record<string, string>> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token ?? '';
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
 
   // totals
   const totalReqs = modules.reduce((a, m) => a + m.lessons.reduce((b, l) => b + l.requirements.length, 0), 0);
@@ -153,7 +157,7 @@ export default function AssignmentExperiencePlayer({
       try {
         await fetch('/api/guided-project-progress', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeader },
+          headers: { 'Content-Type': 'application/json', ...await getAuthHeader() },
           body: JSON.stringify({ formId, userId, progress: prog, currentModuleId: activeModule, currentLessonId: activeLesson }),
         });
       } finally { setSaving(false); }
@@ -622,7 +626,7 @@ export default function AssignmentExperiencePlayer({
                       try {
                         const res = await fetch('/api/assignments/complete-ve-assignment', {
                           method: 'POST',
-                          headers: { 'Content-Type': 'application/json', ...authHeader },
+                          headers: { 'Content-Type': 'application/json', ...await getAuthHeader() },
                           body: JSON.stringify({ assignmentId, progress, currentModuleId: activeModule, currentLessonId: activeLesson, groupId: groupId || undefined, participants: participants?.length ? participants : undefined }),
                         });
                         let json: any = {};
