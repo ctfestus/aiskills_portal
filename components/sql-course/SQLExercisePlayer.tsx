@@ -394,6 +394,7 @@ export default function SQLExercisePlayer({
   const [leftTab, setLeftTab]         = useState<'lesson' | 'hint'>('lesson');
   const [errorExplain, setErrorExplain]       = useState('');
   const [explainLoading, setExplainLoading]   = useState(false);
+  const [resetKey, setResetKey]       = useState(0);
   const resizingRef = useRef(false);
   const resizeStartX = useRef(0);
   const resizeStartW = useRef(0);
@@ -888,7 +889,7 @@ export default function SQLExercisePlayer({
               <div className="flex-1" />
               <button
                 type="button"
-                onClick={() => { setQuery(starterCode); setFeedback(null); setError(''); }}
+                onClick={() => { setQuery(starterCode); setFeedback(null); setError(''); setResetKey(k => k + 1); }}
                 className="w-7 h-7 grid place-items-center rounded-full border transition-opacity hover:opacity-70"
                 style={{ borderColor: border, background: editorBg, color: muted }}
                 title="Reset"
@@ -913,7 +914,7 @@ export default function SQLExercisePlayer({
             {/* CodeMirror */}
             <div className="flex-1 min-h-0">
               <CodeMirrorEditor
-                key={`${question.id}:${editorSchemaKey}:${solutionRevealed ? 'sol' : 'edit'}`}
+                key={`${question.id}:${editorSchemaKey}:${solutionRevealed ? 'sol' : 'edit'}:${resetKey}`}
                 value={query}
                 onChange={setQuery}
                 isDark={isDark}

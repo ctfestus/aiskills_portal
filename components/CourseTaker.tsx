@@ -2130,7 +2130,6 @@ export function CourseTaker({
     const countsAsPassed = !!payload.passed && !payload.skipped && !payload.solutionViewed;
     const answer = JSON.stringify({
       query: payload.query,
-      result: payload.result,
       passed: countsAsPassed,
       feedback: payload.feedback,
       skipped: !!payload.skipped,
