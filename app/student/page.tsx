@@ -982,8 +982,8 @@ function CoursesSection({ userEmail, userId: userIdProp, C, isOutstandingProp }:
         if (a.passed && a.completed_at && !ex.completed_at) { progressMap[a.course_id] = a; continue; }
         // ex is already passed+completed -- never overwrite with an in-progress attempt
         if (ex.passed && ex.completed_at && !a.completed_at) continue;
-        // Prefer in-progress over a not-yet-passed completed attempt (student is retaking)
-        if (!a.completed_at && ex.completed_at) { progressMap[a.course_id] = a; continue; }
+        // Prefer in-progress over a completed-but-failed attempt (student is retaking)
+        if (!a.completed_at && ex.completed_at && !ex.passed) { progressMap[a.course_id] = a; continue; }
         // Among completed, prefer higher score
         if (ex.completed_at && a.completed_at && a.score > ex.score) progressMap[a.course_id] = a;
       }
@@ -5764,7 +5764,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
         if (!ex) { caMap[key] = a; continue; }
         if (a.passed && a.completed_at && !ex.completed_at) { caMap[key] = a; continue; }
         if (ex.passed && ex.completed_at && !a.completed_at) continue;
-        if (!a.completed_at && ex.completed_at) { caMap[key] = a; continue; }
+        if (!a.completed_at && ex.completed_at && !ex.passed) { caMap[key] = a; continue; }
         if (a.completed_at && ex.completed_at && (a.score ?? 0) > (ex.score ?? 0)) caMap[key] = a;
       }
       const gpMap: Record<string, any> = {};

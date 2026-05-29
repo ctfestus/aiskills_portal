@@ -388,7 +388,7 @@ export async function POST(req: NextRequest) {
         const hintsUsed: string[]           = attempt.hints_used ?? [];
         const passmark                      = courseData.passmark ?? 50;
 
-        const scorable = questions.filter(q => !q.lessonOnly && !q.isSection);
+        const scorable = questions.filter(q => !q.lessonOnly && !q.isSection && !q.isDownloads);
         let correct = 0;
         const scoreQuestion = (q: any): boolean => {
           const ua = storedAnswers[q.id];

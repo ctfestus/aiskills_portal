@@ -1086,7 +1086,11 @@ export function CourseTaker({
       </svg>
     );
     const isLessonOnly = totalQuestions === 0;
-    const scoreDisplay = Number.isInteger(score) ? String(score) : score.toFixed(1);
+    // Derive the correct count from the confirmed percentage so that after a page
+    // refresh (where the session score counter resets to 0) the display still shows
+    // the right number rather than "0 / N correct".
+    const correctCount = Math.round((submittedPct / 100) * totalQuestions);
+    const scoreDisplay = String(correctCount);
     const scoreMarker = Math.max(4, Math.min(96, submittedPct));
     const passMarker = Math.max(4, Math.min(96, passmark));
 
