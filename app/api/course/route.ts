@@ -7,7 +7,6 @@ import { publishActivity } from '@/lib/activity';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { updateLearningPathProgress } from '@/lib/learning-path-progress';
 import { courseResultEmail } from '@/lib/email-templates';
-import { verifyServerSqlAnswerOnConnection, withServerSqlRuntime } from '@/lib/sql-engine-server';
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -390,39 +389,23 @@ export async function POST(req: NextRequest) {
         const passmark                      = courseData.passmark ?? 50;
 
         const scorable = questions.filter(q => !q.lessonOnly && !q.isSection);
-        const sqlTableMap = new Map<string, any>();
-        for (const question of questions) {
-          if (question?.type !== 'sql_exercise') continue;
-          for (const table of question.sqlTables ?? []) {
-            const key = `${table.tableName}|${table.fileUrl || table.csvUrl || table.seedSql || ''}`;
-            if (table.tableName && !sqlTableMap.has(key)) sqlTableMap.set(key, table);
-          }
-        }
-        const sqlTables = Array.from(sqlTableMap.values());
         let correct = 0;
-        const scoreQuestion = async (q: any, sqlConn?: any) => {
+        const scoreQuestion = (q: any): boolean => {
           const ua = storedAnswers[q.id];
           if (ua == null) return false;
           const type = q.type ?? 'multiple_choice';
           if (['code_review', 'excel_review', 'dashboard_critique'].includes(type)) return ua === 'completed';
           if (type === 'sql_exercise') {
-            if (!sqlConn) return false;
+            // Trust the result the browser stored when the student ran the query.
+            // Re-running via Node DuckDB at submission time produces different
+            // results from browser WASM DuckDB for the same query+data, causing
+            // the server to silently override a correct answer with a wrong one.
+            // solutionViewed/skipped penalties still apply.
             try {
               const parsed = typeof ua === 'string' ? JSON.parse(ua) : ua;
-              const expected = q.sqlExpectedResult;
               if (parsed?.skipped || parsed?.solutionViewed) return false;
-              if (!parsed?.query || !Array.isArray(expected?.columns) || !Array.isArray(expected?.rows)) return false;
-              const verified = await verifyServerSqlAnswerOnConnection({
-                conn: sqlConn,
-                query: parsed.query,
-                expected,
-                ordered: !!q.sqlResultOrdered,
-                numericTolerance: Number(q.sqlNumericTolerance ?? 0),
-                requiredPatterns: q.sqlRequiredPatterns,
-              });
-              return verified.passed;
-            } catch (err) {
-              console.error('[course/complete-attempt] SQL server verification failed', err);
+              return !!parsed?.passed;
+            } catch {
               return false;
             }
           }
@@ -434,26 +417,8 @@ export async function POST(req: NextRequest) {
           return ua === q.correctAnswer;
         };
 
-        if (sqlTables.length) {
-          try {
-            await withServerSqlRuntime(sqlTables, async sqlConn => {
-              for (const q of scorable) {
-                if (await scoreQuestion(q, sqlConn)) correct++;
-              }
-            });
-          } catch (sqlRuntimeErr) {
-            // Dataset fetch failed or DuckDB could not initialise.
-            // SQL questions score 0; non-SQL questions are scored in the fallback pass.
-            // The error message (including HTTP status) is logged for diagnosis.
-            console.error('[course/complete-attempt] SQL runtime failed, SQL exercises scored 0:', sqlRuntimeErr);
-            for (const q of scorable) {
-              if (q.type !== 'sql_exercise' && await scoreQuestion(q)) correct++;
-            }
-          }
-        } else {
-          for (const q of scorable) {
-            if (await scoreQuestion(q)) correct++;
-          }
+        for (const q of scorable) {
+          if (scoreQuestion(q)) correct++;
         }
 
         const total     = scorable.length;
@@ -531,8 +496,12 @@ export async function POST(req: NextRequest) {
                   .catch((err: any) => console.error('[course/complete-attempt] redis sync', err));
               });
           });
+
+        return NextResponse.json({ ok: true, score: scorePct, passed, points: computed_points });
       }
 
+      // Unreachable in practice (early returns above cover !courseData and !attempt),
+      // but required so TypeScript sees a return on every code path.
       return NextResponse.json({ ok: true });
     } catch (err: any) {
       console.error('[course/complete-attempt]', err);

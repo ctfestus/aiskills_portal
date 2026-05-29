@@ -43,6 +43,7 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Pro
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectingId, setSelectingId] = useState<number | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Upload tab state
@@ -83,10 +84,24 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Pro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
-  function select(photo: Photo) {
+  async function select(photo: Photo) {
+    if (selectingId !== null) return;
+    setSelectingId(photo.id);
     setSelectedId(photo.id);
-    onChange(photo.src.large, photo.photographer);
-    setOpen(false);
+    try {
+      const imgRes = await fetch(photo.src.large);
+      const blob = await imgRes.blob();
+      const ext = blob.type.split('/')[1] || 'jpg';
+      const file = new File([blob], `pexels-${photo.id}.${ext}`, { type: blob.type });
+      const cloudUrl = await uploadToCloudinary(file, 'covers');
+      onChange(cloudUrl, photo.photographer);
+    } catch {
+      // Fallback to direct Pexels URL if upload fails
+      onChange(photo.src.large, photo.photographer);
+    } finally {
+      setSelectingId(null);
+      setOpen(false);
+    }
   }
 
   function openModal() {
@@ -246,18 +261,20 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Pro
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                       {photos.map(photo => {
                         const isSel = selectedId === photo.id;
+                        const isSelecting = selectingId === photo.id;
                         return (
                           <button
                             key={photo.id}
                             onClick={() => select(photo)}
+                            disabled={selectingId !== null}
                             style={{
                               position: 'relative', padding: 0, margin: 0,
                               border: isSel ? `3px solid ${C.cta}` : '3px solid transparent',
-                              borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+                              borderRadius: 12, overflow: 'hidden', cursor: selectingId !== null ? 'wait' : 'pointer',
                               background: C.input, display: 'block', width: '100%',
                               transition: 'border-color 0.15s, transform 0.15s',
                             }}
-                            onMouseEnter={e => { if (!isSel) e.currentTarget.style.borderColor = `${C.cta}80`; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                            onMouseEnter={e => { if (!isSel && !selectingId) e.currentTarget.style.borderColor = `${C.cta}80`; e.currentTarget.style.transform = 'scale(1.02)'; }}
                             onMouseLeave={e => { if (!isSel) e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}
                           >
                             <img
@@ -268,7 +285,12 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Pro
                             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.62))', padding: '18px 8px 6px', color: 'white', fontSize: 11, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {photo.photographer}
                             </div>
-                            {isSel && (
+                            {isSelecting && (
+                              <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Loader2 size={28} className="animate-spin" color="white" />
+                              </div>
+                            )}
+                            {isSel && !isSelecting && (
                               <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <div style={{ background: C.cta, borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                   <Check size={18} color="white" strokeWidth={3} />

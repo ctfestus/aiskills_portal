@@ -284,7 +284,9 @@ export function CourseTaker({
   // Anti-cheat state
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [attemptError, setAttemptError] = useState('');
-  const [submitError, setSubmitError] = useState('');
+  const [submitError, setSubmitError]   = useState('');
+  const [submitSaving, setSubmitSaving] = useState(false);
+  const [serverResult, setServerResult] = useState<{ score: number; passed: boolean; points: number } | null>(null);
   const [checkingAttempts, setCheckingAttempts] = useState(!!initialStudentName);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const confettiRef   = useRef<HTMLCanvasElement | null>(null);
@@ -769,43 +771,78 @@ export function CourseTaker({
     }).catch(() => {});
   }, [formId, studentEmail, studentName, reviewMode]);
 
-  // Mark active attempt as completed via API -- returns a promise so callers can await it
-  const clearProgress = useCallback(async (finalScore: number): Promise<void> => {
-    if (!formId || !studentEmail.trim()) return;
-    if (reviewMode) return; // review mode -- keep original completed attempt intact
+  // Mark active attempt as completed via API.
+  // Retries up to 2 times on failure before throwing.
+  // Returns the server-confirmed score/passed/points on success.
+  const clearProgress = useCallback(async (finalScore: number): Promise<{ score: number; passed: boolean; points: number } | null> => {
+    if (!formId || !studentEmail.trim()) return null;
+    if (reviewMode) return null;
     const scorePct = totalQuestions > 0 ? Math.round((Math.min(finalScore, totalQuestions) / totalQuestions) * 100) : 100;
     const passed   = totalQuestions === 0 ? true : scorePct >= passmark;
     const { data: { session } } = await supabase.auth.getSession();
-    // Pass the final answers so complete-attempt writes them atomically with completed_at,
-    // avoiding a race where save-progress loses the last lessonOnly 'viewed' entry.
-    const res = await fetch('/api/course', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-      },
-      body: JSON.stringify({
-        action:                 'complete-attempt',
-        course_id:              formId,
-        score:                  scorePct,
-        passed,
-        points:                 totalPoints,
-        current_question_index: totalQuestions,
-        final_answers:          answersRef.current,
-      }),
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+    const body = JSON.stringify({
+      action:                 'complete-attempt',
+      course_id:              formId,
+      score:                  scorePct,
+      passed,
+      points:                 totalPoints,
+      current_question_index: totalQuestions,
+      final_answers:          answersRef.current,
     });
-    if (!res.ok) throw new Error(`complete-attempt failed: ${res.status}`);
+
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 1500 * attempt));
+      try {
+        const res = await fetch('/api/course', { method: 'POST', headers, body });
+        if (res.ok) {
+          const json = await res.json().catch(() => ({}));
+          return {
+            score:  typeof json.score  === 'number' ? json.score  : scorePct,
+            passed: typeof json.passed === 'boolean' ? json.passed : passed,
+            points: typeof json.points === 'number' ? json.points : totalPoints,
+          };
+        }
+        lastErr = new Error(`complete-attempt failed: ${res.status}`);
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr;
   }, [formId, studentEmail, totalQuestions, passmark, totalPoints, reviewMode]);
 
   const finishCourse = useCallback(async (finalScore: number) => {
     setSubmitError('');
+    setSubmitSaving(true);
     try {
-      await clearProgress(finalScore);
-      setPhase('complete');
+      const result = await clearProgress(finalScore);
+      const confirmedScore  = result?.score  ?? (totalQuestions > 0 ? Math.round((Math.min(finalScore, totalQuestions) / totalQuestions) * 100) : 100);
+      const confirmedPassed = result?.passed ?? (totalQuestions === 0 ? true : confirmedScore >= passmark);
+      const confirmedPoints = result?.points ?? totalPoints;
+      if (result) setServerResult(result);
+      // Skip the intermediate "Submit & See Results" screen -- go straight to results
+      // using the server-confirmed values so what the student sees matches what is stored.
+      await (onSubmit({ preventDefault: () => {} } as any, {
+        name:         studentName,
+        email:        studentEmail,
+        score:        finalScore,
+        total:        totalQuestions,
+        percentage:   confirmedScore,
+        passed:       confirmedPassed,
+        answers:      answersRef.current,
+        points:       confirmedPoints,
+        streak,
+        studentToken: sessionTokenRef.current,
+      }) as any);
+      setPhase('complete'); // triggers SQL runtime cleanup via useEffect
     } catch {
       setSubmitError('Could not save your result. Please check your connection and try again.');
+    } finally {
+      setSubmitSaving(false);
     }
-  }, [clearProgress]);
+  }, [clearProgress, onSubmit, studentName, studentEmail, totalQuestions, passmark, totalPoints, streak]);
 
   // Resume from saved progress
   const handleResume = useCallback(() => {
@@ -1025,8 +1062,8 @@ export function CourseTaker({
 
   // -- Success screen (shown after submission) --
   if (isSuccess) {
-    const submittedPct = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 100;
-    const submittedPassed = totalQuestions === 0 ? true : submittedPct >= passmark;
+    const submittedPct    = serverResult?.score  ?? (totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 100);
+    const submittedPassed = serverResult?.passed ?? (totalQuestions === 0 ? true : submittedPct >= passmark);
 
     const buildLinkedInUrl = (name: string, certId: string, orgName?: string, issuedAt?: string | null) => {
       const issueDate = issuedAt ? new Date(issuedAt) : new Date();
@@ -2438,6 +2475,24 @@ export function CourseTaker({
               style={{ background: '#10b981' }}>
               🔥 {streakToast.replace(/^🔥\s*/, '')}
             </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* -- Saving banner -- */}
+      <AnimatePresence>
+        {submitSaving && !submitError && (
+          <motion.div
+            key="submit-saving"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl"
+            style={{ background: '#18181b', border: '1px solid rgba(255,255,255,0.1)', maxWidth: 420, width: 'calc(100vw - 32px)' }}
+          >
+            <Loader2 className="w-4 h-4 text-zinc-400 flex-shrink-0 animate-spin" />
+            <p className="flex-1 text-xs text-zinc-300">Saving your result...</p>
           </motion.div>
         )}
       </AnimatePresence>
