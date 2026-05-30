@@ -41,8 +41,12 @@ function quoteIdent(name: string) {
   return `"${name.replace(/"/g, '""')}"`;
 }
 
+function stripSqlNameMarkup(raw: string) {
+  return raw.trim().replace(/^`([^`]+)`$/, '$1');
+}
+
 function normalizeTableName(raw: string) {
-  return raw.trim().replace(/[^a-zA-Z0-9_]/g, '_').replace(/^(\d)/, '_$1') || 'table_data';
+  return stripSqlNameMarkup(raw).replace(/[^a-zA-Z0-9_]/g, '_').replace(/^(\d)/, '_$1') || 'table_data';
 }
 
 function scalarToSql(value: unknown, targetType?: string) {

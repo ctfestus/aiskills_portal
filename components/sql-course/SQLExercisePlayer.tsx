@@ -60,6 +60,32 @@ const vscLightHighlight = syntaxHighlighting(HighlightStyle.define([
   // identifiers stay default (#1e1e1e) -- set via editor theme
 ]));
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]!));
+}
+
+function stripWrappingBackticks(value: string): string {
+  return value.trim()
+    .replace(/^`([^`]+)`$/, '$1')
+    .replace(/^&#96;([\s\S]+?)&#96;$/i, '$1')
+    .replace(/^&grave;([\s\S]+?)&grave;$/i, '$1');
+}
+
+function renderRichText(html: string): string {
+  const normalizedCode = html.replace(/<code\b[^>]*>([\s\S]*?)<\/code>/gi, (_, code: string) =>
+    `<code>${escapeHtml(stripWrappingBackticks(code).replace(/`|&#96;|&grave;/gi, ''))}</code>`
+  );
+  return sanitizeRichText(
+    normalizedCode.replace(/`([^`]+)`/g, (_, code: string) => `<code>${escapeHtml(code)}</code>`)
+  );
+}
+
 interface Props {
   question: any;
   runtime: SQLRuntime | null;
@@ -823,17 +849,16 @@ export default function SQLExercisePlayer({
               )}
               {lesson?.body && (
                 <div
-                  className={`prose max-w-none ve-lesson-body [&_blockquote]:border-l-[color:var(--lesson-accent)] [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[13px] [&_:not(pre)>code]:text-[var(--lesson-accent)] [&_:not(pre)>code]:bg-[var(--lesson-accent-bg)] [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_:not(pre)>code]:border [&_:not(pre)>code]:border-[var(--lesson-accent-border)] [&_pre]:bg-[var(--lesson-code-bg)] [&_pre]:border-l-4 [&_pre]:border-l-[color:var(--lesson-accent)] [&_pre]:rounded-r-md [&_pre]:py-3 [&_pre]:px-4 [&_pre_code]:font-mono [&_pre_code]:text-[13px] [&_pre_code]:bg-transparent [&_pre_code]:border-0 [&_pre_code]:p-0 [&_pre_code]:text-[var(--lesson-pre-text)] ${isDark ? 'dark prose-invert prose-p:text-zinc-300 prose-p:leading-[1.65] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-pre:bg-transparent' : 'prose-p:text-[#3d4f72] prose-p:leading-[1.65] prose-headings:text-[#1a1d2e] prose-headings:font-semibold prose-strong:text-[#1a1d2e] prose-li:text-[#3d4f72] prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-pre:bg-transparent'}`}
+                  className={`prose max-w-none ve-lesson-body [&_blockquote]:border-l-[color:var(--lesson-accent)] [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[13px] [&_:not(pre)>code]:text-[var(--lesson-accent)] [&_:not(pre)>code]:bg-[var(--lesson-accent-bg)] [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_pre]:bg-[var(--lesson-code-bg)] [&_pre]:border-l-4 [&_pre]:border-l-[color:var(--lesson-accent)] [&_pre]:rounded-r-md [&_pre]:py-3 [&_pre]:px-4 [&_pre_code]:font-mono [&_pre_code]:text-[13px] [&_pre_code]:bg-transparent [&_pre_code]:border-0 [&_pre_code]:p-0 [&_pre_code]:text-[var(--lesson-pre-text)] ${isDark ? 'dark prose-invert prose-p:text-zinc-300 prose-p:leading-[1.65] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-pre:bg-transparent' : 'prose-p:text-[#3d4f72] prose-p:leading-[1.65] prose-headings:text-[#1a1d2e] prose-headings:font-semibold prose-strong:text-[#1a1d2e] prose-li:text-[#3d4f72] prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-pre:bg-transparent'}`}
                   style={{
                     color: isDark ? '#d4d4d8' : '#3d4f72',
                     fontSize: 15,
                     '--lesson-accent': accentColor,
                     '--lesson-accent-bg': `${accentColor}22`,
-                    '--lesson-accent-border': `${accentColor}55`,
                     '--lesson-code-bg': isDark ? `${accentColor}18` : `${accentColor}12`,
                     '--lesson-pre-text': isDark ? '#c9d1d9' : '#1a1d2e',
                   } as React.CSSProperties}
-                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(lesson.body.replace(/`([^`]+)`/g, '<code>$1</code>')) }}
+                  dangerouslySetInnerHTML={{ __html: renderRichText(lesson.body) }}
                 />
               )}
 
@@ -847,14 +872,13 @@ export default function SQLExercisePlayer({
                     Task
                   </p>
                   <div
-                    className={`prose max-w-none ve-lesson-body [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[var(--lesson-accent)] [&_:not(pre)>code]:bg-[var(--lesson-accent-bg)] [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_:not(pre)>code]:border [&_:not(pre)>code]:border-[var(--lesson-accent-border)] ${isDark ? 'dark prose-invert prose-p:text-zinc-300 prose-p:leading-[1.65] prose-li:text-zinc-300' : 'prose-p:text-[#3d4f72] prose-p:leading-[1.65] prose-li:text-[#3d4f72]'}`}
+                    className={`prose max-w-none ve-lesson-body [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[var(--lesson-accent)] [&_:not(pre)>code]:bg-[var(--lesson-accent-bg)] [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 ${isDark ? 'dark prose-invert prose-p:text-zinc-300 prose-p:leading-[1.65] prose-li:text-zinc-300' : 'prose-p:text-[#3d4f72] prose-p:leading-[1.65] prose-li:text-[#3d4f72]'}`}
                     style={{
                       fontSize: 15,
                       '--lesson-accent': accentColor,
                       '--lesson-accent-bg': `${accentColor}22`,
-                      '--lesson-accent-border': `${accentColor}55`,
                     } as React.CSSProperties}
-                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(String(question.question).replace(/`([^`]+)`/g, '<code>$1</code>')) }}
+                    dangerouslySetInnerHTML={{ __html: renderRichText(String(question.question)) }}
                   />
                 </>
               )}

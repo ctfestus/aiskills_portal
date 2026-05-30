@@ -401,6 +401,10 @@ body {
 [data-theme="dark"] .rich-content a       { color: #3E93FF; }
 [data-theme="dark"] .rich-content blockquote { color: #a1a1aa; }
 
+/* Suppress Tailwind Typography default backtick pseudo-elements on inline code */
+.ve-lesson-body code::before,
+.ve-lesson-body code::after { content: none !important; }
+
 /* Lesson body / editor table styles — light mode (! needed to override AI inline styles) */
 .ve-lesson-body table, .rich-editor table { width: 100% !important; border-collapse: collapse !important; }
 .ve-lesson-body thead tr, .rich-editor thead tr { background-color: #f1f5f9 !important; }

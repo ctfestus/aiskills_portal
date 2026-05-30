@@ -48,6 +48,36 @@ type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'co
 
 const REVIEW_TYPES: QuestionType[] = ['code_review', 'excel_review', 'dashboard_critique', 'document_review'];
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]!));
+}
+
+function stripWrappingBackticks(value: string): string {
+  return value.trim()
+    .replace(/^(?:`|&#96;|&grave;)/i, '')
+    .replace(/(?:`|&#96;|&grave;)$/i, '');
+}
+
+function renderBody(html: string): string {
+  const normalizedCode = html.replace(/<code\b[^>]*>([\s\S]*?)<\/code>/gi, (_, code: string) =>
+    `<code>${escapeHtml(stripWrappingBackticks(code).replace(/`|&#96;|&grave;/gi, ''))}</code>`
+  );
+  return sanitizeRichText(
+    normalizedCode
+      .replace(/``([^`]+)``/g, (_, code: string) => `<code>${escapeHtml(code)}</code>`)
+      .replace(/`([^`]+)`/g, (_, code: string) => `<code>${escapeHtml(code)}</code>`)
+  );
+}
+
+const INLINE_CODE_BADGE_CLASSES =
+  '[&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[0.9em] [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_:not(pre)>code]:bg-emerald-50 [&_:not(pre)>code]:text-emerald-700 dark:[&_:not(pre)>code]:bg-emerald-500/15 dark:[&_:not(pre)>code]:text-emerald-400 [&_:not(pre)>code]:before:content-none [&_:not(pre)>code]:after:content-none';
+
 interface DownloadItem {
   id: string;
   title: string;
@@ -2989,9 +3019,13 @@ export function CourseTaker({
                                   </p>
                                 ) : (
                                   <>
-                                    <p className="text-[12.5px] font-semibold leading-snug"
+                                    <p className="text-[12.5px] font-semibold leading-snug line-clamp-2"
                                       style={{ color: isCurrent ? (isDark ? '#f0f0f0' : '#111') : isDark ? '#777' : '#888' }}>
-                                      {REVIEW_TYPES.includes(q.type as QuestionType) ? 'Project' : 'Test Your Knowledge'}
+                                      {REVIEW_TYPES.includes(q.type as QuestionType)
+                                        ? 'Project'
+                                        : q.type === 'sql_exercise'
+                                          ? ((q as any).lesson?.title || (q as any).question || 'SQL Exercise')
+                                          : 'Test Your Knowledge'}
                                     </p>
                                     <div className="flex items-center gap-1.5 mt-1">
                                       <span className="text-[11px] font-medium" style={{ color: isDark ? '#555' : '#777' }}>
@@ -3003,7 +3037,8 @@ export function CourseTaker({
                                           : q.type === 'excel_review' ? 'AI Excel Review'
                                           : q.type === 'dashboard_critique' ? 'AI Dashboard Review'
                                           : q.type === 'document_review' ? 'AI Document Review'
-                                                          : 'Multiple choice'}
+                                          : q.type === 'sql_exercise' ? 'SQL Exercise'
+                                          : 'Multiple choice'}
                                       </span>
                                       <span style={{ color: isDark ? '#444' : '#bbb' }}>·</span>
                                       <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold"
@@ -3231,12 +3266,12 @@ export function CourseTaker({
                         {lesson.body && (
                           <div className="px-4 sm:px-8 pt-4 sm:pt-6 pb-5 sm:pb-6">
                             <div
-                              className={`prose prose-sm max-w-none [font-size:15.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
+                              className={`prose prose-sm max-w-none [font-size:15.5px] ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark
                                 ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
                                 : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
                               }`}
                               style={{ color: isDark ? '#d4d4d8' : '#3f3f46', ...fontStyle }}
-                              dangerouslySetInnerHTML={{ __html: sanitizeRichText(lesson.body) }}
+                              dangerouslySetInnerHTML={{ __html: renderBody(lesson.body) }}
                             />
                           </div>
                         )}
@@ -3426,12 +3461,12 @@ export function CourseTaker({
                       )}
                       {currentQuestion.lesson.body && (
                         <div
-                          className={`mb-6 prose prose-sm max-w-none [font-size:15.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
+                          className={`mb-6 prose prose-sm max-w-none [font-size:15.5px] ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark
                             ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
                             : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
                           }`}
                           style={{ color: isDark ? '#d4d4d8' : '#3f3f46', ...fontStyle }}
-                          dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentQuestion.lesson.body) }}
+                          dangerouslySetInnerHTML={{ __html: renderBody(currentQuestion.lesson.body) }}
                         />
                       )}
                     </>
@@ -3883,12 +3918,12 @@ export function CourseTaker({
                   )}
                   {currentQuestion.lesson.body && (
                     <div
-                      className={`prose prose-base sm:prose-lg max-w-none ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
+                      className={`prose prose-base sm:prose-lg max-w-none ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark
                         ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.65] prose-headings:text-white prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-300 prose-blockquote:not-italic'
                         : 'prose-p:text-zinc-700 prose-p:leading-[1.65] prose-headings:text-zinc-900 prose-strong:text-zinc-900 prose-li:text-zinc-700 prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-700 prose-blockquote:not-italic'
                       }`}
                       style={{ color: isDark ? '#d4d4d8' : '#3f3f46', ...fontStyle }}
-                      dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentQuestion.lesson.body) }}
+                      dangerouslySetInnerHTML={{ __html: renderBody(currentQuestion.lesson.body) }}
                     />
                   )}
                   {(config as any).lessonTiming === 'before' && !isChecking ? (
