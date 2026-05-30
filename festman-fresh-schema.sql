@@ -263,7 +263,7 @@ CREATE TABLE public.assignments (
   status                  text        NOT NULL DEFAULT 'draft'
                                         CHECK (status IN ('draft','published','closed')),
   type                    text        NOT NULL DEFAULT 'standard'
-                                        CHECK (type IN ('standard','code_review','excel_review','dashboard_critique','virtual_experience')),
+                                        CHECK (type IN ('standard','code_review','excel_review','dashboard_critique','virtual_experience','document_review')),
   config                  jsonb,
   deadline_date           date,
   created_at              timestamptz NOT NULL DEFAULT now(),
@@ -2166,6 +2166,24 @@ CREATE INDEX idx_certificates_course_id ON public.certificates(course_id);
 -- event_registrations
 CREATE INDEX idx_event_registrations_student ON public.event_registrations(student_id);
 CREATE INDEX idx_event_registrations_event   ON public.event_registrations(event_id);
+
+-- live_attendance (migration 112)
+CREATE INDEX idx_live_attendance_event_id   ON public.live_attendance(event_id);
+CREATE INDEX idx_live_attendance_student_id ON public.live_attendance(student_id);
+
+-- recording_entries (migration 112)
+CREATE INDEX idx_recording_entries_recording_id ON public.recording_entries(recording_id);
+
+-- recordings (migration 112)
+CREATE INDEX idx_recordings_status     ON public.recordings(status);
+CREATE INDEX idx_recordings_cohort_ids ON public.recordings USING GIN (cohort_ids);
+
+-- certificates (migration 112)
+CREATE INDEX idx_certificates_ve_id            ON public.certificates(ve_id);
+CREATE INDEX idx_certificates_learning_path_id ON public.certificates(learning_path_id);
+
+-- announcements (migration 112)
+CREATE INDEX idx_announcements_published_at ON public.announcements(published_at);
 
 -- sent_nudges (migration 016)
 CREATE INDEX sent_nudges_lookup ON public.sent_nudges(student_id, nudge_type, sent_at);

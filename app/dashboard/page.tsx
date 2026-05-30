@@ -1918,9 +1918,69 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
 
           {viewingSub.response_text ? (() => {
             const subAssignType = selected?.type ?? 'standard';
-            if (['code_review', 'excel_review', 'dashboard_critique'].includes(subAssignType)) {
+            if (['code_review', 'excel_review', 'dashboard_critique', 'document_review'].includes(subAssignType)) {
               try {
                 const parsed = JSON.parse(viewingSub.response_text);
+
+                if (subAssignType === 'document_review') {
+                  const gaps: string[] = parsed.gaps ?? (parsed.sections ?? []).map((s: any) => s.title);
+                  const topRecs: string[] = parsed.topRecommendations ?? [];
+                  const submittedDate = viewingSub.submitted_at ?? viewingSub.updated_at;
+                  const reviewMode = parsed.manualReview ? 'manual' : 'ai';
+                  return (
+                    <div className="rounded-xl overflow-hidden mb-3">
+                      <div className="px-4 py-3 flex items-center justify-between" style={{ background: '#0f172a' }}>
+                        <div className="flex-1 min-w-0 mr-3">
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                            {reviewMode === 'manual' ? 'Submitted for Review' : 'AI Document Review'}
+                          </p>
+                          {submittedDate && <p className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>{new Date(submittedDate).toLocaleDateString()}</p>}
+                          {parsed.executiveSummary && reviewMode !== 'manual' && <p className="text-xs mt-1 max-w-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{parsed.executiveSummary}</p>}
+                        </div>
+                        {reviewMode !== 'manual' && parsed.overallScore > 0 && (
+                          <div className="flex items-baseline gap-1 flex-shrink-0 ml-4">
+                            <span className="font-black" style={{ fontSize: 44, color: '#fff', lineHeight: 1 }}>{parsed.overallScore?.toFixed(1)}</span>
+                            <span className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>/100</span>
+                          </div>
+                        )}
+                      </div>
+                      {parsed.fileUrl && (
+                        <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
+                          <a href={parsed.fileUrl} target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold transition-opacity hover:opacity-70"
+                            style={{ color: '#6366f1' }}>
+                            <Download className="w-3 h-3" /> Download submitted report
+                            {parsed.fileName && <span className="font-normal ml-1 opacity-60">({parsed.fileName})</span>}
+                          </a>
+                        </div>
+                      )}
+                      {gaps.length > 0 && reviewMode !== 'manual' && (
+                        <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
+                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Areas to Improve</p>
+                          <div className="space-y-1">
+                            {gaps.map((t, i) => (
+                              <div key={i} className="flex items-start gap-2 text-sm" style={{ color: C.text }}>
+                                <span style={{ color: '#ef4444', flexShrink: 0 }}>•</span><span>{t}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {topRecs.length > 0 && reviewMode !== 'manual' && (
+                        <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
+                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Top Recommendations</p>
+                          <div className="space-y-1.5">
+                            {topRecs.map((r, i) => (
+                              <div key={i} className="flex items-start gap-2 text-sm" style={{ color: C.text }}>
+                                <span className="font-bold flex-shrink-0" style={{ color: '#16a34a' }}>{i + 1}.</span><span>{r}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
 
                 if (subAssignType === 'code_review' || subAssignType === 'excel_review') {
                   const issueTitles: string[] = parsed.issueTitles ?? (parsed.issues ?? []).map((i: any) => i.title);

@@ -394,7 +394,7 @@ export async function POST(req: NextRequest) {
           const ua = storedAnswers[q.id];
           if (ua == null) return false;
           const type = q.type ?? 'multiple_choice';
-          if (['code_review', 'excel_review', 'dashboard_critique'].includes(type)) return ua === 'completed';
+          if (['code_review', 'excel_review', 'dashboard_critique', 'document_review'].includes(type)) return ua === 'completed';
           if (type === 'sql_exercise') {
             // Trust the result the browser stored when the student ran the query.
             // Re-running via Node DuckDB at submission time produces different

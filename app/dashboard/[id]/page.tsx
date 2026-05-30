@@ -104,6 +104,7 @@ function ResponsesTab({
   const [selectedResponse, setSelectedResponse] = useState<any | null>(null);
   const [eventAttendance, setEventAttendance] = useState<any[]>([]);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  const [docReviewStudent, setDocReviewStudent] = useState<any | null>(null);
 
   useEffect(() => {
     if (!isEvent || !form.id) return;
@@ -181,6 +182,8 @@ function ResponsesTab({
 
   if (isCourse) {
     const questions = form.config?.questions || [];
+    const docReviewQuestions = questions.filter((q: any) => q.type === 'document_review');
+    const hasDocReview = docReviewQuestions.length > 0;
     const passmark = form.config?.passmark ?? 50;
     const completedAttempts = courseProgress.filter((p: any) => p.completed);
     const passedAttempts = completedAttempts.filter((p: any) => p.passed);
@@ -201,6 +204,9 @@ function ResponsesTab({
           } catch {
             return false;
           }
+        }
+        if (q.type === 'document_review') {
+          try { const p = JSON.parse(answer); return p?.completed === true; } catch { return answer === 'completed'; }
         }
         if (['code_review', 'excel_review', 'dashboard_critique'].includes(q.type)) return answer === 'completed';
         if (q.type === 'fill_blank') {
@@ -348,6 +354,7 @@ function ResponsesTab({
                     <th className="px-3 sm:px-6 py-3 font-medium">Status</th>
                     <th className="px-3 sm:px-6 py-3 font-medium">Progress</th>
                     <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Last Active</th>
+                    {hasDocReview && <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Reports</th>}
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${dividerCls}`}>
@@ -371,12 +378,18 @@ function ResponsesTab({
                         </div>
                       </td>
                       <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>--</td>
+                      {hasDocReview && <td className="hidden sm:table-cell px-3 sm:px-6 py-3">--</td>}
                     </tr>
                   ))}
                   {/* In-progress students */}
                   {inProgressStudents.map((p: any) => {
                     const qTotal = questions.length || 1;
                     const progressPct = Math.min(100, Math.round(((p.current_question_index ?? 0) / qTotal) * 100));
+                    const submittedDocs = docReviewQuestions.filter((q: any) => {
+                      const ans = p.answers?.[q.id];
+                      if (!ans) return false;
+                      return ans === 'completed' || ans === 'failed';
+                    });
                     return (
                       <tr key={`ip_${p.student_email}`} className={`transition-colors ${tableRow}`}>
                         <td className={`px-3 sm:px-6 py-3 font-medium ${textPrim}`}>{p.student_name || <span className={`italic ${textMut}`}>Unknown</span>}</td>
@@ -398,6 +411,15 @@ function ResponsesTab({
                         <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>
                           {p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--'}
                         </td>
+                        {hasDocReview && (
+                          <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
+                            {submittedDocs.length > 0
+                              ? <button onClick={() => setDocReviewStudent({ ...p, docQuestions: docReviewQuestions })} className="text-xs font-semibold px-2.5 py-1 rounded-lg transition-opacity hover:opacity-70" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>
+                                  View {submittedDocs.length}
+                                </button>
+                              : <span className={`text-xs ${textMut}`}>--</span>}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -405,6 +427,11 @@ function ResponsesTab({
                   {[...completedByEmail.values()].map((p: any) => {
                     const pct = p.score ?? 0;
                     const pass = p.passed ?? false;
+                    const submittedDocs = docReviewQuestions.filter((q: any) => {
+                      const ans = p.answers?.[q.id];
+                      if (!ans) return false;
+                      return ans === 'completed' || ans === 'failed';
+                    });
                     return (
                       <tr key={`cp_${p.student_email}`} className={`transition-colors ${tableRow}`}>
                         <td className={`px-3 sm:px-6 py-3 font-medium ${textPrim}`}>{p.student_name || <span className={`italic ${textMut}`}>Unknown</span>}</td>
@@ -426,17 +453,111 @@ function ResponsesTab({
                         <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>
                           {p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--'}
                         </td>
+                        {hasDocReview && (
+                          <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
+                            {submittedDocs.length > 0
+                              ? <button onClick={() => setDocReviewStudent({ ...p, docQuestions: docReviewQuestions })} className="text-xs font-semibold px-2.5 py-1 rounded-lg transition-opacity hover:opacity-70" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>
+                                  View {submittedDocs.length}
+                                </button>
+                              : <span className={`text-xs ${textMut}`}>--</span>}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
                   {totalEnrolled === 0 && (
-                    <tr><td colSpan={5} className={`px-6 py-12 text-center ${textMut}`}>No students enrolled yet.</td></tr>
+                    <tr><td colSpan={hasDocReview ? 6 : 5} className={`px-6 py-12 text-center ${textMut}`}>No students enrolled yet.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
+
+      {/* Document review modal */}
+      {docReviewStudent && (() => {
+        const s = docReviewStudent;
+        const docQs: any[] = s.docQuestions ?? [];
+        return (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setDocReviewStudent(null)}>
+            <div className={`rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-[rgba(0,0,0,0.08)]'}`} onClick={e => e.stopPropagation()}>
+              <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? 'border-zinc-800' : 'border-[rgba(0,0,0,0.07)]'}`}>
+                <div>
+                  <h3 className={`text-base font-semibold ${textPrim}`}>{s.student_name || s.student_email || 'Student'}</h3>
+                  {s.student_name && <p className={`text-xs mt-0.5 ${textMut}`}>{s.student_email}</p>}
+                </div>
+                <button onClick={() => setDocReviewStudent(null)} className={textMut}>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                {docQs.map((q: any) => {
+                  const ans = s.answers?.[q.id];
+                  if (ans !== 'completed' && ans !== 'failed') return null;
+                  let lean: any = null;
+                  try { lean = JSON.parse(s.answers?.[`__review_${q.id}`] ?? ''); } catch {}
+                  const reviewMode = lean?.documentReviewMode ?? q.documentReviewMode ?? 'ai_only';
+                  return (
+                    <div key={q.id} className={`rounded-xl overflow-hidden border ${isDark ? 'border-zinc-700' : 'border-[rgba(0,0,0,0.08)]'}`}>
+                      <div className="px-4 py-3 flex items-start justify-between gap-3" style={{ background: '#0f172a' }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                            {reviewMode === 'manual' ? 'Submitted for Review' : 'AI Document Review'}
+                          </p>
+                          <p className="text-xs font-semibold truncate mb-1" style={{ color: 'rgba(255,255,255,0.7)' }}>{q.question || 'Document Review'}</p>
+                          {lean?.executiveSummary && reviewMode !== 'manual' && (
+                            <p className="text-xs leading-relaxed line-clamp-3" style={{ color: 'rgba(255,255,255,0.5)' }}>{lean.executiveSummary}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {ans === 'failed' && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}>Below minimum</span>
+                          )}
+                          {lean?.overallScore > 0 && reviewMode !== 'manual' && (
+                            <div className="flex items-baseline gap-0.5">
+                              <span className="font-black" style={{ fontSize: 32, color: '#fff', lineHeight: 1 }}>{lean.overallScore.toFixed(1)}</span>
+                              <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>/100</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {lean?.gaps?.length > 0 && reviewMode !== 'manual' && (
+                        <div className={`px-4 py-3 border-t ${isDark ? 'border-zinc-700 bg-zinc-800/50' : 'border-[rgba(0,0,0,0.06)] bg-[#f8f8f5]'}`}>
+                          <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${textMut}`}>Areas to Improve</p>
+                          <div className="space-y-1">
+                            {lean.gaps.slice(0, 3).map((g: string, i: number) => (
+                              <div key={i} className={`flex items-start gap-2 text-xs ${textPrim}`}>
+                                <span className="text-red-400 flex-shrink-0">•</span><span>{g}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {lean?.topRecommendations?.length > 0 && reviewMode !== 'manual' && (
+                        <div className={`px-4 py-3 border-t ${isDark ? 'border-zinc-700 bg-zinc-800/50' : 'border-[rgba(0,0,0,0.06)] bg-[#f8f8f5]'}`}>
+                          <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${textMut}`}>Top Recommendations</p>
+                          <div className="space-y-1">
+                            {lean.topRecommendations.map((r: string, i: number) => (
+                              <div key={i} className={`flex items-start gap-2 text-xs ${textPrim}`}>
+                                <span className="font-bold flex-shrink-0" style={{ color: '#22c55e' }}>{i + 1}.</span><span>{r}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {!lean && (
+                        <div className={`px-4 py-3 border-t ${isDark ? 'border-zinc-700 bg-zinc-800/50' : 'border-[rgba(0,0,0,0.06)] bg-[#f8f8f5]'}`}>
+                          <span className={`text-xs ${textMut}`}>AI review details not available for this submission.</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       </div>
     );
   }

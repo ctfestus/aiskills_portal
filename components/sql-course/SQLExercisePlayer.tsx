@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Database,
+  Download,
   Loader2,
   Maximize2,
   Menu,
@@ -88,6 +89,26 @@ type DetailModal =
 function parseSaved(saved?: string) {
   if (!saved) return null;
   try { return JSON.parse(saved); } catch { return { query: saved }; }
+}
+
+function exportToCsv(result: SQLResult, filename: string) {
+  const escape = (v: unknown) => {
+    const s = formatCell(v);
+    if (s === '') return '';
+    if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+  const header = result.columns.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',');
+  const body = result.rows.map(row => row.map(escape).join(',')).join('\n');
+  const blob = new Blob([`${header}\n${body}`], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function quoteIdent(name: string) {
@@ -395,6 +416,7 @@ export default function SQLExercisePlayer({
   const [errorExplain, setErrorExplain]       = useState('');
   const [explainLoading, setExplainLoading]   = useState(false);
   const [resetKey, setResetKey]       = useState(0);
+  const [exportingTable, setExportingTable] = useState('');
   const resizingRef = useRef(false);
   const resizeStartX = useRef(0);
   const resizeStartW = useRef(0);
@@ -510,6 +532,21 @@ export default function SQLExercisePlayer({
       const out = await executeQuery(runtime.conn, `SELECT * FROM ${quoteIdent(tableName)} LIMIT 50`);
       setSampleResults(prev => ({ ...prev, [tableName]: out }));
     } catch { /* ignore */ } finally { setSampleLoading(''); }
+  }
+
+  async function exportCurrent() {
+    if (activeTab === 'result') {
+      if (result) exportToCsv(result, 'query_result.csv');
+      return;
+    }
+    if (!runtime || exportingTable) return;
+    setExportingTable(activeTab);
+    try {
+      const full = await executeQuery(runtime.conn, `SELECT * FROM ${quoteIdent(activeTab)}`, false, { limit: null });
+      exportToCsv(full, `${activeTab}.csv`);
+    } catch { /* ignore */ } finally {
+      setExportingTable('');
+    }
   }
 
   async function runQuery() {
@@ -1049,6 +1086,21 @@ export default function SQLExercisePlayer({
                   {visibleResult.capped ? ` (capped at ${STUDENT_RESULT_LIMIT})` : ''}
                 </span>
               )}
+              {(activeTab === 'result' ? !!result : !!runtime) && (
+                <button
+                  type="button"
+                  onClick={exportCurrent}
+                  disabled={!!exportingTable}
+                  className="w-11 border-l grid place-items-center transition-opacity hover:opacity-60 disabled:opacity-30"
+                  style={{ borderColor: border }}
+                  title={activeTab === 'result' ? 'Export result as CSV' : `Export ${activeTab} as CSV`}
+                >
+                  {exportingTable === activeTab
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: muted }} />
+                    : <Download className="w-3.5 h-3.5" style={{ color: muted }} />
+                  }
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setModal({ type: 'grid', title: activeTab === 'result' ? 'Query result' : `${activeTab} sample`, result: visibleResult })}
@@ -1200,14 +1252,27 @@ export default function SQLExercisePlayer({
                 </p>
                 <h3 className="text-[14px] font-semibold">{modal.title}</h3>
               </div>
-              <button
-                type="button"
-                onClick={() => setModal(null)}
-                className="w-8 h-8 grid place-items-center rounded-lg transition-opacity hover:opacity-70"
-                style={{ background: subtle, color: muted }}
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {modal.type === 'grid' && modal.result && modal.result.rows.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => exportToCsv(modal.result!, `${modal.title.replace(/\s+/g, '_')}.csv`)}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold border transition-opacity hover:opacity-70"
+                    style={{ borderColor: border, background: subtle, color: muted }}
+                    title="Export as CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Export CSV
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setModal(null)}
+                  className="w-8 h-8 grid place-items-center rounded-lg transition-opacity hover:opacity-70"
+                  style={{ background: subtle, color: muted }}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <div className="flex-1 min-h-0 overflow-hidden p-4">
               {modal.type === 'cell' ? (

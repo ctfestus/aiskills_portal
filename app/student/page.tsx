@@ -1448,9 +1448,10 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   );
 }
 // --- Assignments section ---
-const CodeReviewPlayer      = dynamic(() => import('@/components/CodeReviewPlayer'),       { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
-const ExcelReviewPlayer     = dynamic(() => import('@/components/ExcelReviewPlayer'),      { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
+const CodeReviewPlayer        = dynamic(() => import('@/components/CodeReviewPlayer'),        { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
+const ExcelReviewPlayer       = dynamic(() => import('@/components/ExcelReviewPlayer'),       { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
 const DashboardCritiquePlayer = dynamic(() => import('@/components/DashboardCritiquePlayer'), { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
+const DocumentReviewPlayer    = dynamic(() => import('@/components/DocumentReviewPlayer'),    { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
 const AssignmentExperiencePlayer = dynamic(() => import('@/components/AssignmentExperiencePlayer'), { ssr: false, loading: () => <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#888' }}/></div> });
 
 function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, onBack }: { assignment: any; userId: string; studentName: string; studentEmail: string; C: typeof LIGHT_C; onBack: () => void }) {
@@ -1493,7 +1494,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
     setSelectedParticipants(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
   const assignmentType = assignment.type ?? 'standard';
-  const isAiType = ['code_review', 'excel_review', 'dashboard_critique'].includes(assignmentType);
+  const isAiType = ['code_review', 'excel_review', 'dashboard_critique', 'document_review'].includes(assignmentType);
   const isVeType = assignmentType === 'virtual_experience';
 
   useEffect(() => {
@@ -2325,6 +2326,20 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               savedResult={(() => { try { return submission?.response_text ? JSON.parse(submission.response_text) : undefined; } catch { return undefined; } })()}
               rubric={assignment.config?.rubric}
               onComplete={isGroupAssignment && !isLeader ? () => {} : (result: any) => autoSubmit(result.audit?.overallScore ?? null, JSON.stringify(result))}
+            />
+          )}
+          {assignmentType === 'document_review' && (
+            <DocumentReviewPlayer
+              reqId={assignment.id}
+              isDark={isDark}
+              accentColor={C.green}
+              completed={isGraded || isSubmitted}
+              savedSummary={(() => { try { return submission?.response_text ? JSON.parse(submission.response_text) : undefined; } catch { return undefined; } })()}
+              rubric={assignment.config?.rubric}
+              context={assignment.config?.context}
+              minScore={assignment.config?.minScore}
+              documentReviewMode={assignment.config?.documentReviewMode ?? 'ai_only'}
+              onComplete={isGroupAssignment && !isLeader ? () => {} : (result: any, lean: any) => autoSubmit(lean.overallScore || null, JSON.stringify(lean))}
             />
           )}
         </div>

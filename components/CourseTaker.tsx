@@ -37,15 +37,16 @@ import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
 import CodeReviewPlayer, { LeanSubmission } from '@/components/CodeReviewPlayer';
 import ExcelReviewPlayer, { ExcelLeanSubmission } from '@/components/ExcelReviewPlayer';
+import DocumentReviewPlayer, { DocumentLeanSubmission } from '@/components/DocumentReviewPlayer';
 import dynamic from 'next/dynamic';
 import { initSQLRuntime, SQLRuntime } from '@/lib/sql-engine';
 
 const SQLExercisePlayer = dynamic(() => import('@/components/sql-course/SQLExercisePlayer'), { ssr: false });
 
 type ShowAnswers = 'per_question' | 'after_quiz' | 'none';
-type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise';
+type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise' | 'document_review';
 
-const REVIEW_TYPES: QuestionType[] = ['code_review', 'excel_review', 'dashboard_critique'];
+const REVIEW_TYPES: QuestionType[] = ['code_review', 'excel_review', 'dashboard_critique', 'document_review'];
 
 interface DownloadItem {
   id: string;
@@ -88,6 +89,7 @@ interface CourseQuestion {
   context?: string;
   minScore?: number;
   reviewLanguage?: string;
+  documentReviewMode?: 'ai_only' | 'manual' | 'hybrid';
   sqlTables?: { id?: string; tableName: string; fileName?: string; fileUrl?: string; csvUrl?: string; seedSql?: string }[];
   sqlStarterCode?: string;
   sqlSolution?: string;
@@ -489,7 +491,21 @@ export function CourseTaker({
       setSelectedOption(null);
       setFillBlankAnswer('');
       if (prevAnswer) {
-        setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
+        // For document_review, a 'failed' answer means the student scored below minScore
+        // and still has retry attempts available -- don't mark as completed so they see
+        // the upload form again instead of being locked out of their retry.
+        if (qType !== 'document_review' || prevAnswer === 'completed') {
+          setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
+        }
+        if (qType === 'document_review') {
+          const shadowData = answers[`__review_${currentQuestion.id}`];
+          if (shadowData) {
+            try {
+              const parsed = JSON.parse(shadowData);
+              if (parsed) setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: parsed }));
+            } catch {}
+          }
+        }
       }
     } else if (prevAnswer) {
       // Normal question already answered -- restore locked state, no re-answering allowed
@@ -631,6 +647,26 @@ export function CourseTaker({
           setDisplayedPoints(prev.points ?? 0);
           setStreak(prev.streak ?? 0);
           setHintsUsed(new Set(prev.hints_used ?? []));
+          // Restore document_review summaries immediately -- the useEffect that normally
+          // does this only fires when currentQuestionIndex changes, but in review mode
+          // the index may not change (e.g. single-question course at index 0), so the
+          // effect never re-runs and savedSummary stays undefined.
+          const summaries: Record<string, any> = {};
+          const completed: string[] = [];
+          for (const q of questions) {
+            if ((q as any).type === 'document_review') {
+              const shadowData = restoredAnswers[`__review_${q.id}`];
+              if (shadowData) {
+                try {
+                  const parsed = JSON.parse(shadowData);
+                  if (parsed) summaries[q.id] = parsed;
+                } catch {}
+              }
+              if (restoredAnswers[q.id] === 'completed') completed.push(q.id);
+            }
+          }
+          if (Object.keys(summaries).length > 0) setReviewSummaries(prev => ({ ...prev, ...summaries }));
+          if (completed.length > 0) setReviewCompleted(prev => { const s = new Set(prev); completed.forEach(id => s.add(id)); return s; });
         }
         setReviewMode(true);
         setCheckingAttempts(false);
@@ -2966,6 +3002,7 @@ export function CourseTaker({
                                           : q.type === 'code_review' ? 'AI Code Review'
                                           : q.type === 'excel_review' ? 'AI Excel Review'
                                           : q.type === 'dashboard_critique' ? 'AI Dashboard Review'
+                                          : q.type === 'document_review' ? 'AI Document Review'
                                                           : 'Multiple choice'}
                                       </span>
                                       <span style={{ color: isDark ? '#444' : '#bbb' }}>·</span>
@@ -3477,6 +3514,45 @@ export function CourseTaker({
                         if (!alreadyDone && passed && !reviewMode) setScore(s => s + 1);
                         setAnswers(newAnswers);
                         saveProgress(newAnswers, currentQuestionIndex + 1, score + (!alreadyDone && passed ? 1 : 0), totalPoints, streak, hintsUsed);
+                      }}
+                    />
+                  )}
+                  {questionType === 'document_review' && (
+                    <DocumentReviewPlayer
+                      reqId={currentQuestion.id}
+                      isDark={isDark}
+                      accentColor={accent}
+                      completed={reviewCompleted.has(currentQuestion.id)}
+                      submissions={reviewSubmissions[currentQuestion.id] ?? []}
+                      savedSummary={reviewSummaries[currentQuestion.id]}
+                      context={currentQuestion.context}
+                      rubric={currentQuestion.rubric}
+                      minScore={(currentQuestion as any).documentReviewMode === 'manual' ? undefined : currentQuestion.minScore}
+                      maxReviews={(currentQuestion as any).documentReviewMode === 'manual' ? 1 : 2}
+                      documentReviewMode={(currentQuestion as any).documentReviewMode ?? 'ai_only'}
+                      onComplete={(_, lean, passed) => {
+                        const alreadyDone = reviewCompleted.has(currentQuestion.id);
+                        setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
+                        setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: lean }));
+                        setReviewSubmissions(prev => ({ ...prev, [currentQuestion.id]: [...(prev[currentQuestion.id] ?? []), lean] }));
+                        const answer = passed ? 'completed' : 'failed';
+                        // Store lean under a shadow key so instructors can read it from the dashboard
+                        // without affecting scoring (server only scores keys matching question IDs)
+                        const reviewKey = `__review_${currentQuestion.id}`;
+                        const leanSnapshot = JSON.stringify({
+                          overallScore: lean.overallScore,
+                          executiveSummary: lean.executiveSummary,
+                          gaps: lean.gaps,
+                          topRecommendations: lean.topRecommendations,
+                          submittedAt: lean.submittedAt,
+                          documentReviewMode: (currentQuestion as any).documentReviewMode ?? 'ai_only',
+                        });
+                        const newAnswers = { ...answersRef.current, [currentQuestion.id]: answer, [reviewKey]: leanSnapshot };
+                        answersRef.current = newAnswers;
+                        const countsAsScore = (currentQuestion as any).documentReviewMode !== 'manual' && passed;
+                        if (!alreadyDone && countsAsScore && !reviewMode) setScore(s => s + 1);
+                        setAnswers(newAnswers);
+                        saveProgress(newAnswers, currentQuestionIndex + 1, score + (!alreadyDone && countsAsScore ? 1 : 0), totalPoints, streak, hintsUsed);
                       }}
                     />
                   )}

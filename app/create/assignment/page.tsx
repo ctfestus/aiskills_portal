@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { useTheme } from '@/components/ThemeProvider';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Code2, FileSpreadsheet, LayoutDashboard, Briefcase, ClipboardList, Eye } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Code2, FileSpreadsheet, LayoutDashboard, Briefcase, ClipboardList, Eye, FileText } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const AssignmentExperiencePlayer = dynamic(() => import('@/components/AssignmentExperiencePlayer'), { ssr: false });
 import Link from 'next/link';
@@ -60,14 +60,15 @@ const DARK_C = {
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
-type AssignmentType = 'standard' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'virtual_experience';
+type AssignmentType = 'standard' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'virtual_experience' | 'document_review';
 
 const ASSIGNMENT_TYPES: { value: AssignmentType; label: string; icon: React.ReactNode; description: string }[] = [
-  { value: 'standard',            label: 'Standard',        icon: <ClipboardList style={{ width: 15, height: 15 }}/>,    description: 'Text response, file uploads and links' },
-  { value: 'code_review',         label: 'Code Review',     icon: <Code2 style={{ width: 15, height: 15 }}/>,            description: 'AI reviews submitted code' },
-  { value: 'excel_review',        label: 'Excel Review',    icon: <FileSpreadsheet style={{ width: 15, height: 15 }}/>,  description: 'AI reviews uploaded spreadsheet' },
-  { value: 'dashboard_critique',  label: 'Dashboard',       icon: <LayoutDashboard style={{ width: 15, height: 15 }}/>,  description: 'AI critiques a dashboard screenshot' },
-  { value: 'virtual_experience',  label: 'Virtual Experience', icon: <Briefcase style={{ width: 15, height: 15 }}/>,      description: 'Embed a full virtual experience' },
+  { value: 'standard',            label: 'Standard',           icon: <ClipboardList style={{ width: 15, height: 15 }}/>,    description: 'Text response, file uploads and links' },
+  { value: 'code_review',         label: 'Code Review',        icon: <Code2 style={{ width: 15, height: 15 }}/>,            description: 'AI reviews submitted code' },
+  { value: 'excel_review',        label: 'Excel Review',       icon: <FileSpreadsheet style={{ width: 15, height: 15 }}/>,  description: 'AI reviews uploaded spreadsheet' },
+  { value: 'dashboard_critique',  label: 'Dashboard',          icon: <LayoutDashboard style={{ width: 15, height: 15 }}/>,  description: 'AI critiques a dashboard screenshot' },
+  { value: 'document_review',     label: 'Document Review',    icon: <FileText style={{ width: 15, height: 15 }}/>,         description: 'AI reviews a submitted PDF or Word report' },
+  { value: 'virtual_experience',  label: 'Virtual Experience', icon: <Briefcase style={{ width: 15, height: 15 }}/>,        description: 'Embed a full virtual experience' },
 ];
 
 interface Resource {
@@ -231,6 +232,7 @@ export default function CreateAssignmentPage() {
       case 'code_review':        return { rubric, minScore, ...(schema.trim() ? { schema: schema.trim() } : {}) };
       case 'excel_review':       return { rubric, minScore, ...(context.trim() ? { context: context.trim() } : {}) };
       case 'dashboard_critique': return { rubric };
+      case 'document_review':    return { rubric, minScore, ...(context.trim() ? { context: context.trim() } : {}) };
       case 'virtual_experience': return veFormId ? { ve_form_id: veFormId } : null;
       default:                   return null;
     }
@@ -568,8 +570,21 @@ export default function CreateAssignmentPage() {
                     <p style={hintStyle(C)}>Each line becomes a separate rubric criterion the AI will grade against.</p>
                   </div>
 
+                  {/* Context (excel_review / document_review) */}
+                  {assignmentType === 'document_review' && (
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={labelStyle(C)}>Report scope / context <span style={{ fontSize: 12, fontWeight: 400, color: C.faint }}>(optional)</span></label>
+                      <textarea
+                        value={context}
+                        onChange={e => setContext(e.target.value)}
+                        placeholder="Describe what the report should cover, the market, industry, or company context the AI should use when reviewing..."
+                        style={textareaStyle(C)}
+                      />
+                    </div>
+                  )}
+
                   {/* Min Score */}
-                  {(assignmentType === 'code_review' || assignmentType === 'excel_review') && (
+                  {(assignmentType === 'code_review' || assignmentType === 'excel_review' || assignmentType === 'document_review') && (
                     <div style={{ marginBottom: 16 }}>
                       <label style={labelStyle(C)}>Minimum Pass Score <span style={{ fontSize: 12, fontWeight: 400 }}>(out of 100)</span></label>
                       <input

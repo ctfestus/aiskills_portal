@@ -52,7 +52,7 @@ interface FormField {
   description?: string;
 }
 
-type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise';
+type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise' | 'document_review';
 
 interface DownloadItem {
   id: string;
@@ -89,12 +89,13 @@ interface CourseQuestion {
     imageUrl?: string;
     videoUrl?: string;
   };
-  // AI review fields (code_review | excel_review | dashboard_critique)
+  // AI review fields (code_review | excel_review | dashboard_critique | document_review)
   rubric?: string[];
   schema?: string;
   context?: string;
   minScore?: number;
   reviewLanguage?: string;
+  documentReviewMode?: 'ai_only' | 'manual' | 'hybrid';
   sqlTables?: { id?: string; tableName: string; fileName?: string; fileUrl?: string; csvUrl?: string; seedSql?: string }[];
   sqlStarterCode?: string;
   sqlSolution?: string;
@@ -1709,6 +1710,7 @@ const [isSaving, setIsSaving] = useState(false);
       code_review:         { options: [], correctAnswer: '', rubric: ['Code runs without errors', 'Follows naming conventions', 'Logic is correct'], reviewLanguage: 'javascript', minScore: 70 },
       excel_review:        { options: [], correctAnswer: '', rubric: ['Correct formulas used', 'Data is accurate', 'Formatting is clean'], context: '', minScore: 70 },
       dashboard_critique:  { options: [], correctAnswer: '', rubric: ['Visuals are appropriate', 'Insights are accurate', 'Layout is clear'], context: '', minScore: 70 },
+      document_review:     { options: [], correctAnswer: '', rubric: ['Report addresses the brief', 'Analysis is evidence-based', 'Recommendations are actionable', 'Writing is clear and professional'], context: '', minScore: 70, documentReviewMode: 'ai_only' },
       sql_exercise:        { options: [], correctAnswer: '', sqlTables: [], sqlStarterCode: 'SELECT * FROM table_name LIMIT 10;', sqlSolution: '', sqlExpectedResult: undefined, sqlHints: [], sqlResultOrdered: false, sqlNumericTolerance: 0, sqlRequiredPatterns: [] },
     };
     updateConfig({
@@ -1770,6 +1772,7 @@ const [isSaving, setIsSaving] = useState(false);
       code_review:         { options: [], correctAnswer: '', rubric: ['Code runs without errors', 'Follows naming conventions', 'Logic is correct'], reviewLanguage: 'javascript', minScore: 70 },
       excel_review:        { options: [], correctAnswer: '', rubric: ['Correct formulas used', 'Data is accurate', 'Formatting is clean'], context: '', minScore: 70 },
       dashboard_critique:  { options: [], correctAnswer: '', rubric: ['Visuals are appropriate', 'Insights are accurate', 'Layout is clear'], context: '', minScore: 70 },
+      document_review:     { options: [], correctAnswer: '', rubric: ['Report addresses the brief', 'Analysis is evidence-based', 'Recommendations are actionable', 'Writing is clear and professional'], context: '', minScore: 70, documentReviewMode: 'ai_only' },
       sql_exercise:        { options: [], correctAnswer: '', sqlTables: [], sqlStarterCode: 'SELECT * FROM table_name LIMIT 10;', sqlSolution: '', sqlExpectedResult: undefined, sqlHints: [], sqlResultOrdered: false, sqlNumericTolerance: 0, sqlRequiredPatterns: [] },
     };
     const qs = [...(formConfig.questions || [])];
@@ -3149,6 +3152,7 @@ const [isSaving, setIsSaving] = useState(false);
                           <option value="code_review">AI Code Review</option>
                           <option value="excel_review">AI Excel Review</option>
                           <option value="dashboard_critique">AI Dashboard Critique</option>
+                          <option value="document_review">AI Document Review</option>
                           <option value="sql_exercise">SQL Exercise</option>
                           <option value="downloads">Downloads</option>
                         </select>
@@ -3383,7 +3387,7 @@ const [isSaving, setIsSaving] = useState(false);
                             value={qType}
                             onChange={e => {
                               const v = e.target.value as QuestionType;
-                              const isReview = ['code_review', 'excel_review', 'dashboard_critique'].includes(v);
+                              const isReview = ['code_review', 'excel_review', 'dashboard_critique', 'document_review'].includes(v);
                               const isSql = v === 'sql_exercise';
                               handleUpdateQuestion(q.id, {
                                 type: v,
@@ -3404,6 +3408,7 @@ const [isSaving, setIsSaving] = useState(false);
                             <option value="code_review">AI Code Review</option>
                             <option value="excel_review">AI Excel Review</option>
                             <option value="dashboard_critique">AI Dashboard Critique</option>
+                            <option value="document_review">AI Document Review</option>
                             <option value="sql_exercise">SQL Exercise</option>
                           </select>
                           <button
@@ -3447,7 +3452,7 @@ const [isSaving, setIsSaving] = useState(false);
                           >
                             {busyQuestionId === q.id && aiLoadingLabel === 'Generating lesson...' ? 'Generating…' : 'AI Lesson'}
                           </button>
-                          {!q.lessonOnly && !(['code_review', 'excel_review', 'dashboard_critique', 'sql_exercise'] as const).includes(qType as any) && (<>
+                          {!q.lessonOnly && !(['code_review', 'excel_review', 'dashboard_critique', 'document_review', 'sql_exercise'] as const).includes(qType as any) && (<>
                           <button
                             type="button"
                             onClick={() => generateQuestionAsset(q, 'generate_hint')}
@@ -3471,7 +3476,7 @@ const [isSaving, setIsSaving] = useState(false);
                         {!q.lessonOnly && (<>
 
                         {/* Question text -- hidden for review types; they use the project brief field inside the config panel */}
-                        {!(['code_review', 'excel_review', 'dashboard_critique', 'sql_exercise'] as const).includes(qType as any) && (
+                        {!(['code_review', 'excel_review', 'dashboard_critique', 'document_review', 'sql_exercise'] as const).includes(qType as any) && (
                         <div>
                           <label className={labelCls} style={labelStyle}>Question</label>
                           <input type="text" value={q.question} onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })} className={inputCls} style={inputStyle}
@@ -3651,10 +3656,10 @@ const [isSaving, setIsSaving] = useState(false);
                         )}
 
                         {/* AI Review config */}
-                        {(['code_review', 'excel_review', 'dashboard_critique'] as const).includes(qType as any) && (
+                        {(['code_review', 'excel_review', 'dashboard_critique', 'document_review'] as const).includes(qType as any) && (
                           <div className="space-y-3 rounded-xl p-3" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
                             <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentColor }}>
-                              {qType === 'code_review' ? 'Code Review' : qType === 'excel_review' ? 'Excel Review' : 'Dashboard Critique'} Config
+                              {qType === 'code_review' ? 'Code Review' : qType === 'excel_review' ? 'Excel Review' : qType === 'dashboard_critique' ? 'Dashboard Critique' : 'Document Review'} Config
                             </p>
 
                             {/* Project prompt / brief */}
@@ -3665,7 +3670,7 @@ const [isSaving, setIsSaving] = useState(false);
                                 onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })}
                                 className={`${inputCls} min-h-[72px] resize-y`}
                                 style={inputStyle}
-                                placeholder="Describe the project the student must complete..."
+                                placeholder={qType === 'document_review' ? 'Describe the report the student must write...' : 'Describe the project the student must complete...'}
                               />
                             </div>
 
@@ -3700,17 +3705,36 @@ const [isSaving, setIsSaving] = useState(false);
                               </div>
                             )}
 
-                            {/* Context (excel_review / dashboard_critique) */}
-                            {(qType === 'excel_review' || qType === 'dashboard_critique') && (
+                            {/* Context (excel_review / dashboard_critique / document_review) */}
+                            {(qType === 'excel_review' || qType === 'dashboard_critique' || qType === 'document_review') && (
                               <div>
-                                <label className={labelCls} style={labelStyle}>Dataset / context <span style={{ color: C.faint }}>(optional)</span></label>
+                                <label className={labelCls} style={labelStyle}>
+                                  {qType === 'document_review' ? 'Report scope / context' : 'Dataset / context'} <span style={{ color: C.faint }}>(optional)</span>
+                                </label>
                                 <textarea
                                   value={q.context || ''}
                                   onChange={e => handleUpdateQuestion(q.id, { context: e.target.value })}
                                   className={`${inputCls} min-h-[60px] resize-y`}
                                   style={inputStyle}
-                                  placeholder="Describe the dataset or context the student works with..."
+                                  placeholder={qType === 'document_review' ? 'Describe what the report should cover, the market, industry, or company context...' : 'Describe the dataset or context the student works with...'}
                                 />
+                              </div>
+                            )}
+
+                            {/* Review mode (document_review only) */}
+                            {qType === 'document_review' && (
+                              <div>
+                                <label className={labelCls} style={labelStyle}>Review mode</label>
+                                <select
+                                  value={(q as any).documentReviewMode || 'ai_only'}
+                                  onChange={e => handleUpdateQuestion(q.id, { documentReviewMode: e.target.value as any })}
+                                  className={`${inputCls} py-1.5`}
+                                  style={inputStyle}
+                                >
+                                  <option value="ai_only">AI Only -- AI reviews and auto-grades</option>
+                                  <option value="manual">Manual -- Instructor reviews and grades</option>
+                                  <option value="hybrid">Hybrid -- AI reviews, instructor can override grade</option>
+                                </select>
                               </div>
                             )}
 
@@ -3773,18 +3797,21 @@ const [isSaving, setIsSaving] = useState(false);
                             </div>
 
                             {/* Min score */}
-                            <div>
-                              <label className={labelCls} style={labelStyle}>Minimum passing score (%)</label>
-                              <input
-                                type="number"
-                                min={0}
-                                max={100}
-                                value={q.minScore ?? 70}
-                                onChange={e => handleUpdateQuestion(q.id, { minScore: Number(e.target.value) })}
-                                className={`${inputCls} w-24`}
-                                style={inputStyle}
-                              />
-                            </div>
+                            {/* Min score -- not shown for manual review mode */}
+                            {!(qType === 'document_review' && ((q as any).documentReviewMode === 'manual')) && (
+                              <div>
+                                <label className={labelCls} style={labelStyle}>Minimum passing score (%)</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  value={q.minScore ?? 70}
+                                  onChange={e => handleUpdateQuestion(q.id, { minScore: Number(e.target.value) })}
+                                  className={`${inputCls} w-24`}
+                                  style={inputStyle}
+                                />
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -3939,7 +3966,7 @@ const [isSaving, setIsSaving] = useState(false);
                         )}
 
                         {/* Hint and explanation -- not shown for AI review types */}
-                        {!(['code_review', 'excel_review', 'dashboard_critique', 'sql_exercise'] as const).includes(qType as any) && (<>
+                        {!(['code_review', 'excel_review', 'dashboard_critique', 'document_review', 'sql_exercise'] as const).includes(qType as any) && (<>
                         <div>
                           <label className={labelCls} style={labelStyle}>Hint <span style={{ color: C.faint }}>(optional)</span></label>
                           <input
@@ -4093,6 +4120,7 @@ const [isSaving, setIsSaving] = useState(false);
                       <option value="code_review">AI Code Review</option>
                       <option value="excel_review">AI Excel Review</option>
                       <option value="dashboard_critique">AI Dashboard Critique</option>
+                      <option value="document_review">AI Document Review</option>
                       <option value="sql_exercise">SQL Exercise</option>
                       <option value="downloads">Downloads</option>
                     </select>

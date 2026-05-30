@@ -1,0 +1,556 @@
+'use client';
+
+import React, { useRef, useState } from 'react';
+import { Loader2, CheckCircle2, Zap, RotateCcw, FileText, Download } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { downloadReviewPdf } from '@/lib/downloadReviewPdf';
+import AiReviewDisclaimer from '@/components/AiReviewDisclaimer';
+
+interface SectionIssue {
+  name: string;
+  severity: 'critical' | 'improvement' | 'suggestion';
+  title: string;
+  detail: string;
+  recommendation: string;
+}
+interface RubricGrade { criterion: string; passed: boolean; comment: string; }
+interface CategoryScore {
+  name: string;
+  score: number;
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+}
+interface ReviewResult {
+  overallScore: number;
+  executiveSummary: string;
+  sections: SectionIssue[];
+  categories: CategoryScore[];
+  topRecommendations: string[];
+  rubricGrades?: RubricGrade[];
+}
+
+export interface DocumentLeanSubmission {
+  submittedAt: string;
+  completed: boolean;
+  overallScore: number;
+  executiveSummary: string;
+  gaps: string[];
+  topRecommendations: string[];
+  rubricGrades?: RubricGrade[];
+}
+
+interface Props {
+  reqId: string;
+  isDark: boolean;
+  accentColor: string;
+  completed: boolean;
+  submissions?: DocumentLeanSubmission[];
+  savedSummary?: DocumentLeanSubmission;
+  context?: string;
+  rubric?: string[];
+  minScore?: number;
+  maxReviews?: number;
+  documentReviewMode?: 'ai_only' | 'manual' | 'hybrid';
+  onComplete: (result: ReviewResult, lean: DocumentLeanSubmission, passed: boolean) => void;
+}
+
+function severityColor(s: SectionIssue['severity']) {
+  if (s === 'critical')    return '#ef4444';
+  if (s === 'improvement') return '#f59e0b';
+  return '#3b82f6';
+}
+function severityLabel(s: SectionIssue['severity']) {
+  if (s === 'critical')    return 'Critical';
+  if (s === 'improvement') return 'Improvement';
+  return 'Suggestion';
+}
+function scoreColor(n: number) {
+  if (n >= 80) return '#22c55e';
+  if (n >= 60) return '#f59e0b';
+  return '#ef4444';
+}
+
+export default function DocumentReviewPlayer({
+  reqId, isDark, accentColor, completed, submissions = [], savedSummary,
+  context, rubric, minScore, maxReviews, documentReviewMode = 'ai_only', onComplete,
+}: Props) {
+  const isManual = documentReviewMode === 'manual';
+  const isHybrid = documentReviewMode === 'hybrid';
+  const atLimit     = maxReviews !== undefined && submissions.length >= maxReviews;
+  const shouldLock  = maxReviews === undefined || atLimit || submissions.length === 0;
+  const [file, setFile]         = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [result, setResult]     = useState<ReviewResult | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [error, setError]       = useState('');
+  const inputRef   = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  const bg     = isDark ? '#0f0f0f' : '#f8fafc';
+  const card   = isDark ? '#1a1a1a' : '#ffffff';
+  const border = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  const text   = isDark ? '#f0f0f0' : '#111';
+  const muted  = isDark ? '#888' : '#666';
+  const inner  = isDark ? '#222' : '#f3f4f6';
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const f = e.dataTransfer.files[0];
+    if (f) pickFile(f);
+  }
+
+  function pickFile(f: File) {
+    const ext = f.name.split('.').pop()?.toLowerCase();
+    if (!['pdf', 'docx', 'doc', 'txt'].includes(ext ?? '')) {
+      setError('Only PDF, DOCX, DOC, and TXT files are supported.');
+      return;
+    }
+    setFile(f);
+    setError('');
+  }
+
+  async function handleSubmit() {
+    if (!file) { setError('Please upload your document first.'); return; }
+    setError('');
+    setAnalyzing(true);
+    try {
+      // Manual mode: no AI call, no storage -- just mark submitted
+      if (isManual) {
+        const lean: DocumentLeanSubmission = {
+          submittedAt: new Date().toISOString(),
+          completed: true,
+          overallScore: 0,
+          executiveSummary: '',
+          gaps: [],
+          topRecommendations: [],
+        };
+        onComplete({ overallScore: 0, executiveSummary: '', sections: [], categories: [], topRecommendations: [] }, lean, true);
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const fd = new FormData();
+      fd.append('file', file);
+      if (context?.trim()) fd.append('context', context.trim());
+      if (rubric?.length) fd.append('rubric', JSON.stringify(rubric));
+
+      const res = await fetch('/api/document-review', {
+        method: 'POST',
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+        body: fd,
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setResult(json);
+
+      const lean: DocumentLeanSubmission = {
+        submittedAt: new Date().toISOString(),
+        completed: true,
+        overallScore: json.overallScore,
+        executiveSummary: json.executiveSummary ?? '',
+        gaps: (json.sections ?? []).filter((s: SectionIssue) => s.severity === 'critical' || s.severity === 'improvement').map((s: SectionIssue) => s.title),
+        topRecommendations: json.topRecommendations ?? [],
+        rubricGrades: json.rubricGrades,
+      };
+      const passed = !minScore || json.overallScore >= minScore;
+      onComplete(json, lean, passed);
+    } catch (err: any) {
+      setError(err.message || 'The AI review service is busy right now. Please wait a moment and try again. Your work has not been lost.');
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  function reset() { setFile(null); setResult(null); setError(''); }
+
+  async function downloadPdf() {
+    if (!resultsRef.current) return;
+    try {
+      await downloadReviewPdf(resultsRef.current, `document-review-${Date.now()}.pdf`);
+    } catch (err: any) {
+      setError(err?.message ?? 'PDF export failed. Please try again.');
+    }
+  }
+
+  // Already completed, no in-session summary
+  if (!result && completed && !savedSummary && shouldLock) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}25` }}>
+        <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+        <p className="text-sm font-medium" style={{ color: accentColor }}>
+          {isManual ? 'Report submitted for instructor review.' : 'Document review already submitted for this question.'}
+        </p>
+      </div>
+    );
+  }
+
+  // Manual mode: after submit confirmation
+  if (isManual && completed && savedSummary) {
+    return (
+      <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${border}` }}>
+        <div className="px-5 py-4 flex items-start justify-between gap-4" style={{ background: '#0f172a' }}>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>Report Submitted</p>
+            <p className="text-xs mb-2" style={{ color: 'rgba(255,255,255,0.4)' }}>{new Date(savedSummary.submittedAt).toLocaleDateString()}</p>
+            <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.6)' }}>Your instructor will review your report and provide feedback.</p>
+          </div>
+          <CheckCircle2 className="w-6 h-6 flex-shrink-0" style={{ color: '#22c55e' }} />
+        </div>
+      </div>
+    );
+  }
+
+  // Returning student -- show saved summary
+  if (!result && completed && savedSummary && shouldLock) {
+    return (
+      <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${border}` }}>
+        <div className="px-5 py-4 flex items-start justify-between gap-4" style={{ background: '#0f172a' }}>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>AI Document Review</p>
+            <p className="text-xs mb-2" style={{ color: 'rgba(255,255,255,0.4)' }}>{new Date(savedSummary.submittedAt).toLocaleDateString()}</p>
+            {savedSummary.executiveSummary && (
+              <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.6)' }}>{savedSummary.executiveSummary}</p>
+            )}
+          </div>
+          <div className="flex items-baseline gap-1 flex-shrink-0">
+            <span style={{ fontSize: 40, fontWeight: 900, lineHeight: 1, color: '#fff' }}>{savedSummary.overallScore.toFixed(1)}</span>
+            <span className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>/100</span>
+          </div>
+        </div>
+        {savedSummary.gaps.length > 0 && (
+          <div className="px-5 py-3" style={{ borderTop: `1px solid ${border}`, background: card }}>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: muted }}>Areas to Improve</p>
+            <div className="space-y-1">
+              {savedSummary.gaps.map((g, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs" style={{ color: text }}>
+                  <span style={{ color: '#ef4444', flexShrink: 0 }}>•</span>
+                  <span>{g}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {savedSummary.topRecommendations.length > 0 && (
+          <div className="px-5 py-3" style={{ borderTop: `1px solid ${border}`, background: card }}>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: muted }}>Top Recommendations</p>
+            <div className="space-y-1.5">
+              {savedSummary.topRecommendations.map((r, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs" style={{ color: text }}>
+                  <span className="font-bold flex-shrink-0" style={{ color: '#22c55e' }}>{i + 1}.</span>
+                  <span>{r}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="px-5 py-3" style={{ borderTop: `1px solid ${border}`, background: card }}>
+          <AiReviewDisclaimer isDark={isDark} />
+        </div>
+      </div>
+    );
+  }
+
+  if (!result) {
+    if (atLimit) {
+      return (
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', border: `1px solid ${border}` }}>
+          <FileText className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: muted }} />
+          <div>
+            <p className="text-sm font-semibold" style={{ color: text }}>Review limit reached</p>
+            <p className="text-xs mt-0.5" style={{ color: muted }}>You have used all {maxReviews} allowed review attempts for this question.</p>
+          </div>
+        </div>
+      );
+    }
+    const lastAttempt = submissions.length > 0 ? submissions[submissions.length - 1] : null;
+    return (
+      <div className="space-y-3">
+        <AiReviewDisclaimer isDark={isDark} />
+        {lastAttempt && (
+          <div className="flex items-center justify-between px-4 py-2.5 rounded-lg" style={{ background: inner, border: `1px solid ${border}` }}>
+            <span style={{ fontSize: 12, color: muted }}>
+              Attempt {submissions.length} · Last score: <span style={{ fontWeight: 700, color: scoreColor(lastAttempt.overallScore) }}>{lastAttempt.overallScore.toFixed(1)}/100</span>
+            </span>
+            <span style={{ fontSize: 11, color: muted }}>{new Date(lastAttempt.submittedAt).toLocaleDateString()}</span>
+          </div>
+        )}
+
+        <div
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          onClick={() => inputRef.current?.click()}
+          className="flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors"
+          style={{
+            border: `2px dashed ${dragging ? accentColor : border}`,
+            borderRadius: 12,
+            padding: '36px 24px',
+            background: dragging ? `${accentColor}08` : inner,
+          }}>
+          <input ref={inputRef} type="file" accept=".pdf,.docx,.doc,.txt" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) pickFile(f); }} />
+          <FileText className="w-8 h-8" style={{ color: file ? '#22c55e' : muted }} />
+          {file
+            ? <p style={{ fontSize: 13, fontWeight: 600, color: text }}>{file.name}</p>
+            : <>
+                <p style={{ fontSize: 13, fontWeight: 600, color: text }}>Drop your report here</p>
+                <p style={{ fontSize: 12, color: muted }}>or click to browse &middot; PDF, DOCX, DOC, TXT</p>
+              </>
+          }
+        </div>
+
+        {error && <p className="text-xs text-red-400 font-medium">{error}</p>}
+
+        <button onClick={handleSubmit} disabled={analyzing || !file}
+          className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-60"
+          style={{ background: accentColor, color: '#fff', borderRadius: 8 }}>
+          {analyzing
+            ? <><Loader2 className="w-4 h-4 animate-spin" /> {isManual ? 'Submitting...' : 'Reviewing...'}</>
+            : isManual
+              ? <><FileText className="w-4 h-4" /> Submit for Instructor Review</>
+              : <><Zap className="w-4 h-4" /> {isHybrid ? 'Submit for AI + Instructor Review' : 'Submit for AI Review'}</>}
+        </button>
+      </div>
+    );
+  }
+
+  const criticals    = result.sections.filter(s => s.severity === 'critical');
+  const improvements = result.sections.filter(s => s.severity === 'improvement');
+  const suggestions  = result.sections.filter(s => s.severity === 'suggestion');
+  const prev         = submissions.length > 0 ? submissions[submissions.length - 1] : null;
+  const scoreDelta   = prev ? +(result.overallScore - prev.overallScore).toFixed(1) : null;
+
+  return (
+    <div ref={resultsRef} className="space-y-4" style={{ fontFamily: 'var(--font-sans)' }}>
+      <AiReviewDisclaimer isDark={isDark} />
+
+      {/* Score diff vs previous */}
+      {prev && (
+        <div style={{ border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden', background: card }}>
+          <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: `1px solid ${border}` }}>
+            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: muted }}>
+              Attempt {submissions.length + 1} vs Attempt {submissions.length}
+            </p>
+            <span style={{ fontSize: 13, fontWeight: 800, color: scoreDelta! > 0 ? '#22c55e' : scoreDelta! < 0 ? '#ef4444' : muted, fontVariantNumeric: 'tabular-nums' }}>
+              {scoreDelta! > 0 ? '+' : ''}{scoreDelta} pts
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ background: isDark ? '#111827' : '#0f172a', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ padding: '24px 28px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] mb-3" style={{ color: '#ADEE66' }}>
+                AI Document Review
+              </p>
+              <div className="flex items-baseline gap-2 mb-3">
+                <span style={{ fontSize: 56, fontWeight: 900, lineHeight: 1, color: '#fff', letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums' }}>
+                  {result.overallScore.toFixed(1)}
+                </span>
+                <span style={{ fontSize: 18, fontWeight: 400, color: 'rgba(255,255,255,0.25)' }}>/100</span>
+              </div>
+              <div style={{ width: 200, height: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 16 }}>
+                <div style={{ height: '100%', width: `${result.overallScore}%`, background: '#ADEE66' }} />
+              </div>
+              <p style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(255,255,255,0.55)', maxWidth: 480 }}>{result.executiveSummary}</p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button onClick={downloadPdf}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
+                style={{ background: 'rgba(173,238,102,0.12)', color: '#ADEE66', borderRadius: 6, border: '1px solid rgba(173,238,102,0.2)' }}>
+                <Download className="w-3 h-3" /> PDF
+              </button>
+              {!atLimit && (
+                <button onClick={reset}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
+                  style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <RotateCcw className="w-3 h-3" /> Reset
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Issue counts */}
+        <div className="flex" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          {[
+            { list: criticals,    color: '#ef4444', label: 'Critical' },
+            { list: improvements, color: '#f59e0b', label: 'Improvements' },
+            { list: suggestions,  color: '#3b82f6', label: 'Suggestions' },
+          ].map(({ list, color, label }, idx) => (
+            <div key={label} className="flex-1 flex items-center gap-2.5 px-7 py-4"
+              style={{ borderRight: idx < 2 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+              <span style={{ fontSize: 22, fontWeight: 900, color: list.length > 0 ? color : 'rgba(255,255,255,0.15)', fontVariantNumeric: 'tabular-nums' }}>
+                {list.length}
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: list.length > 0 ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                {label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Section issues */}
+      {result.sections.length > 0 && (
+        <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 20px', borderBottom: `1px solid ${border}` }}>
+            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: muted }}>Section Feedback</p>
+          </div>
+          {result.sections.map((issue, i) => {
+            const color = severityColor(issue.severity);
+            return (
+              <div key={i} style={{ display: 'flex', borderBottom: i < result.sections.length - 1 ? `1px solid ${border}` : 'none' }}>
+                <div style={{ width: 3, flexShrink: 0, background: color }} />
+                <div style={{ flex: 1, padding: '16px 20px' }}>
+                  <div className="flex items-center gap-3 mb-2 flex-wrap">
+                    <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em',
+                      padding: '3px 8px', background: `${color}15`, color, borderRadius: 3 }}>
+                      {severityLabel(issue.severity)}
+                    </span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{issue.name}</span>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: text }}>{issue.title}</p>
+                  </div>
+                  <p style={{ fontSize: 12.5, lineHeight: 1.6, color: muted, marginBottom: issue.recommendation ? 12 : 0 }}>{issue.detail}</p>
+                  {issue.recommendation && (
+                    <div style={{ background: isDark ? 'rgba(37,99,235,0.08)' : '#eff6ff', borderLeft: '2px solid #3b82f6', padding: '10px 14px' }}>
+                      <p style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#3b82f6', marginBottom: 5 }}>Recommendation</p>
+                      <p style={{ fontSize: 12.5, color: isDark ? '#93c5fd' : '#1e40af', lineHeight: 1.6 }}>{issue.recommendation}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Rubric */}
+      {result.rubricGrades && result.rubricGrades.length > 0 && (() => {
+        const passed = result.rubricGrades!.filter(g => g.passed).length;
+        const total  = result.rubricGrades!.length;
+        const pct    = Math.round((passed / total) * 100);
+        const trackColor = pct === 100 ? '#22c55e' : pct >= 60 ? '#f59e0b' : '#ef4444';
+        return (
+          <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden' }}>
+            <div className="flex items-center justify-between" style={{ padding: '12px 20px', borderBottom: `1px solid ${border}` }}>
+              <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: muted }}>Assignment Rubric</p>
+              <div className="flex items-center gap-3">
+                <div style={{ width: 80, height: 2, background: border, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct}%`, background: trackColor }} />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: text, fontVariantNumeric: 'tabular-nums' }}>
+                  {passed}<span style={{ fontWeight: 400, color: muted }}>/{total}</span>
+                </span>
+              </div>
+            </div>
+            {result.rubricGrades!.map((grade, i) => (
+              <div key={i} className="flex items-start gap-4"
+                style={{ padding: '14px 20px', borderBottom: i < result.rubricGrades!.length - 1 ? `1px solid ${border}` : 'none' }}>
+                <div style={{ width: 2, alignSelf: 'stretch', flexShrink: 0, background: grade.passed ? '#22c55e' : border, marginTop: 2, marginBottom: 2 }} />
+                <div className="flex-1 min-w-0">
+                  <p style={{ fontSize: 13, fontWeight: 600, color: text, marginBottom: 4 }}>{grade.criterion}</p>
+                  <p style={{ fontSize: 12, color: muted, lineHeight: 1.6 }}>{grade.comment}</p>
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', flexShrink: 0, marginTop: 2, color: grade.passed ? '#22c55e' : muted }}>
+                  {grade.passed ? 'PASS' : 'FAIL'}
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
+      {/* Category scores */}
+      <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 20px', borderBottom: `1px solid ${border}` }}>
+          <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: muted }}>Score Breakdown</p>
+        </div>
+        {result.categories.map((cat, i) => (
+          <div key={cat.name} className="flex items-start gap-5"
+            style={{ padding: '16px 20px', borderBottom: i < result.categories.length - 1 ? `1px solid ${border}` : 'none' }}>
+            <div style={{ width: 36, flexShrink: 0, textAlign: 'center' }}>
+              <span style={{ fontSize: 22, fontWeight: 900, color: scoreColor(cat.score), lineHeight: 1, display: 'block', fontVariantNumeric: 'tabular-nums' }}>{cat.score}</span>
+              <span style={{ fontSize: 9, color: muted }}>/100</span>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="flex items-center justify-between mb-1.5">
+                <p style={{ fontSize: 13, fontWeight: 700, color: text }}>{cat.name}</p>
+                <span style={{ fontSize: 10, fontWeight: 700, color: scoreColor(cat.score), textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  {cat.score >= 80 ? 'Excellent' : cat.score >= 60 ? 'Good' : cat.score >= 40 ? 'Needs Work' : 'Critical'}
+                </span>
+              </div>
+              <div style={{ height: 2, background: border, overflow: 'hidden', marginBottom: 8 }}>
+                <div style={{ height: '100%', width: `${cat.score}%`, background: scoreColor(cat.score) }} />
+              </div>
+              <p style={{ fontSize: 12, color: muted, lineHeight: 1.5, marginBottom: 6 }}>{cat.summary}</p>
+              {cat.strengths.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-1">
+                  {cat.strengths.map((s, si) => (
+                    <span key={si} style={{ fontSize: 11, padding: '2px 8px', background: 'rgba(34,197,94,0.1)', color: '#22c55e', borderRadius: 4 }}>{s}</span>
+                  ))}
+                </div>
+              )}
+              {cat.gaps.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {cat.gaps.map((g, gi) => (
+                    <span key={gi} style={{ fontSize: 11, padding: '2px 8px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', borderRadius: 4 }}>{g}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Top recommendations */}
+      {result.topRecommendations.length > 0 && (
+        <div style={{ background: isDark ? '#111827' : '#0f172a', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: '#ADEE66' }}>Priority Actions</p>
+          </div>
+          {result.topRecommendations.map((r, i) => (
+            <div key={i} className="flex items-start gap-4"
+              style={{ padding: '16px 20px', borderBottom: i < result.topRecommendations.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+              <span style={{ flexShrink: 0, width: 20, height: 20, background: '#ADEE66', color: '#0f172a',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, borderRadius: 4 }}>
+                {i + 1}
+              </span>
+              <p style={{ fontSize: 13, lineHeight: 1.65, color: 'rgba(255,255,255,0.65)' }}>{r}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Pass/fail gate */}
+      {minScore && result.overallScore < minScore ? (
+        <div className="flex items-start gap-3 px-4 py-3" style={{ background: 'rgba(239,68,68,0.08)', borderLeft: '2px solid #ef4444' }}>
+          <div style={{ flexShrink: 0, marginTop: 1 }}>
+            <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%' }} />
+            </div>
+          </div>
+          <div>
+            <p style={{ fontSize: 12, fontWeight: 700, color: '#ef4444', marginBottom: 2 }}>
+              Score too low &middot; {result.overallScore.toFixed(1)}/100 &middot; Minimum required: {minScore}/100
+            </p>
+            <p style={{ fontSize: 12, color: '#ef4444', opacity: 0.8 }}>Revise your report and resubmit -- no point awarded until the minimum is reached.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 px-4 py-3"
+          style={{ background: `${accentColor}10`, borderLeft: `2px solid ${accentColor}` }}>
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+          <p style={{ fontSize: 12, fontWeight: 600, color: accentColor }}>
+            Review complete &middot; {result.sections.length} section note{result.sections.length !== 1 ? 's' : ''} identified
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}

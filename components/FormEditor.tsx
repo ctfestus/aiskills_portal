@@ -44,7 +44,7 @@ interface FormField {
   description?: string;
 }
 
-type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise';
+type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise' | 'document_review';
 
 interface DownloadItem {
   id: string;
@@ -81,12 +81,13 @@ interface CourseQuestion {
     imageUrl?: string;
     videoUrl?: string;
   };
-  // AI review fields (code_review | excel_review | dashboard_critique)
+  // AI review fields (code_review | excel_review | dashboard_critique | document_review)
   rubric?: string[];
   schema?: string;
   context?: string;
   minScore?: number;
   reviewLanguage?: string;
+  documentReviewMode?: 'ai_only' | 'manual' | 'hybrid';
   sqlTables?: { id?: string; tableName: string; fileName?: string; fileUrl?: string; csvUrl?: string; seedSql?: string }[];
   sqlStarterCode?: string;
   sqlSolution?: string;
@@ -1210,6 +1211,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
       code_review:         { options: [], correctAnswer: '', rubric: ['Code runs without errors', 'Follows naming conventions', 'Logic is correct'], reviewLanguage: 'javascript', minScore: 70 },
       excel_review:        { options: [], correctAnswer: '', rubric: ['Correct formulas used', 'Data is accurate', 'Formatting is clean'], context: '', minScore: 70 },
       dashboard_critique:  { options: [], correctAnswer: '', rubric: ['Visuals are appropriate', 'Insights are accurate', 'Layout is clear'], context: '', minScore: 70 },
+      document_review:     { options: [], correctAnswer: '', rubric: ['Report addresses the brief', 'Analysis is evidence-based', 'Recommendations are actionable', 'Writing is clear and professional'], context: '', minScore: 70, documentReviewMode: 'ai_only' },
       sql_exercise:        { options: [], correctAnswer: '', sqlTables: [], sqlStarterCode: 'SELECT * FROM table_name LIMIT 10;', sqlSolution: '', sqlExpectedResult: undefined, sqlHints: [], sqlResultOrdered: false, sqlNumericTolerance: 0, sqlRequiredPatterns: [] },
     };
     updateConfig({
@@ -1261,6 +1263,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
       code_review:         { options: [], correctAnswer: '', rubric: ['Code runs without errors', 'Follows naming conventions', 'Logic is correct'], reviewLanguage: 'javascript', minScore: 70 },
       excel_review:        { options: [], correctAnswer: '', rubric: ['Correct formulas used', 'Data is accurate', 'Formatting is clean'], context: '', minScore: 70 },
       dashboard_critique:  { options: [], correctAnswer: '', rubric: ['Visuals are appropriate', 'Insights are accurate', 'Layout is clear'], context: '', minScore: 70 },
+      document_review:     { options: [], correctAnswer: '', rubric: ['Report addresses the brief', 'Analysis is evidence-based', 'Recommendations are actionable', 'Writing is clear and professional'], context: '', minScore: 70, documentReviewMode: 'ai_only' },
       sql_exercise:        { options: [], correctAnswer: '', sqlTables: [], sqlStarterCode: 'SELECT * FROM table_name LIMIT 10;', sqlSolution: '', sqlExpectedResult: undefined, sqlHints: [], sqlResultOrdered: false, sqlNumericTolerance: 0, sqlRequiredPatterns: [] },
     };
     const qs = [...(formConfig.questions || [])];
@@ -2422,6 +2425,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                           <option value="code_review">AI Code Review</option>
                           <option value="excel_review">AI Excel Review</option>
                           <option value="dashboard_critique">AI Dashboard Critique</option>
+                          <option value="document_review">AI Document Review</option>
                           <option value="sql_exercise">SQL Exercise</option>
                           <option value="downloads">Downloads</option>
                         </select>
@@ -2639,7 +2643,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               value={qType}
                               onChange={e => {
                                 const v = e.target.value as QuestionType;
-                                const isReview = ['code_review', 'excel_review', 'dashboard_critique'].includes(v);
+                                const isReview = ['code_review', 'excel_review', 'dashboard_critique', 'document_review'].includes(v);
                                 const isSql = v === 'sql_exercise';
                                 handleUpdateQuestion(q.id, {
                                   type: v,
@@ -2660,6 +2664,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               <option value="code_review">AI Code Review</option>
                               <option value="excel_review">AI Excel Review</option>
                               <option value="dashboard_critique">AI Dashboard Critique</option>
+                              <option value="document_review">AI Document Review</option>
                               <option value="sql_exercise">SQL Exercise</option>
                                     </select>
                             <button
@@ -2705,7 +2710,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                             >
                               {busyQuestionId === q.id && aiLoadingLabel === 'Generating lesson...' ? 'Generating…' : 'AI Lesson'}
                             </button>
-                            {!q.lessonOnly && !(['code_review', 'excel_review', 'dashboard_critique', 'sql_exercise'] as const).includes(qType as any) && (<>
+                            {!q.lessonOnly && !(['code_review', 'excel_review', 'dashboard_critique', 'document_review', 'sql_exercise'] as const).includes(qType as any) && (<>
                             <button
                               type="button"
                               onClick={() => generateQuestionAsset(q, 'generate_hint')}
@@ -2729,7 +2734,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                           {!q.lessonOnly && (<>
 
                           {/* Question text -- hidden for review types; they use the project brief field inside the config panel */}
-                          {!(['code_review', 'excel_review', 'dashboard_critique', 'sql_exercise'] as const).includes(qType as any) && (
+                          {!(['code_review', 'excel_review', 'dashboard_critique', 'document_review', 'sql_exercise'] as const).includes(qType as any) && (
                           <div>
                             <label className={labelCls} style={labelStyle}>Question</label>
                             <input type="text" value={q.question} onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })} className={inputCls} style={inputStyle}
@@ -2904,10 +2909,10 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                           )}
 
                           {/* AI Review config */}
-                          {(['code_review', 'excel_review', 'dashboard_critique'] as const).includes(qType as any) && (
+                          {(['code_review', 'excel_review', 'dashboard_critique', 'document_review'] as const).includes(qType as any) && (
                             <div className="space-y-3 rounded-xl p-3" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
                               <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentColor }}>
-                                {qType === 'code_review' ? 'Code Review' : qType === 'excel_review' ? 'Excel Review' : 'Dashboard Critique'} Config
+                                {qType === 'code_review' ? 'Code Review' : qType === 'excel_review' ? 'Excel Review' : qType === 'dashboard_critique' ? 'Dashboard Critique' : 'Document Review'} Config
                               </p>
 
                               <div>
@@ -2917,7 +2922,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                   onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })}
                                   className={`${inputCls} min-h-[72px] resize-y`}
                                   style={inputStyle}
-                                  placeholder="Describe the project the student must complete..."
+                                  placeholder={qType === 'document_review' ? 'Describe the report the student must write...' : 'Describe the project the student must complete...'}
                                 />
                               </div>
 
@@ -2950,19 +2955,36 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                 </div>
                               )}
 
-                              {(qType === 'excel_review' || qType === 'dashboard_critique') && (
+                              {(qType === 'excel_review' || qType === 'dashboard_critique' || qType === 'document_review') && (
                                 <div>
-                                  <label className={labelCls} style={labelStyle}>Dataset / context <span style={{ color: FE.faint }}>(optional)</span></label>
+                                  <label className={labelCls} style={labelStyle}>
+                                    {qType === 'document_review' ? 'Report scope / context' : 'Dataset / context'} <span style={{ color: FE.faint }}>(optional)</span>
+                                  </label>
                                   <textarea
                                     value={q.context || ''}
                                     onChange={e => handleUpdateQuestion(q.id, { context: e.target.value })}
                                     className={`${inputCls} min-h-[60px] resize-y`}
                                     style={inputStyle}
-                                    placeholder="Describe the dataset or context the student works with..."
+                                    placeholder={qType === 'document_review' ? 'Describe what the report should cover, the market, industry, or company context...' : 'Describe the dataset or context the student works with...'}
                                   />
                                 </div>
                               )}
 
+                              {qType === 'document_review' && (
+                                <div>
+                                  <label className={labelCls} style={labelStyle}>Review mode</label>
+                                  <select
+                                    value={(q as any).documentReviewMode || 'ai_only'}
+                                    onChange={e => handleUpdateQuestion(q.id, { documentReviewMode: e.target.value as any })}
+                                    className={`${inputCls} py-1.5`}
+                                    style={inputStyle}
+                                  >
+                                    <option value="ai_only">AI Only -- AI reviews and auto-grades</option>
+                                    <option value="manual">Manual -- Instructor reviews and grades</option>
+                                    <option value="hybrid">Hybrid -- AI reviews, instructor can override grade</option>
+                                  </select>
+                                </div>
+                              )}
 
                               <div>
                                 <label className={labelCls} style={labelStyle}>Rubric criteria</label>
@@ -3020,18 +3042,20 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                 </div>
                               </div>
 
-                              <div>
-                                <label className={labelCls} style={labelStyle}>Minimum passing score (%)</label>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={100}
-                                  value={q.minScore ?? 70}
-                                  onChange={e => handleUpdateQuestion(q.id, { minScore: Number(e.target.value) })}
-                                  className={`${inputCls} w-24`}
-                                  style={inputStyle}
-                                />
-                              </div>
+                              {!(qType === 'document_review' && ((q as any).documentReviewMode === 'manual')) && (
+                                <div>
+                                  <label className={labelCls} style={labelStyle}>Minimum passing score (%)</label>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    value={q.minScore ?? 70}
+                                    onChange={e => handleUpdateQuestion(q.id, { minScore: Number(e.target.value) })}
+                                    className={`${inputCls} w-24`}
+                                    style={inputStyle}
+                                  />
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -3147,7 +3171,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                           )}
 
                           {/* Hint and explanation -- not shown for AI review types */}
-                          {!(['code_review', 'excel_review', 'dashboard_critique', 'sql_exercise'] as const).includes(qType as any) && (<>
+                          {!(['code_review', 'excel_review', 'dashboard_critique', 'document_review', 'sql_exercise'] as const).includes(qType as any) && (<>
                           <div>
                             <label className={labelCls} style={labelStyle}>Hint <span style={{ color: FE.faint }}>(optional)</span></label>
                             <input
@@ -3317,6 +3341,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                       <option value="code_review">AI Code Review</option>
                       <option value="excel_review">AI Excel Review</option>
                       <option value="dashboard_critique">AI Dashboard Critique</option>
+                      <option value="document_review">AI Document Review</option>
                       <option value="sql_exercise">SQL Exercise</option>
                       <option value="downloads">Downloads</option>
                     </select>

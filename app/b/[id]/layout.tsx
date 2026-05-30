@@ -47,10 +47,12 @@ export async function generateMetadata({
       title,
       description,
       url: `${appUrl}/b/${id}`,
-      images: ogImage ? [{ url: ogImage }] : [],
+      images: ogImage
+        ? [{ url: ogImage, width: 512, height: 512, alt: title }]
+        : [],
     },
     twitter: {
-      card: ogImage ? 'summary_large_image' : 'summary',
+      card: 'summary',
       title,
       description,
       images: ogImage ? [ogImage] : [],
