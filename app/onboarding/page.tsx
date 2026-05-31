@@ -157,7 +157,7 @@ export default function OnboardingPage() {
         .single();
 
       if (p?.onboarding_done) {
-        router.replace(p.role === 'student' ? '/student' : '/dashboard');
+        router.replace(p.role === 'student' || p.role === 'staff' ? '/student' : '/dashboard');
         return;
       }
 
@@ -229,7 +229,7 @@ export default function OnboardingPage() {
       }
 
       const { data: finalStudent } = await supabase.from('students').select('role').eq('id', userId).single();
-      router.replace(finalStudent?.role === 'student' ? '/student' : '/dashboard');
+      router.replace(finalStudent?.role === 'student' || finalStudent?.role === 'staff' ? '/student' : '/dashboard');
     } catch (e: any) {
       setError(e.message || 'Something went wrong. Please try again.');
       setSaving(false);

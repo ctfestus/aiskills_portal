@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useState, useRef, useCallback, Fragment } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef, useCallback, Fragment, createContext, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -449,6 +449,13 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
               }
             </div>
             <div className="py-1.5">
+              {profile?.role === 'staff' && (
+                <Link href="/student" onClick={() => setOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ff-hover"
+                  style={{ color: C.muted }}>
+                  <GraduationCap className="w-4 h-4" style={{ color: C.faint }}/> My Learning
+                </Link>
+              )}
               {username && (
                 <Link href={`/u/${username}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ff-hover"
@@ -1025,6 +1032,7 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
   form: any; index: number; isLast: boolean; shareMenuOpen: string | null; setShareMenuOpen: (id: string | null) => void; setFormToDelete: (id: string) => void;
 }) {
   const C = useC();
+  const isStaff = useContext(IsStaffContext);
   const ev = form.config?.eventDetails ?? {};
   const dateObj = ev.date ? new Date(ev.date) : null;
   const _today = new Date(); _today.setHours(0, 0, 0, 0);
@@ -1092,10 +1100,12 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
                 className="p-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.9)', color: '#111' }} title="Edit">
                 <Edit2 className="w-3.5 h-3.5"/>
               </Link>
-              <button onClick={() => setFormToDelete(form.id)}
-                className="p-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.9)', color: '#ef4444' }} title="Delete">
-                <Trash2 className="w-3.5 h-3.5"/>
-              </button>
+              {!isStaff && (
+                <button onClick={() => setFormToDelete(form.id)}
+                  className="p-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.9)', color: '#ef4444' }} title="Delete">
+                  <Trash2 className="w-3.5 h-3.5"/>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1194,6 +1204,8 @@ const NAV_ITEMS = [
   { id: 'site',          label: 'Site',           Icon: Settings,      adminOnly: false },
 ] as const;
 type SectionId = typeof NAV_ITEMS[number]['id'];
+const STAFF_SECTION_IDS = new Set<SectionId>(['events', 'recordings', 'tracking', 'cohorts']);
+const IsStaffContext = createContext(false);
 
 const COMING_SOON: SectionId[] = [];
 
@@ -1608,6 +1620,7 @@ function SchedulesManageSection({ C }: { C: typeof LIGHT_C }) {
 
 // --- Recordings manage section ---
 function RecordingsManageSection({ C }: { C: typeof LIGHT_C }) {
+  const isStaff = useContext(IsStaffContext);
   const [items, setItems]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -1668,12 +1681,14 @@ function RecordingsManageSection({ C }: { C: typeof LIGHT_C }) {
                 style={{ background: C.pill, color: C.muted, textDecoration: 'none' }}>
                 <Edit2 className="w-3.5 h-3.5"/> Edit
               </Link>
-              <button onClick={() => handleDelete(item.id)} disabled={deletingId === item.id}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold"
-                style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}`,
-                  cursor: deletingId === item.id ? 'not-allowed' : 'pointer', opacity: deletingId === item.id ? 0.6 : 1 }}>
-                <Trash2 className="w-3.5 h-3.5"/> {deletingId === item.id ? 'Deleting…' : 'Delete'}
-              </button>
+              {!isStaff && (
+                <button onClick={() => handleDelete(item.id)} disabled={deletingId === item.id}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold"
+                  style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}`,
+                    cursor: deletingId === item.id ? 'not-allowed' : 'pointer', opacity: deletingId === item.id ? 0.6 : 1 }}>
+                  <Trash2 className="w-3.5 h-3.5"/> {deletingId === item.id ? 'Deleting…' : 'Delete'}
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -3019,6 +3034,7 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
 
 // --- Cohorts section ---
 function CohortsSection({ C }: { C: typeof LIGHT_C }) {
+  const isStaff = useContext(IsStaffContext);
   const isLight = C.text === '#111';
   const [cohorts, setCohorts]           = useState<any[]>([]);
   const [students, setStudents]         = useState<any[]>([]);
@@ -3186,16 +3202,21 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   useEffect(() => { load(); }, []);
 
   useEffect(() => {
+    if (isStaff) {
+      setAllowedEmails([]);
+      return;
+    }
     if (selectedCohort?.id) loadAllowedEmails(selectedCohort.id);
     else setAllowedEmails([]);
-  }, [selectedCohort?.id]);
+  }, [isStaff, selectedCohort?.id]);
 
   useEffect(() => {
+    if (isStaff) return;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session && selectedCohort?.id) loadAllowedEmails(selectedCohort.id);
     });
     return () => subscription.unsubscribe();
-  }, [selectedCohort?.id]);
+  }, [isStaff, selectedCohort?.id]);
 
   useEffect(() => {
     if (!menuOpenId) return;
@@ -3317,15 +3338,21 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   const saveEdit = async () => {
     if (!selectedCohort || !editForm.name.trim()) return;
     setEditSaving(true);
-    const { data, error } = await supabase.from('cohorts').update({
-      name:        editForm.name.trim(),
-      description: editForm.description.trim() || null,
-      start_date:  editForm.start_date || null,
-      end_date:    editForm.end_date || null,
-      updated_at:  new Date().toISOString(),
-    }).eq('id', selectedCohort.id).select().single();
-    if (error) showToast(false, error.message);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`/api/cohorts/${selectedCohort.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+      body: JSON.stringify({
+        name:        editForm.name.trim(),
+        description: editForm.description.trim() || null,
+        start_date:  editForm.start_date || null,
+        end_date:    editForm.end_date || null,
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) showToast(false, json.error || 'Failed to update cohort.');
     else {
+      const data = json.cohort;
       setCohorts(prev => prev.map(c => c.id === selectedCohort.id ? data : c));
       setSelectedCohort(data);
       setEditOpen(false);
@@ -3490,7 +3517,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
     ...ves.map(v => ({ ...v, _type: 'virtual_experience' })),
     ...learningPaths.map(l => ({ ...l, _type: 'learning_path' })),
     ...assignmentsList.map(a => ({ ...a, _type: 'assignment' })),
-  ];
+  ].filter(c => !isStaff || c.status === 'published');
   const cq = courseSearch.trim().toLowerCase();
   const filteredContent = allContent.filter(c =>
     !cq || (c.title ?? '').toLowerCase().includes(cq)
@@ -3506,6 +3533,11 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
     { id: 'payment',    label: 'Payment' },
     { id: 'admissions', label: `Admissions (${allowedEmails.length})` },
   ] as const;
+  const visibleTabs = isStaff ? TABS.filter(t => t.id === 'students' || t.id === 'courses') : TABS;
+
+  useEffect(() => {
+    if (isStaff && activeTab !== 'students' && activeTab !== 'courses') setActiveTab('students');
+  }, [activeTab, isStaff]);
 
   function Avatar({ name, email, size = 8 }: { name?: string; email: string; size?: number }) {
     const label = (name ?? email)[0].toUpperCase();
@@ -3547,7 +3579,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
               <h2 className="text-base font-bold" style={{ color: C.text }}>Cohorts</h2>
               <p className="text-xs mt-0.5" style={{ color: C.faint }}>{cohorts.length} cohort{cohorts.length !== 1 ? 's' : ''}</p>
             </div>
-            <div className="flex items-center gap-2">
+            {!isStaff && <div className="flex items-center gap-2">
               <Link href="/admin/groups"
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold no-underline"
                 style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
@@ -3558,7 +3590,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                 style={{ background: C.cta, color: C.ctaText }}>
                 <Plus className="w-4 h-4"/> New Cohort
               </button>
-            </div>
+            </div>}
           </div>
 
           {/* Cohort list */}
@@ -3575,7 +3607,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
               <div className="flex flex-col items-center py-16 gap-2">
                 <GraduationCap className="w-8 h-8 opacity-20" style={{ color: C.faint }}/>
                 <p className="text-sm" style={{ color: C.faint }}>No cohorts yet</p>
-                <button onClick={() => setShowCreate(true)} className="text-xs font-semibold mt-1 underline underline-offset-2" style={{ color: C.green }}>Create your first cohort</button>
+                {!isStaff && <button onClick={() => setShowCreate(true)} className="text-xs font-semibold mt-1 underline underline-offset-2" style={{ color: C.green }}>Create your first cohort</button>}
               </div>
             ) : cohorts.map(c => {
               const studentCount = students.filter(s => s.cohort_id === c.id).length;
@@ -3609,12 +3641,14 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                           style={{ color: C.text }}>
                           <Edit2 className="w-3.5 h-3.5"/> Edit
                         </button>
-                        <button onClick={e => { e.stopPropagation(); setMenuOpenId(null); if (window.confirm(`Delete "${c.name}"?`)) deleteCohort(c.id); }}
-                          className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-left transition-colors hover:bg-red-500/10"
-                          style={{ color: '#ef4444' }}>
-                          {deletingId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Trash2 className="w-3.5 h-3.5"/>}
-                          Delete
-                        </button>
+                        {!isStaff && (
+                          <button onClick={e => { e.stopPropagation(); setMenuOpenId(null); if (window.confirm(`Delete "${c.name}"?`)) deleteCohort(c.id); }}
+                            className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-left transition-colors hover:bg-red-500/10"
+                            style={{ color: '#ef4444' }}>
+                            {deletingId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Trash2 className="w-3.5 h-3.5"/>}
+                            Delete
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -3648,7 +3682,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
 
           {/* Tabs */}
           <div className="flex border-b overflow-x-auto" style={{ borderColor: C.divider }}>
-                {TABS.map(t => (
+                {visibleTabs.map(t => (
                   <button key={t.id}
                     onClick={() => { setActiveTab(t.id as any); setSearch(''); setSelected(new Set()); setReassignId(null); setCourseSearch(''); }}
                     className="px-4 py-2.5 text-[13px] font-semibold whitespace-nowrap transition-colors relative flex-shrink-0"
@@ -3674,7 +3708,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                       <div className="flex flex-col items-center py-14 gap-2">
                         <UserPlus className="w-8 h-8 opacity-20" style={{ color: C.faint }}/>
                         <p className="text-sm" style={{ color: C.faint }}>No students in this cohort yet</p>
-                        <button onClick={() => setActiveTab('manage')} className="text-xs font-semibold mt-1 underline underline-offset-2" style={{ color: C.green }}>Add from unassigned</button>
+                        {!isStaff && <button onClick={() => setActiveTab('manage')} className="text-xs font-semibold mt-1 underline underline-offset-2" style={{ color: C.green }}>Add from unassigned</button>}
                       </div>
                     ) : cohortStudents
                         .filter(s => !search || (s.full_name ?? '').toLowerCase().includes(search.toLowerCase()) || s.email.toLowerCase().includes(search.toLowerCase()))
@@ -3686,7 +3720,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                                 <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || '--'}</p>
                                 <p className="text-xs truncate" style={{ color: C.faint }}>{s.email}</p>
                               </div>
-                              <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
+                              {!isStaff && <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
                                 <button onClick={() => setReassignId(reassignId === s.id ? null : s.id)}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-blue-500/10"
                                   style={{ color: '#3b82f6' }}>
@@ -3703,9 +3737,9 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                                   {deletingUserId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Trash2 className="w-3.5 h-3.5"/>}
                                   Delete
                                 </button>
-                              </div>
+                              </div>}
                             </div>
-                            {reassignId === s.id && (
+                            {!isStaff && reassignId === s.id && (
                               <div className="mx-4 mb-4 rounded-2xl overflow-hidden"
                                 style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: `0 8px 32px rgba(0,0,0,${isLight ? '0.10' : '0.40'})` }}>
                                 <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.divider}` }}>
@@ -3756,7 +3790,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
               )}
 
               {/* --- Manage Students tab --- */}
-              {activeTab === 'manage' && (
+              {!isStaff && activeTab === 'manage' && (
                 <div>
                   <div className="px-5 py-3 flex items-center gap-3 border-b" style={{ borderColor: C.divider }}>
                     <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: C.input, border: `1px solid ${C.cardBorder}` }}>
@@ -3874,7 +3908,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
               )}
 
               {/* --- Payment Settings tab --- */}
-              {activeTab === 'payment' && (
+              {!isStaff && activeTab === 'payment' && (
                 <div className="p-5 space-y-3">
                   <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
                     {[
@@ -3933,7 +3967,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
               )}
 
               {/* --- New Admissions tab --- */}
-              {activeTab === 'admissions' && (
+              {!isStaff && activeTab === 'admissions' && (
                 <div className="p-5 space-y-4">
                   <div className="flex items-center gap-2">
                     <button onClick={() => { setAddAdmissionOpen(true); setAddAdmissionLog([]); setAddAdmissionError(''); setAddAdmissionForm(blankAdmissionForm); }}
@@ -4043,7 +4077,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
       )}
 
       {/* Create Cohort Modal */}
-      {showCreate && (
+      {!isStaff && showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}
           onClick={() => setShowCreate(false)}>
           <div className="w-full max-w-md rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 24px 80px rgba(0,0,0,0.35)' }}
@@ -4147,7 +4181,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
       )}
 
       {/* Add Admission Modal */}
-      {addAdmissionOpen && selectedCohort && (
+      {!isStaff && addAdmissionOpen && selectedCohort && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}
           onClick={() => { setAddAdmissionOpen(false); setAddAdmissionLog([]); }}>
           <div className="w-full max-w-lg rounded-2xl overflow-hidden flex flex-col max-h-[92vh]"
@@ -4617,6 +4651,7 @@ const STATUS_META = {
 } as const;
 
 function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
+  const isStaff = useContext(IsStaffContext);
   const [rows, setRows]           = useState<any[]>([]);
   const [cohorts, setCohorts]     = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -4781,12 +4816,14 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
             <Download style={{ width: 14, height: 14 }} />
             Export CSV
           </button>
+          {!isStaff && (
           <button
             onClick={() => { setComposing(v => !v); setMsgResult(null); }}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 10, border: `1px solid ${composing ? C.cta : C.cardBorder}`, background: composing ? C.cta : C.card, color: composing ? C.ctaText : C.text, fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}>
             <Send style={{ width: 14, height: 14 }} />
             Message Segment
           </button>
+          )}
         </div>
       </div>
 
@@ -9562,10 +9599,12 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
   setShareMenuOpen: (id: string | null) => void; setFormToDelete: (id: string) => void;
   onDuplicated: (newForm: any) => void; C: typeof LIGHT_C;
 }) {
+  const isStaff = useContext(IsStaffContext);
   const [page, setPage] = useState(1);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [section]);
 
+  if (isStaff && !STAFF_SECTION_IDS.has(section)) return <ComingSoon id="events" C={C} />;
   if (COMING_SOON.includes(section)) return <ComingSoon id={section} C={C} />;
   if (section === 'branding')     return <BrandingSection C={C} />;
   if (section === 'site')         return <SiteSettingsSection C={C} />;
@@ -9719,6 +9758,7 @@ export default function DashboardPage() {
   const [shareMenuOpen, setShareMenuOpen] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<SectionId>('courses');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isStaff = profile?.role === 'staff';
 
   // Read hash on mount and on browser back/forward
   useEffect(() => {
@@ -9741,10 +9781,18 @@ export default function DashboardPage() {
   }, []);
 
   function goSection(id: SectionId) {
+    if (isStaff && !STAFF_SECTION_IDS.has(id)) id = 'events';
     setActiveSection(id);
     sessionStorage.setItem('dashboard-section', id);
     window.location.hash = id;
   }
+
+  useEffect(() => {
+    if (!isStaff || STAFF_SECTION_IDS.has(activeSection)) return;
+    setActiveSection('events');
+    sessionStorage.setItem('dashboard-section', 'events');
+    window.location.hash = 'events';
+  }, [activeSection, isStaff]);
 
   useEffect(() => {
     const fetchUserAndForms = async () => {
@@ -9766,10 +9814,11 @@ export default function DashboardPage() {
       _cache.user = user;
 
       // Query all content tables
+      const isStaffUser = studentData?.role === 'staff';
       const [{ data: coursesData }, { data: eventsData }, { data: vesData }] = await Promise.all([
-        supabase.from('courses').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('events').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('virtual_experiences').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        isStaffUser ? Promise.resolve({ data: [] }) : supabase.from('courses').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        isStaffUser ? supabase.from('events').select('*').order('created_at', { ascending: false }) : supabase.from('events').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        isStaffUser ? Promise.resolve({ data: [] }) : supabase.from('virtual_experiences').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
       ]);
 
       // Fetch response counts
@@ -9969,7 +10018,7 @@ export default function DashboardPage() {
             {NAV_GROUPS.map(group => {
               const visibleItems = group.items
                 .map(id => NAV_ITEMS.find(n => n.id === id)!)
-                .filter(item => item && (!item.adminOnly || profile?.role === 'admin'));
+                .filter(item => item && (!item.adminOnly || profile?.role === 'admin') && (!isStaff || STAFF_SECTION_IDS.has(item.id)));
               if (!visibleItems.length) return null;
               return (
                 <div key={group.label}>
@@ -10008,7 +10057,7 @@ export default function DashboardPage() {
             })}
 
             {/* External page links (e.g. Open Certificates) */}
-            {NAV_LINK_GROUPS.map(group => (
+            {!isStaff && NAV_LINK_GROUPS.map(group => (
               <div key={group.label}>
                 <p className="px-3 mb-2 text-[10px] font-semibold tracking-widest uppercase"
                   style={{ color: C.faint }}>{group.label}</p>
@@ -10035,7 +10084,7 @@ export default function DashboardPage() {
 
           {/* Sidebar footer */}
           <div className="px-3 pb-4 pt-2 border-t" style={{ borderColor: C.divider }}>
-            <Link href="/settings"
+            {!isStaff && <Link href="/settings"
               className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-normal transition-colors"
               style={{ color: C.muted }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = C.text; }}
@@ -10045,7 +10094,7 @@ export default function DashboardPage() {
                 <Settings className="w-4 h-4" style={{ color: theme === 'dark' ? 'rgba(255,255,255,0.35)' : '#9ca3af' }}/>
               </div>
               Settings
-            </Link>
+            </Link>}
           </div>
         </aside>
 
@@ -10067,9 +10116,9 @@ export default function DashboardPage() {
                   </p>
                 )}
               </div>
-              {(activeSection === 'courses' || activeSection === 'events') && (
+              {((!isStaff && activeSection === 'courses') || activeSection === 'events') && (
                 <div className="flex flex-wrap items-center gap-2">
-                  {activeSection === 'courses' && forms.filter(f => f.content_type === 'course').length > 0 && (
+                  {!isStaff && activeSection === 'courses' && forms.filter(f => f.content_type === 'course').length > 0 && (
                     <button
                       onClick={() => exportAllInSection(forms, 'course', 'courses_bulk')}
                       className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80"
@@ -10077,13 +10126,13 @@ export default function DashboardPage() {
                       <Download className="w-3.5 h-3.5" /> Export All
                     </button>
                   )}
-                  {activeSection === 'courses' && SYNC_ENABLED && forms.filter(f => f.content_type === 'course').length > 0 && (
+                  {!isStaff && activeSection === 'courses' && SYNC_ENABLED && forms.filter(f => f.content_type === 'course').length > 0 && (
                     <PushAllButton
                       items={forms.filter(f => f.content_type === 'course').map(f => ({ type: 'course', id: f.id }))}
                       C={C}
                     />
                   )}
-                  {activeSection === 'courses' && (
+                  {!isStaff && activeSection === 'courses' && (
                     <ImportButton
                       types={['course']}
                       C={C}
@@ -10091,7 +10140,7 @@ export default function DashboardPage() {
                       onBulkDone={() => window.location.reload()}
                     />
                   )}
-                  {activeSection === 'courses' && (
+                  {!isStaff && activeSection === 'courses' && (
                     <Link
                       href="/create?type=sql-course"
                       className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
@@ -10109,19 +10158,21 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <SectionContent
-              section={activeSection}
-              forms={forms}
-              shareMenuOpen={shareMenuOpen}
-              setShareMenuOpen={setShareMenuOpen}
-              setFormToDelete={setFormToDelete}
-              onDuplicated={newForm => {
-                const updated = [newForm, ...forms];
-                _cache.forms = updated;
-                setForms(updated);
-              }}
-              C={C}
-            />
+            <IsStaffContext.Provider value={isStaff}>
+              <SectionContent
+                section={activeSection}
+                forms={forms}
+                shareMenuOpen={shareMenuOpen}
+                setShareMenuOpen={setShareMenuOpen}
+                setFormToDelete={setFormToDelete}
+                onDuplicated={newForm => {
+                  const updated = [newForm, ...forms];
+                  _cache.forms = updated;
+                  setForms(updated);
+                }}
+                C={C}
+              />
+            </IsStaffContext.Provider>
           </motion.div>
         </main>
       </div>

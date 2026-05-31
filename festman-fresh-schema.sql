@@ -72,7 +72,7 @@ CREATE TABLE public.students (
   bio                text,
   social_links       jsonb       DEFAULT '{}'::jsonb,
   role               text        NOT NULL DEFAULT 'student'
-                                   CHECK (role IN ('student','instructor','admin')),
+                                   CHECK (role IN ('student','instructor','admin','staff')),
   status             text        NOT NULL DEFAULT 'active'
                                    CHECK (status IN ('active','inactive','graduated','suspended')),
   cohort_id          uuid        REFERENCES public.cohorts(id) ON DELETE SET NULL,
@@ -682,6 +682,14 @@ RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS
   )
 $$;
 
+CREATE OR REPLACE FUNCTION public.is_staff()
+RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
+  SELECT COALESCE(
+    (SELECT role = 'staff' FROM public.students WHERE id = (SELECT auth.uid())),
+    false
+  )
+$$;
+
 CREATE OR REPLACE FUNCTION public.my_group_ids()
 RETURNS uuid[]
 LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
@@ -710,11 +718,13 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.get_my_role()            FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.is_admin()               FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.is_instructor_or_admin() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.is_staff()               FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.my_group_ids()           FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.valid_group_participants(uuid, uuid[]) FROM PUBLIC;
 GRANT  EXECUTE ON FUNCTION public.get_my_role()            TO authenticated;
 GRANT  EXECUTE ON FUNCTION public.is_admin()               TO authenticated;
 GRANT  EXECUTE ON FUNCTION public.is_instructor_or_admin() TO authenticated;
+GRANT  EXECUTE ON FUNCTION public.is_staff()               TO authenticated;
 GRANT  EXECUTE ON FUNCTION public.my_group_ids()           TO authenticated;
 GRANT  EXECUTE ON FUNCTION public.valid_group_participants(uuid, uuid[]) TO authenticated;
 
@@ -1248,6 +1258,10 @@ CREATE POLICY "students: instructor delete"
   ON public.students FOR DELETE
   USING ((SELECT public.is_instructor_or_admin()));
 
+CREATE POLICY "students: staff select"
+  ON public.students FOR SELECT
+  USING ((SELECT public.is_staff()));
+
 -- ── cohorts (migration 033: require is_instructor_or_admin on writes) ──
 CREATE POLICY "cohorts: select"
   ON public.cohorts FOR SELECT
@@ -1284,6 +1298,10 @@ CREATE POLICY "cohorts: instructor delete"
     (SELECT public.is_instructor_or_admin())
     AND (created_by = (SELECT auth.uid()) OR (SELECT public.is_admin()))
   );
+
+CREATE POLICY "cohorts: staff select"
+  ON public.cohorts FOR SELECT
+  USING ((SELECT public.is_staff()));
 
 -- ── forms (migration 032: owner or admin select; 033: role check on writes) ──
 CREATE POLICY "forms: owner select"
@@ -1339,6 +1357,10 @@ CREATE POLICY "responses: owner select"
     )
   );
 
+CREATE POLICY "responses: staff select"
+  ON public.responses FOR SELECT
+  USING ((SELECT public.is_staff()));
+
 -- ── courses (migration 046: includes learning_path membership access) ──
 CREATE POLICY "courses: participants select"
   ON public.courses FOR SELECT
@@ -1379,6 +1401,10 @@ CREATE POLICY "courses: instructor delete"
     AND (user_id = (SELECT auth.uid()) OR (SELECT public.is_admin()))
   );
 
+CREATE POLICY "courses: staff published select"
+  ON public.courses FOR SELECT
+  USING ((SELECT public.is_staff()) AND status = 'published');
+
 -- ── events (migration 030) ─────────────────────────────────────
 CREATE POLICY "events: participants select"
   ON public.events FOR SELECT
@@ -1412,6 +1438,19 @@ CREATE POLICY "events: instructor delete"
     (SELECT public.is_instructor_or_admin())
     AND (user_id = (SELECT auth.uid()) OR (SELECT public.is_admin()))
   );
+
+CREATE POLICY "events: staff select"
+  ON public.events FOR SELECT
+  USING ((SELECT public.is_staff()));
+
+CREATE POLICY "events: staff insert"
+  ON public.events FOR INSERT
+  WITH CHECK ((SELECT public.is_staff()) AND user_id = (SELECT auth.uid()));
+
+CREATE POLICY "events: staff update"
+  ON public.events FOR UPDATE
+  USING ((SELECT public.is_staff()))
+  WITH CHECK ((SELECT public.is_staff()));
 
 -- ── data_center_datasets (migration 106) ──────────────────────
 CREATE POLICY "Students read published data center datasets"
@@ -1479,6 +1518,10 @@ CREATE POLICY "virtual_experiences: instructor delete"
     AND (user_id = (SELECT auth.uid()) OR (SELECT public.is_admin()))
   );
 
+CREATE POLICY "virtual_experiences: staff published select"
+  ON public.virtual_experiences FOR SELECT
+  USING ((SELECT public.is_staff()) AND status = 'published');
+
 -- ── assignments (migration 097: use my_group_ids() helper for group check) ──
 CREATE POLICY "assignments: select"
   ON public.assignments FOR SELECT
@@ -1516,6 +1559,10 @@ CREATE POLICY "assignments: instructor delete"
     (SELECT public.is_instructor_or_admin())
     AND (created_by = (SELECT auth.uid()) OR (SELECT public.is_admin()))
   );
+
+CREATE POLICY "assignments: staff published select"
+  ON public.assignments FOR SELECT
+  USING ((SELECT public.is_staff()) AND status = 'published');
 
 -- ── assignment_resources ──────────────────────────────────────
 CREATE POLICY "assignment_resources: select"
@@ -1908,6 +1955,10 @@ CREATE POLICY "students_read_published_paths"
     )
   );
 
+CREATE POLICY "learning_paths: staff published select"
+  ON public.learning_paths FOR SELECT
+  USING ((SELECT public.is_staff()) AND status = 'published');
+
 -- ── course_attempts ───────────────────────────────────────────
 CREATE POLICY "students_read_own_attempts"
   ON public.course_attempts FOR SELECT
@@ -1916,6 +1967,10 @@ CREATE POLICY "students_read_own_attempts"
 CREATE POLICY "course_attempts: instructor read"
   ON public.course_attempts FOR SELECT
   USING ((SELECT public.is_instructor_or_admin()));
+
+CREATE POLICY "course_attempts: staff select"
+  ON public.course_attempts FOR SELECT
+  USING ((SELECT public.is_staff()));
 
 CREATE POLICY "course_attempts: student insert"
   ON public.course_attempts FOR INSERT
@@ -1935,6 +1990,10 @@ CREATE POLICY "guided_project_attempts: instructor read"
   ON public.guided_project_attempts FOR SELECT
   USING ((SELECT public.is_instructor_or_admin()));
 
+CREATE POLICY "guided_project_attempts: staff select"
+  ON public.guided_project_attempts FOR SELECT
+  USING ((SELECT public.is_staff()));
+
 -- ── student_xp ────────────────────────────────────────────────
 CREATE POLICY "students_read_own_xp"
   ON public.student_xp FOR SELECT
@@ -1943,6 +2002,10 @@ CREATE POLICY "students_read_own_xp"
 CREATE POLICY "student_xp: instructor read"
   ON public.student_xp FOR SELECT
   USING ((SELECT public.is_instructor_or_admin()));
+
+CREATE POLICY "student_xp: staff select"
+  ON public.student_xp FOR SELECT
+  USING ((SELECT public.is_staff()));
 
 -- ── certificates ──────────────────────────────────────────────
 CREATE POLICY "certificates: public select"
@@ -1995,6 +2058,91 @@ CREATE POLICY "event_registrations: instructor manage"
   ON public.event_registrations FOR ALL
   USING  ((SELECT public.is_instructor_or_admin()))
   WITH CHECK ((SELECT public.is_instructor_or_admin()));
+
+CREATE POLICY "event_registrations: staff select"
+  ON public.event_registrations FOR SELECT
+  USING ((SELECT public.is_staff()));
+
+CREATE POLICY "live_attendance: student select"
+  ON public.live_attendance FOR SELECT
+  USING (student_id = (SELECT auth.uid()));
+
+CREATE POLICY "live_attendance: instructor select"
+  ON public.live_attendance FOR SELECT
+  USING ((SELECT public.is_instructor_or_admin()));
+
+CREATE POLICY "live_attendance: staff select"
+  ON public.live_attendance FOR SELECT
+  USING ((SELECT public.is_staff()));
+
+-- recordings
+CREATE POLICY "recordings: select"
+  ON public.recordings FOR SELECT
+  USING (
+    created_by = (SELECT auth.uid())
+    OR (SELECT public.is_admin())
+    OR EXISTS (
+      SELECT 1 FROM public.students s
+      WHERE s.id = (SELECT auth.uid()) AND s.cohort_id = ANY(cohort_ids)
+    )
+  );
+
+CREATE POLICY "recordings: instructor insert"
+  ON public.recordings FOR INSERT
+  WITH CHECK ((SELECT public.is_instructor_or_admin()) AND (created_by = (SELECT auth.uid()) OR (SELECT public.is_admin())));
+
+CREATE POLICY "recordings: instructor update"
+  ON public.recordings FOR UPDATE
+  USING ((SELECT public.is_instructor_or_admin()) AND (created_by = (SELECT auth.uid()) OR (SELECT public.is_admin())))
+  WITH CHECK ((SELECT public.is_instructor_or_admin()) AND (created_by = (SELECT auth.uid()) OR (SELECT public.is_admin())));
+
+CREATE POLICY "recordings: instructor delete"
+  ON public.recordings FOR DELETE
+  USING ((SELECT public.is_instructor_or_admin()) AND (created_by = (SELECT auth.uid()) OR (SELECT public.is_admin())));
+
+CREATE POLICY "recordings: staff select"
+  ON public.recordings FOR SELECT
+  USING ((SELECT public.is_staff()));
+
+CREATE POLICY "recordings: staff insert"
+  ON public.recordings FOR INSERT
+  WITH CHECK ((SELECT public.is_staff()) AND created_by = (SELECT auth.uid()));
+
+CREATE POLICY "recordings: staff update"
+  ON public.recordings FOR UPDATE
+  USING ((SELECT public.is_staff()))
+  WITH CHECK ((SELECT public.is_staff()));
+
+CREATE POLICY "recording_entries: select"
+  ON public.recording_entries FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.recordings r
+      WHERE r.id = recording_id
+        AND (
+          r.created_by = (SELECT auth.uid())
+          OR (SELECT public.is_admin())
+          OR EXISTS (
+            SELECT 1 FROM public.students s
+            WHERE s.id = (SELECT auth.uid()) AND s.cohort_id = ANY(r.cohort_ids)
+          )
+        )
+    )
+  );
+
+CREATE POLICY "recording_entries: instructor manage"
+  ON public.recording_entries FOR ALL
+  USING (EXISTS (SELECT 1 FROM public.recordings r WHERE r.id = recording_id AND (r.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin()))))
+  WITH CHECK (EXISTS (SELECT 1 FROM public.recordings r WHERE r.id = recording_id AND (r.created_by = (SELECT auth.uid()) OR (SELECT public.is_admin()))));
+
+CREATE POLICY "recording_entries: staff select"
+  ON public.recording_entries FOR SELECT
+  USING ((SELECT public.is_staff()));
+
+CREATE POLICY "recording_entries: staff manage"
+  ON public.recording_entries FOR ALL
+  USING ((SELECT public.is_staff()))
+  WITH CHECK ((SELECT public.is_staff()));
 
 -- ── sent_nudges ───────────────────────────────────────────────
 -- No client read access — server-side only (service role)

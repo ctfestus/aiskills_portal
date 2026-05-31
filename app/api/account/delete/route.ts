@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   // Prevent self-deletion of admin accounts via this endpoint
   const { data: profile } = await supabase
-    .from('profiles')
+    .from('students')
     .select('role')
     .eq('id', user.id)
     .single();

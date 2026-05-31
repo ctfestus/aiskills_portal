@@ -53,7 +53,7 @@ async function fetchAndVerify(
   if (!data) return null;
   if (data[ownerCol] !== userId) {
     const { data: s } = await supabase.from('students').select('role').eq('id', userId).single();
-    if (s?.role !== 'admin') return null;
+    if (s?.role !== 'admin' && s?.role !== 'staff') return null;
   }
   return data;
 }

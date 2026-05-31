@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { data: student } = await supabase.from('students').select('role').eq('id', user.id).single();
-  if (!student || !['instructor', 'admin'].includes(student.role)) {
+  if (!student || !['instructor', 'admin', 'staff'].includes(student.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -97,6 +97,9 @@ export async function POST(req: NextRequest) {
 
   const isCourse = Boolean(config?.isCourse);
   const isEvent  = Boolean(config?.eventDetails?.isEvent);
+  if (student.role === 'staff' && !isEvent) {
+    return NextResponse.json({ error: 'Staff can only create live sessions.' }, { status: 403 });
+  }
   if (!isCourse && !isEvent) {
     return NextResponse.json({ error: 'config must set isCourse or eventDetails.isEvent' }, { status: 400 });
   }
@@ -228,7 +231,7 @@ export async function PUT(req: NextRequest) {
   }
 
   const { data: profile } = await supabase.from('students').select('role').eq('id', user.id).single();
-  if (!profile || !['instructor', 'admin'].includes(profile.role)) {
+  if (!profile || !['instructor', 'admin', 'staff'].includes(profile.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -242,7 +245,10 @@ export async function PUT(req: NextRequest) {
 
   const found = await findContentById(supabase, id);
   if (!found) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (found.row.user_id !== user.id && profile.role !== 'admin') {
+  if (profile.role === 'staff' && found.table !== 'events') {
+    return NextResponse.json({ error: 'Staff can only edit live sessions.' }, { status: 403 });
+  }
+  if (found.row.user_id !== user.id && profile.role !== 'admin' && profile.role !== 'staff') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -377,7 +383,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { data: profile } = await supabase.from('students').select('role').eq('id', user.id).single();
-  if (!profile || !['instructor', 'admin'].includes(profile.role)) {
+  if (!profile || !['instructor', 'admin', 'staff'].includes(profile.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -391,7 +397,10 @@ export async function PATCH(req: NextRequest) {
 
   const found = await findContentById(supabase, formId);
   if (!found) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (found.row.user_id !== user.id && profile.role !== 'admin') {
+  if (profile.role === 'staff' && found.table !== 'events') {
+    return NextResponse.json({ error: 'Staff can only publish live sessions.' }, { status: 403 });
+  }
+  if (found.row.user_id !== user.id && profile.role !== 'admin' && profile.role !== 'staff') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -443,6 +452,9 @@ export async function DELETE(req: NextRequest) {
   if (!found) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const { data: profile } = await supabase.from('students').select('role').eq('id', user.id).single();
+  if (profile?.role === 'staff') {
+    return NextResponse.json({ error: 'Staff cannot delete content.' }, { status: 403 });
+  }
   const isAdmin = profile?.role === 'admin';
   if (found.row.user_id !== user.id && !isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

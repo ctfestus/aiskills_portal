@@ -2338,6 +2338,7 @@ export default function FormDetailPage() {
   const [courseProgress, setCourseProgress] = useState<any[]>([]);
   const [cohortStudents, setCohortStudents] = useState<any[]>([]);
   const [formCohorts, setFormCohorts]       = useState<{ id: string; name: string }[]>([]);
+  const [isStaff, setIsStaff] = useState(false);
   const initialTab = (searchParams.get('tab') as TabId) || 'settings';
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
 
@@ -2346,8 +2347,9 @@ export default function FormDetailPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) { window.location.href = '/auth'; return; }
 
-      const [{ data: { user } }, [{ data: courseRow }, { data: eventRow }, { data: veRow }]] = await Promise.all([
+      const [{ data: { user } }, { data: profile }, [{ data: courseRow }, { data: eventRow }, { data: veRow }]] = await Promise.all([
         supabase.auth.getUser(),
+        supabase.from('students').select('role').eq('id', session.user.id).single(),
         Promise.all([
           supabase.from('courses').select('*').eq('id', id as string).maybeSingle(),
           supabase.from('events').select('*').eq('id', id as string).maybeSingle(),
@@ -2356,6 +2358,14 @@ export default function FormDetailPage() {
       ]);
 
       const isEventContent = !!eventRow;
+      if (profile?.role === 'staff') {
+        setIsStaff(true);
+        if (!isEventContent) {
+          router.replace('/dashboard#events');
+          return;
+        }
+        if (activeTab !== 'settings') setActiveTab('settings');
+      }
       let responseData: any[] | null = null;
       let count: number | null = null;
 
@@ -2459,7 +2469,7 @@ export default function FormDetailPage() {
       setLoading(false);
     };
     fetchData();
-  }, [id]);
+  }, [activeTab, id, router]);
 
   const fetchPage = async (newPage: number) => {
     setPageLoading(true);
@@ -2610,9 +2620,9 @@ export default function FormDetailPage() {
             <a href={formUrl} target="_blank" rel="noreferrer" className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-70" style={{ background: hdrBtnBg, border: `1px solid ${hdrBtnBord}`, color: hdrTextMut }}>
               <ExternalLink className="w-3.5 h-3.5" /> View
             </a>
-            <button onClick={() => exportContent(form)} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-70" style={{ background: hdrBtnBg, border: `1px solid ${hdrBtnBord}`, color: hdrTextMut }} title="Export">
+            {!isStaff && <button onClick={() => exportContent(form)} className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-70" style={{ background: hdrBtnBg, border: `1px solid ${hdrBtnBord}`, color: hdrTextMut }} title="Export">
               <Download className="w-3.5 h-3.5" /> Export
-            </button>
+            </button>}
             <button onClick={toggleTheme} className="p-2 rounded-lg transition-colors ff-hover" title="Toggle theme" style={{ color: hdrTextMut }}>
               {isLight ? <Moon className="w-4 h-4"/> : <Sun className="w-4 h-4"/>}
             </button>
@@ -2621,7 +2631,7 @@ export default function FormDetailPage() {
 
         {/* -- Tab bar -- */}
         <div className="px-2 sm:px-6 flex items-center gap-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-          {TABS.filter(tab => (!tab.courseOnly || type === 'course') && !(tab.id === 'settings' && type === 'virtual_experience')).map(tab => {
+          {TABS.filter(tab => (!isStaff || tab.id === 'settings') && (!tab.courseOnly || type === 'course') && !(tab.id === 'settings' && type === 'virtual_experience')).map(tab => {
             const isActive = activeTab === tab.id;
             return (
               <button

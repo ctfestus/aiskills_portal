@@ -37,20 +37,50 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const { data: profile } = await supabase
+    .from('students')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+  if (!profile || !['admin', 'instructor', 'staff'].includes(profile.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  const isStaff = profile.role === 'staff';
+  const isAdmin = profile.role === 'admin';
+
   const url = new URL(req.url);
   const cohortFilter = url.searchParams.get('cohortId') ?? 'all';
   const typeFilter   = url.searchParams.get('contentType') ?? 'all';
 
-  // 1. Fetch courses, VEs, and assignments owned by this instructor
+  // 1. Fetch tracked content. Staff/admins see all published content; instructors
+  // keep their owner-scoped view, including drafts as before.
+  const coursesQuery = () => {
+    let query = supabase.from('courses').select('id, title, cohort_ids, questions, deadline_days, status');
+    if (isStaff || isAdmin) query = query.eq('status', 'published');
+    else query = query.eq('user_id', user.id);
+    return query;
+  };
+  const vesQuery = () => {
+    let query = supabase.from('virtual_experiences').select('id, title, cohort_ids, modules, deadline_days, status');
+    if (isStaff || isAdmin) query = query.eq('status', 'published');
+    else query = query.eq('user_id', user.id);
+    return query;
+  };
+  const assignmentsQuery = () => {
+    let query = supabase.from('assignments').select('id, title, cohort_ids, deadline_date, type, config, status').eq('status', 'published');
+    if (!isStaff && !isAdmin) query = query.eq('created_by', user.id);
+    return query;
+  };
+
   const [{ data: courses }, { data: ves }, { data: assignments }] = await Promise.all([
     typeFilter === 'all' || typeFilter === 'course'
-      ? supabase.from('courses').select('id, title, cohort_ids, questions, deadline_days').eq('user_id', user.id)
+      ? coursesQuery()
       : Promise.resolve({ data: [] as any[] }),
     typeFilter === 'all' || typeFilter === 'virtual_experience'
-      ? supabase.from('virtual_experiences').select('id, title, cohort_ids, modules, deadline_days').eq('user_id', user.id)
+      ? vesQuery()
       : Promise.resolve({ data: [] as any[] }),
     typeFilter === 'all' || typeFilter === 'assignment'
-      ? supabase.from('assignments').select('id, title, cohort_ids, deadline_date, type, config').eq('created_by', user.id).eq('status', 'published')
+      ? assignmentsQuery()
       : Promise.resolve({ data: [] as any[] }),
   ]);
 

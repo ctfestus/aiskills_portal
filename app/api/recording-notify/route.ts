@@ -21,7 +21,7 @@ async function requireInstructor(req: NextRequest) {
   const { data: { user }, error } = await db.auth.getUser(token);
   if (error || !user) return null;
   const { data: student } = await db.from('students').select('role').eq('id', user.id).maybeSingle();
-  if (!student || !['admin', 'instructor'].includes(student.role)) return null;
+  if (!student || !['admin', 'instructor', 'staff'].includes(student.role)) return null;
   return user;
 }
 

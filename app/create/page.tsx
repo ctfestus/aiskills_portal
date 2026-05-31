@@ -909,6 +909,7 @@ export default function Page() {
   const [isSharedView, setIsSharedView] = useState(false);
   const [copied, setCopied] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 const [isSaving, setIsSaving] = useState(false);
   const [savingAs, setSavingAs] = useState<'draft' | 'published' | null>(null);
   const [formStatus, setFormStatus] = useState<'draft' | 'published'>('published');
@@ -1018,18 +1019,19 @@ const [isSaving, setIsSaving] = useState(false);
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { router.replace('/auth'); return; }
 
-      // Role guard -- only instructors and admins can access create pages
+      // Role guard -- instructors/admins can create all content; staff can create events.
       const { data: studentProfile } = await supabase
         .from('students')
         .select('role')
         .eq('id', session.user.id)
         .single();
 
-      if (!studentProfile || !['instructor', 'admin'].includes(studentProfile.role)) {
+      if (!studentProfile || !['instructor', 'admin', 'staff'].includes(studentProfile.role)) {
         router.replace('/dashboard');
         return;
       }
 
+      setUserRole(studentProfile.role);
       setUser(session.user);
 
       // cohorts loaded in separate effect below
@@ -1040,6 +1042,7 @@ const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (!userRole) return;
     const params = new URLSearchParams(window.location.search);
     const s = params.get('s');
     const editId = params.get('edit');
@@ -1061,6 +1064,11 @@ const [isSaving, setIsSaving] = useState(false);
         let slug = '';
         let cohortIds: string[] = [];
         let status = '';
+
+        if (userRole === 'staff' && course) {
+          router.replace('/dashboard#events');
+          return;
+        }
 
         if (course) {
           id = course.id; slug = course.slug || ''; cohortIds = course.cohort_ids || []; status = course.status;
@@ -1096,6 +1104,10 @@ const [isSaving, setIsSaving] = useState(false);
       });
     } else {
       const type = params.get('type');
+      if (userRole === 'staff' && type && type !== 'event') {
+        router.replace('/create?type=event');
+        return;
+      }
       if (type === 'sql-course') {
         setSqlWizardStep('brief');
       } else if (type) {
@@ -1104,7 +1116,7 @@ const [isSaving, setIsSaving] = useState(false);
       }
       setIsLoadingEdit(false);
     }
-  }, []);
+  }, [router, userRole]);
 
   useEffect(() => {
     supabase.from('cohorts').select('id, name').order('name').then(({ data }) => {
@@ -1160,6 +1172,10 @@ const [isSaving, setIsSaving] = useState(false);
   const handleShare = async (saveStatus: 'draft' | 'published' = 'published') => {
     if (!formConfig) return;
     if (!user) { showToast('Please sign in to save and share your work.', 'info'); window.location.href = '/auth'; return; }
+    if (userRole === 'staff' && !formConfig.eventDetails?.isEvent) {
+      showToast('Staff can only create and edit live sessions.', 'error');
+      return;
+    }
     setIsSaving(true);
     setSavingAs(saveStatus);
     try {
@@ -1267,6 +1283,10 @@ const [isSaving, setIsSaving] = useState(false);
 
   // -- Template selection --
   const handleSelectTemplate = (template: typeof TEMPLATES[number]) => {
+    if (userRole === 'staff' && template.key !== 'event' && template.key !== 'webinar') {
+      showToast('Staff can only create live sessions.', 'error');
+      return;
+    }
     setFormConfig(template.config);
     setIsSuccess(false);
     setSavedFormId(null);
@@ -2192,7 +2212,7 @@ const [isSaving, setIsSaving] = useState(false);
                   <div className="flex-1 h-px" style={{ background: C.divider }} />
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {TEMPLATES.map((t, i) => {
+                  {TEMPLATES.filter(t => userRole !== 'staff' || t.config.eventDetails?.isEvent).map((t, i) => {
                     const Icon = t.icon;
                     return (
                       <motion.button key={t.key} type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 + i * 0.07 }} onClick={() => handleSelectTemplate(t)} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
@@ -2208,7 +2228,7 @@ const [isSaving, setIsSaving] = useState(false);
                     );
                   })}
                   {/* SQL Course with AI */}
-                  <motion.button key="sql-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 + TEMPLATES.length * 0.07 }} onClick={() => setSqlWizardStep('brief')} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                  {userRole !== 'staff' && <motion.button key="sql-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 + TEMPLATES.length * 0.07 }} onClick={() => setSqlWizardStep('brief')} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#3b82f618' }}>
                       <Database className="w-4.5 h-4.5" style={{ color: '#3b82f6', width: 18, height: 18 }} />
                     </div>
@@ -2218,7 +2238,7 @@ const [isSaving, setIsSaving] = useState(false);
                     </div>
                     <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#3b82f618', color: '#3b82f6' }}>AI</span>
                     <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>Use</span>
-                  </motion.button>
+                  </motion.button>}
                 </div>
               </motion.div>
             </>

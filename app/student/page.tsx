@@ -348,6 +348,8 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
             <div className="p-2">
               {(profile?.role === 'instructor' || profile?.role === 'admin') &&
                 menuItem('/dashboard', BarChart3, 'Instructor Dashboard', C.faint, iconBgSubtle)}
+              {profile?.role === 'staff' &&
+                menuItem('/dashboard#events', LayoutDashboard, 'Staff Dashboard', C.faint, iconBgSubtle)}
               {menuItem('/student#courses', GraduationCap, 'My Learning', C.faint, iconBgSubtle)}
               {menuItem('/student#certificates', Award, 'My Certificates', C.faint, iconBgSubtle)}
               {username && menuItem(`/s/${username}`, User, 'View Profile', C.faint, iconBgSubtle, true)}
@@ -6888,14 +6890,17 @@ export default function StudentDashboard() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) { router.replace('/auth'); return; }
 
-      const [{ data: { user: authUser } }, { data: profileData }, { data: studentData }] = await Promise.all([
+      const [{ data: { user: authUser } }, { data: studentData }] = await Promise.all([
         supabase.auth.getUser(),
-        supabase.from('profiles').select('*').eq('id', session.user.id).single(),
-        supabase.from('students').select('username').eq('id', session.user.id).single(),
+        supabase
+          .from('students')
+          .select('username, role, full_name, avatar_url, onboarding_done')
+          .eq('id', session.user.id)
+          .single(),
       ]);
 
       if (!authUser) { router.replace('/auth'); return; }
-      if (profileData && !profileData.onboarding_completed) { router.replace('/onboarding'); return; }
+      if (!studentData?.onboarding_done) { router.replace('/onboarding'); return; }
 
       // Check for admin viewAs mode
       const viewAsId = new URLSearchParams(window.location.search).get('viewAs');
@@ -6910,7 +6915,12 @@ export default function StudentDashboard() {
       setViewingAs(resolvedViewingAs);
 
       setUser(authUser);
-      setProfile(profileData ? { ...profileData, username: studentData?.username ?? null } : profileData);
+      setProfile({
+        username:   studentData?.username ?? null,
+        role:       studentData?.role ?? null,
+        full_name:  studentData?.full_name ?? null,
+        avatar_url: studentData?.avatar_url ?? null,
+      });
 
       // Update last_login_at (fire-and-forget) -- skip in viewAs mode
       if (!resolvedViewingAs) {

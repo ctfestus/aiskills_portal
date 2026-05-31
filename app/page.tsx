@@ -973,7 +973,11 @@ export default function LandingPage() {
       const u = session?.user ?? null;
       setUser(u);
       if (u) {
-        const { data } = await supabase.from('profiles').select('*').eq('id', u.id).single();
+        const { data } = await supabase
+          .from('students')
+          .select('username, role, full_name, avatar_url')
+          .eq('id', u.id)
+          .single();
         setProfile(data);
       }
     });

@@ -106,7 +106,7 @@ export default function AuthPage() {
           .eq('id', data.session!.user.id)
           .single();
         if (!student || !student.onboarding_done) window.location.href = '/onboarding';
-        else if (student.role === 'student') window.location.href = '/student';
+        else if (student.role === 'student' || student.role === 'staff') window.location.href = '/student';
         else window.location.href = '/dashboard';
       } else {
         const res = await fetch(`/api/cohort-allowlist?email=${encodeURIComponent(email)}`);

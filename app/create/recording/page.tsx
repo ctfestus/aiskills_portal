@@ -74,7 +74,7 @@ export default function CreateRecordingPage() {
 
       const { data: profile } = await supabase
         .from('students').select('role').eq('id', session.user.id).single();
-      if (!profile || !['instructor', 'admin'].includes(profile.role)) {
+      if (!profile || !['instructor', 'admin', 'staff'].includes(profile.role)) {
         router.replace('/dashboard'); return;
       }
 
