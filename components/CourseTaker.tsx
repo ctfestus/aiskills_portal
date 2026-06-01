@@ -9,7 +9,7 @@ import {
   CheckCircle2, XCircle, Loader2, ChevronRight, RotateCcw,
   Clock, EyeOff, AlertTriangle, ShieldAlert, GripVertical,
   ChevronLeft, BookOpen, X, ExternalLink, ArrowRight, MoreHorizontal, Zap,
-  ArrowLeftToLine, ArrowRightFromLine, Download, ArrowDownToLine,
+  ArrowLeftToLine, ArrowRightFromLine, Download, ArrowDownToLine, Lock,
 } from 'lucide-react';
 import { AnimatedField } from '@/components/AnimatedField';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -100,6 +100,7 @@ interface CourseQuestion {
   codeSnippet?: string;
   codeLanguage?: string;
   lessonOnly?: boolean;
+  lockUntilPrevious?: boolean;
   isSection?: boolean;
   sectionTitle?: string;
   sectionDescription?: string;
@@ -345,6 +346,7 @@ export function CourseTaker({
   const [existingCertId, setExistingCertId] = useState<string | null>(null);
   const [finishPending, setFinishPending] = useState<any[] | null>(null); // unanswered questions blocking finish
   const [streakToast, setStreakToast] = useState<string | null>(null);
+  const [lockedToast, setLockedToast] = useState<string | null>(null);
   const questions = useMemo(() => config.questions || [], [config.questions]);
   const learningOutcomes: string[] = config.learnOutcomes || [];
   const currentQuestion = questions[currentQuestionIndex];
@@ -1027,6 +1029,22 @@ export function CourseTaker({
       failed: false,
     };
   }, [answers]);
+
+  // A slide marked "lock until previous" stays locked until the nearest
+  // preceding non-section slide is completed. First slide / review mode: never locked.
+  const isSlideLocked = useCallback((idx: number) => {
+    const q: any = questions[idx];
+    if (!q?.lockUntilPrevious || reviewMode) return false;
+    let prevIdx = idx - 1;
+    while (prevIdx >= 0 && (questions[prevIdx] as any)?.isSection) prevIdx--;
+    if (prevIdx < 0) return false;
+    return !getSlideProgressStatus(questions[prevIdx]).completed;
+  }, [questions, reviewMode, getSlideProgressStatus]);
+
+  const notifyLocked = useCallback(() => {
+    setLockedToast('Complete the previous lesson to unlock this.');
+    setTimeout(() => setLockedToast(null), 2400);
+  }, []);
 
   // -- Points system --
   const ps = (config as any).pointsSystem;
@@ -2549,6 +2567,25 @@ export function CourseTaker({
         )}
       </AnimatePresence>
 
+      {/* -- Locked-slide toast -- */}
+      <AnimatePresence>
+        {lockedToast && (
+          <motion.div
+            key="locked-toast"
+            initial={{ opacity: 0, y: -16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-14 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none"
+          >
+            <span className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[12px] font-semibold shadow-lg"
+              style={{ background: isDark ? '#27272a' : '#111', color: '#fff' }}>
+              <Lock className="w-3.5 h-3.5" /> {lockedToast}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* -- Saving banner -- */}
       <AnimatePresence>
         {submitSaving && !submitError && (
@@ -2954,17 +2991,20 @@ export function CourseTaker({
                           const progressStatus = getSlideProgressStatus(q);
                           const isDoneQ = progressStatus.completed;
                           const isCurrent = idx === currentQuestionIndex;
+                          const locked = isSlideLocked(idx);
                           const isLastItem = si === totalGroupSlides - 1 && gi === chapters.length - 1;
 
                           return (
                             <button
                               key={q.id}
                               onClick={() => {
+                                if (locked) { notifyLocked(); return; }
                                 setDirection(idx > currentQuestionIndex ? 1 : -1);
                                 setCurrentQuestionIndex(idx);
                                 if (typeof window !== 'undefined' && window.innerWidth < 640) setSidebarOpen(false);
                               }}
                               className="w-full flex items-start gap-2.5 text-left transition-all hover:opacity-80"
+                              style={{ opacity: locked ? 0.55 : 1, cursor: locked ? 'not-allowed' : 'pointer' }}
                             >
                               {/* Circle + connector line */}
                               <div className="flex flex-col items-center flex-shrink-0">
@@ -2983,6 +3023,8 @@ export function CourseTaker({
                                     <div className="w-2 h-2 rounded-full bg-white" />
                                   ) : isDoneQ ? (
                                     <CheckCircle2 className="w-3.5 h-3.5" style={{ color: accent }} />
+                                  ) : locked ? (
+                                    <Lock className="w-3 h-3" style={{ color: isDark ? '#777' : '#888' }} />
                                   ) : (q as any).isDownloads ? (
                                     <Download className="w-3 h-3" style={{ color: isDark ? '#777' : '#888' }} />
                                   ) : (q as any).lessonOnly ? (
@@ -3827,15 +3869,16 @@ export function CourseTaker({
                       {group.slides.map(({ q, idx }) => {
                         const answered = !!answers[q.id];
                         const isCurrent = idx === currentQuestionIndex;
+                        const locked = isSlideLocked(idx);
                         return (
                           <button key={q.id}
-                            onClick={() => { setDirection(idx > currentQuestionIndex ? 1 : -1); setCurrentQuestionIndex(idx); setShowChapters(false); }}
+                            onClick={() => { if (locked) { notifyLocked(); return; } setDirection(idx > currentQuestionIndex ? 1 : -1); setCurrentQuestionIndex(idx); setShowChapters(false); }}
                             className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:opacity-80"
-                            style={{ background: isCurrent ? (isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)') : 'transparent' }}
+                            style={{ background: isCurrent ? (isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)') : 'transparent', opacity: locked ? 0.55 : 1, cursor: locked ? 'not-allowed' : 'pointer' }}
                           >
                             <span className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold"
                               style={{ background: isCurrent ? accent : answered ? `${accent}25` : isDark ? '#2a2a2a' : '#f0f0f0', color: isCurrent ? '#fff' : answered ? accent : isDark ? '#555' : '#aaa' }}>
-                              {answered ? '✓' : (q as any).lessonOnly ? '◉' : idx + 1}
+                              {answered ? '✓' : locked ? <Lock className="w-3 h-3" /> : (q as any).lessonOnly ? '◉' : idx + 1}
                             </span>
                             <span className="flex-1 text-[13px] leading-snug line-clamp-2" style={{ color: isCurrent ? (isDark ? '#fff' : '#111') : isDark ? '#999' : '#555' }}>
                               {(q as any).lessonOnly ? ((q as any).lesson?.title || 'Lesson') : q.question}

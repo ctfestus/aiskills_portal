@@ -9,6 +9,7 @@ import {
   X, MapPin, ArrowUpRight, ChevronDown, ChevronUp, Sparkles,
   Building2, GripVertical, BookOpen, Pencil, Monitor, Smartphone, RotateCcw, ExternalLink, Video, Search,
   HelpCircle, CalendarDays, ClipboardList, Share2, CheckCircle2, Zap, Settings, Upload, Download, Link2, FileText,
+  Lock, LockOpen,
 } from 'lucide-react';
 import { ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import dynamic from 'next/dynamic';
@@ -68,6 +69,7 @@ interface CourseQuestion {
   codeSnippet?: string;
   codeLanguage?: string;
   lessonOnly?: boolean;
+  lockUntilPrevious?: boolean;
   isSection?: boolean;
   sectionTitle?: string;
   sectionDescription?: string;
@@ -448,6 +450,22 @@ function SwitchToggle({ checked, onChange, accentColor }: { checked: boolean; on
       >
         <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${checked ? 'translate-x-4' : ''}`} />
       </span>
+    </button>
+  );
+}
+
+// Toggle: lock this slide until the previous lesson is completed
+function LockToggle({ locked, onToggle, accentColor }: { locked: boolean; onToggle: () => void; accentColor?: string }) {
+  const FE = useFEC();
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={locked ? 'Locked until the previous lesson is completed' : 'Lock until the previous lesson is completed'}
+      className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all"
+      style={locked ? { background: accentColor ?? '#10b981', color: 'white' } : { background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
+    >
+      {locked ? <Lock className="w-3 h-3" /> : <LockOpen className="w-3 h-3" />} Lock
     </button>
   );
 }
@@ -2514,6 +2532,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                 <Download className="w-3 h-3" /> {q.downloadsTitle || 'Downloads'}
                               </span>
                             </button>
+                            <LockToggle
+                              locked={!!q.lockUntilPrevious}
+                              onToggle={() => updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, lockUntilPrevious: !qq.lockUntilPrevious } : qq) })}
+                              accentColor={accentColor}
+                            />
                             <button type="button" onClick={() => updateConfig({ questions: formConfig.questions?.filter(qq => qq.id !== q.id) })}
                               className="p-1 rounded transition-colors hover:bg-red-500/10">
                               <X className="w-3.5 h-3.5 text-red-400" />
@@ -2581,8 +2604,13 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                             if (!file) return;
                                             e.target.value = '';
                                             try {
-                                              const url = await uploadToCloudinary(file, 'course-downloads');
-                                              updateItems(dlItems.map(it => it.id === item.id ? { ...it, fileUrl: url, fileName: file.name, title: it.title || file.name } : it));
+                                              const { data: { session } } = await supabase.auth.getSession();
+                                              const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                                              const path = `course-downloads/${session?.user.id ?? 'anon'}/${Date.now()}-${safeName}`;
+                                              const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true, contentType: file.type || undefined });
+                                              if (error) throw error;
+                                              const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
+                                              updateItems(dlItems.map(it => it.id === item.id ? { ...it, fileUrl: publicUrl, fileName: file.name, title: it.title || file.name } : it));
                                             } catch { /* silently fail */ }
                                           }} />
                                           <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-60 cursor-pointer" style={{ border: `1.5px dashed ${FE.inputBorder}`, color: FE.faint }}>
@@ -2679,6 +2707,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                             >
                               <BookOpen className="w-3 h-3" /> Lesson only
                             </button>
+                            <LockToggle
+                              locked={!!q.lockUntilPrevious}
+                              onToggle={() => handleUpdateQuestion(q.id, { lockUntilPrevious: !q.lockUntilPrevious })}
+                              accentColor={accentColor}
+                            />
                             <button type="button" onClick={() => handleRemoveQuestion(q.id)} className="p-1 transition-colors hover:text-red-400" style={{ color: FE.faint }}>
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>

@@ -28,7 +28,8 @@
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\DELL\\\\Documents\\\\ALL Apps\\\\App_AI Skils\\\\AI Skills Africa App\\\\components\" -Recurse -Force -ErrorAction SilentlyContinue | Where-Object {$_.PSIsContainer -eq $false} | Select-Object FullName | Format-List)",
       "Bash(Get-ChildItem -Recurse -Path \"app\" -Filter \"page.tsx\")",
       "Bash(Select-Object FullName)",
-      "Bash(grep -r \"supabase\" \"c:\\\\Users\\\\DELL\\\\Documents\\\\ALL Apps\\\\App_AI Skils\\\\AI Skills Africa App\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.js\" --include=\"*.jsx\" ! -path \"*/node_modules/*\" ! -path \"*/.next/*\")"
+      "Bash(grep -r \"supabase\" \"c:\\\\Users\\\\DELL\\\\Documents\\\\ALL Apps\\\\App_AI Skils\\\\AI Skills Africa App\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.js\" --include=\"*.jsx\" ! -path \"*/node_modules/*\" ! -path \"*/.next/*\")",
+      "Bash(grep -E \"create/page|create\\\\\\\\\\\\\\\\page|error TS\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\DELL\\Documents\\ALL Apps\\Landing pages\\elevate-landing\\lib",

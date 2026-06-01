@@ -13,7 +13,7 @@ import {
   ArrowUpRight, ChevronDown, ChevronUp,
   Building2, Share2, GripVertical,
   CalendarDays, HelpCircle, ClipboardList, Video, BookOpen, Search, Zap, Settings, Upload,
-  Download, Link2, FileText, Database, ArrowLeft,
+  Download, Link2, FileText, Database, ArrowLeft, Lock, LockOpen,
 } from 'lucide-react';
 import { AnimatedField, ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import dynamic from 'next/dynamic';
@@ -76,6 +76,7 @@ interface CourseQuestion {
   codeSnippet?: string;
   codeLanguage?: string;
   lessonOnly?: boolean;
+  lockUntilPrevious?: boolean;
   isSection?: boolean;
   sectionTitle?: string;
   sectionDescription?: string;
@@ -3245,6 +3246,15 @@ const [isSaving, setIsSaving] = useState(false);
                                 <Download className="w-3 h-3" /> {q.downloadsTitle || 'Downloads'}
                               </span>
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, lockUntilPrevious: !qq.lockUntilPrevious } : qq) })}
+                              title={q.lockUntilPrevious ? 'Locked until the previous lesson is completed' : 'Lock until the previous lesson is completed'}
+                              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all"
+                              style={q.lockUntilPrevious ? { background: accentColor, color: C.ctaText } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.faint }}
+                            >
+                              {q.lockUntilPrevious ? <Lock className="w-3 h-3" /> : <LockOpen className="w-3 h-3" />} Lock
+                            </button>
                             <button type="button" onClick={() => updateConfig({ questions: formConfig.questions?.filter(qq => qq.id !== q.id) })}
                               className="p-1 rounded transition-colors hover:bg-red-500/10">
                               <X className="w-3.5 h-3.5 text-red-400" />
@@ -3340,8 +3350,13 @@ const [isSaving, setIsSaving] = useState(false);
                                               if (!file) return;
                                               e.target.value = '';
                                               try {
-                                                const url = await uploadToCloudinary(file, 'course-downloads');
-                                                updateItems(dlItems.map(it => it.id === item.id ? { ...it, fileUrl: url, fileName: file.name, title: it.title || file.name } : it));
+                                                const { data: { session } } = await supabase.auth.getSession();
+                                                const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                                                const path = `course-downloads/${session?.user.id ?? 'anon'}/${Date.now()}-${safeName}`;
+                                                const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true, contentType: file.type || undefined });
+                                                if (error) throw error;
+                                                const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
+                                                updateItems(dlItems.map(it => it.id === item.id ? { ...it, fileUrl: publicUrl, fileName: file.name, title: it.title || file.name } : it));
                                               } catch { /* silently fail */ }
                                             }}
                                           />
@@ -3443,6 +3458,15 @@ const [isSaving, setIsSaving] = useState(false);
                             style={q.lessonOnly ? { background: accentColor, color: C.ctaText } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.faint }}
                           >
                             <BookOpen className="w-3 h-3" /> Lesson only
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuestion(q.id, { lockUntilPrevious: !q.lockUntilPrevious })}
+                            title={q.lockUntilPrevious ? 'Locked until the previous lesson is completed' : 'Lock until the previous lesson is completed'}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all"
+                            style={q.lockUntilPrevious ? { background: accentColor, color: C.ctaText } : { background: C.pill, border: `1px solid ${C.inputBorder}`, color: C.faint }}
+                          >
+                            {q.lockUntilPrevious ? <Lock className="w-3 h-3" /> : <LockOpen className="w-3 h-3" />} Lock
                           </button>
                           <button type="button" onClick={() => handleRemoveQuestion(q.id)} className="p-1 transition-colors hover:text-red-400" style={{ color: C.faint }}>
                             <Trash2 className="w-3.5 h-3.5" />
