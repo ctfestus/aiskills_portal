@@ -3,6 +3,18 @@
  * Returns the secure CDN URL.
  */
 export async function uploadToCloudinary(file: File | Blob, folder: string, publicId?: string): Promise<string> {
+  return (await uploadToCloudinaryWithMeta(file, folder, publicId)).url;
+}
+
+/**
+ * Same as uploadToCloudinary but also returns metadata from Cloudinary.
+ * `pages` is the page count for multi-page assets (PDFs); 1 otherwise.
+ */
+export async function uploadToCloudinaryWithMeta(
+  file: File | Blob,
+  folder: string,
+  publicId?: string,
+): Promise<{ url: string; pages: number }> {
   const fd = new FormData();
   fd.append('file', file);
   fd.append('folder', folder);
@@ -13,8 +25,8 @@ export async function uploadToCloudinary(file: File | Blob, folder: string, publ
     const msg = await res.text().catch(() => 'Upload failed');
     throw new Error(msg);
   }
-  const { url } = await res.json();
-  return url as string;
+  const { url, pages } = await res.json();
+  return { url: url as string, pages: typeof pages === 'number' && pages > 0 ? pages : 1 };
 }
 
 /**

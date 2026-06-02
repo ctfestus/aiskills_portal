@@ -43,12 +43,12 @@ export async function POST(req: NextRequest) {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
-  const result = await new Promise<{ secure_url: string; public_id: string }>((resolve, reject) => {
+  const result = await new Promise<{ secure_url: string; public_id: string; pages?: number }>((resolve, reject) => {
     cloudinary.uploader.upload_stream(
       { folder, resource_type: 'auto', overwrite: true },
       (err, res) => {
         if (err || !res) reject(err ?? new Error('Upload failed'));
-        else resolve(res as { secure_url: string; public_id: string });
+        else resolve(res as { secure_url: string; public_id: string; pages?: number });
       },
     ).end(buffer);
   });
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     ? result.secure_url
     : result.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
 
-  return NextResponse.json({ url: optimisedUrl, publicId: result.public_id });
+  return NextResponse.json({ url: optimisedUrl, publicId: result.public_id, pages: result.pages ?? 1 });
 }
 
 // DELETE /api/upload

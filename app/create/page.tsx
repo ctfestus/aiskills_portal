@@ -24,7 +24,10 @@ import { RichTextEditor } from '@/components/RichTextEditor';
 import { getFontById, loadGoogleFont } from '@/lib/fonts';
 import { FontPickerModal } from '@/components/FontPickerModal';
 import { supabase } from '@/lib/supabase';
-import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import { uploadToCloudinary, uploadToCloudinaryWithMeta } from '@/lib/uploadToCloudinary';
+import { deleteUploadedFile } from '@/lib/storage-cleanup';
+import { uploadToGithub } from '@/lib/uploadToGithub';
+import { isPdfFile } from '@/lib/cloudinary-pdf';
 import { executeQuery, initSQLRuntime } from '@/lib/sql-engine';
 import { formatSQLPreflightIssue, preflightSQLExercises } from '@/lib/sql-exercise-preflight';
 import Link from 'next/link';
@@ -62,6 +65,7 @@ interface DownloadItem {
   fileName?: string;
   linkUrl?: string;
   type: 'file' | 'link';
+  pdfPages?: number;   // set when the uploaded file is a PDF, enables inline carousel
 }
 
 interface CourseQuestion {
@@ -89,6 +93,9 @@ interface CourseQuestion {
     body?: string;
     imageUrl?: string;
     videoUrl?: string;
+    pdfUrl?: string;
+    pdfName?: string;
+    pdfPages?: number;
   };
   // AI review fields (code_review | excel_review | dashboard_critique | document_review)
   rubric?: string[];
@@ -1817,6 +1824,7 @@ const [isSaving, setIsSaving] = useState(false);
       const q = formConfig?.questions?.find(q => q.id === qId);
       if (!q) return;
       const newImages = [...(q.optionImages || q.options.map(() => ''))];
+      deleteUploadedFile(newImages[optionIdx]);   // remove the image being replaced
       newImages[optionIdx] = src;
       handleUpdateQuestion(qId, { optionImages: newImages });
     };
@@ -1854,13 +1862,9 @@ const [isSaving, setIsSaving] = useState(false);
       return;
     }
     try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const path = `sql-course/${Date.now()}_${safeName}`;
-      const { error } = await supabase.storage.from('datasets').upload(path, file, { upsert: false });
-      if (error) throw error;
-      const { data } = supabase.storage.from('datasets').getPublicUrl(path);
+      const { url } = await uploadToGithub(file, 'sql-datasets');
       const q = formConfig?.questions?.find(q => q.id === questionId);
-      const tables = (q?.sqlTables ?? []).map(t => t.id === tableId ? { ...t, fileName: file.name, fileUrl: data.publicUrl, csvUrl: data.publicUrl } : t);
+      const tables = (q?.sqlTables ?? []).map(t => t.id === tableId ? { ...t, fileName: file.name, fileUrl: url, csvUrl: url } : t);
       handleUpdateQuestion(questionId, { sqlTables: tables, sqlExpectedResult: undefined });
       showToast('Dataset uploaded.', 'success');
     } catch (err: any) {
@@ -1978,7 +1982,9 @@ const [isSaving, setIsSaving] = useState(false);
     e.target.value = '';
 
     try {
+      const oldCover = formConfig?.coverImage;
       const publicUrl = await uploadToCloudinary(file, 'covers');
+      if (oldCover && oldCover !== publicUrl) deleteUploadedFile(oldCover);
       updateConfig({ coverImage: publicUrl });
     } catch {
       const reader = new FileReader();
@@ -2761,7 +2767,7 @@ const [isSaving, setIsSaving] = useState(false);
                 <div className="relative w-full h-28 rounded-xl overflow-hidden group" style={{ border: `1px solid ${C.cardBorder}` }}>
                   <img src={formConfig.coverImage} alt="Cover" className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <button onClick={() => updateConfig({ coverImage: '' })} className="flex items-center gap-1.5 text-red-400 text-xs font-medium bg-white/80 px-3 py-1.5 rounded-lg hover:bg-white transition-colors">
+                    <button onClick={() => { deleteUploadedFile(formConfig.coverImage); updateConfig({ coverImage: '' }); }} className="flex items-center gap-1.5 text-red-400 text-xs font-medium bg-white/80 px-3 py-1.5 rounded-lg hover:bg-white transition-colors">
                       <Trash2 className="w-3.5 h-3.5" /> Remove
                     </button>
                   </div>
@@ -3331,10 +3337,10 @@ const [isSaving, setIsSaving] = useState(false);
                                       item.fileUrl ? (
                                         <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg" style={{ background: '#f59e0b15', border: '1px solid #f59e0b30' }}>
                                           <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#f59e0b' }} />
-                                          <span className="text-xs flex-1 truncate" style={{ color: C.text }}>{item.fileName || 'Uploaded file'}</span>
+                                          <span className="text-xs flex-1 truncate" style={{ color: C.text }}>{item.fileName || 'Uploaded file'}{item.pdfPages ? ` · inline preview (${item.pdfPages}p)` : ''}</span>
                                           <button
                                             type="button"
-                                            onClick={() => updateItems(dlItems.map(it => it.id === item.id ? { ...it, fileUrl: '', fileName: '' } : it))}
+                                            onClick={() => { deleteUploadedFile(item.fileUrl); updateItems(dlItems.map(it => it.id === item.id ? { ...it, fileUrl: '', fileName: '', pdfPages: undefined } : it)); }}
                                             className="text-red-400 text-[10px] font-medium hover:opacity-70 flex-shrink-0"
                                           >
                                             Remove
@@ -3349,19 +3355,26 @@ const [isSaving, setIsSaving] = useState(false);
                                               const file = e.target.files?.[0];
                                               if (!file) return;
                                               e.target.value = '';
+                                              if (file.size > 20 * 1024 * 1024) { showToast(`File is too large (${(file.size / 1048576).toFixed(1)} MB). Maximum is 20 MB.`); return; }
                                               try {
-                                                const { data: { session } } = await supabase.auth.getSession();
-                                                const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-                                                const path = `course-downloads/${session?.user.id ?? 'anon'}/${Date.now()}-${safeName}`;
-                                                const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true, contentType: file.type || undefined });
-                                                if (error) throw error;
-                                                const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
-                                                updateItems(dlItems.map(it => it.id === item.id ? { ...it, fileUrl: publicUrl, fileName: file.name, title: it.title || file.name } : it));
-                                              } catch { /* silently fail */ }
+                                                if (isPdfFile(file.name, file.type)) {
+                                                  // PDFs go to Cloudinary so students get an inline page viewer
+                                                  const { url, pages } = await uploadToCloudinaryWithMeta(file, 'course-downloads');
+                                                  updateItems(dlItems.map(it => it.id === item.id ? { ...it, fileUrl: url, fileName: file.name, pdfPages: pages, title: it.title || file.name } : it));
+                                                } else {
+                                                  const { data: { session } } = await supabase.auth.getSession();
+                                                  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                                                  const path = `course-downloads/${session?.user.id ?? 'anon'}/${Date.now()}-${safeName}`;
+                                                  const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true, contentType: file.type || undefined });
+                                                  if (error) throw error;
+                                                  const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
+                                                  updateItems(dlItems.map(it => it.id === item.id ? { ...it, fileUrl: publicUrl, fileName: file.name, pdfPages: undefined, title: it.title || file.name } : it));
+                                                }
+                                              } catch (err: any) { showToast(err?.message || 'Upload failed. Please try again.'); }
                                             }}
                                           />
                                           <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-60 cursor-pointer" style={{ border: `1.5px dashed ${C.inputBorder}`, color: C.faint }}>
-                                            <Upload className="w-3.5 h-3.5" /> Click to upload file
+                                            <Upload className="w-3.5 h-3.5" /> Click to upload file (max 20 MB)
                                           </div>
                                         </label>
                                       )
@@ -3593,6 +3606,7 @@ const [isSaving, setIsSaving] = useState(false);
                                       <span className="text-[10px]" style={{ color: C.faint }}>Option {optIdx + 1}</span>
                                       {q.options.length > 2 && (
                                         <button type="button" onClick={() => {
+                                          deleteUploadedFile((q.optionImages || [])[optIdx]);
                                           const newOpts = q.options.filter((_, i) => i !== optIdx);
                                           const newImages = (q.optionImages || q.options.map(() => '')).filter((_, i) => i !== optIdx);
                                           const u: Partial<CourseQuestion> = { options: newOpts, optionImages: newImages };
@@ -3902,7 +3916,7 @@ const [isSaving, setIsSaving] = useState(false);
                                     />
                                     <button
                                       type="button"
-                                      onClick={() => handleUpdateQuestion(q.id, { sqlTables: (q.sqlTables ?? []).filter((_, i) => i !== tableIdx) })}
+                                      onClick={() => { deleteUploadedFile(q.sqlTables?.[tableIdx]?.fileUrl); handleUpdateQuestion(q.id, { sqlTables: (q.sqlTables ?? []).filter((_, i) => i !== tableIdx) }); }}
                                       className="px-2 rounded-lg hover:text-red-400"
                                       style={{ color: C.faint }}
                                     >
@@ -4081,7 +4095,7 @@ const [isSaving, setIsSaving] = useState(false);
                                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                     <button
                                       type="button"
-                                      onClick={() => handleUpdateQuestion(q.id, { lesson: { ...q.lesson, imageUrl: '' } })}
+                                      onClick={() => { deleteUploadedFile(q.lesson?.imageUrl); handleUpdateQuestion(q.id, { lesson: { ...q.lesson, imageUrl: '' } }); }}
                                       className="text-red-400 text-[10px] font-medium flex items-center gap-1 bg-white/80 px-2 py-1 rounded-lg"
                                     >
                                       <Trash2 className="w-3 h-3" /> Remove
@@ -4109,6 +4123,32 @@ const [isSaving, setIsSaving] = useState(false);
                                   />
                                   <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-60" style={{ border: `1.5px dashed ${C.inputBorder}`, color: C.faint }}>
                                     <ImageIcon className="w-3.5 h-3.5" /> Upload image (optional)
+                                  </div>
+                                </label>
+                              )}
+                              {/* PDF: upload (shown to students as an inline page viewer) */}
+                              {q.lesson.pdfUrl ? (
+                                <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg" style={{ background: '#f59e0b15', border: '1px solid #f59e0b30' }}>
+                                  <FileText className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#f59e0b' }} />
+                                  <span className="text-xs flex-1 truncate" style={{ color: C.text }}>
+                                    {q.lesson.pdfName || 'PDF'}{q.lesson.pdfPages ? ` · ${q.lesson.pdfPages} page${q.lesson.pdfPages > 1 ? 's' : ''}` : ''}
+                                  </span>
+                                  <button type="button" onClick={() => { deleteUploadedFile(q.lesson?.pdfUrl); handleUpdateQuestion(q.id, { lesson: { ...q.lesson, pdfUrl: '', pdfName: '', pdfPages: undefined } }); }} className="text-red-400 text-[10px] font-medium hover:opacity-70 flex-shrink-0">Remove</button>
+                                </div>
+                              ) : (
+                                <label className="block cursor-pointer">
+                                  <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={async e => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    e.target.value = '';
+                                    if (file.size > 20 * 1024 * 1024) { showToast(`PDF is too large (${(file.size / 1048576).toFixed(1)} MB). Maximum is 20 MB.`); return; }
+                                    try {
+                                      const { url, pages } = await uploadToCloudinaryWithMeta(file, 'lesson-pdfs');
+                                      handleUpdateQuestion(q.id, { lesson: { ...q.lesson, pdfUrl: url, pdfName: file.name, pdfPages: pages } });
+                                    } catch (err: any) { showToast(err?.message || 'PDF upload failed. Please try again.'); }
+                                  }} />
+                                  <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-60" style={{ border: `1.5px dashed ${C.inputBorder}`, color: C.faint }}>
+                                    <FileText className="w-3.5 h-3.5" /> Upload PDF (max 20 MB)
                                   </div>
                                 </label>
                               )}

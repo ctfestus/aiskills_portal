@@ -38,6 +38,8 @@ import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
 import CodeReviewPlayer, { LeanSubmission } from '@/components/CodeReviewPlayer';
 import ExcelReviewPlayer, { ExcelLeanSubmission } from '@/components/ExcelReviewPlayer';
 import DocumentReviewPlayer, { DocumentLeanSubmission } from '@/components/DocumentReviewPlayer';
+import PdfCarousel from '@/components/PdfCarousel';
+import { pdfDownloadUrl } from '@/lib/cloudinary-pdf';
 import dynamic from 'next/dynamic';
 import { initSQLRuntime, SQLRuntime } from '@/lib/sql-engine';
 
@@ -86,6 +88,7 @@ interface DownloadItem {
   fileName?: string;
   linkUrl?: string;
   type: 'file' | 'link';
+  pdfPages?: number;
 }
 
 interface CourseQuestion {
@@ -113,6 +116,9 @@ interface CourseQuestion {
     body?: string;
     imageUrl?: string;
     videoUrl?: string;
+    pdfUrl?: string;
+    pdfName?: string;
+    pdfPages?: number;
   };
   // AI review fields
   rubric?: string[];
@@ -3194,16 +3200,21 @@ export function CourseTaker({
                         {dlItems.length > 0 && (
                           <div className="px-4 sm:px-8 pt-4 pb-2 space-y-4">
                             {dlItems.map((item) => {
-                              const href = item.type === 'file' ? item.fileUrl : item.linkUrl;
+                              const isPdfEmbed = item.type === 'file' && !!item.fileUrl && !!item.pdfPages;
+                              const href = item.type === 'file'
+                                ? (isPdfEmbed ? pdfDownloadUrl(item.fileUrl!) : item.fileUrl)
+                                : item.linkUrl;
                               return (
                                 <div key={item.id}>
                                   <div className="flex flex-col items-center text-center px-6 pt-6 pb-7 gap-4">
-                                    <img
-                                      src="https://wbbcxctblfoyoboskazr.supabase.co/storage/v1/object/public/form-assets/assignment-resources/file_downloadable.svg"
-                                      alt=""
-                                      className="w-48 h-auto select-none pointer-events-none"
-                                      draggable={false}
-                                    />
+                                    {!isPdfEmbed && (
+                                      <img
+                                        src="https://wbbcxctblfoyoboskazr.supabase.co/storage/v1/object/public/form-assets/assignment-resources/file_downloadable.svg"
+                                        alt=""
+                                        className="w-48 h-auto select-none pointer-events-none"
+                                        draggable={false}
+                                      />
+                                    )}
                                     <div className="space-y-1">
                                       <h3 className="text-lg font-bold leading-snug" style={{ color: isDark ? '#ffffff' : '#111' }}>
                                         {item.title || 'Download file'}
@@ -3220,7 +3231,12 @@ export function CourseTaker({
                                         </p>
                                       )}
                                     </div>
-                                    {item.type === 'file' && (
+                                    {isPdfEmbed && item.fileUrl && (
+                                      <div className="w-[calc(100%+3rem)] -mx-6 pt-1">
+                                        <PdfCarousel url={item.fileUrl} pages={item.pdfPages || 1} fileName={item.fileName} accent={accent} isDark={isDark} />
+                                      </div>
+                                    )}
+                                    {item.type === 'file' && !isPdfEmbed && (
                                       <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl" style={{ background: isDark ? '#1e1e1e' : '#ffffff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}>
                                         <svg className="w-5 h-5 flex-shrink-0" style={{ color: isDark ? '#a1a1aa' : '#888' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
                                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" strokeLinecap="round" strokeLinejoin="round" />
@@ -3301,6 +3317,13 @@ export function CourseTaker({
                             <div className="rounded-lg overflow-hidden">
                               <img src={lesson.imageUrl} alt="Lesson illustration" className="w-full object-cover" />
                             </div>
+                          </div>
+                        )}
+
+                        {/* PDF */}
+                        {lesson.pdfUrl && (
+                          <div className="px-3 sm:px-8 pt-4 pb-2">
+                            <PdfCarousel url={lesson.pdfUrl} pages={lesson.pdfPages || 1} fileName={lesson.pdfName} accent={accent} isDark={isDark} />
                           </div>
                         )}
 
@@ -3499,6 +3522,11 @@ export function CourseTaker({
                       {currentQuestion.lesson.imageUrl && (
                         <div className="mb-4 rounded-lg overflow-hidden">
                           <img src={currentQuestion.lesson.imageUrl} alt="Lesson illustration" className="w-full object-cover" />
+                        </div>
+                      )}
+                      {currentQuestion.lesson.pdfUrl && (
+                        <div className="mb-4">
+                          <PdfCarousel url={currentQuestion.lesson.pdfUrl} pages={currentQuestion.lesson.pdfPages || 1} fileName={currentQuestion.lesson.pdfName} accent={accent} isDark={isDark} />
                         </div>
                       )}
                       {currentQuestion.lesson.body && (
@@ -3958,6 +3986,9 @@ export function CourseTaker({
                     <div className="rounded-xl overflow-hidden shadow-sm">
                       <img src={currentQuestion.lesson.imageUrl} alt="Lesson illustration" className="w-full object-cover" />
                     </div>
+                  )}
+                  {currentQuestion.lesson.pdfUrl && (
+                    <PdfCarousel url={currentQuestion.lesson.pdfUrl} pages={currentQuestion.lesson.pdfPages || 1} fileName={currentQuestion.lesson.pdfName} accent={accent} isDark={isDark} />
                   )}
                   {currentQuestion.lesson.body && (
                     <div

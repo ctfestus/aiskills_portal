@@ -32,6 +32,13 @@ function sanitizeFilename(raw: string): string {
   return base.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, 'file');
 }
 
+const SAFE_FOLDER = /^[a-zA-Z0-9_\-/]+$/;
+function sanitizeFolder(raw: string | null): string {
+  const f = (raw ?? 'assignment-resources').replace(/^\/+|\/+$/g, '');
+  if (!f || !SAFE_FOLDER.test(f) || f.includes('..')) return 'assignment-resources';
+  return f;
+}
+
 export async function POST(req: NextRequest) {
   const user = await getSessionUser(req);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -59,7 +66,8 @@ export async function POST(req: NextRequest) {
   }
 
   const safeName = sanitizeFilename(file.name);
-  const filePath = `assignment-resources/${Date.now()}_${safeName}`;
+  const folder   = sanitizeFolder(form.get('folder') as string | null);
+  const filePath = `${folder}/${Date.now()}_${safeName}`;
 
   const buffer = await file.arrayBuffer();
   const base64 = Buffer.from(buffer).toString('base64');
@@ -87,4 +95,55 @@ export async function POST(req: NextRequest) {
 
   const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`;
   return NextResponse.json({ url: rawUrl, name: file.name });
+}
+
+// DELETE /api/assignments/github-upload
+// Body: { url: string } -- a raw.githubusercontent.com URL produced by POST.
+// Removes the file from the repo (working tree; git history retains it).
+export async function DELETE(req: NextRequest) {
+  const user = await getSessionUser(req);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const token = process.env.GITHUB_TOKEN;
+  const owner = process.env.GITHUB_REPO_OWNER;
+  const repo  = process.env.GITHUB_REPO_NAME;
+  if (!token || !owner || !repo) {
+    return NextResponse.json({ error: 'GitHub integration not configured.' }, { status: 500 });
+  }
+
+  const body = await req.json().catch(() => null);
+  const url: string = body?.url ?? '';
+  const m = url.match(/^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/);
+  if (!m) return NextResponse.json({ error: 'Invalid GitHub URL' }, { status: 400 });
+
+  const [, mOwner, mRepo, mBranch, rawPath] = m;
+  if (mOwner !== owner || mRepo !== repo) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const filePath = rawPath.split('/').map(decodeURIComponent).join('/');
+  if (filePath.includes('..')) return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`;
+  const ghHeaders = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+
+  // Look up the file SHA (required to delete via the Contents API)
+  const metaRes = await fetch(`${apiUrl}?ref=${encodeURIComponent(mBranch)}`, { headers: ghHeaders });
+  if (metaRes.status === 404) return NextResponse.json({ ok: true }); // already gone
+  if (!metaRes.ok) return NextResponse.json({ error: `GitHub API error ${metaRes.status}` }, { status: 502 });
+  const meta = await metaRes.json();
+  const sha = Array.isArray(meta) ? null : meta?.sha;
+  if (!sha) return NextResponse.json({ error: 'File not found' }, { status: 404 });
+
+  const delRes = await fetch(apiUrl, {
+    method: 'DELETE',
+    headers: { ...ghHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: `Delete ${filePath}`, sha, branch: mBranch }),
+  });
+  if (!delRes.ok) {
+    const err = await delRes.json().catch(() => ({}));
+    return NextResponse.json({ error: err.message ?? `GitHub API error ${delRes.status}` }, { status: 502 });
+  }
+  return NextResponse.json({ ok: true });
 }
