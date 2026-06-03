@@ -19,6 +19,8 @@ import { useRouter } from 'next/navigation';
 import { Star } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
+import { ReviewReportView, REVIEW_TYPES } from '@/components/ReviewReportView';
+import { parseReviewNotes, inferReviewType } from '@/lib/reviewRecord';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/uploadToCloudinary';
@@ -1754,6 +1756,8 @@ function StudentAvatar({ name, email, size = 32, C }: { name?: string; email?: s
 }
 
 function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const [assignments, setAssignments]       = useState<any[]>([]);
   const [loading, setLoading]               = useState(true);
   const [deletingId, setDeletingId]         = useState<string | null>(null);
@@ -1933,151 +1937,37 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
 
           {viewingSub.response_text ? (() => {
             const subAssignType = selected?.type ?? 'standard';
-            if (['code_review', 'excel_review', 'dashboard_critique', 'document_review'].includes(subAssignType)) {
-              try {
-                const parsed = JSON.parse(viewingSub.response_text);
-
-                if (subAssignType === 'document_review') {
-                  const gaps: string[] = parsed.gaps ?? (parsed.sections ?? []).map((s: any) => s.title);
-                  const topRecs: string[] = parsed.topRecommendations ?? [];
-                  const submittedDate = viewingSub.submitted_at ?? viewingSub.updated_at;
-                  const reviewMode = parsed.manualReview ? 'manual' : 'ai';
+            if (REVIEW_TYPES.includes(subAssignType)) {
+              const rec = parseReviewNotes(viewingSub.response_text);
+              if (rec) {
+                const type = rec.type ?? subAssignType;
+                if (type === 'document_review') {
+                  const isManual = rec.documentReviewMode === 'manual' || !!rec.report?.manualReview;
+                  const fileUrl = rec.report?.fileUrl;
                   return (
-                    <div className="rounded-xl overflow-hidden mb-3">
-                      <div className="px-4 py-3 flex items-center justify-between" style={{ background: '#0f172a' }}>
-                        <div className="flex-1 min-w-0 mr-3">
-                          <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                            {reviewMode === 'manual' ? 'Submitted for Review' : 'AI Document Review'}
-                          </p>
-                          {submittedDate && <p className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>{new Date(submittedDate).toLocaleDateString()}</p>}
-                          {parsed.executiveSummary && reviewMode !== 'manual' && <p className="text-xs mt-1 max-w-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{parsed.executiveSummary}</p>}
-                        </div>
-                        {reviewMode !== 'manual' && parsed.overallScore > 0 && (
-                          <div className="flex items-baseline gap-1 flex-shrink-0 ml-4">
-                            <span className="font-black" style={{ fontSize: 44, color: '#fff', lineHeight: 1 }}>{parsed.overallScore?.toFixed(1)}</span>
-                            <span className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>/100</span>
-                          </div>
-                        )}
-                      </div>
-                      {parsed.fileUrl && (
-                        <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
-                          <a href={parsed.fileUrl} target="_blank" rel="noreferrer"
+                    <div className="mb-3 space-y-3">
+                      {fileUrl && (
+                        <div className="rounded-xl px-4 py-3" style={{ background: C.input }}>
+                          <a href={fileUrl} target="_blank" rel="noreferrer"
                             className="inline-flex items-center gap-1.5 text-xs font-semibold transition-opacity hover:opacity-70"
-                            style={{ color: '#6366f1' }}>
+                            style={{ color: C.green }}>
                             <Download className="w-3 h-3" /> Download submitted report
-                            {parsed.fileName && <span className="font-normal ml-1 opacity-60">({parsed.fileName})</span>}
+                            {rec.report?.fileName && <span className="font-normal ml-1 opacity-60">({rec.report.fileName})</span>}
                           </a>
                         </div>
                       )}
-                      {gaps.length > 0 && reviewMode !== 'manual' && (
-                        <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
-                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Areas to Improve</p>
-                          <div className="space-y-1">
-                            {gaps.map((t, i) => (
-                              <div key={i} className="flex items-start gap-2 text-sm" style={{ color: C.text }}>
-                                <span style={{ color: '#ef4444', flexShrink: 0 }}>•</span><span>{t}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {topRecs.length > 0 && reviewMode !== 'manual' && (
-                        <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
-                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Top Recommendations</p>
-                          <div className="space-y-1.5">
-                            {topRecs.map((r, i) => (
-                              <div key={i} className="flex items-start gap-2 text-sm" style={{ color: C.text }}>
-                                <span className="font-bold flex-shrink-0" style={{ color: '#16a34a' }}>{i + 1}.</span><span>{r}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      {isManual
+                        ? <div className="rounded-xl px-4 py-3" style={{ background: C.input }}><span className="text-sm" style={{ color: C.faint }}>Submitted for instructor review.</span></div>
+                        : <ReviewReportView rec={{ ...rec, type: 'document_review' }} isDark={isDark} />}
                     </div>
                   );
                 }
-
-                if (subAssignType === 'code_review' || subAssignType === 'excel_review') {
-                  const issueTitles: string[] = parsed.issueTitles ?? (parsed.issues ?? []).map((i: any) => i.title);
-                  const topRecs: string[] = parsed.topRecommendations ?? [];
-                  const submittedDate = viewingSub.submitted_at ?? viewingSub.updated_at;
-                  return (
-                    <div className="rounded-xl overflow-hidden mb-3">
-                      <div className="px-4 py-3 flex items-center justify-between" style={{ background: '#0f172a' }}>
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                            AI {subAssignType === 'code_review' ? 'Code' : 'Excel'} Review
-                          </p>
-                          {submittedDate && <p className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>{new Date(submittedDate).toLocaleDateString()}</p>}
-                          {parsed.executiveSummary && <p className="text-xs mt-1 max-w-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{parsed.executiveSummary}</p>}
-                        </div>
-                        <div className="flex items-baseline gap-1 flex-shrink-0 ml-4">
-                          <span className="font-black" style={{ fontSize: 44, color: '#fff', lineHeight: 1 }}>{parsed.overallScore?.toFixed(1)}</span>
-                          <span className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>/100</span>
-                        </div>
-                      </div>
-                      {issueTitles.length > 0 && (
-                        <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
-                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Issues Found</p>
-                          <div className="space-y-1">
-                            {issueTitles.map((t, i) => (
-                              <div key={i} className="flex items-start gap-2 text-sm" style={{ color: C.text }}>
-                                <span style={{ color: '#ef4444', flexShrink: 0 }}>•</span>
-                                <span>{t}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {topRecs.length > 0 && (
-                        <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
-                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Top Recommendations</p>
-                          <div className="space-y-1.5">
-                            {topRecs.map((r, i) => (
-                              <div key={i} className="flex items-start gap-2 text-sm" style={{ color: C.text }}>
-                                <span className="font-bold flex-shrink-0" style={{ color: '#16a34a' }}>{i + 1}.</span>
-                                <span>{r}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-
-                if (subAssignType === 'dashboard_critique' && parsed.audit) {
-                  const audit = parsed.audit as { overallScore: number; executiveSummary: string; categories: { name: string; score: number }[] };
-                  return (
-                    <div className="rounded-xl overflow-hidden mb-3">
-                      <div className="px-4 py-3 flex items-start justify-between gap-4" style={{ background: '#0f172a' }}>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>Dashboard Critique</p>
-                          {audit.executiveSummary && <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{audit.executiveSummary}</p>}
-                        </div>
-                        <div className="flex items-baseline gap-1 flex-shrink-0">
-                          <span className="font-black" style={{ fontSize: 44, color: '#fff', lineHeight: 1 }}>{audit.overallScore.toFixed(1)}</span>
-                          <span className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>/10</span>
-                        </div>
-                      </div>
-                      {audit.categories?.length > 0 && (
-                        <div className="px-4 py-3 space-y-2" style={{ background: C.input }}>
-                          <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Category Scores</p>
-                          {audit.categories.map((cat, i) => (
-                            <div key={i} className="flex items-center justify-between text-sm">
-                              <span style={{ color: C.text }}>{cat.name}</span>
-                              <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-                                style={{ background: cat.score >= 7 ? '#dcfce7' : cat.score >= 5 ? '#fef9c3' : '#fee2e2', color: cat.score >= 7 ? '#16a34a' : cat.score >= 5 ? '#ca8a04' : '#dc2626' }}>
-                                {cat.score}/10
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-              } catch {}
+                return (
+                  <div className="mb-3">
+                    <ReviewReportView rec={{ ...rec, type }} isDark={isDark} />
+                  </div>
+                );
+              }
             }
 
             return (
@@ -2091,59 +1981,20 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
           )}
 
           {veAttemptProgress && (() => {
-            const aiCards: React.ReactNode[] = [];
-            for (const [, entry] of Object.entries(veAttemptProgress)) {
-              const e = entry as any;
-              if (!e?.notes) continue;
-              let leans: any[];
-              try { leans = JSON.parse(e.notes); if (!Array.isArray(leans)) continue; } catch { continue; }
-              for (const lean of leans) {
-                if (lean?.overallScore == null) continue;
-                const isOutOf10 = lean.overallScore <= 10 && !lean.issues;
-                const issueTitles: string[] = lean.issueTitles ?? (lean.issues ?? []).map((i: any) => i.title);
-                const topRecs: string[] = lean.topRecommendations ?? [];
-                const label = lean.type === 'dashboard_critique' ? 'Dashboard Critique' : lean.issueTitles || lean.issues ? 'AI Excel Review' : 'AI Code Review';
-                aiCards.push(
-                  <div key={aiCards.length} className="rounded-xl overflow-hidden mb-3">
-                    <div className="px-4 py-3 flex items-center justify-between" style={{ background: '#0f172a' }}>
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>{label}</p>
-                        {lean.executiveSummary && <p className="text-xs mt-1 max-w-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{lean.executiveSummary}</p>}
-                      </div>
-                      <div className="flex items-baseline gap-1 flex-shrink-0 ml-4">
-                        <span className="font-black" style={{ fontSize: 44, color: '#fff', lineHeight: 1 }}>{lean.overallScore?.toFixed(1)}</span>
-                        <span className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>/{isOutOf10 ? 10 : 100}</span>
-                      </div>
-                    </div>
-                    {issueTitles.length > 0 && (
-                      <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
-                        <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Issues Found</p>
-                        <div className="space-y-1">
-                          {issueTitles.map((t, i) => (
-                            <div key={i} className="flex items-start gap-2 text-sm" style={{ color: C.text }}>
-                              <span style={{ color: '#ef4444', flexShrink: 0 }}>•</span><span>{t}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {topRecs.length > 0 && (
-                      <div className="px-4 py-3" style={{ borderTop: `1px solid ${C.divider}`, background: C.input }}>
-                        <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.faint }}>Top Recommendations</p>
-                        <div className="space-y-1.5">
-                          {topRecs.map((r, i) => (
-                            <div key={i} className="flex items-start gap-2 text-sm" style={{ color: C.text }}>
-                              <span className="font-bold flex-shrink-0" style={{ color: '#16a34a' }}>{i + 1}.</span><span>{r}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
+            const cards: React.ReactNode[] = [];
+            for (const [reqId, entry] of Object.entries(veAttemptProgress)) {
+              const rec = parseReviewNotes((entry as any)?.notes);
+              if (!rec) continue;
+              // Only render entries that look like AI reviews (typed, inferable, or a legacy lean with a score).
+              const type = rec.type ?? inferReviewType(rec.report);
+              if (!type && typeof rec.report?.overallScore !== 'number') continue;
+              cards.push(
+                <div key={reqId} className="mb-3">
+                  <ReviewReportView rec={rec} isDark={isDark} />
+                </div>
+              );
             }
-            return aiCards.length > 0 ? <>{aiCards}</> : null;
+            return cards.length > 0 ? <>{cards}</> : null;
           })()}
 
           {subFiles.length > 0 && (

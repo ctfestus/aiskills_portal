@@ -17,6 +17,8 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import FormEditor from '@/components/FormEditor';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
+import { ReviewReportView, LegacyReviewSummary, REVIEW_TYPES, REVIEW_LABELS } from '@/components/ReviewReportView';
+import { parseReviewNotes } from '@/lib/reviewRecord';
 
 // -- Lazy charts ---
 const ResponsesOverTimeChart = dynamic(
@@ -104,7 +106,7 @@ function ResponsesTab({
   const [selectedResponse, setSelectedResponse] = useState<any | null>(null);
   const [eventAttendance, setEventAttendance] = useState<any[]>([]);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
-  const [docReviewStudent, setDocReviewStudent] = useState<any | null>(null);
+  const [reviewStudent, setReviewStudent] = useState<any | null>(null);
 
   useEffect(() => {
     if (!isEvent || !form.id) return;
@@ -182,8 +184,8 @@ function ResponsesTab({
 
   if (isCourse) {
     const questions = form.config?.questions || [];
-    const docReviewQuestions = questions.filter((q: any) => q.type === 'document_review');
-    const hasDocReview = docReviewQuestions.length > 0;
+    const reviewQuestions = questions.filter((q: any) => REVIEW_TYPES.includes(q.type));
+    const hasReview = reviewQuestions.length > 0;
     const passmark = form.config?.passmark ?? 50;
     const completedAttempts = courseProgress.filter((p: any) => p.completed);
     const passedAttempts = completedAttempts.filter((p: any) => p.passed);
@@ -354,7 +356,7 @@ function ResponsesTab({
                     <th className="px-3 sm:px-6 py-3 font-medium">Status</th>
                     <th className="px-3 sm:px-6 py-3 font-medium">Progress</th>
                     <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Last Active</th>
-                    {hasDocReview && <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Reports</th>}
+                    {hasReview && <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Reports</th>}
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${dividerCls}`}>
@@ -378,14 +380,14 @@ function ResponsesTab({
                         </div>
                       </td>
                       <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>--</td>
-                      {hasDocReview && <td className="hidden sm:table-cell px-3 sm:px-6 py-3">--</td>}
+                      {hasReview && <td className="hidden sm:table-cell px-3 sm:px-6 py-3">--</td>}
                     </tr>
                   ))}
                   {/* In-progress students */}
                   {inProgressStudents.map((p: any) => {
                     const qTotal = questions.length || 1;
                     const progressPct = Math.min(100, Math.round(((p.current_question_index ?? 0) / qTotal) * 100));
-                    const submittedDocs = docReviewQuestions.filter((q: any) => {
+                    const submittedDocs = reviewQuestions.filter((q: any) => {
                       const ans = p.answers?.[q.id];
                       if (!ans) return false;
                       return ans === 'completed' || ans === 'failed';
@@ -411,10 +413,10 @@ function ResponsesTab({
                         <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>
                           {p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--'}
                         </td>
-                        {hasDocReview && (
+                        {hasReview && (
                           <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
                             {submittedDocs.length > 0
-                              ? <button onClick={() => setDocReviewStudent({ ...p, docQuestions: docReviewQuestions })} className="text-xs font-semibold px-2.5 py-1 rounded-lg transition-opacity hover:opacity-70" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>
+                              ? <button onClick={() => setReviewStudent({ ...p, reviewQs: reviewQuestions })} className="text-xs font-semibold px-2.5 py-1 rounded-lg transition-opacity hover:opacity-70" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>
                                   View {submittedDocs.length}
                                 </button>
                               : <span className={`text-xs ${textMut}`}>--</span>}
@@ -427,7 +429,7 @@ function ResponsesTab({
                   {[...completedByEmail.values()].map((p: any) => {
                     const pct = p.score ?? 0;
                     const pass = p.passed ?? false;
-                    const submittedDocs = docReviewQuestions.filter((q: any) => {
+                    const submittedDocs = reviewQuestions.filter((q: any) => {
                       const ans = p.answers?.[q.id];
                       if (!ans) return false;
                       return ans === 'completed' || ans === 'failed';
@@ -453,10 +455,10 @@ function ResponsesTab({
                         <td className={`hidden sm:table-cell px-3 sm:px-6 py-3 whitespace-nowrap text-xs ${textMut}`}>
                           {p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '--'}
                         </td>
-                        {hasDocReview && (
+                        {hasReview && (
                           <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
                             {submittedDocs.length > 0
-                              ? <button onClick={() => setDocReviewStudent({ ...p, docQuestions: docReviewQuestions })} className="text-xs font-semibold px-2.5 py-1 rounded-lg transition-opacity hover:opacity-70" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>
+                              ? <button onClick={() => setReviewStudent({ ...p, reviewQs: reviewQuestions })} className="text-xs font-semibold px-2.5 py-1 rounded-lg transition-opacity hover:opacity-70" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>
                                   View {submittedDocs.length}
                                 </button>
                               : <span className={`text-xs ${textMut}`}>--</span>}
@@ -466,7 +468,7 @@ function ResponsesTab({
                     );
                   })}
                   {totalEnrolled === 0 && (
-                    <tr><td colSpan={hasDocReview ? 6 : 5} className={`px-6 py-12 text-center ${textMut}`}>No students enrolled yet.</td></tr>
+                    <tr><td colSpan={hasReview ? 6 : 5} className={`px-6 py-12 text-center ${textMut}`}>No students enrolled yet.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -475,81 +477,41 @@ function ResponsesTab({
         )}
 
       {/* Document review modal */}
-      {docReviewStudent && (() => {
-        const s = docReviewStudent;
-        const docQs: any[] = s.docQuestions ?? [];
+      {reviewStudent && (() => {
+        const s = reviewStudent;
+        const docQs: any[] = s.reviewQs ?? [];
         return (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setDocReviewStudent(null)}>
-            <div className={`rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-[rgba(0,0,0,0.08)]'}`} onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setReviewStudent(null)}>
+            <div className={`rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-[rgba(0,0,0,0.08)]'}`} onClick={e => e.stopPropagation()}>
               <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? 'border-zinc-800' : 'border-[rgba(0,0,0,0.07)]'}`}>
                 <div>
                   <h3 className={`text-base font-semibold ${textPrim}`}>{s.student_name || s.student_email || 'Student'}</h3>
                   {s.student_name && <p className={`text-xs mt-0.5 ${textMut}`}>{s.student_email}</p>}
                 </div>
-                <button onClick={() => setDocReviewStudent(null)} className={textMut}>
+                <button onClick={() => setReviewStudent(null)} className={textMut}>
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
                 {docQs.map((q: any) => {
                   const ans = s.answers?.[q.id];
                   if (ans !== 'completed' && ans !== 'failed') return null;
-                  let lean: any = null;
-                  try { lean = JSON.parse(s.answers?.[`__review_${q.id}`] ?? ''); } catch {}
-                  const reviewMode = lean?.documentReviewMode ?? q.documentReviewMode ?? 'ai_only';
+                  let rec: any = null;
+                  try { rec = JSON.parse(s.answers?.[`__review_${q.id}`] ?? ''); } catch {}
+                  const mode = rec?.documentReviewMode ?? q.documentReviewMode ?? 'ai_only';
                   return (
-                    <div key={q.id} className={`rounded-xl overflow-hidden border ${isDark ? 'border-zinc-700' : 'border-[rgba(0,0,0,0.08)]'}`}>
-                      <div className="px-4 py-3 flex items-start justify-between gap-3" style={{ background: '#0f172a' }}>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                            {reviewMode === 'manual' ? 'Submitted for Review' : 'AI Document Review'}
-                          </p>
-                          <p className="text-xs font-semibold truncate mb-1" style={{ color: 'rgba(255,255,255,0.7)' }}>{q.question || 'Document Review'}</p>
-                          {lean?.executiveSummary && reviewMode !== 'manual' && (
-                            <p className="text-xs leading-relaxed line-clamp-3" style={{ color: 'rgba(255,255,255,0.5)' }}>{lean.executiveSummary}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {ans === 'failed' && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}>Below minimum</span>
-                          )}
-                          {lean?.overallScore > 0 && reviewMode !== 'manual' && (
-                            <div className="flex items-baseline gap-0.5">
-                              <span className="font-black" style={{ fontSize: 32, color: '#fff', lineHeight: 1 }}>{lean.overallScore.toFixed(1)}</span>
-                              <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>/100</span>
-                            </div>
-                          )}
-                        </div>
+                    <div key={q.id} className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className={`text-sm font-semibold ${textPrim}`}>{q.question || REVIEW_LABELS[q.type] || 'AI Review'}</p>
+                        {ans === 'failed' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444' }}>Below minimum</span>
+                        )}
                       </div>
-                      {lean?.gaps?.length > 0 && reviewMode !== 'manual' && (
-                        <div className={`px-4 py-3 border-t ${isDark ? 'border-zinc-700 bg-zinc-800/50' : 'border-[rgba(0,0,0,0.06)] bg-[#f8f8f5]'}`}>
-                          <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${textMut}`}>Areas to Improve</p>
-                          <div className="space-y-1">
-                            {lean.gaps.slice(0, 3).map((g: string, i: number) => (
-                              <div key={i} className={`flex items-start gap-2 text-xs ${textPrim}`}>
-                                <span className="text-red-400 flex-shrink-0">•</span><span>{g}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {lean?.topRecommendations?.length > 0 && reviewMode !== 'manual' && (
-                        <div className={`px-4 py-3 border-t ${isDark ? 'border-zinc-700 bg-zinc-800/50' : 'border-[rgba(0,0,0,0.06)] bg-[#f8f8f5]'}`}>
-                          <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${textMut}`}>Top Recommendations</p>
-                          <div className="space-y-1">
-                            {lean.topRecommendations.map((r: string, i: number) => (
-                              <div key={i} className={`flex items-start gap-2 text-xs ${textPrim}`}>
-                                <span className="font-bold flex-shrink-0" style={{ color: '#22c55e' }}>{i + 1}.</span><span>{r}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {!lean && (
-                        <div className={`px-4 py-3 border-t ${isDark ? 'border-zinc-700 bg-zinc-800/50' : 'border-[rgba(0,0,0,0.06)] bg-[#f8f8f5]'}`}>
-                          <span className={`text-xs ${textMut}`}>AI review details not available for this submission.</span>
-                        </div>
-                      )}
+                      {rec?.report
+                        ? <ReviewReportView rec={{ ...rec, type: rec.type ?? q.type }} isDark={isDark} />
+                        : mode === 'manual'
+                          ? <div className={`rounded-xl px-4 py-3 border ${isDark ? 'border-zinc-700 bg-zinc-800/50' : 'border-[rgba(0,0,0,0.06)] bg-[#f8f8f5]'}`}><span className={`text-xs ${textMut}`}>Submitted for instructor review.</span></div>
+                          : <LegacyReviewSummary lean={rec} isDark={isDark} textPrim={textPrim} textMut={textMut} />}
                     </div>
                   );
                 })}
@@ -2235,18 +2197,21 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
       {/* Review modal */}
       {reviewing && (() => {
         const reviewableReqs: { moduleTitle: string; lessonTitle: string; label: string; type: string; reqId: string }[] = [];
+        const aiReviewReqs: { moduleTitle: string; lessonTitle: string; label: string; type: string; reqId: string }[] = [];
         modules.forEach((m: any) => {
           (m.lessons || []).forEach((l: any) => {
             (l.requirements || []).forEach((r: any) => {
               if (r.type === 'text' || r.type === 'upload') {
                 reviewableReqs.push({ moduleTitle: m.title, lessonTitle: l.title, label: r.label || r.description || 'Requirement', type: r.type, reqId: r.id });
+              } else if (REVIEW_TYPES.includes(r.type)) {
+                aiReviewReqs.push({ moduleTitle: m.title, lessonTitle: l.title, label: r.label || r.description || REVIEW_LABELS[r.type] || 'AI Review', type: r.type, reqId: r.id });
               }
             });
           });
         });
         return (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className={`rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-[rgba(0,0,0,0.08)]'}`}>
+            <div className={`rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-[rgba(0,0,0,0.08)]'}`}>
               {/* Header */}
               <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? 'border-zinc-800' : 'border-[rgba(0,0,0,0.07)]'}`}>
                 <div>
@@ -2284,6 +2249,26 @@ function VirtualExperienceReportTab({ form }: { form: any }) {
                               ? <p className={`text-sm leading-relaxed ${textPrim}`}>{textResponse}</p>
                               : <p className={`text-xs italic ${textMut}`}>No response submitted</p>
                           )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* AI review reports */}
+                {aiReviewReqs.length > 0 && (
+                  <div className="space-y-4">
+                    <p className={`text-[11px] font-bold uppercase tracking-widest ${textMut}`}>AI Review Reports</p>
+                    {aiReviewReqs.map(req => {
+                      const entry = reviewing.progress?.[req.reqId];
+                      const rec = parseReviewNotes(entry?.notes);
+                      return (
+                        <div key={req.reqId} className="space-y-2">
+                          <p className={`text-[11px] font-semibold uppercase tracking-wide ${textMut}`}>{req.moduleTitle} - {req.lessonTitle}</p>
+                          <p className={`text-sm font-medium ${textPrim}`}>{req.label}</p>
+                          {rec
+                            ? <ReviewReportView rec={{ ...rec, type: rec.type ?? req.type }} isDark={isDark} />
+                            : <p className={`text-xs italic ${textMut}`}>No AI review submitted</p>}
                         </div>
                       );
                     })}

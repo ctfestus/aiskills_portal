@@ -11,8 +11,9 @@ import {
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
-import CodeReviewPlayer, { LeanSubmission } from '@/components/CodeReviewPlayer';
-import ExcelReviewPlayer, { ExcelLeanSubmission } from '@/components/ExcelReviewPlayer';
+import CodeReviewPlayer from '@/components/CodeReviewPlayer';
+import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
+import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
 import AiReviewDisclaimer from '@/components/AiReviewDisclaimer';
 
 // Types
@@ -1043,13 +1044,13 @@ export default function VirtualExperienceTaker({
                               isDark={isDark ?? false}
                               accentColor={accentColor}
                               completed={done}
-                              savedResult={saved?.notes ? (() => { try { return JSON.parse(saved.notes!); } catch { return undefined; } })() : undefined}
+                              savedResult={parseReviewNotes(saved?.notes)?.report}
                               savedImageUrl={undefined}
                               rubric={(req as any).rubric}
                               onComplete={(result, _imageDataUrl) => {
                                 setProgress(prev => {
                                   // Store only the analysis JSON in notes (not the base64 image: too large for DB)
-                                  const next = { ...prev, [req.id]: { completed: true, notes: JSON.stringify(result) } };
+                                  const next = { ...prev, [req.id]: { completed: true, notes: buildReviewNotes('dashboard_critique', result, prev[req.id]?.notes) } };
                                   saveProgress(next, currentModId, currentLesId);
                                   return next;
                                 });
@@ -1078,14 +1079,13 @@ export default function VirtualExperienceTaker({
                               isDark={isDark ?? false}
                               accentColor={accentColor}
                               completed={done}
-                              submissions={saved?.notes ? (() => { try { const p = JSON.parse(saved.notes!); return Array.isArray(p) ? p as LeanSubmission[] : []; } catch { return []; } })() : []}
+                              savedResult={(() => { const rep = parseReviewNotes(saved?.notes)?.report; return isFullReport('code_review', rep) ? rep : undefined; })()}
                               rubric={req.rubric}
                               schema={req.schema}
                               minScore={req.minScore}
-                              onComplete={(_, lean, passed) => {
+                              onComplete={(result, passed) => {
                                 setProgress(prev => {
-                                  const existing: LeanSubmission[] = prev[req.id]?.notes ? (() => { try { const p = JSON.parse(prev[req.id].notes!); return Array.isArray(p) ? p : []; } catch { return []; } })() : [];
-                                  const next = { ...prev, [req.id]: { completed: passed, notes: JSON.stringify([...existing, lean]) } };
+                                  const next = { ...prev, [req.id]: { completed: passed, notes: buildReviewNotes('code_review', result, prev[req.id]?.notes) } };
                                   saveProgress(next, currentModId, currentLesId);
                                   return next;
                                 });
@@ -1114,14 +1114,13 @@ export default function VirtualExperienceTaker({
                               isDark={isDark ?? false}
                               accentColor={accentColor}
                               completed={done}
-                              submissions={saved?.notes ? (() => { try { const p = JSON.parse(saved.notes!); return Array.isArray(p) ? p as ExcelLeanSubmission[] : []; } catch { return []; } })() : []}
+                              savedResult={(() => { const rep = parseReviewNotes(saved?.notes)?.report; return isFullReport('excel_review', rep) ? rep : undefined; })()}
                               context={req.context}
                               rubric={req.rubric}
                               minScore={req.minScore}
-                              onComplete={(_, lean, passed) => {
+                              onComplete={(result, passed) => {
                                 setProgress(prev => {
-                                  const existing: ExcelLeanSubmission[] = prev[req.id]?.notes ? (() => { try { const p = JSON.parse(prev[req.id].notes!); return Array.isArray(p) ? p : []; } catch { return []; } })() : [];
-                                  const next = { ...prev, [req.id]: { completed: passed, notes: JSON.stringify([...existing, lean]) } };
+                                  const next = { ...prev, [req.id]: { completed: passed, notes: buildReviewNotes('excel_review', result, prev[req.id]?.notes) } };
                                   saveProgress(next, currentModId, currentLesId);
                                   return next;
                                 });

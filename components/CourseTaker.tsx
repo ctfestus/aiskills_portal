@@ -35,9 +35,9 @@ import { CSS } from '@dnd-kit/utilities';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
-import CodeReviewPlayer, { LeanSubmission } from '@/components/CodeReviewPlayer';
-import ExcelReviewPlayer, { ExcelLeanSubmission } from '@/components/ExcelReviewPlayer';
-import DocumentReviewPlayer, { DocumentLeanSubmission } from '@/components/DocumentReviewPlayer';
+import CodeReviewPlayer from '@/components/CodeReviewPlayer';
+import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
+import DocumentReviewPlayer from '@/components/DocumentReviewPlayer';
 import PdfCarousel from '@/components/PdfCarousel';
 import { pdfDownloadUrl } from '@/lib/cloudinary-pdf';
 import dynamic from 'next/dynamic';
@@ -274,11 +274,11 @@ export function CourseTaker({
 
   // AI review questions -- tracks which have been completed
   const [reviewCompleted, setReviewCompleted] = useState<Set<string>>(new Set());
-  // Stores lean summaries/results for completed review questions (in-session only)
+  // Stores the full latest AI report per completed review question (persisted via the __review_ shadow key)
   const [reviewSummaries, setReviewSummaries] = useState<Record<string, any>>({});
-  // Submission history per review question (for 2-review limit)
-  const [reviewSubmissions, setReviewSubmissions] = useState<Record<string, any[]>>({});
-  const [reviewDashCounts, setReviewDashCounts] = useState<Record<string, number>>({});
+  // Attempt count per review question (drives the per-question review limit)
+  const [reviewCounts, setReviewCounts] = useState<Record<string, number>>({});
+  const reviewCountsRef = useRef<Record<string, number>>({});
 
   // Feature 3: hint system
   const [hintsUsed, setHintsUsed] = useState<Set<string>>(new Set());
@@ -407,6 +407,23 @@ export function CourseTaker({
   const courseTimerMins: number = config.courseTimer ?? 0;
   const maxAttempts: number = config.maxAttempts ?? 0;
   const questionType: QuestionType = currentQuestion?.type ?? 'multiple_choice';
+  // Saved AI-review state for the current question, derived at render so it is present on first mount
+  // (after navigation/resume the players remount, and reviewSummaries state can lag a frame).
+  // Source of truth is the persisted __review_<id> shadow snapshot in `answers`; the in-session
+  // reviewSummaries entry is preferred when present (it also carries the dashboard screenshot).
+  const reviewSaved = (() => {
+    if (!currentQuestion || !REVIEW_TYPES.includes(questionType)) return null;
+    const id = currentQuestion.id;
+    let shadow: any = null;
+    const raw = answers[`__review_${id}`];
+    if (raw) { try { shadow = JSON.parse(raw); } catch {} }
+    const inSession = reviewSummaries[id];
+    const count = Math.max(reviewCounts[id] ?? 0, typeof shadow?.count === 'number' ? shadow.count : 0);
+    if (questionType === 'dashboard_critique') {
+      return { result: inSession?.result ?? shadow?.report ?? undefined, imageUrl: inSession?.imageUrl, count };
+    }
+    return { report: (inSession ?? shadow?.report) ?? undefined, count };
+  })();
   const [sqlRuntime, setSqlRuntime] = useState<SQLRuntime | null>(null);
   const [sqlPreparing, setSqlPreparing] = useState(false);
   const [sqlPrepareError, setSqlPrepareError] = useState('');
@@ -528,21 +545,26 @@ export function CourseTaker({
       setHintVisible(false);
       setSelectedOption(null);
       setFillBlankAnswer('');
+      // Rehydrate the saved report + attempt count from the __review_ shadow key (all review types)
+      const shadowData = answers[`__review_${currentQuestion.id}`];
+      if (shadowData) {
+        try {
+          const rec = JSON.parse(shadowData);
+          if (rec) {
+            if (typeof rec.count === 'number') setReviewCounts(prev => ({ ...prev, [currentQuestion.id]: rec.count }));
+            const summary = qType === 'dashboard_critique'
+              ? (rec.report ? { result: rec.report, imageUrl: rec.imageUrl } : null)
+              : (rec.report ?? null);
+            if (summary) setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: summary }));
+          }
+        } catch {}
+      }
       if (prevAnswer) {
         // For document_review, a 'failed' answer means the student scored below minScore
         // and still has retry attempts available -- don't mark as completed so they see
         // the upload form again instead of being locked out of their retry.
         if (qType !== 'document_review' || prevAnswer === 'completed') {
           setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
-        }
-        if (qType === 'document_review') {
-          const shadowData = answers[`__review_${currentQuestion.id}`];
-          if (shadowData) {
-            try {
-              const parsed = JSON.parse(shadowData);
-              if (parsed) setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: parsed }));
-            } catch {}
-          }
         }
       }
     } else if (prevAnswer) {
@@ -685,25 +707,36 @@ export function CourseTaker({
           setDisplayedPoints(prev.points ?? 0);
           setStreak(prev.streak ?? 0);
           setHintsUsed(new Set(prev.hints_used ?? []));
-          // Restore document_review summaries immediately -- the useEffect that normally
+          // Restore review reports + counts immediately -- the useEffect that normally
           // does this only fires when currentQuestionIndex changes, but in review mode
           // the index may not change (e.g. single-question course at index 0), so the
-          // effect never re-runs and savedSummary stays undefined.
+          // effect never re-runs and the saved report stays undefined.
           const summaries: Record<string, any> = {};
+          const counts: Record<string, number> = {};
           const completed: string[] = [];
           for (const q of questions) {
-            if ((q as any).type === 'document_review') {
-              const shadowData = restoredAnswers[`__review_${q.id}`];
-              if (shadowData) {
-                try {
-                  const parsed = JSON.parse(shadowData);
-                  if (parsed) summaries[q.id] = parsed;
-                } catch {}
-              }
-              if (restoredAnswers[q.id] === 'completed') completed.push(q.id);
+            const qt = (q as any).type;
+            if (!REVIEW_TYPES.includes(qt)) continue;
+            const shadowData = restoredAnswers[`__review_${q.id}`];
+            if (shadowData) {
+              try {
+                const rec = JSON.parse(shadowData);
+                if (rec) {
+                  if (typeof rec.count === 'number') counts[q.id] = rec.count;
+                  const summary = qt === 'dashboard_critique'
+                    ? (rec.report ? { result: rec.report, imageUrl: rec.imageUrl } : null)
+                    : (rec.report ?? null);
+                  if (summary) summaries[q.id] = summary;
+                }
+              } catch {}
             }
+            if (restoredAnswers[q.id] === 'completed') completed.push(q.id);
           }
           if (Object.keys(summaries).length > 0) setReviewSummaries(prev => ({ ...prev, ...summaries }));
+          if (Object.keys(counts).length > 0) {
+            setReviewCounts(prev => ({ ...prev, ...counts }));
+            reviewCountsRef.current = { ...reviewCountsRef.current, ...counts };
+          }
           if (completed.length > 0) setReviewCompleted(prev => { const s = new Set(prev); completed.forEach(id => s.add(id)); return s; });
         }
         setReviewMode(true);
@@ -772,6 +805,9 @@ export function CourseTaker({
     answersRef.current = answers;
     progressRef.current = { answers, index: maxIdxRef.current, score, points: totalPoints, streak, hintsUsed };
   }, [answers, currentQuestionIndex, score, totalPoints, streak, hintsUsed]);
+
+  // Keep the review-count ref in sync with restored/updated counts
+  useEffect(() => { reviewCountsRef.current = reviewCounts; }, [reviewCounts]);
 
   // Flush progress when the student switches away from this tab (keepalive ensures delivery on unload)
   useEffect(() => {
@@ -844,6 +880,55 @@ export function CourseTaker({
       }),
     }).catch(() => {});
   }, [formId, studentEmail, studentName, reviewMode]);
+
+  // Persist a completed AI review: stores the full latest report (+ attempt count) under a
+  // __review_<id> shadow key so it survives reload and is readable by instructors, and records
+  // the pass/fail answer used for scoring. Manual document review has no report (report: null).
+  function recordReview(
+    q: any,
+    report: any,
+    passed: boolean,
+    extra?: { imageUrl?: string; documentReviewMode?: string },
+  ) {
+    const id = q.id;
+    const type = q.type;
+    const isManualDoc = extra?.documentReviewMode === 'manual';
+    const alreadyDone = reviewCompleted.has(id);
+    // Advance from the highest known count -- the in-session ref or the persisted shadow snapshot --
+    // so a 2nd attempt right after a resume (before the ref is rehydrated) still increments correctly.
+    let shadowCount = 0;
+    const prevRaw = answersRef.current[`__review_${id}`];
+    if (prevRaw) { try { const pr = JSON.parse(prevRaw); if (typeof pr?.count === 'number') shadowCount = pr.count; } catch {} }
+    const nextCount = Math.max(reviewCountsRef.current[id] ?? 0, shadowCount) + 1;
+    reviewCountsRef.current = { ...reviewCountsRef.current, [id]: nextCount };
+
+    setReviewCompleted(prev => new Set(prev).add(id));
+    setReviewCounts(prev => ({ ...prev, [id]: nextCount }));
+    setReviewSummaries(prev => ({
+      ...prev,
+      [id]: type === 'dashboard_critique' ? { result: report, imageUrl: extra?.imageUrl } : report,
+    }));
+
+    const answer = passed ? 'completed' : 'failed';
+    // Note: the dashboard screenshot (base64) is intentionally NOT persisted -- it would bloat the
+    // course_attempts.answers JSONB and slow saves. It stays in session memory (reviewSummaries) so the
+    // interactive critique works within the session; on reload the report renders without the overlay.
+    const snapshot = JSON.stringify({
+      type,
+      count: nextCount,
+      passed,
+      submittedAt: new Date().toISOString(),
+      report: isManualDoc ? null : report,
+      ...(extra?.documentReviewMode ? { documentReviewMode: extra.documentReviewMode } : {}),
+    });
+    const newAnswers = { ...answersRef.current, [id]: answer, [`__review_${id}`]: snapshot };
+    answersRef.current = newAnswers;
+
+    const countsAsScore = !isManualDoc && passed;
+    if (!alreadyDone && countsAsScore && !reviewMode) setScore(s => s + 1);
+    setAnswers(newAnswers);
+    saveProgress(newAnswers, currentQuestionIndex + 1, score + (!alreadyDone && countsAsScore ? 1 : 0), totalPoints, streak, hintsUsed);
+  }
 
   // Mark active attempt as completed via API.
   // Retries up to 2 times on failure before throwing.
@@ -3549,25 +3634,15 @@ export function CourseTaker({
                       isDark={isDark}
                       accentColor={accent}
                       completed={reviewCompleted.has(currentQuestion.id)}
-                      submissions={reviewSubmissions[currentQuestion.id] ?? []}
-                      savedSummary={reviewSummaries[currentQuestion.id]}
+                      savedResult={reviewSaved?.report}
+                      reviewsUsed={reviewSaved?.count ?? 0}
                       rubric={currentQuestion.rubric}
                       schema={currentQuestion.schema}
                       minScore={currentQuestion.minScore}
                       reviewLanguage={currentQuestion.reviewLanguage}
                       maxReviews={2}
-                      onComplete={(_, lean, passed) => {
-                        const alreadyDone = reviewCompleted.has(currentQuestion.id);
-                        setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
-                        setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: lean }));
-                        setReviewSubmissions(prev => ({ ...prev, [currentQuestion.id]: [...(prev[currentQuestion.id] ?? []), lean] }));
-                        const answer = passed ? 'completed' : 'failed';
-                        const newAnswers = { ...answersRef.current, [currentQuestion.id]: answer };
-                        answersRef.current = newAnswers;
-                        if (!alreadyDone && passed && !reviewMode) setScore(s => s + 1);
-                        setAnswers(newAnswers);
-                        saveProgress(newAnswers, currentQuestionIndex + 1, score + (!alreadyDone && passed ? 1 : 0), totalPoints, streak, hintsUsed);
-                      }}
+                      showAttemptCount
+                      onComplete={(result, passed) => recordReview(currentQuestion, result, passed)}
                     />
                   )}
                   {questionType === 'excel_review' && (
@@ -3576,24 +3651,14 @@ export function CourseTaker({
                       isDark={isDark}
                       accentColor={accent}
                       completed={reviewCompleted.has(currentQuestion.id)}
-                      submissions={reviewSubmissions[currentQuestion.id] ?? []}
-                      savedSummary={reviewSummaries[currentQuestion.id]}
+                      savedResult={reviewSaved?.report}
+                      reviewsUsed={reviewSaved?.count ?? 0}
                       context={currentQuestion.context}
                       rubric={currentQuestion.rubric}
                       minScore={currentQuestion.minScore}
                       maxReviews={2}
-                      onComplete={(_, lean, passed) => {
-                        const alreadyDone = reviewCompleted.has(currentQuestion.id);
-                        setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
-                        setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: lean }));
-                        setReviewSubmissions(prev => ({ ...prev, [currentQuestion.id]: [...(prev[currentQuestion.id] ?? []), lean] }));
-                        const answer = passed ? 'completed' : 'failed';
-                        const newAnswers = { ...answersRef.current, [currentQuestion.id]: answer };
-                        answersRef.current = newAnswers;
-                        if (!alreadyDone && passed && !reviewMode) setScore(s => s + 1);
-                        setAnswers(newAnswers);
-                        saveProgress(newAnswers, currentQuestionIndex + 1, score + (!alreadyDone && passed ? 1 : 0), totalPoints, streak, hintsUsed);
-                      }}
+                      showAttemptCount
+                      onComplete={(result, passed) => recordReview(currentQuestion, result, passed)}
                     />
                   )}
                   {questionType === 'dashboard_critique' && (
@@ -3602,24 +3667,14 @@ export function CourseTaker({
                       isDark={isDark}
                       accentColor={accent}
                       completed={reviewCompleted.has(currentQuestion.id)}
-                      savedResult={reviewSummaries[currentQuestion.id]?.result}
-                      savedImageUrl={reviewSummaries[currentQuestion.id]?.imageUrl}
+                      savedResult={reviewSaved?.result}
+                      savedImageUrl={reviewSaved?.imageUrl}
                       rubric={currentQuestion.rubric}
                       minScore={currentQuestion.minScore}
-                      reviewsUsed={reviewDashCounts[currentQuestion.id] ?? 0}
+                      reviewsUsed={reviewSaved?.count ?? 0}
                       maxReviews={2}
-                      onComplete={(result, imageDataUrl, passed) => {
-                        const alreadyDone = reviewCompleted.has(currentQuestion.id);
-                        setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
-                        setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: { result, imageUrl: imageDataUrl } }));
-                        setReviewDashCounts(prev => ({ ...prev, [currentQuestion.id]: (prev[currentQuestion.id] ?? 0) + 1 }));
-                        const answer = passed ? 'completed' : 'failed';
-                        const newAnswers = { ...answersRef.current, [currentQuestion.id]: answer };
-                        answersRef.current = newAnswers;
-                        if (!alreadyDone && passed && !reviewMode) setScore(s => s + 1);
-                        setAnswers(newAnswers);
-                        saveProgress(newAnswers, currentQuestionIndex + 1, score + (!alreadyDone && passed ? 1 : 0), totalPoints, streak, hintsUsed);
-                      }}
+                      showAttemptCount
+                      onComplete={(result, imageDataUrl, passed) => recordReview(currentQuestion, result, passed, { imageUrl: imageDataUrl })}
                     />
                   )}
                   {questionType === 'document_review' && (
@@ -3628,37 +3683,15 @@ export function CourseTaker({
                       isDark={isDark}
                       accentColor={accent}
                       completed={reviewCompleted.has(currentQuestion.id)}
-                      submissions={reviewSubmissions[currentQuestion.id] ?? []}
-                      savedSummary={reviewSummaries[currentQuestion.id]}
+                      savedResult={reviewSaved?.report}
+                      reviewsUsed={reviewSaved?.count ?? 0}
                       context={currentQuestion.context}
                       rubric={currentQuestion.rubric}
                       minScore={(currentQuestion as any).documentReviewMode === 'manual' ? undefined : currentQuestion.minScore}
                       maxReviews={(currentQuestion as any).documentReviewMode === 'manual' ? 1 : 2}
+                      showAttemptCount
                       documentReviewMode={(currentQuestion as any).documentReviewMode ?? 'ai_only'}
-                      onComplete={(_, lean, passed) => {
-                        const alreadyDone = reviewCompleted.has(currentQuestion.id);
-                        setReviewCompleted(prev => new Set(prev).add(currentQuestion.id));
-                        setReviewSummaries(prev => ({ ...prev, [currentQuestion.id]: lean }));
-                        setReviewSubmissions(prev => ({ ...prev, [currentQuestion.id]: [...(prev[currentQuestion.id] ?? []), lean] }));
-                        const answer = passed ? 'completed' : 'failed';
-                        // Store lean under a shadow key so instructors can read it from the dashboard
-                        // without affecting scoring (server only scores keys matching question IDs)
-                        const reviewKey = `__review_${currentQuestion.id}`;
-                        const leanSnapshot = JSON.stringify({
-                          overallScore: lean.overallScore,
-                          executiveSummary: lean.executiveSummary,
-                          gaps: lean.gaps,
-                          topRecommendations: lean.topRecommendations,
-                          submittedAt: lean.submittedAt,
-                          documentReviewMode: (currentQuestion as any).documentReviewMode ?? 'ai_only',
-                        });
-                        const newAnswers = { ...answersRef.current, [currentQuestion.id]: answer, [reviewKey]: leanSnapshot };
-                        answersRef.current = newAnswers;
-                        const countsAsScore = (currentQuestion as any).documentReviewMode !== 'manual' && passed;
-                        if (!alreadyDone && countsAsScore && !reviewMode) setScore(s => s + 1);
-                        setAnswers(newAnswers);
-                        saveProgress(newAnswers, currentQuestionIndex + 1, score + (!alreadyDone && countsAsScore ? 1 : 0), totalPoints, streak, hintsUsed);
-                      }}
+                      onComplete={(result, passed) => recordReview(currentQuestion, result, passed, { documentReviewMode: (currentQuestion as any).documentReviewMode ?? 'ai_only' })}
                     />
                   )}
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   BookOpen, CalendarDays, ClipboardList, Users, Megaphone,
@@ -2299,11 +2300,11 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               isDark={isDark}
               accentColor={C.green}
               completed={isGraded || isSubmitted}
-              savedSummary={(() => { try { return submission?.response_text ? JSON.parse(submission.response_text) : undefined; } catch { return undefined; } })()}
+              savedResult={(() => { const rep = parseReviewNotes(submission?.response_text)?.report; return isFullReport('code_review', rep) ? rep : undefined; })()}
               rubric={assignment.config?.rubric}
               schema={assignment.config?.schema}
               minScore={assignment.config?.minScore}
-              onComplete={isGroupAssignment && !isLeader ? () => {} : (result: any, lean: any) => autoSubmit(result.overallScore, JSON.stringify(lean))}
+              onComplete={isGroupAssignment && !isLeader ? () => {} : (result: any) => autoSubmit(result.overallScore, buildReviewNotes('code_review', result, submission?.response_text))}
             />
           )}
           {assignmentType === 'excel_review' && (
@@ -2312,11 +2313,11 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               isDark={isDark}
               accentColor={C.green}
               completed={isGraded || isSubmitted}
-              savedSummary={(() => { try { return submission?.response_text ? JSON.parse(submission.response_text) : undefined; } catch { return undefined; } })()}
+              savedResult={(() => { const rep = parseReviewNotes(submission?.response_text)?.report; return isFullReport('excel_review', rep) ? rep : undefined; })()}
               rubric={assignment.config?.rubric}
               context={assignment.config?.context}
               minScore={assignment.config?.minScore}
-              onComplete={isGroupAssignment && !isLeader ? () => {} : (result: any, lean: any) => autoSubmit(result.overallScore, JSON.stringify(lean))}
+              onComplete={isGroupAssignment && !isLeader ? () => {} : (result: any) => autoSubmit(result.overallScore, buildReviewNotes('excel_review', result, submission?.response_text))}
             />
           )}
           {assignmentType === 'dashboard_critique' && (
@@ -2325,9 +2326,9 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               isDark={isDark}
               accentColor={C.green}
               completed={isGraded || isSubmitted}
-              savedResult={(() => { try { return submission?.response_text ? JSON.parse(submission.response_text) : undefined; } catch { return undefined; } })()}
+              savedResult={parseReviewNotes(submission?.response_text)?.report}
               rubric={assignment.config?.rubric}
-              onComplete={isGroupAssignment && !isLeader ? () => {} : (result: any) => autoSubmit(result.audit?.overallScore ?? null, JSON.stringify(result))}
+              onComplete={isGroupAssignment && !isLeader ? () => {} : (result: any) => autoSubmit(result.audit?.overallScore ?? null, buildReviewNotes('dashboard_critique', result, submission?.response_text))}
             />
           )}
           {assignmentType === 'document_review' && (
@@ -2336,12 +2337,12 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               isDark={isDark}
               accentColor={C.green}
               completed={isGraded || isSubmitted}
-              savedSummary={(() => { try { return submission?.response_text ? JSON.parse(submission.response_text) : undefined; } catch { return undefined; } })()}
+              savedResult={(() => { if ((assignment.config?.documentReviewMode ?? 'ai_only') === 'manual') return undefined; const rep = parseReviewNotes(submission?.response_text)?.report; return isFullReport('document_review', rep) ? rep : undefined; })()}
               rubric={assignment.config?.rubric}
               context={assignment.config?.context}
               minScore={assignment.config?.minScore}
               documentReviewMode={assignment.config?.documentReviewMode ?? 'ai_only'}
-              onComplete={isGroupAssignment && !isLeader ? () => {} : (result: any, lean: any) => autoSubmit(lean.overallScore || null, JSON.stringify(lean))}
+              onComplete={isGroupAssignment && !isLeader ? () => {} : (result: any) => autoSubmit(result.overallScore || null, buildReviewNotes('document_review', result, submission?.response_text, { documentReviewMode: assignment.config?.documentReviewMode ?? 'ai_only' }))}
             />
           )}
         </div>

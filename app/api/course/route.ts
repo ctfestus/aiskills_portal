@@ -265,6 +265,12 @@ export async function POST(req: NextRequest) {
       const incomingPoints = Number.isFinite(Number(points)) ? Number(points) : 0;
       const incomingStreak = Number.isFinite(Number(streak)) ? Number(streak) : 0;
 
+      // Attempt count carried inside a __review_<id> snapshot; used to decide which review state is newer.
+      const reviewCount = (val: unknown): number => {
+        if (typeof val !== 'string') return 0;
+        try { const r = JSON.parse(val); return typeof r?.count === 'number' ? r.count : 0; } catch { return 0; }
+      };
+
       const buildPayload = (existing?: {
         current_question_index?: number | null;
         answers?: Record<string, string> | null;
@@ -275,10 +281,25 @@ export async function POST(req: NextRequest) {
         const existingIndex = existing?.current_question_index ?? 0;
         const existingAnswers = existing?.answers && typeof existing.answers === 'object' ? existing.answers : {};
         const existingHints = Array.isArray(existing?.hints_used) ? existing.hints_used : [];
+
+        // Existing answers win on conflicts so an older tab cannot rewrite completed work.
+        const mergedAnswers: Record<string, string> = { ...incomingAnswers, ...existingAnswers };
+        // Exception: review questions are mutable across attempts. When the incoming __review_<id>
+        // snapshot has a higher attempt count than the stored one, the newer attempt wins -- both the
+        // snapshot and its paired answer key -- so a 2nd attempt's report/score/pass-fail persists
+        // mid-course. Lower/equal counts keep the stored value, preserving the older-tab guard.
+        for (const key of Object.keys(incomingAnswers)) {
+          if (!key.startsWith('__review_')) continue;
+          if (reviewCount(incomingAnswers[key]) > reviewCount((existingAnswers as Record<string, string>)[key])) {
+            mergedAnswers[key] = incomingAnswers[key];
+            const id = key.slice('__review_'.length);
+            if (Object.prototype.hasOwnProperty.call(incomingAnswers, id)) mergedAnswers[id] = incomingAnswers[id];
+          }
+        }
+
         return {
           current_question_index: Math.max(existingIndex, incomingIndex),
-          // Existing answers win on conflicts so an older tab cannot rewrite completed work.
-          answers:                { ...incomingAnswers, ...existingAnswers },
+          answers:                mergedAnswers,
           streak:                 Math.max(existing?.streak ?? 0, incomingStreak),
           hints_used:             [...new Set([...existingHints, ...incomingHints])],
           points:                 Math.max(existing?.points ?? 0, incomingPoints),

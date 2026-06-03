@@ -8,8 +8,9 @@ import {
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
-import CodeReviewPlayer, { LeanSubmission } from '@/components/CodeReviewPlayer';
-import ExcelReviewPlayer, { ExcelLeanSubmission } from '@/components/ExcelReviewPlayer';
+import CodeReviewPlayer from '@/components/CodeReviewPlayer';
+import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
+import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
 
 // -- Types ---
 
@@ -504,9 +505,9 @@ export default function AssignmentExperiencePlayer({
                                 isDark={isDark}
                                 accentColor={accent}
                                 completed={isDone}
-                                savedResult={saved?.notes ? (() => { try { return JSON.parse(saved.notes!); } catch { return undefined; } })() : undefined}
+                                savedResult={parseReviewNotes(saved?.notes)?.report}
                                 rubric={req.rubric}
-                                onComplete={(result) => updateProgress(req.id, { completed: true, notes: JSON.stringify(result) })}
+                                onComplete={(result) => updateProgress(req.id, { completed: true, notes: buildReviewNotes('dashboard_critique', result, saved?.notes) })}
                               />
                             </div>
                           );
@@ -515,7 +516,8 @@ export default function AssignmentExperiencePlayer({
                         // Code Review
                         if (req.type === 'code_review') {
                           const saved = progress[req.id];
-                          const submissions: LeanSubmission[] = saved?.notes ? (() => { try { const p = JSON.parse(saved.notes!); return Array.isArray(p) ? p : []; } catch { return []; } })() : [];
+                          const savedReport = parseReviewNotes(saved?.notes)?.report;
+                          const savedResult = isFullReport('code_review', savedReport) ? savedReport : undefined;
                           return (
                             <div key={req.id} className="space-y-3">
                               <div className="flex items-start gap-2">
@@ -532,12 +534,12 @@ export default function AssignmentExperiencePlayer({
                                 isDark={isDark}
                                 accentColor={accent}
                                 completed={isDone}
-                                submissions={submissions}
+                                savedResult={savedResult}
                                 rubric={req.rubric}
                                 schema={req.schema}
                                 minScore={req.minScore}
-                                onComplete={(_, lean, passed) => {
-                                  updateProgress(req.id, { completed: passed, notes: JSON.stringify([...submissions, lean]) });
+                                onComplete={(result, passed) => {
+                                  updateProgress(req.id, { completed: passed, notes: buildReviewNotes('code_review', result, saved?.notes) });
                                 }}
                               />
                             </div>
@@ -547,7 +549,8 @@ export default function AssignmentExperiencePlayer({
                         // Excel Review
                         if (req.type === 'excel_review') {
                           const saved = progress[req.id];
-                          const submissions: ExcelLeanSubmission[] = saved?.notes ? (() => { try { const p = JSON.parse(saved.notes!); return Array.isArray(p) ? p : []; } catch { return []; } })() : [];
+                          const savedReport = parseReviewNotes(saved?.notes)?.report;
+                          const savedResult = isFullReport('excel_review', savedReport) ? savedReport : undefined;
                           return (
                             <div key={req.id} className="space-y-3">
                               <div className="flex items-start gap-2">
@@ -564,12 +567,12 @@ export default function AssignmentExperiencePlayer({
                                 isDark={isDark}
                                 accentColor={accent}
                                 completed={isDone}
-                                submissions={submissions}
+                                savedResult={savedResult}
                                 rubric={req.rubric}
                                 context={req.context}
                                 minScore={req.minScore}
-                                onComplete={(_, lean, passed) => {
-                                  updateProgress(req.id, { completed: passed, notes: JSON.stringify([...submissions, lean]) });
+                                onComplete={(result, passed) => {
+                                  updateProgress(req.id, { completed: passed, notes: buildReviewNotes('excel_review', result, saved?.notes) });
                                 }}
                               />
                             </div>

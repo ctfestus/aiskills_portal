@@ -49,6 +49,7 @@ interface Props {
   minScore?: number;
   reviewsUsed?: number;
   maxReviews?: number;
+  showAttemptCount?: boolean;
   onComplete: (result: CritiqueResult, imageDataUrl: string, passed: boolean) => void;
 }
 
@@ -70,9 +71,13 @@ const TYPE_COLORS: Record<string, string> = {
   OTHER:          '#94a3b8',
 };
 
-export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, completed, savedResult, savedImageUrl, rubric, minScore, reviewsUsed = 0, maxReviews, onComplete }: Props) {
+export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, completed, savedResult, savedImageUrl, rubric, minScore, reviewsUsed = 0, maxReviews, showAttemptCount, onComplete }: Props) {
   const atLimit = maxReviews !== undefined && reviewsUsed >= maxReviews;
   const shouldLock = maxReviews === undefined || atLimit || reviewsUsed === 0;
+  // Offer Reset (try again) only while attempts remain. Once a submission is terminal -- completed
+  // with no per-question retry budget (direct/VE assignments) -- hide it so the student can't clear
+  // the saved report into an empty locked state.
+  const showReset = !atLimit && !(completed && maxReviews === undefined);
   const [imageDataUrl, setImageDataUrl] = useState<string>(savedImageUrl ?? '');
   const [result, setResult]             = useState<CritiqueResult | null>(savedResult ?? null);
   const [analyzing, setAnalyzing]       = useState(false);
@@ -170,6 +175,30 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
     );
   }
 
+  // Saved report with no screenshot: assignment/VE store the report only (not the base64 image),
+  // and the course flow no longer persists the image either. Render the holistic report without
+  // the interactive overlay so students and instructors still see the saved feedback on reload.
+  if (result && !imageDataUrl) {
+    return (
+      <div ref={resultsRef} className="space-y-3">
+        <AiReviewDisclaimer isDark={isDark} />
+        {showAttemptCount && maxReviews !== undefined && reviewsUsed > 0 && (
+          <p style={{ fontSize: 11, fontWeight: 600, color: muted }}>Attempt {reviewsUsed} of {maxReviews}</p>
+        )}
+        {result.audit ? (
+          <AuditReport audit={result.audit} accentColor={accentColor} isDark={isDark} />
+        ) : (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}30` }}>
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+            <p className="text-xs font-medium" style={{ color: accentColor }}>
+              {result.elements?.length ?? 0} elements analysed
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // Upload state
   if (!imageDataUrl) {
     if (atLimit) {
@@ -234,6 +263,9 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
   return (
     <div ref={resultsRef} className="space-y-3">
       <AiReviewDisclaimer isDark={isDark} />
+      {showAttemptCount && maxReviews !== undefined && reviewsUsed > 0 && (
+        <p style={{ fontSize: 11, fontWeight: 600, color: muted }}>Attempt {reviewsUsed} of {maxReviews}</p>
+      )}
       {/* Toolbar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -260,7 +292,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
               <Download className="w-3 h-3" /> PDF
             </button>
           )}
-          {!atLimit && (
+          {showReset && (
             <button
               onClick={reset}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
@@ -470,7 +502,7 @@ function scoreBarColor(score: number) {
   return '#ef4444';
 }
 
-function AuditReport({ audit, accentColor, isDark }: { audit: Audit; accentColor: string; isDark: boolean }) {
+export function AuditReport({ audit, accentColor, isDark }: { audit: Audit; accentColor: string; isDark: boolean }) {
   const bg      = isDark ? '#1e1e1e' : '#f2f2f4';
   const card    = isDark ? '#272727' : '#ffffff';
   const inner   = isDark ? '#303030' : '#f7f7f9';

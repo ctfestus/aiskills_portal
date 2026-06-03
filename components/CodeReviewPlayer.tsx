@@ -33,27 +33,20 @@ interface ReviewResult {
   rubricGrades?: RubricGrade[];
 }
 
-export interface LeanSubmission {
-  submittedAt: string;
-  overallScore: number;
-  executiveSummary: string;
-  issueTitles: string[];
-  topRecommendations: string[];
-}
-
 interface Props {
   reqId: string;
   isDark: boolean;
   accentColor: string;
   completed: boolean;
-  submissions?: LeanSubmission[];
-  savedSummary?: LeanSubmission;
+  savedResult?: ReviewResult;
+  reviewsUsed?: number;
   rubric?: string[];
   schema?: string;
   minScore?: number;
   reviewLanguage?: string;
   maxReviews?: number;
-  onComplete: (result: ReviewResult, lean: LeanSubmission, passed: boolean) => void;
+  showAttemptCount?: boolean;
+  onComplete: (result: ReviewResult, passed: boolean) => void;
 }
 
 function severityColor(s: LineIssue['severity']) {
@@ -72,11 +65,15 @@ function scoreColor(n: number) {
   return '#ef4444';
 }
 
-export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed, submissions = [], savedSummary, rubric, schema, minScore, reviewLanguage, maxReviews, onComplete }: Props) {
-  const atLimit = maxReviews !== undefined && submissions.length >= maxReviews;
+export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed, savedResult, reviewsUsed = 0, rubric, schema, minScore, reviewLanguage, maxReviews, showAttemptCount, onComplete }: Props) {
+  const atLimit = maxReviews !== undefined && reviewsUsed >= maxReviews;
   // Lock the "already completed" views only when: no per-question limit (VE/assignment), at limit,
-  // or state was lost on page reload (submissions empty but marked completed).
-  const shouldLock = maxReviews === undefined || atLimit || submissions.length === 0;
+  // or state was lost on page reload (no saved report and no further attempts).
+  const shouldLock = maxReviews === undefined || atLimit || reviewsUsed === 0;
+  // Offer Reset (try again) only while attempts remain. Once a submission is terminal -- completed
+  // with no per-question retry budget (direct/VE assignments) -- hide it so the student can't clear
+  // the saved report into an empty locked state.
+  const showReset = !atLimit && !(completed && maxReviews === undefined);
   // Normalize authored language to match the LANGUAGES display array
   const lockedLanguage = reviewLanguage
     ? (LANGUAGES.find(l => l.toLowerCase() === reviewLanguage.toLowerCase()) ?? null)
@@ -85,7 +82,9 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
   const [code, setCode]         = useState('');
   const [language, setLanguage] = useState(lockedLanguage ?? 'Python');
   const [dialect, setDialect]   = useState('PostgreSQL');
-  const [result, setResult]     = useState<ReviewResult | null>(null);
+  // Show the saved report on mount whenever one exists. When retries remain, the result view's
+  // Reset button (rendered while !atLimit) lets the student start another attempt.
+  const [result, setResult]     = useState<ReviewResult | null>(savedResult ?? null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError]       = useState('');
   const [inputMode, setInputMode] = useState<'paste' | 'upload'>('paste');
@@ -124,15 +123,8 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
       const json = await res.json();
       if (json.error) throw new Error(json.error);
       setResult(json);
-      const lean: LeanSubmission = {
-        submittedAt: new Date().toISOString(),
-        overallScore: json.overallScore,
-        executiveSummary: json.executiveSummary ?? '',
-        issueTitles: (json.issues ?? []).map((i: LineIssue) => i.title),
-        topRecommendations: json.topRecommendations ?? [],
-      };
       const passed = !minScore || json.overallScore >= minScore;
-      onComplete(json, lean, passed);
+      onComplete(json, passed);
     } catch (err: any) {
       setError(err.message || 'The AI review service is busy right now. Please wait a moment and try again. Your work has not been lost.');
     } finally {
@@ -166,64 +158,14 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
     }
   }
 
-  // Already completed this session but summary not available (e.g. after page reload) -- show locked state
-  if (!result && completed && !savedSummary && shouldLock) {
+  // Already completed but the saved report isn't available (e.g. older data) -- show locked state
+  if (!result && completed && shouldLock) {
     return (
       <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}25` }}>
         <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
         <p className="text-sm font-medium" style={{ color: accentColor }}>
           Code review already submitted for this question.
         </p>
-      </div>
-    );
-  }
-
-  // Returning student -- show saved summary card
-  if (!result && completed && savedSummary && shouldLock) {
-    return (
-      <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${border}` }}>
-        <div className="px-5 py-4 flex items-start justify-between gap-4" style={{ background: '#0f172a' }}>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>AI Code Review</p>
-            <p className="text-xs mb-2" style={{ color: 'rgba(255,255,255,0.4)' }}>{new Date(savedSummary.submittedAt).toLocaleDateString()}</p>
-            {savedSummary.executiveSummary && (
-              <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.6)' }}>{savedSummary.executiveSummary}</p>
-            )}
-          </div>
-          <div className="flex items-baseline gap-1 flex-shrink-0">
-            <span style={{ fontSize: 40, fontWeight: 900, lineHeight: 1, color: '#fff' }}>{savedSummary.overallScore.toFixed(1)}</span>
-            <span className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>/100</span>
-          </div>
-        </div>
-        {savedSummary.issueTitles.length > 0 && (
-          <div className="px-5 py-3" style={{ borderTop: `1px solid ${border}`, background: card }}>
-            <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: muted }}>Issues Found</p>
-            <div className="space-y-1">
-              {savedSummary.issueTitles.map((t, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs" style={{ color: text }}>
-                  <span style={{ color: '#ef4444', flexShrink: 0 }}>•</span>
-                  <span>{t}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {savedSummary.topRecommendations.length > 0 && (
-          <div className="px-5 py-3" style={{ borderTop: `1px solid ${border}`, background: card }}>
-            <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: muted }}>Top Recommendations</p>
-            <div className="space-y-1.5">
-              {savedSummary.topRecommendations.map((r, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs" style={{ color: text }}>
-                  <span className="font-bold flex-shrink-0" style={{ color: '#22c55e' }}>{i + 1}.</span>
-                  <span>{r}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        <div className="px-5 py-3" style={{ borderTop: `1px solid ${border}`, background: card }}>
-          <AiReviewDisclaimer isDark={isDark} />
-        </div>
       </div>
     );
   }
@@ -241,18 +183,9 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
         </div>
       );
     }
-    const lastAttempt = submissions.length > 0 ? submissions[submissions.length - 1] : null;
     return (
       <div className="space-y-3">
         <AiReviewDisclaimer isDark={isDark} />
-        {lastAttempt && (
-          <div className="flex items-center justify-between px-4 py-2.5 rounded-lg" style={{ background: inner, border: `1px solid ${border}` }}>
-            <span style={{ fontSize: 12, color: muted }}>
-              Attempt {submissions.length} · Last score: <span style={{ fontWeight: 700, color: scoreColor(lastAttempt.overallScore) }}>{lastAttempt.overallScore.toFixed(1)}/100</span>
-            </span>
-            <span style={{ fontSize: 11, color: muted }}>{new Date(lastAttempt.submittedAt).toLocaleDateString()}</span>
-          </div>
-        )}
         {/* Language selector -- locked when instructor specified a language */}
         {lockedLanguage ? (
           <div className="flex items-center gap-2">
@@ -387,56 +320,11 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
   const warnings    = result.issues.filter(i => i.severity === 'warning');
   const suggestions = result.issues.filter(i => i.severity === 'suggestion');
 
-  const prev = submissions.length > 0 ? submissions[submissions.length - 1] : null;
-  const currentTitles = result.issues.map(i => i.title);
-  const resolvedIssues = prev ? prev.issueTitles.filter(t => !currentTitles.includes(t)) : [];
-  const newIssues      = prev ? currentTitles.filter(t => !prev.issueTitles.includes(t)) : [];
-  const scoreDelta     = prev ? +(result.overallScore - prev.overallScore).toFixed(1) : null;
-
   return (
     <div ref={resultsRef} className="space-y-4" style={{ fontFamily: 'var(--font-sans)' }}>
       <AiReviewDisclaimer isDark={isDark} />
-
-      {/* Diff panel */}
-      {prev && (
-        <div style={{ border: `1px solid ${border}`, borderRadius: 12, overflow: 'hidden', background: card }}>
-          <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: `1px solid ${border}` }}>
-            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: muted }}>
-              Attempt {submissions.length + 1} vs Attempt {submissions.length}
-            </p>
-            <span style={{ fontSize: 13, fontWeight: 800, color: scoreDelta! > 0 ? '#22c55e' : scoreDelta! < 0 ? '#ef4444' : muted, fontVariantNumeric: 'tabular-nums' }}>
-              {scoreDelta! > 0 ? '+' : ''}{scoreDelta} pts
-            </span>
-          </div>
-          <div className="flex">
-            <div className="flex-1 px-5 py-4" style={{ borderRight: `1px solid ${border}` }}>
-              <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#22c55e', marginBottom: 8 }}>
-                Fixed ({resolvedIssues.length})
-              </p>
-              {resolvedIssues.length === 0
-                ? <p style={{ fontSize: 12, color: muted }}>None from last attempt</p>
-                : resolvedIssues.map((t, i) => (
-                  <div key={i} className="flex items-start gap-2 mb-1.5">
-                    <div style={{ width: 2, height: 14, background: '#22c55e', flexShrink: 0, marginTop: 2 }} />
-                    <p style={{ fontSize: 12, color: text, lineHeight: 1.4 }}>{t}</p>
-                  </div>
-                ))}
-            </div>
-            <div className="flex-1 px-5 py-4">
-              <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#ef4444', marginBottom: 8 }}>
-                New ({newIssues.length})
-              </p>
-              {newIssues.length === 0
-                ? <p style={{ fontSize: 12, color: muted }}>No new issues</p>
-                : newIssues.map((t, i) => (
-                  <div key={i} className="flex items-start gap-2 mb-1.5">
-                    <div style={{ width: 2, height: 14, background: '#ef4444', flexShrink: 0, marginTop: 2 }} />
-                    <p style={{ fontSize: 12, color: text, lineHeight: 1.4 }}>{t}</p>
-                  </div>
-                ))}
-            </div>
-          </div>
-        </div>
+      {showAttemptCount && maxReviews !== undefined && reviewsUsed > 0 && (
+        <p style={{ fontSize: 11, fontWeight: 600, color: muted }}>Attempt {reviewsUsed} of {maxReviews}</p>
       )}
 
       {/* Header */}
@@ -464,7 +352,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
                 style={{ background: 'rgba(173,238,102,0.12)', color: '#ADEE66', borderRadius: 6, border: '1px solid rgba(173,238,102,0.2)' }}>
                 <Download className="w-3 h-3" /> PDF
               </button>
-              {!atLimit && (
+              {showReset && (
                 <button onClick={reset}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
                   style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
