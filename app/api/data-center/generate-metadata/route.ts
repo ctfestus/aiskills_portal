@@ -135,8 +135,31 @@ const schema = {
     category:         { type: Type.STRING },
     tags:             { type: Type.ARRAY, items: { type: Type.STRING } },
     sample_questions: { type: Type.ARRAY, items: { type: Type.STRING } },
+    sample_question_types: { type: Type.ARRAY, items: { type: Type.STRING } },
+    analyst_sections: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          title: { type: Type.STRING },
+          brief: { type: Type.STRING },
+          tasks: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                prompt: { type: Type.STRING },
+                type: { type: Type.STRING },
+              },
+              required: ['prompt', 'type'],
+            },
+          },
+        },
+        required: ['title', 'brief', 'tasks'],
+      },
+    },
   },
-  required: ['title', 'description', 'scenario', 'category', 'tags', 'sample_questions'],
+  required: ['title', 'description', 'scenario', 'category', 'tags', 'sample_questions', 'sample_question_types', 'analyst_sections'],
 };
 
 export async function POST(req: NextRequest) {
@@ -166,7 +189,12 @@ Based on the data above, generate metadata for this dataset:
 - scenario: 2-4 short paragraphs of rich-text HTML for the "Scenario / Background" field. Create a realistic workplace or business context around the dataset: who collected it, what decision or problem the analyst is supporting, why the dataset matters, and how learners should think about the analysis. Use only simple HTML tags like <p>, <strong>, <ul>, <li>. Do not include markdown.
 - category: Choose the single most relevant category from this list: ${CATEGORIES.join(', ')}
 - tags: 3-5 meaningful keyword tags relevant to the data. Use proper title case (e.g. "Customer Loyalty", "Flight Data", "Africa", "Retail Analytics"). 1-3 words per tag, no punctuation.
-- sample_questions: 6 business and problem-focused questions a data analyst could answer by analysing this dataset. Frame them as real business problems or decisions a manager or analyst would ask -- not generic exploration. Do NOT mention any tools. Cover a mix of: KPI measurement, trend analysis, segmentation, performance comparison, and root cause investigation. Examples of the right tone: "Which customer segments have the highest churn rate and what factors drive it?", "How has monthly revenue trended over the past year and which regions are underperforming against targets?", "Which products generate the highest profit margin and how does this vary by category?"
+- analyst_sections: 3-5 dataset-specific analysis phases, similar to guided project milestones. Do NOT use generic fixed titles like "Understand the Dataset" unless the dataset truly calls for it. Each section title should reflect the actual data and scenario, e.g. "Campaign Channel Performance", "Off-Schedule Attendance Risk", "Regional Revenue Leakage", or "Customer Retention Drivers".
+  - Each section needs a short brief explaining what the learner is investigating.
+  - Each section needs 2-4 tasks.
+  - Task type must be "sql" only when the task can be answered directly with a SELECT/WITH query from the available tables. Use "analytics" for interpretation, recommendations, root-cause thinking, communication, visualization planning, or questions requiring context beyond SQL.
+  - Include a connected flow from initial baseline checks to deeper diagnosis and final business recommendation.
+- sample_questions and sample_question_types: a flat backward-compatible copy of all analyst section tasks, in the same order. sample_question_types must use "sql" or "analytics" for each matching question.
 
 Return only valid JSON.`;
 

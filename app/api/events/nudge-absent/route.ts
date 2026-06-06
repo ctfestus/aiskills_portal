@@ -30,13 +30,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { eventId, sessionDate } = body;
+  const { eventId, sessionDate, studentIds } = body;
   if (!eventId) return NextResponse.json({ error: 'eventId is required' }, { status: 400 });
+
+  // Optional: restrict the nudge to a specific subset of students (e.g. when
+  // some absentees were excused). Empty/absent means "all absent students".
+  const allowList: Set<string> | null =
+    Array.isArray(studentIds) && studentIds.length > 0 ? new Set(studentIds as string[]) : null;
 
   // Confirm caller owns the event
   const { data: event } = await supabase
     .from('events')
-    .select('id, title, slug, meeting_link, user_id')
+    .select('id, title, slug, meeting_link, user_id, event_date')
     .eq('id', eventId)
     .eq('user_id', user.id)
     .maybeSingle();
@@ -70,7 +75,9 @@ export async function POST(req: NextRequest) {
     attendedIds = new Set((att ?? []).map((a: any) => a.student_id as string));
   }
 
-  const absentRegs = regs.filter((r: any) => !attendedIds.has(r.student_id));
+  const absentRegs = regs.filter((r: any) =>
+    !attendedIds.has(r.student_id) && (!allowList || allowList.has(r.student_id))
+  );
   if (absentRegs.length === 0) {
     return NextResponse.json({ sent: 0, message: 'No absent students' });
   }
@@ -78,7 +85,9 @@ export async function POST(req: NextRequest) {
   const t        = await getTenantSettings();
   const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
   const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
-  const targetDate = sessionDate ?? new Date().toISOString().slice(0, 10);
+  // Fall back to the event's own date (not today) so the reminder is dated to the
+  // actual session even when no sessionDate is supplied by the caller.
+  const targetDate = sessionDate ?? event.event_date ?? new Date().toISOString().slice(0, 10);
 
   let sent = 0;
   for (const reg of absentRegs) {

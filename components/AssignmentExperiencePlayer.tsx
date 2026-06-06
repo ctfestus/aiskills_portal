@@ -73,6 +73,7 @@ interface Props {
   groupId?: string;
   participants?: string[];
   canSubmit?: boolean;
+  graded?: boolean;
 }
 
 // -- Helpers ---
@@ -96,7 +97,7 @@ function normalize(s: string) { return s.toLowerCase().replace(/\s+/g, ' ').trim
 // -- Component ---
 
 export default function AssignmentExperiencePlayer({
-  formId, config, userId, studentName, studentEmail, sessionToken, assignmentId = '', initialProgress = {}, isDark = false, onComplete, previewMode = false, groupId, participants, canSubmit = true,
+  formId, config, userId, studentName, studentEmail, sessionToken, assignmentId = '', initialProgress = {}, isDark = false, onComplete, previewMode = false, groupId, participants, canSubmit = true, graded = false,
 }: Props) {
   const accent = '#00b95c';
   const modules = config.modules || [];
@@ -121,7 +122,10 @@ export default function AssignmentExperiencePlayer({
   const [saving,        setSaving]        = useState(false);
   const [uploadingReq,  setUploadingReq]  = useState<string | null>(null);
   const [done,          setDone]          = useState(() => canSubmit && allComplete(config, initialProgress ?? {}));
+  const [reviewMode,    setReviewMode]    = useState(false);
   const [expandedMods,  setExpandedMods]  = useState<Set<string>>(new Set([modules[0]?.id]));
+  // Review is read-only and exists only after grading. Pre-grading behaviour is unchanged.
+  const readOnly = graded;
   const [completeError, setCompleteError] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   async function getAuthHeader(): Promise<Record<string, string>> {
@@ -144,6 +148,7 @@ export default function AssignmentExperiencePlayer({
   const prevEntry   = currentIdx > 0 ? flatLessons[currentIdx - 1] : null;
   const nextEntry   = currentIdx < flatLessons.length - 1 ? flatLessons[currentIdx + 1] : null;
   const lessonLocked = (lesson: Lesson, modId: string) => {
+    if (reviewMode) return false;
     const idx = flatLessons.findIndex(x => x.lesson.id === lesson.id);
     if (idx === 0) return false;
     const prev = flatLessons[idx - 1];
@@ -151,7 +156,7 @@ export default function AssignmentExperiencePlayer({
   };
 
   const saveProgress = useCallback(async (prog: Progress) => {
-    if (previewMode) return;
+    if (previewMode || readOnly) return;
     clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(async () => {
       setSaving(true);
@@ -164,7 +169,7 @@ export default function AssignmentExperiencePlayer({
       } finally { setSaving(false); }
     }, 800);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formId, userId, activeModule, activeLesson, sessionToken]);
+  }, [formId, userId, activeModule, activeLesson, sessionToken, readOnly]);
 
   const updateProgress = useCallback((reqId: string, patch: Partial<Progress[string]>) => {
     setProgress(prev => {
@@ -206,7 +211,31 @@ export default function AssignmentExperiencePlayer({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  if (done) {
+  // After grading: read-only review only. The landing card offers a Review button;
+  // entering review falls through to render the lessons read-only below.
+  if (graded && !reviewMode) {
+    return (
+      <div className="rounded-2xl p-8 text-center" style={{ background: 'rgba(14,9,221,0.06)' }}>
+        <CheckCircle className="w-10 h-10 mx-auto mb-3" style={{ color: accent }}/>
+        <p className="text-base font-bold mb-1" style={{ color: accent }}>Experience Complete!</p>
+        <p className="text-sm" style={{ color: muted }}>
+          {canSubmit
+            ? 'This submission has been graded.'
+            : 'Your group submission has been graded.'}
+        </p>
+        <div className="flex items-center justify-center gap-2 mt-5">
+          <button onClick={() => { setReviewMode(true); navigate(modules[0]?.id ?? '', modules[0]?.lessons[0]?.id ?? ''); }}
+            className="px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:opacity-80"
+            style={{ background: `${accent}12`, color: accent, border: 'none', cursor: 'pointer' }}>
+            {canSubmit ? 'Review submission' : 'Review group submission'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Pre-grading behaviour -- unchanged.
+  if (!graded && done) {
     return (
       <div className="rounded-2xl p-8 text-center" style={{ background: 'rgba(14,9,221,0.06)' }}>
         <CheckCircle className="w-10 h-10 mx-auto mb-3" style={{ color: accent }}/>
@@ -216,7 +245,7 @@ export default function AssignmentExperiencePlayer({
     );
   }
 
-  if (!canSubmit && overallPct >= 100) {
+  if (!graded && !canSubmit && overallPct >= 100) {
     return (
       <div className="rounded-2xl p-8 text-center" style={{ background: 'rgba(14,9,221,0.06)' }}>
         <CheckCircle className="w-10 h-10 mx-auto mb-3" style={{ color: accent }}/>
@@ -228,6 +257,20 @@ export default function AssignmentExperiencePlayer({
 
   return (
     <div className="space-y-4">
+      {/* Review-mode banner */}
+      {reviewMode && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3" style={{ background: `${accent}10`, border: `1px solid ${accent}25` }}>
+          <span className="text-xs font-semibold" style={{ color: accent }}>
+            {canSubmit ? 'Reviewing your submission (read-only)' : 'Reviewing the group submission (read-only)'}
+          </span>
+          <button onClick={() => setReviewMode(false)}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:opacity-80"
+            style={{ background: accent, color: 'white', border: 'none', cursor: 'pointer' }}>
+            Exit review
+          </button>
+        </div>
+      )}
+
       {/* Progress bar */}
       <div className="rounded-2xl p-4" style={{ background: bg, border: `1px solid ${border}`, boxShadow: shadow }}>
         <div className="flex items-center justify-between mb-2">
@@ -376,16 +419,16 @@ export default function AssignmentExperiencePlayer({
                                   const isCorrect  = req.correctAnswer && normalize(opt) === normalize(req.correctAnswer);
                                   const showResult = answered;
                                   return (
-                                    <button key={`${req.id}-opt-${oi}`} disabled={isDone}
+                                    <button key={`${req.id}-opt-${oi}`} disabled={isDone || readOnly}
                                       className="w-full text-left px-4 py-3 rounded-xl text-sm transition-all"
                                       style={{
                                         border: `1.5px solid ${showResult && isSelected ? (isCorrect ? '#10b981' : '#ef4444') : isSelected ? accent : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
                                         background: showResult && isSelected ? (isCorrect ? 'rgba(16,185,129,0.07)' : 'rgba(239,68,68,0.06)') : isSelected ? `${accent}08` : optionBg,
                                         color: showResult && isSelected ? (isCorrect ? '#10b981' : '#ef4444') : text,
-                                        cursor: isDone ? 'default' : 'pointer',
+                                        cursor: isDone || readOnly ? 'default' : 'pointer',
                                       }}
                                       onClick={() => {
-                                        if (isDone) return;
+                                        if (isDone || readOnly) return;
                                         const isC = req.correctAnswer ? normalize(opt) === normalize(req.correctAnswer) : false;
                                         updateProgress(req.id, { selectedAnswer: opt, completed: isC });
                                       }}
@@ -416,6 +459,7 @@ export default function AssignmentExperiencePlayer({
                               </div>
                               <textarea
                                 value={val}
+                                readOnly={readOnly}
                                 onChange={e => updateProgress(req.id, { notes: e.target.value, completed: !!e.target.value.trim() })}
                                 placeholder="Type your answer here..."
                                 rows={4}
@@ -442,23 +486,23 @@ export default function AssignmentExperiencePlayer({
                                 </div>
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
                               </div>
-                              <label className="flex flex-col items-center gap-2 rounded-xl py-6 cursor-pointer transition-all"
-                                style={{ border: `1.5px dashed ${fileUrl ? `${accent}60` : isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'}`, background: fileUrl ? `${accent}04` : subtle }}>
+                              <label className="flex flex-col items-center gap-2 rounded-xl py-6 transition-all"
+                                style={{ border: `1.5px dashed ${fileUrl ? `${accent}60` : isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'}`, background: fileUrl ? `${accent}04` : subtle, cursor: readOnly ? 'default' : 'pointer' }}>
                                 {uploading
                                   ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: accent }}/>
                                   : fileUrl
                                   ? <CheckCircle2 className="w-5 h-5" style={{ color: accent }}/>
                                   : <UploadIcon className="w-5 h-5" style={{ color: faint }}/>}
                                 <p className="text-xs font-medium text-center" style={{ color: fileUrl ? accent : muted }}>
-                                  {uploading ? 'Uploading...' : fileUrl ? 'Uploaded. Click to replace.' : 'Click to upload your file'}
+                                  {uploading ? 'Uploading...' : fileUrl ? (readOnly ? 'Uploaded' : 'Uploaded. Click to replace.') : readOnly ? 'No file uploaded' : 'Click to upload your file'}
                                 </p>
                                 {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[11px] underline" style={{ color: accent }}>View file</a>}
-                                <input type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(req.id, f); }}/>
+                                <input type="file" className="hidden" disabled={readOnly} onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(req.id, f); }}/>
                               </label>
                               <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
                                 style={{ border: `1px solid ${linkUrl ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: subtle }}>
                                 <LinkIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: faint }}/>
-                                <input type="url" value={linkUrl} placeholder="Or paste a link..."
+                                <input type="url" value={linkUrl} readOnly={readOnly} placeholder="Or paste a link..."
                                   className="flex-1 bg-transparent text-sm outline-none"
                                   style={{ color: text }}
                                   onChange={e => updateProgress(req.id, { linkUrl: e.target.value, completed: !!e.target.value.trim() })}/>
@@ -472,9 +516,10 @@ export default function AssignmentExperiencePlayer({
                           return (
                             <div key={req.id} className="flex items-start gap-3">
                               <button
+                                disabled={readOnly}
                                 className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center mt-0.5 transition-all"
-                                style={{ background: isDone ? accent : 'transparent', border: `1.5px solid ${isDone ? accent : isDark ? '#555' : '#ccc'}`, cursor: 'pointer' }}
-                                onClick={() => updateProgress(req.id, { completed: !isDone })}
+                                style={{ background: isDone ? accent : 'transparent', border: `1.5px solid ${isDone ? accent : isDark ? '#555' : '#ccc'}`, cursor: readOnly ? 'default' : 'pointer' }}
+                                onClick={() => { if (readOnly) return; updateProgress(req.id, { completed: !isDone }); }}
                               >
                                 {isDone && <CheckCircle2 style={{ width: 12, height: 12, color: 'white' }}/>}
                               </button>
@@ -504,7 +549,7 @@ export default function AssignmentExperiencePlayer({
                                 reqId={req.id}
                                 isDark={isDark}
                                 accentColor={accent}
-                                completed={isDone}
+                                completed={isDone || readOnly}
                                 savedResult={parseReviewNotes(saved?.notes)?.report}
                                 rubric={req.rubric}
                                 onComplete={(result) => updateProgress(req.id, { completed: true, notes: buildReviewNotes('dashboard_critique', result, saved?.notes) })}
@@ -533,7 +578,7 @@ export default function AssignmentExperiencePlayer({
                                 reqId={req.id}
                                 isDark={isDark}
                                 accentColor={accent}
-                                completed={isDone}
+                                completed={isDone || readOnly}
                                 savedResult={savedResult}
                                 rubric={req.rubric}
                                 schema={req.schema}
@@ -566,7 +611,7 @@ export default function AssignmentExperiencePlayer({
                                 reqId={req.id}
                                 isDark={isDark}
                                 accentColor={accent}
-                                completed={isDone}
+                                completed={isDone || readOnly}
                                 savedResult={savedResult}
                                 rubric={req.rubric}
                                 context={req.context}
@@ -603,12 +648,14 @@ export default function AssignmentExperiencePlayer({
                 </button>
                 {nextEntry ? (
                   <button
-                    disabled={lessonPct(currentLes, progress) < 100}
+                    disabled={!reviewMode && lessonPct(currentLes, progress) < 100}
                     onClick={() => navigate(nextEntry.modId, nextEntry.lesson.id)}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
-                    style={{ background: accent, color: 'white', border: 'none', cursor: lessonPct(currentLes, progress) < 100 ? 'not-allowed' : 'pointer' }}>
+                    style={{ background: accent, color: 'white', border: 'none', cursor: !reviewMode && lessonPct(currentLes, progress) < 100 ? 'not-allowed' : 'pointer' }}>
                     Next <ChevronRight className="w-4 h-4"/>
                   </button>
+                ) : reviewMode ? (
+                  <span/>
                 ) : (
                   !canSubmit ? (
                   <button

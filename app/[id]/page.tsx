@@ -13,6 +13,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { getFontById } from '@/lib/fonts';
+import { buildGoogleCalUrl, buildOutlookCalUrl, buildYahooCalUrl, downloadIcs, buildCalendarFields, isRecurring } from '@/lib/calendar-links';
 
 // --- Social platform data (mirrors page.tsx) ---
 const SOCIAL_PLATFORMS = [
@@ -204,98 +205,6 @@ const detectPlatform = (url?: string): { name: string; color: string; icon: Reac
   return { name: 'Join Meeting', color: '#555', icon: null };
 };
 
-// Parse a YYYY-MM-DD date string as local time (avoids UTC-midnight timezone shifts)
-const parseLocalDate = (date: string): Date | null => {
-  const parts = date.split('-').map(Number);
-  if (parts.length !== 3 || parts.some(isNaN)) return null;
-  return new Date(parts[0], parts[1] - 1, parts[2]);
-};
-
-// Build a Google Calendar URL from event details
-const DAY_MAP = ['SU','MO','TU','WE','TH','FR','SA'];
-const buildRRule = (recurrence?: string, endDate?: string, days?: number[]): string | null => {
-  if (!recurrence || recurrence === 'once') return null;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  let rule = `RRULE:FREQ=${recurrence === 'weekly' ? 'WEEKLY' : 'DAILY'}`;
-  if (recurrence === 'weekly' && days?.length) rule += `;BYDAY=${days.map(d => DAY_MAP[d]).join(',')}`;
-  if (endDate) {
-    const ed = parseLocalDate(endDate);
-    if (ed) rule += `;UNTIL=${ed.getFullYear()}${pad(ed.getMonth()+1)}${pad(ed.getDate())}T235959Z`;
-  }
-  return rule;
-};
-
-const buildGoogleCalUrl = (title: string, date: string, time: string, location: string, description: string, recurrence?: string, recurrenceEndDate?: string, recurrenceDays?: number[]) => {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const d = parseLocalDate(date);
-  if (!d) return null;
-  const timeParts = (time ?? '').split(':');
-  const h = timeParts[0] ? +timeParts[0] : 9;
-  const m = timeParts[1] ? +timeParts[1] : 0;
-  const start = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(h)}${pad(m)}00`;
-  const endD = new Date(d); endD.setHours(h + 2, m);
-  const end = `${endD.getFullYear()}${pad(endD.getMonth()+1)}${pad(endD.getDate())}T${pad(endD.getHours())}${pad(endD.getMinutes())}00`;
-  const enc = encodeURIComponent;
-  const rrule = buildRRule(recurrence, recurrenceEndDate, recurrenceDays);
-  let url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${enc(title)}&dates=${start}/${end}&location=${enc(location)}&details=${enc(description)}`;
-  if (rrule) url += `&recur=${enc(rrule)}`;
-  return url;
-};
-
-// Build an Outlook Web calendar URL
-const buildOutlookCalUrl = (title: string, date: string, time: string, location: string, description: string) => {
-  const d = parseLocalDate(date);
-  if (!d) return null;
-  const timeParts = (time ?? '').split(':');
-  const h = timeParts[0] ? +timeParts[0] : 9;
-  const m = timeParts[1] ? +timeParts[1] : 0;
-  d.setHours(h, m, 0);
-  const end = new Date(d); end.setHours(end.getHours() + 2);
-  const fmt = (dt: Date) => dt.toISOString().replace(/\.\d{3}Z$/, '');
-  const enc = encodeURIComponent;
-  return `https://outlook.live.com/calendar/0/deeplink/compose?subject=${enc(title)}&startdt=${enc(fmt(d))}&enddt=${enc(fmt(end))}&location=${enc(location)}&body=${enc(description)}`;
-};
-
-// Build a Yahoo Calendar URL
-const buildYahooCalUrl = (title: string, date: string, time: string, location: string, description: string) => {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const d = parseLocalDate(date);
-  if (!d) return null;
-  const timeParts = (time ?? '').split(':');
-  const h = timeParts[0] ? +timeParts[0] : 9;
-  const m = timeParts[1] ? +timeParts[1] : 0;
-  const start = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(h)}${pad(m)}00`;
-  const endD = new Date(d); endD.setHours(h + 2, m);
-  const end = `${endD.getFullYear()}${pad(endD.getMonth()+1)}${pad(endD.getDate())}T${pad(endD.getHours())}${pad(endD.getMinutes())}00`;
-  const enc = encodeURIComponent;
-  return `https://calendar.yahoo.com/?v=60&title=${enc(title)}&st=${start}&et=${end}&in_loc=${enc(location)}&desc=${enc(description)}`;
-};
-
-// Build a .ics file blob URL
-const downloadIcs = (title: string, date: string, time: string, location: string, description: string, recurrence?: string, recurrenceEndDate?: string, recurrenceDays?: number[]) => {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const d = parseLocalDate(date);
-  if (!d) return;
-  const timeParts = (time ?? '').split(':');
-  const h = timeParts[0] ? +timeParts[0] : 9;
-  const m = timeParts[1] ? +timeParts[1] : 0;
-  const fmt = (dt: Date) => `${dt.getFullYear()}${pad(dt.getMonth()+1)}${pad(dt.getDate())}T${pad(dt.getHours())}${pad(dt.getMinutes())}00`;
-  d.setHours(h, m);
-  const end = new Date(d); end.setHours(end.getHours() + 2);
-  const rrule = buildRRule(recurrence, recurrenceEndDate, recurrenceDays);
-  const lines = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT',
-    `SUMMARY:${title}`, `DTSTART:${fmt(d)}`, `DTEND:${fmt(end)}`,
-    `LOCATION:${location}`, `DESCRIPTION:${description.replace(/<[^>]*>/g,'')}`,
-    ...(rrule ? [rrule] : []),
-    'END:VEVENT', 'END:VCALENDAR',
-  ];
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/calendar' }));
-  a.download = `${title.replace(/\s+/g,'-')}.ics`;
-  a.click();
-};
-
 export default function PublicFormPage() {
   const { logoUrl, logoDarkUrl } = useTenant();
   const { id } = useParams();
@@ -366,6 +275,7 @@ export default function PublicFormPage() {
   const [prefilledName, setPrefilledName] = useState('');
   const [prefilledEmail, setPrefilledEmail] = useState('');
   const [calPopupOpen, setCalPopupOpen] = useState(false);
+  const [calBusy, setCalBusy] = useState(false);
   const [creatorProfile, setCreatorProfile] = useState<any>(null);
   const [profilePopupOpen, setProfilePopupOpen] = useState(false);
   const profileHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1328,12 +1238,15 @@ export default function PublicFormPage() {
               {config.eventDetails?.isEvent && config.eventDetails.date && config.postSubmission?.type !== 'redirect' && (() => {
                 const ev = config.eventDetails;
                 const isVirtual = ev.eventType === 'virtual';
-                const joinHref = joinToken ? `/api/join?token=${joinToken}` : '';
-                const calLocation = isVirtual ? joinHref : (ev.location ?? '');
-                const calDescription = [config.description ?? '', isVirtual && joinHref ? `Join: ${joinHref}` : ''].filter(Boolean).join('\n\n');
-                const googleUrl  = buildGoogleCalUrl(config.title, ev.date, ev.time, calLocation, calDescription, form.recurrence, form.recurrence_end_date, form.recurrence_days);
-                const outlookUrl = buildOutlookCalUrl(config.title, ev.date, ev.time, calLocation, calDescription);
-                const yahooUrl   = buildYahooCalUrl(config.title, ev.date, ev.time, calLocation, calDescription);
+                // Absolute join link so a tap from the calendar reminder reaches /api/join and records attendance.
+                const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                const joinHref = joinToken ? `${origin}/api/join?token=${joinToken}` : '';
+                const recurring = isRecurring(form.recurrence);
+                const { calLocation, calDescription } = buildCalendarFields({ isVirtual, joinUrl: joinHref, location: ev.location, description: config.description });
+                const googleUrl  = buildGoogleCalUrl(config.title, ev.date, ev.time, ev.timezone, calLocation, calDescription, form.recurrence, form.recurrence_end_date, form.recurrence_days);
+                // Outlook.com and Yahoo web links can't encode a recurrence -- only offer them for one-time events; the .ics carries the full series.
+                const outlookUrl = recurring ? null : buildOutlookCalUrl(config.title, ev.date, ev.time, ev.timezone, calLocation, calDescription);
+                const yahooUrl   = recurring ? null : buildYahooCalUrl(config.title, ev.date, ev.time, ev.timezone, calLocation, calDescription);
                 const GoogleIcon = () => (
                   <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
                     <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908C16.657 14.013 17.64 11.71 17.64 9.2z" fill="#4285F4"/>
@@ -1356,14 +1269,47 @@ export default function PublicFormPage() {
                   </svg>
                 );
                 const btnBase: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer', border: 'none', textDecoration: 'none', width: '100%', textAlign: 'left' as const };
+                // For virtual events without a token yet, register on demand so the calendar entry carries a tracked join link.
+                const openCal = async () => {
+                  setJoinErr('');
+                  let preparedToken = joinToken;
+                  if (isVirtual && !preparedToken) {
+                    setCalBusy(true);
+                    try {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      if (session?.access_token) {
+                        const res = await fetch('/api/event-register', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                          body: JSON.stringify({ formId: form.id }),
+                        });
+                        const json = await res.json();
+                        if (json.join_token) {
+                          preparedToken = json.join_token;
+                          setJoinToken(json.join_token);
+                        }
+                      }
+                    } catch {}
+                    setCalBusy(false);
+                  }
+                  if (isVirtual && !preparedToken) {
+                    setJoinErr('Could not prepare your calendar link. Please refresh and try again.');
+                    return;
+                  }
+                  setCalPopupOpen(true);
+                };
                 return (
                   <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 24 }}>
-                    <button
-                      onClick={() => setCalPopupOpen(v => !v)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, fontSize: 13, fontWeight: 600, border: `1px solid ${t.sectionBorder}`, background: t.sectionBg, color: t.label, cursor: 'pointer' }}
-                    >
-                      <Calendar style={{ width: 15, height: 15 }}/> Add to Calendar
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                      <button
+                        onClick={openCal}
+                        disabled={calBusy}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, fontSize: 13, fontWeight: 600, border: `1px solid ${t.sectionBorder}`, background: t.sectionBg, color: t.label, cursor: calBusy ? 'default' : 'pointer', opacity: calBusy ? 0.65 : 1 }}
+                      >
+                        <Calendar style={{ width: 15, height: 15 }}/> {calBusy ? 'Preparing...' : 'Add to Calendar'}
+                      </button>
+                      {joinErr && <p style={{ margin: 0, fontSize: 12, color: '#ef4444', textAlign: 'center' }}>{joinErr}</p>}
+                    </div>
                     {calPopupOpen && (
                       <>
                         <div onClick={() => setCalPopupOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }} />
@@ -1375,7 +1321,7 @@ export default function PublicFormPage() {
                             </div>
                             <div>
                               <p style={{ fontWeight: 700, fontSize: 17, color: t.title, margin: 0 }}>Add to Calendar</p>
-                              <p style={{ fontSize: 13, color: t.body, marginTop: 6, lineHeight: 1.55 }}>Save this event to your preferred calendar app.</p>
+                              <p style={{ fontSize: 13, color: t.body, marginTop: 6, lineHeight: 1.55 }}>{recurring ? 'Saves every session in the series to your calendar.' : 'Save this event to your preferred calendar app.'}</p>
                             </div>
                           </div>
                           {/* Options */}
@@ -1398,7 +1344,7 @@ export default function PublicFormPage() {
                                 <OutlookIcon/> Outlook.com
                               </a>
                             )}
-                            <button onClick={() => { downloadIcs(config.title, ev.date, ev.time, calLocation, calDescription, form.recurrence, form.recurrence_end_date, form.recurrence_days); setCalPopupOpen(false); }}
+                            <button onClick={() => { downloadIcs(config.title, ev.date, ev.time, ev.timezone, calLocation, calDescription, form.recurrence, form.recurrence_end_date, form.recurrence_days); setCalPopupOpen(false); }}
                               style={{ ...btnBase, background: dark ? '#27272a' : '#f4f4f5', color: dark ? '#a1a1aa' : '#52525b' }}>
                               <Download style={{ width: 18, height: 18, flexShrink: 0 }}/> iCal (Apple / Outlook)
                             </button>

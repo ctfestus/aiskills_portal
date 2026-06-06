@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
       emailBatch.push({
         from:    FROM,
         to:      c.email,
-        subject: `Your payment is overdue -- access protected until ${graceEndStr}`,
+        subject: `Your payment is overdue: access protected until ${graceEndStr}`,
         html:    gracePeriodWarningEmail({
           name: c.studentName, graceEndDate: graceEndStr, daysLeft: c.daysLeft, dashboardUrl, branding,
         }),

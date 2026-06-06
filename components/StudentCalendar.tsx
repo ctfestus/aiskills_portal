@@ -114,9 +114,52 @@ function sanitizeUrl(v?: string | null) {
   } catch { return null; }
 }
 
-function localEndOfDay(dateStr: string): Date {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, m - 1, d, 23, 59, 59, 999);
+/* Expand a recurring event into one date-string per occurrence.
+   Mirrors the reminder-cron semantics: weekly repeats on recurrence_days
+   (empty = every day), daily repeats every day.
+
+   Iteration begins at the later of the series start and the start of the
+   current month, so a long-running series can never exhaust the cap on
+   historical dates before reaching upcoming sessions. A series with an
+   explicit recurrence_end_date is expanded fully through that date (bounded
+   only by the safety cap); an open-ended series falls back to a 6-month
+   horizon since "all upcoming" is otherwise unbounded. */
+function expandEventDates(
+  startStr: string,
+  recurrence: string | null,
+  days: number[],
+  endStr: string | null,
+): string[] {
+  if (!recurrence || recurrence === 'once') return [startStr];
+
+  const [sy, sm, sd] = startStr.split('-').map(Number);
+  const start = new Date(sy, sm - 1, sd);
+  if (isNaN(start.getTime())) return [startStr];
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const windowStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  let end: Date;
+  if (endStr) {
+    const [ey, em, ed] = endStr.split('-').map(Number);
+    end = new Date(ey, em - 1, ed);
+  } else {
+    end = new Date(today.getFullYear(), today.getMonth() + 6, today.getDate());
+  }
+
+  const out: string[] = [];
+  const cur = start > windowStart ? new Date(start) : new Date(windowStart);
+  const MAX = 400; // safety cap
+  while (cur <= end && out.length < MAX) {
+    const matches = recurrence === 'weekly'
+      ? (days.length === 0 || days.includes(cur.getDay()))
+      : true; // daily
+    if (matches) out.push(dateKey(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  // Fallback: series fully in the past, or starts beyond the horizon --
+  // still surface the original date so the event is never dropped entirely.
+  return out.length ? out : [startStr];
 }
 
 /* --- Skeleton --- */
@@ -148,9 +191,7 @@ function ItemModal({ item, onClose, onNavigate }: {
   }, [onClose]);
 
   const now = new Date();
-  const isPast = item.kind === 'event' && item.recurrence && item.recurrence !== 'once' && item.recurrenceEndDate
-    ? localEndOfDay(item.recurrenceEndDate) < now
-    : item.date < now;
+  const isPast = item.date < now;
 
   return (
     <motion.div
@@ -545,9 +586,7 @@ function ListRow({ item, onSelect }: { item: CalItem; onSelect: (i: CalItem) => 
   const meta = KIND_META[item.kind];
   const [imgErr, setImgErr] = useState(false);
   const now = new Date();
-  const isPast = item.kind === 'event' && item.recurrence && item.recurrence !== 'once' && item.recurrenceEndDate
-    ? localEndOfDay(item.recurrenceEndDate) < now
-    : item.date < now;
+  const isPast = item.date < now;
 
   return (
     <button
@@ -672,7 +711,7 @@ export default function CalendarSection({ userId, onNavigate }: {
         const [{ data: events }, { data: cohortAssignments }, { data: groupAssignments }] = await Promise.all([
           supabase
             .from('events')
-            .select('id, title, description, slug, cover_image, event_date, event_time, event_type, location, meeting_link, recurrence, recurrence_end_date')
+            .select('id, title, description, slug, cover_image, event_date, event_time, event_type, location, meeting_link, recurrence, recurrence_end_date, recurrence_days')
             .contains('cohort_ids', [student.cohort_id])
             .eq('status', 'published'),
           supabase
@@ -725,23 +764,28 @@ export default function CalendarSection({ userId, onNavigate }: {
         for (const e of events ?? []) {
           if (!e.event_date) continue;
           const timeStr = e.event_time ? (e.event_time as string).substring(0, 5) : null;
-          const d = timeStr ? new Date(`${e.event_date}T${timeStr}:00`) : new Date(`${e.event_date}T00:00:00`);
-          if (isNaN(d.getTime())) continue;
-          calItems.push({
-            id: e.id, kind: 'event',
-            title: e.title || 'Untitled Event',
-            date: d,
-            coverImage: e.cover_image || null,
-            description: e.description || null,
-            eventType: e.event_type || 'Virtual',
-            locationText: e.location || null,
-            meetingLink: sanitizeUrl(e.meeting_link),
-            slug: e.slug || null,
-            hasTime: !!timeStr,
-            recurrence: e.recurrence || null,
-            recurrenceEndDate: e.recurrence_end_date || null,
-            joinToken: tokenMap.get(e.id) ?? null,
-          });
+          const recurrenceDays = Array.isArray(e.recurrence_days) ? (e.recurrence_days as number[]) : [];
+          const occurrences = expandEventDates(e.event_date, e.recurrence, recurrenceDays, e.recurrence_end_date);
+
+          for (const occDate of occurrences) {
+            const d = timeStr ? new Date(`${occDate}T${timeStr}:00`) : new Date(`${occDate}T00:00:00`);
+            if (isNaN(d.getTime())) continue;
+            calItems.push({
+              id: e.id, kind: 'event',
+              title: e.title || 'Untitled Event',
+              date: d,
+              coverImage: e.cover_image || null,
+              description: e.description || null,
+              eventType: e.event_type || 'Virtual',
+              locationText: e.location || null,
+              meetingLink: sanitizeUrl(e.meeting_link),
+              slug: e.slug || null,
+              hasTime: !!timeStr,
+              recurrence: e.recurrence || null,
+              recurrenceEndDate: e.recurrence_end_date || null,
+              joinToken: tokenMap.get(e.id) ?? null,
+            });
+          }
         }
 
         for (const a of assignments ?? []) {

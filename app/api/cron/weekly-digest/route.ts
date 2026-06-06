@@ -168,10 +168,10 @@ export async function POST(req: NextRequest) {
     }
 
     const subject = missedDeadlines.length > 0
-      ? `⚠️ ${missedDeadlines.length} overdue item${missedDeadlines.length > 1 ? 's' : ''} -- your weekly update`
+      ? `⚠️ ${missedDeadlines.length} overdue item${missedDeadlines.length > 1 ? 's' : ''} in your weekly update`
       : completed.length > 0
         ? `You completed ${completed.length} item${completed.length > 1 ? 's' : ''} this week 🎓`
-        : `Your weekly learning update -- keep going!`;
+        : `Your weekly learning update: keep going!`;
 
     emailBatch.push({
       from: FROM, to: email, subject,

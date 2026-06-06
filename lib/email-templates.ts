@@ -245,7 +245,7 @@ export function courseResultEmail(data: {
       <p style="color:#555;">You have successfully completed <b>${courseTitle}</b>. Your certificate is ready to view, download, and share.</p>
       ${certUrl ? cta('🎓 View Your Certificate', certUrl) : cta('View Course', formUrl)}
     ` : `
-      <p>Thanks for completing <b>${courseTitle}</b>. Keep practising -- you can retake it to improve your score.</p>
+      <p>Thanks for completing <b>${courseTitle}</b>. Keep practising. You can retake it to improve your score.</p>
       ${cta('Retake Course', formUrl)}
     `}
 
@@ -301,9 +301,9 @@ export function nudgeEmail(data: {
   const intro = status === 'not_started'
     ? `We noticed you have not started <b>${contentTitle}</b> yet. We just wanted to reach out with a little encouragement.`
     : status === 'in_progress'
-    ? `You are making progress on <b>${contentTitle}</b> -- great work so far! We are reaching out because we want to make sure you do not miss the deadline. Now is the time to push through and finish strong.`
+    ? `You are making progress on <b>${contentTitle}</b>. Great work so far! We are reaching out because we want to make sure you do not miss the deadline. Now is the time to push through and finish strong.`
     : status === 'failed'
-    ? `You submitted <b>${contentTitle}</b>, but did not pass yet. That is not the end of the road -- review the material, try again, and use this as feedback for your next attempt.`
+    ? `You submitted <b>${contentTitle}</b>, but did not pass yet. That is not the end of the road. Review the material, try again, and use this as feedback for your next attempt.`
     : `We noticed you have not visited <b>${contentTitle}</b> in a while. We are checking in because we believe in you and do not want you to miss out.`;
 
   const content = `
@@ -314,22 +314,22 @@ export function nudgeEmail(data: {
       <p style="margin:0 0 10px;font-weight:700;color:#15803d;font-size:15px;">Why upskilling matters 🚀</p>
       <p style="margin:0;color:#374151;font-size:14px;line-height:1.7;">
         In today's fast-moving world, the skills you build today directly shape the opportunities you unlock tomorrow.
-        Every lesson you complete, every challenge you tackle puts you ahead -- and the learning you do here is
+        Every lesson you complete, every challenge you tackle puts you ahead, and the learning you do here is
         directly relevant to real roles in the industry.
       </p>
     </div>
 
     ${status === 'stalled' ? `
     <p style="color:#374151;">
-      <b>You've already taken the first step</b> -- which is the hardest part. Getting back on track is easier than you think.
+      <b>You've already taken the first step</b>, which is the hardest part. Getting back on track is easier than you think.
       Remember why you started, and know that each module you complete brings you closer to a real skill you can use.
     </p>` : status === 'in_progress' ? `
     <p style="color:#374151;">
-      <b>You are already on your way</b> -- do not let the momentum slip. Even 20 minutes a day can get you across the finish line.
+      <b>You are already on your way</b>. Do not let the momentum slip. Even 20 minutes a day can get you across the finish line.
       The effort you have already put in is worth protecting. Keep going.
     </p>` : status === 'failed' ? `
     <p style="color:#374151;">
-      <b>A failed attempt is useful data</b> -- it shows exactly where to focus next. Revisit the feedback, strengthen the weak spots, and retake when ready.
+      <b>A failed attempt is useful data</b>. It shows exactly where to focus next. Revisit the feedback, strengthen the weak spots, and retake when ready.
     </p>` : `
     <p style="color:#374151;">
       It only takes a few minutes to begin. Once you start, you will find the content is practical, relevant, and designed
@@ -354,7 +354,7 @@ export function nudgeEmail(data: {
         <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Continue Learning</p>
         <p style="margin:0 0 8px;font-size:16px;font-weight:700;color:#111827;">${contentTitle}</p>
         <p style="margin:0;font-size:13px;color:#374151;line-height:1.6;">
-          Complete this course to unlock the <b>"${relatedAssignmentTitle}"</b> assignment -- a hands-on task to apply what you have learned.
+          Complete this course to unlock the <b>"${relatedAssignmentTitle}"</b> assignment, a hands-on task to apply what you have learned.
         </p>
       </div>
     </a>` : ''}
@@ -460,7 +460,7 @@ export function weeklyDigestEmail(data: {
 
   const content = `
     <p><b>Hi ${esc(name)},</b></p>
-    <p>Here's your weekly learning update. Stay consistent -- every lesson counts! 🚀</p>
+    <p>Here's your weekly learning update. Stay consistent. Every lesson counts! 🚀</p>
 
     ${completed.length > 0 ? `
     <p style="font-size:15px;font-weight:700;color:#111;margin-top:24px;">✅ Completed this week</p>
@@ -475,7 +475,7 @@ export function weeklyDigestEmail(data: {
     </table>` : ''}
 
     ${missedDeadlines.length > 0 ? `
-    <p style="font-size:15px;font-weight:700;color:#dc2626;margin-top:24px;">⚠️ Overdue -- action needed</p>
+    <p style="font-size:15px;font-weight:700;color:#dc2626;margin-top:24px;">⚠️ Overdue: action needed</p>
     <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #fee2e2;background:#fff5f5;border-radius:0;">
       ${missedRows}
     </table>
@@ -486,7 +486,7 @@ export function weeklyDigestEmail(data: {
     <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;">
       ${notStartedRows}
     </table>
-    <p style="font-size:13px;color:#6b7280;margin-top:8px;">You have been assigned these programs. Starting is the hardest part -- log in and take the first step.</p>` : ''}
+    <p style="font-size:13px;color:#6b7280;margin-top:8px;">You have been assigned these programs. Starting is the hardest part. Log in and take the first step.</p>` : ''}
 
     <div style="margin:24px 0;padding:16px;background:#f0fdf4;border-left:4px solid #22c55e;border-radius:0;">
       <p style="margin:0;color:#15803d;font-size:14px;line-height:1.7;">
@@ -575,7 +575,7 @@ export function day3CheckInEmail(data: { name: string; studentUrl: string; cours
   const appName = branding?.appName || tenant.appName;
   const content = `
     <p><b>Hi ${esc(name)},</b></p>
-    <p>It has been a few days since you joined ${appName}. We just wanted to check in -- have you had a chance to explore your courses yet?</p>
+    <p>It has been a few days since you joined ${appName}. We just wanted to check in. Have you had a chance to explore your courses yet?</p>
 
     ${courseTitle && courseUrl ? `
     <div style="margin:20px 0;border-radius:0;overflow:hidden;border:1px solid #e5e7eb;">
@@ -610,10 +610,10 @@ export function day7EncouragementEmail(data: { name: string; studentUrl: string;
     </div>
     <p style="color:#374151;">Keep the momentum going. Every course you complete builds your profile and brings you closer to your career goals.</p>
     ` : hasStarted ? `
-    <p>You have started your learning journey -- that is great! The hardest part is always the beginning, and you have done it. 💪</p>
+    <p>You have started your learning journey, and that is great! The hardest part is always the beginning, and you have done it. 💪</p>
     <p style="color:#374151;">Even if life got busy, come back and pick up where you left off. Your progress is saved.</p>
     ` : `
-    <p>We noticed you have not started a course yet -- and that is completely okay. Life gets busy. But we want to make sure you do not miss out.</p>
+    <p>We noticed you have not started a course yet, and that is completely okay. Life gets busy. But we want to make sure you do not miss out.</p>
     <p style="color:#374151;">Your courses are waiting. It only takes a few minutes to begin, and the skills you build here are directly relevant to real jobs.</p>
     `}
     ${cta('Continue Learning', studentUrl)}
@@ -933,7 +933,7 @@ export function assignmentGradedEmail(data: {
 
     ${passed
       ? `<p style="color:#555;margin-top:20px;">Great work! Log in to view your full results.</p>`
-      : `<p style="color:#555;margin-top:20px;">Don't be discouraged -- you can review the feedback and resubmit.</p>`
+      : `<p style="color:#555;margin-top:20px;">Don't be discouraged. You can review the feedback and resubmit.</p>`
     }
 
     ${cta('View Assignment', studentUrl)}
@@ -986,6 +986,37 @@ export function gracePeriodWarningEmail(data: {
     <p><b>Best regards,</b></p>
   `;
 
+  return shell(content, branding);
+}
+
+// -- Assignment Due Reminder ---
+export function assignmentDueReminderEmail(data: {
+  name: string;
+  assignmentTitle: string;
+  dueDate: string;
+  daysLeft: number;
+  dashboardUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { name, assignmentTitle, dueDate, daysLeft, dashboardUrl, branding } = data;
+  const urgency = daysLeft <= 0 ? 'is due today' : daysLeft === 1 ? 'is due tomorrow' : `is due in ${daysLeft} days`;
+  const content = `
+    <p><b>Hi ${esc(name)},</b></p>
+    <p>This is a friendly reminder that your assignment <b>${esc(assignmentTitle)}</b> ${urgency}${dueDate ? ` (${esc(dueDate)})` : ''}, and we have not received your submission yet.</p>
+
+    <div style="margin:20px 0;padding:20px;background:#fffbeb;border-left:4px solid #d97706;border-radius:0;">
+      <p style="margin:0;font-size:14px;font-weight:700;color:#d97706;">Please submit before the deadline so you do not lose marks.</p>
+    </div>
+
+    <p style="color:#374151;">Log in to your dashboard, open the assignment, and submit your work.</p>
+
+    ${cta('Open Assignment', dashboardUrl)}
+
+    <p style="color:#6b7280;font-size:13px;">If you have already submitted, you can ignore this message.</p>
+
+    <br>
+    <p><b>Best of luck,</b></p>
+  `;
   return shell(content, branding);
 }
 

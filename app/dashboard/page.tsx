@@ -1,17 +1,17 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useState, useRef, useCallback, Fragment, createContext, useContext } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef, useCallback, Fragment, createContext, useContext, cloneElement, isValidElement } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Loader2, Plus, FileText, BarChart3, ExternalLink, Trash2, Edit2,
   Share2, Check, Copy, X, CalendarDays, AlignLeft, Settings, User,
-  LogOut, ChevronDown, BookOpen, MapPin, Sun, Moon, Zap,
+  LogOut, ChevronDown, ChevronRight, BookOpen, MapPin, Sun, Moon, Zap,
   ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
   Users, Megaphone, Trophy, Menu, CheckCircle2, XCircle,
   UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
-  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw, Palette, Mail, Video, PlayCircle, MoreVertical, Database, Sparkles,
+  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw, Palette, Mail, Video, PlayCircle, MoreVertical, Database, Sparkles, Eye, Save,
 } from 'lucide-react';
 import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS, TextPositions, defaultTextPositions } from '@/components/CertificateTemplate';
 import Link from 'next/link';
@@ -27,6 +27,7 @@ import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/uploadToCloudina
 import { TEMPLATES as SITE_TEMPLATES } from '@/lib/site-templates';
 import { PexelsImagePicker } from '@/components/PexelsImagePicker';
 import { loadGoogleFont, getFontById } from '@/lib/fonts';
+import { isScheduledSessionDate } from '@/lib/event-sessions';
 
 // --- Design tokens ---
 const LIGHT_C = {
@@ -8393,6 +8394,18 @@ function computeExpectedSessionDates(event: any): string[] {
     }
     return [...dateSet].sort();
   }
+  if (event.recurrence === 'daily') {
+    const endStr = event.recurrence_end_date && event.recurrence_end_date < todayStr
+      ? event.recurrence_end_date : todayStr;
+    const cur = new Date(event.event_date + 'T12:00:00');
+    const end = new Date(endStr + 'T12:00:00');
+    const dates: string[] = [];
+    while (cur <= end) {
+      dates.push(cur.toISOString().slice(0, 10));
+      cur.setUTCDate(cur.getUTCDate() + 1);
+    }
+    return dates;
+  }
   return [];
 }
 
@@ -8408,6 +8421,8 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
   const [viewMode, setViewMode] = useState<'summary' | 'matrix'>('summary');
   const [nudging, setNudging] = useState(false);
   const [nudgeMsg, setNudgeMsg] = useState('');
+  const [nudgeDate, setNudgeDate] = useState('');           // which session's absences to act on
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set()); // students to nudge
 
   useEffect(() => {
     (async () => {
@@ -8447,13 +8462,16 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
 
   const selectedEvent   = events.find((e: any) => e.id === selectedEventId) ?? null;
   const expectedDates   = computeExpectedSessionDates(selectedEvent);
-  const attendanceDates = [...new Set(attendance.map((a: any) => a.session_date as string))];
+  // Drop off-schedule rows: a stray click on a non-session day must not invent
+  // a session or mark anyone absent for a date the meeting never ran.
+  const validAttendance = attendance.filter((a: any) => isScheduledSessionDate(selectedEvent, a.session_date as string));
+  const attendanceDates = [...new Set(validAttendance.map((a: any) => a.session_date as string))];
   const sessionDates    = [...new Set([...expectedDates, ...attendanceDates])].sort();
   const totalSessions   = sessionDates.length;
 
   const attendanceMap = new Map<string, Set<string>>();
   const lastJoinedMap = new Map<string, string>();
-  for (const a of attendance) {
+  for (const a of validAttendance) {
     if (!attendanceMap.has(a.student_id)) attendanceMap.set(a.student_id, new Set());
     attendanceMap.get(a.student_id)!.add(a.session_date);
     const prev = lastJoinedMap.get(a.student_id);
@@ -8484,13 +8502,31 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
   };
 
   const lastSession  = sessionDates[sessionDates.length - 1] ?? null;
-  const absentRows   = lastSession
-    ? studentRows.filter(r => !r.attended.has(lastSession))
-    : studentRows.filter(r => r.count === 0);
+  // The session whose absences we are acting on: the chosen date, else the latest.
+  const activeDate   = (nudgeDate && sessionDates.includes(nudgeDate)) ? nudgeDate : lastSession;
+  const absentRows   = activeDate ? studentRows.filter(r => !r.attended.has(activeDate)) : [];
+  const absentIds    = new Set(absentRows.map(r => r.id));
+
+  // Default the selection to every absentee for the active session; the
+  // instructor can then deselect anyone who was excused.
+  useEffect(() => {
+    setSelectedIds(new Set(absentRows.map(r => r.id)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDate, attendance, registrations]);
+
+  const toggleStudent = (id: string) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const allAbsentSelected = absentRows.length > 0 && absentRows.every(r => selectedIds.has(r.id));
+  const toggleAllAbsent = () =>
+    setSelectedIds(allAbsentSelected ? new Set() : new Set(absentRows.map(r => r.id)));
 
   const handleNudge = async () => {
-    if (!selectedEventId || absentRows.length === 0) return;
-    if (!window.confirm(`Send a missed-session reminder to ${absentRows.length} student${absentRows.length !== 1 ? 's' : ''}?`)) return;
+    const ids = Array.from(selectedIds).filter(id => absentIds.has(id));
+    if (!selectedEventId || ids.length === 0) return;
+    if (!window.confirm(`Send a missed-session reminder to ${ids.length} student${ids.length !== 1 ? 's' : ''}?`)) return;
     setNudging(true);
     setNudgeMsg('');
     try {
@@ -8498,7 +8534,7 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
       const res  = await fetch('/api/events/nudge-absent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? ''}` },
-        body: JSON.stringify({ eventId: selectedEventId, sessionDate: lastSession }),
+        body: JSON.stringify({ eventId: selectedEventId, sessionDate: activeDate, studentIds: ids }),
       });
       const json = await res.json();
       setNudgeMsg(json.error ? `Error: ${json.error}` : `Sent to ${json.sent} student${json.sent !== 1 ? 's' : ''}`);
@@ -8562,11 +8598,23 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
                     </button>
                   ))}
                 </div>
+                {sessionDates.length > 1 && (
+                  <select value={activeDate ?? ''} onChange={e => setNudgeDate(e.target.value)}
+                    title="Session to check absences against"
+                    className="rounded-lg px-2.5 py-1.5 text-xs font-medium"
+                    style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text, outline: 'none' }}>
+                    {sessionDates.map(d => (
+                      <option key={d} value={d}>
+                        {new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 {absentRows.length > 0 && (
-                  <button onClick={handleNudge} disabled={nudging}
+                  <button onClick={handleNudge} disabled={nudging || selectedIds.size === 0}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
-                    style={{ background: '#fee2e2', color: '#dc2626', opacity: nudging ? 0.6 : 1 }}>
-                    <Mail className="w-3.5 h-3.5" /> {nudging ? 'Sending...' : `Nudge absent (${absentRows.length})`}
+                    style={{ background: '#fee2e2', color: '#dc2626', opacity: (nudging || selectedIds.size === 0) ? 0.6 : 1 }}>
+                    <Mail className="w-3.5 h-3.5" /> {nudging ? 'Sending...' : `Nudge absent (${selectedIds.size})`}
                   </button>
                 )}
                 {studentRows.length > 0 && (
@@ -8597,7 +8645,12 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={thStyle}>
-                      <th className="text-left px-4 sm:px-5 py-3 text-xs font-semibold uppercase tracking-wide">Student</th>
+                      <th className="px-3 sm:px-4 py-3 text-center" style={{ width: 40 }}>
+                        <input type="checkbox" aria-label="Select all absent"
+                          checked={allAbsentSelected} disabled={absentRows.length === 0}
+                          onChange={toggleAllAbsent} style={{ accentColor: C.cta, cursor: absentRows.length === 0 ? 'default' : 'pointer' }} />
+                      </th>
+                      <th className="text-left px-1 sm:px-2 py-3 text-xs font-semibold uppercase tracking-wide">Student</th>
                       <th className="text-center px-3 sm:px-4 py-3 text-xs font-semibold uppercase tracking-wide">Attended</th>
                       <th className="text-center px-3 sm:px-4 py-3 text-xs font-semibold uppercase tracking-wide">Missed</th>
                       <th className="hidden sm:table-cell text-right px-5 py-3 text-xs font-semibold uppercase tracking-wide">Last Joined</th>
@@ -8606,9 +8659,17 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
                   <tbody>
                     {studentRows.map(r => {
                       const missed = totalSessions - r.count;
+                      const isAbsent = absentIds.has(r.id);
                       return (
                         <tr key={r.id}>
-                          <td className="px-4 sm:px-5 py-3">
+                          <td className="px-3 sm:px-4 py-3 text-center">
+                            {isAbsent ? (
+                              <input type="checkbox" aria-label={`Nudge ${r.name}`}
+                                checked={selectedIds.has(r.id)} onChange={() => toggleStudent(r.id)}
+                                style={{ accentColor: C.cta, cursor: 'pointer' }} />
+                            ) : null}
+                          </td>
+                          <td className="px-1 sm:px-2 py-3">
                             <p className="font-semibold" style={{ color: C.text }}>{r.name}</p>
                             <p className="text-xs" style={{ color: C.faint }}>{r.email}</p>
                           </td>
@@ -8683,29 +8744,34 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
 // -- Data Center Admin Section ---
 
 type DatasetFile = { name: string; url: string };
+type DatasetQuestionType = 'sql' | 'analytics';
+type AnalystTask = { id?: string; prompt: string; description?: string; type?: DatasetQuestionType };
+type AnalystSection = { id?: string; title: string; brief?: string; videoUrl?: string; difficulty?: string; duration?: string; tasks: AnalystTask[] };
 
 type DatasetRow = {
   id: string; title: string; description: string | null; cover_image_url: string | null;
   cover_image_alt: string | null; tags: string[]; category: string | null;
-  sample_questions: string[]; file_url: string | null; file_name: string | null;
+  sample_questions: string[]; sample_question_types?: DatasetQuestionType[] | null; analyst_sections?: AnalystSection[] | null; file_url: string | null; file_name: string | null;
   files: DatasetFile[];
   row_count: number | null; source: string | null; source_url: string | null;
   scenario: string | null; disclaimer: string | null;
   table_type: 'single' | 'multiple' | null;
+  sql_workbench_enabled: boolean;
   is_published: boolean; created_at: string;
 };
 
 const BLANK_DATASET: Omit<DatasetRow, 'id' | 'created_at'> = {
   title: '', description: '', cover_image_url: null, cover_image_alt: null,
-  tags: [], category: '', sample_questions: [], file_url: '', file_name: '',
+  tags: [], category: '', sample_questions: [], sample_question_types: [], analyst_sections: [], file_url: '', file_name: '',
   files: [],
-  row_count: null, source: null, source_url: null, scenario: null, disclaimer: null, table_type: null, is_published: false,
+  row_count: null, source: null, source_url: null, scenario: null, disclaimer: null, table_type: null, sql_workbench_enabled: true, is_published: false,
 };
 
 function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
   const [datasets, setDatasets]   = useState<DatasetRow[]>([]);
   const [loading, setLoading]     = useState(true);
   const [view, setView]           = useState<'list' | 'editor'>('list');
+  const [editorTab, setEditorTab] = useState<'overview' | 'dataset' | 'phases' | 'disclaimer'>('overview');
   const [editing, setEditing]     = useState<DatasetRow | null>(null);
   const [form, setForm]           = useState({ ...BLANK_DATASET });
   const [saving, setSaving]       = useState(false);
@@ -8719,6 +8785,7 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
   const [fileUploading, setFileUploading] = useState(false);
   const tagInputRef               = useRef<HTMLInputElement>(null);
   const dataFileRef               = useRef<HTMLInputElement>(null);
+  const [expandedAnalystSections, setExpandedAnalystSections] = useState<Record<string, boolean>>({});
 
   async function getToken() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -8740,7 +8807,9 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     setEditing(null);
     setForm({ ...BLANK_DATASET });
     setTagInput('');
+    setExpandedAnalystSections({});
     setError('');
+    setEditorTab('overview');
     setView('editor');
   }
 
@@ -8750,15 +8819,19 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     setForm({
       title: d.title, description: d.description ?? '', cover_image_url: d.cover_image_url,
       cover_image_alt: d.cover_image_alt, tags: d.tags, category: d.category ?? '',
-      sample_questions: d.sample_questions, file_url: d.file_url ?? '',
+      sample_questions: d.sample_questions, sample_question_types: normalizeQuestionTypes(d.sample_questions, d.sample_question_types), file_url: d.file_url ?? '',
+      analyst_sections: normalizeAnalystSections(d.analyst_sections, d.sample_questions, d.sample_question_types),
       file_name: d.file_name ?? '', row_count: d.row_count,
       files,
       source: d.source ?? '', source_url: d.source_url ?? '', scenario: d.scenario ?? '', disclaimer: d.disclaimer ?? '',
       table_type: d.table_type ?? null,
+      sql_workbench_enabled: d.sql_workbench_enabled ?? true,
       is_published: d.is_published,
     });
     setTagInput('');
+    setExpandedAnalystSections({});
     setError('');
+    setEditorTab('overview');
     setView('editor');
   }
 
@@ -8771,6 +8844,77 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
 
   function removeTag(tag: string) {
     setForm(f => ({ ...f, tags: f.tags.filter(t => t !== tag) }));
+  }
+
+  function normalizeQuestionTypes(questions: string[] = [], types?: (DatasetQuestionType | string)[] | null): DatasetQuestionType[] {
+    return questions.map((_, i) => types?.[i] === 'sql' ? 'sql' : 'analytics');
+  }
+
+  function newAnalystId(prefix: string) {
+    return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  function normalizeAnalystSections(sections?: AnalystSection[] | null, questions: string[] = [], types?: (DatasetQuestionType | string)[] | null): AnalystSection[] {
+    const cleaned = (Array.isArray(sections) ? sections : [])
+      .map((section, sectionIndex) => {
+        const tasks = (Array.isArray(section.tasks) ? section.tasks : [])
+          .map((task, taskIndex) => ({
+            id: task.id || `task-${sectionIndex + 1}-${taskIndex + 1}`,
+            // Do NOT trim here: this runs on every keystroke while editing, and trimming
+            // would strip spaces as you type. Final trimming happens in compactAnalystSections (on save).
+            prompt: String(task.prompt ?? ''),
+            description: String(task.description ?? ''),
+            type: task.type === 'sql' ? 'sql' as const : 'analytics' as const,
+          }));
+        return {
+          id: section.id || `section-${sectionIndex + 1}`,
+          title: String(section.title ?? '') || `Analysis Phase ${sectionIndex + 1}`,
+          brief: String(section.brief ?? ''),
+          videoUrl: String(section.videoUrl ?? ''),
+          difficulty: String(section.difficulty ?? ''),
+          duration: String(section.duration ?? ''),
+          tasks,
+        };
+      });
+
+    if (cleaned.length > 0) return cleaned;
+
+    const qTypes = normalizeQuestionTypes(questions, types);
+    const sqlTasks = questions
+      .map((prompt, i) => ({ prompt: prompt.trim(), type: qTypes[i], id: `legacy-task-${i + 1}` }))
+      .filter(task => task.prompt && task.type === 'sql');
+    const analyticsTasks = questions
+      .map((prompt, i) => ({ prompt: prompt.trim(), type: qTypes[i], id: `legacy-task-${i + 1}` }))
+      .filter(task => task.prompt && task.type === 'analytics');
+
+    return [
+      sqlTasks.length ? { id: 'legacy-sql-practice', title: 'SQL Practice', brief: 'Tasks students should answer directly in the SQL Workbench.', tasks: sqlTasks } : null,
+      analyticsTasks.length ? { id: 'legacy-analytics', title: 'Analytics Questions', brief: 'Broader analysis and business interpretation tasks.', tasks: analyticsTasks } : null,
+    ].filter(Boolean) as AnalystSection[];
+  }
+
+  function flattenAnalystQuestions(sections: AnalystSection[]) {
+    const tasks = sections.flatMap(section => section.tasks).filter(task => task.prompt.trim());
+    return {
+      sample_questions: tasks.map(task => task.prompt),
+      sample_question_types: tasks.map(task => task.type === 'sql' ? 'sql' as const : 'analytics' as const),
+    };
+  }
+
+  function compactAnalystSections(sections: AnalystSection[]) {
+    return sections
+      .map(section => ({
+        ...section,
+        title: section.title.trim(),
+        brief: section.brief?.trim() ?? '',
+        videoUrl: section.videoUrl?.trim() ?? '',
+        difficulty: section.difficulty?.trim() ?? '',
+        duration: section.duration?.trim() ?? '',
+        tasks: section.tasks
+          .map(task => ({ ...task, prompt: task.prompt.trim(), description: task.description?.trim() ?? '', type: task.type === 'sql' ? 'sql' as const : 'analytics' as const }))
+          .filter(task => task.prompt),
+      }))
+      .filter(section => section.title || section.tasks.length > 0);
   }
 
   function normalizeDatasetFiles(d: { file_url?: string | null; file_name?: string | null; files?: DatasetFile[] | null }) {
@@ -8838,15 +8982,26 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? 'Generation failed'); return; }
-      setForm(f => ({
-        ...f,
-        title:            data.title            ?? f.title,
-        description:      data.description      ?? f.description,
-        scenario:         data.scenario         ?? f.scenario,
-        category:         data.category         ?? f.category,
-        tags:             data.tags?.length      ? data.tags : f.tags,
-        sample_questions: data.sample_questions?.length ? data.sample_questions : f.sample_questions,
-      }));
+      const generatedSections = normalizeAnalystSections(data.analyst_sections, data.sample_questions, data.sample_question_types);
+      setForm(f => {
+        const flattened = generatedSections.length
+          ? flattenAnalystQuestions(generatedSections)
+          : {
+              sample_questions: data.sample_questions?.length ? data.sample_questions : f.sample_questions,
+              sample_question_types: data.sample_questions?.length ? data.sample_questions.map(() => 'analytics' as const) : f.sample_question_types,
+            };
+        return {
+          ...f,
+          title:            data.title            ?? f.title,
+          description:      data.description      ?? f.description,
+          scenario:         data.scenario         ?? f.scenario,
+          category:         data.category         ?? f.category,
+          tags:             data.tags?.length      ? data.tags : f.tags,
+          analyst_sections: generatedSections.length ? generatedSections : f.analyst_sections,
+          sample_questions: flattened.sample_questions,
+          sample_question_types: flattened.sample_question_types,
+        };
+      });
     } catch {
       setError('AI generation failed. Please try again.');
     } finally {
@@ -8854,7 +9009,7 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     }
   }
 
-  async function save() {
+  async function save(publish?: boolean) {
     if (!form.title.trim()) { setError('Title is required'); return; }
     setSaving(true);
     setError('');
@@ -8864,9 +9019,16 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     const allTags = pendingTag && !form.tags.includes(pendingTag) ? [...form.tags, pendingTag] : form.tags;
     const files = normalizeDatasetFiles(form);
     const primary = files.find(file => file.url === form.file_url) ?? files[0];
+    const analyst_sections = compactAnalystSections(normalizeAnalystSections(form.analyst_sections, form.sample_questions, form.sample_question_types));
+    const flattenedQuestions = flattenAnalystQuestions(analyst_sections);
+    const isPublished = publish === undefined ? form.is_published : publish;
     const payload = {
       ...form,
+      is_published: isPublished,
       tags: allTags,
+      analyst_sections,
+      sample_questions: flattenedQuestions.sample_questions,
+      sample_question_types: flattenedQuestions.sample_question_types,
       files,
       file_url: primary?.url ?? '',
       file_name: primary?.name ?? '',
@@ -8902,13 +9064,15 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
   }
 
   function datasetPayload(d: DatasetRow | typeof BLANK_DATASET) {
+    const analyst_sections = compactAnalystSections(normalizeAnalystSections(d.analyst_sections, d.sample_questions, d.sample_question_types));
+    const flattenedQuestions = flattenAnalystQuestions(analyst_sections);
     return {
       title: d.title, description: d.description, cover_image_url: d.cover_image_url,
       cover_image_alt: d.cover_image_alt, tags: d.tags, category: d.category,
-      sample_questions: d.sample_questions, file_url: d.file_url, file_name: d.file_name,
+      sample_questions: flattenedQuestions.sample_questions, sample_question_types: flattenedQuestions.sample_question_types, analyst_sections, file_url: d.file_url, file_name: d.file_name,
       files: normalizeDatasetFiles(d),
       source: d.source, source_url: (d as any).source_url ?? null, scenario: (d as any).scenario ?? null, disclaimer: d.disclaimer,
-      table_type: d.table_type, is_published: d.is_published,
+      table_type: d.table_type, sql_workbench_enabled: d.sql_workbench_enabled, is_published: d.is_published,
     };
   }
 
@@ -9005,83 +9169,274 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     }
   }
 
-  function addQuestion() {
-    setForm(f => ({ ...f, sample_questions: [...f.sample_questions, ''] }));
+  function syncAnalystSections(sections: AnalystSection[]) {
+    const cleaned = normalizeAnalystSections(sections);
+    const flattened = flattenAnalystQuestions(cleaned);
+    setForm(f => ({
+      ...f,
+      analyst_sections: cleaned,
+      sample_questions: flattened.sample_questions,
+      sample_question_types: flattened.sample_question_types,
+    }));
   }
 
-  function setQuestion(idx: number, val: string) {
-    const qs = [...form.sample_questions];
-    qs[idx] = val;
-    setForm(f => ({ ...f, sample_questions: qs }));
+  function addAnalystSection() {
+    const section: AnalystSection = {
+      id: newAnalystId('section'),
+      title: 'New Analysis Phase',
+      brief: '',
+      tasks: [{ id: newAnalystId('task'), prompt: '', type: 'analytics' }],
+    };
+    setForm(f => ({ ...f, analyst_sections: [...normalizeAnalystSections(f.analyst_sections, f.sample_questions, f.sample_question_types), section] }));
+    setExpandedAnalystSections(prev => ({ ...prev, [section.id!]: true }));
   }
 
-  function removeQuestion(idx: number) {
-    setForm(f => ({ ...f, sample_questions: f.sample_questions.filter((_, i) => i !== idx) }));
+  function updateAnalystSection(sectionId: string, updates: Partial<AnalystSection>) {
+    const sections = normalizeAnalystSections(form.analyst_sections, form.sample_questions, form.sample_question_types)
+      .map(section => section.id === sectionId ? { ...section, ...updates } : section);
+    syncAnalystSections(sections);
+  }
+
+  function removeAnalystSection(sectionId: string) {
+    const sections = normalizeAnalystSections(form.analyst_sections, form.sample_questions, form.sample_question_types)
+      .filter(section => section.id !== sectionId);
+    syncAnalystSections(sections);
+  }
+
+  function addAnalystTask(sectionId: string, type: DatasetQuestionType = 'analytics') {
+    const sections = normalizeAnalystSections(form.analyst_sections, form.sample_questions, form.sample_question_types)
+      .map(section => section.id === sectionId
+        ? { ...section, tasks: [...section.tasks, { id: newAnalystId('task'), prompt: '', type }] }
+        : section);
+    syncAnalystSections(sections);
+  }
+
+  function updateAnalystTask(sectionId: string, taskId: string, updates: Partial<AnalystTask>) {
+    const sections = normalizeAnalystSections(form.analyst_sections, form.sample_questions, form.sample_question_types)
+      .map(section => section.id === sectionId
+        ? { ...section, tasks: section.tasks.map(task => task.id === taskId ? { ...task, ...updates } : task) }
+        : section);
+    syncAnalystSections(sections);
+  }
+
+  function removeAnalystTask(sectionId: string, taskId: string) {
+    const sections = normalizeAnalystSections(form.analyst_sections, form.sample_questions, form.sample_question_types)
+      .map(section => section.id === sectionId
+        ? { ...section, tasks: section.tasks.filter(task => task.id !== taskId) }
+        : section);
+    syncAnalystSections(sections);
   }
 
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '9px 12px', borderRadius: 10, fontSize: 14,
     border: `1px solid ${C.cardBorder}`, background: C.input, color: C.text,
-    outline: 'none', boxSizing: 'border-box',
+    outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
   };
   const font = 'var(--font-sans, Inter, sans-serif)';
 
   if (view === 'editor') {
-    const sectionHead = (icon: React.ReactNode, label: string, accent: string) => (
+    const EDITOR_TABS = [
+      { id: 'overview' as const,   label: 'Overview',        Icon: FileText },
+      { id: 'dataset' as const,    label: 'Dataset',         Icon: Database },
+      { id: 'phases' as const,     label: 'Analysis Phases', Icon: Search },
+      { id: 'disclaimer' as const, label: 'Disclaimer',      Icon: AlertTriangle },
+    ];
+
+    // VE-style: one cohesive C.cta accent for every section head (the `accent` arg is ignored).
+    const sectionHead = (icon: React.ReactNode, label: string, _accent?: string) => (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <div style={{ width: 32, height: 32, borderRadius: 9, background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          {icon}
+        <div style={{ width: 32, height: 32, borderRadius: 9, background: `${C.cta}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {isValidElement(icon) ? cloneElement(icon as React.ReactElement<{ color?: string }>, { color: C.cta }) : icon}
         </div>
         <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{label}</span>
       </div>
     );
 
     const card = (children: React.ReactNode) => (
-      <div style={{ background: C.card, borderRadius: 18, padding: 24 }}>
+      <div style={{ background: C.card, borderRadius: 18, padding: 24, border: 'none' }}>
         {children}
+      </div>
+    );
+
+    const analystSections = normalizeAnalystSections(form.analyst_sections, form.sample_questions, form.sample_question_types);
+
+    const analystSectionEditor = (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {analystSections.length === 0 && (
+          <div style={{ padding: '16px', borderRadius: 12, background: C.page, border: 'none', textAlign: 'center' }}>
+            <p style={{ margin: 0, color: C.faint, fontSize: 13 }}>No analyst sections yet.</p>
+          </div>
+        )}
+        {analystSections.map((section, sectionIndex) => {
+          const sectionId = section.id || `section-${sectionIndex + 1}`;
+          const expanded = expandedAnalystSections[sectionId] !== false;
+          return (
+            <div key={sectionId} style={{ display: 'grid', gridTemplateColumns: '30px minmax(0, 1fr)', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <span style={{ width: 26, height: 26, borderRadius: '50%', background: `${C.cta}1f`, border: 'none', color: C.cta, fontSize: 11, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{sectionIndex + 1}</span>
+                {sectionIndex < analystSections.length - 1 && <span style={{ flex: 1, minHeight: 16, width: 0, borderLeft: `2px dashed ${C.cardBorder}`, margin: '5px 0' }} />}
+              </div>
+              <div style={{ border: 'none', borderRadius: 14, background: C.page, overflow: 'hidden', marginBottom: sectionIndex < analystSections.length - 1 ? 4 : 0 }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: 12, borderBottom: expanded ? `1px solid ${C.cardBorder}` : 'none' }}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedAnalystSections(prev => ({ ...prev, [sectionId]: !expanded }))}
+                    style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: C.input, color: C.faint, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </button>
+                  <input
+                    value={section.title}
+                    onChange={e => updateAnalystSection(sectionId, { title: e.target.value })}
+                    placeholder="e.g. Channel And Audience Breakdown"
+                    style={{ ...inputStyle, background: C.card, fontWeight: 800, fontSize: 14, flex: 1 }}
+                  />
+                  <button onClick={() => removeAnalystSection(sectionId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                {expanded && (
+                  <div style={{ padding: 12 }}>
+                    <div style={{ marginBottom: 10 }}>
+                      <RichTextEditor
+                        value={section.brief ?? ''}
+                        onChange={html => updateAnalystSection(sectionId, { brief: html })}
+                        placeholder="Briefly describe what this phase asks the learner to investigate."
+                        bgOverride={C.card}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <Video size={15} style={{ color: C.faint, flexShrink: 0 }} />
+                      <input
+                        value={section.videoUrl ?? ''}
+                        onChange={e => updateAnalystSection(sectionId, { videoUrl: e.target.value })}
+                        placeholder="Embed link (optional) -- Canva, YouTube, Vimeo or Bunny"
+                        style={{ ...inputStyle, background: C.card, fontSize: 13 }}
+                      />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                      <select
+                        value={section.difficulty ?? ''}
+                        onChange={e => updateAnalystSection(sectionId, { difficulty: e.target.value })}
+                        style={{ ...inputStyle, background: C.card, fontSize: 13, cursor: 'pointer' }}
+                      >
+                        <option value="">Difficulty: Auto</option>
+                        <option value="Beginner">Beginner</option>
+                        <option value="Intermediate">Intermediate</option>
+                        <option value="Advanced">Advanced</option>
+                      </select>
+                      <input
+                        value={section.duration ?? ''}
+                        onChange={e => updateAnalystSection(sectionId, { duration: e.target.value })}
+                        placeholder="Duration: Auto (e.g. 30-60 mins)"
+                        style={{ ...inputStyle, background: C.card, fontSize: 13 }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {section.tasks.map((task, taskIndex) => {
+                        const taskId = task.id || `task-${sectionIndex + 1}-${taskIndex + 1}`;
+                        return (
+                          <div key={taskId} style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr) 112px 24px', gap: 8, alignItems: 'start' }}>
+                            <span style={{ marginTop: 8, width: 22, height: 22, borderRadius: '50%', background: task.type === 'sql' ? 'rgba(8,145,178,0.14)' : `${C.cta}1f`, color: task.type === 'sql' ? '#0891b2' : C.cta, fontSize: 11, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{taskIndex + 1}</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+                              <input
+                                value={task.prompt}
+                                onChange={e => updateAnalystTask(sectionId, taskId, { prompt: e.target.value })}
+                                placeholder={task.type === 'sql' ? 'Task description, e.g. Which channel has the highest conversion rate?' : 'Task description, e.g. What targeting recommendation should the team make?'}
+                                style={{ ...inputStyle, background: C.card, fontSize: 13, fontWeight: 600 }}
+                              />
+                              <textarea
+                                value={task.description ?? ''}
+                                onChange={e => updateAnalystTask(sectionId, taskId, { description: e.target.value })}
+                                rows={2}
+                                placeholder={task.type === 'sql' ? 'Instructions for the student (optional), e.g. Use GROUP BY channel and ORDER BY the conversion rate.' : 'Instructions for the student (optional), e.g. Compare the two campaigns and justify your recommendation.'}
+                                style={{ ...inputStyle, background: C.card, fontSize: 12.5, color: C.muted, resize: 'vertical' }}
+                              />
+                            </div>
+                            <select
+                              value={task.type ?? 'analytics'}
+                              onChange={e => updateAnalystTask(sectionId, taskId, { type: e.target.value as DatasetQuestionType })}
+                              style={{ ...inputStyle, background: C.card, fontSize: 12, fontWeight: 600, color: C.muted, padding: '8px 9px' }}
+                            >
+                              <option value="analytics">Analytics</option>
+                              <option value="sql">SQL</option>
+                            </select>
+                            <button onClick={() => removeAnalystTask(sectionId, taskId)} style={{ marginTop: 6, background: 'none', border: 'none', cursor: 'pointer', color: C.faint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <X size={14} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                      <button onClick={() => addAnalystTask(sectionId, 'analytics')} style={{ fontSize: 12, color: C.muted, background: C.input, border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600, padding: '7px 10px' }}>
+                        <Plus size={13} /> Analytics Task
+                      </button>
+                      <button onClick={() => addAnalystTask(sectionId, 'sql')} style={{ fontSize: 12, color: C.muted, background: C.input, border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600, padding: '7px 10px' }}>
+                        <Plus size={13} /> SQL Task
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        <button onClick={addAnalystSection} style={{ alignSelf: 'flex-start', fontSize: 13, color: C.muted, background: C.input, border: 'none', borderRadius: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, padding: '8px 12px' }}>
+          <Plus size={14} /> Add Analysis Phase
+        </button>
       </div>
     );
 
     return (
       <div style={{ fontFamily: font }}>
-        {/* Top bar */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-          <div>
-            <h2 style={{ fontWeight: 800, fontSize: 23, color: C.text, margin: 0 }}>{editing ? 'Edit Dataset' : 'New Dataset'}</h2>
-            <p style={{ fontSize: 13, color: C.faint, margin: '2px 0 0' }}>Fill in the details below to {editing ? 'update this' : 'publish a new'} dataset.</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button onClick={() => setView('list')} style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 10, cursor: 'pointer', color: C.muted, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontWeight: 600 }}>
-              <ArrowLeft size={14} /> Back
-            </button>
+        {/* Sticky VE-style toolbar */}
+        <div style={{ position: 'sticky', top: 0, zIndex: 20, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 4px', marginBottom: 24, background: C.page }}>
+          <button onClick={() => setView('list')} title="Back to datasets"
+            style={{ width: 34, height: 34, borderRadius: 9, border: 'none', background: C.pill, color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <ArrowLeft size={16} />
+          </button>
+          <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{editing ? 'Edit Dataset' : 'Create Dataset'}</span>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
               onClick={generateMetadata}
               disabled={generating || !form.file_url}
               title={!form.file_url ? 'Add a file URL or upload a file first' : 'Auto-fill title, description, tags, category and sample questions using AI'}
-              style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: form.file_url ? '#f59e0b' : C.input, color: form.file_url ? 'white' : C.faint, fontWeight: 700, fontSize: 14, cursor: form.file_url && !generating ? 'pointer' : 'default', opacity: generating ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 7 }}>
-              {generating ? <><Loader2 size={14} className="animate-spin" /> Generating...</> : <><Sparkles size={14} /> Generate with AI</>}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', borderRadius: 12, border: 'none', background: C.card, color: form.file_url ? C.text : C.faint, fontWeight: 600, fontSize: 13, cursor: form.file_url && !generating ? 'pointer' : 'default', opacity: generating ? 0.7 : 1 }}>
+              {generating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {generating ? 'Generating...' : 'Generate with AI'}
             </button>
-            {/* Publish toggle inline */}
-            <button onClick={() => setForm(f => ({ ...f, is_published: !f.is_published }))}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: form.is_published ? 'rgba(22,163,74,0.1)' : C.card, cursor: 'pointer', fontSize: 14, fontWeight: 700, color: form.is_published ? '#16a34a' : C.muted }}>
-              <div style={{ width: 36, height: 20, borderRadius: 10, background: form.is_published ? '#16a34a' : C.cardBorder, position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
-                <span style={{ position: 'absolute', top: 2, left: form.is_published ? 18 : 2, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
-              </div>
-              {form.is_published ? 'Published' : 'Draft'}
+            {editing && (
+              <a href="/data-playground" target="_blank" rel="noreferrer" title="Open the Data Playground"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', borderRadius: 12, border: 'none', background: C.card, color: C.muted, fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+                <Eye size={14} /> Preview
+              </a>
+            )}
+            <button onClick={() => save(false)} disabled={saving}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', borderRadius: 12, border: 'none', background: C.card, color: C.muted, fontWeight: 600, fontSize: 13, cursor: saving ? 'default' : 'pointer' }}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save Draft
             </button>
-            <button onClick={save} disabled={saving}
-              style={{ padding: '9px 22px', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontWeight: 700, fontSize: 15, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 7 }}>
-              {saving && <Loader2 size={14} className="animate-spin" />}
-              {saving ? 'Saving...' : editing ? 'Save Changes' : 'Create Dataset'}
+            <button onClick={() => save(true)} disabled={saving}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 18px', borderRadius: 12, border: 'none', background: C.cta, color: C.ctaText, fontWeight: 700, fontSize: 13, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+              {editing ? 'Update' : 'Publish'}
             </button>
           </div>
         </div>
 
         {error && <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', fontSize: 14, color: '#ef4444', fontWeight: 600 }}>{error}</div>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 20, alignItems: 'start' }}>
-          {/* LEFT COLUMN */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* Section tabs */}
+        <div className="hide-scrollbar" style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: `1px solid ${C.divider}`, overflowX: 'auto' }}>
+          {EDITOR_TABS.map(t => (
+            <button key={t.id} onClick={() => setEditorTab(t.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 15px', marginBottom: -1, border: 'none', borderBottom: `2px solid ${editorTab === t.id ? C.cta : 'transparent'}`, background: 'transparent', color: editorTab === t.id ? C.text : C.muted, fontWeight: editorTab === t.id ? 700 : 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: font }}>
+              <t.Icon size={15} /> {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ maxWidth: 1100, display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {editorTab === 'overview' && (<>
 
             {/* Basics card */}
             {card(<>
@@ -9168,24 +9523,22 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
               </div>
             </>)}
 
-            {/* Scenario card */}
+            {/* Cover image card */}
             {card(<>
-              {sectionHead(<FileText size={16} color="white" />, 'Scenario / Background', '#7c3aed')}
-              <div>
-                <p style={{ fontSize: 12, color: C.faint, marginTop: 0, marginBottom: 10 }}>
-                  Describe the real-world context or story behind this dataset. Supports rich text, headings, lists, and links.
-                </p>
-                <RichTextEditor
-                  value={form.scenario ?? ''}
-                  onChange={v => setForm(f => ({ ...f, scenario: v }))}
-                  placeholder="e.g. A local health clinic collected patient visit records over 5 years to track disease trends..."
-                  bgOverride={C.input}
-                />
-              </div>
+              {sectionHead(<Upload size={16} color="white" />, 'Cover Image', '#10a37f')}
+              <PexelsImagePicker
+                value={form.cover_image_url}
+                altValue={form.cover_image_alt}
+                onChange={(url, alt) => setForm(f => ({ ...f, cover_image_url: url, cover_image_alt: alt }))}
+                onClear={() => setForm(f => ({ ...f, cover_image_url: null, cover_image_alt: null }))}
+                C={C}
+                token=""
+              />
             </>)}
+          </>)}
 
-            {/* File card */}
-            {card(<>
+          {/* File card */}
+          {editorTab === 'dataset' && card(<>
               {sectionHead(<Download size={16} color="white" />, 'Dataset File', '#0891b2')}
 
               {/* Mode toggle */}
@@ -9294,40 +9647,38 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                 <div style={{ display: 'flex', gap: 8 }}>
                   {(['single', 'multiple'] as const).map(opt => (
                     <button key={opt} onClick={() => setForm(f => ({ ...f, table_type: f.table_type === opt ? null : opt }))}
-                      style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: `1px solid ${form.table_type === opt ? C.cta : C.cardBorder}`, background: form.table_type === opt ? `${C.cta}15` : C.input, color: form.table_type === opt ? C.cta : C.muted, fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s' }}>
+                      style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', background: form.table_type === opt ? `${C.cta}1f` : C.input, color: form.table_type === opt ? C.cta : C.muted, fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s' }}>
                       {opt === 'single' ? 'Single Table' : 'Multiple Tables'}
                     </button>
                   ))}
                 </div>
                 <p style={{ margin: '6px 0 0', fontSize: 12, color: C.faint }}>Single = one CSV/sheet. Multiple = ZIP or workbook with several related tables.</p>
               </div>
-            </>)}
 
-
-            {/* Sample Questions card */}
-            {card(<>
-              {sectionHead(<Search size={16} color="white" />, 'Sample Questions', '#d97706')}
-              {form.sample_questions.length === 0 && (
-                <div style={{ padding: '16px', borderRadius: 10, background: C.page, textAlign: 'center', marginBottom: 12 }}>
-                  <p style={{ fontSize: 13, color: C.faint, margin: 0 }}>No questions yet. Help students know what to explore with this dataset.</p>
-                </div>
-              )}
-              {form.sample_questions.map((q, idx) => (
-                <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-                  <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: 'rgba(217,119,6,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#d97706' }}>{idx + 1}</span>
-                  <input value={q} onChange={e => setQuestion(idx, e.target.value)} placeholder={`e.g. Which region had the highest sales?`} style={{ ...inputStyle, flex: 1, fontSize: 14 }} />
-                  <button onClick={() => removeQuestion(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint, flexShrink: 0 }}>
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-              <button onClick={addQuestion} style={{ marginTop: 4, fontSize: 14, color: '#d97706', background: 'rgba(217,119,6,0.08)', border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700, padding: '7px 12px' }}>
-                <Plus size={14} /> Add Question
+              <button onClick={() => setForm(f => ({ ...f, sql_workbench_enabled: !f.sql_workbench_enabled }))}
+                style={{ marginTop: 16, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px', borderRadius: 12, border: 'none', background: form.sql_workbench_enabled ? 'rgba(8,145,178,0.08)' : C.input, cursor: 'pointer', textAlign: 'left' }}>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 13, fontWeight: 800, color: C.text }}>SQL Workbench</span>
+                  <span style={{ display: 'block', marginTop: 3, fontSize: 12, color: C.faint, lineHeight: 1.45 }}>Show browser SQL practice for CSV, Excel, or ZIP table datasets.</span>
+                </span>
+                <span style={{ width: 38, height: 22, borderRadius: 999, background: form.sql_workbench_enabled ? '#0891b2' : C.cardBorder, position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                  <span style={{ position: 'absolute', top: 3, left: form.sql_workbench_enabled ? 19 : 3, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
+                </span>
               </button>
             </>)}
 
+
+            {/* Analyst task sections card */}
+            {editorTab === 'phases' && card(<>
+              {sectionHead(<Search size={16} color="white" />, 'Analyst Task Brief', '#d97706')}
+              <p style={{ fontSize: 12, color: C.faint, margin: '-6px 0 14px', lineHeight: 1.45 }}>
+                Create dataset-specific analysis phases. Mark only tasks that can be answered with SELECT/WITH queries as SQL.
+              </p>
+              {analystSectionEditor}
+            </>)}
+
             {/* Disclaimer card */}
-            {card(<>
+            {editorTab === 'disclaimer' && card(<>
               {sectionHead(<AlertTriangle size={16} color="white" />, 'Disclaimer', '#7c3aed')}
               <textarea
                 value={form.disclaimer ?? ''}
@@ -9337,22 +9688,6 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                 style={{ ...inputStyle, resize: 'vertical' }}
               />
             </>)}
-          </div>
-
-          {/* RIGHT COLUMN - Cover image */}
-          <div style={{ position: 'sticky', top: 20 }}>
-            {card(<>
-              {sectionHead(<Upload size={16} color="white" />, 'Cover Image', '#10a37f')}
-              <PexelsImagePicker
-                value={form.cover_image_url}
-                altValue={form.cover_image_alt}
-                onChange={(url, alt) => setForm(f => ({ ...f, cover_image_url: url, cover_image_alt: alt }))}
-                onClear={() => setForm(f => ({ ...f, cover_image_url: null, cover_image_alt: null }))}
-                C={C}
-                token=""
-              />
-            </>)}
-          </div>
         </div>
       </div>
     );
@@ -9427,6 +9762,13 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                 }}>
                   {d.is_published ? 'Published' : 'Draft'}
                 </button>
+                <span title={d.sql_workbench_enabled ? 'SQL Workbench enabled' : 'SQL Workbench disabled'} style={{
+                  padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                  background: d.sql_workbench_enabled ? 'rgba(8,145,178,0.12)' : C.pill,
+                  color: d.sql_workbench_enabled ? '#0891b2' : C.faint,
+                }}>
+                  SQL {d.sql_workbench_enabled ? 'On' : 'Off'}
+                </span>
                 <button onClick={() => exportDataset(d)} title="Export" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: 4 }}>
                   <Download size={15} />
                 </button>

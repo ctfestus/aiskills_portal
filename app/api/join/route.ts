@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { isScheduledSessionDate, eventLocalDate } from '@/lib/event-sessions';
 
 function adminClient() {
   return createClient(
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
   // Step 2: get the meeting link for the event
   const { data: event, error: eventError } = await supabase
     .from('events')
-    .select('meeting_link')
+    .select('meeting_link, event_date, recurrence, recurrence_end_date, recurrence_days, timezone')
     .eq('id', reg.event_id)
     .maybeSingle();
 
@@ -64,18 +65,22 @@ export async function GET(req: NextRequest) {
     return new NextResponse('Invalid meeting URL', { status: 400 });
   }
 
-  // Record attendance; upsert so repeated clicks on the same day update joined_at
-  const today = new Date().toISOString().slice(0, 10);
-  const { error: attendanceError } = await supabase
-    .from('live_attendance')
-    .upsert(
-      { event_id: reg.event_id, student_id: reg.student_id, session_date: today, joined_at: new Date().toISOString() },
-      { onConflict: 'event_id,student_id,session_date' }
-    );
+  // Record attendance only when the click falls on an actual scheduled session
+  // date. Use the event's timezone -- a click at the correct local time near UTC
+  // midnight must not be stamped (and gated) against the wrong calendar day.
+  const today = eventLocalDate(event?.timezone);
+  if (isScheduledSessionDate(event, today)) {
+    const { error: attendanceError } = await supabase
+      .from('live_attendance')
+      .upsert(
+        { event_id: reg.event_id, student_id: reg.student_id, session_date: today, joined_at: new Date().toISOString() },
+        { onConflict: 'event_id,student_id,session_date' }
+      );
 
-  if (attendanceError) {
-    console.error('[join] attendance upsert error:', attendanceError.message);
-    // Non-fatal: still redirect even if attendance recording fails
+    if (attendanceError) {
+      console.error('[join] attendance upsert error:', attendanceError.message);
+      // Non-fatal: still redirect even if attendance recording fails
+    }
   }
 
   return NextResponse.redirect(safeUrl);

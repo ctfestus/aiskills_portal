@@ -7,6 +7,11 @@ export interface SQLTableConfig {
   seedSql?: string;
 }
 
+export interface SQLRowsTableConfig {
+  tableName: string;
+  rows: unknown[][];
+}
+
 export interface SQLResult {
   columns: string[];
   rows: unknown[][];
@@ -298,6 +303,36 @@ export async function initSQLRuntime(tables: SQLTableConfig[]): Promise<SQLRunti
   };
 }
 
+export async function initSQLRuntimeFromRows(tables: SQLRowsTableConfig[]): Promise<SQLRuntime> {
+  const duckdb = await import('@duckdb/duckdb-wasm');
+  const bundles = duckdb.getJsDelivrBundles();
+  const bundle = await duckdb.selectBundle(bundles);
+  const workerUrl = URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' }));
+  const worker = new Worker(workerUrl);
+  const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
+  await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+  URL.revokeObjectURL(workerUrl);
+
+  const setupConn = await db.connect();
+  for (const table of tables) {
+    await loadRows(setupConn, normalizeTableName(table.tableName), table.rows);
+  }
+  const loadedTables = await discoverSQLTables(setupConn);
+  await setupConn.close().catch(() => {});
+
+  const conn = await db.connect();
+
+  return {
+    db,
+    conn,
+    tables: loadedTables,
+    close: async () => {
+      await conn.close().catch(() => {});
+      await db.terminate().catch(() => {});
+    },
+  };
+}
+
 export async function loadSQLTables(conn: any, tables: SQLTableConfig[]): Promise<SQLRuntime['tables']> {
   for (const table of tables) {
     const tableName = normalizeTableName(table.tableName);
@@ -330,6 +365,10 @@ export async function loadSQLTables(conn: any, tables: SQLTableConfig[]): Promis
     }
   }
 
+  return discoverSQLTables(conn);
+}
+
+async function discoverSQLTables(conn: any): Promise<SQLRuntime['tables']> {
   // Discover every table that actually exists in the DB (catches all tables created by seedSql)
   const allTables = await safeMetadataQuery(
     conn,

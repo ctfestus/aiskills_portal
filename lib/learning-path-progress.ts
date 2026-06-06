@@ -82,7 +82,7 @@ export async function updateLearningPathProgress(
                 await resend.emails.send({
                   from: FROM,
                   to:   studentRow.email,
-                  subject: `You completed "${completedItem.title}" -- next up in ${path.title}`,
+                  subject: `You completed "${completedItem.title}": next up in ${path.title}`,
                   html: courseCompletedNextUpEmail({
                     name:            studentRow.full_name ?? 'there',
                     pathTitle:       path.title,

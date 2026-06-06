@@ -90,12 +90,50 @@ async function getUser(req: NextRequest) {
 // -- GET /api/guided-project-progress?veId= ---
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const veId      = searchParams.get('veId') ?? searchParams.get('formId'); // formId kept for backward compat
-  const studentId = searchParams.get('studentId');
+  const veId         = searchParams.get('veId') ?? searchParams.get('formId'); // formId kept for backward compat
+  const studentId    = searchParams.get('studentId');
+  const groupId      = searchParams.get('groupId');
+  const assignmentId = searchParams.get('assignmentId');
 
   if (!veId) return NextResponse.json({ error: 'veId required' }, { status: 400 });
 
   const supabase = adminClient();
+
+  // Group member reviewing a graded group submission: return the submitter's attempt
+  // (the actual graded work lives in the submitter's guided_project_attempts row).
+  if (groupId && assignmentId) {
+    const user = await getUser(req);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Requester must be a member of the group.
+    const { data: membership } = await supabase
+      .from('group_members')
+      .select('student_id')
+      .eq('group_id', groupId)
+      .eq('student_id', user.id)
+      .maybeSingle();
+    if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    // Review is only available once the group submission has been graded.
+    const { data: submission } = await supabase
+      .from('assignment_submissions')
+      .select('submitted_by, status')
+      .eq('assignment_id', assignmentId)
+      .eq('group_id', groupId)
+      .maybeSingle();
+    if (!submission || submission.status !== 'graded' || !submission.submitted_by) {
+      return NextResponse.json({ error: 'Not available' }, { status: 403 });
+    }
+
+    const { data: attempt } = await supabase
+      .from('guided_project_attempts')
+      .select('*')
+      .eq('ve_id', veId)
+      .eq('student_id', submission.submitted_by)
+      .maybeSingle();
+
+    return NextResponse.json({ attempt: attempt ?? null });
+  }
 
   // Creator/admin view -- return all attempts for a VE
   if (!studentId) {
