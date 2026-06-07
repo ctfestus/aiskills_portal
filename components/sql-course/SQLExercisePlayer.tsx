@@ -183,8 +183,8 @@ function DataGrid({
   onCellOpen: (title: string, value: unknown) => void;
 }) {
   const divider = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)';
-  const headerBg = isDark ? '#141416' : '#f8fafc';
-  const rowBg = isDark ? '#0f0f10' : '#ffffff';
+  const headerBg = isDark ? '#1b1b1f' : '#f8fafc';
+  const rowBg = isDark ? '#141416' : '#ffffff';
   const numColor = isDark ? '#2e3355' : '#cbd5e1';
   const visibleRows = result?.rows.slice(0, 100) ?? [];
 
@@ -307,7 +307,7 @@ function CodeMirrorEditor({
             '.cm-line': { padding: '0 20px', lineHeight: '1.75' },
             '.cm-scroller': { fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace' },
             '.cm-gutters': {
-              borderRight: `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+              borderRight: 'none',
               background: bg,
               color: isDark ? '#262a44' : '#c8d0e4',
               fontSize: '11px',
@@ -432,7 +432,7 @@ export default function SQLExercisePlayer({
   const [sampleLoading, setSampleLoading] = useState('');
   const [leftOpen, setLeftOpen]       = useState(true);
   const [leftWidth, setLeftWidth]     = useState(420);
-  const [editorPct, setEditorPct]     = useState(55);
+  const [editorPct, setEditorPct]     = useState(50);
   const [modal, setModal]             = useState<DetailModal | null>(null);
   const [feedbackDismissed, setFeedbackDismissed] = useState(false);
   const [isMobile, setIsMobile]       = useState(false);
@@ -497,15 +497,17 @@ export default function SQLExercisePlayer({
   }
 
   // ---- Tokens ----
-  const leftBg    = isDark ? '#141416' : '#ffffff';
-  const leftHdr   = isDark ? '#111113' : '#f8fafc';
-  const editorBg  = isDark ? '#0f0f10' : '#ffffff';
-  const resultsBg = isDark ? '#0c0c0d' : '#f8fafc';
-  const stripBg   = isDark ? '#0d0d0e' : '#f8fafc';
-  const border    = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.07)';
+  // "Sections, not borders": panels are opaque rounded cards floating on the canvas
+  // seam; toolbars are tonal bands (translucent overlay) rather than hairline-divided strips.
+  const canvas    = isDark ? '#0f0f10' : '#F2F5FA';                                  // matches the main course page background
+  const leftBg    = isDark ? '#141416' : '#ffffff';                                  // unified card surface (same as other lesson cards)
+  const editorBg  = isDark ? '#141416' : '#ffffff';
+  const resultsBg = isDark ? '#141416' : '#ffffff';
+  const headerBg  = isDark ? '#0f0f10' : '#F2F5FA';                                  // inset header block -- matches the main page background
   const text      = isDark ? '#e4e4e7' : '#1a1d2e';
-  const muted     = isDark ? '#52525b' : '#64748b';
-  const subtle    = isDark ? '#1c1c1e' : '#f1f5f9';
+  const muted     = isDark ? '#6b7280' : '#94a3b8';
+  const subtle    = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)';       // soft control fill
+  const border    = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)';       // faint divider for the in-lesson <hr>/popover only
 
   const tables     = useMemo(() => runtime?.tables ?? [], [runtime?.tables]);
   const editorSchema = useMemo<SQLNamespace>(() => {
@@ -738,75 +740,67 @@ export default function SQLExercisePlayer({
           border: 'none',
           borderRadius: 0,
           color: text,
-          background: leftBg,
+          background: canvas,
         }}
       >
 
         {/* ══════════ MOBILE TAB BAR ══════════ */}
         {isMobile && (
-          <div
-            className="flex-shrink-0 flex items-stretch border-b"
-            style={{ height: 44, background: stripBg, borderColor: border }}
-          >
+          <div className="flex-shrink-0 flex items-stretch gap-1.5 px-2 pt-2">
             {(lesson?.title || lesson?.body || lesson?.videoUrl || lesson?.imageUrl || question.question) && (
               <button
                 type="button"
                 onClick={() => setMobileTab('lesson')}
-                className="flex-1 relative text-[12px] font-semibold transition-colors"
-                style={{ color: mobileTab === 'lesson' ? text : muted }}
+                className="flex-1 h-9 rounded-lg text-[12px] font-semibold transition-colors"
+                style={{ background: mobileTab === 'lesson' ? leftBg : 'transparent', color: mobileTab === 'lesson' ? text : muted }}
               >
                 Lesson
-                {mobileTab === 'lesson' && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full" style={{ background: accentColor }} />}
               </button>
             )}
             <button
               type="button"
               onClick={() => setMobileTab('query')}
-              className="flex-1 relative text-[12px] font-semibold transition-colors"
-              style={{ color: mobileTab === 'query' ? text : muted }}
+              className="flex-1 h-9 rounded-lg text-[12px] font-semibold transition-colors"
+              style={{ background: mobileTab === 'query' ? leftBg : 'transparent', color: mobileTab === 'query' ? text : muted }}
             >
               Query
-              {mobileTab === 'query' && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full" style={{ background: accentColor }} />}
             </button>
             <button
               type="button"
               onClick={() => setMobileTab('result')}
-              className="flex-1 relative text-[12px] font-semibold transition-colors"
-              style={{ color: mobileTab === 'result' ? text : muted }}
+              className="flex-1 h-9 rounded-lg text-[12px] font-semibold transition-colors"
+              style={{ background: mobileTab === 'result' ? leftBg : 'transparent', color: mobileTab === 'result' ? text : muted }}
             >
               Results
-              {mobileTab === 'result' && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full" style={{ background: accentColor }} />}
             </button>
           </div>
         )}
 
         {/* ══════════ CONTENT ROW ══════════ */}
-        <div className="flex-1 min-h-0 flex overflow-hidden">
+        <div className="flex-1 min-h-0 flex overflow-hidden p-2 sm:p-3">
 
         {/* ══════════ LEFT PANEL ══════════ */}
         {(!isMobile ? leftOpen : mobileTab === 'lesson') && (
           <div
-            className="flex flex-col"
+            className="flex flex-col rounded-2xl overflow-hidden"
             style={{
               width: isMobile ? '100%' : leftWidth,
               flexShrink: 0,
               background: leftBg,
-              borderRight: isMobile ? 'none' : `1px solid ${border}`,
             }}
           >
-            {/* Panel header with tabs */}
+            {/* Panel header with pill tabs */}
             <div
-              className="flex-shrink-0 flex items-stretch border-b"
-              style={{ height: 44, background: leftHdr, borderColor: border }}
+              className="flex-shrink-0 flex items-center gap-1 px-3 m-2 rounded-xl"
+              style={{ height: 48, background: headerBg }}
             >
               <button
                 type="button"
                 onClick={() => setLeftTab('lesson')}
-                className="relative px-4 text-[12px] font-bold transition-colors"
-                style={{ color: leftTab === 'lesson' ? text : muted }}
+                className="h-8 px-3 rounded-lg text-[12px] font-bold transition-colors"
+                style={{ background: leftTab === 'lesson' ? subtle : 'transparent', color: leftTab === 'lesson' ? text : muted }}
               >
                 Lesson
-                {leftTab === 'lesson' && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full" style={{ background: accentColor }} />}
               </button>
               {hasHints && (
                 <button
@@ -815,11 +809,10 @@ export default function SQLExercisePlayer({
                     setLeftTab('hint');
                     if (!hintShown) { setHintShown(true); onHintUsed(); }
                   }}
-                  className="relative px-4 text-[12px] font-bold transition-colors"
-                  style={{ color: leftTab === 'hint' ? text : muted }}
+                  className="h-8 px-3 rounded-lg text-[12px] font-bold transition-colors"
+                  style={{ background: leftTab === 'hint' ? subtle : 'transparent', color: leftTab === 'hint' ? text : muted }}
                 >
                   💡 Hint{hintPenalty && !hintShown ? <span className="ml-1 text-[10px] font-semibold" style={{ color: isDark ? '#fca5a5' : '#dc2626' }}>-{hintPenalty} pts</span> : null}
-                  {leftTab === 'hint' && <span className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full" style={{ background: accentColor }} />}
                 </button>
               )}
             </div>
@@ -833,7 +826,7 @@ export default function SQLExercisePlayer({
                 </h2>
               )}
               {lesson?.videoUrl && safeEmbedUrl(lesson.videoUrl) && (
-                <div className="mb-4 rounded-lg overflow-hidden" style={{ aspectRatio: '16/9', border: `1px solid ${border}` }}>
+                <div className="mb-4 rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
                   <iframe
                     src={safeEmbedUrl(lesson.videoUrl)!}
                     className="w-full h-full"
@@ -843,7 +836,7 @@ export default function SQLExercisePlayer({
                 </div>
               )}
               {lesson?.imageUrl && (
-                <div className="mb-4 rounded-lg overflow-hidden" style={{ border: `1px solid ${border}` }}>
+                <div className="mb-4 rounded-xl overflow-hidden">
                   <img src={lesson.imageUrl} alt="" className="w-full object-cover" />
                 </div>
               )}
@@ -904,15 +897,15 @@ export default function SQLExercisePlayer({
           </div>
         )}
 
-        {/* ══════════ RESIZE HANDLE (desktop only) ══════════ */}
+        {/* ══════════ RESIZE HANDLE (desktop only) -- canvas seam between cards ══════════ */}
         {!isMobile && leftOpen && (
           <div
             className="flex-shrink-0 group relative"
-            style={{ width: 5, cursor: 'col-resize', background: 'transparent', borderRight: `1px solid ${border}` }}
+            style={{ width: 8, cursor: 'col-resize', background: 'transparent' }}
             onMouseDown={onResizeStart}
           >
             <div
-              className="absolute inset-y-0 left-0 w-full opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute inset-y-2 left-1/2 -translate-x-1/2 w-[3px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
               style={{ background: accentColor }}
             />
           </div>
@@ -925,19 +918,19 @@ export default function SQLExercisePlayer({
           {/* ---- EDITOR SECTION ---- */}
           {(!isMobile || mobileTab === 'query') && (
           <div
-            className="flex flex-col"
+            className="flex flex-col rounded-2xl overflow-hidden"
             style={{ flex: isMobile ? 1 : `0 0 ${editorPct}%`, minHeight: 0, background: editorBg }}
           >
             {/* Editor header */}
             <div
-              className="flex-shrink-0 flex items-center gap-3 px-4 border-b"
-              style={{ height: 44, background: stripBg, borderColor: border }}
+              className="flex-shrink-0 flex items-center gap-3 px-3 m-2 rounded-xl"
+              style={{ height: 48, background: headerBg }}
             >
               {!isMobile && (
                 <button
                   type="button"
                   onClick={() => setLeftOpen(o => !o)}
-                  className="w-7 h-7 grid place-items-center rounded-md transition-opacity hover:opacity-70 flex-shrink-0"
+                  className="w-8 h-8 grid place-items-center rounded-lg transition-opacity hover:opacity-70 flex-shrink-0"
                   style={{ background: subtle, color: muted }}
                   title={leftOpen ? 'Collapse lesson' : 'Expand lesson'}
                 >
@@ -951,8 +944,8 @@ export default function SQLExercisePlayer({
               <button
                 type="button"
                 onClick={() => { setQuery(starterCode); setFeedback(null); setError(''); setResetKey(k => k + 1); }}
-                className="w-7 h-7 grid place-items-center rounded-full border transition-opacity hover:opacity-70"
-                style={{ borderColor: border, background: editorBg, color: muted }}
+                className="w-8 h-8 grid place-items-center rounded-lg transition-opacity hover:opacity-70"
+                style={{ background: subtle, color: muted }}
                 title="Reset"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -962,8 +955,8 @@ export default function SQLExercisePlayer({
             {/* Solution notice */}
             {solutionRevealed && !completed && (
               <div
-                className="flex-shrink-0 flex items-center gap-2.5 px-4 py-2 border-b"
-                style={{ background: isDark ? 'rgba(52,211,153,0.08)' : 'rgba(236,253,245,0.95)', borderColor: 'rgba(52,211,153,0.20)' }}
+                className="flex-shrink-0 flex items-center gap-2.5 px-4 py-2"
+                style={{ background: isDark ? 'rgba(52,211,153,0.10)' : 'rgba(52,211,153,0.10)' }}
               >
                 <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: '#34d399' }}>Solution</span>
                 <span className="text-[12px]" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
@@ -986,18 +979,18 @@ export default function SQLExercisePlayer({
               />
             </div>
 
-            {/* Action bar */}
+            {/* Action bar -- stacks full-width on mobile, right-aligned row on desktop */}
             <div
-              className="flex-shrink-0 flex items-center justify-end gap-2.5 px-4 border-t"
-              style={{ height: 56, background: stripBg, borderColor: border }}
+              className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-2.5 px-4 py-3"
+              style={{ background: 'transparent' }}
             >
               {canRevealSolution && !solutionRevealed && (
                 <button
                   type="button"
                   onClick={() => { revealSolution(); setFeedbackDismissed(true); }}
                   disabled={solutionLoading}
-                  className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg text-[13px] font-semibold border transition-opacity disabled:opacity-50 hover:opacity-80"
-                  style={{ borderColor: 'rgba(52,211,153,0.35)', color: '#34d399', background: isDark ? 'rgba(52,211,153,0.08)' : 'rgba(236,253,245,0.9)' }}
+                  className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto h-9 px-4 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-50 hover:opacity-80"
+                  style={{ color: '#34d399', background: 'rgba(52,211,153,0.13)' }}
                 >
                   {solutionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                   View Solution
@@ -1008,8 +1001,8 @@ export default function SQLExercisePlayer({
                 type="button"
                 onClick={runQuery}
                 disabled={!runtime || busy}
-                className="inline-flex items-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold border transition-opacity disabled:opacity-40"
-                style={{ borderColor: border, background: editorBg, color: text }}
+                className="inline-flex items-center justify-center gap-2 w-full sm:w-auto h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40 hover:opacity-80"
+                style={{ background: subtle, color: text }}
               >
                 {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
                 Run Code
@@ -1019,7 +1012,7 @@ export default function SQLExercisePlayer({
                   type="button"
                   onClick={checkAnswer}
                   disabled={!runtime || busy}
-                  className="inline-flex items-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40"
+                  className="inline-flex items-center justify-center gap-2 w-full sm:w-auto h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40"
                   style={{ background: accentColor, color: '#052033' }}
                 >
                   {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
@@ -1031,7 +1024,7 @@ export default function SQLExercisePlayer({
                   type="button"
                   onClick={continueIncorrect}
                   disabled={busy}
-                  className="inline-flex items-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40"
+                  className="inline-flex items-center justify-center gap-2 w-full sm:w-auto h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40"
                   style={{ background: accentColor, color: '#052033' }}
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -1042,7 +1035,7 @@ export default function SQLExercisePlayer({
                 <button
                   type="button"
                   onClick={onNext}
-                  className="inline-flex items-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold"
+                  className="inline-flex items-center justify-center gap-2 w-full sm:w-auto h-9 px-5 rounded-lg text-[13px] font-semibold"
                   style={{ background: accentColor, color: '#052033' }}
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -1053,15 +1046,15 @@ export default function SQLExercisePlayer({
           </div>
           )} {/* end editor section */}
 
-          {/* ---- VERTICAL RESIZE HANDLE (desktop only) ---- */}
+          {/* ---- VERTICAL RESIZE HANDLE (desktop only) -- canvas seam between cards ---- */}
           {!isMobile && (
           <div
             className="flex-shrink-0 group relative"
-            style={{ height: 5, cursor: 'row-resize', background: 'transparent', borderTop: `1px solid ${border}`, borderBottom: `1px solid ${border}` }}
+            style={{ height: 8, cursor: 'row-resize', background: 'transparent' }}
             onMouseDown={onVerticalResizeStart}
           >
             <div
-              className="absolute inset-x-0 top-0 h-full opacity-0 group-hover:opacity-100 transition-opacity"
+              className="absolute inset-x-2 top-1/2 -translate-y-1/2 h-[3px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
               style={{ background: accentColor }}
             />
           </div>
@@ -1069,44 +1062,39 @@ export default function SQLExercisePlayer({
 
           {/* ---- RESULTS SECTION ---- */}
           {(!isMobile || mobileTab === 'result') && (
-          <div className="flex flex-col" style={{ flex: isMobile ? 1 : `0 0 ${100 - editorPct}%`, minHeight: 0, background: resultsBg }}>
+          <div className="flex flex-col rounded-2xl overflow-hidden" style={{ flex: isMobile ? 1 : '1 1 0%', minHeight: 0, background: resultsBg }}>
 
-            {/* Tab bar */}
+            {/* Tab bar -- pill tabs, no dividers */}
             <div
-              className="flex-shrink-0 flex items-stretch border-b"
-              style={{ height: 42, background: stripBg, borderColor: border }}
+              className="flex-shrink-0 flex items-center gap-2 px-3 m-2 rounded-xl"
+              style={{ height: 48, background: headerBg }}
             >
-              {[
-                { id: 'result' as const, label: 'query result' },
-                ...tables.map(t => ({ id: t.tableName, label: t.tableName })),
-              ].map(tab => {
-                const active = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => { setActiveTab(tab.id); if (tab.id !== 'result') previewTable(tab.id); }}
-                    className="relative px-4 text-[12px] font-semibold border-r transition-colors"
-                    style={{
-                      borderColor: border,
-                      background: active ? resultsBg : 'transparent',
-                      color: active ? text : muted,
-                    }}
-                  >
-                    {tab.label}
-                    {active && (
-                      <span
-                        className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full"
-                        style={{ background: accentColor }}
-                      />
-                    )}
-                  </button>
-                );
-              })}
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar min-w-0">
+                {[
+                  { id: 'result' as const, label: 'query result' },
+                  ...tables.map(t => ({ id: t.tableName, label: t.tableName })),
+                ].map(tab => {
+                  const active = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => { setActiveTab(tab.id); if (tab.id !== 'result') previewTable(tab.id); }}
+                      className="flex-shrink-0 h-8 px-3 rounded-lg text-[12px] font-semibold whitespace-nowrap transition-colors"
+                      style={{
+                        background: active ? subtle : 'transparent',
+                        color: active ? text : muted,
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
               <div className="flex-1" />
               {activeTab === 'result' && visibleResult && (
-                <span className="self-center px-3 text-[11px] tabular-nums" style={{ color: muted }}>
-                  Showing {displayedRowCount} of {totalRowCount} rows
+                <span className="flex-shrink-0 text-[11px] tabular-nums" style={{ color: muted }}>
+                  {displayedRowCount} of {totalRowCount} rows
                   {visibleResult.capped ? ` (capped at ${STUDENT_RESULT_LIMIT})` : ''}
                 </span>
               )}
@@ -1115,8 +1103,8 @@ export default function SQLExercisePlayer({
                   type="button"
                   onClick={exportCurrent}
                   disabled={!!exportingTable}
-                  className="w-11 border-l grid place-items-center transition-opacity hover:opacity-60 disabled:opacity-30"
-                  style={{ borderColor: border }}
+                  className="flex-shrink-0 w-8 h-8 rounded-lg grid place-items-center transition-opacity hover:opacity-70 disabled:opacity-30"
+                  style={{ background: subtle }}
                   title={activeTab === 'result' ? 'Export result as CSV' : `Export ${activeTab} as CSV`}
                 >
                   {exportingTable === activeTab
@@ -1128,8 +1116,8 @@ export default function SQLExercisePlayer({
               <button
                 type="button"
                 onClick={() => setModal({ type: 'grid', title: activeTab === 'result' ? 'Query result' : `${activeTab} sample`, result: visibleResult })}
-                className="w-11 border-l grid place-items-center transition-opacity hover:opacity-60"
-                style={{ borderColor: border }}
+                className="flex-shrink-0 w-8 h-8 rounded-lg grid place-items-center transition-opacity hover:opacity-70"
+                style={{ background: subtle }}
                 title="Expand"
               >
                 <Maximize2 className="w-3.5 h-3.5" style={{ color: muted }} />
@@ -1139,12 +1127,11 @@ export default function SQLExercisePlayer({
             {/* Feedback panel -- appears above the grid, does not overlay it */}
             {activeTab === 'result' && feedback && !feedbackDismissed && (
               <div
-                className="flex-shrink-0 border-b"
+                className="flex-shrink-0"
                 style={{
-                  borderColor: feedback.passed ? 'rgba(52,211,153,0.20)' : 'rgba(239,68,68,0.20)',
                   background: feedback.passed
-                    ? (isDark ? 'rgba(52,211,153,0.07)' : 'rgba(240,253,244,0.9)')
-                    : (isDark ? 'rgba(239,68,68,0.07)' : 'rgba(255,245,245,0.9)'),
+                    ? (isDark ? 'rgba(52,211,153,0.09)' : 'rgba(240,253,244,0.95)')
+                    : (isDark ? 'rgba(239,68,68,0.09)' : 'rgba(255,245,245,0.95)'),
                 }}
               >
                 {/* Colored top stripe */}
@@ -1199,27 +1186,27 @@ export default function SQLExercisePlayer({
               {/* AI error explanation -- lives outside the error conditional so it survives tab/state changes */}
               {errorExplain && (
                 <div
-                  className="flex-shrink-0 flex items-start gap-2.5 px-4 py-3 border-b"
-                  style={{ background: isDark ? 'rgba(139,92,246,0.07)' : 'rgba(245,243,255,0.95)', borderColor: 'rgba(139,92,246,0.18)' }}
+                  className="flex-shrink-0 flex items-start gap-2.5 px-4 py-3"
+                  style={{ background: `${accentColor}14` }}
                 >
-                  <Sparkles className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: '#a78bfa' }} />
-                  <p className="text-[12.5px] leading-relaxed flex-1" style={{ color: isDark ? '#c4b5fd' : '#5b21b6' }}>{errorExplain}</p>
+                  <Sparkles className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: accentColor }} />
+                  <p className="text-[12.5px] leading-relaxed flex-1" style={{ color: text }}>{errorExplain}</p>
                   <button type="button" onClick={() => setErrorExplain('')} className="flex-shrink-0 opacity-50 hover:opacity-100 transition-opacity">
-                    <X className="w-3.5 h-3.5" style={{ color: isDark ? '#a78bfa' : '#7c3aed' }} />
+                    <X className="w-3.5 h-3.5" style={{ color: accentColor }} />
                   </button>
                 </div>
               )}
               <div className="flex-1 min-h-0 overflow-hidden">
               {activeTab === 'result' && error ? (
                 <div className="p-5">
-                  <div className="rounded-lg border p-4" style={{ background: isDark ? 'rgba(239,68,68,0.06)' : 'rgba(239,68,68,0.04)', borderColor: 'rgba(239,68,68,0.15)' }}>
+                  <div className="rounded-xl p-4" style={{ background: isDark ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.05)' }}>
                     <pre className="text-[12px] text-red-400 whitespace-pre-wrap font-mono leading-relaxed">{error}</pre>
                     <button
                       type="button"
                       onClick={() => fetchErrorExplanation(error)}
                       disabled={explainLoading}
                       className="inline-flex items-center gap-1.5 mt-3 text-[12px] font-semibold transition-opacity disabled:opacity-40 hover:opacity-80"
-                      style={{ color: '#a78bfa' }}
+                      style={{ color: accentColor }}
                     >
                       {explainLoading
                         ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1234,12 +1221,14 @@ export default function SQLExercisePlayer({
                   <span className="text-[12px] font-medium">Loading sample rows...</span>
                 </div>
               ) : (
-                <DataGrid
-                  result={visibleResult}
-                  isDark={isDark}
-                  emptyMessage={activeTab === 'result' ? 'Run a query to see results' : 'No data available'}
-                  onCellOpen={(title, value) => setModal({ type: 'cell', title, value })}
-                />
+                <div className="h-full overflow-hidden px-3 pb-3 pt-1">
+                  <DataGrid
+                    result={visibleResult}
+                    isDark={isDark}
+                    emptyMessage={activeTab === 'result' ? 'Run a query to see results' : 'No data available'}
+                    onCellOpen={(title, value) => setModal({ type: 'cell', title, value })}
+                  />
+                </div>
               )}
             </div>
 
@@ -1263,13 +1252,12 @@ export default function SQLExercisePlayer({
             className="w-full max-w-5xl max-h-[88vh] flex flex-col overflow-hidden"
             style={{
               background: editorBg,
-              border: `1px solid ${border}`,
-              borderRadius: 14,
+              borderRadius: 18,
               boxShadow: isDark ? '0 24px 64px rgba(0,0,0,0.7)' : '0 24px 64px rgba(15,23,42,0.18)',
               color: text,
             }}
           >
-            <div className="flex-none flex items-center justify-between gap-3 px-5 py-4 border-b" style={{ borderColor: border }}>
+            <div className="flex-none flex items-center justify-between gap-3 px-5 py-4" style={{ background: headerBg }}>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: accentColor }}>
                   {modal.type === 'cell' ? 'Cell Value' : 'Data Preview'}
@@ -1281,8 +1269,8 @@ export default function SQLExercisePlayer({
                   <button
                     type="button"
                     onClick={() => exportToCsv(modal.result!, `${modal.title.replace(/\s+/g, '_')}.csv`)}
-                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold border transition-opacity hover:opacity-70"
-                    style={{ borderColor: border, background: subtle, color: muted }}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold transition-opacity hover:opacity-70"
+                    style={{ background: subtle, color: muted }}
                     title="Export as CSV"
                   >
                     <Download className="w-3.5 h-3.5" /> Export CSV
@@ -1300,12 +1288,12 @@ export default function SQLExercisePlayer({
             </div>
             <div className="flex-1 min-h-0 overflow-hidden p-4">
               {modal.type === 'cell' ? (
-                <pre className="h-full min-h-[200px] overflow-auto rounded-lg border p-4 text-[13px] whitespace-pre-wrap font-mono"
-                  style={{ borderColor: border, background: stripBg, color: text }}>
+                <pre className="h-full min-h-[200px] overflow-auto rounded-xl p-4 text-[13px] whitespace-pre-wrap font-mono"
+                  style={{ background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.03)', color: text }}>
                   {formatCell(modal.value) || 'NULL'}
                 </pre>
               ) : (
-                <div className="rounded-lg border overflow-hidden" style={{ height: '65vh', borderColor: border }}>
+                <div className="rounded-xl overflow-hidden" style={{ height: '65vh', background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.02)' }}>
                   <DataGrid
                     result={modal.result}
                     isDark={isDark}
