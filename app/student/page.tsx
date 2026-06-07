@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
 import { motion, AnimatePresence } from 'motion/react';
+import { createPortal } from 'react-dom';
 import {
   BookOpen, CalendarDays, ClipboardList, Users, Megaphone,
   Calendar, Trophy, Award, ChevronDown, LogOut,
@@ -749,7 +750,6 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
 function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
   const [paths, setPaths]         = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
-  const [expanded, setExpanded]   = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -784,98 +784,345 @@ function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
   );
 
   return (
-    <div className="space-y-3">
-      {paths.map((path: any) => {
-        const totalItems     = (path.item_ids ?? []).length;
-        const completedIds: string[] = path.progress?.completed_item_ids ?? [];
-        const completedCount = completedIds.length;
-        const pct            = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
-        const allDone        = completedCount === totalItems && totalItems > 0;
-        const pathCertId     = path.progress?.cert_id ?? null;
-        const isExpanded     = expanded === path.id;
-
-        return (
-          <div key={path.id} className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
-            {/* Header row */}
-            <div className="flex items-center gap-4 p-4 cursor-pointer" onClick={() => setExpanded(isExpanded ? null : path.id)}>
-              {path.cover_image
-                ? <img src={path.cover_image} alt="" className="w-14 h-14 rounded-xl object-cover flex-shrink-0"/>
-                : <div className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${C.green}18` }}>
-                    <BookOpen className="w-6 h-6" style={{ color: C.green }}/>
-                  </div>}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="font-semibold text-sm truncate" style={{ color: C.text }}>{path.title}</p>
-                  {allDone && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: '#f0fdf4', color: '#16a34a' }}>Completed</span>}
-                </div>
-                <p className="text-xs mb-2" style={{ color: C.faint }}>{completedCount} of {totalItems} completed</p>
-                {/* Progress bar */}
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: C.cardBorder }}>
-                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: allDone ? '#16a34a' : C.green }}/>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {pathCertId && (
-                  <a href={`/certificate/${pathCertId}`} target="_blank" rel="noreferrer"
-                    onClick={e => e.stopPropagation()}
-                    className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-opacity hover:opacity-80"
-                    style={{ background: '#f0fdf4', color: '#16a34a' }}>
-                    <Award className="w-3 h-3"/> Certificate
-                  </a>
-                )}
-                {isExpanded ? <ChevronLeft className="w-4 h-4" style={{ color: C.faint }}/> : <ChevronRight className="w-4 h-4" style={{ color: C.faint }}/>}
-              </div>
-            </div>
-
-            {/* Expanded item list */}
-            {isExpanded && (
-              <div className="border-t" style={{ borderColor: C.cardBorder }}>
-                {path.description && (
-                  <p className="px-4 py-3 text-sm border-b" style={{ color: C.muted, borderColor: C.cardBorder }}>{path.description}</p>
-                )}
-                {(path.items ?? []).map((item: any, idx: number) => {
-                  const done      = completedIds.includes(item.id);
-                  const isCurrent = !done && (idx === 0 || completedIds.includes((path.items[idx - 1] as any)?.id));
-                  const isLocked  = !done && !isCurrent;
-                  const isVE = item.content_type === 'virtual_experience' || item.content_type === 'guided_project' || item.config?.isVirtualExperience || item.config?.isGuidedProject;
-                  const href = isVE ? `/student?section=virtual_experiences` : `/${item.slug || item.id}`;
-                  return (
-                    <div key={item.id} className="flex items-center gap-3 px-4 py-3 border-t first:border-t-0"
-                      style={{ borderColor: C.cardBorder, background: isCurrent ? `${C.green}09` : 'transparent', opacity: isLocked ? 0.55 : 1 }}>
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-                        style={{ background: done ? '#16a34a' : isCurrent ? C.green : C.cardBorder }}>
-                        {done
-                          ? <CheckCircle className="w-3.5 h-3.5 text-white"/>
-                          : isLocked
-                            ? <Lock className="w-3 h-3" style={{ color: C.faint }}/>
-                            : <span className="text-[10px] font-bold" style={{ color: isCurrent ? '#fff' : C.faint }}>{idx + 1}</span>}
-                      </div>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
-                        style={{ background: isVE ? '#6366f120' : '#3b82f620', color: isVE ? '#6366f1' : '#3b82f6' }}>
-                        {isVE ? 'VE' : 'Course'}
-                      </span>
-                      <span className="text-sm flex-1 truncate" style={{ color: C.text }}>{item.title}</span>
-                      {isLocked ? (
-                        <span className="text-[11px] font-medium px-3 py-1.5 rounded-lg flex-shrink-0 flex items-center gap-1"
-                          style={{ background: C.pill, color: C.faint }}>
-                          <Lock className="w-3 h-3"/> Locked
-                        </span>
-                      ) : (
-                        <a href={href} target="_blank" rel="noreferrer"
-                          className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80 flex-shrink-0"
-                          style={{ background: done ? C.pill : C.cta, color: done ? C.muted : C.ctaText }}>
-                          <Play className="w-3 h-3 inline mr-1"/>{done ? 'Review' : 'Start'}
-                        </a>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
+    <div className="space-y-6">
+      {paths.map((path: any) => (
+        <PathRow key={path.id} path={path} C={C} />
+      ))}
     </div>
+  );
+}
+
+// One learning path rendered as a titled, horizontally-scrolling carousel of course cards
+function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const totalItems     = (path.item_ids ?? []).length;
+  const completedIds: string[] = path.progress?.completed_item_ids ?? [];
+  const completedCount = completedIds.length;
+  const allDone        = completedCount === totalItems && totalItems > 0;
+  const pathCertId     = path.progress?.cert_id ?? null;
+  const items: any[]   = path.items ?? [];
+
+  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+
+  // Hover preview (desktop / hover-capable pointers only)
+  const [hover, setHover] = useState<{ data: any; left: number; top: number; originX: number; originY: number } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
+  const scheduleClose = () => { cancelClose(); closeTimer.current = setTimeout(() => setHover(null), 120); };
+  const openHover = (data: any, el: HTMLElement) => {
+    if (typeof window === 'undefined' || !window.matchMedia('(hover: hover)').matches) return;
+    cancelClose();
+    const r = el.getBoundingClientRect();
+    const W = 320, H = 420;
+    const left = Math.max(12, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 12));
+    const top  = Math.max(12, Math.min(r.top - 20, window.innerHeight - H - 12));
+    const originX = Math.max(0, Math.min(r.left + r.width / 2 - left, W));
+    const originY = Math.max(0, Math.min(r.top + r.height / 2 - top, H));
+    setHover({ data, left, top, originX, originY });
+  };
+  useEffect(() => () => cancelClose(), []);
+
+  return (
+    <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+      {/* Header: title + nav arrows */}
+      <div className="flex items-start justify-between gap-4 mb-1">
+        <div className="min-w-0">
+          <h3 className="text-xl sm:text-2xl font-bold leading-tight" style={{ color: C.text }}>{path.title}</h3>
+          {allDone && <span className="inline-block mt-1.5 text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#f0fdf4', color: '#16a34a' }}>Completed</span>}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {pathCertId && (
+            <a href={`/certificate/${pathCertId}`} target="_blank" rel="noreferrer"
+              className="hidden sm:flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-opacity hover:opacity-80"
+              style={{ background: '#f0fdf4', color: '#16a34a' }}>
+              <Award className="w-3 h-3"/> Certificate
+            </a>
+          )}
+          <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronLeft className="w-4 h-4"/>
+          </button>
+          <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronRight className="w-4 h-4"/>
+          </button>
+        </div>
+      </div>
+
+      {path.description && <p className="text-sm mt-2 mb-4" style={{ color: C.muted }}>{path.description}</p>}
+
+      {/* Carousel */}
+      <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {items.map((item: any, idx: number) => {
+          const done      = completedIds.includes(item.id);
+          const isCurrent = !done && (idx === 0 || completedIds.includes(items[idx - 1]?.id));
+          const isLocked  = !done && !isCurrent;
+          const isVE = item.content_type === 'virtual_experience' || item.content_type === 'guided_project' || item.config?.isVirtualExperience || item.config?.isGuidedProject;
+          const href = isVE ? `/student?section=virtual_experiences` : `/${item.slug || item.id}`;
+          const cover = item.cover_image;
+
+          const card = (
+            <>
+              <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
+                {cover
+                  ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+                  : <div className="w-full h-full flex items-center justify-center">
+                      {isVE ? <Layers className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>}
+                    </div>}
+                {/* Status -- light-green chip with white text for active items */}
+                {!isLocked && (
+                  <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
+                    style={{ background: done ? '#16a34a' : '#22c55e', color: '#ffffff' }}>
+                    {done ? 'Completed' : 'In progress'}
+                  </span>
+                )}
+                {/* Locked -- small lock chip top-right, cover stays bright */}
+                {isLocked && (
+                  <span className="absolute top-2 right-2 w-6 h-6 rounded-full grid place-items-center shadow-sm" style={{ background: 'rgba(255,255,255,0.92)' }}>
+                    <Lock className="w-3 h-3" style={{ color: '#475569' }}/>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs mt-2" style={{ color: C.faint }}>{isVE ? 'Virtual Experience' : 'Course'}</p>
+              <p className="text-[15px] font-bold leading-snug mt-0.5 line-clamp-2" style={{ color: C.text }}>{item.title}</p>
+            </>
+          );
+
+          return (
+            <div key={item.id} className="flex-shrink-0 w-[220px] snap-start"
+              onMouseEnter={(e) => openHover({ item, isVE, done, isCurrent, isLocked, href }, e.currentTarget)}
+              onMouseLeave={scheduleClose}>
+              {isLocked
+                ? <div className="cursor-not-allowed">{card}</div>
+                : <a href={href} target="_blank" rel="noreferrer" className="block transition-transform hover:-translate-y-0.5">{card}</a>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Hover preview -- grows out of the hovered card */}
+      {typeof document !== 'undefined' && hover && createPortal(
+        <HoverPreviewCard
+          key={hover.data.item.id}
+          left={hover.left}
+          top={hover.top}
+          originX={hover.originX}
+          originY={hover.originY}
+          onEnter={cancelClose}
+          onLeave={scheduleClose}
+        >
+          <PathItemPreview
+            item={hover.data.item}
+            isVE={hover.data.isVE}
+            done={hover.data.done}
+            isCurrent={hover.data.isCurrent}
+            isLocked={hover.data.isLocked}
+            href={hover.data.href}
+            C={C}
+          />
+        </HoverPreviewCard>,
+        document.body,
+      )}
+    </section>
+  );
+}
+
+// Group courses by their tool/category; named tools alphabetical, "Other" last
+function groupCoursesByTool(courses: any[]): [string, any[]][] {
+  const groups = new Map<string, any[]>();
+  for (const c of courses) {
+    const key = (c.form?.category ?? '').trim() || 'Other';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(c);
+  }
+  return [...groups.entries()].sort((a, b) => {
+    if (a[0] === 'Other') return 1;
+    if (b[0] === 'Other') return -1;
+    return a[0].localeCompare(b[0]);
+  });
+}
+
+// Floating hover preview -- grows out of the hovered card via a CSS transition (mount flag on rAF)
+function HoverPreviewCard({ left, top, originX, originY, onEnter, onLeave, children }: {
+  left: number; top: number; originX: number; originY: number;
+  onEnter: () => void; onLeave: () => void; children: ReactNode;
+}) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => { const id = requestAnimationFrame(() => setShown(true)); return () => cancelAnimationFrame(id); }, []);
+  return (
+    <div
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
+      style={{
+        position: 'fixed', left, top, width: 320, zIndex: 200,
+        transformOrigin: `${originX}px ${originY}px`,
+        opacity: shown ? 1 : 0,
+        transform: shown ? 'scale(1)' : 'scale(0.55)',
+        transition: 'opacity 0.3s ease-out, transform 0.42s cubic-bezier(0.16,1,0.3,1)',
+        willChange: 'opacity, transform',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Rich preview shown on hover for a learning-path item (course / virtual experience)
+function PathItemPreview({ item, isVE, done, isCurrent, isLocked, href, C }: {
+  item: any; isVE: boolean; done: boolean; isCurrent: boolean; isLocked: boolean; href: string; C: typeof LIGHT_C;
+}) {
+  const cover = item.cover_image;
+  const desc = (item.description || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.card, boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
+      <div className="relative w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
+        {cover
+          ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+          : <div className="w-full h-full flex items-center justify-center">{isVE ? <Layers className="w-9 h-9" style={{ color: '#16a34a' }}/> : <BookOpen className="w-9 h-9" style={{ color: '#16a34a' }}/>}</div>}
+        {!isLocked && (
+          <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
+            style={{ background: done ? '#16a34a' : '#22c55e', color: '#ffffff' }}>
+            {done ? 'Completed' : 'In progress'}
+          </span>
+        )}
+        {isLocked && (
+          <span className="absolute top-2 right-2 w-6 h-6 rounded-full grid place-items-center shadow-sm" style={{ background: 'rgba(255,255,255,0.92)' }}>
+            <Lock className="w-3 h-3" style={{ color: '#475569' }}/>
+          </span>
+        )}
+      </div>
+      <div className="p-5">
+        <p className="text-xs mb-1" style={{ color: C.faint }}>{isVE ? 'Virtual Experience' : 'Course'}</p>
+        <h3 className="text-lg font-bold leading-snug mb-2 line-clamp-2" style={{ color: C.text }}>{item.title}</h3>
+        {desc && <p className="text-sm leading-relaxed line-clamp-4 mb-4" style={{ color: C.muted }}>{desc}</p>}
+        {isLocked ? (
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl" style={{ background: C.pill, color: C.faint }}>
+            <Lock className="w-3.5 h-3.5"/> Locked
+          </span>
+        ) : (
+          <a href={href} target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl transition-opacity hover:opacity-90"
+            style={{ background: done ? C.pill : '#16a34a', color: done ? C.muted : '#ffffff' }}>
+            <Play className="w-3.5 h-3.5"/>{done ? 'Review' : isCurrent ? 'Start' : 'Open'}
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// One tool group rendered as a titled, horizontally-scrolling carousel of course cards
+function ToolRow({ tool, courses, deadlines, C, onDetails }: { tool: string; courses: any[]; deadlines: Record<string, Date | null>; C: typeof LIGHT_C; onDetails: (c: any) => void }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const icon = getToolIcon(tool);
+  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+
+  // Hover preview: show the full course card in a floating popover (desktop / hover-capable pointers only)
+  const [hover, setHover] = useState<{ course: any; left: number; top: number; originX: number; originY: number } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
+  const scheduleClose = () => { cancelClose(); closeTimer.current = setTimeout(() => setHover(null), 120); };
+  const openHover = (course: any, el: HTMLElement) => {
+    if (typeof window === 'undefined' || !window.matchMedia('(hover: hover)').matches) return;
+    cancelClose();
+    const r = el.getBoundingClientRect();
+    const W = 320, H = 540;
+    const left = Math.max(12, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 12));
+    const top  = Math.max(12, Math.min(r.top - 20, window.innerHeight - H - 12));
+    // Grow from the hovered card: transform-origin = the card's center relative to the popover box
+    const originX = Math.max(0, Math.min(r.left + r.width / 2 - left, W));
+    const originY = Math.max(0, Math.min(r.top + r.height / 2 - top, H));
+    setHover({ course, left, top, originX, originY });
+  };
+  useEffect(() => () => cancelClose(), []);
+
+  return (
+    <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+      {/* Header: tool name + nav arrows */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {icon && <img src={icon} alt="" className="w-6 h-6 object-contain flex-shrink-0"/>}
+          <h3 className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: C.text }}>{tool}</h3>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronLeft className="w-4 h-4"/>
+          </button>
+          <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronRight className="w-4 h-4"/>
+          </button>
+        </div>
+      </div>
+
+      {/* Carousel */}
+      <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {courses.map((c: any) => {
+          const completed  = !!c.completed_at;
+          const currentIdx = c.current_question_index ?? 0;
+          const cover      = c.form?.config?.coverImage ?? c.form?.cover_image;
+          const title      = c.form?.title ?? 'Untitled Course';
+          const status     = completed ? 'Completed' : currentIdx > 0 ? 'In progress' : null;
+          const questions  = c.form?.questions ?? c.form?.config?.questions ?? [];
+          const countableQ = questions.filter((q: any) => !q.isSection);
+          const answeredQ  = countableQ.filter((q: any) => !!(c.answers ?? {})[q.id]).length;
+          const totalQ     = countableQ.length;
+          const progress   = completed ? 100 : (totalQ > 0 ? Math.round((answeredQ / totalQ) * 100) : 0);
+          return (
+            <div key={c.form_id} className="flex-shrink-0 w-[220px] snap-start"
+              onMouseEnter={(e) => openHover(c, e.currentTarget)} onMouseLeave={scheduleClose}>
+              <button onClick={() => onDetails(c)} className="block w-full text-left transition-transform hover:-translate-y-0.5">
+                <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
+                  {cover
+                    ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+                    : <div className="w-full h-full flex items-center justify-center"><BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/></div>}
+                  {status && (
+                    <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
+                      style={{ background: completed ? '#16a34a' : '#22c55e', color: '#ffffff' }}>
+                      {status}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs mt-2" style={{ color: C.faint }}>Course</p>
+                <p className="text-[15px] font-bold leading-snug mt-0.5 mb-2.5 line-clamp-2" style={{ color: C.text }}>{title}</p>
+                <ProgressBar value={progress} color="#22c55e"/>
+                <p className="text-[11px] mt-1" style={{ color: C.faint }}>
+                  {completed ? 'Completed' : currentIdx > 0 ? `${progress}% complete` : `${totalQ} questions`}
+                </p>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Hover preview -- the full course card in a floating popover */}
+      {typeof document !== 'undefined' && hover && createPortal(
+        <HoverPreviewCard
+          key={hover.course.form_id}
+          left={hover.left}
+          top={hover.top}
+          originX={hover.originX}
+          originY={hover.originY}
+          onEnter={cancelClose}
+          onLeave={scheduleClose}
+        >
+          <CourseCard
+            course={hover.course}
+            deadline={deadlines[hover.course.form_id]}
+            C={C}
+            onDetails={() => { setHover(null); onDetails(hover.course); }}
+          />
+        </HoverPreviewCard>,
+        document.body,
+      )}
+    </section>
   );
 }
 
@@ -1105,11 +1352,11 @@ function CoursesSection({ userEmail, userId: userIdProp, C, isOutstandingProp }:
         </div>
       )}
 
-      {/* Courses grid -- hidden while searching */}
+      {/* Courses grouped by tool -- hidden while searching */}
       {searchResults === null && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {courses.map((c: any) => (
-            <CourseCard key={c.form_id} course={c} deadline={deadlines[c.form_id]} C={C} onDetails={() => setDetailCourse(c)}/>
+        <div className="space-y-6">
+          {groupCoursesByTool(courses).map(([tool, list]) => (
+            <ToolRow key={tool} tool={tool} courses={list} deadlines={deadlines} C={C} onDetails={setDetailCourse} />
           ))}
         </div>
       )}
@@ -3784,6 +4031,122 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
   );
 }
 
+// Group virtual experiences by industry; named industries alphabetical, "Other" last
+function groupVEsByIndustry(items: any[]): [string, any[]][] {
+  const groups = new Map<string, any[]>();
+  for (const f of items) {
+    const key = (f.industry ?? f.config?.industry ?? '').trim() || 'Other';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(f);
+  }
+  return [...groups.entries()].sort((a, b) => {
+    if (a[0] === 'Other') return 1;
+    if (b[0] === 'Other') return -1;
+    return a[0].localeCompare(b[0]);
+  });
+}
+
+// One industry group rendered as a titled carousel of VE cards, with the grow-from-card hover preview
+function IndustryRow({ industry, items, attempts, deadlines, C, onDetails }: {
+  industry: string; items: any[]; attempts: Record<string, any>; deadlines: Record<string, Date | null>;
+  C: typeof LIGHT_C; onDetails: (f: any) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+
+  const [hover, setHover] = useState<{ form: any; left: number; top: number; originX: number; originY: number } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
+  const scheduleClose = () => { cancelClose(); closeTimer.current = setTimeout(() => setHover(null), 120); };
+  const openHover = (form: any, el: HTMLElement) => {
+    if (typeof window === 'undefined' || !window.matchMedia('(hover: hover)').matches) return;
+    cancelClose();
+    const r = el.getBoundingClientRect();
+    const W = 320, H = 480;
+    const left = Math.max(12, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 12));
+    const top  = Math.max(12, Math.min(r.top - 20, window.innerHeight - H - 12));
+    const originX = Math.max(0, Math.min(r.left + r.width / 2 - left, W));
+    const originY = Math.max(0, Math.min(r.top + r.height / 2 - top, H));
+    setHover({ form, left, top, originX, originY });
+  };
+  useEffect(() => () => cancelClose(), []);
+
+  return (
+    <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <h3 className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: C.text }}>{industry}</h3>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronLeft className="w-4 h-4"/>
+          </button>
+          <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronRight className="w-4 h-4"/>
+          </button>
+        </div>
+      </div>
+
+      <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {items.map((form: any) => {
+          const attempt     = attempts[form.id];
+          const isCompleted = !!attempt?.completed_at;
+          const isStarted   = !!attempt && !isCompleted;
+          const status      = isCompleted ? 'Completed' : isStarted ? 'In progress' : null;
+          const cover       = form.config?.coverImage ?? form.cover_image;
+          return (
+            <div key={form.id} className="flex-shrink-0 w-[220px] snap-start"
+              onMouseEnter={(e) => openHover(form, e.currentTarget)} onMouseLeave={scheduleClose}>
+              <button onClick={() => onDetails(form)} className="block w-full text-left transition-transform hover:-translate-y-0.5">
+                <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
+                  {cover
+                    ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+                    : <div className="w-full h-full flex items-center justify-center"><Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/></div>}
+                  {status && (
+                    <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
+                      style={{ background: isCompleted ? '#16a34a' : '#22c55e', color: '#ffffff' }}>
+                      {status}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs mt-2" style={{ color: C.faint }}>Virtual Experience</p>
+                <p className="text-[15px] font-bold leading-snug mt-0.5 line-clamp-2" style={{ color: C.text }}>{form.title}</p>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Hover preview -- grows out of the hovered card */}
+      {typeof document !== 'undefined' && hover && createPortal(
+        <HoverPreviewCard
+          key={hover.form.id}
+          left={hover.left}
+          top={hover.top}
+          originX={hover.originX}
+          originY={hover.originY}
+          onEnter={cancelClose}
+          onLeave={scheduleClose}
+        >
+          <VirtualExperienceCard
+            form={hover.form}
+            attempt={attempts[hover.form.id]}
+            deadline={deadlines[hover.form.id]}
+            C={C}
+            onDetails={() => { setHover(null); onDetails(hover.form); }}
+          />
+        </HoverPreviewCard>,
+        document.body,
+      )}
+    </section>
+  );
+}
+
 function VirtualExperiencesSection({ userId, userEmail, C }: { userId: string; userEmail: string; C: typeof LIGHT_C }) {
   const [items,       setItems]       = useState<any[]>([]);
   const [attempts,    setAttempts]    = useState<Record<string, any>>({});
@@ -3879,18 +4242,17 @@ function VirtualExperiencesSection({ userId, userEmail, C }: { userId: string; u
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {items.map((form: any) => (
-          <VirtualExperienceCard
-            key={form.id}
-            form={form}
-            attempt={attempts[form.id]}
-            deadline={deadlines[form.id]}
-            C={C}
-            onDetails={() => setDetail(form)}
-          />
-        ))}
-      </div>
+      {groupVEsByIndustry(items).map(([industry, list]) => (
+        <IndustryRow
+          key={industry}
+          industry={industry}
+          items={list}
+          attempts={attempts}
+          deadlines={deadlines}
+          C={C}
+          onDetails={setDetail}
+        />
+      ))}
       <AnimatePresence>
         {detail && (
           <VirtualExperienceDetailPane
@@ -4421,9 +4783,106 @@ const BADGE_TABS = [
 ] as const;
 type BadgeTabId = typeof BADGE_TABS[number]['id'];
 
+// One badge category rendered as a titled, horizontally-scrolling carousel
+function BadgeRow({ title, badges, earnedIds, certIdMap, badgeUuidMap, appUrl, appName, liOpen, setLiOpen, onDownload, C }: {
+  title: string; badges: any[]; earnedIds: Set<string>; certIdMap: Record<string, string>; badgeUuidMap: Record<string, string>;
+  appUrl: string; appName?: string | null; liOpen: string | null; setLiOpen: (v: string | null) => void; onDownload: (b: any) => void; C: typeof LIGHT_C;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+  return (
+    <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: C.text }}>{title}</h3>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronLeft className="w-4 h-4"/>
+          </button>
+          <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronRight className="w-4 h-4"/>
+          </button>
+        </div>
+      </div>
+      <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {badges.map((b: any) => {
+          const earned = earnedIds.has(b.id);
+          const now = new Date();
+          const certPageId   = certIdMap[b.id];
+          const certPageUrl  = certPageId  ? `${appUrl}/certificate/${certPageId}` : null;
+          const badgeUuid    = badgeUuidMap[b.id];
+          const badgePageUrl = badgeUuid   ? `${appUrl}/b/${badgeUuid}`             : null;
+          const shareUrl     = certPageUrl ?? badgePageUrl ?? null;
+          const liCertUrl    = shareUrl
+            ? `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(b.name)}&organizationName=${encodeURIComponent(appName ?? '')}&issueYear=${now.getFullYear()}&issueMonth=${now.getMonth() + 1}&certUrl=${encodeURIComponent(shareUrl)}&certId=${encodeURIComponent(certPageId ?? badgeUuid ?? b.id)}`
+            : null;
+          const liPostUrl    = shareUrl ? `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}` : null;
+          return (
+            <div key={b.id} className="flex-shrink-0 w-[190px] snap-start flex flex-col items-center text-center gap-3 pt-2" style={{ opacity: earned ? 1 : 0.45 }}>
+              <div className="w-24 h-24 flex items-center justify-center flex-shrink-0">
+                {earned && b.image_url
+                  ? <img src={b.image_url} alt={b.name} className="w-24 h-24 object-contain drop-shadow-md"/>
+                  : earned
+                    ? <span className="text-5xl leading-none">{b.icon}</span>
+                    : <div className="w-24 h-24 rounded-full flex items-center justify-center" style={{ background: C.pill }}><Lock className="w-8 h-8" style={{ color: C.faint }}/></div>}
+              </div>
+              <div className="space-y-1">
+                <p className="text-[15px] font-bold leading-tight" style={{ color: C.text }}>{b.name}</p>
+                <p className="text-xs leading-snug line-clamp-3" style={{ color: C.muted }}>{b.description}</p>
+              </div>
+              {earned && (
+                <div className="flex items-center justify-center gap-2 mt-1">
+                  {b.image_url && (
+                    <button onClick={() => onDownload(b)} title="Download badge"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center transition-opacity hover:opacity-70"
+                      style={{ background: C.pill, color: C.muted }}>
+                      <Download className="w-3.5 h-3.5"/>
+                    </button>
+                  )}
+                  <div className="relative">
+                    <button onClick={() => setLiOpen(liOpen === b.id ? null : b.id)} title="Share on LinkedIn"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center transition-opacity hover:opacity-80"
+                      style={{ background: '#0A66C2', color: '#fff' }}>
+                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    </button>
+                    {liOpen === b.id && (
+                      <div className="absolute bottom-10 right-0 z-20 w-48 rounded-xl overflow-hidden shadow-lg"
+                        style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                        {liCertUrl && (
+                          <a href={liCertUrl} target="_blank" rel="noreferrer" onClick={() => setLiOpen(null)}
+                            className="flex items-center gap-2.5 px-4 py-3 text-xs font-semibold hover:opacity-70 transition-opacity"
+                            style={{ color: C.text, borderBottom: `1px solid ${C.divider}` }}>
+                            <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4 flex-shrink-0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                            Add to Certifications
+                          </a>
+                        )}
+                        {liPostUrl && (
+                          <a href={liPostUrl} target="_blank" rel="noreferrer" onClick={() => setLiOpen(null)}
+                            className="flex items-center gap-2.5 px-4 py-3 text-xs font-semibold hover:opacity-70 transition-opacity"
+                            style={{ color: C.text }}>
+                            <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4 flex-shrink-0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                            Share as Post
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function StudentBadgesSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   const { appName, appUrl } = useTenant();
-  const [tab, setTab]               = useState<BadgeTabId>('achievement');
   const [liOpen, setLiOpen]         = useState<string | null>(null);
   const [allBadges, setAllBadges]   = useState<{ id: string; name: string; description: string; icon: string; color: string; image_url: string | null; category: string }[]>([]);
   const [earnedIds, setEarnedIds]   = useState<Set<string>>(new Set());
@@ -4459,10 +4918,6 @@ function StudentBadgesSection({ userId, C }: { userId: string; C: typeof LIGHT_C
     })();
   }, [userId]);
 
-  const tabBadges = allBadges.filter(b => (b.category ?? 'achievement') === tab);
-  const totalEarned = earnedIds.size;
-  const totalBadges = allBadges.length;
-
   const handleDownload = async (b: typeof allBadges[0]) => {
     const safeName = `${(b.name ?? b.id).replace(/[^a-zA-Z0-9\s-]/g, '').trim().replace(/\s+/g, '-')}-badge`;
     const ext = b.image_url?.split('.').pop()?.split('?')[0] ?? 'png';
@@ -4492,130 +4947,36 @@ function StudentBadgesSection({ userId, C }: { userId: string; C: typeof LIGHT_C
 
   return (
     <div className="space-y-6">
-      {/* Header row */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <p className="text-sm" style={{ color: C.muted }}>{totalEarned} of {totalBadges} earned</p>
-        {streak && streak.current_streak > 0 && (
-          <div className="flex items-center gap-2 px-4 py-2 rounded-xl"
-            style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.18)' }}>
-            <span className="text-xl leading-none">🔥</span>
-            <div>
-              <p className="text-sm font-bold leading-none" style={{ color: '#f97316' }}>{streak.current_streak}-day streak</p>
-              <p className="text-[11px]" style={{ color: C.faint }}>Best: {streak.longest_streak} days</p>
-            </div>
+      {/* Streak */}
+      {streak && streak.current_streak > 0 && (
+        <div className="flex items-center gap-2 px-4 py-2 rounded-xl w-fit"
+          style={{ background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.18)' }}>
+          <span className="text-xl leading-none">🔥</span>
+          <div>
+            <p className="text-sm font-bold leading-none" style={{ color: '#f97316' }}>{streak.current_streak}-day streak</p>
+            <p className="text-[11px]" style={{ color: C.faint }}>Best: {streak.longest_streak} days</p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1.5 rounded-2xl w-fit" style={{ background: C.pill }}>
-        {BADGE_TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className="px-5 py-3 rounded-xl text-sm font-semibold transition-all"
-            style={{
-              background:  tab === t.id ? C.card : 'transparent',
-              color:       tab === t.id ? C.text : C.faint,
-              boxShadow:   tab === t.id ? C.cardShadow : 'none',
-              fontFamily:  'var(--font-lato)',
-            }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Badge grid */}
-      {tabBadges.length === 0 ? (
+      {/* Category carousels */}
+      {allBadges.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center rounded-2xl"
           style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
           <Medal className="w-10 h-10 mb-3" style={{ color: C.faint, opacity: 0.4 }}/>
-          <p className="text-sm font-semibold" style={{ color: C.text }}>No badges in this category yet</p>
+          <p className="text-sm font-semibold" style={{ color: C.text }}>No badges yet</p>
           <p className="text-xs mt-1" style={{ color: C.faint }}>Check back when new badges are added.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {tabBadges.map(b => {
-            const earned = earnedIds.has(b.id);
-            const now = new Date();
-            const certPageId   = certIdMap[b.id];
-            const certPageUrl  = certPageId              ? `${appUrl}/certificate/${certPageId}`     : null;
-            const badgeUuid    = badgeUuidMap[b.id];
-            const badgePageUrl = badgeUuid               ? `${appUrl}/b/${badgeUuid}`                : null;
-            const shareUrl     = certPageUrl ?? badgePageUrl ?? null;
-            const liCertUrl   = shareUrl
-              ? `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(b.name)}&organizationName=${encodeURIComponent(appName ?? '')}&issueYear=${now.getFullYear()}&issueMonth=${now.getMonth() + 1}&certUrl=${encodeURIComponent(shareUrl)}&certId=${encodeURIComponent(certPageId ?? badgeUuid ?? b.id)}`
-              : null;
-            const liPostUrl = shareUrl
-              ? `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`
-              : null;
-            return (
-              <div key={b.id}
-                className="flex flex-col items-center gap-3 px-5 pt-8 pb-6 rounded-2xl text-center"
-                style={{ background: C.card, opacity: earned ? 1 : 0.45 }}>
-                {/* Badge image */}
-                <div className="w-28 h-28 flex items-center justify-center flex-shrink-0">
-                  {earned && b.image_url
-                    ? (
-                      <div className="drop-shadow-md">
-                        <img src={b.image_url} alt={b.name} className="w-28 h-28 object-contain"/>
-                      </div>
-                    )
-                    : earned
-                      ? <span className="text-6xl leading-none">{b.icon}</span>
-                      : <div className="w-28 h-28 rounded-full flex items-center justify-center" style={{ background: C.pill }}>
-                          <Lock className="w-9 h-9" style={{ color: C.faint }}/>
-                        </div>
-                  }
-                </div>
-                <div className="space-y-1.5 flex-1">
-                  <p className="text-[17px] font-bold leading-tight" style={{ color: C.text, fontFamily: 'var(--font-lato)' }}>{b.name}</p>
-                  <p className="text-sm leading-snug" style={{ color: C.muted, fontFamily: 'var(--font-lato)' }}>{b.description}</p>
-                </div>
-                {/* Actions -- earned only, right-aligned */}
-                {earned && (
-                  <div className="flex items-center justify-end gap-2 w-full mt-2">
-                    {b.image_url && (
-                      <button onClick={() => handleDownload(b)} title="Download badge"
-                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-opacity hover:opacity-70"
-                        style={{ background: C.pill, color: C.muted }}>
-                        <Download className="w-3.5 h-3.5"/>
-                      </button>
-                    )}
-                    <div className="relative">
-                      <button onClick={() => setLiOpen(liOpen === b.id ? null : b.id)} title="Share on LinkedIn"
-                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-opacity hover:opacity-80"
-                        style={{ background: '#0A66C2', color: '#fff' }}>
-                        <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                      </button>
-                      {liOpen === b.id && (
-                        <div className="absolute bottom-10 right-0 z-20 w-48 rounded-xl overflow-hidden shadow-lg"
-                          style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-                          {liCertUrl && (
-                            <a href={liCertUrl} target="_blank" rel="noreferrer"
-                              onClick={() => setLiOpen(null)}
-                              className="flex items-center gap-2.5 px-4 py-3 text-xs font-semibold hover:opacity-70 transition-opacity"
-                              style={{ color: C.text, borderBottom: `1px solid ${C.divider}` }}>
-                              <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4 flex-shrink-0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                              Add to Certifications
-                            </a>
-                          )}
-                          {liPostUrl && (
-                            <a href={liPostUrl} target="_blank" rel="noreferrer"
-                              onClick={() => setLiOpen(null)}
-                              className="flex items-center gap-2.5 px-4 py-3 text-xs font-semibold hover:opacity-70 transition-opacity"
-                              style={{ color: C.text }}>
-                              <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4 flex-shrink-0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                              Share as Post
-                            </a>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        BADGE_TABS.map(t => {
+          const list = allBadges.filter(b => (b.category ?? 'achievement') === t.id);
+          if (!list.length) return null;
+          return (
+            <BadgeRow key={t.id} title={t.label} badges={list}
+              earnedIds={earnedIds} certIdMap={certIdMap} badgeUuidMap={badgeUuidMap}
+              appUrl={appUrl} appName={appName} liOpen={liOpen} setLiOpen={setLiOpen} onDownload={handleDownload} C={C} />
+          );
+        })
       )}
     </div>
   );
@@ -4843,6 +5204,67 @@ function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typeof LIG
 }
 
 // --- Certificates section ---
+// Group certificates by type, in a fixed order, skipping empty types
+function groupCertsByType(certs: any[]): [string, any[]][] {
+  const buckets: Record<string, any[]> = { Courses: [], 'Virtual Experiences': [], 'Learning Paths': [] };
+  for (const c of certs) {
+    const key = c.ve_id ? 'Virtual Experiences' : c.learning_path_id ? 'Learning Paths' : 'Courses';
+    buckets[key].push(c);
+  }
+  return (['Courses', 'Virtual Experiences', 'Learning Paths'] as const)
+    .filter(k => buckets[k].length).map(k => [k, buckets[k]] as [string, any[]]);
+}
+
+// One certificate type rendered as a titled, horizontally-scrolling carousel
+function CertRow({ title, certs, C }: { title: string; certs: any[]; C: typeof LIGHT_C }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+  return (
+    <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: C.text }}>{title}</h3>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronLeft className="w-4 h-4"/>
+          </button>
+          <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronRight className="w-4 h-4"/>
+          </button>
+        </div>
+      </div>
+      <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {certs.map((cert: any) => {
+          const cover = cert.content?.cover_image;
+          return (
+            <a key={cert.id} href={`/certificate/${cert.id}`} target="_blank" rel="noreferrer"
+              className="flex-shrink-0 w-[240px] snap-start block transition-transform hover:-translate-y-0.5">
+              <div className="relative rounded-xl overflow-hidden w-full aspect-video flex items-center justify-center"
+                style={{ background: cover ? '#0b0b0d' : `linear-gradient(135deg, ${C.green}18 0%, ${C.lime}30 100%)` }}>
+                {cover
+                  ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+                  : <div className="flex flex-col items-center gap-1">
+                      <Award className="w-9 h-9" style={{ color: C.green }}/>
+                      <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: C.green }}>Certificate</span>
+                    </div>}
+                <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md" style={{ background: '#16a34a', color: '#ffffff' }}>Earned</span>
+              </div>
+              <p className="text-[15px] font-bold leading-snug mt-2 line-clamp-2" style={{ color: C.text }}>{cert.content?.title || 'Certificate'}</p>
+              <p className="text-xs mt-1" style={{ color: C.faint }}>
+                Issued {new Date(cert.issued_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+              </p>
+            </a>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function CertificatesSection({ userId, userEmail, userName, C }: { userId: string; userEmail: string; userName: string; C: typeof LIGHT_C }) {
   const [certs, setCerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -4903,54 +5325,10 @@ function CertificatesSection({ userId, userEmail, userName, C }: { userId: strin
   );
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm" style={{ color: C.faint }}>
-        You have earned <span className="font-semibold" style={{ color: C.text }}>{certs.length}</span> certificate{certs.length !== 1 ? 's' : ''}.
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {certs.map((cert, i) => (
-          <motion.div key={cert.id} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.06 }}
-            className="rounded-2xl overflow-hidden group"
-            style={{ background: C.card }}
-            onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
-            onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
-            {/* Cover image or gradient banner */}
-            {cert.content?.cover_image
-              ? <img src={cert.content.cover_image} alt="" className="w-full h-32 object-cover" />
-              : <div className="relative h-32 flex flex-col items-center justify-center gap-1"
-                  style={{ background: `linear-gradient(135deg, ${C.green}15 0%, ${C.lime}25 100%)`, borderBottom: `1px solid ${C.cardBorder}` }}>
-                  <Award className="w-10 h-10" style={{ color: C.green }}/>
-                  <span className="text-[11px] font-bold tracking-widest uppercase" style={{ color: C.green }}>Certificate</span>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                    style={{ background: C.lime, color: C.green }}>Passed</span>
-                </div>}
-            {/* Info */}
-            <div className="p-5">
-              <h3 className="text-sm font-semibold mb-1.5" style={{ color: C.text }}>
-                {cert.content?.title || 'Certificate'}
-              </h3>
-              <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2"
-                style={
-                  cert.ve_id
-                    ? { background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }
-                    : cert.learning_path_id
-                    ? { background: '#fdf4ff', color: '#7e22ce', border: '1px solid #e9d5ff' }
-                    : { background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }
-                }>
-                {cert.ve_id ? 'Virtual Experience' : cert.learning_path_id ? 'Learning Path' : 'Course'}
-              </span>
-              <p className="text-xs mb-4" style={{ color: C.faint }}>
-                Issued {new Date(cert.issued_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
-              </p>
-              <Link href={`/certificate/${cert.id}`}
-                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80 dashboard-cta"
-                style={{ background: C.cta, color: C.ctaText }}>
-                <Award className="w-4 h-4"/> View Certificate
-              </Link>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+    <div className="space-y-6">
+      {groupCertsByType(certs).map(([title, list]) => (
+        <CertRow key={title} title={title} certs={list} C={C} />
+      ))}
     </div>
   );
 }
@@ -5099,6 +5477,131 @@ function ShareProfileCard({ username, C }: { username?: string; C: typeof LIGHT_
 }
 
 // --- Overview section ---
+// Progress (answered/total or requirements done) for an in-progress course or project
+function inProgressProgress(form: any, attempt: any, isProject: boolean) {
+  if (isProject) {
+    const total = (form.config?.modules ?? []).reduce((a: number, m: any) => a + (m.lessons ?? []).reduce((b: number, l: any) => b + (l.requirements ?? []).length, 0), 0);
+    const done  = Object.values(attempt?.progress ?? {}).filter((v: any) => v?.completed).length;
+    return { done, total, pct: total > 0 ? Math.round((done / total) * 100) : 0 };
+  }
+  const countable = (form.config?.questions ?? []).filter((q: any) => !q.isSection);
+  const total = countable.length;
+  const done  = countable.filter((q: any) => !!(attempt?.answers ?? {})[q.id]).length;
+  return { done, total, pct: total > 0 ? Math.round((done / total) * 100) : 0 };
+}
+
+// Rich hover preview for an in-progress item
+function InProgressPreview({ form, isProject, pct, done, total, href, C }: {
+  form: any; isProject: boolean; pct: number; done: number; total: number; href: string; C: typeof LIGHT_C;
+}) {
+  const cover = form.config?.coverImage;
+  const desc = (form.config?.description ?? form.description ?? '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.card, boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
+      <div className="relative w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
+        {cover
+          ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+          : <div className="w-full h-full flex items-center justify-center">{isProject ? <Briefcase className="w-9 h-9" style={{ color: '#16a34a' }}/> : <BookOpen className="w-9 h-9" style={{ color: '#16a34a' }}/>}</div>}
+        <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md" style={{ background: '#22c55e', color: '#ffffff' }}>In progress</span>
+      </div>
+      <div className="p-5">
+        <p className="text-xs mb-1" style={{ color: C.faint }}>{isProject ? 'Virtual Experience' : 'Course'}</p>
+        <h3 className="text-lg font-bold leading-snug mb-2 line-clamp-2" style={{ color: C.text }}>{form.title}</h3>
+        {desc && <p className="text-sm leading-relaxed line-clamp-3 mb-3" style={{ color: C.muted }}>{desc}</p>}
+        <div className="flex items-center justify-between gap-2 mb-1.5 text-[12px]" style={{ color: C.faint }}>
+          <span>{pct}% complete</span><span>{done}/{total}</span>
+        </div>
+        <ProgressBar value={pct} color="#22c55e"/>
+        <a href={href} target="_blank" rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl transition-opacity hover:opacity-90 mt-4"
+          style={{ background: '#16a34a', color: '#ffffff' }}>
+          <Play className="w-3.5 h-3.5"/> Continue
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// "In Progress" carousel with the grow-from-card hover preview
+function InProgressRow({ items, C }: { items: any[]; C: typeof LIGHT_C }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+
+  const [hover, setHover] = useState<{ data: any; left: number; top: number; originX: number; originY: number } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
+  const scheduleClose = () => { cancelClose(); closeTimer.current = setTimeout(() => setHover(null), 120); };
+  const openHover = (data: any, el: HTMLElement) => {
+    if (typeof window === 'undefined' || !window.matchMedia('(hover: hover)').matches) return;
+    cancelClose();
+    const r = el.getBoundingClientRect();
+    const W = 320, H = 520;
+    const left = Math.max(12, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 12));
+    const top  = Math.max(12, Math.min(r.top - 20, window.innerHeight - H - 12));
+    const originX = Math.max(0, Math.min(r.left + r.width / 2 - left, W));
+    const originY = Math.max(0, Math.min(r.top + r.height / 2 - top, H));
+    setHover({ data, left, top, originX, originY });
+  };
+  useEffect(() => () => cancelClose(), []);
+
+  return (
+    <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="text-xl sm:text-2xl font-bold leading-tight" style={{ color: C.text }}>In Progress</h3>
+          <p className="text-sm mt-1" style={{ color: C.muted }}>Pick up where you left off</p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronLeft className="w-4 h-4"/>
+          </button>
+          <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronRight className="w-4 h-4"/>
+          </button>
+        </div>
+      </div>
+
+      <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {items.map(({ form, attempt, isProject }: any) => {
+          const { pct, done, total } = inProgressProgress(form, attempt, isProject);
+          const cover = form.config?.coverImage;
+          const href  = `/${form.slug || form.id}`;
+          const data  = { form, isProject, pct, done, total, href };
+          return (
+            <div key={form.id} className="flex-shrink-0 w-[220px] snap-start"
+              onMouseEnter={(e) => openHover(data, e.currentTarget)} onMouseLeave={scheduleClose}>
+              <a href={href} target="_blank" rel="noreferrer" className="block transition-transform hover:-translate-y-0.5">
+                <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
+                  {cover
+                    ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+                    : <div className="w-full h-full flex items-center justify-center">{isProject ? <Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>}</div>}
+                  <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md" style={{ background: '#22c55e', color: '#ffffff' }}>In progress</span>
+                </div>
+                <p className="text-xs mt-2" style={{ color: C.faint }}>{isProject ? 'Virtual Experience' : 'Course'}</p>
+                <p className="text-[15px] font-bold leading-snug mt-0.5 mb-2.5 line-clamp-2" style={{ color: C.text }}>{form.title}</p>
+                <ProgressBar value={pct} color="#22c55e"/>
+                <p className="text-[11px] mt-1" style={{ color: C.faint }}>{pct}% complete</p>
+              </a>
+            </div>
+          );
+        })}
+      </div>
+
+      {typeof document !== 'undefined' && hover && createPortal(
+        <HoverPreviewCard key={hover.data.form.id} left={hover.left} top={hover.top} originX={hover.originX} originY={hover.originY} onEnter={cancelClose} onLeave={scheduleClose}>
+          <InProgressPreview form={hover.data.form} isProject={hover.data.isProject} pct={hover.data.pct} done={hover.data.done} total={hover.data.total} href={hover.data.href} C={C} />
+        </HoverPreviewCard>,
+        document.body,
+      )}
+    </section>
+  );
+}
+
 function OverviewSection({ user, userEmail, C, onNavigate }: {
   user: any; userEmail: string; C: typeof LIGHT_C; onNavigate: (id: SectionId) => void;
 }) {
@@ -5110,7 +5613,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
   const [certs, setCerts]                   = useState<any[]>([]);
   const [myRank, setMyRank]                 = useState<number | null>(null);
   const [totalInCohort, setTotalInCohort]   = useState(0);
-  const [activityEvents, setActivityEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
   const [gaps, setGaps]                     = useState<any[]>([]);
   const [assignmentStats, setAssignmentStats] = useState<{ total: number; submitted: number; graded: number } | null>(null);
   const [assignmentItems, setAssignmentItems] = useState<any[]>([]);
@@ -5118,6 +5621,12 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
   const [allBadges, setAllBadges]             = useState<{ id: string; name: string; description: string; icon: string; color: string; image_url: string | null }[]>([]);
   const [earnedBadgeIds, setEarnedBadgeIds]   = useState<Set<string>>(new Set());
   const [streak, setStreak]                   = useState<{ current_streak: number; longest_streak: number } | null>(null);
+  const recScrollRef = useRef<HTMLDivElement>(null);
+  const recScrollBy = (dir: number) => recScrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+  const statScrollRef = useRef<HTMLDivElement>(null);
+  const statScrollBy = (dir: number) => statScrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+  const upScrollRef = useRef<HTMLDivElement>(null);
+  const upScrollBy = (dir: number) => upScrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
 
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === 'visible') setRefreshKey(k => k + 1); };
@@ -5140,7 +5649,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
       const { data: gmRows } = await supabase.from('group_members').select('group_id').eq('student_id', user.id);
       const myGroupIds = (gmRows ?? []).map((r: any) => r.group_id as string);
 
-      const [courseRes, veRes, attemptsRes, gpAttRes, cohortAssignCrsRes, cohortAssignVeRes, certsData, lbData, actData, gapsData, assignmentsRes, asmSubsRes, allBadgesRes, earnedBadgesRes, streakRes, groupAssignmentsRes, groupSubsRes] =
+      const [courseRes, veRes, attemptsRes, gpAttRes, cohortAssignCrsRes, cohortAssignVeRes, certsData, lbData, eventsRes, gapsData, assignmentsRes, asmSubsRes, allBadgesRes, earnedBadgesRes, streakRes, groupAssignmentsRes, groupSubsRes] =
         await Promise.all([
           cohort
             ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes').contains('cohort_ids', [cohort]).eq('status', 'published')
@@ -5149,7 +5658,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
             ? supabase.from('virtual_experiences').select('id, title, slug, cover_image, modules, deadline_days').contains('cohort_ids', [cohort]).eq('status', 'published')
             : Promise.resolve({ data: [] as any[] }),
           supabase.from('course_attempts')
-            .select('course_id, score, current_question_index, completed_at, passed, updated_at, answers')
+            .select('course_id, score, points, current_question_index, completed_at, passed, updated_at, answers')
             .eq('student_id', user.id).order('updated_at', { ascending: false }),
           supabase.from('guided_project_attempts')
             .select('ve_id, completed_at, progress, updated_at')
@@ -5171,10 +5680,9 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
             ? fetch(`/api/leaderboard?cohort_id=${encodeURIComponent(cohort)}`, { headers: { Authorization: `Bearer ${token}` } })
                 .then(r => r.json()).catch(() => ({ rankings: [] }))
             : Promise.resolve({ rankings: [] }),
-          cohort && token
-            ? fetch(`/api/activity/feed?cohort_id=${encodeURIComponent(cohort)}`, { headers: { Authorization: `Bearer ${token}` } })
-                .then(r => r.json()).catch(() => ({ events: [] }))
-            : Promise.resolve({ events: [] }),
+          cohort
+            ? supabase.from('events').select('id, title, slug, event_date, event_time').contains('cohort_ids', [cohort]).eq('status', 'published')
+            : Promise.resolve({ data: [] as any[] }),
           token
             ? fetch('/api/vector/gaps', { headers: { Authorization: `Bearer ${token}` } })
                 .then(r => r.json()).catch(() => ({ gaps: [] }))
@@ -5249,10 +5757,6 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
         f.config?.isGuidedProject || f.config?.isVirtualExperience;
       const isCrsForm  = (f: any) => f.content_type === 'course' || f.config?.isCourse;
 
-      // Activity (last 30 min)
-      const ago30 = Date.now() - 30 * 60 * 1000;
-      const recentAct = ((actData as any)?.events ?? []).filter((e: any) => e.ts > ago30).slice(0, 6);
-
       // Leaderboard rank
       const rankings: any[] = (lbData as any)?.rankings ?? [];
       const myEntry = rankings.find((r: any) => r.isMe);
@@ -5285,7 +5789,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
       setCerts((certsData as any)?.certs ?? []);
       setMyRank(myEntry?.rank ?? null);
       setTotalInCohort(rankings.length);
-      setActivityEvents(recentAct);
+      setEvents((eventsRes as any)?.data ?? []);
       setGaps((gapsData as any)?.gaps ?? []);
       setAssignmentStats({
         total:     asmRows.length,
@@ -5333,31 +5837,26 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
     }
   };
 
-  const inProgressCount = courses.filter(f => {
-    const proj = isProjForm(f);
-    const a    = proj ? gpAttempts[f.id] : courseAttempts[f.id];
-    return a && !isEffectivelyDone(f, a, proj);
-  }).length;
-
   const completedCount = courses.filter(f => {
     const proj = isProjForm(f);
     const a    = proj ? gpAttempts[f.id] : courseAttempts[f.id];
     return isEffectivelyDone(f, a, proj);
   }).length;
 
+  const totalXP = Object.values(courseAttempts).reduce((sum: number, a: any) => sum + (a?.points ?? 0), 0);
+
   // In-progress items sorted by last active -- most recent first
-  const continueLearning = [...courses]
+  const inProgressItems = [...courses]
     .map(f => {
       const proj = isProjForm(f);
       const a    = proj ? gpAttempts[f.id] : courseAttempts[f.id];
       return { form: f, attempt: a, isProject: proj, ts: a?.updated_at ? new Date(a.updated_at).getTime() : 0 };
     })
     .filter(({ attempt, form, isProject }) => !!attempt && !isEffectivelyDone(form, attempt, isProject))
-    .sort((a, b) => b.ts - a.ts)
-    .slice(0, 3);
+    .sort((a, b) => b.ts - a.ts);
 
   // Deadlines in the next 14 days (excluding already-completed)
-  const upcomingDeadlines: Array<{ title: string; daysLeft: number; type: 'course' | 'project' | 'assignment' }> = [
+  const upcomingDeadlines: Array<{ title: string; daysLeft: number; type: 'course' | 'project' | 'assignment' | 'event' }> = [
     // Courses + VEs
     ...Object.entries(deadlines)
       .filter(([formId]) => courses.some(f => f.id === formId))
@@ -5387,6 +5886,17 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
         daysLeft: Math.ceil((new Date(a.deadline_date).getTime() - now) / 86400000),
         type: 'assignment' as const,
       })),
+    // Events
+    ...events
+      .map((ev: any) => {
+        if (!ev.event_date) return null;
+        const d = new Date(`${ev.event_date}T${(ev.event_time || '00:00').slice(0, 5)}:00`);
+        if (Number.isNaN(d.getTime())) return null;
+        const daysLeft = Math.ceil((d.getTime() - now) / 86400000);
+        if (daysLeft < 0 || daysLeft > 14) return null;
+        return { title: ev.title, daysLeft, type: 'event' as const };
+      })
+      .filter(Boolean) as any[],
   ].sort((a: any, b: any) => a.daysLeft - b.daysLeft);
 
   if (loading) return (
@@ -5408,231 +5918,127 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
   return (
     <div className="space-y-4 lg:space-y-6">
 
-      {/* Pick up where you left off */}
-      {continueLearning[0] && (() => {
-        const { form, attempt, isProject } = continueLearning[0];
-        const dl       = deadlines[form.id] ?? null;
-        const daysLeft = dl ? Math.ceil((dl.getTime() - now) / 86400000) : null;
-        const dlColor  = daysLeft === null ? null : daysLeft < 0 ? '#ef4444' : daysLeft <= 3 ? '#f59e0b' : '#6b7280';
-        const dlLabel  = daysLeft === null ? null : daysLeft < 0 ? 'Overdue' : daysLeft === 0 ? 'Due today' : `${daysLeft}d left`;
-        const countableQ = isProject ? [] : (form.config?.questions ?? []).filter((q: any) => !q.isSection);
-        const totalQ   = isProject
-          ? (form.config?.modules ?? []).reduce((a: number, m: any) => a + (m.lessons ?? []).reduce((b: number, l: any) => b + (l.requirements ?? []).length, 0), 0)
-          : countableQ.length;
-        const done     = isProject
-          ? Object.values((attempt?.progress ?? {})).filter((v: any) => v?.completed).length
-          : countableQ.filter((q: any) => !!(attempt?.answers ?? {})[q.id]).length;
-        const pct      = totalQ > 0 ? Math.round((done / totalQ) * 100) : 0;
-        const href     = `/${form.slug || form.id}`;
-
-        return (
-          <div className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
-            {/* On mobile: thumbnail+content row, then full-width CTA below */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                {/* Thumbnail */}
-                <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 relative"
-                  style={{ background: isProject ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'linear-gradient(135deg,#0e09dd,#3b82f6)' }}>
-                  {form.config?.coverImage
-                    ? <img src={form.config.coverImage} alt="" className="w-full h-full object-cover"/>
-                    : <div className="w-full h-full flex items-center justify-center">
-                        {isProject
-                          ? <Briefcase className="w-6 h-6" style={{ color: 'rgba(255,255,255,0.9)' }}/>
-                          : <BookOpen  className="w-6 h-6" style={{ color: 'rgba(255,255,255,0.9)' }}/>}
-                      </div>
-                  }
-                </div>
-                {/* Content */}
-                <div className="flex-1 min-w-0 space-y-1.5">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.muted }}>Pick up where you left off</p>
-                    <p className="text-sm font-bold leading-snug truncate" style={{ color: C.text }}>{form.title}</p>
-                    {dlLabel && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mt-1"
-                        style={{ background: `${dlColor ?? '#6b7280'}18`, color: dlColor ?? '#6b7280' }}>
-                        {dlLabel}
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[11px]" style={{ color: C.faint }}>
-                      <span>{pct}%</span><span>{done}/{totalQ}</span>
-                    </div>
-                    <ProgressBar value={pct} color={C.green}/>
-                  </div>
-                </div>
-              </div>
-              {/* CTA -- full width on mobile, auto on sm+ */}
-              <a href={href} target="_blank" rel="noreferrer"
-                className="w-full sm:w-auto sm:flex-shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80"
-                style={{ background: C.cta, color: C.ctaText }}>
-                <Play className="w-3 h-3"/> Continue
-              </a>
-            </div>
+      {/* Statistics carousel */}
+      <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-xl sm:text-2xl font-bold leading-tight" style={{ color: C.text }}>Statistics</h3>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={() => statScrollBy(-1)} aria-label="Scroll left"
+              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+              style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+              <ChevronLeft className="w-4 h-4"/>
+            </button>
+            <button onClick={() => statScrollBy(1)} aria-label="Scroll right"
+              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+              style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+              <ChevronRight className="w-4 h-4"/>
+            </button>
           </div>
-        );
-      })()}
+        </div>
 
-      {/* Overview cards -- equal height on desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 lg:items-stretch">
-
-        {/* Stat cards 2x2 */}
-        <div className="lg:h-full grid grid-cols-2 gap-3" style={{ gridAutoRows: '1fr' }}>
+        <div ref={statScrollRef} className="flex gap-5 overflow-x-auto pb-1 mt-4 snap-x"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {([
-            { icon: TrendingUp,  color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', value: inProgressCount,     label: 'In Progress',   nav: 'courses'      },
-            { icon: CheckCircle, color: '#16a34a', bg: 'rgba(22,163,74,0.12)',  value: completedCount,      label: 'Completed',     nav: 'courses'      },
-            { icon: Award,       color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', value: certs.length,        label: 'Certificates',  nav: 'certificates' },
-            { icon: Medal,       color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)', value: earnedBadgeIds.size, label: 'Badges Earned', nav: 'badges'       },
+            { icon: Zap,         color: '#eab308', bg: 'rgba(234,179,8,0.12)',  value: totalXP.toLocaleString(), label: 'XP Earned',        nav: 'badges'       },
+            { icon: CheckCircle, color: '#16a34a', bg: 'rgba(22,163,74,0.12)',  value: completedCount,           label: 'Courses Completed', nav: 'courses'      },
+            { icon: Award,       color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', value: certs.length,             label: 'Certificates',      nav: 'certificates' },
+            { icon: Medal,       color: '#14b8a6', bg: 'rgba(20,184,166,0.12)', value: earnedBadgeIds.size,      label: 'Badges',            nav: 'badges'       },
           ] as const).map(({ icon: Icon, color, bg, value, label, nav }) => (
             <button key={label} onClick={() => onNavigate(nav as SectionId)}
-              className="rounded-2xl p-4 flex items-center gap-3 text-left hover:opacity-90 transition-opacity w-full lg:h-full"
-              style={{ background: C.card }}>
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: bg }}>
-                <Icon className="w-4 h-4" style={{ color }}/>
+              className="flex-shrink-0 w-[180px] snap-start flex items-center gap-3 text-left transition-opacity hover:opacity-80">
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: bg }}>
+                <Icon className="w-5 h-5" style={{ color }}/>
               </div>
               <div className="min-w-0">
-                <div className="text-xl font-black tabular-nums leading-none" style={{ color: C.text }}>{value}</div>
+                <div className="text-2xl font-black tabular-nums leading-none" style={{ color: C.text }}>{value}</div>
                 <div className="text-[11px] font-medium mt-0.5 truncate" style={{ color: C.muted }}>{label}</div>
               </div>
             </button>
           ))}
         </div>
+      </section>
 
-        {/* RIGHT -- Donut charts */}
-        <div className="lg:h-full flex flex-col gap-3">
-          {(() => {
-            const total     = courses.length;
-            const completed = completedCount;
-            const pct       = total > 0 ? Math.round((completed / total) * 100) : 0;
-            return (
-              <button onClick={() => onNavigate('courses')} className="lg:flex-1 rounded-2xl p-4 flex items-center gap-4 text-left hover:opacity-90 transition-opacity w-full"
-                style={{ background: C.card }}>
-                <div className="relative flex-shrink-0 flex items-center justify-center" style={{ width: 60, height: 60 }}>
-                  <DonutChart total={total} done={completed} color="#09c86c" size={60}/>
-                  <span className="absolute text-[11px] font-black" style={{ color: C.text }}>{pct}%</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-black" style={{ color: C.text }}>{completed}<span className="text-xs font-semibold" style={{ color: C.muted }}>/{total}</span></p>
-                  <p className="text-xs font-semibold" style={{ color: C.muted }}>Courses completed</p>
-                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#09c86c' }}/>
-                    <span className="text-[10px]" style={{ color: C.faint }}>Completed</span>
-                    <div className="w-2 h-2 rounded-full ml-1 flex-shrink-0" style={{ background: C.pill }}/>
-                    <span className="text-[10px]" style={{ color: C.faint }}>Remaining</span>
-                  </div>
-                </div>
+      {/* In Progress carousel */}
+      {inProgressItems.length > 0 && <InProgressRow items={inProgressItems} C={C} />}
+
+      {/* Upcoming -- deadlines + events, carousel */}
+      <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-xl sm:text-2xl font-bold leading-tight" style={{ color: C.text }}>Upcoming</h3>
+          {upcomingDeadlines.length > 0 && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button onClick={() => upScrollBy(-1)} aria-label="Scroll left"
+                className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+                style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                <ChevronLeft className="w-4 h-4"/>
               </button>
-            );
-          })()}
-          {assignmentStats && (
-            <button onClick={() => onNavigate('assignments')} className="lg:flex-1 rounded-2xl p-4 flex items-center gap-4 text-left hover:opacity-90 transition-opacity w-full"
-              style={{ background: C.card }}>
-              <div className="relative flex-shrink-0 flex items-center justify-center" style={{ width: 60, height: 60 }}>
-                <DonutChart total={assignmentStats.total} done={assignmentStats.submitted} color="#09c86c" size={60}/>
-                <span className="absolute text-[11px] font-black" style={{ color: C.text }}>
-                  {assignmentStats.total > 0 ? Math.round((assignmentStats.submitted / assignmentStats.total) * 100) : 0}%
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-black" style={{ color: C.text }}>{assignmentStats.submitted}<span className="text-xs font-semibold" style={{ color: C.muted }}>/{assignmentStats.total}</span></p>
-                <p className="text-xs font-semibold" style={{ color: C.muted }}>Assignments submitted</p>
-                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#09c86c' }}/>
-                  <span className="text-[10px]" style={{ color: C.faint }}>Submitted</span>
-                  <div className="w-2 h-2 rounded-full ml-1 flex-shrink-0" style={{ background: C.pill }}/>
-                  <span className="text-[10px]" style={{ color: C.faint }}>Pending</span>
-                </div>
-              </div>
-            </button>
+              <button onClick={() => upScrollBy(1)} aria-label="Scroll right"
+                className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+                style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                <ChevronRight className="w-4 h-4"/>
+              </button>
+            </div>
           )}
         </div>
-      </div>
 
-      {/* Two-column: Deadlines | Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
-
-        {/* Deadlines */}
-        <div className="lg:col-span-3 space-y-3">
-          <h2 className="text-base font-bold" style={{ color: C.text }}>Upcoming Deadlines</h2>
-          {upcomingDeadlines.length === 0 ? (
-            <div className="rounded-2xl p-8 flex flex-col items-center gap-2"
-              style={{ background: C.card }}>
-              <CheckCircle className="w-8 h-8 opacity-30" style={{ color: '#16a34a' }}/>
-              <p className="text-sm font-semibold" style={{ color: C.text }}>All clear!</p>
-              <p className="text-xs" style={{ color: C.faint }}>No deadlines in the next 14 days.</p>
-            </div>
-          ) : (
-            <div className="rounded-2xl overflow-hidden"
-              style={{ background: C.card }}>
-              {upcomingDeadlines.map(({ title, daysLeft, type }, idx) => {
-                const col = daysLeft < 0 ? '#ef4444' : daysLeft <= 3 ? '#f59e0b' : daysLeft <= 7 ? '#f97316' : '#16a34a';
-                const lbl = daysLeft < 0 ? 'Overdue' : daysLeft === 0 ? 'Due today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft} days`;
-                const Icon = type === 'assignment' ? ClipboardList : type === 'project' ? Briefcase : BookOpen;
-                const typeLabel = type === 'assignment' ? 'Assignment' : type === 'project' ? 'Project' : 'Course';
-                return (
-                  <div key={`${type}-${title}-${idx}`} className="flex items-center gap-4 px-5 py-4"
-                    style={{ borderBottom: idx < upcomingDeadlines.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: `${col}15` }}>
+        {upcomingDeadlines.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-10">
+            <CheckCircle className="w-8 h-8 opacity-30" style={{ color: '#16a34a' }}/>
+            <p className="text-sm font-semibold" style={{ color: C.text }}>All clear!</p>
+            <p className="text-xs" style={{ color: C.faint }}>No deadlines or events in the next 14 days.</p>
+          </div>
+        ) : (
+          <div ref={upScrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            {upcomingDeadlines.map(({ title, daysLeft, type }, idx) => {
+              const col = daysLeft < 0 ? '#ef4444' : daysLeft <= 3 ? '#f59e0b' : daysLeft <= 7 ? '#f97316' : '#16a34a';
+              const lbl = daysLeft < 0 ? 'Overdue' : daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft} days`;
+              const Icon = type === 'assignment' ? ClipboardList : type === 'project' ? Briefcase : type === 'event' ? CalendarDays : BookOpen;
+              const typeLabel = type === 'assignment' ? 'Assignment' : type === 'project' ? 'Project' : type === 'event' ? 'Event' : 'Course';
+              return (
+                <div key={`${type}-${title}-${idx}`} className="flex-shrink-0 w-[210px] snap-start flex flex-col gap-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${col}15` }}>
                       <Icon className="w-4 h-4" style={{ color: col }}/>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{title}</p>
-                      <p className="text-xs mt-0.5" style={{ color: C.muted }}>{typeLabel}</p>
-                    </div>
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0"
-                      style={{ background: `${col}15`, color: col }}>{lbl}</span>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0" style={{ background: `${col}15`, color: col }}>{lbl}</span>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Right: Activity feed */}
-        <div className="lg:col-span-2 space-y-3">
-          <h2 className="text-base font-bold" style={{ color: C.text }}>Live Activity</h2>
-          {activityEvents.length === 0 ? (
-            <div className="rounded-2xl p-5 text-center"
-              style={{ background: C.card }}>
-              <p className="text-xs" style={{ color: C.faint }}>No recent cohort activity in the last 30 minutes.</p>
-            </div>
-          ) : (
-            <div className="rounded-2xl overflow-hidden"
-              style={{ background: C.card }}>
-              {activityEvents.map((e: any, idx: number) => (
-                <div key={`${e.ts}:${String(e.name)}`} className="flex items-center gap-3 px-4 py-3"
-                  style={{ borderBottom: idx < activityEvents.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold"
-                    style={{ background: `${C.green}18`, color: C.green }}>
-                    {String(e.name ?? '?').slice(0, 2).toUpperCase()}
+                  <div>
+                    <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: C.text }}>{title}</p>
+                    <p className="text-xs mt-1" style={{ color: C.muted }}>{typeLabel}</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs leading-snug" style={{ color: C.text }}>
-                      <span className="font-semibold">{String(e.name ?? '').slice(0, 30)}</span>{' '}
-                      <span style={{ color: C.muted }}>completed</span>
-                    </p>
-                    <p className="text-[11px] truncate mt-0.5" style={{ color: C.faint }}>
-                      {String(e.title ?? '').slice(0, 40)}
-                    </p>
-                  </div>
-                  <Zap className="w-3 h-3 flex-shrink-0" style={{ color: C.green }}/>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Recommended for you -- last on page */}
       {gaps.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 flex-shrink-0" style={{ color: C.green }}/>
-            <h2 className="text-base font-bold" style={{ color: C.text }}>Recommended for You</h2>
-            <span className="text-xs" style={{ color: C.muted }}>Topics you haven&apos;t explored yet</span>
+        <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <TrendingUp className="w-5 h-5 flex-shrink-0" style={{ color: C.green }}/>
+              <h3 className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: C.text }}>Recommended for You</h3>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button onClick={() => recScrollBy(-1)} aria-label="Scroll left"
+                className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+                style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                <ChevronLeft className="w-4 h-4"/>
+              </button>
+              <button onClick={() => recScrollBy(1)} aria-label="Scroll right"
+                className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+                style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                <ChevronRight className="w-4 h-4"/>
+              </button>
+            </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+          <p className="text-sm mt-1" style={{ color: C.muted }}>Topics you haven&apos;t explored yet</p>
+
+          <div ref={recScrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {gaps.map((gap: any) => {
               const isVE = gap.course.contentType === 'virtual_experience' || gap.course.contentType === 'guided_project';
               const liveItem = courses.find((c: any) => c.id === gap.course.formId);
@@ -5644,29 +6050,26 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
               })();
               return (
                 <a key={gap.course.formId} href={href}
-                  className="rounded-2xl overflow-hidden no-underline flex flex-col transition-all hover:opacity-90"
-                  style={{ background: C.card }}>
-                  <div className="w-full h-28 flex items-center justify-center overflow-hidden flex-shrink-0 relative"
-                    style={{ background: `${C.green}10` }}>
+                  className="flex-shrink-0 w-[220px] snap-start block no-underline transition-transform hover:-translate-y-0.5">
+                  <div className="relative rounded-xl overflow-hidden w-full aspect-video flex items-center justify-center"
+                    style={{ background: safeCover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
                     {safeCover
                       ? <img src={safeCover} alt="" className="w-full h-full object-cover"/>
-                      : <TrendingUp className="w-8 h-8" style={{ color: C.green, opacity: 0.3 }}/>}
-                    <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
-                      style={{ background: 'rgba(0,0,0,0.45)', color: 'white', backdropFilter: 'blur(4px)' }}>
-                      {String(gap.topic ?? '').slice(0, 24)}
-                    </span>
+                      : (isVE ? <Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>)}
+                    {gap.topic && (
+                      <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
+                        style={{ background: '#16a34a', color: '#ffffff' }}>
+                        {String(gap.topic).slice(0, 24)}
+                      </span>
+                    )}
                   </div>
-                  <div className="p-4 flex-1 flex flex-col gap-2">
-                    <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: C.text }}>{gap.course.title}</p>
-                    <div className="mt-auto">
-                      <span className="text-xs font-semibold" style={{ color: C.green }}>Start learning </span>
-                    </div>
-                  </div>
+                  <p className="text-xs mt-2" style={{ color: C.faint }}>{isVE ? 'Virtual Experience' : 'Course'}</p>
+                  <p className="text-[15px] font-bold leading-snug mt-0.5 line-clamp-2" style={{ color: C.text }}>{gap.course.title}</p>
                 </a>
               );
             })}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

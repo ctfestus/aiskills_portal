@@ -182,8 +182,8 @@ export async function POST(req: NextRequest) {
     const allItemIds = [...new Set(paths.flatMap((p: any) => p.item_ids ?? []))];
     const [{ data: coursesRaw }, { data: vesRaw }] = allItemIds.length
       ? await Promise.all([
-          supabase.from('courses').select('id, title, slug, cover_image').in('id', allItemIds),
-          supabase.from('virtual_experiences').select('id, title, slug, cover_image').in('id', allItemIds),
+          supabase.from('courses').select('id, title, slug, cover_image, description').in('id', allItemIds),
+          supabase.from('virtual_experiences').select('id, title, slug, cover_image, description').in('id', allItemIds),
         ])
       : [{ data: [] }, { data: [] }];
 

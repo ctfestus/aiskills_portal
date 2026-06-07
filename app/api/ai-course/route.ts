@@ -3,6 +3,7 @@ import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getRedis } from '@/lib/redis';
+import { pdfPageImageUrl } from '@/lib/cloudinary-pdf';
 
 const ALLOWED_ACTIONS = new Set([
   'generate_questions',
@@ -16,6 +17,8 @@ const ALLOWED_ACTIONS = new Set([
   'generate_broadcast_email',
   'generate_sql_course_outline',
   'generate_sql_course_full',
+  'generate_doc_course_outline',
+  'generate_doc_course_full',
 ]);
 
 function adminClient() {
@@ -136,9 +139,97 @@ const toNumber = (value: unknown) => {
 const containsAny = (text: string, patterns: string[]) =>
   patterns.some(pattern => text.includes(pattern));
 
-async function findLessonVideo(query: string): Promise<string | null> {
+// Resolve a creator-provided channel reference (name, @handle, or URL) to a YouTube channelId.
+async function resolveYouTubeChannelId(input: string, apiKey: string): Promise<string | null> {
+  const raw = input.trim();
+  if (!raw) return null;
+
+  // Already a channel ID.
+  if (/^UC[\w-]{22}$/.test(raw)) return raw;
+
+  // Pull a handle or id out of a pasted URL.
+  let handle = '';
+  let query = raw;
+  const urlMatch = raw.match(/youtube\.com\/(?:channel\/(UC[\w-]{22})|@([\w.-]+)|c\/([\w.-]+)|user\/([\w.-]+))/i);
+  if (urlMatch) {
+    if (urlMatch[1]) return urlMatch[1];                       // /channel/UC...
+    handle = urlMatch[2] || urlMatch[3] || urlMatch[4] || '';
+    query = handle;
+  } else if (raw.startsWith('@')) {
+    handle = raw.slice(1);
+    query = handle;
+  }
+
+  // Try the precise handle lookup first.
+  if (handle) {
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(handle)}&key=${apiKey}`,
+        { cache: 'no-store' },
+      );
+      if (res.ok) {
+        const json = await res.json();
+        const id = json?.items?.[0]?.id;
+        if (id) return id as string;
+      }
+    } catch { /* fall through to name search */ }
+  }
+
+  // Fall back to a channel search by name.
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/search?part=id&type=channel&maxResults=1&q=${encodeURIComponent(query)}&key=${apiKey}`,
+      { cache: 'no-store' },
+    );
+    if (res.ok) {
+      const json = await res.json();
+      const id = json?.items?.[0]?.id?.channelId;
+      if (id) return id as string;
+    }
+  } catch { /* no channel found */ }
+
+  return null;
+}
+
+// Find the most relevant embeddable video for a query WITHIN a specific channel.
+async function findChannelVideo(channelId: string, query: string, apiKey: string): Promise<string | null> {
+  const params = new URLSearchParams({
+    key: apiKey,
+    part: 'snippet',
+    channelId,
+    q: query,
+    type: 'video',
+    maxResults: '5',
+    order: 'relevance',
+    safeSearch: 'strict',
+    videoEmbeddable: 'true',
+    videoSyndicated: 'true',
+    relevanceLanguage: 'en',
+  });
+  const res = await fetch(`https://www.googleapis.com/youtube/v3/search?${params.toString()}`, { cache: 'no-store' });
+  if (!res.ok) return null;
+  const json = await res.json();
+  const videoId = (json.items || []).map((item: any) => item?.id?.videoId).filter(Boolean)[0];
+  return videoId ? buildYouTubeUrl(videoId) : null;
+}
+
+async function findLessonVideo(query: string, preferredChannels: string[] = []): Promise<string | null> {
   const apiKey = getYouTubeApiKey();
   if (!apiKey || !query.trim()) return null;
+
+  // If the creator named channels, pull a video FROM those channels first -- a generic
+  // topic search will not surface a niche channel, so restricting the search is the only
+  // reliable way to honor the preference.
+  const namedChannels = preferredChannels.map(c => c.trim()).filter(Boolean).slice(0, 3);
+  for (const channel of namedChannels) {
+    const channelId = await resolveYouTubeChannelId(channel, apiKey).catch(() => null);
+    if (!channelId) continue;
+    const url = await findChannelVideo(channelId, query, apiKey).catch(() => null);
+    if (url) return url;
+  }
+
+  // General search (used when no channels were named, or none had a relevant video).
+  const userChannels = preferredChannels.map(c => c.toLowerCase().trim()).filter(Boolean);
 
   const searchParams = new URLSearchParams({
     key: apiKey,
@@ -205,6 +296,12 @@ async function findLessonVideo(query: string): Promise<string | null> {
         if (channelTitle.includes(name)) return score + 120;
         return score;
       }, 0);
+      // Channels the creator explicitly asked for win decisively over the defaults.
+      const userPreferredBoost = userChannels.reduce((score, name) => {
+        if (channelTitle === name) return score + 600;
+        if (channelTitle.includes(name)) return score + 400;
+        return score;
+      }, 0);
       const officialBoost = containsAny(channelTitle, OFFICIAL_CHANNEL_KEYWORDS) ? 80 : 0;
       const tutorialBoost = containsAny(combinedText, TUTORIAL_PATTERNS) ? 45 : 0;
       const clickbaitPenalty = containsAny(combinedText, CLICKBAIT_PATTERNS) ? 80 : 0;
@@ -214,6 +311,7 @@ async function findLessonVideo(query: string): Promise<string | null> {
         viewCount >= 250_000 ? 18 :
         viewCount >= 100_000 ? 10 : 0;
       const score =
+        userPreferredBoost +
         preferredBoost +
         officialBoost +
         tutorialBoost +
@@ -227,6 +325,66 @@ async function findLessonVideo(query: string): Promise<string | null> {
     .sort((a: any, b: any) => b.score - a.score);
 
   return scored[0]?.id ? buildYouTubeUrl(scored[0].id) : null;
+}
+
+// Find a relevant stock photo for a lesson. Tries Unsplash, then Pexels.
+// Returns null when no key is configured so the feature degrades gracefully.
+async function findStockImage(query: string): Promise<string | null> {
+  if (!query?.trim()) return null;
+
+  const unsplashKey = process.env.UNSPLASH_ACCESS_KEY;
+  if (unsplashKey) {
+    try {
+      const res = await fetch(
+        `https://api.unsplash.com/search/photos?per_page=1&orientation=landscape&content_filter=high&query=${encodeURIComponent(query)}`,
+        { headers: { Authorization: `Client-ID ${unsplashKey}` }, cache: 'no-store' },
+      );
+      if (res.ok) {
+        const json = await res.json();
+        const url = json?.results?.[0]?.urls?.regular;
+        if (url) return url as string;
+      }
+    } catch { /* fall through to Pexels */ }
+  }
+
+  const pexelsKey = process.env.PEXELS_API_KEY;
+  if (pexelsKey) {
+    try {
+      const res = await fetch(
+        `https://api.pexels.com/v1/search?per_page=1&orientation=landscape&size=large&query=${encodeURIComponent(query)}`,
+        { headers: { Authorization: pexelsKey }, cache: 'no-store' },
+      );
+      if (res.ok) {
+        const json = await res.json();
+        const src = json?.photos?.[0]?.src;
+        // Prefer the high-res variant; fall back through progressively smaller ones.
+        const url = src?.large2x ?? src?.landscape ?? src?.large;
+        if (url) return url as string;
+      }
+    } catch { /* no image available */ }
+  }
+
+  return null;
+}
+
+async function checkDocCourseRateLimit(userId: string, role: string): Promise<NextResponse | null> {
+  const redis = getRedis();
+  if (!redis) return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
+  const limit = role === 'admin' ? 20 : 5;
+  try {
+    const key = `rate:ai-doc-course:${userId}`;
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, 3600);
+    if (count > limit) {
+      return NextResponse.json(
+        { error: `AI course limit reached. You can generate ${limit} courses per hour.` },
+        { status: 429 },
+      );
+    }
+  } catch {
+    return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
+  }
+  return null;
 }
 
 async function checkSqlCourseRateLimit(userId: string, role: string): Promise<NextResponse | null> {
@@ -248,6 +406,29 @@ async function checkSqlCourseRateLimit(userId: string, role: string): Promise<Ne
   }
   return null;
 }
+
+// Shared instructional-design persona for the document-to-course engine.
+const DOC_COURSE_PERSONA = `You are a world-class course creator and instructional designer with deep expertise in adult learning, backward design, and skills-based training. Your specialty is transforming documents, documentation, and product guides into JOB-READY, hands-on courses that build real, applicable workplace skills.
+
+Design philosophy:
+- Job-ready: every lesson maps to something the learner will actually DO on the job, not just facts to memorize. Frame outcomes as concrete capabilities.
+- Hands-on and realistic: teach through worked examples, concrete steps, and realistic workplace scenarios drawn from the document's subject matter. Show how the concept is used in practice.
+- Backward design: start from the capability the learner should walk away with, then build lessons and practice toward it.
+- Active application: assessments test decision-making and applying the concept in realistic situations, not just definition recall.
+- Scaffolded: progress from foundational concepts to applied, scenario-based mastery so confidence builds module over module.`;
+
+// The full vocabulary of exercise types the platform supports, with guidance on when to pick each.
+// The engine chooses the most fitting type per lesson based on the document content AND the creator's focus.
+const DOC_COURSE_TYPE_GUIDE = `Choose the most fitting exercise type for each lesson based on the document's subject matter and the creator's stated focus. Be decisive and practical - prefer hands-on, tool-appropriate exercises over generic quizzes whenever the content supports it:
+- sql_exercise: the learner writes and runs real SQL against sample tables. Use whenever the material involves SQL, querying, or relational databases.
+- code_review: the learner writes code and an AI reviewer grades it. Use for programming, scripting, or software tasks.
+- excel_review: the learner builds a spreadsheet and an AI reviewer grades it. Use for Excel, spreadsheets, or formula-based analysis.
+- dashboard_critique: the learner builds a dashboard/visualization and an AI reviewer critiques it. Use for BI, reporting, analytics, or data visualization.
+- document_review: the learner writes a report/document and an AI reviewer grades it. Use for writing, business analysis, strategy, or deliverables.
+- multiple_choice: a scenario-based knowledge check with 4 options. Use for conceptual understanding.
+- fill_blank: complete a key term, command, or value. Use for precise recall of syntax or terminology.
+- arrange: order the steps of a real process or workflow. Use for procedures and sequences.
+STRONGLY honor the creator's focus: if they ask for SQL, make SQL lessons sql_exercise; if they ask for hands-on practice, favor the applied types (sql_exercise, code_review, excel_review, dashboard_critique, document_review) over plain knowledge checks. Use multiple_choice/fill_blank/arrange for genuinely conceptual lessons or to vary pacing.`;
 
 export async function POST(req: NextRequest) {
   // 1. Authentication + RBAC -- instructors and admins only
@@ -1115,6 +1296,475 @@ ${JSON.stringify(lessonInput, null, 2)}`;
         title,
         description: outline.courseDescription ?? outline.businessScenario ?? '',
         isCourse:    true,
+        learnOutcomes: outline.learningOutcomes ?? [],
+        questions,
+      });
+    }
+
+    // -- Generate course outline from a document (step 1 of 2) ---
+    if (action === 'generate_doc_course_outline') {
+      const rateLimitErr = await checkDocCourseRateLimit(user.id, userProfile?.role ?? 'instructor');
+      if (rateLimitErr) return rateLimitErr;
+
+      const sourceText = clamp(body.sourceText, 100_000);
+      const title      = clamp(body.title, 200);
+      const audience   = clamp(body.audience, 200);
+      const level      = clamp(body.level, 30) || 'Beginner';
+      const goal       = clamp(body.goal, 600);
+      const focus      = clamp(body.focus, 800);
+      const depth      = clamp(body.depth, 20) || 'balanced';
+      const practice   = clamp(body.practice, 20) || 'balanced';
+      const tone       = clamp(body.tone, 20) || 'professional';
+      const moduleIndex: number | null = typeof body.moduleIndex === 'number' ? body.moduleIndex : null;
+      const existingOutline = body.existingOutline ?? null;
+
+      const depthGuidance =
+        depth === 'primer'        ? 'Keep it concise and essential: 3-4 modules, 2-4 lessons each. Cover only the core, highest-value material.'
+      : depth === 'comprehensive' ? 'Be thorough and complete: 8-12 modules, 4-6 lessons each, covering the material in depth with no important gaps.'
+      :                             'Use a balanced scope: 4-8 modules, 3-6 lessons each.';
+
+      const practiceGuidance =
+        practice === 'hands_on'  ? 'Strongly favor applied, hands-on exercise types (sql_exercise, code_review, excel_review, dashboard_critique, document_review). Use knowledge checks only occasionally.'
+      : practice === 'knowledge' ? 'Favor knowledge-check types (multiple_choice, fill_blank, arrange); use applied exercises only where the content clearly calls for hands-on work.'
+      :                            'Use a balanced mix of applied exercises and knowledge checks.';
+
+      if (!sourceText.trim()) {
+        return NextResponse.json({ error: 'sourceText is required' }, { status: 400 });
+      }
+
+      const lessonItemSchema = {
+        type: Type.OBJECT,
+        properties: {
+          id:           { type: Type.STRING, description: 'short random id like l_ab12cd' },
+          title:        { type: Type.STRING },
+          summary:      { type: Type.STRING, description: 'one sentence on what this lesson teaches' },
+          questionType: { type: Type.STRING, description: 'one of: sql_exercise, code_review, excel_review, dashboard_critique, document_review, multiple_choice, fill_blank, arrange' },
+        },
+        required: ['id', 'title', 'summary', 'questionType'],
+      };
+
+      const briefBlock = `Course parameters:
+- Working title: ${title || '(none, propose one)'}
+- Audience: ${audience || 'general learners'}
+- Level: ${level}
+- Primary goal (what learners should be able to DO): ${goal || 'derive the most valuable, job-ready capability from the document'}
+- Tone: ${tone}
+- Creator focus: ${focus || 'cover the document comprehensively'}`;
+
+      const rules = `Rules:
+- Ground every concept, fact, feature, and step strictly in the DOCUMENT CONTENT below. Do not invent product facts or capabilities that are not in the document.
+- You MAY build realistic, job-relevant scenarios and worked examples that APPLY the document's content to real workplace situations. That is how hands-on skill is practiced, and it is encouraged.
+- Use backward design toward the primary goal. ${depthGuidance} Sequence lessons from foundational to applied so later modules build hands-on mastery.
+- Each lesson teaches exactly ONE focused, applicable concept, task, or step. Lesson titles name the specific skill or task and are action-oriented where possible (e.g. "Configure X", "Troubleshoot Y"), not vague headers.
+- Set each lesson's questionType using the EXERCISE TYPE GUIDE below - match the type to what the lesson actually trains.
+
+${DOC_COURSE_TYPE_GUIDE}
+
+- Practice emphasis: ${practiceGuidance}
+- Plain ASCII only. No em dashes, no curly quotes, no ellipsis characters, no asterisks.`;
+
+      // -- Single-module regeneration --
+      if (moduleIndex !== null && existingOutline) {
+        const currentModule = existingOutline.modules?.[moduleIndex];
+        const otherModules = (existingOutline.modules ?? [])
+          .filter((_: any, i: number) => i !== moduleIndex)
+          .map((m: any) => m.title).join(', ');
+
+        const prompt = `${DOC_COURSE_PERSONA}
+
+You are regenerating a single module for a course built from a document.
+
+${briefBlock}
+- Other modules already in the course: ${otherModules}
+
+Current module to replace:
+${JSON.stringify(currentModule, null, 2)}
+
+${rules}
+
+Generate a fresh replacement module that covers material from the document not already covered by the other modules.
+
+DOCUMENT CONTENT:
+${sourceText}`;
+
+        const schema = {
+          type: Type.OBJECT,
+          properties: {
+            module: {
+              type: Type.OBJECT,
+              properties: {
+                id:          { type: Type.STRING },
+                title:       { type: Type.STRING },
+                description: { type: Type.STRING },
+                lessons:     { type: Type.ARRAY, items: lessonItemSchema },
+              },
+              required: ['id', 'title', 'description', 'lessons'],
+            },
+          },
+          required: ['module'],
+        };
+        const result = await generateJSON(prompt, schema, { temperature: 0.6, geminiRetries: 2 } as any);
+        return NextResponse.json(result);
+      }
+
+      const prompt = `${DOC_COURSE_PERSONA}
+
+Design a complete, job-ready course from the document below.
+
+${briefBlock}
+
+${rules}
+
+Produce:
+1. courseTitle: a clear, compelling, outcome-driven title (reuse the working title if it fits).
+2. courseDescription: 2-3 sentences on the concrete job-ready capability the learner will walk away with.
+3. learningOutcomes: 4-6 outcomes, each a real on-the-job capability starting with an action verb (e.g. "Configure", "Troubleshoot", "Design", "Apply").
+4. modules: the full module and lesson structure following the rules above.
+
+DOCUMENT CONTENT:
+${sourceText}`;
+
+      const schema = {
+        type: Type.OBJECT,
+        properties: {
+          courseTitle:       { type: Type.STRING },
+          courseDescription: { type: Type.STRING },
+          learningOutcomes:  { type: Type.ARRAY, items: { type: Type.STRING } },
+          modules: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id:          { type: Type.STRING },
+                title:       { type: Type.STRING },
+                description: { type: Type.STRING },
+                lessons:     { type: Type.ARRAY, items: lessonItemSchema },
+              },
+              required: ['id', 'title', 'description', 'lessons'],
+            },
+          },
+        },
+        required: ['courseTitle', 'courseDescription', 'learningOutcomes', 'modules'],
+      };
+
+      const result = await generateJSON(prompt, schema, { temperature: 0.6, geminiRetries: 2 } as any);
+      return NextResponse.json(result);
+    }
+
+    // -- Generate full course from approved document outline (step 2 of 2) ---
+    if (action === 'generate_doc_course_full') {
+      const rateLimitErr = await checkDocCourseRateLimit(user.id, userProfile?.role ?? 'instructor');
+      if (rateLimitErr) return rateLimitErr;
+
+      const outline    = body.outline;
+      const sourceText = clamp(body.sourceText, 100_000);
+      const title      = clamp(body.title || outline?.courseTitle || '', 200);
+      const audience   = clamp(body.audience, 200);
+      const level      = clamp(body.level, 30) || 'Beginner';
+      const goal       = clamp(body.goal, 600);
+      const tone       = clamp(body.tone, 20) || 'professional';
+      const pdfUrl     = typeof body.pdfUrl === 'string' ? body.pdfUrl : '';
+      const pageCount  = Number(body.pageCount) || 0;
+
+      const imageMode: string[] = Array.isArray(body.imageMode)
+        ? body.imageMode.map((m: any) => String(m))
+        : [body.imageMode].filter(Boolean).map((m: any) => String(m));
+      const wantSourceImages = imageMode.includes('source') && !!pdfUrl;
+      const wantStockImages  = imageMode.includes('stock');
+
+      // Video preferences -- creator decides whether to use videos at all, and which channels to favor.
+      const includeVideos = body.includeVideos !== false; // default on
+      const preferredChannels: string[] = Array.isArray(body.preferredChannels)
+        ? body.preferredChannels.map((c: any) => clamp(c, 80)).filter(Boolean).slice(0, 12)
+        : [];
+
+      if (!outline?.modules?.length) {
+        return NextResponse.json({ error: 'outline.modules is required' }, { status: 400 });
+      }
+      if (!sourceText.trim()) {
+        return NextResponse.json({ error: 'sourceText is required' }, { status: 400 });
+      }
+
+      const baseCtx = `${DOC_COURSE_PERSONA}
+
+Course context:
+- Title: ${title}
+- Audience: ${audience || 'general learners'}
+- Level: ${level}
+- Primary goal: ${goal || 'build the most valuable, job-ready capability from the document'}
+- Tone: write all lesson and question content in a ${tone} voice.
+
+STRICT GROUNDING: All facts, features, and steps must come from the DOCUMENT CONTENT. Do not invent product facts. You MAY construct realistic, job-relevant scenarios and worked examples that apply that content to practice.
+STRICT FORMATTING: Plain ASCII only. No em dashes, no curly quotes, no ellipsis, no asterisks.`;
+
+      const questionSchema = {
+        type: Type.OBJECT,
+        properties: {
+          type:          { type: Type.STRING, description: 'Must equal the lesson planned questionType: sql_exercise, code_review, excel_review, dashboard_critique, document_review, multiple_choice, fill_blank, or arrange.' },
+          question:      { type: Type.STRING, description: 'The question, task, or brief. For fill_blank put ___ where the blank goes. For applied types this is the task/brief the learner must complete.' },
+          options:       { type: Type.ARRAY, items: { type: Type.STRING }, description: 'multiple_choice: exactly 4 options. arrange: items in correct order. Empty for all other types.' },
+          correctAnswer: { type: Type.STRING, description: 'multiple_choice: exact correct option text. fill_blank: the answer word(s). Empty for arrange and all applied types.' },
+          explanation:   { type: Type.STRING, description: 'For knowledge-check types: why the answer is correct.' },
+          hint:          { type: Type.STRING, description: 'Optional subtle hint (knowledge-check types).' },
+          codeSnippet:   { type: Type.STRING, description: 'Optional code shown with the question (code type only).' },
+          codeLanguage:  { type: Type.STRING, description: 'Language of codeSnippet, e.g. javascript, python (code type only).' },
+          // AI reviewer types (code_review, excel_review, dashboard_critique, document_review)
+          rubric:        { type: Type.ARRAY, items: { type: Type.STRING }, description: 'For reviewer types: 3-5 specific grading criteria the AI should assess.' },
+          context:       { type: Type.STRING, description: 'For reviewer types: dataset, scope, or context the learner works with.' },
+          reviewLanguage:{ type: Type.STRING, description: 'For code_review: the programming language, e.g. python, javascript, sql.' },
+          // sql_exercise
+          scenario:      { type: Type.STRING, description: 'For sql_exercise: a short HTML business scenario (2-3 sentences, <p> and <strong> only) that frames the task in a realistic workplace situation, naming a specific role, team, or report and why the data is needed.' },
+          sqlSolution:   { type: Type.STRING, description: 'For sql_exercise: a correct SQL query that answers the task, using ONLY the shared dataset tables and exact column names.' },
+          sqlStarterCode:{ type: Type.STRING, description: 'For sql_exercise: starter SQL the learner edits, e.g. a SELECT skeleton.' },
+          sqlHints:      { type: Type.ARRAY, items: { type: Type.STRING }, description: 'For sql_exercise: 1-3 progressive hints.' },
+        },
+        required: ['type', 'question'],
+      };
+
+      const lessonContentSchema = {
+        type: Type.OBJECT,
+        properties: {
+          lessonId:   { type: Type.STRING },
+          title:      { type: Type.STRING },
+          body:       { type: Type.STRING, description: 'Practical, hands-on lesson HTML with a worked example or how-to steps where possible: <p>, <strong>, <ul>, <li>, <h4>, <blockquote>. 100-180 words. No hr dividers.' },
+          imageQuery: { type: Type.STRING, description: 'Concrete visual 2-4 word subject for a professional stock photo (real-world scene/tool/object, never text or a UI screenshot)' },
+          sourcePage: { type: Type.NUMBER, description: '1-based page number ONLY if the document has a real figure/diagram/chart for this lesson worth showing; otherwise 0' },
+          questions:  { type: Type.ARRAY, items: questionSchema },
+        },
+        required: ['lessonId', 'title', 'body', 'questions'],
+      };
+
+      const moduleContentSchema = {
+        type: Type.OBJECT,
+        properties: {
+          intro: {
+            type: Type.OBJECT,
+            properties: {
+              title:      { type: Type.STRING },
+              body:       { type: Type.STRING, description: 'Module intro HTML, 120-220 words, using <p>, <strong>, <ul>, <li>, <h4>, <blockquote>.' },
+              videoQuery: { type: Type.STRING, description: 'Specific educational YouTube query naming the subject and ending with "tutorial" or "explained"' },
+              imageQuery: { type: Type.STRING, description: 'Concrete visual 2-4 word subject for a professional stock photo (real-world scene/tool/workplace, not abstract text)' },
+            },
+            required: ['title', 'body'],
+          },
+          lessons: { type: Type.ARRAY, items: lessonContentSchema },
+        },
+        required: ['intro', 'lessons'],
+      };
+
+      const uid = () => Math.random().toString(36).slice(2, 9);
+      const questions: any[] = [];
+
+      const resolveLessonImage = async (imageQuery: string, sourcePage: number): Promise<string> => {
+        // Prefer a relevant, high-res stock photo. Document page screenshots are mostly
+        // text (and sometimes blank), so they are only a fallback when no stock photo is found.
+        if (wantStockImages) {
+          const url = await findStockImage(imageQuery).catch(() => null);
+          if (url) return url;
+        }
+        if (wantSourceImages && sourcePage >= 1 && (!pageCount || sourcePage <= pageCount)) {
+          return pdfPageImageUrl(pdfUrl, sourcePage);
+        }
+        return '';
+      };
+
+      // -- Shared SQL dataset: generated once, only when the outline has SQL exercises --
+      const hasSqlLessons = outline.modules.some(
+        (m: any) => (m.lessons ?? []).some((l: any) => l.questionType === 'sql_exercise'),
+      );
+      let sqlTables: { tableName: string; description: string; seedSql: string }[] = [];
+      let sqlSchemaBlock = '';
+      if (hasSqlLessons) {
+        const datasetPrompt = `${DOC_COURSE_PERSONA}
+
+Generate a small, realistic SQL practice dataset grounded in the subject and domain of the DOCUMENT CONTENT below.
+
+Rules:
+- 2-4 relational tables with realistic, internally consistent data and sensible foreign keys.
+- Total rows across all tables between 40 and 90.
+- Use ONLY these column types: INTEGER, TEXT, REAL, DATE. No BIGINT, SERIAL, BOOLEAN, or ARRAY.
+- Each table's seedSql must contain valid DuckDB CREATE TABLE and INSERT INTO statements, no markdown fences.
+- Keep ids and relationships consistent across the whole dataset so JOINs work.
+- Plain ASCII only.
+
+DOCUMENT CONTENT:
+${clamp(sourceText, 40_000)}`;
+
+        const datasetSchema = {
+          type: Type.OBJECT,
+          properties: {
+            tables: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  tableName:   { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  seedSql:     { type: Type.STRING },
+                },
+                required: ['tableName', 'description', 'seedSql'],
+              },
+            },
+          },
+          required: ['tables'],
+        };
+
+        try {
+          const ds = await generateJSON(datasetPrompt, datasetSchema, { temperature: 0.4, geminiRetries: 2 } as any);
+          if (Array.isArray(ds?.tables)) {
+            sqlTables = ds.tables.filter((t: any) => t?.tableName && t?.seedSql);
+          }
+        } catch (err) {
+          console.warn('[doc-course] SQL dataset generation failed:', (err as Error).message);
+        }
+
+        // CREATE-only schema (strip INSERT rows) to give module prompts the table/column names cheaply.
+        const createOnly = (seedSql: string): string => {
+          const idx = seedSql.toUpperCase().indexOf('INSERT INTO');
+          return idx > 0 ? seedSql.slice(0, idx).trim() : seedSql;
+        };
+        sqlSchemaBlock = sqlTables
+          .map(t => `-- ${t.tableName}: ${t.description}\n${createOnly(t.seedSql)}`)
+          .join('\n\n');
+      }
+      let isFirstSqlExercise = true;
+
+      for (const mod of outline.modules) {
+        const lessonPlan = (mod.lessons ?? [])
+          .map((l: any) => `- [${l.id}] ${l.title} (${l.questionType}): ${l.summary ?? ''}`)
+          .join('\n');
+
+        const modulePrompt = `You are writing one module of a course built from a document.
+${baseCtx}
+
+Module: ${mod.title}
+${mod.description ? `Module description: ${mod.description}` : ''}
+
+Lessons to write (return the EXACT lessonId for each, do not change ids):
+${lessonPlan}
+
+For the module, produce:
+- intro: a short, motivating introduction that frames what the learner will be able to DO after this module and why it matters on the job. Include:
+  - videoQuery: a specific, educational YouTube search query that names the concrete subject and ends with a word like "tutorial" or "explained" (so it surfaces a high-quality explainer, not a vlog or promo).
+  - imageQuery: a concrete, visual 2-4 word subject for a professional stock photo that depicts a real-world scene, tool, or workplace, NOT abstract text or a UI screenshot.
+- lessons: one entry per planned lesson, in order. Each lesson has:
+  - body: a focused, practical mini-lesson that teaches the concept AND how to apply it in real work. Where the document supports it, include a concrete worked example or a short numbered "how to" sequence of steps, and connect the concept to a realistic workplace task. Be specific and actionable, not abstract.
+  - imageQuery: a concrete, visual 2-4 word subject for a professional stock photo illustrating this lesson (a real-world scene, tool, or object - never text, a logo, or a UI screenshot).
+  - sourcePage: set to the 1-based page number ONLY if the document clearly contains a figure, diagram, chart, or screenshot for THIS lesson that is worth showing; otherwise 0.
+  - questions: build exactly ONE question whose "type" EQUALS the lesson's planned questionType shown above. Make it realistic and job-relevant. Fill ONLY the fields for that type:
+    - multiple_choice: a short realistic scenario question, exactly 4 plausible options, correctAnswer is the exact correct option text, plus a one-sentence explanation and a subtle hint. (You may add a second multiple_choice question if helpful.)
+    - fill_blank: put ___ in the question (inside a practical statement or command), options empty, correctAnswer is the missing word(s), plus explanation.
+    - arrange: options are the steps of a real process or workflow in the correct order, correctAnswer empty, plus explanation.
+    - sql_exercise: ALWAYS write "scenario" first - a short, realistic business situation (2-3 sentences, HTML <p> and <strong> only) that names a specific role, team, or report and explains WHY the data is needed. Example: "<p>The <strong>Head of Marketing</strong> wants a full list of every customer and their contact details from the sales records to plan an outreach campaign.</p>". Then "question" is the concrete task tied to that scenario, e.g. "Write a query that returns every column from the sales table." NEVER write a bare task without a scenario. Provide sqlSolution (a correct query using ONLY the shared dataset tables and exact column names below), sqlStarterCode (a starter the learner edits), and 1-3 sqlHints. Leave options/correctAnswer empty.
+    - code_review: question is a coding task/brief. Provide reviewLanguage and a rubric of 3-5 specific grading criteria. Optionally context. Leave options/correctAnswer empty.
+    - excel_review: question is a spreadsheet task/brief. Provide a rubric of 3-5 criteria and context describing the dataset. Leave options/correctAnswer empty.
+    - dashboard_critique: question is a dashboard/visualization task/brief. Provide a rubric of 3-5 criteria and context. Leave options/correctAnswer empty.
+    - document_review: question is a report/document brief. Provide a rubric of 3-5 criteria and context describing scope. Leave options/correctAnswer empty.
+${hasSqlLessons && sqlSchemaBlock ? `
+SHARED SQL DATASET (use ONLY these tables and exact column names for every sql_exercise; never invent columns):
+${sqlSchemaBlock}
+` : ''}
+DOCUMENT CONTENT:
+${clamp(sourceText, 60_000)}`;
+
+        let gen: any;
+        try {
+          gen = await generateJSON(modulePrompt, moduleContentSchema, { temperature: 0.6, geminiRetries: 2 } as any);
+        } catch (err) {
+          console.warn('[doc-course] module generation failed, skipping:', (err as Error).message);
+          continue;
+        }
+
+        // -- Module intro slide --
+        const intro = gen.intro ?? {};
+        const introVideo = (includeVideos && intro.videoQuery)
+          ? await findLessonVideo(intro.videoQuery, preferredChannels).catch(() => null)
+          : null;
+        const introImage = await resolveLessonImage(intro.imageQuery ?? mod.title, 0);
+        questions.push({
+          id:            uid(),
+          lessonOnly:    true,
+          question:      '',
+          options:       [],
+          correctAnswer: '',
+          lesson:        { title: intro.title || mod.title, body: intro.body || '', imageUrl: introImage, videoUrl: introVideo || '' },
+        });
+
+        // -- Lessons + questions --
+        for (const lesson of gen.lessons ?? []) {
+          const lessonImage = await resolveLessonImage(lesson.imageQuery ?? lesson.title, Number(lesson.sourcePage) || 0);
+          questions.push({
+            id:            uid(),
+            lessonOnly:    true,
+            question:      '',
+            options:       [],
+            correctAnswer: '',
+            lesson:        { title: lesson.title || '', body: lesson.body || '', imageUrl: lessonImage, videoUrl: '' },
+          });
+
+          const ALL_TYPES = ['multiple_choice', 'fill_blank', 'arrange', 'code', 'sql_exercise', 'code_review', 'excel_review', 'dashboard_critique', 'document_review'];
+          const toStrArray = (v: any): string[] => Array.isArray(v) ? v.map((x: any) => String(x)).filter(Boolean) : [];
+
+          for (const q of lesson.questions ?? []) {
+            const type = ALL_TYPES.includes(q.type) ? q.type : 'multiple_choice';
+            const options = toStrArray(q.options);
+
+            // Base shape shared by every question slide.
+            const base: any = {
+              id:            uid(),
+              type,
+              question:      String(q.question ?? ''),
+              options:       [],
+              correctAnswer: '',
+              explanation:   String(q.explanation ?? ''),
+              hint:          String(q.hint ?? ''),
+            };
+
+            if (type === 'multiple_choice' || type === 'code') {
+              base.options = options;
+              base.correctAnswer = String(q.correctAnswer ?? '');
+              if (type === 'code') {
+                base.codeSnippet = String(q.codeSnippet ?? '');
+                base.codeLanguage = String(q.codeLanguage ?? 'javascript');
+              }
+            } else if (type === 'fill_blank') {
+              base.correctAnswer = String(q.correctAnswer ?? '');
+            } else if (type === 'arrange') {
+              base.options = options;
+              base.correctAnswer = options.join('|||'); // options are in correct order
+            } else if (type === 'sql_exercise') {
+              base.sqlTables           = isFirstSqlExercise ? sqlTables.map(t => ({ tableName: t.tableName, seedSql: t.seedSql })) : [];
+              base.sqlSolution         = String(q.sqlSolution ?? '');
+              base.sqlStarterCode      = String(q.sqlStarterCode ?? 'SELECT * FROM table_name LIMIT 10;');
+              base.sqlHints            = toStrArray(q.sqlHints);
+              base.sqlResultOrdered    = false;
+              base.sqlNumericTolerance = 0;
+              base.sqlRequiredPatterns = [];
+              // Business scenario shown above the SQL editor; the task itself stays in `question`.
+              base.lesson              = { title: String(lesson.title ?? ''), body: String(q.scenario ?? '') };
+              isFirstSqlExercise = false;
+            } else {
+              // AI reviewer types: code_review, excel_review, dashboard_critique, document_review
+              base.rubric  = toStrArray(q.rubric);
+              base.context = String(q.context ?? '');
+              base.minScore = 70;
+              if (type === 'code_review') base.reviewLanguage = String(q.reviewLanguage ?? 'javascript');
+              if (type === 'document_review') base.documentReviewMode = 'ai_only';
+            }
+
+            questions.push(base);
+          }
+        }
+      }
+
+      if (!questions.length) {
+        return NextResponse.json({ error: 'Course generation produced no content. Please try again.' }, { status: 502 });
+      }
+
+      return NextResponse.json({
+        title,
+        description:   outline.courseDescription ?? '',
+        isCourse:      true,
         learnOutcomes: outline.learningOutcomes ?? [],
         questions,
       });

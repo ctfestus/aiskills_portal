@@ -299,13 +299,6 @@ const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   description: 'Description Block',
 };
 
-const EXAMPLE_PROMPTS = [
-  'Event registration for a tech conference',
-  'Customer feedback survey',
-  'Job application form',
-  'Course on world capitals',
-];
-
 const uid = () => Math.random().toString(36).slice(2, 9);
 
 const TEMPLATES: { key: string; label: string; description: string; icon: React.ElementType; color: string; config: FormConfig }[] = [
@@ -908,8 +901,6 @@ export default function Page() {
   const router = useRouter();
   const inputStyle = { background: C.input, border: `1px solid ${C.inputBorder}`, color: C.text };
   const labelStyle = { color: C.faint };
-  const [prompt, setPrompt] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
   const [formConfig, setFormConfig] = useState<FormConfig | null>(null);
   const [isLoadingEdit, setIsLoadingEdit] = useState(true); // stays true until useEffect resolves
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -963,6 +954,16 @@ const [isSaving, setIsSaving] = useState(false);
   const [sqlOutline, setSqlOutline] = useState<any | null>(null);
   const [sqlModuleLoading, setSqlModuleLoading] = useState<number | null>(null);
   const [sqlExpandedTables, setSqlExpandedTables] = useState<Set<number>>(new Set());
+  // Document -> Course AI Wizard
+  const [docWizardStep, setDocWizardStep] = useState<null | 'input' | 'outline'>(null);
+  const [docBrief, setDocBrief] = useState<{ title: string; audience: string; level: string; goal: string; focus: string; depth: 'primer' | 'balanced' | 'comprehensive'; practice: 'hands_on' | 'balanced' | 'knowledge'; tone: 'professional' | 'conversational' | 'academic'; imageMode: string[]; includeVideos: boolean; preferredChannels: string }>({ title: '', audience: '', level: 'Beginner', goal: '', focus: '', depth: 'balanced', practice: 'balanced', tone: 'professional', imageMode: ['source', 'stock'], includeVideos: true, preferredChannels: '' });
+  const [docSourceMethod, setDocSourceMethod] = useState<'file' | 'text' | 'url'>('file');
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docText, setDocText] = useState('');
+  const [docUrl, setDocUrl] = useState('');
+  const [docExtract, setDocExtract] = useState<{ sourceText: string; pdfUrl?: string; pageCount?: number } | null>(null);
+  const [docOutline, setDocOutline] = useState<any | null>(null);
+  const [docModuleLoading, setDocModuleLoading] = useState<number | null>(null);
   const [busyQuestionId, setBusyQuestionId] = useState<string | null>(null);
   const [lessonPrompts, setLessonPrompts] = useState<Record<string, string>>({});
   const [lessonPromptModal, setLessonPromptModal] = useState<{ q: CourseQuestion } | null>(null);
@@ -987,7 +988,6 @@ const [isSaving, setIsSaving] = useState(false);
   const toggleCohort = (id: string) =>
     setSelectedCohortIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
-  const promptRef = useRef<HTMLTextAreaElement>(null);
   const badgeInputRef = useRef<HTMLInputElement>(null);
   const [uploadingBadge, setUploadingBadge] = useState(false);
 
@@ -1118,6 +1118,8 @@ const [isSaving, setIsSaving] = useState(false);
       }
       if (type === 'sql-course') {
         setSqlWizardStep('brief');
+      } else if (type === 'doc-course') {
+        setDocWizardStep('input');
       } else if (type) {
         const match = TEMPLATES.find(t => t.key === type);
         if (match) setFormConfig({ ...match.config });
@@ -1301,41 +1303,6 @@ const [isSaving, setIsSaving] = useState(false);
     setCustomSlug('');
   };
 
-  // -- AI generation --
-  const handleGenerate = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!prompt.trim()) return;
-    setIsGenerating(true);
-    setFormConfig(null);
-    setIsSuccess(false);
-    setSavedFormId(null);
-    setCustomSlug('');
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ prompt }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const parsed = await res.json();
-      if (parsed) {
-        const defaultFields: FormField[] = [
-          { id: 'default_full_name', name: 'full_name', label: 'Full Name', type: 'text', placeholder: 'Enter your full name...', required: true },
-          { id: 'default_email', name: 'email', label: 'Email Address', type: 'email', placeholder: 'you@example.com', required: true },
-          { id: 'default_phone', name: 'phone', label: 'Contact Number', type: 'phone', required: true },
-        ];
-        const skipKeywords = ['full name', 'first name', 'last name', 'email', 'phone', 'mobile', 'telephone', 'contact'];
-        const aiFields = (parsed.fields || []).filter(
-          (f: FormField) => !skipKeywords.some(kw => f.label.toLowerCase().includes(kw) || f.name.toLowerCase().includes(kw))
-        ).map((f: FormField) => ({ ...f, required: f.required !== false }));
-        setFormConfig({ ...parsed, fields: parsed.isCourse ? [] : [...defaultFields, ...aiFields], questions: parsed.questions || [], coverImage: '', theme: 'forest', mode: 'dark', font: 'sans' });
-      }
-    } catch (error) {
-      console.error('Failed to generate form:', error);
-      showToast('Failed to generate. Please try again.');
-    } finally { setIsGenerating(false); }
-  };
 
   const handleGenerateSqlOutline = async () => {
     if (!sqlBrief.title.trim()) { showToast('Please enter a course title.', 'error'); return; }
@@ -1424,6 +1391,154 @@ const [isSaving, setIsSaving] = useState(false);
       setSqlWizardStep(null);
       // Keep sqlOutline so the user can return to it from the editor
       showToast('SQL course generated! Review and publish when ready.', 'success');
+    } catch (err: any) {
+      setAiFailed(true);
+      showToast(err.message || 'Failed to generate course. Please try again.', 'error');
+    } finally {
+      setAiLoadingLabel('');
+    }
+  };
+
+  // -- Document -> Course wizard --
+  const handleGenerateDocOutline = async () => {
+    if (docSourceMethod === 'file' && !docFile) { showToast('Please choose a document to upload.', 'error'); return; }
+    if (docSourceMethod === 'text' && !docText.trim()) { showToast('Please paste some content.', 'error'); return; }
+    if (docSourceMethod === 'url' && !docUrl.trim()) { showToast('Please enter a URL.', 'error'); return; }
+
+    setAiLoadingLabel('Reading your document...');
+    setAiFailed(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      // 1. Extract source content
+      let extractRes: Response;
+      if (docSourceMethod === 'file') {
+        const fd = new FormData();
+        fd.append('file', docFile!);
+        extractRes = await fetch('/api/doc-course/extract', {
+          method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+        });
+      } else {
+        extractRes = await fetch('/api/doc-course/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(docSourceMethod === 'text' ? { text: docText } : { url: docUrl }),
+        });
+      }
+      const extracted = await extractRes.json();
+      if (!extractRes.ok) throw new Error(extracted.error || 'Failed to read the document.');
+      setDocExtract(extracted);
+
+      // 2. Generate outline
+      setAiLoadingLabel('Designing your course outline...');
+      const res = await fetch('/api/ai-course', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action: 'generate_doc_course_outline',
+          sourceText: extracted.sourceText,
+          title: docBrief.title,
+          audience: docBrief.audience,
+          level: docBrief.level,
+          goal: docBrief.goal,
+          focus: docBrief.focus,
+          depth: docBrief.depth,
+          practice: docBrief.practice,
+          tone: docBrief.tone,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate outline.');
+      setDocOutline(data);
+      setDocBrief(prev => ({ ...prev, title: data.courseTitle || prev.title }));
+      setDocWizardStep('outline');
+    } catch (err: any) {
+      setAiFailed(true);
+      showToast(err.message || 'Failed to generate outline. Please try again.', 'error');
+    } finally {
+      setAiLoadingLabel('');
+    }
+  };
+
+  const handleRegenerateDocModule = async (modIdx: number) => {
+    if (!docOutline || !docExtract) return;
+    setDocModuleLoading(modIdx);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/ai-course', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({
+          action: 'generate_doc_course_outline',
+          sourceText: docExtract.sourceText,
+          title: docBrief.title,
+          audience: docBrief.audience,
+          level: docBrief.level,
+          goal: docBrief.goal,
+          focus: docBrief.focus,
+          depth: docBrief.depth,
+          practice: docBrief.practice,
+          tone: docBrief.tone,
+          moduleIndex: modIdx,
+          existingOutline: docOutline,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to regenerate module.');
+      setDocOutline((prev: any) => ({
+        ...prev,
+        modules: prev.modules.map((m: any, i: number) => i === modIdx ? data.module ?? m : m),
+      }));
+    } catch (err: any) {
+      showToast(err.message || 'Failed to regenerate module.', 'error');
+    } finally {
+      setDocModuleLoading(null);
+    }
+  };
+
+  const handleGenerateDocFullCourse = async () => {
+    if (!docOutline || !docExtract) return;
+    setAiLoadingLabel('Generating your course...');
+    setAiFailed(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/ai-course', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({
+          action: 'generate_doc_course_full',
+          outline: docOutline,
+          sourceText: docExtract.sourceText,
+          title: docBrief.title,
+          audience: docBrief.audience,
+          level: docBrief.level,
+          goal: docBrief.goal,
+          practice: docBrief.practice,
+          tone: docBrief.tone,
+          pdfUrl: docExtract.pdfUrl ?? '',
+          pageCount: docExtract.pageCount ?? 0,
+          imageMode: docBrief.imageMode,
+          includeVideos: docBrief.includeVideos,
+          preferredChannels: docBrief.preferredChannels.split(',').map(c => c.trim()).filter(Boolean),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate course.');
+      setFormConfig({
+        title: data.title || docBrief.title,
+        description: data.description || '',
+        isCourse: true,
+        coverImage: '',
+        theme: 'forest',
+        mode: 'dark',
+        font: 'sans',
+        fields: [],
+        questions: data.questions || [],
+        learnOutcomes: data.learnOutcomes || [],
+      });
+      setDocWizardStep(null);
+      showToast('Course generated! Review and publish when ready.', 'success');
     } catch (err: any) {
       setAiFailed(true);
       showToast(err.message || 'Failed to generate course. Please try again.', 'error');
@@ -2028,7 +2143,7 @@ const [isSaving, setIsSaving] = useState(false);
           )}
         </nav>
 
-        <div className={`relative z-10 flex-1 flex flex-col items-center ${sqlWizardStep ? 'justify-start pt-8 sm:pt-12' : 'justify-center py-20'} px-4 sm:px-6 ${sqlWizardStep === 'outline' ? 'max-w-5xl' : 'max-w-3xl'} mx-auto w-full`}>
+        <div className={`relative z-10 flex-1 flex flex-col items-center ${(sqlWizardStep || docWizardStep) ? 'justify-start pt-8 sm:pt-12' : 'justify-center py-20'} px-4 sm:px-6 ${(sqlWizardStep === 'outline' || docWizardStep === 'outline') ? 'max-w-5xl' : 'max-w-3xl'} mx-auto w-full`}>
 
           {/* SQL Course Wizard -- Brief step */}
           {sqlWizardStep === 'brief' && (
@@ -2177,52 +2292,257 @@ const [isSaving, setIsSaving] = useState(false);
             </motion.div>
           )}
 
-          {/* Normal landing page */}
-          {!sqlWizardStep && (
-            <>
-              <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="text-center space-y-5 mb-12">
-                <h1 className="text-3xl sm:text-5xl md:text-6xl font-semibold tracking-tight leading-[1.1]" style={{ color: C.text }}>
-                  Build forms in<br /><span style={{ color: C.green, fontStyle: 'italic', fontFamily: 'Georgia, serif' }}>seconds</span>, not <span style={{ color: '#d97706', fontStyle: 'italic', fontFamily: 'Georgia, serif' }}>hours.</span>
-                </h1>
-                <p className="text-lg max-w-md mx-auto leading-relaxed" style={{ color: C.muted }}>
-                  Describe what you need. We generate a polished, interactive form instantly.
-                </p>
-              </motion.div>
+          {/* Document -> Course Wizard -- Input step */}
+          {docWizardStep === 'input' && (
+            <motion.div key="doc-input" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-xl mx-auto">
+              <button type="button" onClick={() => setDocWizardStep(null)} className="flex items-center gap-1.5 text-sm mb-6 transition-opacity hover:opacity-60" style={{ color: C.muted }}>
+                <ArrowLeft className="w-4 h-4" /> Back
+              </button>
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${C.cta}18` }}>
+                  <FileText className="w-5 h-5" style={{ color: C.cta }} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold" style={{ color: C.text }}>Course from a Document</h2>
+                  <p className="text-sm" style={{ color: C.muted }}>Turn a PDF, slide deck, guide, or page into a full course with lessons and quizzes.</p>
+                </div>
+              </div>
 
-              <motion.form initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} onSubmit={handleGenerate} className="w-full">
-                <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}>
-                  <div className="p-3 flex flex-col gap-3">
-                    <textarea ref={promptRef} value={prompt} onChange={e => setPrompt(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate(e as any); } }} placeholder="e.g. A registration form for a 3-day music festival with t-shirt size and meal preference..." className="w-full border-none outline-none text-sm px-2 py-1 resize-none min-h-[72px] leading-relaxed bg-transparent" style={{ color: C.text }} disabled={isGenerating} />
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs hidden sm:inline" style={{ color: C.faint }}>Enter to generate · Shift+Enter for new line</span>
-                      <button type="submit" disabled={isGenerating || !prompt.trim()} className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: C.cta, color: C.ctaText }}>
-                        {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</> : <><Sparkles className="w-4 h-4" /> Generate</>}
+              <div className="flex flex-col gap-4">
+                {/* Source method tabs */}
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { key: 'file', label: 'Upload', icon: Upload },
+                    { key: 'text', label: 'Paste text', icon: FileText },
+                    { key: 'url',  label: 'Web URL', icon: Link2 },
+                  ] as const).map(opt => {
+                    const Icon = opt.icon;
+                    const active = docSourceMethod === opt.key;
+                    return (
+                      <button key={opt.key} type="button" onClick={() => setDocSourceMethod(opt.key)} className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all" style={active ? { background: C.cta, color: C.ctaText } : { background: C.pill, color: C.muted, border: `1px solid ${C.inputBorder}` }}>
+                        <Icon className="w-3.5 h-3.5" /> {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {docSourceMethod === 'file' && (
+                  <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-xl cursor-pointer transition-colors text-center" style={{ background: C.input, border: `1.5px dashed ${C.inputBorder}` }}>
+                    <Upload className="w-6 h-6" style={{ color: C.faint }} />
+                    <span className="text-sm font-medium" style={{ color: C.text }}>{docFile ? docFile.name : 'Choose a file'}</span>
+                    <span className="text-xs" style={{ color: C.faint }}>PDF, DOCX, DOC, TXT, PPTX, PPT (max 20 MB)</span>
+                    <input type="file" accept=".pdf,.docx,.doc,.txt,.pptx,.ppt" className="hidden" onChange={e => setDocFile(e.target.files?.[0] ?? null)} />
+                  </label>
+                )}
+                {docSourceMethod === 'text' && (
+                  <textarea value={docText} onChange={e => setDocText(e.target.value)} placeholder="Paste your documentation, product guide, or notes here..." rows={8} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
+                )}
+                {docSourceMethod === 'url' && (
+                  <input type="url" value={docUrl} onChange={e => setDocUrl(e.target.value)} placeholder="https://docs.example.com/guide" className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle} />
+                )}
+
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Course Title <span style={{ color: C.faint }}>(optional)</span></label>
+                  <input type="text" value={docBrief.title} onChange={e => setDocBrief(p => ({ ...p, title: e.target.value }))} placeholder="Leave blank to let AI propose one" className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Audience <span style={{ color: C.faint }}>(optional)</span></label>
+                    <input type="text" value={docBrief.audience} onChange={e => setDocBrief(p => ({ ...p, audience: e.target.value }))} placeholder="e.g. New customers, sales team" className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Level</label>
+                    <select value={docBrief.level} onChange={e => setDocBrief(p => ({ ...p, level: e.target.value }))} className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle}>
+                      {['Beginner', 'Intermediate', 'Advanced'].map(lv => <option key={lv} value={lv}>{lv}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Course Goal <span style={{ color: C.faint }}>(what should learners be able to DO?)</span></label>
+                  <textarea value={docBrief.goal} onChange={e => setDocBrief(p => ({ ...p, goal: e.target.value }))} placeholder="e.g. Confidently write SQL queries to answer real business questions" rows={2} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Specific Focus <span style={{ color: C.faint }}>(optional)</span></label>
+                  <textarea value={docBrief.focus} onChange={e => setDocBrief(p => ({ ...p, focus: e.target.value }))} placeholder="Any sections, topics, or angles to emphasize or skip..." rows={2} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Depth</label>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { key: 'primer',        label: 'Quick primer' },
+                      { key: 'balanced',      label: 'Balanced' },
+                      { key: 'comprehensive', label: 'Comprehensive' },
+                    ] as const).map(opt => {
+                      const active = docBrief.depth === opt.key;
+                      return (
+                        <button key={opt.key} type="button" onClick={() => setDocBrief(p => ({ ...p, depth: opt.key }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: C.cta, color: C.ctaText } : { background: C.pill, color: C.muted, border: `1px solid ${C.inputBorder}` }}>
+                          {active ? <Check className="w-3 h-3 inline mr-1" /> : null}{opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] mt-1.5" style={{ color: C.faint }}>How thorough the course should be (controls how many modules and lessons).</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Practice Style</label>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { key: 'hands_on',  label: 'Hands-on heavy' },
+                      { key: 'balanced',  label: 'Balanced' },
+                      { key: 'knowledge', label: 'Knowledge checks' },
+                    ] as const).map(opt => {
+                      const active = docBrief.practice === opt.key;
+                      return (
+                        <button key={opt.key} type="button" onClick={() => setDocBrief(p => ({ ...p, practice: opt.key }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: C.cta, color: C.ctaText } : { background: C.pill, color: C.muted, border: `1px solid ${C.inputBorder}` }}>
+                          {active ? <Check className="w-3 h-3 inline mr-1" /> : null}{opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] mt-1.5" style={{ color: C.faint }}>Lean toward applied exercises (SQL, reviews) or quick knowledge checks.</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Tone</label>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { key: 'professional',  label: 'Professional' },
+                      { key: 'conversational', label: 'Conversational' },
+                      { key: 'academic',      label: 'Academic' },
+                    ] as const).map(opt => {
+                      const active = docBrief.tone === opt.key;
+                      return (
+                        <button key={opt.key} type="button" onClick={() => setDocBrief(p => ({ ...p, tone: opt.key }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: C.cta, color: C.ctaText } : { background: C.pill, color: C.muted, border: `1px solid ${C.inputBorder}` }}>
+                          {active ? <Check className="w-3 h-3 inline mr-1" /> : null}{opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Lesson Images</label>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { key: 'source', label: 'From the document' },
+                      { key: 'stock',  label: 'Stock photos' },
+                    ] as const).map(opt => {
+                      const active = docBrief.imageMode.includes(opt.key);
+                      return (
+                        <button key={opt.key} type="button" onClick={() => setDocBrief(p => ({ ...p, imageMode: active ? p.imageMode.filter(m => m !== opt.key) : [...p.imageMode, opt.key] }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: C.cta, color: C.ctaText } : { background: C.pill, color: C.muted, border: `1px solid ${C.inputBorder}` }}>
+                          {active ? <Check className="w-3 h-3 inline mr-1" /> : null}{opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] mt-1.5" style={{ color: C.faint }}>Document pages are used for uploaded PDFs; stock photos cover everything else.</p>
+                </div>
+
+                {/* Videos */}
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Lesson Videos</label>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { val: true,  label: 'Include YouTube videos' },
+                      { val: false, label: 'No videos' },
+                    ] as const).map(opt => {
+                      const active = docBrief.includeVideos === opt.val;
+                      return (
+                        <button key={String(opt.val)} type="button" onClick={() => setDocBrief(p => ({ ...p, includeVideos: opt.val }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: C.cta, color: C.ctaText } : { background: C.pill, color: C.muted, border: `1px solid ${C.inputBorder}` }}>
+                          {active ? <Check className="w-3 h-3 inline mr-1" /> : null}{opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {docBrief.includeVideos && (
+                    <div className="mt-2.5">
+                      <input type="text" value={docBrief.preferredChannels} onChange={e => setDocBrief(p => ({ ...p, preferredChannels: e.target.value }))} placeholder="Channel name, @handle, or link, comma separated (optional)" className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle} />
+                      <p className="text-[11px] mt-1.5" style={{ color: C.faint }}>e.g. freeCodeCamp, @AlexTheAnalyst, or a channel URL. Videos will be pulled from these channels when they have a relevant match.</p>
+                    </div>
+                  )}
+                </div>
+
+                <button type="button" onClick={handleGenerateDocOutline} disabled={!!aiLoadingLabel} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: C.cta, color: C.ctaText }}>
+                  <Sparkles className="w-4 h-4" /> Generate Outline
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Document -> Course Wizard -- Outline review step */}
+          {docWizardStep === 'outline' && docOutline && (
+            <motion.div key="doc-outline" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-3xl mx-auto pb-12">
+              <div className="flex items-center justify-between mb-6">
+                <button type="button" onClick={() => setDocWizardStep('input')} className="flex items-center gap-1.5 text-sm transition-opacity hover:opacity-60" style={{ color: C.muted }}>
+                  <ArrowLeft className="w-4 h-4" /> Back
+                </button>
+                <div className="text-center">
+                  <h2 className="text-base font-semibold" style={{ color: C.text }}>Review Outline</h2>
+                  <p className="text-xs" style={{ color: C.faint }}>Edit inline, then generate the full course.</p>
+                </div>
+                <button type="button" onClick={handleGenerateDocFullCourse} disabled={!!aiLoadingLabel} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: C.cta, color: C.ctaText }}>
+                  <Sparkles className="w-3.5 h-3.5" /> Generate Full Course
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                {(docOutline.modules ?? []).map((mod: any, modIdx: number) => (
+                  <div key={mod.id || modIdx} className="rounded-xl p-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                    <div className="flex items-start gap-2 mb-1">
+                      <span className="text-xs font-bold mt-2 flex-shrink-0" style={{ color: C.faint }}>M{modIdx + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <input value={mod.title} onChange={e => setDocOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, i: number) => i === modIdx ? { ...m, title: e.target.value } : m) }))} className="w-full text-sm font-semibold bg-transparent border-none outline-none py-1" style={{ color: C.text }} />
+                        <input value={mod.description} onChange={e => setDocOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, i: number) => i === modIdx ? { ...m, description: e.target.value } : m) }))} className="w-full text-xs bg-transparent border-none outline-none pb-1" style={{ color: C.muted }} />
+                      </div>
+                      <button type="button" onClick={() => handleRegenerateDocModule(modIdx)} disabled={docModuleLoading !== null} className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg flex-shrink-0 transition-opacity disabled:opacity-40" style={{ background: C.pill, color: C.muted }}>
+                        {docModuleLoading === modIdx ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                        Regenerate
+                      </button>
+                      <button type="button" onClick={() => setDocOutline((prev: any) => ({ ...prev, modules: prev.modules.filter((_: any, i: number) => i !== modIdx) }))} className="flex-shrink-0 transition-opacity hover:opacity-70" title="Delete module" style={{ color: C.faint }}>
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-1.5 mt-2 ml-5">
+                      {(mod.lessons ?? []).map((lesson: any, lessonIdx: number) => {
+                        const typeBg: Record<string, string> = { multiple_choice: '#475569', fill_blank: '#16a34a', arrange: '#d97706', sql_exercise: '#3b82f6', code: '#0ea5e9', code_review: '#0891b2', excel_review: '#15803d', dashboard_critique: '#0d9488', document_review: '#b45309' };
+                        const typeLabel: Record<string, string> = { multiple_choice: 'MCQ', fill_blank: 'FILL', arrange: 'ORDER', sql_exercise: 'SQL', code: 'CODE', code_review: 'CODE REVIEW', excel_review: 'EXCEL', dashboard_critique: 'DASHBOARD', document_review: 'DOCUMENT' };
+                        const docLessonTypes = ['multiple_choice', 'fill_blank', 'arrange', 'sql_exercise', 'code', 'code_review', 'excel_review', 'dashboard_critique', 'document_review'];
+                        const col = typeBg[lesson.questionType] ?? '#475569';
+                        return (
+                          <div key={lesson.id || lessonIdx} className="flex items-center gap-2 group">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex-shrink-0" style={{ background: col, color: '#fff' }}>{typeLabel[lesson.questionType] ?? 'MCQ'}</span>
+                            <input value={lesson.title} onChange={e => setDocOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, mi: number) => mi !== modIdx ? m : { ...m, lessons: m.lessons.map((l: any, li: number) => li === lessonIdx ? { ...l, title: e.target.value } : l) }) }))} className="flex-1 text-xs bg-transparent border-none outline-none" style={{ color: C.text }} />
+                            <select value={lesson.questionType} onChange={e => setDocOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, mi: number) => mi !== modIdx ? m : { ...m, lessons: m.lessons.map((l: any, li: number) => li === lessonIdx ? { ...l, questionType: e.target.value } : l) }) }))} className="text-[10px] rounded px-1 py-0.5 flex-shrink-0" style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.text }}>
+                              {docLessonTypes.map(qt => <option key={qt} value={qt}>{typeLabel[qt] ?? qt}</option>)}
+                            </select>
+                            <button type="button" onClick={() => setDocOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, mi: number) => mi !== modIdx ? m : { ...m, lessons: m.lessons.filter((_: any, li: number) => li !== lessonIdx) }) }))} className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" style={{ color: C.faint }}>
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                      <button type="button" onClick={() => setDocOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, mi: number) => mi !== modIdx ? m : { ...m, lessons: [...m.lessons, { id: Math.random().toString(36).slice(2, 9), title: 'New lesson', summary: '', questionType: 'multiple_choice' }] }) }))} className="flex items-center gap-1 text-xs mt-1 transition-opacity hover:opacity-60" style={{ color: C.faint }}>
+                        <Plus className="w-3 h-3" /> Add lesson
                       </button>
                     </div>
                   </div>
-                </div>
-              </motion.form>
-
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="flex flex-wrap gap-2 mt-5 justify-center">
-                {EXAMPLE_PROMPTS.map(ex => (
-                  <button key={ex} type="button" onClick={() => { setPrompt(ex); promptRef.current?.focus(); }} className="px-3 py-1.5 rounded-full text-xs transition-all hover:opacity-70" style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
-                    {ex}
-                  </button>
                 ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Normal landing page */}
+          {!sqlWizardStep && !docWizardStep && (
+            <>
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="text-center mb-8">
+                <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight" style={{ color: C.text }}>What would you like to create?</h1>
+                <p className="text-sm mt-2" style={{ color: C.muted }}>Pick a template or start from scratch.</p>
               </motion.div>
 
-              {/* Templates */}
-              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }} className="w-full mt-10">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex-1 h-px" style={{ background: C.divider }} />
-                  <span className="text-xs font-medium tracking-wider uppercase" style={{ color: C.faint }}>or start from a template</span>
-                  <div className="flex-1 h-px" style={{ background: C.divider }} />
-                </div>
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="w-full">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {TEMPLATES.filter(t => userRole !== 'staff' || t.config.eventDetails?.isEvent).map((t, i) => {
                     const Icon = t.icon;
                     return (
-                      <motion.button key={t.key} type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 + i * 0.07 }} onClick={() => handleSelectTemplate(t)} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                      <motion.button key={t.key} type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +i * 0.07 }} onClick={() => handleSelectTemplate(t)} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
                         <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${t.color}18` }}>
                           <Icon className="w-4.5 h-4.5" style={{ color: t.color, width: 18, height: 18 }} />
                         </div>
@@ -2235,7 +2555,7 @@ const [isSaving, setIsSaving] = useState(false);
                     );
                   })}
                   {/* SQL Course with AI */}
-                  {userRole !== 'staff' && <motion.button key="sql-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 + TEMPLATES.length * 0.07 }} onClick={() => setSqlWizardStep('brief')} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                  {userRole !== 'staff' && <motion.button key="sql-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +TEMPLATES.length * 0.07 }} onClick={() => setSqlWizardStep('brief')} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#3b82f618' }}>
                       <Database className="w-4.5 h-4.5" style={{ color: '#3b82f6', width: 18, height: 18 }} />
                     </div>
@@ -2246,13 +2566,25 @@ const [isSaving, setIsSaving] = useState(false);
                     <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#3b82f618', color: '#3b82f6' }}>AI</span>
                     <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>Use</span>
                   </motion.button>}
+                  {/* Course from a Document */}
+                  {userRole !== 'staff' && <motion.button key="doc-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +(TEMPLATES.length + 1) * 0.07 }} onClick={() => setDocWizardStep('input')} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${C.cta}18` }}>
+                      <FileText className="w-4.5 h-4.5" style={{ color: C.cta, width: 18, height: 18 }} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold leading-tight" style={{ color: C.text }}>Document to Course</p>
+                      <p className="text-xs mt-0.5 leading-snug" style={{ color: C.faint }}>Turn a PDF, deck, guide, or page into lessons and quizzes.</p>
+                    </div>
+                    <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${C.cta}18`, color: C.cta }}>AI</span>
+                    <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>Use</span>
+                  </motion.button>}
                 </div>
               </motion.div>
             </>
           )}
 
         </div>
-        <GeneratingOverlay visible={isGenerating || !!aiLoadingLabel} label={aiLoadingLabel || (isGenerating ? 'Generating your form' : undefined)} failed={aiFailed} />
+        <GeneratingOverlay visible={!!aiLoadingLabel} label={aiLoadingLabel || undefined} failed={aiFailed} />
       </main>
     );
   }
@@ -2304,6 +2636,16 @@ const [isSaving, setIsSaving] = useState(false);
                 onClick={() => { setFormConfig(null); setSqlWizardStep('outline'); }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-opacity hover:opacity-80"
                 style={{ background: '#3b82f618', color: '#3b82f6', border: '1px solid #3b82f630' }}
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> Edit Outline
+              </button>
+            )}
+            {docOutline && (
+              <button
+                type="button"
+                onClick={() => { setFormConfig(null); setDocWizardStep('outline'); }}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-opacity hover:opacity-80"
+                style={{ background: `${C.cta}18`, color: C.cta, border: `1px solid ${C.cta}30` }}
               >
                 <ArrowLeft className="w-3.5 h-3.5" /> Edit Outline
               </button>
@@ -4664,7 +5006,7 @@ const [isSaving, setIsSaving] = useState(false);
           </div>
         </div>
       </div>
-      <GeneratingOverlay visible={isGenerating || !!aiLoadingLabel} label={aiLoadingLabel || (isGenerating ? 'Generating your form' : undefined)} failed={aiFailed} />
+      <GeneratingOverlay visible={!!aiLoadingLabel} label={aiLoadingLabel || undefined} failed={aiFailed} />
       <AnimatePresence>
         {descriptionModalOpen && formConfig?.isCourse && (
           <motion.div
