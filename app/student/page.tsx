@@ -463,7 +463,7 @@ function ProgressBar({ value, max = 100, color }: { value: number; max?: number;
 }
 
 // --- Course card ---
-function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?: Date | null; C: typeof LIGHT_C; onDetails: () => void }) {
+function CourseCard({ course, deadline, C, onDetails, hideCategory }: { course: any; deadline?: Date | null; C: typeof LIGHT_C; onDetails: () => void; hideCategory?: boolean }) {
   const questions = course.form?.questions ?? course.config?.questions ?? course.form?.config?.questions ?? [];
   const countableQ = questions.filter((q: any) => !q.isSection);
   const answeredQ = countableQ.filter((q: any) => !!(course.answers ?? {})[q.id]).length;
@@ -528,7 +528,7 @@ function CourseCard({ course, deadline, C, onDetails }: { course: any; deadline?
       {/* Content */}
       <div className="p-5 flex flex-col flex-1">
         {/* Category tag */}
-        {category && (
+        {category && !hideCategory && (
           <div className="self-start inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-3"
             style={{ background: C.pill }}>
             {categoryIcon && <img src={categoryIcon} alt={category} className="w-3.5 h-3.5 object-contain flex-shrink-0" />}
@@ -1118,6 +1118,7 @@ function ToolRow({ tool, courses, deadlines, C, onDetails }: { tool: string; cou
             deadline={deadlines[hover.course.form_id]}
             C={C}
             onDetails={() => { setHover(null); onDetails(hover.course); }}
+            hideCategory
           />
         </HoverPreviewCard>,
         document.body,
@@ -5681,7 +5682,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
                 .then(r => r.json()).catch(() => ({ rankings: [] }))
             : Promise.resolve({ rankings: [] }),
           cohort
-            ? supabase.from('events').select('id, title, slug, event_date, event_time').contains('cohort_ids', [cohort]).eq('status', 'published')
+            ? supabase.from('events').select('id, title, slug, event_date, event_time, cover_image').contains('cohort_ids', [cohort]).eq('status', 'published')
             : Promise.resolve({ data: [] as any[] }),
           token
             ? fetch('/api/vector/gaps', { headers: { Authorization: `Bearer ${token}` } })
@@ -5689,7 +5690,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
             : Promise.resolve({ gaps: [] }),
           // Assignments assigned to this cohort
           cohort
-            ? supabase.from('assignments').select('id, title, deadline_date').contains('cohort_ids', [cohort]).eq('status', 'published')
+            ? supabase.from('assignments').select('id, title, deadline_date, cover_image').contains('cohort_ids', [cohort]).eq('status', 'published')
             : Promise.resolve({ data: [] as any[] }),
           // This student's submissions
           supabase.from('assignment_submissions')
@@ -5706,7 +5707,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
             .maybeSingle(),
           // Assignments targeting the student's groups
           myGroupIds.length > 0
-            ? supabase.from('assignments').select('id, title, deadline_date').overlaps('group_ids', myGroupIds).eq('status', 'published')
+            ? supabase.from('assignments').select('id, title, deadline_date, cover_image').overlaps('group_ids', myGroupIds).eq('status', 'published')
             : Promise.resolve({ data: [] as any[] }),
           // Group submissions for the student's groups (covers non-leader members)
           myGroupIds.length > 0
@@ -5856,7 +5857,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
     .sort((a, b) => b.ts - a.ts);
 
   // Deadlines in the next 14 days (excluding already-completed)
-  const upcomingDeadlines: Array<{ title: string; daysLeft: number; type: 'course' | 'project' | 'assignment' | 'event' }> = [
+  const upcomingDeadlines: Array<{ title: string; daysLeft: number; type: 'course' | 'project' | 'assignment' | 'event'; cover?: string | null }> = [
     // Courses + VEs
     ...Object.entries(deadlines)
       .filter(([formId]) => courses.some(f => f.id === formId))
@@ -5869,7 +5870,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
         if (isEffectivelyDone(form, a, proj)) return null;
         const daysLeft = Math.ceil((dl.getTime() - now) / 86400000);
         if (daysLeft > 14) return null;
-        return { title: form.title, daysLeft, type: proj ? 'project' : 'course' } as const;
+        return { title: form.title, daysLeft, type: proj ? 'project' : 'course', cover: form.config?.coverImage ?? form.cover_image ?? null } as const;
       })
       .filter(Boolean) as any[],
     // Assignments
@@ -5885,6 +5886,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
         title: a.title,
         daysLeft: Math.ceil((new Date(a.deadline_date).getTime() - now) / 86400000),
         type: 'assignment' as const,
+        cover: a.cover_image ?? null,
       })),
     // Events
     ...events
@@ -5894,7 +5896,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
         if (Number.isNaN(d.getTime())) return null;
         const daysLeft = Math.ceil((d.getTime() - now) / 86400000);
         if (daysLeft < 0 || daysLeft > 14) return null;
-        return { title: ev.title, daysLeft, type: 'event' as const };
+        return { title: ev.title, daysLeft, type: 'event' as const, cover: ev.cover_image ?? null };
       })
       .filter(Boolean) as any[],
   ].sort((a: any, b: any) => a.daysLeft - b.daysLeft);
@@ -5990,23 +5992,21 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
         ) : (
           <div ref={upScrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            {upcomingDeadlines.map(({ title, daysLeft, type }, idx) => {
+            {upcomingDeadlines.map(({ title, daysLeft, type, cover }, idx) => {
               const col = daysLeft < 0 ? '#ef4444' : daysLeft <= 3 ? '#f59e0b' : daysLeft <= 7 ? '#f97316' : '#16a34a';
               const lbl = daysLeft < 0 ? 'Overdue' : daysLeft === 0 ? 'Today' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft} days`;
               const Icon = type === 'assignment' ? ClipboardList : type === 'project' ? Briefcase : type === 'event' ? CalendarDays : BookOpen;
               const typeLabel = type === 'assignment' ? 'Assignment' : type === 'project' ? 'Project' : type === 'event' ? 'Event' : 'Course';
               return (
-                <div key={`${type}-${title}-${idx}`} className="flex-shrink-0 w-[210px] snap-start flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${col}15` }}>
-                      <Icon className="w-4 h-4" style={{ color: col }}/>
-                    </div>
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0" style={{ background: `${col}15`, color: col }}>{lbl}</span>
+                <div key={`${type}-${title}-${idx}`} className="flex-shrink-0 w-[210px] snap-start">
+                  <div className="relative rounded-xl overflow-hidden w-full aspect-video flex items-center justify-center" style={{ background: cover ? '#0b0b0d' : `${col}14` }}>
+                    {cover
+                      ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+                      : <Icon className="w-10 h-10" style={{ color: col }}/>}
+                    <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md" style={{ background: col, color: '#ffffff' }}>{lbl}</span>
                   </div>
-                  <div>
-                    <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: C.text }}>{title}</p>
-                    <p className="text-xs mt-1" style={{ color: C.muted }}>{typeLabel}</p>
-                  </div>
+                  <p className="text-xs mt-2" style={{ color: C.faint }}>{typeLabel}</p>
+                  <p className="text-[15px] font-bold leading-snug mt-0.5 line-clamp-2" style={{ color: C.text }}>{title}</p>
                 </div>
               );
             })}
