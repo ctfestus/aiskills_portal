@@ -10,7 +10,7 @@ import {
   Clock, EyeOff, AlertTriangle, ShieldAlert, GripVertical,
   ChevronLeft, BookOpen, X, ExternalLink, ArrowRight, MoreHorizontal, Zap,
   ArrowLeftToLine, ArrowRightFromLine, Download, ArrowDownToLine, Lock,
-  Menu, Check, Play, FileText, FlaskConical, ListChecks,
+  Check, Play, FileText, FlaskConical, ListChecks,
 } from 'lucide-react';
 import { AnimatedField } from '@/components/AnimatedField';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -45,6 +45,17 @@ import dynamic from 'next/dynamic';
 import { initSQLRuntime, SQLRuntime } from '@/lib/sql-engine';
 
 const SQLExercisePlayer = dynamic(() => import('@/components/sql-course/SQLExercisePlayer'), { ssr: false });
+
+// Hamburger -- slightly tighter line spacing than lucide's Menu (lines at 7/12/17 vs 6/12/18)
+function MenuIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" className={className}>
+      <line x1="4" y1="7" x2="20" y2="7" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="17" x2="20" y2="17" />
+    </svg>
+  );
+}
 
 type ShowAnswers = 'per_question' | 'after_quiz' | 'none';
 type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise' | 'document_review';
@@ -2735,8 +2746,17 @@ export function CourseTaker({
         >
           {questionType === 'sql_exercise' ? (
             <>
-              {/* SQL nav -- left: logo */}
-              <div className="flex items-center gap-2 flex-1 min-w-0">
+              {/* SQL nav -- left: outline toggle (mobile) + logo */}
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                {!sidebarOpen && (
+                  <button
+                    onClick={() => setSidebarOpen(true)}
+                    className={`sm:hidden p-1.5 rounded-lg transition-colors flex-shrink-0 ${isDark ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'}`}
+                    title="Open course outline"
+                  >
+                    <MenuIcon className="w-5 h-5" />
+                  </button>
+                )}
                 {(isDark ? (logoDarkUrl || logoUrl) : logoUrl) && (
                   <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                     <img src={(isDark ? (logoDarkUrl || logoUrl) : logoUrl) || undefined} alt="" style={{ height: 30, width: 'auto', objectFit: 'contain' }} />
@@ -2748,7 +2768,7 @@ export function CourseTaker({
               <div className="flex items-center gap-2 flex-1 justify-end">
                 {pointsEnabled && (
                   <div
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full"
                     style={{ background: isDark ? '#141416' : '#ffffff', marginTop: 6 }}
                   >
                     <span className="text-[14px]">🏆</span>
@@ -2822,8 +2842,17 @@ export function CourseTaker({
             </>
           ) : (
             <>
-              {/* Default nav -- left: logo */}
-              <div className="flex items-center flex-shrink-0">
+              {/* Default nav -- left: outline toggle (mobile) + logo */}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {!sidebarOpen && (
+                  <button
+                    onClick={() => setSidebarOpen(true)}
+                    className={`sm:hidden p-1.5 rounded-lg transition-colors ${isDark ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'}`}
+                    title="Open course outline"
+                  >
+                    <MenuIcon className="w-5 h-5" />
+                  </button>
+                )}
                 {(isDark ? (logoDarkUrl || logoUrl) : logoUrl) && (
                   <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
                     <img src={(isDark ? (logoDarkUrl || logoUrl) : logoUrl) || undefined} alt="" style={{ height: 30, width: 'auto', objectFit: 'contain' }} />
@@ -2902,32 +2931,17 @@ export function CourseTaker({
         {/* -- SIDEBAR (non-inline only) -- */}
         {!inlineMode && (
           <>
-            {/* Mobile backdrop */}
+            {/* Mobile backdrop -- above the SQL player overlay (z-40) so the outline drawer is usable during exercises */}
             {sidebarOpen && (
               <div
-                className="fixed inset-0 bg-black/60 z-30 sm:hidden"
+                className="fixed inset-0 bg-black/60 z-[55] sm:hidden"
                 onClick={() => setSidebarOpen(false)}
               />
             )}
 
-            {/* Mobile open button -- tab anchored to left edge of content when sidebar is closed */}
-            {/* Hidden during SQL exercises: the player provides its own Lesson tab */}
-            {!sidebarOpen && questionType !== 'sql_exercise' && (
-              <div className="absolute top-4 left-0 z-50 sm:hidden group">
-                <button
-                  onClick={() => setSidebarOpen(true)}
-                  className={`px-2.5 py-2 rounded-r-lg transition-colors ${isDark ? 'text-zinc-400 hover:text-zinc-200 bg-zinc-800' : 'text-zinc-500 hover:text-zinc-700 bg-white shadow-sm border-t border-r border-b border-zinc-200'}`}
-                >
-                  <Menu className="w-5 h-5" strokeWidth={2.5} />
-                </button>
-                <span className={`pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity ${isDark ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-900 text-white'}`}>
-                  Open course outline
-                </span>
-              </div>
-            )}
 
             <aside
-              className={`absolute inset-y-0 left-0 z-40 sm:relative sm:inset-auto flex-shrink-0 flex flex-col transition-all duration-300 sm:my-3 sm:ml-3 sm:rounded-2xl ${!sidebarOpen ? '-translate-x-full sm:translate-x-0' : 'translate-x-0'}`}
+              className={`absolute inset-y-0 left-0 z-[56] rounded-r-2xl sm:relative sm:inset-auto sm:z-40 flex-shrink-0 flex flex-col transition-all duration-300 sm:my-3 sm:ml-3 sm:rounded-2xl ${!sidebarOpen ? '-translate-x-full sm:translate-x-0' : 'translate-x-0'}`}
               style={{
                 width: sidebarOpen ? 'min(100vw, 360px)' : 48,
                 minWidth: sidebarOpen ? 'min(100vw, 360px)' : 48,
@@ -2949,7 +2963,7 @@ export function CourseTaker({
                   >
                     {sidebarOpen
                       ? <X className="w-4 h-4" strokeWidth={2.5} />
-                      : <Menu className="w-5 h-5" strokeWidth={2.5} />}
+                      : <MenuIcon className="w-5 h-5" />}
                   </button>
                   {/* Tooltip below when open (aside has overflow:hidden, left side is clipped). Tooltip to the right when collapsed (44px rail, no space on left). */}
                   <span className={`pointer-events-none absolute px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 ${isDark ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-900 text-white'} ${sidebarOpen ? 'top-full mt-1 right-0' : 'left-full ml-2 top-1/2 -translate-y-1/2'}`}>

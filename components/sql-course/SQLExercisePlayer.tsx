@@ -761,17 +761,9 @@ export default function SQLExercisePlayer({
               type="button"
               onClick={() => setMobileTab('query')}
               className="flex-1 h-9 rounded-lg text-[12px] font-semibold transition-colors"
-              style={{ background: mobileTab === 'query' ? leftBg : 'transparent', color: mobileTab === 'query' ? text : muted }}
+              style={{ background: mobileTab !== 'lesson' ? leftBg : 'transparent', color: mobileTab !== 'lesson' ? text : muted }}
             >
               Query
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobileTab('result')}
-              className="flex-1 h-9 rounded-lg text-[12px] font-semibold transition-colors"
-              style={{ background: mobileTab === 'result' ? leftBg : 'transparent', color: mobileTab === 'result' ? text : muted }}
-            >
-              Results
             </button>
           </div>
         )}
@@ -911,12 +903,12 @@ export default function SQLExercisePlayer({
           </div>
         )}
 
-        {/* ══════════ RIGHT PANEL ══════════ */}
-        {(!isMobile || mobileTab === 'query' || mobileTab === 'result') && (
-        <div ref={rightPanelRef} className="flex-1 min-w-0 flex flex-col">
+        {/* ══════════ RIGHT PANEL -- on mobile shows editor + results stacked on one page ══════════ */}
+        {(!isMobile || mobileTab !== 'lesson') && (
+        <div ref={rightPanelRef} className="flex-1 min-w-0 flex flex-col gap-2 sm:gap-0">
 
           {/* ---- EDITOR SECTION ---- */}
-          {(!isMobile || mobileTab === 'query') && (
+          {(!isMobile || mobileTab !== 'lesson') && (
           <div
             className="flex flex-col rounded-2xl overflow-hidden"
             style={{ flex: isMobile ? 1 : `0 0 ${editorPct}%`, minHeight: 0, background: editorBg }}
@@ -979,9 +971,9 @@ export default function SQLExercisePlayer({
               />
             </div>
 
-            {/* Action bar -- stacks full-width on mobile, right-aligned row on desktop */}
+            {/* Action bar -- wraps to extra rows on narrow screens instead of overflowing */}
             <div
-              className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-2.5 px-4 py-3"
+              className="flex-shrink-0 flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 px-4 py-3"
               style={{ background: 'transparent' }}
             >
               {canRevealSolution && !solutionRevealed && (
@@ -989,7 +981,7 @@ export default function SQLExercisePlayer({
                   type="button"
                   onClick={() => { revealSolution(); setFeedbackDismissed(true); }}
                   disabled={solutionLoading}
-                  className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto h-9 px-4 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-50 hover:opacity-80"
+                  className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-50 hover:opacity-80"
                   style={{ color: '#34d399', background: 'rgba(52,211,153,0.13)' }}
                 >
                   {solutionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
@@ -1001,7 +993,7 @@ export default function SQLExercisePlayer({
                 type="button"
                 onClick={runQuery}
                 disabled={!runtime || busy}
-                className="inline-flex items-center justify-center gap-2 w-full sm:w-auto h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40 hover:opacity-80"
+                className="inline-flex items-center justify-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40 hover:opacity-80"
                 style={{ background: subtle, color: text }}
               >
                 {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
@@ -1012,7 +1004,7 @@ export default function SQLExercisePlayer({
                   type="button"
                   onClick={checkAnswer}
                   disabled={!runtime || busy}
-                  className="inline-flex items-center justify-center gap-2 w-full sm:w-auto h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40"
+                  className="inline-flex items-center justify-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40"
                   style={{ background: accentColor, color: '#052033' }}
                 >
                   {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
@@ -1024,7 +1016,7 @@ export default function SQLExercisePlayer({
                   type="button"
                   onClick={continueIncorrect}
                   disabled={busy}
-                  className="inline-flex items-center justify-center gap-2 w-full sm:w-auto h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40"
+                  className="inline-flex items-center justify-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40"
                   style={{ background: accentColor, color: '#052033' }}
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -1035,7 +1027,7 @@ export default function SQLExercisePlayer({
                 <button
                   type="button"
                   onClick={onNext}
-                  className="inline-flex items-center justify-center gap-2 w-full sm:w-auto h-9 px-5 rounded-lg text-[13px] font-semibold"
+                  className="inline-flex items-center justify-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold"
                   style={{ background: accentColor, color: '#052033' }}
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -1061,7 +1053,7 @@ export default function SQLExercisePlayer({
           )}
 
           {/* ---- RESULTS SECTION ---- */}
-          {(!isMobile || mobileTab === 'result') && (
+          {(!isMobile || mobileTab !== 'lesson') && (
           <div className="flex flex-col rounded-2xl overflow-hidden" style={{ flex: isMobile ? 1 : '1 1 0%', minHeight: 0, background: resultsBg }}>
 
             {/* Tab bar -- pill tabs, no dividers */}
