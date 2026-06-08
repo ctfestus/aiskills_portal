@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Loader2, Plus, FileText, BarChart3, ExternalLink, Trash2, Edit2,
   Share2, Check, Copy, X, CalendarDays, AlignLeft, Settings, User,
-  LogOut, ChevronDown, ChevronRight, BookOpen, MapPin, Sun, Moon, Zap,
+  LogOut, ChevronDown, ChevronRight, ChevronLeft, BookOpen, MapPin, Sun, Moon, Zap,
   ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
   Users, Megaphone, Trophy, Menu, CheckCircle2, XCircle,
   UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
@@ -1000,7 +1000,7 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
         className="relative h-44 w-full overflow-hidden cursor-pointer rounded-2xl flex-shrink-0"
         style={{ background: C.thumbBg }}>
         {(form.config?.coverImage && !coverError)
-          ? <img src={form.config.coverImage} alt={form.title} onError={() => setCoverError(true)} className="block w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"/>
+          ? <img src={form.config.coverImage} alt={form.title} loading="lazy" onError={() => setCoverError(true)} className="block w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"/>
           : <div className="w-full h-full flex items-center justify-center group-hover:scale-105 transition-transform duration-700 ease-out">
               <meta.Icon className="w-10 h-10 opacity-20" style={{ color: C.green }}/>
             </div>
@@ -1063,6 +1063,56 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
         </div>
       </div>
     </motion.div>
+  );
+}
+
+// Group courses by their category/tool; named tools alphabetical, "Other" last
+function groupFormsByCategory(forms: any[]): [string, any[]][] {
+  const groups = new Map<string, any[]>();
+  for (const f of forms) {
+    const key = (f.category ?? '').trim() || 'Other';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(f);
+  }
+  return [...groups.entries()].sort((a, b) => {
+    if (a[0] === 'Other') return 1;
+    if (b[0] === 'Other') return -1;
+    return a[0].localeCompare(b[0]);
+  });
+}
+
+// One tool group rendered as a titled, horizontally-scrolling carousel of course cards
+function CourseToolRow({ tool, forms, shareMenuOpen, setShareMenuOpen, setFormToDelete }: {
+  tool: string; forms: any[]; shareMenuOpen: string | null; setShareMenuOpen: (id: string | null) => void; setFormToDelete: (id: string) => void;
+}) {
+  const C = useC();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 340, behavior: 'smooth' });
+  return (
+    <section className="rounded-2xl p-5 sm:p-6 mb-6" style={{ background: C.card }}>
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <h2 className="text-lg sm:text-xl font-bold truncate" style={{ color: C.text }}>{tool}</h2>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronLeft className="w-4 h-4"/>
+          </button>
+          <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronRight className="w-4 h-4"/>
+          </button>
+        </div>
+      </div>
+      <div ref={scrollRef} className="flex gap-6 overflow-x-auto pb-2 snap-x" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {forms.map((form, idx) => (
+          <div key={form.id} className="flex-shrink-0 w-[300px] snap-start">
+            <FormCard form={form} index={idx} shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen} setFormToDelete={setFormToDelete}/>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -1322,6 +1372,105 @@ const GP_IND_COLORS: Record<string, string> = {
   edtech: '#8b5cf6', healthcare: '#ef4444', ecommerce: '#f97316', consulting: '#14b8a6',
 };
 
+// Group VEs by industry; named industries alphabetical, "Other" last
+function groupVEsByIndustry(forms: any[]): [string, any[]][] {
+  const groups = new Map<string, any[]>();
+  for (const f of forms) {
+    const key = (f.config?.industry ?? f.industry ?? '').trim() || 'Other';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(f);
+  }
+  return [...groups.entries()].sort((a, b) => {
+    if (a[0] === 'Other') return 1;
+    if (b[0] === 'Other') return -1;
+    return a[0].localeCompare(b[0]);
+  });
+}
+
+// One industry group rendered as a titled carousel of VE management cards
+function VEIndustryRow({ industry, forms, handleDuplicate, duplicatingId, setFormToDelete, C }: {
+  industry: string; forms: any[]; handleDuplicate: (f: any) => void; duplicatingId: string | null; setFormToDelete: (id: string) => void; C: typeof LIGHT_C;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 340, behavior: 'smooth' });
+  return (
+    <section className="rounded-2xl p-5 sm:p-6 mb-6" style={{ background: C.card }}>
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <h2 className="text-lg sm:text-xl font-bold truncate" style={{ color: C.text }}>{industry.replace(/\b\w/g, c => c.toUpperCase())}</h2>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronLeft className="w-4 h-4"/>
+          </button>
+          <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronRight className="w-4 h-4"/>
+          </button>
+        </div>
+      </div>
+      <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-2 snap-x" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {forms.map(form => {
+          const cfg   = form.config || {};
+          const color = GP_IND_COLORS[cfg.industry] || '#6366f1';
+          const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
+          return (
+            <div key={form.id} className="flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ background: C.card }}>
+              {cfg.coverImage
+                ? <img src={cfg.coverImage} alt="" loading="lazy" className="w-full h-28 object-cover" />
+                : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${color}18` }}>
+                    <Briefcase className="w-8 h-8" style={{ color }} />
+                  </div>}
+              <div className="p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: `${color}18`, color }}>{cfg.industry || 'Project'}</span>
+                  <span className="text-[10px]" style={{ color: C.faint }}>{cfg.difficulty}</span>
+                  {form.status === 'draft' && (
+                    <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>Draft</span>
+                  )}
+                </div>
+                <p className="font-semibold text-sm" style={{ color: C.text }}>{form.title}</p>
+                <p className="text-xs" style={{ color: C.faint }}>{cfg.company} · {totalLessons} lesson{totalLessons !== 1 ? 's' : ''}</p>
+                <div className="flex gap-2 pt-1">
+                  <Link href={`/dashboard/${form.id}`}
+                    className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl border transition-all hover:opacity-70"
+                    style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                    Report
+                  </Link>
+                  <Link href={`/create/guided-project?id=${form.id}`}
+                    className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl transition-all hover:opacity-80"
+                    style={{ background: `${color}18`, color }}>
+                    Edit
+                  </Link>
+                  <button onClick={() => handleDuplicate(form)} disabled={!!duplicatingId}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80 disabled:opacity-50"
+                    style={{ background: C.pill, color: C.muted }} title="Duplicate">
+                    {duplicatingId === form.id
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                  <button onClick={() => exportContent(form)}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
+                    style={{ background: C.pill, color: C.muted }} title="Export">
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+                  {SYNC_ENABLED && <PushButton type="virtual_experience" id={form.id} C={C} />}
+                  <button onClick={() => setFormToDelete(form.id)}
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
+                    style={{ background: C.deleteBg, color: C.deleteText }} title="Delete">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function VirtualExperiencesManageSection({ C, forms, setFormToDelete, onDuplicated }: { C: typeof LIGHT_C; forms: any[]; setFormToDelete: (id: string) => void; onDuplicated: (newForm: any) => void }) {
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const gpForms = forms.filter(f => f.content_type === 'virtual_experience' || f.content_type === 'guided_project' || f.config?.isVirtualExperience || f.config?.isGuidedProject);
@@ -1440,63 +1589,10 @@ function VirtualExperiencesManageSection({ C, forms, setFormToDelete, onDuplicat
           </Link>
         </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {gpForms.map(form => {
-          const cfg   = form.config || {};
-          const color = GP_IND_COLORS[cfg.industry] || '#6366f1';
-          const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
-          return (
-            <div key={form.id} className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
-              {cfg.coverImage
-                ? <img src={cfg.coverImage} alt="" className="w-full h-28 object-cover" />
-                : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${color}18` }}>
-                    <Briefcase className="w-8 h-8" style={{ color }} />
-                  </div>}
-              <div className="p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: `${color}18`, color }}>{cfg.industry || 'Project'}</span>
-                  <span className="text-[10px]" style={{ color: C.faint }}>{cfg.difficulty}</span>
-                  {form.status === 'draft' && (
-                    <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>Draft</span>
-                  )}
-                </div>
-                <p className="font-semibold text-sm" style={{ color: C.text }}>{form.title}</p>
-                <p className="text-xs" style={{ color: C.faint }}>{cfg.company} · {totalLessons} lesson{totalLessons !== 1 ? 's' : ''}</p>
-                <div className="flex gap-2 pt-1">
-                  <Link href={`/dashboard/${form.id}`}
-                    className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl border transition-all hover:opacity-70"
-                    style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
-                    Report
-                  </Link>
-                  <Link href={`/create/guided-project?id=${form.id}`}
-                    className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl transition-all hover:opacity-80"
-                    style={{ background: `${color}18`, color }}>
-                    Edit
-                  </Link>
-                  <button onClick={() => handleDuplicate(form)} disabled={!!duplicatingId}
-                    className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80 disabled:opacity-50"
-                    style={{ background: C.pill, color: C.muted }} title="Duplicate">
-                    {duplicatingId === form.id
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                  <button onClick={() => exportContent(form)}
-                    className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
-                    style={{ background: C.pill, color: C.muted }} title="Export">
-                    <Download className="w-3.5 h-3.5" />
-                  </button>
-                  {SYNC_ENABLED && <PushButton type="virtual_experience" id={form.id} C={C} />}
-                  <button onClick={() => setFormToDelete(form.id)}
-                    className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
-                    style={{ background: C.deleteBg, color: C.deleteText }} title="Delete">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {groupVEsByIndustry(gpForms).map(([industry, list]) => (
+        <VEIndustryRow key={industry} industry={industry} forms={list}
+          handleDuplicate={handleDuplicate} duplicatingId={duplicatingId} setFormToDelete={setFormToDelete} C={C}/>
+      ))}
     </div>
   );
 }
@@ -4983,6 +5079,8 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
   const [generatingDesc, setGeneratingDesc] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const badgeInputRef = useRef<HTMLInputElement>(null);
+  const lpScrollRef = useRef<HTMLDivElement>(null);
+  const lpScrollBy = (dir: number) => lpScrollRef.current?.scrollBy({ left: dir * 340, behavior: 'smooth' });
 
   const publishedForms = forms.filter(f => f.status === 'published');
   const courseOptions  = publishedForms.filter(f => f.content_type === 'course' || f.config?.isCourse);
@@ -5345,13 +5443,29 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <h2 className="text-lg sm:text-xl font-bold" style={{ color: C.text }}>Learning Paths</h2>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button onClick={() => lpScrollBy(-1)} aria-label="Scroll left"
+                className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+                style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                <ChevronLeft className="w-4 h-4"/>
+              </button>
+              <button onClick={() => lpScrollBy(1)} aria-label="Scroll right"
+                className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+                style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                <ChevronRight className="w-4 h-4"/>
+              </button>
+            </div>
+          </div>
+          <div ref={lpScrollRef} className="flex gap-4 overflow-x-auto pb-2 snap-x" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {paths.map((path: any) => {
             const assignedCohortNames = (path.cohort_ids ?? []).map((id: string) => cohorts.find((c: any) => c.id === id)?.name).filter(Boolean);
             return (
-              <div key={path.id} className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
+              <div key={path.id} className="flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ background: C.card }}>
                 {path.cover_image
-                  ? <img src={path.cover_image} alt="" className="w-full h-28 object-cover"/>
+                  ? <img src={path.cover_image} alt="" loading="lazy" className="w-full h-28 object-cover"/>
                   : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${C.green}12` }}>
                       <BookOpen className="w-8 h-8 opacity-30" style={{ color: C.green }}/>
                     </div>}
@@ -5386,7 +5500,8 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
               </div>
             );
           })}
-        </div>
+          </div>
+        </section>
       )}
     </div>
   );
@@ -9924,55 +10039,12 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
     );
   }
 
-  const totalPages = Math.ceil(filtered.length / COURSES_PAGE_SIZE);
-  const paged = filtered.slice((page - 1) * COURSES_PAGE_SIZE, page * COURSES_PAGE_SIZE);
-  const pageNums = getPageNums(page, totalPages);
-
   return (
     <div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {paged.map((form, idx) => (
-          <FormCard key={form.id} form={form} index={(page - 1) * COURSES_PAGE_SIZE + idx}
-            shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen} setFormToDelete={setFormToDelete}/>
-        ))}
-      </div>
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-1.5 mt-10">
-          <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-30 transition-all hover:opacity-80"
-            style={{ background: C.card, color: C.muted, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}
-          >
-            Previous
-          </button>
-          {pageNums.map((pg, i) =>
-            pg === null
-              ? <span key={`ellipsis-${i}`} className="w-9 text-center text-sm" style={{ color: C.faint }}>...</span>
-              : <button
-                  key={pg}
-                  onClick={() => setPage(pg)}
-                  className="w-9 h-9 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
-                  style={{
-                    background: page === pg ? C.cta : C.card,
-                    color: page === pg ? C.ctaText : C.muted,
-                    border: `1px solid ${page === pg ? C.cta : C.cardBorder}`,
-                    boxShadow: page === pg ? 'none' : C.cardShadow,
-                  }}
-                >
-                  {pg}
-                </button>
-          )}
-          <button
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-30 transition-all hover:opacity-80"
-            style={{ background: C.card, color: C.muted, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}
-          >
-            Next
-          </button>
-        </div>
-      )}
+      {groupFormsByCategory(filtered).map(([tool, list]) => (
+        <CourseToolRow key={tool} tool={tool} forms={list}
+          shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen} setFormToDelete={setFormToDelete}/>
+      ))}
     </div>
   );
 }
@@ -10171,18 +10243,26 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="max-w-5xl mx-auto px-5 md:px-8 py-8 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-                <div className="h-44" style={{ background: C.skeleton }}/>
-                <div className="p-5 space-y-3">
-                  <div className="h-4 w-3/4 rounded-lg" style={{ background: C.skeleton }}/>
-                  <div className="h-3 w-full rounded-lg" style={{ background: C.pill }}/>
-                  <div className="h-3 w-2/3 rounded-lg" style={{ background: C.pill }}/>
+          {[0, 1].map(s => (
+            <div key={s} className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="h-6 w-44 rounded-lg" style={{ background: C.skeleton }}/>
+                <div className="flex gap-2">
+                  <div className="w-9 h-9 rounded-full" style={{ background: C.skeleton }}/>
+                  <div className="w-9 h-9 rounded-full" style={{ background: C.skeleton }}/>
                 </div>
               </div>
-            ))}
-          </div>
+              <div className="flex gap-6 overflow-hidden">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex-shrink-0 w-[300px]">
+                    <div className="h-44 rounded-2xl" style={{ background: C.skeleton }}/>
+                    <div className="h-4 w-3/4 rounded-lg mt-3" style={{ background: C.skeleton }}/>
+                    <div className="h-3 w-1/2 rounded-lg mt-2" style={{ background: C.pill }}/>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );

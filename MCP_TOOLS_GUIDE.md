@@ -57,34 +57,44 @@ For scenario-based SQL courses, ask "guide me through a SQL course" - each exerc
 
 ---
 
-## 4. Building a course from a document (PDF, DOCX, URL, or text)
+## 4. Building a course from a document (PDF, DOCX, PPT, URL, or text)
 
-Use **`extract_document_source`** to get the teachable source, then build the course from it with `create_course` (or `update_course` to add to an existing one).
+| Tool | What it does |
+|---|---|
+| `create_course_from_document` | Builds a complete course from a document using the **same two-stage generator as the platform web app** (outline, then full), so the result matches the platform exactly, then saves it as a draft. **Use this to create a course from a document.** |
+| `extract_document_source` | Returns only the raw teachable text of a document or URL (no course is built). Use it when you just want the source to inspect, not a built course. |
 
-How the source is handled depends on its type:
+### How `create_course_from_document` works
 
-| Source | What happens | What you do |
-|---|---|---|
-| **PDF** | Claude reads PDFs natively, so the tool does **not** extract it and no AI extractor runs on it. | **Attach the PDF to the Claude Desktop chat**, then say "build a course from this PDF". Claude reads it directly. (Claude cannot open an arbitrary file path on disk - it reads files attached to the conversation.) |
-| **Pasted text** | No extraction needed. | Paste the content and say "make a course from this". |
-| **TXT file** | Read directly off disk by the tool. | Give the full file path. |
-| **DOCX / DOC / PPTX / PPT** | Extracted server-side and returned as clean Markdown, because Claude cannot read these formats natively. | Give the full file path. |
-| **Public URL** | Fetched and cleaned to text server-side (no AI model). | Give the URL. |
+It produces the identical house-style course as the web wizard - same question schema, types, density, scenario formatting, and lesson structure - because it calls the platform's own generation pipeline.
 
-After the source is in hand, Claude drafts an ordered slide list (lessons to teach, then questions / exercises to test each idea, grouped with section dividers), keeps every fact faithful to the source, summarizes, and on your confirmation calls `create_course`.
+**Getting the source** depends on the type:
 
-**What uses an AI model, and what does not:**
-- PDF and pasted text: read by Claude (in Desktop). No Gemini, no extra API key.
-- DOCX / DOC / PPTX / PPT: read by Gemini on the platform's `/api/doc-course/extract` endpoint (Claude cannot read Office formats natively).
-- TXT and URL: no AI model at all.
+| Source | How the source is obtained |
+|---|---|
+| **PDF** | Claude reads PDFs natively. Attach the PDF to the chat; Claude reads it and passes the content in as the source. No Gemini, no upload. |
+| **Pasted text** | Used directly as the source. |
+| **TXT file** | Read off disk by the tool. |
+| **DOCX / DOC / PPTX / PPT** | Extracted server-side via the platform endpoint (Gemini), because Claude cannot read Office formats natively. |
+| **Public URL** | Fetched and cleaned to text server-side (no AI model). |
 
-**Requirements:**
-- PDF and text paths work with no server dependency.
-- Office-file and URL paths call the deployed `/api/doc-course/extract` endpoint, so that route must be deployed; Office files additionally need `GEMINI_API_KEY` set on the server.
+**The brief (gathered by Claude, like the web wizard):** before generating, Claude asks for and passes along:
+- Audience, level (Beginner / Intermediate / Advanced), and the goal (what learners should be able to DO).
+- Focus to emphasize; depth (`primer` 3-4 modules / `balanced` 4-8 / `comprehensive` 8-12); practice emphasis (`hands_on` / `balanced` / `knowledge`); tone.
+- Whether to include **YouTube explainer videos**, and any **preferred channels**.
+- Image mode (stock photos), cohorts, and pass mark.
 
-> Note: this is the MCP behavior. The platform's own document-upload course builder (in the web app) is separate and still uses Gemini for PDFs.
+The generator then produces the modules, lessons, and one question per lesson matched to the content (sql_exercise, code_review, multiple_choice, etc.), wires in stock images and module-intro videos per the brief, and the tool saves it as a draft. Review and `publish_content` when ready.
 
-Example: "I want to turn this handbook into a course" then attach the PDF, or "build a course from https://example.com/guide".
+**What uses which model:**
+- The **course generation** (questions, lessons, structure) runs on the platform's `/api/ai-course` generator - identical to the web app.
+- **Reading the source:** PDF and pasted text are read by Claude (no Gemini); DOCX / DOC / PPTX / PPT use Gemini server-side; TXT and URL use no model.
+
+**Requirements:** the `/api/ai-course` and `/api/doc-course/extract` routes must be deployed, and `GEMINI_API_KEY` set on the server (the generator and Office extraction both use it). PDF/text reading needs no key on the MCP side.
+
+> The "source" image mode (PDF page images) is not available in the MCP path, since the PDF is read by Claude rather than uploaded; stock images still work.
+
+Example: attach a PDF and say "build a course from this for beginner analysts, hands-on, include videos"; or "create a course from https://example.com/guide".
 
 ---
 

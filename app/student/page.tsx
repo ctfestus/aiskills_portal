@@ -93,6 +93,34 @@ function Sk({ w = '100%', h = 16, r = 8 }: { w?: string | number; h?: number; r?
   return <div style={{ width: w, height: h, borderRadius: r, background: C.skeleton, flexShrink: 0 }} className="animate-pulse"/>;
 }
 
+// Loading skeleton matching the carousel layout (section panel + title + a row of cards)
+function CarouselSkeleton({ C, rows = 2, cards = 4 }: { C: typeof LIGHT_C; rows?: number; cards?: number }) {
+  return (
+    <div className="space-y-6">
+      {[...Array(rows)].map((_, s) => (
+        <div key={s} className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="h-6 w-44 rounded-lg animate-pulse" style={{ background: C.skeleton }}/>
+            <div className="flex gap-2">
+              <div className="w-9 h-9 rounded-full animate-pulse" style={{ background: C.skeleton }}/>
+              <div className="w-9 h-9 rounded-full animate-pulse" style={{ background: C.skeleton }}/>
+            </div>
+          </div>
+          <div className="flex gap-4 overflow-hidden">
+            {[...Array(cards)].map((_, i) => (
+              <div key={i} className="flex-shrink-0 w-[220px]">
+                <div className="rounded-xl w-full aspect-video animate-pulse" style={{ background: C.skeleton }}/>
+                <div className="h-3 w-14 rounded mt-2 animate-pulse" style={{ background: C.skeleton }}/>
+                <div className="h-4 w-36 rounded mt-2 animate-pulse" style={{ background: C.skeleton }}/>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 type CohortTimeline = {
   id: string;
   name: string;
@@ -765,13 +793,7 @@ function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
     })();
   }, []);
 
-  if (loading) return (
-    <div className="space-y-3">
-      {[0,1].map(i => (
-        <div key={i} className="rounded-2xl h-24 animate-pulse" style={{ background: C.card }}/>
-      ))}
-    </div>
-  );
+  if (loading) return <CarouselSkeleton C={C}/>;
 
   if (!paths.length) return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -868,7 +890,7 @@ function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
             <>
               <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
                 {cover
-                  ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+                  ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
                   : <div className="w-full h-full flex items-center justify-center">
                       {isVE ? <Layers className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>}
                     </div>}
@@ -980,7 +1002,7 @@ function PathItemPreview({ item, isVE, done, isCurrent, isLocked, href, C }: {
     <div className="rounded-2xl overflow-hidden" style={{ background: C.card, boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
       <div className="relative w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
         {cover
-          ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+          ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
           : <div className="w-full h-full flex items-center justify-center">{isVE ? <Layers className="w-9 h-9" style={{ color: '#16a34a' }}/> : <BookOpen className="w-9 h-9" style={{ color: '#16a34a' }}/>}</div>}
         {!isLocked && (
           <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
@@ -1081,7 +1103,7 @@ function ToolRow({ tool, courses, deadlines, C, onDetails }: { tool: string; cou
               <button onClick={() => onDetails(c)} className="block w-full text-left transition-transform hover:-translate-y-0.5">
                 <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
                   {cover
-                    ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+                    ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
                     : <div className="w-full h-full flex items-center justify-center"><BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/></div>}
                   {status && (
                     <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
@@ -1304,11 +1326,7 @@ function CoursesSection({ userEmail, userId: userIdProp, C, isOutstandingProp }:
     });
   }, [searchQuery, courses]);
 
-  if (loading) return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-      {[0,1,2].map(i => <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card }}><Sk h={144} r={0}/><div className="p-4 space-y-3"><Sk h={16}/><Sk h={12} w="60%"/><Sk h={6}/></div></div>)}
-    </div>
-  );
+  if (loading) return <CarouselSkeleton C={C}/>;
 
   return (
     <div className="space-y-6">
@@ -2397,7 +2415,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
                           <div className="w-14 h-14 rounded-full overflow-hidden border-2"
                             style={{ borderColor: isMe ? C.green : m.is_leader ? '#f59e0b' : C.pill }}>
                             {s.avatar_url
-                              ? <img src={s.avatar_url} alt="" className="w-full h-full object-cover"/>
+                              ? <img src={s.avatar_url} alt="" loading="lazy" className="w-full h-full object-cover"/>
                               : <div className="w-full h-full flex items-center justify-center text-lg font-bold"
                                   style={{ background: isMe ? `${C.green}22` : C.pill, color: isMe ? C.green : C.muted }}>
                                   {initial}
@@ -4076,7 +4094,7 @@ function IndustryRow({ industry, items, attempts, deadlines, C, onDetails }: {
     <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2.5 min-w-0">
-          <h3 className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: C.text }}>{industry}</h3>
+          <h3 className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: C.text }}>{industry.replace(/\b\w/g, c => c.toUpperCase())}</h3>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
@@ -4106,7 +4124,7 @@ function IndustryRow({ industry, items, attempts, deadlines, C, onDetails }: {
               <button onClick={() => onDetails(form)} className="block w-full text-left transition-transform hover:-translate-y-0.5">
                 <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
                   {cover
-                    ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+                    ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
                     : <div className="w-full h-full flex items-center justify-center"><Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/></div>}
                   {status && (
                     <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
@@ -4227,15 +4245,7 @@ function VirtualExperiencesSection({ userId, userEmail, C }: { userId: string; u
     load();
   }, [userEmail, userId]);
 
-  if (loading) return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-      {[0,1,2].map(i => (
-        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
-          <Sk h={144} r={0}/><div className="p-4 space-y-3"><Sk h={16}/><Sk h={12} w="60%"/><Sk h={6}/></div>
-        </div>
-      ))}
-    </div>
-  );
+  if (loading) return <CarouselSkeleton C={C}/>;
 
   if (!items.length) return (
     <EmptyState icon={Briefcase} title="No Virtual Experiences" body="Virtual experiences assigned to your cohort will appear here." />
@@ -4826,7 +4836,7 @@ function BadgeRow({ title, badges, earnedIds, certIdMap, badgeUuidMap, appUrl, a
             <div key={b.id} className="flex-shrink-0 w-[190px] snap-start flex flex-col items-center text-center gap-3 pt-2" style={{ opacity: earned ? 1 : 0.45 }}>
               <div className="w-24 h-24 flex items-center justify-center flex-shrink-0">
                 {earned && b.image_url
-                  ? <img src={b.image_url} alt={b.name} className="w-24 h-24 object-contain drop-shadow-md"/>
+                  ? <img src={b.image_url} alt={b.name} loading="lazy" className="w-24 h-24 object-contain drop-shadow-md"/>
                   : earned
                     ? <span className="text-5xl leading-none">{b.icon}</span>
                     : <div className="w-24 h-24 rounded-full flex items-center justify-center" style={{ background: C.pill }}><Lock className="w-8 h-8" style={{ color: C.faint }}/></div>}
@@ -4938,13 +4948,7 @@ function StudentBadgesSection({ userId, C }: { userId: string; C: typeof LIGHT_C
     }
   };
 
-  if (loading) return (
-    <div className="space-y-4 p-2">
-      <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-        {[...Array(8)].map((_, i) => <div key={i} className="rounded-2xl h-40 animate-pulse" style={{ background: C.skeleton }}/>)}
-      </div>
-    </div>
-  );
+  if (loading) return <CarouselSkeleton C={C}/>;
 
   return (
     <div className="space-y-6">
@@ -5247,7 +5251,7 @@ function CertRow({ title, certs, C }: { title: string; certs: any[]; C: typeof L
               <div className="relative rounded-xl overflow-hidden w-full aspect-video flex items-center justify-center"
                 style={{ background: cover ? '#0b0b0d' : `linear-gradient(135deg, ${C.green}18 0%, ${C.lime}30 100%)` }}>
                 {cover
-                  ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+                  ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
                   : <div className="flex flex-col items-center gap-1">
                       <Award className="w-9 h-9" style={{ color: C.green }}/>
                       <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: C.green }}>Certificate</span>
@@ -5308,15 +5312,7 @@ function CertificatesSection({ userId, userEmail, userName, C }: { userId: strin
     load();
   }, [userEmail, userId]);
 
-  if (loading) return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-      {[0,1,2].map(i => (
-        <div key={i} className="rounded-2xl overflow-hidden" style={{ background: C.card }}>
-          <Sk h={120} r={0}/><div className="p-5 space-y-2"><Sk h={16} w="60%"/><Sk h={12} w="80%"/></div>
-        </div>
-      ))}
-    </div>
-  );
+  if (loading) return <CarouselSkeleton C={C}/>;
 
   if (!certs.length) return (
     <EmptyState icon={Award} title="No certificates yet"
@@ -5501,7 +5497,7 @@ function InProgressPreview({ form, isProject, pct, done, total, href, C }: {
     <div className="rounded-2xl overflow-hidden" style={{ background: C.card, boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
       <div className="relative w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
         {cover
-          ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+          ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
           : <div className="w-full h-full flex items-center justify-center">{isProject ? <Briefcase className="w-9 h-9" style={{ color: '#16a34a' }}/> : <BookOpen className="w-9 h-9" style={{ color: '#16a34a' }}/>}</div>}
         <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md" style={{ background: '#22c55e', color: '#ffffff' }}>In progress</span>
       </div>
@@ -5579,7 +5575,7 @@ function InProgressRow({ items, C }: { items: any[]; C: typeof LIGHT_C }) {
               <a href={href} target="_blank" rel="noreferrer" className="block transition-transform hover:-translate-y-0.5">
                 <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
                   {cover
-                    ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+                    ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
                     : <div className="w-full h-full flex items-center justify-center">{isProject ? <Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>}</div>}
                   <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md" style={{ background: '#22c55e', color: '#ffffff' }}>In progress</span>
                 </div>
@@ -5901,21 +5897,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
       .filter(Boolean) as any[],
   ].sort((a: any, b: any) => a.daysLeft - b.daysLeft);
 
-  if (loading) return (
-    <div className="space-y-6">
-      <div><Sk h={28} w="38%" r={8}/><div className="mt-1.5"><Sk h={14} w="52%" r={6}/></div></div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[0,1,2,3].map(i => (
-          <div key={i} className="rounded-2xl p-5" style={{ background: C.card }}>
-            <Sk h={40} w={40} r={12}/><div className="mt-3"><Sk h={26} w="40%"/></div><div className="mt-1.5"><Sk h={12} w="58%"/></div>
-          </div>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[0,1,2].map(i => <div key={i} className="rounded-2xl h-52" style={{ background: C.card }}/>)}
-      </div>
-    </div>
-  );
+  if (loading) return <CarouselSkeleton C={C} rows={3}/>;
 
   return (
     <div className="space-y-4 lg:space-y-6">
@@ -6001,7 +5983,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
                 <div key={`${type}-${title}-${idx}`} className="flex-shrink-0 w-[210px] snap-start">
                   <div className="relative rounded-xl overflow-hidden w-full aspect-video flex items-center justify-center" style={{ background: cover ? '#0b0b0d' : `${col}14` }}>
                     {cover
-                      ? <img src={cover} alt="" className="w-full h-full object-cover"/>
+                      ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
                       : <Icon className="w-10 h-10" style={{ color: col }}/>}
                     <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md" style={{ background: col, color: '#ffffff' }}>{lbl}</span>
                   </div>
@@ -6054,7 +6036,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
                   <div className="relative rounded-xl overflow-hidden w-full aspect-video flex items-center justify-center"
                     style={{ background: safeCover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
                     {safeCover
-                      ? <img src={safeCover} alt="" className="w-full h-full object-cover"/>
+                      ? <img src={safeCover} alt="" loading="lazy" className="w-full h-full object-cover"/>
                       : (isVE ? <Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>)}
                     {gap.topic && (
                       <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
