@@ -4487,7 +4487,7 @@ function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
       const list = cohortData ?? [];
       setCohorts(list);
       const { data: { session } } = await supabase.auth.getSession();
-      const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+      const headers: Record<string, string> = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
       const entries = await Promise.all(list.map(async (c: any) => {
         try {
           const res = await fetch(`/api/leaderboard?cohort_id=${c.id}`, { headers });
