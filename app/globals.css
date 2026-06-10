@@ -19,10 +19,43 @@
   --swatch-ring: #f4f4f5;
 }
 
+/* Keyboard focus indicator for form controls (WCAG 2.4.7).
+   Many inputs use `outline-none` or inline `outline:none`, which strips the
+   default ring, leaving keyboard users with no idea which field is active.
+   Restore a high-contrast ring on keyboard focus only -- :focus-visible keeps
+   it off for ordinary mouse clicks so the visual design is unchanged there. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[contenteditable="true"]:focus-visible {
+  outline: 2px solid #00bf63 !important;
+  outline-offset: 1px;
+}
+[data-theme="dark"] input:focus-visible,
+[data-theme="dark"] textarea:focus-visible,
+[data-theme="dark"] select:focus-visible,
+[data-theme="dark"] [contenteditable="true"]:focus-visible {
+  outline-color: #00bf63 !important;
+}
+
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
   overflow-x: hidden;
+}
+
+/* Balance multi-line headings so the last line isn't a lone orphan word.
+   Only affects headings that wrap; single-line headings are untouched. */
+h1, h2, h3, h4 {
+  text-wrap: balance;
+}
+
+/* Defer layout/paint for heavy sections that start below the fold.
+   contain-intrinsic-size reserves space so the scrollbar doesn't jump as the
+   browser skips/renders the block. Apply ONLY to off-screen-on-load blocks. */
+.defer-render {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 480px;
 }
 
 /* Sidebar nav scrollbar — hidden until hover, white thumb on blue sidebar */
@@ -405,6 +438,14 @@ body {
 .ve-lesson-body code::before,
 .ve-lesson-body code::after { content: none !important; }
 
+/* Lesson body stays at its normal weight (Regular); only headings render Black (900). */
+.ve-lesson-body h1,
+.ve-lesson-body h2,
+.ve-lesson-body h3,
+.ve-lesson-body h4,
+.ve-lesson-body h5,
+.ve-lesson-body h6 { font-weight: 900 !important; }
+
 /* Lesson body / editor table styles — light mode (! needed to override AI inline styles) */
 .ve-lesson-body table, .rich-editor table { width: 100% !important; border-collapse: collapse !important; }
 .ve-lesson-body thead tr, .rich-editor thead tr { background-color: #f1f5f9 !important; }
@@ -447,5 +488,19 @@ body {
   background-color: #ff9933 !important;
   color: white !important;
   opacity: 1 !important;
+}
+
+/* Native <select> dropdown options -- dark mode readability.
+   Without this the popup renders white with near-invisible light text. */
+[data-theme="dark"] select {
+  color-scheme: dark;
+}
+[data-theme="dark"] select option {
+  background-color: #1c1c1c;
+  color: #f0f0f0;
+}
+[data-theme="dark"] select option:checked {
+  background-color: #2e2e2e;
+  color: #ffffff;
 }
 

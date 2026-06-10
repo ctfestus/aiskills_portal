@@ -44,16 +44,12 @@ function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
   const card    = isDark ? '#1E1F26' : 'white';
   const divider = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
   const text    = isDark ? '#f0f0f0' : '#111';
-  const muted   = isDark ? '#A8B5C2' : '#555';
   const faint   = isDark ? '#6b7a89' : '#888';
   const pill    = isDark ? '#2a2b34' : '#F4F4F4';
   const cta     = isDark ? '#3E93FF' : '#0e09dd';
   const lime    = isDark ? 'rgba(62,147,255,0.15)' : '#e0e0f5';
   const green   = isDark ? '#3E93FF' : '#0e09dd';
 
-  const iconBgBlue   = isDark ? 'rgba(62,147,255,0.15)'  : 'rgba(14,9,221,0.08)';
-  const iconBgAmber  = isDark ? 'rgba(245,158,11,0.18)'  : 'rgba(245,158,11,0.10)';
-  const iconBgSubtle = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
   const signOutHover = isDark ? 'rgba(239,68,68,0.10)'   : 'rgba(239,68,68,0.08)';
 
   useEffect(() => {
@@ -74,16 +70,14 @@ function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
     window.location.href = '/';
   };
 
-  const menuItem = (href: string, Icon: React.ElementType, label: string, iconColor: string, iconBg: string, external?: boolean) => (
+  const menuItem = (href: string, Icon: React.ElementType, label: string, external?: boolean) => (
     <Link key={label} href={href} onClick={() => setOpen(false)}
       {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
       className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all"
-      style={{ color: muted, textDecoration: 'none' }}
+      style={{ color: text, textDecoration: 'none' }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = pill; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-      <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: iconBg }}>
-        <Icon className="w-3.5 h-3.5" style={{ color: iconColor }}/>
-      </div>
+      <Icon className="w-[18px] h-[18px] flex-shrink-0" style={{ color: text }}/>
       {label}
     </Link>
   );
@@ -138,11 +132,11 @@ function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
 
             {/* Navigation items */}
             <div className="p-2">
-              {menuItem('/dashboard', LayoutDashboard, 'Dashboard', faint, iconBgSubtle)}
-              {menuItem('/student#courses', GraduationCap, 'My Learning', faint, iconBgSubtle)}
-              {menuItem('/student#certificates', Award, 'My Certificates', faint, iconBgSubtle)}
-              {username && menuItem(`/s/${username}`, User, 'View Profile', faint, iconBgSubtle, true)}
-              {menuItem('/settings', Settings, 'Settings', faint, iconBgSubtle)}
+              {menuItem('/dashboard', LayoutDashboard, 'Dashboard')}
+              {menuItem('/student#courses', GraduationCap, 'My Learning')}
+              {menuItem('/student#certificates', Award, 'My Certificates')}
+              {username && menuItem(`/s/${username}`, User, 'View Profile', true)}
+              {menuItem('/settings', Settings, 'Settings')}
             </div>
 
             {/* Sign out */}
@@ -152,10 +146,7 @@ function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
                 style={{ color: '#ef4444' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = signOutHover; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: 'rgba(239,68,68,0.10)' }}>
-                  <LogOut className="w-3.5 h-3.5"/>
-                </div>
+                <LogOut className="w-[18px] h-[18px] flex-shrink-0"/>
                 Sign out
               </button>
             </div>

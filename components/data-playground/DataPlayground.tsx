@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'motion/react';
 import {
   Search, X, Database, Download, Table2,
-  Copy, Check, Loader2, Play, RefreshCw, ChevronDown, ChevronRight,
+  Copy, Check, Loader2, Play, RefreshCw, ChevronDown, ChevronLeft, ChevronRight,
   ArrowLeft, ArrowLeftToLine, ArrowRightFromLine, Clock, Star,
 } from 'lucide-react';
 import { acceptCompletion, autocompletion, CompletionContext, completionStatus, type Completion } from '@codemirror/autocomplete';
@@ -106,7 +107,7 @@ type DataPlaygroundGridProps = {
   emptyNoMatchMessage?: string;
 };
 
-const font = 'var(--font-sans, Inter, sans-serif)';
+const font = "'Google Sans Text', var(--font-sans, Inter, sans-serif)";
 const MAX_WORKBENCH_BYTES = 15 * 1024 * 1024;
 const MAX_WORKBENCH_TABLES = 12;
 const MAX_WORKBENCH_ROWS_PER_TABLE = 75_000;
@@ -1137,7 +1138,6 @@ function DatasetDetailPane({
                   <Download size={15} style={{ flexShrink: 0 }} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{datasetFiles[0].name || 'Download dataset'}{datasetFiles.length > 1 ? ` +${datasetFiles.length - 1}` : ''}</span>
                 </a>
-                {dataset.description && <p style={{ margin: '10px 2px 0', fontSize: 12, color: C.faint, lineHeight: 1.5 }}>{dataset.description}</p>}
               </div>
             )}
 
@@ -1573,6 +1573,43 @@ function DatasetDetailPane({
   );
 }
 
+// Floating hover preview -- grows out of the hovered card via a CSS transition (mount flag on rAF), mirroring the courses hover
+function DatasetHoverCard({ left, top, width, originX, originY, onEnter, onLeave, children }: {
+  left: number; top: number; width: number; originX: number; originY: number;
+  onEnter: () => void; onLeave: () => void; children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(false);
+  const [pos, setPos] = useState({ top, originY });
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      // Measure the real rendered height and clamp so it never runs past the viewport bottom.
+      const h = ref.current?.offsetHeight ?? 0;
+      const clampedTop = Math.max(12, Math.min(top, window.innerHeight - h - 16));
+      setPos({ top: clampedTop, originY: originY + (top - clampedTop) });
+      setShown(true);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [top, originY]);
+  return (
+    <div
+      ref={ref}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
+      style={{
+        position: 'fixed', left, top: pos.top, width: Math.max(width, 320), zIndex: 1000, fontFamily: font,
+        transformOrigin: `${originX}px ${pos.originY}px`,
+        opacity: shown ? 1 : 0,
+        transform: shown ? 'scale(1)' : 'scale(0.55)',
+        transition: 'opacity 0.3s ease-out, transform 0.42s cubic-bezier(0.16,1,0.3,1)',
+        willChange: 'opacity, transform',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function DataPlaygroundGrid({
   C,
   isDark,
@@ -1590,6 +1627,19 @@ export function DataPlaygroundGrid({
   const [selected, setSelected] = useState<DCDataset | null>(null);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [hover, setHover] = useState<{ d: DCDataset; left: number; top: number; originX: number; originY: number } | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || document.getElementById('gfont-google-sans-text')) return;
+    const link = document.createElement('link');
+    link.id = 'gfont-google-sans-text';
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Google+Sans+Text:wght@400;500;700&display=swap';
+    document.head.appendChild(link);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1660,92 +1710,135 @@ export function DataPlaygroundGrid({
         </p>
       )}
 
-      <div style={{ marginBottom: searchInputShadow ? 32 : 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ position: 'relative', maxWidth: searchMaxWidth }}>
-          <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: C.faint, pointerEvents: 'none' }} />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search datasets..."
-            style={searchStyle}
-          />
+      <div style={{ position: 'relative', maxWidth: searchMaxWidth, marginBottom: searchInputShadow ? 28 : 20 }}>
+        <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: C.faint, pointerEvents: 'none' }} />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search datasets..."
+          style={searchStyle}
+        />
+      </div>
+
+      <section style={{ background: C.card, borderRadius: 18, padding: '34px 22px 34px' }}>
+        {/* Header: title + nav arrows */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+          <h3 style={{ fontSize: 17, fontWeight: 500, color: C.text, margin: 0, lineHeight: 1.3, fontFamily: font }}>
+            Level up your data skills with realistic datasets across multiple industries
+          </h3>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+              style={{ width: 36, height: 36, borderRadius: '50%', border: `1px solid ${C.cardBorder}`, background: 'transparent', color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <ChevronLeft size={16} />
+            </button>
+            <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+              style={{ width: 36, height: 36, borderRadius: '50%', border: `1px solid ${C.cardBorder}`, background: 'transparent', color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
 
+        {/* Category tabs */}
         {categories.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
             <button onClick={() => setActiveCategory(null)}
-              style={{ padding: '6px 16px', borderRadius: 20, border: 'none', background: !activeCategory ? C.cta : C.card, color: !activeCategory ? C.ctaText : C.muted, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: font, transition: 'all 0.15s' }}>
+              style={{ padding: '9px 18px', borderRadius: 999, border: !activeCategory ? 'none' : `1px solid ${C.cardBorder}`, background: !activeCategory ? C.cta : 'transparent', color: !activeCategory ? C.ctaText : C.text, fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: font, transition: 'all 0.15s' }}>
               All
             </button>
             {categories.map(cat => (
               <button key={cat} onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
-                style={{ padding: '6px 16px', borderRadius: 20, border: 'none', background: activeCategory === cat ? C.cta : C.card, color: activeCategory === cat ? C.ctaText : C.muted, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: font, transition: 'all 0.15s' }}>
+                style={{ padding: '9px 18px', borderRadius: 999, border: activeCategory === cat ? 'none' : `1px solid ${C.cardBorder}`, background: activeCategory === cat ? C.cta : 'transparent', color: activeCategory === cat ? C.ctaText : C.text, fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: font, transition: 'all 0.15s' }}>
                 {cat}
               </button>
             ))}
           </div>
         )}
-      </div>
 
-      {filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: datasets.length === 0 ? '60px 20px' : '48px 20px', color: C.faint, fontFamily: font }}>
-          <Database size={40} style={{ color: C.faint, display: 'block', margin: '0 auto 12px' }} />
-          <p style={{ fontWeight: 600, fontSize: 16, color: C.text, marginBottom: 4 }}>{datasets.length === 0 ? 'No datasets available yet' : 'No datasets match your search'}</p>
-          <p style={{ fontSize: 13, color: C.faint }}>{datasets.length === 0 ? emptyNoDatasetsMessage : emptyNoMatchMessage}</p>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 16 }}>
-          {filtered.map(d => {
-            const files = getDatasetFiles(d);
-            return (
-              <div key={d.id} style={{ background: C.card, border: 'none', borderRadius: 18, overflow: 'hidden', textAlign: 'left', fontFamily: font, minHeight: 420, display: 'flex', flexDirection: 'column' }}>
+        {/* Carousel row */}
+        {filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: datasets.length === 0 ? '52px 20px' : '40px 20px', color: C.faint, fontFamily: font }}>
+            <Database size={40} style={{ color: C.faint, display: 'block', margin: '0 auto 12px' }} />
+            <p style={{ fontWeight: 600, fontSize: 16, color: C.text, marginBottom: 4 }}>{datasets.length === 0 ? 'No datasets available yet' : 'No datasets match your search'}</p>
+            <p style={{ fontSize: 13, color: C.faint }}>{datasets.length === 0 ? emptyNoDatasetsMessage : emptyNoMatchMessage}</p>
+          </div>
+        ) : (
+          <div ref={scrollRef} style={{ display: 'flex', gap: 18, overflowX: 'auto', paddingBottom: 6, marginTop: 18, scrollbarWidth: 'none' }}>
+            {filtered.map(d => (
+              <div key={d.id}
+                onMouseEnter={e => {
+                  if (typeof window === 'undefined' || !window.matchMedia('(hover: hover)').matches) return;
+                  if (hoverTimer.current) clearTimeout(hoverTimer.current);
+                  const r = e.currentTarget.getBoundingClientRect();
+                  const W = 320, H = 360;
+                  const left = Math.max(12, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 12));
+                  const top  = Math.max(12, Math.min(r.top - 20, window.innerHeight - H - 12));
+                  const originX = Math.max(0, Math.min(r.left + r.width / 2 - left, W));
+                  const originY = Math.max(0, Math.min(r.top + r.height / 2 - top, H));
+                  setHover({ d, left, top, originX, originY });
+                }}
+                onMouseLeave={() => { hoverTimer.current = setTimeout(() => setHover(null), 120); }}
+                onClick={() => setSelected(d)}
+                style={{ flexShrink: 0, width: 230, scrollSnapAlign: 'start', background: 'transparent', cursor: 'pointer', fontFamily: font, display: 'flex', flexDirection: 'column' }}>
                 {d.cover_image_url ? (
-                  <div style={{ padding: '14px 14px 0', overflow: 'hidden', borderRadius: 12 }}>
-                    <img src={d.cover_image_url} alt={d.cover_image_alt ?? ''} style={{ width: '100%', aspectRatio: '16/7', objectFit: 'cover', display: 'block', borderRadius: 12, transition: 'transform 0.35s ease, filter 0.35s ease' }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.filter = 'brightness(1.08)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.filter = 'brightness(1)'; }}
-                    />
-                  </div>
+                  <img src={d.cover_image_url} alt={d.cover_image_alt ?? ''} style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block', borderRadius: 12 }} />
                 ) : (
-                  <div style={{ padding: '14px 14px 0' }}>
-                    <div style={{ width: '100%', aspectRatio: '16/7', background: C.lime, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}>
-                      <Database size={36} style={{ color: C.green }} />
-                    </div>
+                  <div style={{ width: '100%', aspectRatio: '16/9', background: C.lime, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}>
+                    <Database size={32} style={{ color: C.green }} />
                   </div>
                 )}
+                <p style={{ fontSize: 12, color: C.faint, margin: '10px 0 0', fontWeight: 600 }}>Dataset</p>
+                <p style={{ fontWeight: 700, fontSize: 15, color: C.text, margin: '2px 0 0', lineHeight: 1.35 }}>{d.title}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
-                <div style={{ padding: '16px 18px 0', flex: 1 }}>
-                  {tagsFor(d).length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
-                      {tagsFor(d).slice(0, 3).map(t => <span key={t} style={{ fontSize: 13, padding: '3px 9px', borderRadius: 20, background: C.pill, color: C.muted, fontWeight: 700, letterSpacing: 0.2 }}>{t}</span>)}
-                    </div>
-                  )}
-                  <p style={{ fontWeight: 700, fontSize: 18, color: C.text, margin: '0 0 5px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.22 }}>{d.title}</p>
-                  {d.description && <p style={{ fontSize: 14, color: C.faint, margin: 0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', lineHeight: 1.32 }}>{d.description}</p>}
+      {/* Hover preview -- full data card (portal so the scroll container doesn't clip it) */}
+      {hover && createPortal(
+        <DatasetHoverCard key={hover.d.id} left={hover.left} top={hover.top} width={320}
+          originX={hover.originX} originY={hover.originY}
+          onEnter={() => { if (hoverTimer.current) clearTimeout(hoverTimer.current); }}
+          onLeave={() => setHover(null)}>
+          {(() => {
+            const d = hover.d;
+            const files = getDatasetFiles(d);
+            return (
+              <div style={{ background: C.card, borderRadius: 18, overflow: 'hidden', minHeight: 360, boxShadow: isDark ? '0 18px 50px rgba(0,0,0,0.55)' : '0 18px 50px rgba(0,0,0,0.2)', border: 'none', display: 'flex', flexDirection: 'column' }}>
+                {d.cover_image_url ? (
+                  <img src={d.cover_image_url} alt={d.cover_image_alt ?? ''} style={{ width: '100%', aspectRatio: '16/7', objectFit: 'cover', display: 'block' }} />
+                ) : (
+                  <div style={{ width: '100%', aspectRatio: '16/7', background: C.lime, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Database size={36} style={{ color: C.green }} />
+                  </div>
+                )}
+                <div style={{ padding: '20px 20px 0', flex: 1 }}>
+                  <p style={{ fontWeight: 700, fontSize: 20, color: C.text, margin: '0 0 8px', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{d.title}</p>
+                  {d.description && <p style={{ fontSize: 15, color: C.faint, margin: 0, lineHeight: 1.6, display: '-webkit-box', WebkitLineClamp: 6, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{d.description}</p>}
                   {d.table_type && (
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10, padding: '4px 10px', borderRadius: 20, background: C.pill }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 14, padding: '5px 11px', borderRadius: 20, background: C.pill }}>
                       <Database size={12} style={{ color: C.muted }} />
                       <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{d.table_type === 'single' ? 'Single Table' : 'Multiple Tables'}</span>
                     </div>
                   )}
                 </div>
-
-                <div style={{ padding: '14px 18px 18px', display: 'flex', gap: 8, borderTop: `1px solid ${C.divider}`, marginTop: 14 }}>
-                  <button onClick={() => setSelected(d)}
-                    style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                <div style={{ padding: '16px 20px 20px', display: 'flex', gap: 8, borderTop: `1px solid ${C.divider}`, marginTop: 18 }}>
+                  <button onClick={() => { setSelected(d); setHover(null); }}
+                    style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontSize: 15, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                     View Details
                   </button>
                   {files.length > 0 && (
                     <a href={files[0].url} download={files[0].name ?? true} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 0', borderRadius: 10, border: 'none', background: C.input, color: C.text, fontSize: 14, fontWeight: 700, textDecoration: 'none', fontFamily: 'inherit' }}>
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '12px 0', borderRadius: 10, border: 'none', background: C.input, color: C.text, fontSize: 15, fontWeight: 700, textDecoration: 'none', fontFamily: 'inherit' }}>
                       <Download size={14} /> Download
                     </a>
                   )}
                 </div>
               </div>
             );
-          })}
-        </div>
+          })()}
+        </DatasetHoverCard>,
+        document.body
       )}
 
       <AnimatePresence>

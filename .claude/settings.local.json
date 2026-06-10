@@ -30,7 +30,9 @@
       "Bash(Select-Object FullName)",
       "Bash(grep -r \"supabase\" \"c:\\\\Users\\\\DELL\\\\Documents\\\\ALL Apps\\\\App_AI Skils\\\\AI Skills Africa App\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.js\" --include=\"*.jsx\" ! -path \"*/node_modules/*\" ! -path \"*/.next/*\")",
       "Bash(grep -E \"create/page|create\\\\\\\\\\\\\\\\page|error TS\")",
-      "Edit(~/.claude/skills/generate-sql-course/**)"
+      "Edit(~/.claude/skills/generate-sql-course/**)",
+      "Bash(awk 'NR>=8615 && NR<=8632' app/dashboard/page.tsx)",
+      "Bash(awk -F: '$1>=8400 && $1<=8650')"
     ],
     "additionalDirectories": [
       "C:\\Users\\DELL\\Documents\\ALL Apps\\Landing pages\\elevate-landing\\lib",

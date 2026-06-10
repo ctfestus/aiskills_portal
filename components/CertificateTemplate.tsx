@@ -38,7 +38,7 @@ export interface CertificateSettings {
   signatoryTitle:     string;
   certifyText:        string;
   completionText:     string;
-  fontFamily:         "serif" | "sans-serif" | "lato" | "source-sans-pro" | "script";
+  fontFamily:         "serif" | "sans-serif" | "lato" | "source-sans-pro" | "google-sans-text" | "script";
   headingSize:        "sm" | "md" | "lg";
   paddingTop?:        number;
   paddingLeft?:       number;
@@ -87,6 +87,7 @@ const FONT_MAP: Record<CertificateSettings["fontFamily"], string> = {
   "script":          "'Georgia', 'Palatino Linotype', cursive",
   "lato":            "'Lato', 'Arial', sans-serif",
   "source-sans-pro": "'Source Sans 3', 'Source Sans Pro', 'Arial', sans-serif",
+  "google-sans-text": "'Google Sans Text', 'Arial', sans-serif",
 };
 
 const SPACING_MUL: Record<NonNullable<CertificateSettings["lineSpacing"]>, number> = {

@@ -105,7 +105,7 @@ function IndustrySelect({ value, onChange }: { value: string; onChange: (v: stri
                 : filtered.map(ind => (
                   <button key={ind} type="button"
                     onClick={() => { onChange(ind); setOpen(false); setQuery(''); }}
-                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${value === ind ? 'bg-[#f0fdf4] text-[#006128] font-medium' : 'text-[#111] hover:bg-[#f5f6f7]'}`}
+                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${value === ind ? 'bg-[#f0fdf4] text-[#00bf63] font-medium' : 'text-[#111] hover:bg-[#f5f6f7]'}`}
                   >{ind}</button>
                 ))
               }

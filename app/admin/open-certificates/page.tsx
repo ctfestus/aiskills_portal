@@ -493,7 +493,7 @@ function IssuePanel({ programs, initialProgram, onDone, onCancel, C }: {
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>Select Program *</label>
           <select value={selectedProgramId} onChange={e => setSelectedProgramId(e.target.value)}
             style={{ width: '100%', background: C.input, border: `1px solid ${C.cardBorder}`, borderRadius: 8, padding: '9px 12px', fontSize: 14, color: selectedProgramId ? C.text : C.faint, boxSizing: 'border-box' }}>
-            <option value="">-- Choose a program --</option>
+            <option value="">Choose a program</option>
             {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>

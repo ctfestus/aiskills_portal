@@ -13,20 +13,20 @@ import { sanitizeAnnouncementContent, sanitizePlainText } from '@/lib/sanitize';
 
 // --- Design tokens ---
 const LIGHT_C = {
-  page: '#EEEAE3', card: 'white', cardBorder: 'rgba(0,0,0,0.07)',
-  cardShadow: '0 1px 4px rgba(0,0,0,0.06)', green: '#006128', lime: '#ADEE66',
-  cta: '#006128', ctaText: 'white', text: '#111', muted: '#555', faint: '#888',
-  divider: 'rgba(0,0,0,0.07)', input: '#F8F6F1', pill: '#F4F1EB',
-  nav: 'rgba(238,234,227,0.92)', navBorder: 'rgba(0,0,0,0.07)',
+  page: '#F2F5FA', card: 'white', cardBorder: 'rgba(0,0,0,0.07)',
+  cardShadow: 'none', green: '#00bf63', lime: '#ADEE66',
+  cta: '#00bf63', ctaText: 'white', text: '#111', muted: '#555', faint: '#888',
+  divider: 'rgba(0,0,0,0.07)', input: '#f4f5f7', pill: '#eef0f3',
+  nav: 'rgba(242,245,250,0.92)', navBorder: 'rgba(0,0,0,0.07)',
   errorBg: '#fef2f2', errorText: '#ef4444', errorBorder: '#fecaca',
   checkboxBorder: 'rgba(0,0,0,0.2)',
 };
 const DARK_C = {
-  page: '#111111', card: '#1c1c1c', cardBorder: 'rgba(255,255,255,0.07)',
-  cardShadow: '0 1px 4px rgba(0,0,0,0.40)', green: '#ADEE66', lime: '#ADEE66',
-  cta: '#ADEE66', ctaText: '#111', text: '#f0f0f0', muted: '#aaa', faint: '#555',
-  divider: 'rgba(255,255,255,0.07)', input: '#1a1a1a', pill: '#242424',
-  nav: 'rgba(17,17,17,0.90)', navBorder: 'rgba(255,255,255,0.07)',
+  page: '#17181E', card: '#1E1F26', cardBorder: 'rgba(255,255,255,0.07)',
+  cardShadow: 'none', green: '#00bf63', lime: '#ADEE66',
+  cta: '#00bf63', ctaText: 'white', text: '#f0f0f0', muted: '#aaa', faint: '#555',
+  divider: 'rgba(255,255,255,0.07)', input: 'rgba(255,255,255,0.05)', pill: '#242630',
+  nav: 'rgba(23,24,30,0.90)', navBorder: 'rgba(255,255,255,0.07)',
   errorBg: 'rgba(239,68,68,0.12)', errorText: '#f87171', errorBorder: 'rgba(239,68,68,0.25)',
   checkboxBorder: 'rgba(255,255,255,0.2)',
 };
@@ -55,6 +55,7 @@ function toDatetimeLocalValue(d: Date): string {
 // --- Page ---
 export default function CreateAnnouncementPage() {
   const C = useC();
+  const isDark = C === DARK_C;
   const router = useRouter();
 
   const [editId, setEditId]             = useState<string | null>(null);
@@ -190,7 +191,7 @@ export default function CreateAnnouncementPage() {
         background: C.nav, borderBottom: `1px solid ${C.navBorder}`,
         backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
       }}>
-        <div style={{ maxWidth: 700, margin: '0 auto', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ maxWidth: 880, margin: '0 auto', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.muted, textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>
             <ArrowLeft style={{ width: 16, height: 16 }}/> Back
           </Link>
@@ -213,7 +214,7 @@ export default function CreateAnnouncementPage() {
       </header>
 
       {/* Content */}
-      <main style={{ maxWidth: 700, margin: '0 auto', padding: '32px 24px 80px' }}>
+      <main style={{ maxWidth: 880, margin: '0 auto', padding: '32px 24px 80px' }}>
         <form id="announcement-form" onSubmit={handleSubmit} noValidate>
 
           {error && (
@@ -222,164 +223,174 @@ export default function CreateAnnouncementPage() {
             </div>
           )}
 
-          {/* -- Content card --- */}
-          <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>Content</h2>
+          {/* -- One wide card, sections separated by hairlines --- */}
+          <section style={{ background: C.card, borderRadius: 18, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, overflow: 'hidden' }}>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle(C)}>Title <span style={{ color: C.errorText }}>*</span></label>
-              <input
-                type="text" value={title} onChange={e => setTitle(sanitizePlainText(e.target.value))}
-                placeholder="e.g. Important update for all students"
-                style={inputStyle(C)} required maxLength={255}
-              />
-            </div>
+            {/* Section: Content */}
+            <div style={{ padding: '26px 30px' }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginTop: 0, marginBottom: 18 }}>Content</h2>
 
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <label style={{ ...labelStyle(C), marginBottom: 0 }}>Subtitle <span style={{ color: C.faint, fontWeight: 400 }}>(optional, shown as the card teaser)</span></label>
-                <button
-                  type="button"
-                  onClick={generateSubtitle}
-                  disabled={subtitleGenerating}
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 8, border: 'none', cursor: subtitleGenerating ? 'not-allowed' : 'pointer', background: C.lime, color: '#111', fontSize: 12, fontWeight: 700, opacity: subtitleGenerating ? 0.7 : 1, transition: 'opacity 0.15s', flexShrink: 0 }}>
-                  {subtitleGenerating
-                    ? <Loader2 style={{ width: 12, height: 12 }} className="animate-spin"/>
-                    : <Sparkles style={{ width: 12, height: 12 }}/>}
-                  {subtitleGenerating ? 'Writing...' : 'AI Write'}
-                </button>
+              <div style={{ marginBottom: 16 }}>
+                <label style={labelStyle(C)}>Title <span style={{ color: C.errorText }}>*</span></label>
+                <input
+                  type="text" value={title} onChange={e => setTitle(sanitizePlainText(e.target.value))}
+                  placeholder="e.g. Important update for all students"
+                  style={inputStyle(C)} required maxLength={255}
+                />
               </div>
-              <input
-                type="text" value={subtitle} onChange={e => setSubtitle(sanitizePlainText(e.target.value))}
-                placeholder="A short punchy line shown on the card preview"
-                style={inputStyle(C)} maxLength={200}
-              />
-            </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle(C)}>Content <span style={{ color: C.errorText }}>*</span></label>
-              <RichTextEditor value={content} onChange={setContent} placeholder="Write your announcement here…" />
-            </div>
-
-            <div>
-              <label style={labelStyle(C)}>Cover Image</label>
-              <input ref={coverRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => {
-                const file = e.target.files?.[0]; if (!file) return;
-                setCoverUploading(true);
-                try {
-                  const url = await uploadToCloudinary(file, 'covers');
-                  setCoverImage(url);
-                } catch (err: any) { setError(err?.message || 'Image upload failed.'); }
-                finally { setCoverUploading(false); e.target.value = ''; }
-              }}/>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input type="url" value={coverImage} onChange={e => setCoverImage(e.target.value)}
-                  placeholder="https://example.com/image.jpg" style={{ ...inputStyle(C), flex: 1 }}/>
-                <button type="button" onClick={() => coverRef.current?.click()} disabled={coverUploading}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.pill, color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  <Upload style={{ width: 14, height: 14 }}/>{coverUploading ? 'Uploading…' : 'Upload'}
-                </button>
-              </div>
-              {coverImage.trim() && (
-                <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.cardBorder}`, position: 'relative' }}>
-                  <img src={coverImage.trim()} alt="Cover" style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} onError={e => (e.target as HTMLImageElement).style.display = 'none'}/>
-                  <button type="button" onClick={() => setCoverImage('')}
-                    style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.55)', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <X style={{ width: 14, height: 14, color: 'white' }}/>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <label style={{ ...labelStyle(C), marginBottom: 0 }}>Subtitle <span style={{ color: C.faint, fontWeight: 400 }}>(optional, shown as the card teaser)</span></label>
+                  <button
+                    type="button"
+                    onClick={generateSubtitle}
+                    disabled={subtitleGenerating}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 8, border: 'none', cursor: subtitleGenerating ? 'not-allowed' : 'pointer', background: `${C.green}1a`, color: C.green, fontSize: 12, fontWeight: 700, opacity: subtitleGenerating ? 0.7 : 1, transition: 'opacity 0.15s', flexShrink: 0 }}>
+                    {subtitleGenerating
+                      ? <Loader2 style={{ width: 12, height: 12 }} className="animate-spin"/>
+                      : <Sparkles style={{ width: 12, height: 12 }}/>}
+                    {subtitleGenerating ? 'Writing...' : 'AI Write'}
                   </button>
                 </div>
-              )}
-            </div>
+                <input
+                  type="text" value={subtitle} onChange={e => setSubtitle(sanitizePlainText(e.target.value))}
+                  placeholder="A short punchy line shown on the card preview"
+                  style={inputStyle(C)} maxLength={200}
+                />
+              </div>
 
-            <div style={{ marginTop: 16 }}>
-              <label style={labelStyle(C)}>YouTube Video <span style={{ color: C.faint, fontWeight: 400 }}>(optional)</span></label>
-              <input
-                type="url" value={youtubeUrl} onChange={e => setYoutubeUrl(e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=… or https://youtu.be/…"
-                style={inputStyle(C)}
-              />
-              {youtubeUrl.trim() && (() => {
-                const embedId = youtubeUrl.match(/(?:v=|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/)?.[1];
-                return embedId ? (
-                  <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.cardBorder}`, position: 'relative', paddingBottom: '56.25%', height: 0 }}>
-                    <iframe
-                      src={`https://www.youtube.com/embed/${embedId}`}
-                      title="YouTube preview"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
-                    />
-                  </div>
-                ) : (
-                  <p style={{ marginTop: 6, fontSize: 12, color: C.errorText }}>Could not parse YouTube URL. Paste a standard YouTube link.</p>
-                );
-              })()}
-            </div>
-          </section>
+              <div style={{ marginBottom: 16 }}>
+                <label style={labelStyle(C)}>Content <span style={{ color: C.errorText }}>*</span></label>
+                <RichTextEditor value={content} onChange={setContent} placeholder="Write your announcement here…" />
+              </div>
 
-          {/* -- Settings card --- */}
-          <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>Settings</h2>
-
-            {/* Pin toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, padding: '12px 16px', borderRadius: 10, background: C.page, border: `1px solid ${C.divider}` }}>
-              <button
-                type="button"
-                onClick={() => setIsPinned(p => !p)}
-                style={{
-                  width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer',
-                  background: isPinned ? C.cta : C.faint,
-                  position: 'relative', transition: 'background 0.2s', flexShrink: 0,
-                }}
-                aria-checked={isPinned} role="switch" aria-label="Pin announcement"
-              >
-                <span style={{
-                  position: 'absolute', top: 3, left: isPinned ? 21 : 3,
-                  width: 16, height: 16, borderRadius: '50%', background: 'white',
-                  transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+              <div style={{ marginBottom: 16 }}>
+                <label style={labelStyle(C)}>Cover Image</label>
+                <input ref={coverRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => {
+                  const file = e.target.files?.[0]; if (!file) return;
+                  setCoverUploading(true);
+                  try {
+                    const url = await uploadToCloudinary(file, 'covers');
+                    setCoverImage(url);
+                  } catch (err: any) { setError(err?.message || 'Image upload failed.'); }
+                  finally { setCoverUploading(false); e.target.value = ''; }
                 }}/>
-              </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input type="url" value={coverImage} onChange={e => setCoverImage(e.target.value)}
+                    placeholder="https://example.com/image.jpg" style={{ ...inputStyle(C), flex: 1 }}/>
+                  <button type="button" onClick={() => coverRef.current?.click()} disabled={coverUploading}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderRadius: 10, border: 'none', background: C.pill, color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    <Upload style={{ width: 14, height: 14 }}/>{coverUploading ? 'Uploading…' : 'Upload'}
+                  </button>
+                </div>
+                {coverImage.trim() && (
+                  <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.cardBorder}`, position: 'relative' }}>
+                    <img src={coverImage.trim()} alt="Cover" style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} onError={e => (e.target as HTMLImageElement).style.display = 'none'}/>
+                    <button type="button" onClick={() => setCoverImage('')}
+                      style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.55)', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      <X style={{ width: 14, height: 14, color: 'white' }}/>
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.text }}>Pin Announcement</p>
-                <p style={{ margin: 0, fontSize: 12, color: C.faint }}>Pinned announcements appear at the top of the feed</p>
+                <label style={labelStyle(C)}>YouTube Video <span style={{ color: C.faint, fontWeight: 400 }}>(optional)</span></label>
+                <input
+                  type="url" value={youtubeUrl} onChange={e => setYoutubeUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=… or https://youtu.be/…"
+                  style={inputStyle(C)}
+                />
+                {youtubeUrl.trim() && (() => {
+                  const embedId = youtubeUrl.match(/(?:v=|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/)?.[1];
+                  return embedId ? (
+                    <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.cardBorder}`, position: 'relative', paddingBottom: '56.25%', height: 0 }}>
+                      <iframe
+                        src={`https://www.youtube.com/embed/${embedId}`}
+                        title="YouTube preview"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
+                      />
+                    </div>
+                  ) : (
+                    <p style={{ marginTop: 6, fontSize: 12, color: C.errorText }}>Could not parse YouTube URL. Paste a standard YouTube link.</p>
+                  );
+                })()}
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div>
-                <label style={labelStyle(C)}>Published At</label>
-                <input
-                  type="datetime-local" value={publishedAt}
-                  onChange={e => setPublishedAt(e.target.value)}
-                  style={inputStyle(C)}
-                />
+            <div style={{ height: 1, background: C.divider }} />
+
+            {/* Section: Settings */}
+            <div style={{ padding: '26px 30px' }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginTop: 0, marginBottom: 18 }}>Settings</h2>
+
+              {/* Pin toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, padding: '12px 16px', borderRadius: 10, background: C.input }}>
+                <button
+                  type="button"
+                  onClick={() => setIsPinned(p => !p)}
+                  style={{
+                    width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer',
+                    background: isPinned ? C.cta : C.faint,
+                    position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+                  }}
+                  aria-checked={isPinned} role="switch" aria-label="Pin announcement"
+                >
+                  <span style={{
+                    position: 'absolute', top: 3, left: isPinned ? 21 : 3,
+                    width: 16, height: 16, borderRadius: '50%', background: 'white',
+                    transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  }}/>
+                </button>
+                <div>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.text }}>Pin Announcement</p>
+                  <p style={{ margin: 0, fontSize: 12, color: C.faint }}>Pinned announcements appear at the top of the feed</p>
+                </div>
               </div>
-              <div>
-                <label style={labelStyle(C)}>Expires At <span style={{ color: C.faint, fontWeight: 400 }}>(optional)</span></label>
-                <input
-                  type="datetime-local" value={expiresAt}
-                  onChange={e => setExpiresAt(e.target.value)}
-                  style={inputStyle(C)}
-                />
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label style={labelStyle(C)}>Published At</label>
+                  <input
+                    type="datetime-local" value={publishedAt}
+                    onChange={e => setPublishedAt(e.target.value)}
+                    style={inputStyle(C)}
+                  />
+                </div>
+                <div>
+                  <label style={labelStyle(C)}>Expires At <span style={{ color: C.faint, fontWeight: 400 }}>(optional)</span></label>
+                  <input
+                    type="datetime-local" value={expiresAt}
+                    onChange={e => setExpiresAt(e.target.value)}
+                    style={inputStyle(C)}
+                  />
+                </div>
               </div>
             </div>
+
+            {/* Section: Cohorts */}
+            {cohorts.length > 0 && (
+              <>
+                <div style={{ height: 1, background: C.divider }} />
+                <div style={{ padding: '26px 30px' }}>
+                  <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginTop: 0, marginBottom: 16 }}>Assign to Cohorts</h2>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {cohorts.map(c => (
+                      <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={selectedCohortIds.includes(c.id)} onChange={() => toggleCohort(c.id)}
+                          style={{ width: 16, height: 16, accentColor: C.cta, cursor: 'pointer' }} />
+                        <span style={{ fontSize: 14, color: C.text }}>{c.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
           </section>
-
-          {/* -- Cohorts --- */}
-          {cohorts.length > 0 && (
-            <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginTop: 20 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16, marginTop: 0 }}>Assign to Cohorts</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {cohorts.map(c => (
-                  <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={selectedCohortIds.includes(c.id)} onChange={() => toggleCohort(c.id)}
-                      style={{ width: 16, height: 16, accentColor: C.cta, cursor: 'pointer' }} />
-                    <span style={{ fontSize: 14, color: C.text }}>{c.name}</span>
-                  </label>
-                ))}
-              </div>
-            </section>
-          )}
 
         </form>
       </main>

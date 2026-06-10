@@ -232,7 +232,7 @@ export function courseResultEmail(data: {
         `}
         <div style="padding:14px 16px 16px;">
           <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#111;line-height:1.3;">${r.title}</p>
-          <p style="margin:0;font-size:12px;font-weight:600;color:#006128;">Start course </p>
+          <p style="margin:0;font-size:12px;font-weight:600;color:#00bf63;">Start course </p>
         </div>
       </a>
     `).join('')}

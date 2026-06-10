@@ -16,12 +16,12 @@ interface RichTextEditorProps {
 export function RichTextEditor({ value, onChange, placeholder = 'Add a description...', className = '', bgOverride, fontFamily }: RichTextEditorProps) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
-  const bg        = bgOverride ?? (dark ? '#1a1a1a' : '#F8F6F1');
-  const border    = dark ? '1px solid rgba(255,255,255,0.09)' : '1px solid rgba(0,0,0,0.09)';
+  const bg        = bgOverride ?? (dark ? 'rgba(255,255,255,0.05)' : '#f4f5f7');
+  const border    = dark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)';
   const toolDiv   = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
   const textColor = dark ? '#f0f0f0' : '#111';
   const phColor   = dark ? '#555' : '#bbb';
-  const linkColor = dark ? '#ADEE66' : '#006128';
+  const linkColor = dark ? '#ADEE66' : '#00bf63';
   const editorRef = useRef<HTMLDivElement>(null);
   // Track whether the change came from inside the editor (to avoid caret reset)
   const isInternalChange = useRef(false);

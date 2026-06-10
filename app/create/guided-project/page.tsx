@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { useTheme } from '@/components/ThemeProvider';
 import {
-  ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight,
+  ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight, ChevronLeft,
   Plus, Trash2, X, Check, RefreshCw, Upload, Pencil, Star, Clock, Download,
   Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical, Video, Search, Eye,
 } from 'lucide-react';
@@ -49,19 +49,19 @@ import { Suspense } from 'react';
 
 // Design tokens
 const LIGHT_C = {
-  page: '#F3F4F2', card: 'white', cardBorder: 'rgba(0,100,40,0.13)',
-  cardShadow: '0 1px 4px rgba(0,0,0,0.06)', green: '#006128', lime: '#ADEE66',
-  cta: '#006128', ctaText: 'white', text: '#111', muted: '#555', faint: '#888',
+  page: '#F2F5FA', card: '#ffffff', cardBorder: 'rgba(0,0,0,0.08)',
+  cardShadow: '0 1px 4px rgba(0,0,0,0.06)', green: '#00bf63', lime: '#00bf63',
+  cta: '#00bf63', ctaText: 'white', text: '#111', muted: '#555', faint: '#888',
   divider: 'rgba(0,0,0,0.07)', input: '#F8F8F8', pill: '#F2F4F2',
-  nav: 'rgba(243,244,242,0.92)', navBorder: 'rgba(0,100,40,0.10)',
+  nav: '#F2F5FA', navBorder: 'rgba(0,0,0,0.07)',
   modeBorder: 'rgba(0,0,0,0.09)',
 };
 const DARK_C = {
-  page: '#111111', card: '#1c1c1c', cardBorder: 'rgba(173,238,102,0.12)',
-  cardShadow: '0 1px 4px rgba(0,0,0,0.40)', green: '#ADEE66', lime: '#ADEE66',
-  cta: '#ADEE66', ctaText: '#111', text: '#f0f0f0', muted: '#aaa', faint: '#555',
-  divider: 'rgba(255,255,255,0.07)', input: '#1a1a1a', pill: '#242424',
-  nav: 'rgba(17,17,17,0.90)', navBorder: 'rgba(173,238,102,0.10)',
+  page: '#17181E', card: '#1E1F26', cardBorder: 'rgba(255,255,255,0.07)',
+  cardShadow: '0 1px 4px rgba(0,0,0,0.40)', green: '#00bf63', lime: '#00bf63',
+  cta: '#00bf63', ctaText: 'white', text: '#f0f0f0', muted: '#aaa', faint: '#777',
+  divider: 'rgba(255,255,255,0.07)', input: 'rgba(255,255,255,0.05)', pill: '#242630',
+  nav: '#17181E', navBorder: 'rgba(255,255,255,0.07)',
   modeBorder: 'rgba(255,255,255,0.09)',
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
@@ -126,6 +126,16 @@ const INDUSTRIES = [
   { id: 'consulting', label: 'Consulting', emoji: '🤝', color: '#14b8a6' },
 ];
 
+// Carousel sections for the step-2 editor
+const VE_SECTIONS = [
+  { id: 'overview',   label: 'Overview' },
+  { id: 'setup',      label: 'Setup' },
+  { id: 'brief',      label: 'Brief' },
+  { id: 'curriculum', label: 'Curriculum' },
+  { id: 'branding',   label: 'Branding' },
+  { id: 'delivery',   label: 'Delivery & Publish' },
+] as const;
+
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
 
@@ -171,8 +181,8 @@ function RubricBuilder({ criteria, onChange, C, inp, sessionToken }: {
   };
 
   return (
-    <div className="rounded-xl p-3 space-y-2" style={{ background: C.input, border: `1px solid ${C.cardBorder}` }}>
-      <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: '#6366f1' }}>
+    <div className="rounded-xl p-3 space-y-2" style={{ background: 'transparent' }}>
+      <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>
         Grading Rubric
         <span className="ml-1.5 normal-case font-normal tracking-normal" style={{ color: C.faint }}>
           · optional · AI grades each criterion as Pass / Fail
@@ -197,10 +207,10 @@ function RubricBuilder({ criteria, onChange, C, inp, sessionToken }: {
       )}
       {criteria.map((crit, ci) => (
         <div key={ci} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
-          style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          style={{ background: C.pill }}>
           <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ background: '#6366f118' }}>
-            <span className="text-[9px] font-black" style={{ color: '#6366f1' }}>{ci + 1}</span>
+            style={{ background: C.card }}>
+            <span className="text-[9px] font-black" style={{ color: C.muted }}>{ci + 1}</span>
           </div>
           <input
             className="flex-1 bg-transparent text-[12px] outline-none"
@@ -224,7 +234,7 @@ function RubricBuilder({ criteria, onChange, C, inp, sessionToken }: {
         />
         <button onClick={add} disabled={!draft.trim()}
           className="flex items-center gap-1 px-3 rounded-xl text-[12px] font-semibold flex-shrink-0 transition-all hover:opacity-80 disabled:opacity-40"
-          style={{ background: '#6366f118', color: '#6366f1', border: '1px solid #6366f130' }}>
+          style={{ background: C.cta, color: C.ctaText }}>
           <Plus className="w-3 h-3" /> Add
         </button>
       </div>
@@ -269,6 +279,13 @@ function VirtualExperienceCreatePageInner() {
 
   // Step 2 state
   const [step,        setStep]        = useState<1|2>(1);
+  const [activeSection, setActiveSection] = useState<string>('overview');
+  const [secDir, setSecDir] = useState(1); // carousel slide direction
+  const goToSection = (id: string) => {
+    const ids = VE_SECTIONS.map(s => s.id) as readonly string[];
+    setSecDir(ids.indexOf(id) >= ids.indexOf(activeSection) ? 1 : -1);
+    setActiveSection(id);
+  };
   const [config,      setConfig]      = useState<ProjectConfig | null>(null);
   const [title,       setTitle]       = useState('');
   const [cohorts,     setCohorts]     = useState<any[]>([]);
@@ -778,8 +795,8 @@ function VirtualExperienceCreatePageInner() {
   } as React.CSSProperties;
 
   const card = {
-    background: C.card, border: `1px solid ${C.cardBorder}`,
-    borderRadius: 16, boxShadow: C.cardShadow,
+    background: 'transparent', border: 'none',
+    borderRadius: 0, boxShadow: 'none',
   } as React.CSSProperties;
 
   const REQ_COLORS: Record<string, string> = {
@@ -834,11 +851,13 @@ function VirtualExperienceCreatePageInner() {
 
         {/* STEP 1: Configure */}
         {step === 1 && (
-          <div className="max-w-3xl mx-auto space-y-6">
-            {/* Eyebrow + H1 */}
-            <div className="space-y-1 pt-2">
-              <h1 className="text-[28px] font-black leading-tight" style={{ color: C.text }}>What kind of project?</h1>
+          <div className="max-w-3xl mx-auto px-4 py-6">
+          <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: C === DARK_C ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+            <div className="px-6 sm:px-8 pt-6 pb-5" style={{ borderBottom: `1px solid ${C.divider}` }}>
+              <h2 className="text-lg sm:text-xl font-bold leading-tight" style={{ color: C.text }}>What kind of project?</h2>
+              <p className="text-[11px] mt-1 font-medium tracking-wide uppercase" style={{ color: C.faint }}>Choose how to build your virtual experience</p>
             </div>
+            <div className="px-6 sm:px-8 py-7 space-y-6">
 
             {/* Creation mode cards */}
             <div className="grid sm:grid-cols-2 gap-3">
@@ -861,21 +880,21 @@ function VirtualExperienceCreatePageInner() {
                 <button key={m.id} onClick={() => setCreationMode(m.id)}
                   className="relative text-left p-5 rounded-2xl transition-all hover:scale-[1.015]"
                   style={{
-                    border: `2px solid ${creationMode === m.id ? C.cta : (C as any).modeBorder}`,
-                    background: C.card,
-                    boxShadow: creationMode === m.id ? `0 0 0 3px ${C.cta}18` : C.cardShadow,
+                    border: 'none',
+                    background: creationMode === m.id ? `${C.cta}14` : C.pill,
+                    boxShadow: creationMode === m.id ? `0 0 0 2px ${C.cta}` : 'none',
                   }}>
                   {creationMode === m.id && (
                     <div className="absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: C.cta }}>
                       <Check className="w-3 h-3" style={{ color: C.ctaText }}/>
                     </div>
                   )}
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: `${C.cta}18`, color: C.cta }}>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: C.card, color: C.muted }}>
                     {m.icon}
                   </div>
                   <div className="flex items-center gap-2 mb-1">
-                    <p className="text-[15px] font-bold" style={{ color: creationMode === m.id ? C.cta : C.text }}>{m.title}</p>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: `${C.cta}18`, color: C.cta }}>{m.badge}</span>
+                    <p className="text-[15px] font-bold" style={{ color: C.text }}>{m.title}</p>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: C.pill, color: C.muted }}>{m.badge}</span>
                   </div>
                   <p className="text-[13px] leading-relaxed" style={{ color: C.muted }}>{m.desc}</p>
                 </button>
@@ -888,17 +907,17 @@ function VirtualExperienceCreatePageInner() {
               onClick={() => setIsShortCourse(v => !v)}
               className="w-full flex items-center justify-between p-4 rounded-2xl text-left transition-all"
               style={{
-                border: `2px solid ${isShortCourse ? C.cta : (C as any).modeBorder}`,
-                background: isShortCourse ? `${C.cta}10` : C.card,
-                boxShadow: isShortCourse ? `0 0 0 3px ${C.cta}14` : C.cardShadow,
+                border: 'none',
+                background: isShortCourse ? `${C.cta}14` : C.pill,
+                boxShadow: isShortCourse ? `0 0 0 2px ${C.cta}` : 'none',
               }}
             >
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${C.cta}18`, color: C.cta }}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: C.card, color: C.muted }}>
                   <Star className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-[14px] font-bold" style={{ color: isShortCourse ? C.cta : C.text }}>Short Course Mode</p>
+                  <p className="text-[14px] font-bold" style={{ color: C.text }}>Short Course Mode</p>
                   <p className="text-[12px]" style={{ color: C.muted }}>Simplified experience -- no company/dataset context. Lessons + questions + AI review only.</p>
                 </div>
               </div>
@@ -914,7 +933,7 @@ function VirtualExperienceCreatePageInner() {
             {/* Config card: appears when mode selected */}
             {creationMode && (
               <div className="space-y-6 mt-2">
-                <div style={card}>
+                <div style={{ background: C.pill, borderRadius: 16, overflow: 'hidden' }}>
                   {/* Industry */}
                   <div className="p-5 space-y-3">
                     <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Industry</p>
@@ -927,7 +946,7 @@ function VirtualExperienceCreatePageInner() {
                             background: industry === ind.id ? `${C.cta}12` : 'transparent',
                           }}>
                           <span className="text-base">{ind.emoji}</span>
-                          <span className="text-[13px] font-semibold" style={{ color: industry === ind.id ? C.cta : C.text }}>{ind.label}</span>
+                          <span className="text-[13px] font-semibold" style={{ color: C.text }}>{ind.label}</span>
                           {industry === ind.id && <Check className="w-3 h-3 ml-auto flex-shrink-0" style={{ color: C.cta }}/>}
                         </button>
                       ))}
@@ -939,7 +958,7 @@ function VirtualExperienceCreatePageInner() {
                           background: industry === 'other' ? `${C.cta}12` : 'transparent',
                         }}>
                         <span className="text-base">✏️</span>
-                        <span className="text-[13px] font-semibold" style={{ color: industry === 'other' ? C.cta : C.text }}>Other</span>
+                        <span className="text-[13px] font-semibold" style={{ color: C.text }}>Other</span>
                         {industry === 'other' && <Check className="w-3 h-3 ml-auto flex-shrink-0" style={{ color: C.cta }}/>}
                       </button>
                     </div>
@@ -975,7 +994,7 @@ function VirtualExperienceCreatePageInner() {
                             border: `1.5px solid ${difficulty === d.id ? C.cta : C.cardBorder}`,
                             background: difficulty === d.id ? `${C.cta}12` : 'transparent',
                           }}>
-                          <p className="text-[13px] font-bold" style={{ color: difficulty === d.id ? C.cta : C.text }}>{d.label}</p>
+                          <p className="text-[13px] font-bold" style={{ color: C.text }}>{d.label}</p>
                           <p className="text-[11px] mt-0.5" style={{ color: C.faint }}>{d.desc}</p>
                         </button>
                       ))}
@@ -1166,6 +1185,8 @@ function VirtualExperienceCreatePageInner() {
                 )}
               </div>
             )}
+            </div>
+          </div>
           </div>
         )}
 
@@ -1179,10 +1200,10 @@ function VirtualExperienceCreatePageInner() {
           const dataset = (config as any).dataset;
 
           return (
-          <div className="max-w-7xl mx-auto space-y-5">
+          <div className="max-w-4xl mx-auto px-4 py-6">
             {/* Regenerate bar */}
             {!editId && (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 mb-4">
                 <button onClick={() => setStep(1)}
                   className="flex items-center gap-1.5 text-[13px] font-medium px-3 py-1.5 rounded-xl border transition-all hover:opacity-70"
                   style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
@@ -1192,11 +1213,35 @@ function VirtualExperienceCreatePageInner() {
               </div>
             )}
 
-            {/* Two column layout */}
-            <div className="grid lg:grid-cols-5 gap-8 items-start">
+            {/* Carousel: navigable sections */}
+            {(() => {
+              const ids = VE_SECTIONS.map(s => s.id) as readonly string[];
+              const si = ids.indexOf(activeSection);
+              return (
+              <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: C === DARK_C ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+                <div className="flex items-center justify-between gap-4 px-6 sm:px-8 pt-6 pb-5" style={{ borderBottom: `1px solid ${C.divider}` }}>
+                  <div className="min-w-0">
+                    <h2 className="text-lg sm:text-xl font-bold leading-tight truncate" style={{ color: C.text }}>{VE_SECTIONS[si]?.label}</h2>
+                    <p className="text-[11px] mt-1 font-medium tracking-wide uppercase" style={{ color: C.faint }}>Step {si + 1} of {ids.length}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button type="button" disabled={si <= 0} onClick={() => goToSection(ids[si - 1])} aria-label="Previous"
+                      className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70 disabled:opacity-30" style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button type="button" disabled={si >= ids.length - 1} onClick={() => goToSection(ids[si + 1])} aria-label="Next"
+                      className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70 disabled:opacity-30" style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <AnimatePresence mode="wait" custom={secDir}>
+                <motion.div key={activeSection} custom={secDir}
+                  initial={{ opacity: 0, x: secDir * 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: secDir * -28 }}
+                  transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }} className="px-6 sm:px-8 py-7">
 
-              {/* LEFT col-span-3 */}
-              <div className="lg:col-span-3 space-y-4">
+                {activeSection === 'overview' && (
+                <div className="space-y-4">
 
                 {/* Project card */}
                 <div style={{ ...card, overflow: 'hidden' }}>
@@ -1207,7 +1252,7 @@ function VirtualExperienceCreatePageInner() {
                       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 60%)' }} />
                     </div>
                   ) : (
-                    <div style={{ height: 160, background: `linear-gradient(135deg, ${C.cta}28, ${C.cta}06)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ height: 160, background: C.pill, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <span style={{ fontSize: 52 }}>{indInfo.emoji}</span>
                     </div>
                   )}
@@ -1215,11 +1260,11 @@ function VirtualExperienceCreatePageInner() {
                   <div className="p-5 space-y-4">
                     {/* Company identity */}
                     <div className="flex items-center gap-3">
-                      <div style={{ width: 44, height: 44, borderRadius: 10, background: `${C.cta}18`, border: `2px solid ${C.cta}38`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, color: C.cta, flexShrink: 0, letterSpacing: 1 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 10, background: C.pill, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, color: C.text, flexShrink: 0, letterSpacing: 1 }}>
                         {companyInitials}
                       </div>
                       <div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: C.cta }}>{config.industry} · Virtual Experience</p>
+                        <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: C.faint }}>{config.industry} · Virtual Experience</p>
                         <p className="text-[14px] font-bold mt-0.5" style={{ color: C.text }}>{config.company}</p>
                       </div>
                     </div>
@@ -1244,7 +1289,7 @@ function VirtualExperienceCreatePageInner() {
 
                     {/* Meta pills */}
                     <div className="flex flex-wrap gap-2">
-                      <span className="text-[12px] px-3 py-1 rounded-full font-semibold" style={{ background: `${C.cta}18`, color: C.cta }}>{config.role}</span>
+                      <span className="text-[12px] px-3 py-1 rounded-full font-semibold" style={{ background: C.pill, color: C.text }}>{config.role}</span>
                       <span className="text-[12px] px-3 py-1 rounded-full font-semibold capitalize" style={{ background: C.pill, color: C.muted }}>{config.difficulty}</span>
                       {config.duration && <span className="text-[12px] px-3 py-1 rounded-full font-semibold" style={{ background: C.pill, color: C.muted }}>{config.duration}</span>}
                       {config.modules?.length > 0 && <span className="text-[12px] px-3 py-1 rounded-full font-semibold" style={{ background: C.pill, color: C.muted }}>{config.modules.length} modules</span>}
@@ -1261,7 +1306,7 @@ function VirtualExperienceCreatePageInner() {
                               <div key={t} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
                                 {logo
                                   ? <img src={logo} alt={t} className="w-4 h-4 rounded object-contain flex-shrink-0" />
-                                  : <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center text-[9px] font-bold" style={{ background: `${C.cta}20`, color: C.cta }}>{t[0]}</div>
+                                  : <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center text-[9px] font-bold" style={{ background: C.pill, color: C.muted }}>{t[0]}</div>
                                 }
                                 <span className="text-[12px] font-medium" style={{ color: C.text }}>{t}</span>
                               </div>
@@ -1273,29 +1318,32 @@ function VirtualExperienceCreatePageInner() {
 
                     {/* Dataset badge */}
                     {dataset && (
-                      <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: `${C.cta}0e`, border: `1px solid ${C.cta}28` }}>
+                      <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: C.pill }}>
                         <span className="text-base">📊</span>
                         <div>
-                          <p className="text-[12px] font-bold" style={{ color: C.cta }}>{dataset.filename || 'Linked Dataset'}</p>
+                          <p className="text-[12px] font-bold" style={{ color: C.text }}>{dataset.filename || 'Linked Dataset'}</p>
                           {dataset.description && <p className="text-[11px] mt-0.5" style={{ color: C.muted }}>{dataset.description}</p>}
                         </div>
                       </div>
                     )}
                   </div>
                 </div>
+                </div>)}
+                {activeSection === 'brief' && (
+                <div className="space-y-4">
 
                 {/* Manager brief card */}
                 <div style={{ ...card, overflow: 'hidden' }}>
                   {/* Header strip */}
-                  <div className="flex items-center gap-3 px-5 py-3" style={{ background: C.pill, borderBottom: `1px solid ${C.divider}` }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 999, background: `${C.cta}20`, border: `1.5px solid ${C.cta}38`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: C.cta, flexShrink: 0 }}>
+                  <div className="flex items-center gap-3 px-5 pt-1 pb-3">
+                    <div style={{ width: 32, height: 32, borderRadius: 999, background: C.pill, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: C.text, flexShrink: 0 }}>
                       {managerInitials}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-bold" style={{ color: C.text }}>{managerName} <span className="font-normal" style={{ color: C.muted }}>· {managerTitle}</span></p>
                       <p className="text-[11px]" style={{ color: C.faint }}>To: New {config.role} · Your Brief</p>
                     </div>
-                    <span className="text-[11px] px-2 py-0.5 rounded-full font-bold flex-shrink-0" style={{ background: `${C.cta}18`, color: C.cta }}>Onboarding</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full font-bold flex-shrink-0" style={{ background: C.pill, color: C.muted }}>Onboarding</span>
                   </div>
 
                   {/* Editable fields */}
@@ -1357,11 +1405,14 @@ function VirtualExperienceCreatePageInner() {
                       ))}
                     </div>
                     <button onClick={() => setConfig(c => c ? { ...c, learnOutcomes: [...(c.learnOutcomes||[]), ''] } : c)}
-                      className="text-[13px] flex items-center gap-1 hover:opacity-70" style={{ color: C.cta }}>
+                      className="text-[13px] flex items-center gap-1 hover:opacity-70" style={{ color: C.muted }}>
                       <Plus className="w-3.5 h-3.5" /> Add outcome
                     </button>
                   </div>
                 )}
+                </div>)}
+                {activeSection === 'curriculum' && (
+                <div className="space-y-4">
 
                 {/* Program Outline card */}
                 <div style={card} className="overflow-hidden">
@@ -1381,17 +1432,17 @@ function VirtualExperienceCreatePageInner() {
                       return (
                       <SortableVEShell key={mod.id} id={mod.id}>
                         {({ dragHandle: moduleDragHandle }) => (
-                        <div className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${C.cardBorder}`, background: C.page }}>
+                        <div className="rounded-2xl" style={{ background: C.pill }}>
 
                           {/* MODULE HEADER */}
-                          <div className="flex items-center gap-2 px-4 py-2.5" style={{ background: `${C.cta}12`, borderBottom: `1px solid ${C.cta}28` }}>
+                          <div className="flex items-center gap-2 px-4 pt-3.5 pb-2.5">
                             <div className="flex-shrink-0" title="Drag to reorder module">{moduleDragHandle}</div>
-                            <span className="text-[11px] font-black uppercase tracking-widest flex-shrink-0" style={{ color: C.cta }}>Milestone {mi + 1}</span>
+                            <span className="text-[11px] font-black uppercase tracking-widest flex-shrink-0" style={{ color: C.muted }}>Milestone {mi + 1}</span>
                             <input
                               value={mod.title}
                               onChange={e => updateModule(mod.id, { title: e.target.value })}
                               className="flex-1 bg-transparent text-[13px] font-bold outline-none min-w-0"
-                              style={{ color: C.cta }}
+                              style={{ color: C.text }}
                               placeholder="Milestone title…"
                             />
                             <button onClick={() => removeModule(mod.id)}
@@ -1412,13 +1463,13 @@ function VirtualExperienceCreatePageInner() {
                               return (
                               <SortableVEShell key={les.id} id={les.id}>
                                 {({ dragHandle: lessonDragHandle }) => (
-                                <div className="rounded-xl overflow-hidden group" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                                <div className="rounded-xl overflow-hidden group" style={{ background: C.card }}>
 
                                   {/* Lesson header row */}
                                   <div className="flex items-center gap-2 px-3 py-2.5">
                                     <div className="flex-shrink-0" title="Drag to reorder lesson">{lessonDragHandle}</div>
                                     <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-[11px] font-bold"
-                                      style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+                                      style={{ background: C.pill, color: C.muted }}>
                                       {li + 1}
                                     </div>
                                     <span className="text-[10px] font-bold uppercase tracking-widest flex-shrink-0 px-1.5 py-0.5 rounded"
@@ -1437,7 +1488,7 @@ function VirtualExperienceCreatePageInner() {
                                       </div>
                                       <button onClick={() => toggleModule(expandKey)}
                                         className="flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-lg transition-all hover:opacity-70"
-                                        style={{ background: expandedModules.has(expandKey) ? `${C.cta}18` : C.pill, color: expandedModules.has(expandKey) ? C.cta : C.muted }}>
+                                        style={{ background: C.pill, color: C.muted }}>
                                         {expandedModules.has(expandKey)
                                           ? <><ChevronDown className="w-3 h-3" /> Hide</>
                                           : <><ChevronRight className="w-3 h-3" /> {reqCount} deliverable{reqCount !== 1 ? 's' : ''}</>}
@@ -1493,11 +1544,11 @@ function VirtualExperienceCreatePageInner() {
                                           return (
                                             <SortableVEShell key={req.id} id={req.id}>
                                             {({ dragHandle: reqDragHandle }) => (
-                                            <div className="rounded-xl p-3 space-y-2 group" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+                                            <div className="rounded-xl p-3 space-y-2 group" style={{ background: C.pill }}>
                                               <div className="flex items-center gap-2">
                                                 {reqDragHandle}
                                                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                                                  style={{ background: tc.bg, color: tc.color }}>Deliverable {qi + 1}</span>
+                                                  style={{ background: C.card, color: C.muted }}>Deliverable {qi + 1}</span>
                                                 <select value={req.type}
                                                   onChange={e => updateReq(mod.id, les.id, req.id, {
                                                     type: e.target.value as Requirement['type'],
@@ -1505,7 +1556,7 @@ function VirtualExperienceCreatePageInner() {
                                                     correctAnswer: e.target.value === 'mcq' ? '' : undefined,
                                                     expectedAnswer: undefined,
                                                   })}
-                                                  style={{ padding: '2px 6px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.input, color: tc.color, fontSize: 11, fontWeight: 700 }}>
+                                                  style={{ padding: '2px 6px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.text, fontSize: 11, fontWeight: 700 }}>
                                                   <option value="mcq">Multiple Choice</option>
                                                   <option value="text">Short Answer</option>
                                                   <option value="upload">File Upload</option>
@@ -1551,7 +1602,7 @@ function VirtualExperienceCreatePageInner() {
                                                       </div>
                                                     );
                                                   })}
-                                                  {req.correctAnswer && <p className="text-[12px] pt-1" style={{ color: C.cta }}>✓ Correct: {req.correctAnswer}</p>}
+                                                  {req.correctAnswer && <p className="text-[12px] pt-1" style={{ color: C.muted }}>✓ Correct: {req.correctAnswer}</p>}
                                                 </div>
                                               )}
                                               {req.type === 'upload' && (
@@ -1589,14 +1640,14 @@ function VirtualExperienceCreatePageInner() {
                                                 </div>
                                               )}
                                               {req.type === 'task' && (
-                                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: 'rgba(59,130,246,0.06)', color: C.muted }}>
+                                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: C.card, color: C.muted }}>
                                                   <Check className="w-3 h-3 flex-shrink-0" />Students tick a checkbox to confirm completion
                                                 </div>
                                               )}
                                               {req.type === 'dashboard_critique' && (
                                                 <div className="space-y-2">
-                                                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: 'rgba(16,185,129,0.06)', color: C.muted }}>
-                                                    <Star className="w-3 h-3 flex-shrink-0" style={{ color: '#10b981' }} />
+                                                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: C.card, color: C.muted }}>
+                                                    <Star className="w-3 h-3 flex-shrink-0" style={{ color: C.muted }} />
                                                     Students upload a dashboard screenshot. AI critiques every element and delivers a full audit report
                                                   </div>
                                                   <RubricBuilder
@@ -1610,8 +1661,8 @@ function VirtualExperienceCreatePageInner() {
                                               )}
                                               {req.type === 'code_review' && (
                                                 <div className="space-y-2">
-                                                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: 'rgba(99,102,241,0.06)', color: C.muted }}>
-                                                    <Star className="w-3 h-3 flex-shrink-0" style={{ color: '#6366f1' }} />
+                                                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: C.card, color: C.muted }}>
+                                                    <Star className="w-3 h-3 flex-shrink-0" style={{ color: C.muted }} />
                                                     Students paste their code. AI reviews correctness, quality, efficiency, and best practices with line-level feedback
                                                   </div>
                                                   <div>
@@ -1649,8 +1700,8 @@ function VirtualExperienceCreatePageInner() {
                                               )}
                                               {req.type === 'excel_review' && (
                                                 <div className="space-y-2">
-                                                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: 'rgba(34,197,94,0.06)', color: C.muted }}>
-                                                    <Star className="w-3 h-3 flex-shrink-0" style={{ color: '#22c55e' }} />
+                                                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: C.card, color: C.muted }}>
+                                                    <Star className="w-3 h-3 flex-shrink-0" style={{ color: C.muted }} />
                                                     Students upload their .xlsx file. AI reviews formula correctness, formula choice, and value accuracy.
                                                   </div>
                                                   <div>
@@ -1694,7 +1745,7 @@ function VirtualExperienceCreatePageInner() {
                                         </SortableContext>
                                         </DndContext>
                                         <button onClick={() => addReq(mod.id, les.id)}
-                                          className="text-[12px] flex items-center gap-1 hover:opacity-70 font-medium" style={{ color: C.cta }}>
+                                          className="text-[12px] flex items-center gap-1 hover:opacity-70 font-medium" style={{ color: C.muted }}>
                                           <Plus className="w-3 h-3" /> Add task
                                         </button>
                                       </div>
@@ -1710,8 +1761,8 @@ function VirtualExperienceCreatePageInner() {
 
                             {/* Solution video + Add lesson */}
                             <div className="space-y-2 pt-1">
-                              <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
-                                style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+                                style={{ background: C.card }}>
                                 <LinkIcon className="w-3 h-3 flex-shrink-0" style={{ color: C.faint }} />
                                 <input
                                   value={mod.solutionVideo || ''}
@@ -1721,8 +1772,8 @@ function VirtualExperienceCreatePageInner() {
                                   placeholder={`Solution video or file link for "${mod.title}" (YouTube, Bunny, Google Drive, PDF…)`} />
                               </div>
                               <button onClick={() => addLesson(mod.id)}
-                                className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-1.5 rounded-xl border w-full justify-center"
-                                style={{ border: `1px dashed ${C.cardBorder}`, color: C.muted }}>
+                                className="flex items-center gap-1.5 text-[12px] font-medium px-3 py-2.5 rounded-xl w-full justify-center transition-opacity hover:opacity-80"
+                                style={{ background: C.card, color: C.muted }}>
                                 <Plus className="w-3 h-3" /> Add mission to {mod.title}
                               </button>
                             </div>
@@ -1736,10 +1787,9 @@ function VirtualExperienceCreatePageInner() {
                     </DndContext>
                   </div>
                 </div>
-              </div>
-
-              {/* RIGHT col-span-2 */}
-              <div className="lg:col-span-2 space-y-4 lg:sticky lg:top-20">
+                </div>)}
+                {activeSection === 'setup' && (
+                <div className="space-y-4">
 
                 {/* Industry card */}
                 <div style={card} className="p-5 space-y-3">
@@ -1750,7 +1800,7 @@ function VirtualExperienceCreatePageInner() {
                         className="flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-all"
                         style={{ border: `1.5px solid ${industry === ind.id ? C.cta : C.cardBorder}`, background: industry === ind.id ? `${C.cta}12` : 'transparent' }}>
                         <span className="text-base">{ind.emoji}</span>
-                        <span className="text-[12px] font-semibold" style={{ color: industry === ind.id ? C.cta : C.text }}>{ind.label}</span>
+                        <span className="text-[12px] font-semibold" style={{ color: C.text }}>{ind.label}</span>
                         {industry === ind.id && <Check className="w-3 h-3 ml-auto flex-shrink-0" style={{ color: C.cta }} />}
                       </button>
                     ))}
@@ -1758,7 +1808,7 @@ function VirtualExperienceCreatePageInner() {
                       className="flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-all"
                       style={{ border: `1.5px solid ${industry === 'other' ? C.cta : C.cardBorder}`, background: industry === 'other' ? `${C.cta}12` : 'transparent' }}>
                       <span className="text-base">✏️</span>
-                      <span className="text-[12px] font-semibold" style={{ color: industry === 'other' ? C.cta : C.text }}>Other</span>
+                      <span className="text-[12px] font-semibold" style={{ color: C.text }}>Other</span>
                       {industry === 'other' && <Check className="w-3 h-3 ml-auto flex-shrink-0" style={{ color: C.cta }} />}
                     </button>
                   </div>
@@ -1788,6 +1838,9 @@ function VirtualExperienceCreatePageInner() {
                   />
                   <p className="text-[11px]" style={{ color: C.faint }}>Shown to students as an estimate of how long this experience takes to complete.</p>
                 </div>
+                </div>)}
+                {activeSection === 'branding' && (
+                <div className="space-y-4">
 
                 {/* Tool Logos card */}
                 {(config.tools || []).length > 0 && (
@@ -1895,6 +1948,9 @@ function VirtualExperienceCreatePageInner() {
                   </div>
                   <input ref={badgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleBadgeUpload} />
                 </div>
+                </div>)}
+                {activeSection === 'delivery' && (
+                <div className="space-y-4">
 
                 {/* Target Audience card */}
                 <div style={card} className="p-5 space-y-3">
@@ -1935,103 +1991,6 @@ function VirtualExperienceCreatePageInner() {
                   <p className="text-[11px]" style={{ color: C.faint }}>Students have this many days from when their cohort is assigned to complete the experience. Leave blank for no deadline.</p>
                 </div>
 
-                {/* Dataset card */}
-                {(config as any).dataset && (
-                  <div style={card} className="p-5 space-y-3">
-                    <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Dataset</p>
-                    <div className="flex items-start gap-3 p-3 rounded-xl" style={{ background: `${C.cta}0e`, border: `1px solid ${C.cta}28` }}>
-                      <FileText className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: C.cta }} />
-                      <div className="flex-1 min-w-0">
-                        {(config as any).dataset.filename && (
-                          <p className="text-[13px] font-bold truncate" style={{ color: C.text }}>{(config as any).dataset.filename}</p>
-                        )}
-                        {(config as any).dataset.description && (
-                          <p className="text-[12px] mt-0.5" style={{ color: C.muted }}>{(config as any).dataset.description}</p>
-                        )}
-                        {(datasetCsv.trim() || (config as any).dataset.csvContent) && (
-                          <p className="text-[12px] mt-0.5" style={{ color: C.faint }}>
-                            {((datasetCsv.trim() || (config as any).dataset.csvContent || '').split('\n').length || 1) - 1} rows
-                          </p>
-                        )}
-                        {!(datasetCsv.trim() || (config as any).dataset.csvContent) && (config as any).dataset.url && (
-                          <p className="text-[12px] mt-0.5" style={{ color: C.faint }}>Stored in cloud</p>
-                        )}
-                        {(config as any).dataset.url && (
-                          <a href={(config as any).dataset.url} target="_blank" rel="noreferrer"
-                            className="flex items-center gap-1 text-[12px] mt-0.5 hover:opacity-70 transition-opacity truncate"
-                            style={{ color: C.cta }}>
-                            <LinkIcon className="w-3 h-3 flex-shrink-0"/> {(config as any).dataset.url}
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: C.faint }}>Dataset Link</label>
-                      <input
-                        value={(config as any).dataset?.url || ''}
-                        onChange={e => setConfig(c => c ? { ...c, dataset: { ...(c as any).dataset, url: e.target.value } } as any : c)}
-                        style={{ ...inp, fontSize: 13 }}
-                        placeholder="https://docs.google.com/spreadsheets/… (optional)"
-                      />
-                    </div>
-                    {(() => {
-                      const csvContent = datasetCsv.trim() || (config as any).dataset?.csvContent || '';
-                      const hasUrl = !!(config as any).dataset?.url;
-                      if (!csvContent && !hasUrl) return null;
-                      return (
-                        <>
-                          {csvContent && (
-                            <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
-                              <div className="overflow-x-auto">
-                                <pre className="text-[12px] p-3 whitespace-pre leading-relaxed"
-                                  style={{ color: C.muted, background: C.input, maxHeight: 120, overflow: 'auto' }}>
-                                  {csvContent.split('\n').slice(0, 6).join('\n')}
-                                </pre>
-                              </div>
-                            </div>
-                          )}
-                          <button onClick={downloadDataset}
-                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold transition-all hover:opacity-80"
-                            style={{ background: `${C.cta}18`, color: C.cta }}>
-                            <Download className="w-3.5 h-3.5" /> {csvContent ? 'Download CSV' : 'Open Dataset'}
-                          </button>
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {/* Ask AI card */}
-                <div style={card} className="overflow-hidden">
-                  <button onClick={() => setShowImprove(v => !v)}
-                    className="w-full flex items-center justify-between px-5 py-4 transition-all hover:opacity-80"
-                    style={{ color: C.text }}>
-                    <span className="flex items-center gap-2 text-[14px] font-semibold">
-                      <Sparkles className="w-4 h-4" style={{ color: C.cta }} /> Ask AI to improve
-                    </span>
-                    {showImprove
-                      ? <ChevronDown className="w-4 h-4" style={{ color: C.muted }} />
-                      : <ChevronRight className="w-4 h-4" style={{ color: C.muted }} />}
-                  </button>
-                  {showImprove && (
-                    <div className="px-5 pb-5 space-y-3 border-t" style={{ borderColor: C.divider }}>
-                      <p className="text-[12px] pt-3" style={{ color: C.faint }}>
-                        Describe any change. AI will apply it directly to the project.
-                      </p>
-                      <textarea value={improveInstruction} onChange={e => setImproveInstruction(e.target.value)}
-                        placeholder='e.g. "Add a lesson on data cleaning to module 2" or "Replace question 3 in lesson 1 with a harder one"'
-                        rows={3} style={{ ...inp, resize: 'vertical' as const, lineHeight: 1.6, fontSize: 13 }} />
-                      <button onClick={handleImprove} disabled={improving || !improveInstruction.trim()}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[13px] font-semibold transition-all hover:opacity-80 disabled:opacity-40"
-                        style={{ background: C.cta, color: C.ctaText }}>
-                        {improving
-                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Applying changes…</>
-                          : <><Sparkles className="w-3.5 h-3.5" /> Apply to Project</>}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
                 {/* Save section */}
                 <div className="space-y-2 pb-16">
                   {saveError && (
@@ -2051,8 +2010,13 @@ function VirtualExperienceCreatePageInner() {
                     <Save className="w-4 h-4" /> Save as Draft
                   </button>
                 </div>
-              </div>{/* end right column */}
-            </div>{/* end grid */}
+                </div>)}
+
+                </motion.div>
+                </AnimatePresence>
+              </div>
+              );
+            })()}
           </div>
           );
         })()}

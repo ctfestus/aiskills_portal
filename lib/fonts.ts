@@ -10,7 +10,8 @@ export const FONTS: FontOption[] = [
   // Sans-serif
   { id: 'sans',    name: 'System Sans',      category: 'sans',  cssFamily: 'ui-sans-serif, system-ui, sans-serif' },
   { id: 'inter',   name: 'Inter',             category: 'sans',  googleFamily: 'Inter:wght@400;500;600;700',             cssFamily: "'Inter', sans-serif" },
-  { id: 'lato',    name: 'Lato',              category: 'sans',  googleFamily: 'Lato:wght@400;700',                      cssFamily: "'Lato', sans-serif" },
+  { id: 'google-sans-text', name: 'Google Sans Text', category: 'sans', googleFamily: 'Google+Sans+Text:wght@400;500;700', cssFamily: "'Google Sans Text', sans-serif" },
+  { id: 'lato',    name: 'Lato',              category: 'sans',  googleFamily: 'Lato:wght@400;700;900',                  cssFamily: "'Lato', sans-serif" },
   { id: 'poppins', name: 'Poppins',           category: 'sans',  googleFamily: 'Poppins:wght@400;500;600;700',           cssFamily: "'Poppins', sans-serif" },
   { id: 'nunito',      name: 'Nunito',       category: 'sans',  googleFamily: 'Nunito:wght@400;500;600;700',            cssFamily: "'Nunito', sans-serif" },
   { id: 'outfit',      name: 'Outfit',       category: 'sans',  googleFamily: 'Outfit:wght@400;500;600;700',            cssFamily: "'Outfit', sans-serif" },
@@ -29,7 +30,9 @@ export const FONTS: FontOption[] = [
 ];
 
 export function getFontById(id: string): FontOption {
-  return FONTS.find(f => f.id === id) ?? FONTS[0];
+  return FONTS.find(f => f.id === id)
+    ?? FONTS.find(f => f.id === 'google-sans-text')
+    ?? FONTS[0];
 }
 
 /** Inject a Google Font <link> into document.head -- no-op if already loaded or no googleFamily. */

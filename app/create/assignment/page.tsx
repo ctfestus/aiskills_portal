@@ -520,7 +520,7 @@ export default function CreateAssignmentPage() {
                   ) : (
                     <select value={veFormId} onChange={e => setVeFormId(e.target.value)}
                       style={{ ...inputStyle(C), appearance: 'auto' }}>
-                      <option value="">-- Select a Virtual Experience --</option>
+                      <option value="">Select a Virtual Experience</option>
                       {veForms.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}
                     </select>
                   )}
@@ -759,7 +759,7 @@ export default function CreateAssignmentPage() {
               <label style={labelStyle(C)}>Related Course</label>
               <select value={relatedCourse} onChange={e => setRelatedCourse(e.target.value)}
                 style={{ ...inputStyle(C), appearance: 'auto' }}>
-                <option value="">-- None --</option>
+                <option value="">None</option>
                 {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
               </select>
             </div>

@@ -548,8 +548,8 @@ CREATE UNIQUE INDEX certificates_unique_active_student_ve
 CREATE TABLE public.certificate_defaults (
   id                   uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id              uuid        NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
-  institution_name     text        NOT NULL DEFAULT 'AI Skills Africa',
-  primary_color        text        NOT NULL DEFAULT '#006128',
+  institution_name     text        NOT NULL DEFAULT '',
+  primary_color        text        NOT NULL DEFAULT '#00bf63',
   accent_color         text        NOT NULL DEFAULT '#ADEE66',
   background_image_url text,
   logo_url             text,

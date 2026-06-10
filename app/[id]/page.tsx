@@ -81,11 +81,12 @@ const SOCIAL_SVGS: Record<string, React.ReactNode> = {
 };
 
 const buttonThemes: Record<ThemeColor, string> = {
-  forest:  'bg-[#006128] hover:bg-[#004d1e] text-white',
+  forest:  'bg-[#00bf63] hover:bg-[#00a050] text-white',
   lime:    'bg-[#ADEE66] hover:bg-[#9ad94d] text-black',
   emerald: 'bg-emerald-500 hover:bg-emerald-600 text-white',
   rose:    'bg-rose-500 hover:bg-rose-600 text-white',
   amber:   'bg-amber-500 hover:bg-amber-600 text-white',
+  ocean:   'bg-[#3E93FF] hover:bg-[#2f7fe0] text-white',
 };
 
 function stripSqlSolutions(questions: any[] = []) {
@@ -111,41 +112,41 @@ const LIGHT_P = {
   body:         '#555',
   muted:        '#888',
   label:        '#555',
-  sectionBg:    '#F4F1EB',
+  sectionBg:    '#eef0f3',
   sectionBorder:'rgba(0,0,0,0.07)',
   divider:      'rgba(0,0,0,0.08)',
   statusBg:     '#e8f5ee',
-  statusText:   '#006128',
-  pillBg:       '#F0EDE6',
+  statusText:   '#00bf63',
+  pillBg:       '#eef0f3',
   pillText:     '#555',
-  shareBg:      '#F0EDE6',
+  shareBg:      '#eef0f3',
   pastBg:       '#fef9c3',
   pastText:     '#854d0e',
   footerText:   '#999',
   footerBold:   '#111',
 };
 const DARK_P = {
-  page:         '#111111',
+  page:         '#17181E',
   blob:         '#1a3a1a',
-  nav:          'rgba(17,17,17,0.9)',
+  nav:          'rgba(23,24,30,0.9)',
   navBorder:    'rgba(255,255,255,0.07)',
   navText:      '#aaa',
   logoText:     '#f0f0f0',
-  card:         '#1c1c1c',
+  card:         '#1E1F26',
   cardBorder:   'rgba(255,255,255,0.07)',
   cardShadow:   '0 2px 20px rgba(0,0,0,0.4)',
   title:        '#f0f0f0',
   body:         '#aaa',
   muted:        '#777',
   label:        '#aaa',
-  sectionBg:    '#242424',
+  sectionBg:    '#242630',
   sectionBorder:'rgba(255,255,255,0.07)',
   divider:      'rgba(255,255,255,0.07)',
   statusBg:     'rgba(173,238,102,0.12)',
   statusText:   '#ADEE66',
-  pillBg:       '#2a2a2a',
+  pillBg:       '#242630',
   pillText:     '#aaa',
-  shareBg:      '#242424',
+  shareBg:      '#242630',
   pastBg:       'rgba(234,179,8,0.12)',
   pastText:     '#fbbf24',
   footerText:   '#555',
@@ -600,7 +601,7 @@ export default function PublicFormPage() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: '#EEEAE3', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ minHeight: '100vh', background: '#F2F5FA', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'); .ff-pub{font-family:'Inter',sans-serif;}`}</style>
         <div className="ff-pub animate-pulse" style={{ width: '100%', maxWidth: 860 }}>
           <div style={{ background: 'white', borderRadius: 24, overflow: 'hidden', boxShadow: '0 2px 20px rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.07)' }}>
@@ -614,7 +615,7 @@ export default function PublicFormPage() {
               {[...Array(3)].map((_,i) => (
                 <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ height: 12, width: 80, borderRadius: 6, background: 'rgba(0,0,0,0.07)' }}/>
-                  <div style={{ height: 44, borderRadius: 12, background: '#F4F1EB', border: '1px solid rgba(0,0,0,0.07)' }}/>
+                  <div style={{ height: 44, borderRadius: 12, background: '#eef0f3', border: '1px solid rgba(0,0,0,0.07)' }}/>
                 </div>
               ))}
               <div style={{ height: 48, borderRadius: 16, background: '#E0DDD6', marginTop: 8 }}/>
@@ -627,12 +628,12 @@ export default function PublicFormPage() {
 
   if (!form) {
     return (
-      <div style={{ minHeight: '100vh', background: '#EEEAE3', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+      <div style={{ minHeight: '100vh', background: '#F2F5FA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
         <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'); .ff-pub{font-family:'Inter',sans-serif;}`}</style>
         <p style={{ fontSize: 48 }}>🤷</p>
         <h1 className="ff-pub" style={{ fontSize: 20, fontWeight: 700, color: '#111' }}>Not found</h1>
         <p className="ff-pub" style={{ fontSize: 14, color: '#555' }}>This page has been deleted or doesn&apos;t exist.</p>
-        <Link href="/" className="ff-pub" style={{ fontSize: 14, color: '#006128', textDecoration: 'underline' }}>Go home</Link>
+        <Link href="/" className="ff-pub" style={{ fontSize: 14, color: '#00bf63', textDecoration: 'underline' }}>Go home</Link>
       </div>
     );
   }
@@ -644,17 +645,17 @@ export default function PublicFormPage() {
   const t = dark ? DARK_P : LIGHT_P;
   const pageUrl = typeof window !== 'undefined' ? window.location.href : '';
   const accentColor = config.customAccent ?? ({
-    forest: '#006128', lime: '#ADEE66', emerald: '#10b981', rose: '#f43f5e', amber: '#f59e0b',
-  }[config.theme as string] ?? '#006128');
-  const fontOption = getFontById(config.font ?? 'sans');
+    forest: '#00bf63', lime: '#ADEE66', emerald: '#10b981', rose: '#f43f5e', amber: '#f59e0b', ocean: '#3E93FF',
+  }[config.theme as string] ?? '#00bf63');
+  const fontOption = getFontById(config.font ?? 'google-sans-text');
   const fontFace = fontOption.cssFamily;
   const googleFontImport = fontOption.googleFamily
     ? `@import url('https://fonts.googleapis.com/css2?family=${fontOption.googleFamily}&display=swap');`
     : '';
 
   const themeGradients: Record<string, string> = {
-    forest:  'linear-gradient(135deg, #006128, #ADEE66)',
-    lime:    'linear-gradient(135deg, #ADEE66, #006128)',
+    forest:  'linear-gradient(135deg, #00bf63, #ADEE66)',
+    lime:    'linear-gradient(135deg, #ADEE66, #00bf63)',
     emerald: 'linear-gradient(135deg, #34d399, #10b981)',
     rose:    'linear-gradient(135deg, #fb7185, #f43f5e)',
     amber:   'linear-gradient(135deg, #fbbf24, #f59e0b)',
@@ -736,7 +737,7 @@ export default function PublicFormPage() {
       title:     isLight ? '#0d0d0d' : '#f0f0f0',
       body:      isLight ? '#333' : '#bbb',
       muted:     isLight ? '#777' : '#666',
-      subtle:    isLight ? '#f8f8f6' : '#1c1c1c',
+      subtle:    isLight ? '#f4f5f7' : '#1E1F26',
     };
     const companyInitials = config.company?.split(' ').map((w: string) => w[0]).join('').slice(0,2).toUpperCase() || '??';
     const managerInitials = ((config as any).managerName || 'M').split(' ').map((w: string) => w[0]).join('').slice(0,2).toUpperCase();
@@ -744,7 +745,8 @@ export default function PublicFormPage() {
     const isShortCourse = !!(form as any).is_short_course;
 
     return (
-      <div style={{ minHeight: '100vh', background: gp.bg, color: gp.title, fontFamily: 'var(--font-sans), Inter, sans-serif' }}>
+      <div style={{ minHeight: '100vh', background: gp.bg, color: gp.title, fontFamily: fontFace }}>
+        <style>{googleFontImport}</style>
 
         {/* -- Sticky nav -- */}
         <nav style={{ position: 'sticky', top: 0, zIndex: 30, backdropFilter: 'blur(14px)', background: isLight ? 'rgba(255,255,255,0.98)' : 'rgba(13,13,13,0.88)', borderBottom: `1px solid ${isLight ? 'rgba(0,0,0,0.07)' : gp.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: 56 }}>
@@ -955,11 +957,11 @@ export default function PublicFormPage() {
       title:   dark ? '#f0f0f0' : '#0d0d0d',
       body:    dark ? '#bbb'    : '#444',
       muted:   dark ? '#666'    : '#888',
-      subtle:  dark ? '#1c1c1c' : '#f8f8f6',
+      subtle:  dark ? '#1E1F26' : '#f4f5f7',
     };
 
     return (
-      <div style={{ minHeight: '100vh', background: cp.bg, color: cp.title, fontFamily: 'var(--font-sans), Inter, sans-serif' }}>
+      <div style={{ minHeight: '100vh', background: cp.bg, color: cp.title, fontFamily: fontFace }}>
         <style>{googleFontImport}</style>
 
         {/* Sticky nav */}
@@ -1472,7 +1474,7 @@ export default function PublicFormPage() {
                           onMouseEnter={() => { if (profileHoverTimer.current) clearTimeout(profileHoverTimer.current); setProfilePopupOpen(true); }}
                           onMouseLeave={() => { profileHoverTimer.current = setTimeout(() => setProfilePopupOpen(false), 180); }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                            <div style={{ width: 32, height: 32, borderRadius: creatorProfile.account_type === 'company' ? 8 : '50%', overflow: 'hidden', flexShrink: 0, background: dark ? '#1a3a24' : '#d4edda', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: dark ? '#ADEE66' : '#006128' }}>
+                            <div style={{ width: 32, height: 32, borderRadius: creatorProfile.account_type === 'company' ? 8 : '50%', overflow: 'hidden', flexShrink: 0, background: dark ? '#1a3a24' : '#d4edda', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: dark ? '#ADEE66' : '#00bf63' }}>
                               {creatorProfile.avatar_url
                                 ? <img src={creatorProfile.avatar_url} alt={creatorProfile.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
                                 : (creatorProfile.name || creatorProfile.username || '?').slice(0, 2).toUpperCase()}
@@ -1483,9 +1485,9 @@ export default function PublicFormPage() {
                             <div
                               onMouseEnter={() => { if (profileHoverTimer.current) clearTimeout(profileHoverTimer.current); }}
                               onMouseLeave={() => { profileHoverTimer.current = setTimeout(() => setProfilePopupOpen(false), 180); }}
-                              style={{ position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 50, width: 260, borderRadius: 16, padding: 16, background: dark ? '#1c1c1c' : '#ffffff', boxShadow: dark ? '0 8px 32px rgba(0,0,0,0.6)' : '0 8px 32px rgba(0,0,0,0.14)', border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
+                              style={{ position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 50, width: 260, borderRadius: 16, padding: 16, background: dark ? '#1E1F26' : '#ffffff', boxShadow: dark ? '0 8px 32px rgba(0,0,0,0.6)' : '0 8px 32px rgba(0,0,0,0.14)', border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                                <div style={{ width: 44, height: 44, borderRadius: creatorProfile.account_type === 'company' ? 10 : '50%', overflow: 'hidden', flexShrink: 0, background: dark ? '#1a3a24' : '#d4edda', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: dark ? '#ADEE66' : '#006128' }}>
+                                <div style={{ width: 44, height: 44, borderRadius: creatorProfile.account_type === 'company' ? 10 : '50%', overflow: 'hidden', flexShrink: 0, background: dark ? '#1a3a24' : '#d4edda', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: dark ? '#ADEE66' : '#00bf63' }}>
                                   {creatorProfile.avatar_url
                                     ? <img src={creatorProfile.avatar_url} alt={creatorProfile.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
                                     : (creatorProfile.name || creatorProfile.username || '?').slice(0, 2).toUpperCase()}
@@ -1602,7 +1604,7 @@ export default function PublicFormPage() {
                               onMouseEnter={() => { if (profileHoverTimer.current) clearTimeout(profileHoverTimer.current); setProfilePopupOpen(true); }}
                               onMouseLeave={() => { profileHoverTimer.current = setTimeout(() => setProfilePopupOpen(false), 180); }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                                <div style={{ width: 30, height: 30, borderRadius: creatorProfile.account_type === 'company' ? 7 : '50%', overflow: 'hidden', flexShrink: 0, background: dark ? '#1a3a24' : '#d4edda', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: dark ? '#ADEE66' : '#006128' }}>
+                                <div style={{ width: 30, height: 30, borderRadius: creatorProfile.account_type === 'company' ? 7 : '50%', overflow: 'hidden', flexShrink: 0, background: dark ? '#1a3a24' : '#d4edda', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: dark ? '#ADEE66' : '#00bf63' }}>
                                   {creatorProfile.avatar_url
                                     ? <img src={creatorProfile.avatar_url} alt={creatorProfile.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
                                     : (creatorProfile.name || creatorProfile.username || '?').slice(0, 2).toUpperCase()}
@@ -1615,10 +1617,10 @@ export default function PublicFormPage() {
                                 <div
                                   onMouseEnter={() => { if (profileHoverTimer.current) clearTimeout(profileHoverTimer.current); }}
                                   onMouseLeave={() => { profileHoverTimer.current = setTimeout(() => setProfilePopupOpen(false), 180); }}
-                                  style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 6, zIndex: 50, width: 260, borderRadius: 16, padding: 16, background: dark ? '#1c1c1c' : '#ffffff', boxShadow: dark ? '0 8px 32px rgba(0,0,0,0.6)' : '0 8px 32px rgba(0,0,0,0.14)', border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
+                                  style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 6, zIndex: 50, width: 260, borderRadius: 16, padding: 16, background: dark ? '#1E1F26' : '#ffffff', boxShadow: dark ? '0 8px 32px rgba(0,0,0,0.6)' : '0 8px 32px rgba(0,0,0,0.14)', border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
                                   {/* Avatar + name */}
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                                    <div style={{ width: 44, height: 44, borderRadius: creatorProfile.account_type === 'company' ? 10 : '50%', overflow: 'hidden', flexShrink: 0, background: dark ? '#1a3a24' : '#d4edda', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: dark ? '#ADEE66' : '#006128' }}>
+                                    <div style={{ width: 44, height: 44, borderRadius: creatorProfile.account_type === 'company' ? 10 : '50%', overflow: 'hidden', flexShrink: 0, background: dark ? '#1a3a24' : '#d4edda', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: dark ? '#ADEE66' : '#00bf63' }}>
                                       {creatorProfile.avatar_url
                                         ? <img src={creatorProfile.avatar_url} alt={creatorProfile.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
                                         : (creatorProfile.name || creatorProfile.username || '?').slice(0, 2).toUpperCase()}
@@ -1687,7 +1689,7 @@ export default function PublicFormPage() {
                               {speakers.map((sp: any) => (
                                 <div key={sp.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                                   {/* Avatar */}
-                                  <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: dark ? '#1a3a24' : '#d4edda', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: dark ? '#ADEE66' : '#006128' }}>
+                                  <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: dark ? '#1a3a24' : '#d4edda', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: dark ? '#ADEE66' : '#00bf63' }}>
                                     {sp.avatar_url
                                       ? <img src={sp.avatar_url} alt={sp.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                       : (sp.name || '?').slice(0, 2).toUpperCase()}

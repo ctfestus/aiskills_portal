@@ -29,13 +29,15 @@ interface Props {
     divider: string;
   };
   token: string;
+  /** Optional cap on the preview/dropzone width (px). Defaults to full width. */
+  previewMaxWidth?: number;
 }
 
 type Tab = 'pexels' | 'upload';
 
 const DEFAULT_QUERY = 'data technology africa business';
 
-export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Props) {
+export function PexelsImagePicker({ value, altValue, onChange, onClear, C, previewMaxWidth }: Props) {
   const [open, setOpen]             = useState(false);
   const [tab, setTab]               = useState<Tab>('pexels');
   const [query, setQuery]           = useState('');
@@ -157,7 +159,7 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Pro
     <>
       {/* Trigger */}
       {value ? (
-        <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', aspectRatio: '16/9', background: C.input }}>
+        <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden', aspectRatio: '16/9', background: C.input, maxWidth: previewMaxWidth, width: '100%' }}>
           <img src={value} alt={altValue ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
           <div
             className="pexels-overlay"
@@ -187,7 +189,7 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C }: Pro
       ) : (
         <button
           onClick={openModal}
-          style={{ width: '100%', aspectRatio: '16/9', borderRadius: 14, border: `2px dashed ${C.cardBorder}`, background: C.input, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: C.faint, transition: 'border-color 0.2s, color 0.2s' }}
+          style={{ width: '100%', maxWidth: previewMaxWidth, aspectRatio: '16/9', borderRadius: 14, border: `2px dashed ${C.cardBorder}`, background: C.input, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: C.faint, transition: 'border-color 0.2s, color 0.2s' }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = C.cta; e.currentTarget.style.color = C.cta; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = C.cardBorder; e.currentTarget.style.color = C.faint; }}
         >

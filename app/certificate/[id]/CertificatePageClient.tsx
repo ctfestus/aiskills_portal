@@ -25,7 +25,7 @@ interface Props {
 const CERT_TYPE_BADGE: Record<string, { label: string; bg: string; color: string; border: string }> = {
   course:             { label: 'Course',            bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
   virtual_experience: { label: 'Virtual Experience', bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' },
-  learning_path:      { label: 'Learning Path',     bg: '#fdf4ff', color: '#7e22ce', border: '#e9d5ff' },
+  learning_path:      { label: 'Learning Path',     bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' },
 };
 
 function LinkedInIcon() {
@@ -47,6 +47,9 @@ export default function CertificatePageClient({
   const [activeTab, setActiveTab] = useState<'certificate' | 'badge'>('certificate');
 
   const [mainScale, setMainScale] = useState(0.38);
+  // Read the page URL only after mount so SSR and the client's first render
+  // agree (empty string). Setting it during render breaks hydration.
+  const [certUrl, setCertUrl] = useState("");
 
   const THUMB_W  = 100;
   const thumbScale = THUMB_W / CERT_W;
@@ -61,6 +64,7 @@ export default function CertificatePageClient({
       setMainScale(Math.max(availW / CERT_W, 0.08));
     };
     calc();
+    setCertUrl(window.location.href);
     window.addEventListener("resize", calc);
     return () => window.removeEventListener("resize", calc);
   }, []);
@@ -70,7 +74,6 @@ export default function CertificatePageClient({
 
   const issueYear  = new Date(issuedAt).getFullYear();
   const issueMonth = new Date(issuedAt).getMonth() + 1;
-  const certUrl    = typeof window !== "undefined" ? window.location.href : "";
 
   const initials = studentName
     .split(" ")
@@ -131,7 +134,7 @@ export default function CertificatePageClient({
   const certTypeMeta = CERT_TYPE_BADGE[certType];
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen" style={{ background: '#F2F5FA' }}>
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
 
         {/* Mobile: thumbnails above, main below. Desktop: thumbnails left, main right */}
@@ -152,7 +155,7 @@ export default function CertificatePageClient({
                   overflow: 'hidden',
                   borderRadius: 6,
                   boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-                  border: activeTab === 'certificate' ? '2px solid #2563eb' : '2px solid transparent',
+                  border: activeTab === 'certificate' ? '2px solid #00bf63' : '2px solid transparent',
                   opacity: activeTab === 'certificate' ? 1 : 0.55,
                   transition: 'opacity 0.15s, border-color 0.15s',
                 }}
@@ -182,7 +185,7 @@ export default function CertificatePageClient({
                     height: THUMB_W,
                     borderRadius: 10,
                     overflow: 'hidden',
-                    border: activeTab === 'badge' ? '2px solid #2563eb' : '2px solid transparent',
+                    border: activeTab === 'badge' ? '2px solid #00bf63' : '2px solid transparent',
                     opacity: activeTab === 'badge' ? 1 : 0.55,
                     transition: 'opacity 0.15s, border-color 0.15s',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
@@ -277,7 +280,7 @@ export default function CertificatePageClient({
             <button
               onClick={handleDownload}
               disabled={downloading}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-60 transition-colors"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-white text-sm font-semibold rounded-lg hover:brightness-95 disabled:opacity-60 transition-all" style={{ background: '#00bf63' }}
             >
               {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               <span>{downloading ? "Generating..." : "Download Certificate"}</span>
@@ -287,7 +290,7 @@ export default function CertificatePageClient({
               <button
                 onClick={handleDownloadBadge}
                 disabled={downloadingBadge}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-white text-sm font-semibold rounded-lg hover:brightness-95 disabled:opacity-60 transition-all" style={{ background: '#3E93FF' }}
               >
                 {downloadingBadge ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                 <span>{downloadingBadge ? "Downloading..." : "Download Badge"}</span>
@@ -298,7 +301,7 @@ export default function CertificatePageClient({
               href={linkedInUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-100 transition-colors" style={{ background: '#f4f5f7' }}
             >
               <LinkedInIcon />
               <span>Add to LinkedIn</span>
@@ -306,16 +309,16 @@ export default function CertificatePageClient({
 
             <button
               onClick={copyLink}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-100 transition-colors" style={{ background: '#f4f5f7' }}
             >
-              {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <LinkIcon className="w-4 h-4" />}
+              {copied ? <Check className="w-4 h-4 text-[#00bf63]" /> : <LinkIcon className="w-4 h-4" />}
               <span>{copied ? "Copied!" : "Copy Link"}</span>
             </button>
           </div>
 
           {/* Student row */}
           <div className="mt-6 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-blue-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center" style={{ background: '#00bf63' }}>
               {studentAvatarUrl
                 ? <img src={studentAvatarUrl} alt={studentName} className="w-full h-full object-cover" />
                 : <span className="text-white font-bold text-sm">{initials}</span>
@@ -324,7 +327,7 @@ export default function CertificatePageClient({
             <div>
               <p className="font-semibold text-gray-900 leading-tight">{studentName}</p>
               {studentUsername && (
-                <a href={`/s/${studentUsername}`} className="text-xs text-blue-600 hover:underline">View Profile</a>
+                <a href={`/s/${studentUsername}`} className="text-xs hover:underline" style={{ color: '#00bf63' }}>View Profile</a>
               )}
             </div>
           </div>
@@ -349,13 +352,13 @@ export default function CertificatePageClient({
                       >
                         <div
                           className="w-16 h-16 flex-shrink-0 overflow-hidden"
-                          style={{ background: item.coverImage ? undefined : '#ede9fe' }}
+                          style={{ background: item.coverImage ? undefined : '#f1f5f9' }}
                         >
                           {item.coverImage
                             ? <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover" />
                             : (
                               <div className="w-full h-full flex items-center justify-center">
-                                <svg className="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25" />
                                 </svg>
                               </div>

@@ -455,11 +455,11 @@ export function CourseTaker({
   }, [questions]);
 
   const accentColors: Record<string, string> = {
-    forest: '#006128', lime: '#ADEE66', emerald: '#10b981', rose: '#f43f5e', amber: '#f59e0b',
+    forest: '#00bf63', lime: '#ADEE66', emerald: '#10b981', rose: '#f43f5e', amber: '#f59e0b', ocean: '#3E93FF',
   };
-  const accent = (config as any).customAccent ?? accentColors[config.theme] ?? '#006128';
+  const accent = (config as any).customAccent ?? accentColors[config.theme] ?? '#00bf63';
 
-  const fontOption = getFontById(config.font ?? 'sans');
+  const fontOption = getFontById(config.font ?? 'google-sans-text');
   useEffect(() => { loadGoogleFont(fontOption); }, [fontOption]);
 
   useEffect(() => {

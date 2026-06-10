@@ -13,19 +13,19 @@ import { sanitizeRichText, sanitizePlainText } from '@/lib/sanitize';
 
 // --- Design tokens ---
 const LIGHT_C = {
-  page: '#EEEAE3', card: 'white', cardBorder: 'rgba(0,0,0,0.07)',
-  cardShadow: '0 1px 4px rgba(0,0,0,0.06)', green: '#006128', lime: '#ADEE66',
-  cta: '#006128', ctaText: 'white', text: '#111', muted: '#555', faint: '#888',
-  divider: 'rgba(0,0,0,0.07)', input: '#F8F6F1', pill: '#F4F1EB',
-  nav: 'rgba(238,234,227,0.92)', navBorder: 'rgba(0,0,0,0.07)',
+  page: '#F2F5FA', card: 'white', cardBorder: 'rgba(0,0,0,0.07)',
+  cardShadow: 'none', green: '#00bf63', lime: '#ADEE66',
+  cta: '#00bf63', ctaText: 'white', text: '#111', muted: '#555', faint: '#888',
+  divider: 'rgba(0,0,0,0.07)', input: '#f4f5f7', pill: '#eef0f3',
+  nav: 'rgba(242,245,250,0.92)', navBorder: 'rgba(0,0,0,0.07)',
   errorBg: '#fef2f2', errorText: '#ef4444', errorBorder: '#fecaca',
 };
 const DARK_C = {
-  page: '#111111', card: '#1c1c1c', cardBorder: 'rgba(255,255,255,0.07)',
-  cardShadow: '0 1px 4px rgba(0,0,0,0.40)', green: '#ADEE66', lime: '#ADEE66',
-  cta: '#ADEE66', ctaText: '#111', text: '#f0f0f0', muted: '#aaa', faint: '#555',
-  divider: 'rgba(255,255,255,0.07)', input: '#1a1a1a', pill: '#242424',
-  nav: 'rgba(17,17,17,0.90)', navBorder: 'rgba(255,255,255,0.07)',
+  page: '#17181E', card: '#1E1F26', cardBorder: 'rgba(255,255,255,0.07)',
+  cardShadow: 'none', green: '#00bf63', lime: '#ADEE66',
+  cta: '#00bf63', ctaText: 'white', text: '#f0f0f0', muted: '#aaa', faint: '#555',
+  divider: 'rgba(255,255,255,0.07)', input: 'rgba(255,255,255,0.05)', pill: '#242630',
+  nav: 'rgba(23,24,30,0.90)', navBorder: 'rgba(255,255,255,0.07)',
   errorBg: 'rgba(239,68,68,0.12)', errorText: '#f87171', errorBorder: 'rgba(239,68,68,0.25)',
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
@@ -47,6 +47,7 @@ function labelStyle(C: typeof LIGHT_C) {
 // --- Page ---
 export default function CreateCommunityPage() {
   const C = useC();
+  const isDark = C === DARK_C;
   const router = useRouter();
 
   const [editId, setEditId]           = useState<string | null>(null);
@@ -130,7 +131,7 @@ export default function CreateCommunityPage() {
         background: C.nav, borderBottom: `1px solid ${C.navBorder}`,
         backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
       }}>
-        <div style={{ maxWidth: 700, margin: '0 auto', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ maxWidth: 880, margin: '0 auto', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.muted, textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>
             <ArrowLeft style={{ width: 16, height: 16 }}/> Back
           </Link>
@@ -153,7 +154,7 @@ export default function CreateCommunityPage() {
       </header>
 
       {/* Content */}
-      <main style={{ maxWidth: 700, margin: '0 auto', padding: '32px 24px 80px' }}>
+      <main style={{ maxWidth: 880, margin: '0 auto', padding: '32px 24px 80px' }}>
         <form id="community-form" onSubmit={handleSubmit} noValidate>
 
           {error && (
@@ -162,27 +163,33 @@ export default function CreateCommunityPage() {
             </div>
           )}
 
-          {/* -- Details card --- */}
-          <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginBottom: 20 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 20, marginTop: 0 }}>Details</h2>
+          {/* -- One wide card, sections separated by hairlines --- */}
+          <section style={{ background: C.card, borderRadius: 18, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, overflow: 'hidden' }}>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle(C)}>Community Name <span style={{ color: C.errorText }}>*</span></label>
-              <input
-                type="text" value={name} onChange={e => setName(sanitizePlainText(e.target.value))}
-                placeholder="e.g. Spring Cohort 2025"
-                style={inputStyle(C)} required maxLength={255}
-              />
+            {/* Section: Details */}
+            <div style={{ padding: '26px 30px' }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginTop: 0, marginBottom: 18 }}>Details</h2>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={labelStyle(C)}>Community Name <span style={{ color: C.errorText }}>*</span></label>
+                <input
+                  type="text" value={name} onChange={e => setName(sanitizePlainText(e.target.value))}
+                  placeholder="e.g. Spring Cohort 2025"
+                  style={inputStyle(C)} required maxLength={255}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle(C)}>Description</label>
+                <RichTextEditor value={description} onChange={setDescription} placeholder="What is this community about?" />
+              </div>
             </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle(C)}>Description</label>
-              <RichTextEditor value={description} onChange={setDescription} placeholder="What is this community about?" />
-            </div>
+            <div style={{ height: 1, background: C.divider }} />
 
-            {/* Cover Image */}
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle(C)}>Cover Image</label>
+            {/* Section: Cover Image */}
+            <div style={{ padding: '26px 30px' }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginTop: 0, marginBottom: 18 }}>Cover Image</h2>
               <input ref={coverRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => {
                 const file = e.target.files?.[0]; if (!file) return;
                 setCoverUploading(true);
@@ -196,7 +203,7 @@ export default function CreateCommunityPage() {
                 <input type="url" value={coverImage} onChange={e => setCoverImage(e.target.value)}
                   placeholder="https://example.com/image.jpg" style={{ ...inputStyle(C), flex: 1 }}/>
                 <button type="button" onClick={() => coverRef.current?.click()} disabled={coverUploading}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.pill, color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderRadius: 10, border: 'none', background: C.pill, color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   <Upload style={{ width: 14, height: 14 }}/>{coverUploading ? 'Uploading…' : 'Upload'}
                 </button>
               </div>
@@ -211,48 +218,59 @@ export default function CreateCommunityPage() {
               )}
             </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle(C)}>WhatsApp Group Link</label>
-              <input
-                type="url" value={whatsappLink} onChange={e => setWhatsappLink(e.target.value)}
-                placeholder="https://chat.whatsapp.com/…"
-                style={inputStyle(C)}
-              />
-            </div>
+            <div style={{ height: 1, background: C.divider }} />
 
-            <div>
-              <label style={labelStyle(C)}>Status</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {(['active', 'archived'] as const).map(s => (
-                  <button
-                    key={s} type="button"
-                    onClick={() => setStatus(s)}
-                    style={{
-                      padding: '7px 18px', borderRadius: 8, border: `1px solid ${status === s ? C.cta : C.cardBorder}`,
-                      background: status === s ? C.cta : C.input, color: status === s ? C.ctaText : C.muted,
-                      fontSize: 13, fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize', transition: 'all 0.15s',
-                    }}
-                  >{s}</button>
-                ))}
+            {/* Section: Access */}
+            <div style={{ padding: '26px 30px' }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginTop: 0, marginBottom: 18 }}>Access</h2>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={labelStyle(C)}>WhatsApp Group Link</label>
+                <input
+                  type="url" value={whatsappLink} onChange={e => setWhatsappLink(e.target.value)}
+                  placeholder="https://chat.whatsapp.com/…"
+                  style={inputStyle(C)}
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle(C)}>Status</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {(['active', 'archived'] as const).map(s => (
+                    <button
+                      key={s} type="button"
+                      onClick={() => setStatus(s)}
+                      style={{
+                        padding: '8px 18px', borderRadius: 8, border: 'none',
+                        background: status === s ? C.cta : C.input, color: status === s ? C.ctaText : C.muted,
+                        fontSize: 13, fontWeight: 600, cursor: 'pointer', textTransform: 'capitalize', transition: 'all 0.15s',
+                      }}
+                    >{s}</button>
+                  ))}
+                </div>
               </div>
             </div>
+
+            {/* Section: Cohorts */}
+            {cohorts.length > 0 && (
+              <>
+                <div style={{ height: 1, background: C.divider }} />
+                <div style={{ padding: '26px 30px' }}>
+                  <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginTop: 0, marginBottom: 16 }}>Assign to Cohorts</h2>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {cohorts.map(c => (
+                      <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={selectedCohortIds.includes(c.id)} onChange={() => toggleCohort(c.id)}
+                          style={{ width: 16, height: 16, accentColor: C.cta, cursor: 'pointer' }} />
+                        <span style={{ fontSize: 14, color: C.text }}>{c.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
           </section>
-
-          {/* -- Cohorts --- */}
-          {cohorts.length > 0 && (
-            <section style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow, padding: 24, marginTop: 20 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 16, marginTop: 0 }}>Assign to Cohorts</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {cohorts.map(c => (
-                  <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={selectedCohortIds.includes(c.id)} onChange={() => toggleCohort(c.id)}
-                      style={{ width: 16, height: 16, accentColor: C.cta, cursor: 'pointer' }} />
-                    <span style={{ fontSize: 14, color: C.text }}>{c.name}</span>
-                  </label>
-                ))}
-              </div>
-            </section>
-          )}
 
         </form>
       </main>

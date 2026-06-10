@@ -93,7 +93,7 @@ function ResponsesTab({
 }) {
   const { theme } = useTheme();
   const isDark = theme !== 'light';
-  const card = isDark ? 'bg-zinc-900/50 border-zinc-800/50' : 'bg-white border-[rgba(0,0,0,0.07)]';
+  const card = isDark ? 'bg-transparent border-zinc-800/50' : 'bg-transparent border-[rgba(0,0,0,0.07)]';
   const cardHeader = isDark ? 'border-zinc-800' : 'border-[rgba(0,0,0,0.07)]';
   const dividerCls = isDark ? 'divide-zinc-800/50' : 'divide-[rgba(0,0,0,0.05)]';
   const textPrim = isDark ? 'text-white' : 'text-[#111]';
@@ -1253,9 +1253,7 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
   ] as { value: typeof quickType; label: string }[];
 
   // -- Shared style tokens --
-  const card = isDark
-    ? 'bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden'
-    : 'bg-white border border-[rgba(0,0,0,0.07)] rounded-2xl overflow-hidden shadow-sm';
+  const card = 'overflow-hidden';
 
   const cardHeader = isDark
     ? 'px-6 py-4 border-b border-zinc-800 flex items-center gap-3'
@@ -1288,7 +1286,7 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
   const sectionIconBg = isDark ? 'p-2 rounded-lg bg-emerald-500/10' : 'p-2 rounded-lg bg-emerald-50';
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4 py-2">
+    <div className="w-full space-y-4 py-2">
 
       {/* -- Blast Email -- */}
       <div className={card}>
@@ -1626,7 +1624,7 @@ function LeaderboardTab({ form, courseProgress }: { form: any; courseProgress: a
     return { color: isDark ? '#52525b' : '#a1a1aa', glow: 'none' };
   };
 
-  const bg   = isDark ? 'bg-[#0a0a0a]'     : 'bg-white';
+  const bg   = 'bg-transparent';
   const bdr  = isDark ? 'border-zinc-800/60' : 'border-zinc-200';
   const txt  = isDark ? 'text-white'         : 'text-zinc-900';
   const muted = isDark ? 'text-zinc-500'     : 'text-zinc-400';
@@ -1841,7 +1839,7 @@ function MoreTab({ form, formUrl, onClone, onStatusChange }: { form: any; formUr
   };
 
   return (
-    <div className="max-w-2xl mx-auto" style={{ color: textPrim }}>
+    <div className="w-full" style={{ color: textPrim }}>
       {/* Publish status */}
       <div className="py-6 flex items-center justify-between gap-4" style={{ borderBottom: `1px solid ${divider}` }}>
         <div className="flex items-center gap-3">
@@ -2543,14 +2541,14 @@ export default function FormDetailPage() {
     ? `${window.location.origin}/${form?.slug || id}`
     : `/${form?.slug || id}`;
 
-  const bg       = isLight ? '#ffffff' : '#111111';
-  const navBg    = isLight ? 'rgba(255,255,255,0.98)' : 'rgba(0,0,0,0.80)';
-  const navBord  = isLight ? 'rgba(0,0,0,0.07)' : 'rgba(39,39,42,0.6)';
+  const bg       = isLight ? '#F2F5FA' : '#17181E';
+  const navBg    = bg;
+  const navBord  = isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.07)';
   const textPrim = isLight ? '#111' : '#fff';
   const textMut  = isLight ? '#555' : '#71717a';
   const btnBg    = isLight ? '#f5f6f7' : '#27272a';
   const btnBord  = isLight ? 'rgba(0,0,0,0.09)' : '#3f3f46';
-  const green    = '#006128';
+  const green    = '#00bf63';
   const lime     = '#ADEE66';
 
   const hdrTextPrim = textPrim;
@@ -2577,7 +2575,7 @@ export default function FormDetailPage() {
   return (
     <main className="min-h-screen font-sans" style={{ background: bg, color: textPrim }}>
       {/* -- Top header -- */}
-      <header className="sticky top-0 z-20 backdrop-blur-md" style={{ borderBottom: `1px solid ${navBord}`, background: navBg }}>
+      <header className="sticky top-0 z-20 backdrop-blur-md" style={{ background: navBg }}>
         <div className="px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-2 sm:gap-4">
           <Link href="/dashboard" className="transition-colors flex-shrink-0 hover:opacity-60" style={{ color: hdrTextMut }}>
             <ArrowLeft className="w-5 h-5" />
@@ -2614,85 +2612,95 @@ export default function FormDetailPage() {
           </div>
         </div>
 
-        {/* -- Tab bar -- */}
-        <div className="px-2 sm:px-6 flex items-center gap-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-          {TABS.filter(tab => (!isStaff || tab.id === 'settings') && (!tab.courseOnly || type === 'course') && !(tab.id === 'settings' && type === 'virtual_experience')).map(tab => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => { setActiveTab(tab.id); }}
-                className="relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors"
-                style={{ color: isActive ? hdrTextPrim : hdrTextMut }}
-              >
-                <tab.Icon className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="hidden sm:inline">{tab.id === 'responses' && (type === 'course' || type === 'virtual_experience') ? 'Report' : tab.label}</span>
-                {tab.id === 'responses' && totalCount > 0 && (
-                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold transition-colors" style={{ background: isActive ? (isLight ? '#ADEE66' : 'rgba(255,255,255,0.15)') : (isLight ? 'rgba(255,255,255,0.1)' : '#27272a'), color: isActive ? (isLight ? '#006128' : 'white') : hdrTextMut }}>
-                    {totalCount}
-                  </span>
-                )}
-                {isActive && (
-                  <motion.div
-                    layoutId="detail-tab-underline"
-                    className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full"
-                    style={{ background: isLight ? green : 'white' }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
       </header>
 
-      {/* -- Tab content -- */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.18, ease: 'easeOut' }}
-        >
-          {activeTab === 'settings' && type !== 'virtual_experience' ? (
-            <FormEditor formId={id as string} contentType={type === 'course' ? 'course' : 'event'} />
-          ) : (
-            <div className="px-4 sm:px-6 py-6 sm:py-8 max-w-6xl w-full">
-              {activeTab === 'responses' && type !== 'virtual_experience' && (
-                <ResponsesTab
-                  form={form}
-                  responses={responses}
-                  totalCount={totalCount}
-                  page={page}
-                  pageLoading={pageLoading}
-                  onExport={handleExport}
-                  onPageChange={fetchPage}
-                  courseProgress={courseProgress}
-                  cohortStudents={cohortStudents}
-                />
-              )}
-              {activeTab === 'responses' && type === 'virtual_experience' && (
-                <VirtualExperienceReportTab form={form} />
-              )}
-              {activeTab === 'leaderboard' && (
-                <LeaderboardTab form={form} courseProgress={courseProgress} />
-              )}
-              {activeTab === 'email' && (
-                <EmailTab form={form} formUrl={formUrl} courseProgress={courseProgress} cohortStudents={cohortStudents} formCohorts={formCohorts} />
-              )}
-              {activeTab === 'more' && (
-                <MoreTab
-                  form={form}
-                  formUrl={formUrl}
-                  onClone={handleClone}
-                  onStatusChange={(status) => setForm((f: any) => ({ ...f, status }))}
-                />
-              )}
+      {/* -- Tab nav on the left, content carousel standing alone on the right -- */}
+      <div className="px-3 sm:px-6 pt-5 pb-10">
+        {(() => {
+          const visibleTabs = TABS.filter(tab => (!isStaff || tab.id === 'settings') && (!tab.courseOnly || type === 'course') && !(tab.id === 'settings' && type === 'virtual_experience'));
+          const tabLabel = (tab: typeof TABS[number]) => tab.id === 'responses' && (type === 'course' || type === 'virtual_experience') ? 'Report' : tab.label;
+          return (
+            <div className="max-w-6xl mx-auto flex flex-col sm:flex-row gap-4 sm:gap-6">
+              {/* Left: tab nav */}
+              <nav className="flex sm:flex-col gap-1 flex-shrink-0 sm:w-48 overflow-x-auto sm:overflow-visible" style={{ scrollbarWidth: 'none' }}>
+                {visibleTabs.map(tab => {
+                  const isActive = activeTab === tab.id;
+                  const hoverBg  = isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)';
+                  const activeBg = isLight ? '#ffffff' : 'rgba(255,255,255,0.09)';
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = hoverBg; }}
+                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                      className="flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors whitespace-nowrap text-left rounded-lg"
+                      style={{ color: isActive ? textPrim : hdrTextMut, fontWeight: isActive ? 600 : 500, background: isActive ? activeBg : 'transparent', boxShadow: isActive && isLight ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}
+                    >
+                      <tab.Icon className="w-4 h-4 flex-shrink-0" />
+                      <span>{tabLabel(tab)}</span>
+                      {tab.id === 'responses' && totalCount > 0 && (
+                        <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold" style={{ background: isLight ? 'rgba(0,0,0,0.06)' : '#3f3f46', color: hdrTextMut }}>
+                          {totalCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+
+              {/* Right: content carousel, standing alone */}
+              <div className="flex-1 min-w-0 rounded-2xl overflow-hidden" style={{ background: isLight ? '#ffffff' : '#1E1F26', border: isLight ? `1px solid ${navBord}` : '1px solid transparent', boxShadow: 'none' }}>
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeTab}
+                    initial={{ opacity: 0, x: 24 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -24 }}
+                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                  {activeTab === 'settings' && type !== 'virtual_experience' ? (
+                    <FormEditor formId={id as string} contentType={type === 'course' ? 'course' : 'event'} />
+                  ) : (
+                    <div className="px-4 sm:px-6 py-6 sm:py-8 w-full">
+                      {activeTab === 'responses' && type !== 'virtual_experience' && (
+                        <ResponsesTab
+                          form={form}
+                          responses={responses}
+                          totalCount={totalCount}
+                          page={page}
+                          pageLoading={pageLoading}
+                          onExport={handleExport}
+                          onPageChange={fetchPage}
+                          courseProgress={courseProgress}
+                          cohortStudents={cohortStudents}
+                        />
+                      )}
+                      {activeTab === 'responses' && type === 'virtual_experience' && (
+                        <VirtualExperienceReportTab form={form} />
+                      )}
+                      {activeTab === 'leaderboard' && (
+                        <LeaderboardTab form={form} courseProgress={courseProgress} />
+                      )}
+                      {activeTab === 'email' && (
+                        <EmailTab form={form} formUrl={formUrl} courseProgress={courseProgress} cohortStudents={cohortStudents} formCohorts={formCohorts} />
+                      )}
+                      {activeTab === 'more' && (
+                        <MoreTab
+                          form={form}
+                          formUrl={formUrl}
+                          onClone={handleClone}
+                          onStatusChange={(status) => setForm((f: any) => ({ ...f, status }))}
+                        />
+                      )}
+                    </div>
+                  )}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
             </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
+          );
+        })()}
+      </div>
     </main>
   );
 }

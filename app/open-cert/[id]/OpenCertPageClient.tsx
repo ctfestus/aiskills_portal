@@ -63,14 +63,14 @@ export default function OpenCertPageClient({
   };
 
   const modePillBg = isDark
-    ? { badge_only: 'rgba(88,28,135,0.25)', both: 'rgba(29,78,216,0.2)', certificate_only: 'rgba(20,83,45,0.25)' }
-    : { badge_only: '#fdf4ff',              both: '#eff6ff',              certificate_only: '#f0fdf4' };
+    ? { badge_only: 'rgba(124,45,18,0.25)', both: 'rgba(29,78,216,0.2)', certificate_only: 'rgba(20,83,45,0.25)' }
+    : { badge_only: '#fff7ed',              both: '#eff6ff',              certificate_only: '#f0fdf4' };
   const modePillColor = isDark
-    ? { badge_only: '#c084fc', both: '#60a5fa', certificate_only: '#4ade80' }
-    : { badge_only: '#7e22ce', both: '#1d4ed8', certificate_only: '#15803d' };
+    ? { badge_only: '#fb923c', both: '#60a5fa', certificate_only: '#4ade80' }
+    : { badge_only: '#c2410c', both: '#1d4ed8', certificate_only: '#15803d' };
   const modePillBorder = isDark
-    ? { badge_only: 'rgba(126,34,206,0.5)', both: 'rgba(29,78,216,0.5)', certificate_only: 'rgba(22,101,52,0.5)' }
-    : { badge_only: '#e9d5ff',              both: '#bfdbfe',              certificate_only: '#bbf7d0' };
+    ? { badge_only: 'rgba(154,52,18,0.5)', both: 'rgba(29,78,216,0.5)', certificate_only: 'rgba(22,101,52,0.5)' }
+    : { badge_only: '#fed7aa',              both: '#bfdbfe',              certificate_only: '#bbf7d0' };
 
   const showCert  = issueMode === 'certificate_only' || issueMode === 'both';
   const showBadge = issueMode === 'badge_only'       || issueMode === 'both';
@@ -82,6 +82,9 @@ export default function OpenCertPageClient({
   const [copied, setCopied]           = useState(false);
   const [mainScale, setMainScale]     = useState(0.38);
   const [isMobile, setIsMobile]       = useState(false);
+  // Read the page URL only after mount so SSR and the client's first render
+  // agree (empty string). Setting it during render breaks hydration.
+  const [certUrl, setCertUrl]         = useState("");
 
   useEffect(() => {
     const calc = () => {
@@ -93,6 +96,7 @@ export default function OpenCertPageClient({
       setMainScale(Math.max(availW / CERT_W, 0.08));
     };
     calc();
+    setCertUrl(window.location.href);
     window.addEventListener("resize", calc);
     return () => window.removeEventListener("resize", calc);
   }, []);
@@ -108,7 +112,6 @@ export default function OpenCertPageClient({
   const d          = new Date(issuedAt);
   const issueYear  = d.getFullYear();
   const issueMonth = d.getMonth() + 1;
-  const certUrl    = typeof window !== "undefined" ? window.location.href : "";
 
   const initials = recipientName
     .split(" ").slice(0, 2).map(p => p[0]?.toUpperCase() ?? "").join("");
@@ -261,11 +264,11 @@ export default function OpenCertPageClient({
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 0' }}>
                     {badgeImageUrl ? (
                       <div style={{ filter: 'drop-shadow(0 6px 18px rgba(0,0,0,0.28))' }}>
-                        <img src={badgeImageUrl} alt={`${programName} badge`}
+                        <img src={badgeImageUrl} alt={`${programName} badge`} fetchPriority="high"
                           style={{ width: 'min(180px, 70vw)', height: 'auto', maxWidth: '100%', maxHeight: 200, objectFit: 'contain', display: 'block' }} />
                       </div>
                     ) : (
-                      <div style={{ width: 160, height: 160, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 24px rgba(99,102,241,0.35)' }}>
+                      <div style={{ width: 160, height: 160, borderRadius: '50%', background: settings.primaryColor, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 24px rgba(0,0,0,0.2)' }}>
                         <span style={{ fontSize: 52 }}>🏅</span>
                       </div>
                     )}
@@ -291,11 +294,11 @@ export default function OpenCertPageClient({
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 0' }}>
                     {badgeImageUrl ? (
                       <div style={{ filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.28))' }}>
-                        <img src={badgeImageUrl} alt={`${programName} badge`}
+                        <img src={badgeImageUrl} alt={`${programName} badge`} fetchPriority="high"
                           style={{ width: Math.min(previewW * 0.5, 220), height: 'auto', maxWidth: '100%', maxHeight: 260, objectFit: 'contain', display: 'block' }} />
                       </div>
                     ) : (
-                      <div style={{ width: 200, height: 200, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px rgba(99,102,241,0.35)' }}>
+                      <div style={{ width: 200, height: 200, borderRadius: '50%', background: settings.primaryColor, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
                         <span style={{ fontSize: 64 }}>🏅</span>
                       </div>
                     )}
@@ -383,7 +386,7 @@ export default function OpenCertPageClient({
 
           {/* Recipient */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <div style={{ width: 44, height: 44, borderRadius: '50%', background: settings.primaryColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <span style={{ color: 'white', fontWeight: 800, fontSize: 15 }}>{initials}</span>
             </div>
             <div>

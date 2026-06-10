@@ -10,10 +10,11 @@ import {
   Sparkles, Loader2, CheckCircle2, ArrowRight, Check,
   Plus, Trash2, Image as ImageIcon, Sun, Moon,
   LayoutDashboard, Save, X, MapPin,
-  ArrowUpRight, ChevronDown, ChevronUp,
+  ArrowUpRight, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   Building2, Share2, GripVertical,
   CalendarDays, HelpCircle, ClipboardList, Video, BookOpen, Search, Zap, Settings, Upload,
   Download, Link2, FileText, Database, ArrowLeft, Lock, LockOpen,
+  Clock, Users, Globe, Repeat,
 } from 'lucide-react';
 import { AnimatedField, ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import dynamic from 'next/dynamic';
@@ -200,19 +201,21 @@ interface FormConfig {
 const COURSE_CATEGORIES = ['Excel', 'Power BI', 'SQL', 'Tableau', 'AI'] as const;
 
 const buttonThemes: Record<ThemeColor, string> = {
-  forest:  'bg-[#006128] hover:bg-[#004d1e] text-white',
+  forest:  'bg-[#00bf63] hover:bg-[#00994f] text-white',
   lime:    'bg-[#ADEE66] hover:bg-[#9ad94d] text-black',
   emerald: 'bg-emerald-500 hover:bg-emerald-600 text-white',
   rose:    'bg-rose-500 hover:bg-rose-600 text-white',
   amber:   'bg-amber-500 hover:bg-amber-600 text-white',
+  ocean:   'bg-[#3E93FF] hover:bg-[#2f7fe0] text-white',
 };
 
 const themeAccentColors: Record<ThemeColor, string> = {
-  forest:  '#006128',
+  forest:  '#00bf63',
   lime:    '#ADEE66',
   emerald: '#10b981',
   rose:    '#f43f5e',
   amber:   '#f59e0b',
+  ocean:   '#3E93FF',
 };
 
 const SOCIAL_PLATFORMS = [
@@ -314,7 +317,7 @@ const TEMPLATES: { key: string; label: string; description: string; icon: React.
       coverImage: '',
       theme: 'forest',
       mode: 'dark',
-      font: 'sans',
+      font: 'google-sans-text',
       eventDetails: { isEvent: true, date: '', time: '', location: '', timezone: '' },
       fields: [
         { id: uid(), name: 'full_name', label: 'Full Name', type: 'text', placeholder: 'Enter your full name...', required: true },
@@ -335,7 +338,7 @@ const TEMPLATES: { key: string; label: string; description: string; icon: React.
       coverImage: '',
       theme: 'amber',
       mode: 'dark',
-      font: 'sans',
+      font: 'google-sans-text',
       isCourse: true,
       fields: [],
       showAnswers: 'per_question',
@@ -357,7 +360,7 @@ const TEMPLATES: { key: string; label: string; description: string; icon: React.
       coverImage: '',
       theme: 'emerald',
       mode: 'dark',
-      font: 'sans',
+      font: 'google-sans-text',
       fields: [
         { id: uid(), name: 'first_name', label: 'First Name', type: 'text', placeholder: 'Enter your first name...', required: true },
         { id: uid(), name: 'email', label: 'Email Address', type: 'email', placeholder: 'you@example.com', required: false },
@@ -380,7 +383,7 @@ const TEMPLATES: { key: string; label: string; description: string; icon: React.
       coverImage: '',
       theme: 'forest',
       mode: 'dark',
-      font: 'sans',
+      font: 'google-sans-text',
       eventDetails: { isEvent: true, date: '', time: '', location: '', timezone: '' },
       fields: [
         { id: uid(), name: 'full_name', label: 'Full Name', type: 'text', placeholder: 'Enter your full name...', required: true },
@@ -489,26 +492,26 @@ const mergeEventFields = (existingFields: FormField[] = [], generatedFields: any
 const LIGHT_C = {
   page: '#f1f3f5', nav: 'rgba(255,255,255,0.97)', navBorder: 'rgba(0,0,0,0.07)',
   card: '#ffffff', cardBorder: 'rgba(0,0,0,0.08)', cardShadow: '0 1px 4px rgba(0,0,0,0.06)',
-  green: '#006128', lime: '#ADEE66', cta: '#006128', ctaText: 'white',
+  green: '#00bf63', lime: '#ADEE66', cta: '#00bf63', ctaText: 'white',
   text: '#111827', muted: '#4b5563', faint: '#9ca3af', toggleOff: '#d1d5db',
-  divider: 'rgba(0,0,0,0.07)', pill: '#eef0f3', input: '#ffffff', inputBorder: '#d1d5db',
+  divider: 'rgba(0,0,0,0.07)', pill: '#eef0f3', input: '#f4f5f7', inputBorder: 'rgba(0,0,0,0.08)',
   segmentActive: '#ffffff', segmentActiveText: '#111827',
-  groupBg: '#f7f8fa', groupBorder: 'rgba(0,0,0,0.07)',
+  groupBg: '#f4f5f7', groupBorder: 'transparent',
 };
 const DARK_C = {
   page: '#111111', nav: 'rgba(17,17,17,0.90)', navBorder: 'rgba(255,255,255,0.07)',
   card: '#1c1c1c', cardBorder: 'rgba(255,255,255,0.07)', cardShadow: '0 1px 4px rgba(0,0,0,0.40)',
   green: '#ADEE66', lime: '#ADEE66', cta: '#ADEE66', ctaText: '#111',
   text: '#f0f0f0', muted: '#aaa', faint: '#555', toggleOff: '#3a3a3a',
-  divider: 'rgba(255,255,255,0.07)', pill: '#242424', input: '#1a1a1a', inputBorder: 'rgba(255,255,255,0.09)',
+  divider: 'rgba(255,255,255,0.07)', pill: '#242424', input: 'rgba(255,255,255,0.05)', inputBorder: 'rgba(255,255,255,0.08)',
   segmentActive: '#2e2e2e', segmentActiveText: '#f0f0f0',
-  groupBg: 'rgba(255,255,255,0.03)', groupBorder: 'rgba(255,255,255,0.06)',
+  groupBg: 'rgba(255,255,255,0.04)', groupBorder: 'transparent',
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
 // --- UI primitives ---
-const inputCls = "w-full rounded-lg px-3 py-2 text-sm outline-none transition-colors placeholder:text-[#bbb]";
-const labelCls = "block text-xs mb-1.5";
+const inputCls = "w-full rounded-lg px-3.5 py-2.5 text-sm outline-none transition-colors placeholder:text-[#bbb]";
+const labelCls = "block text-xs font-medium mb-2";
 
 function Toggle({ checked, onChange, accentColor }: { checked: boolean; onChange: () => void; accentColor?: string }) {
   const C = useC();
@@ -569,7 +572,7 @@ function FormPreview({ config, isSubmitting, onSubmit, isSuccess, onReset, isSha
   isSharedView: boolean;
 }) {
   const [isRegistering, setIsRegistering] = useState(false);
-  const fontOption = getFontById(config.font ?? 'sans');
+  const fontOption = getFontById(config.font ?? 'google-sans-text');
   useEffect(() => { loadGoogleFont(fontOption); }, [fontOption]);
   const fontStyle = { fontFamily: fontOption.cssFamily };
   const containerBg = config.mode === 'light' ? 'bg-white border-zinc-200 shadow-2xl shadow-black/10' : 'bg-zinc-900/60 border-zinc-800/60 backdrop-blur-sm';
@@ -897,7 +900,11 @@ function SortableFieldCard({ f, isExpanded, toggleExpand, onRemove, onUpdate, in
 export default function Page() {
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl, logoDarkUrl } = useTenant();
+  const { logoUrl, logoDarkUrl, accentColor: brandAccent } = useTenant();
+  // Calm blue accent for wizard selections / CTAs (less loud than the brand amber).
+  const ctaBg     = '#3E93FF';
+  const ctaFg     = '#ffffff';
+  const ctaBorder = 'none';
   const router = useRouter();
   const inputStyle = { background: C.input, border: `1px solid ${C.inputBorder}`, color: C.text };
   const labelStyle = { color: C.faint };
@@ -982,6 +989,11 @@ const [isSaving, setIsSaving] = useState(false);
   const [extractingRubric, setExtractingRubric] = useState<string | null>(null); // `${questionId}:${label}`
   const rubricFileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [activeSection, setActiveSection] = useState<string>('info');
+  const [secDir, setSecDir] = useState(1); // carousel slide direction: 1 = forward, -1 = back
+  const goToSection = (id: string, ids: string[]) => {
+    setSecDir(ids.indexOf(id) >= ids.indexOf(activeSection) ? 1 : -1);
+    setActiveSection(id);
+  };
   const [availableForms, setAvailableForms] = useState<{ id: string; title: string; slug: string }[]>([]);
   const [cohorts, setCohorts] = useState<{ id: string; name: string }[]>([]);
   const [selectedCohortIds, setSelectedCohortIds] = useState<string[]>([]);
@@ -1383,7 +1395,7 @@ const [isSaving, setIsSaving] = useState(false);
         coverImage: '',
         theme: 'forest',
         mode: 'dark',
-        font: 'sans',
+        font: 'google-sans-text',
         fields: [],
         questions: data.questions || [],
         learnOutcomes: data.learnOutcomes || [],
@@ -1532,7 +1544,7 @@ const [isSaving, setIsSaving] = useState(false);
         coverImage: '',
         theme: 'forest',
         mode: 'dark',
-        font: 'sans',
+        font: 'google-sans-text',
         fields: [],
         questions: data.questions || [],
         learnOutcomes: data.learnOutcomes || [],
@@ -2143,14 +2155,15 @@ const [isSaving, setIsSaving] = useState(false);
           )}
         </nav>
 
-        <div className={`relative z-10 flex-1 flex flex-col items-center ${(sqlWizardStep || docWizardStep) ? 'justify-start pt-8 sm:pt-12' : 'justify-center py-20'} px-4 sm:px-6 ${(sqlWizardStep === 'outline' || docWizardStep === 'outline') ? 'max-w-5xl' : 'max-w-3xl'} mx-auto w-full`}>
+        <div className={`relative z-10 flex-1 flex flex-col items-center ${(sqlWizardStep || docWizardStep) ? 'justify-start pt-8 sm:pt-12 pb-16' : 'justify-center py-20'} px-4 sm:px-6 ${(sqlWizardStep === 'outline' || docWizardStep === 'outline') ? 'max-w-5xl' : 'max-w-3xl'} mx-auto w-full`}>
 
           {/* SQL Course Wizard -- Brief step */}
           {sqlWizardStep === 'brief' && (
-            <motion.div key="sql-brief" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-xl mx-auto">
+            <motion.div key="sql-brief" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-3xl mx-auto">
               <button type="button" onClick={() => setSqlWizardStep(null)} className="flex items-center gap-1.5 text-sm mb-6 transition-opacity hover:opacity-60" style={{ color: C.muted }}>
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
+              <div className="rounded-2xl p-6 sm:p-8" style={{ background: C.card, border: theme === 'dark' ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
               <div className="flex items-center gap-3 mb-8">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#3b82f618' }}>
                   <Database className="w-5 h-5" style={{ color: '#3b82f6' }} />
@@ -2187,9 +2200,10 @@ const [isSaving, setIsSaving] = useState(false);
                   <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Specific Focus <span style={{ color: C.faint }}>(optional)</span></label>
                   <textarea value={sqlBrief.promptText} onChange={e => setSqlBrief(p => ({ ...p, promptText: e.target.value }))} placeholder="Any specific topics, datasets, or skills to focus on..." rows={3} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
                 </div>
-                <button type="button" onClick={handleGenerateSqlOutline} disabled={!!aiLoadingLabel || !sqlBrief.title.trim()} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: C.cta, color: C.ctaText }}>
+                <button type="button" onClick={handleGenerateSqlOutline} disabled={!!aiLoadingLabel || !sqlBrief.title.trim()} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
                   <Sparkles className="w-4 h-4" /> Generate Outline
                 </button>
+              </div>
               </div>
             </motion.div>
           )}
@@ -2205,7 +2219,7 @@ const [isSaving, setIsSaving] = useState(false);
                   <h2 className="text-base font-semibold" style={{ color: C.text }}>Review Outline</h2>
                   <p className="text-xs" style={{ color: C.faint }}>Edit inline, then generate the full course.</p>
                 </div>
-                <button type="button" onClick={handleGenerateSqlFullCourse} disabled={!!aiLoadingLabel} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: C.cta, color: C.ctaText }}>
+                <button type="button" onClick={handleGenerateSqlFullCourse} disabled={!!aiLoadingLabel} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
                   <Sparkles className="w-3.5 h-3.5" /> Generate Full Course
                 </button>
               </div>
@@ -2294,13 +2308,14 @@ const [isSaving, setIsSaving] = useState(false);
 
           {/* Document -> Course Wizard -- Input step */}
           {docWizardStep === 'input' && (
-            <motion.div key="doc-input" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-xl mx-auto">
+            <motion.div key="doc-input" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-3xl mx-auto">
               <button type="button" onClick={() => setDocWizardStep(null)} className="flex items-center gap-1.5 text-sm mb-6 transition-opacity hover:opacity-60" style={{ color: C.muted }}>
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
+              <div className="rounded-2xl p-6 sm:p-8" style={{ background: C.card, border: theme === 'dark' ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
               <div className="flex items-center gap-3 mb-8">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${C.cta}18` }}>
-                  <FileText className="w-5 h-5" style={{ color: C.cta }} />
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${brandAccent}18` }}>
+                  <FileText className="w-5 h-5" style={{ color: brandAccent }} />
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold" style={{ color: C.text }}>Course from a Document</h2>
@@ -2319,7 +2334,7 @@ const [isSaving, setIsSaving] = useState(false);
                     const Icon = opt.icon;
                     const active = docSourceMethod === opt.key;
                     return (
-                      <button key={opt.key} type="button" onClick={() => setDocSourceMethod(opt.key)} className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all" style={active ? { background: C.cta, color: C.ctaText } : { background: C.pill, color: C.muted, border: `1px solid ${C.inputBorder}` }}>
+                      <button key={opt.key} type="button" onClick={() => setDocSourceMethod(opt.key)} className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all" style={active ? { background: ctaBg, color: ctaFg, border: ctaBorder } : { background: C.pill, color: C.muted }}>
                         <Icon className="w-3.5 h-3.5" /> {opt.label}
                       </button>
                     );
@@ -2375,7 +2390,7 @@ const [isSaving, setIsSaving] = useState(false);
                     ] as const).map(opt => {
                       const active = docBrief.depth === opt.key;
                       return (
-                        <button key={opt.key} type="button" onClick={() => setDocBrief(p => ({ ...p, depth: opt.key }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: C.cta, color: C.ctaText } : { background: C.pill, color: C.muted, border: `1px solid ${C.inputBorder}` }}>
+                        <button key={opt.key} type="button" onClick={() => setDocBrief(p => ({ ...p, depth: opt.key }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: ctaBg, color: ctaFg, border: ctaBorder } : { background: C.pill, color: C.muted }}>
                           {active ? <Check className="w-3 h-3 inline mr-1" /> : null}{opt.label}
                         </button>
                       );
@@ -2393,7 +2408,7 @@ const [isSaving, setIsSaving] = useState(false);
                     ] as const).map(opt => {
                       const active = docBrief.practice === opt.key;
                       return (
-                        <button key={opt.key} type="button" onClick={() => setDocBrief(p => ({ ...p, practice: opt.key }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: C.cta, color: C.ctaText } : { background: C.pill, color: C.muted, border: `1px solid ${C.inputBorder}` }}>
+                        <button key={opt.key} type="button" onClick={() => setDocBrief(p => ({ ...p, practice: opt.key }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: ctaBg, color: ctaFg, border: ctaBorder } : { background: C.pill, color: C.muted }}>
                           {active ? <Check className="w-3 h-3 inline mr-1" /> : null}{opt.label}
                         </button>
                       );
@@ -2411,7 +2426,7 @@ const [isSaving, setIsSaving] = useState(false);
                     ] as const).map(opt => {
                       const active = docBrief.tone === opt.key;
                       return (
-                        <button key={opt.key} type="button" onClick={() => setDocBrief(p => ({ ...p, tone: opt.key }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: C.cta, color: C.ctaText } : { background: C.pill, color: C.muted, border: `1px solid ${C.inputBorder}` }}>
+                        <button key={opt.key} type="button" onClick={() => setDocBrief(p => ({ ...p, tone: opt.key }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: ctaBg, color: ctaFg, border: ctaBorder } : { background: C.pill, color: C.muted }}>
                           {active ? <Check className="w-3 h-3 inline mr-1" /> : null}{opt.label}
                         </button>
                       );
@@ -2427,7 +2442,7 @@ const [isSaving, setIsSaving] = useState(false);
                     ] as const).map(opt => {
                       const active = docBrief.imageMode.includes(opt.key);
                       return (
-                        <button key={opt.key} type="button" onClick={() => setDocBrief(p => ({ ...p, imageMode: active ? p.imageMode.filter(m => m !== opt.key) : [...p.imageMode, opt.key] }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: C.cta, color: C.ctaText } : { background: C.pill, color: C.muted, border: `1px solid ${C.inputBorder}` }}>
+                        <button key={opt.key} type="button" onClick={() => setDocBrief(p => ({ ...p, imageMode: active ? p.imageMode.filter(m => m !== opt.key) : [...p.imageMode, opt.key] }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: ctaBg, color: ctaFg, border: ctaBorder } : { background: C.pill, color: C.muted }}>
                           {active ? <Check className="w-3 h-3 inline mr-1" /> : null}{opt.label}
                         </button>
                       );
@@ -2446,7 +2461,7 @@ const [isSaving, setIsSaving] = useState(false);
                     ] as const).map(opt => {
                       const active = docBrief.includeVideos === opt.val;
                       return (
-                        <button key={String(opt.val)} type="button" onClick={() => setDocBrief(p => ({ ...p, includeVideos: opt.val }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: C.cta, color: C.ctaText } : { background: C.pill, color: C.muted, border: `1px solid ${C.inputBorder}` }}>
+                        <button key={String(opt.val)} type="button" onClick={() => setDocBrief(p => ({ ...p, includeVideos: opt.val }))} className="px-3 py-1.5 rounded-full text-xs font-medium transition-all" style={active ? { background: ctaBg, color: ctaFg, border: ctaBorder } : { background: C.pill, color: C.muted }}>
                           {active ? <Check className="w-3 h-3 inline mr-1" /> : null}{opt.label}
                         </button>
                       );
@@ -2460,9 +2475,10 @@ const [isSaving, setIsSaving] = useState(false);
                   )}
                 </div>
 
-                <button type="button" onClick={handleGenerateDocOutline} disabled={!!aiLoadingLabel} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: C.cta, color: C.ctaText }}>
+                <button type="button" onClick={handleGenerateDocOutline} disabled={!!aiLoadingLabel} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
                   <Sparkles className="w-4 h-4" /> Generate Outline
                 </button>
+              </div>
               </div>
             </motion.div>
           )}
@@ -2478,7 +2494,7 @@ const [isSaving, setIsSaving] = useState(false);
                   <h2 className="text-base font-semibold" style={{ color: C.text }}>Review Outline</h2>
                   <p className="text-xs" style={{ color: C.faint }}>Edit inline, then generate the full course.</p>
                 </div>
-                <button type="button" onClick={handleGenerateDocFullCourse} disabled={!!aiLoadingLabel} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: C.cta, color: C.ctaText }}>
+                <button type="button" onClick={handleGenerateDocFullCourse} disabled={!!aiLoadingLabel} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
                   <Sparkles className="w-3.5 h-3.5" /> Generate Full Course
                 </button>
               </div>
@@ -2568,14 +2584,14 @@ const [isSaving, setIsSaving] = useState(false);
                   </motion.button>}
                   {/* Course from a Document */}
                   {userRole !== 'staff' && <motion.button key="doc-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +(TEMPLATES.length + 1) * 0.07 }} onClick={() => setDocWizardStep('input')} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${C.cta}18` }}>
-                      <FileText className="w-4.5 h-4.5" style={{ color: C.cta, width: 18, height: 18 }} />
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${brandAccent}18` }}>
+                      <FileText className="w-4.5 h-4.5" style={{ color: brandAccent, width: 18, height: 18 }} />
                     </div>
                     <div>
                       <p className="text-sm font-semibold leading-tight" style={{ color: C.text }}>Document to Course</p>
                       <p className="text-xs mt-0.5 leading-snug" style={{ color: C.faint }}>Turn a PDF, deck, guide, or page into lessons and quizzes.</p>
                     </div>
-                    <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${C.cta}18`, color: C.cta }}>AI</span>
+                    <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${brandAccent}18`, color: brandAccent }}>AI</span>
                     <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>Use</span>
                   </motion.button>}
                 </div>
@@ -2607,7 +2623,7 @@ const [isSaving, setIsSaving] = useState(false);
   };
 
   return (
-    <main className="min-h-screen flex flex-col" style={{ background: C.page }}>
+    <main className="min-h-screen flex flex-col" style={{ background: C.page, colorScheme: theme === 'dark' ? 'dark' : 'light' }}>
       {/* -- Editor header: Logo + Dashboard link + Save -- */}
       <header className="sticky top-0 z-30 backdrop-blur-md" style={{ background: C.nav, borderBottom: `1px solid ${C.navBorder}` }}>
         <div className="flex items-center justify-between px-4 sm:px-6 py-3">
@@ -2645,7 +2661,7 @@ const [isSaving, setIsSaving] = useState(false);
                 type="button"
                 onClick={() => { setFormConfig(null); setDocWizardStep('outline'); }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-opacity hover:opacity-80"
-                style={{ background: `${C.cta}18`, color: C.cta, border: `1px solid ${C.cta}30` }}
+                style={{ background: `${brandAccent}18`, color: brandAccent, border: `1px solid ${brandAccent}30` }}
               >
                 <ArrowLeft className="w-3.5 h-3.5" /> Edit Outline
               </button>
@@ -2678,53 +2694,7 @@ const [isSaving, setIsSaving] = useState(false);
         </div>
       </header>
 
-      <div className="relative z-10 flex flex-1 overflow-hidden">
-        {/* -- Left Nav Sidebar -- */}
-        <nav className="w-52 flex-shrink-0 overflow-y-auto" style={{ background: C.card, borderRight: `1px solid ${C.cardBorder}` }}>
-          <div className="py-2">
-            {([
-              { label: 'Content', items: [
-                { id: 'info', label: 'Basic Info', icon: BookOpen },
-                { id: 'cover', label: 'Cover Image', icon: ImageIcon },
-                ...(!formConfig.isCourse && !formConfig.eventDetails?.isEvent ? [{ id: 'fields', label: 'Form Fields', icon: ClipboardList }] : []),
-                ...(formConfig.isCourse ? [{ id: 'curriculum', label: 'Questions & Lessons', icon: HelpCircle }] : []),
-                ...(formConfig.eventDetails?.isEvent ? [{ id: 'fields', label: 'Registration Fields', icon: ClipboardList }] : []),
-              ]},
-              ...(formConfig.eventDetails?.isEvent ? [{ label: 'Event', items: [
-                { id: 'event_details', label: 'Event Details', icon: CalendarDays },
-                { id: 'visibility', label: 'Visibility', icon: Share2 },
-              ]}] : []),
-              { label: 'Settings', items: [
-                ...(formConfig.isCourse ? [{ id: 'course_settings', label: 'Course Settings', icon: Settings }] : []),
-                { id: 'appearance', label: 'Appearance', icon: Sun },
-                ...(formConfig.isCourse ? [{ id: 'points', label: 'Points & Rewards', icon: Zap }] : []),
-              ]},
-              { label: 'Publishing', items: [
-                ...((formConfig.isCourse || formConfig.eventDetails?.isEvent) ? [{ id: 'cohorts', label: 'Cohorts', icon: Building2 }] : []),
-                { id: 'share', label: 'Share URL', icon: Share2 },
-                { id: 'submission', label: 'After Submission', icon: CheckCircle2 },
-              ]},
-            ] as { label: string; items: { id: string; label: string; icon: React.ElementType }[] }[]).map(group => (
-              <div key={group.label} className="mb-1">
-                <p className="px-4 pt-3 pb-1.5 text-[10px] font-semibold tracking-widest uppercase" style={{ color: C.faint }}>{group.label}</p>
-                {group.items.map(item => {
-                  const isActive = activeSection === item.id;
-                  const Icon = item.icon;
-                  return (
-                    <button key={item.id} type="button" onClick={() => setActiveSection(item.id)}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-all"
-                      style={isActive ? { background: `${accentColor}12`, color: accentColor, borderRight: `2px solid ${accentColor}` } : { color: C.muted }}
-                    >
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </nav>
-
+      <div className="relative z-10 flex flex-col flex-1 overflow-hidden">
         {/* -- Content Area -- */}
         <div className="flex-1 overflow-y-auto custom-scrollbar" style={{ background: C.page }}>
           {/* Published URL banner */}
@@ -2743,8 +2713,54 @@ const [isSaving, setIsSaving] = useState(false);
               </button>
             </div>
           )}
-          <div className="max-w-3xl mx-auto px-4 py-8">
-          <div className="rounded-2xl p-5 space-y-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+          <div className="max-w-5xl mx-auto px-4 py-8">
+          <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: theme === 'dark' ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+          {(() => {
+            const navSections = ([
+              { id: 'info', label: 'Basic Info' },
+              { id: 'cover', label: 'Cover Image' },
+              ...(!formConfig.isCourse && !formConfig.eventDetails?.isEvent ? [{ id: 'fields', label: 'Form Fields' }] : []),
+              ...(formConfig.isCourse ? [{ id: 'curriculum', label: 'Questions & Lessons' }] : []),
+              ...(formConfig.eventDetails?.isEvent ? [{ id: 'fields', label: 'Registration Fields' }] : []),
+              ...(formConfig.eventDetails?.isEvent ? [
+                { id: 'event_details', label: 'Event Details' },
+                { id: 'visibility', label: 'Visibility' },
+              ] : []),
+              ...(formConfig.isCourse ? [{ id: 'course_settings', label: 'Course Settings' }] : []),
+              { id: 'appearance', label: 'Appearance' },
+              ...(formConfig.isCourse ? [{ id: 'points', label: 'Points & Rewards' }] : []),
+              ...((formConfig.isCourse || formConfig.eventDetails?.isEvent) ? [{ id: 'cohorts', label: 'Cohorts' }] : []),
+              { id: 'share', label: 'Share URL' },
+              { id: 'submission', label: 'After Submission' },
+            ] as { id: string; label: string }[]);
+            const ids = navSections.map(s => s.id);
+            const i = ids.indexOf(activeSection);
+            return (
+              <div className="flex items-center justify-between gap-4 px-6 sm:px-8 pt-6 pb-5" style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+                <div className="min-w-0">
+                  <h2 className="text-lg sm:text-xl font-bold leading-tight truncate" style={{ color: C.text }}>{navSections[i]?.label}</h2>
+                  <p className="text-[11px] mt-1 font-medium tracking-wide uppercase" style={{ color: C.faint }}>Step {i + 1} of {ids.length}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button type="button" disabled={i <= 0} onClick={() => goToSection(ids[i - 1], ids)} aria-label="Previous"
+                    className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70 disabled:opacity-30"
+                    style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                    <ChevronLeft className="w-4 h-4"/>
+                  </button>
+                  <button type="button" disabled={i >= ids.length - 1} onClick={() => goToSection(ids[i + 1], ids)} aria-label="Next"
+                    className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70 disabled:opacity-30"
+                    style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                    <ChevronRight className="w-4 h-4"/>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+          <AnimatePresence mode="wait" custom={secDir}>
+          <motion.div key={activeSection} custom={secDir}
+            initial={{ opacity: 0, x: secDir * 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: secDir * -28 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            className="px-6 sm:px-8 py-7 space-y-5">
 
             {activeSection === 'info' && (
               <div className="space-y-5">
@@ -2832,142 +2848,153 @@ const [isSaving, setIsSaving] = useState(false);
 
             {activeSection === 'event_details' && formConfig.eventDetails?.isEvent && (
               <div className="space-y-5">
-                <div className="mb-3 rounded-xl p-3 space-y-2" style={{ background: C.groupBg, border: `1px solid ${C.groupBorder}` }}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <label className={labelCls} style={{ ...labelStyle, marginBottom: 0 }}>AI Event Assistant</label>
-                      <p className="text-[10px] mt-1 leading-relaxed" style={{ color: C.faint }}>
-                        Generate the event setup, suggested registration fields, and confirmation copy from a short brief.
-                      </p>
+                <div className="flex items-center justify-between gap-4 rounded-2xl p-4" style={{ background: `${accentColor}0e` }}>
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${accentColor}1f`, color: accentColor }}>
+                      <Sparkles className="w-4 h-4" />
                     </div>
-                    <div className="px-2 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ background: `${accentColor}18`, color: accentColor }}>
-                      AI
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold" style={{ color: C.text }}>AI Event Assistant</p>
+                      <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: C.faint }}>Generate the setup, registration fields, and confirmation copy from a short brief.</p>
                     </div>
                   </div>
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setEventAssistantOpen(true)}
-                      disabled={!!aiLoadingLabel}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-                      style={{ background: accentColor, color: C.ctaText }}
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Open Event Assistant
-                    </button>
-                  </div>
+                  <button type="button" onClick={() => setEventAssistantOpen(true)} disabled={!!aiLoadingLabel}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-opacity disabled:opacity-50 flex-shrink-0"
+                    style={{ background: accentColor, color: C.ctaText }}>
+                    <Sparkles className="w-3.5 h-3.5" /> Open Assistant
+                  </button>
                 </div>
-                {/* Event type toggle */}
-                <div className="flex gap-1 p-1 rounded-xl mb-2" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
-                  {(['in-person', 'virtual'] as const).map(type => {
-                    const active = (formConfig.eventDetails!.eventType ?? 'in-person') === type;
-                    return (
-                      <button key={type} type="button"
-                        onClick={() => updateConfig({ eventDetails: { ...formConfig.eventDetails!, eventType: type } })}
-                        className="flex-1 py-1.5 rounded-lg text-xs font-medium capitalize transition-all"
-                        style={{ background: active ? C.segmentActive : 'transparent', color: active ? C.segmentActiveText : C.faint, boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : undefined }}>
-                        {type === 'in-person' ? '📍 In-Person' : '🎥 Virtual'}
-                      </button>
-                    );
-                  })}
+                {/* FORMAT -- type + location */}
+                <div className="space-y-3">
+                  <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: C.faint }}>Format</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {([
+                      { type: 'in-person', Icon: MapPin, label: 'In-Person', desc: 'A physical venue' },
+                      { type: 'virtual',   Icon: Video,  label: 'Virtual',   desc: 'An online meeting' },
+                    ] as const).map(({ type, Icon, label, desc }) => {
+                      const active = (formConfig.eventDetails!.eventType ?? 'in-person') === type;
+                      return (
+                        <button key={type} type="button"
+                          onClick={() => updateConfig({ eventDetails: { ...formConfig.eventDetails!, eventType: type } })}
+                          className="relative flex flex-col items-start gap-2.5 p-4 rounded-2xl text-left transition-all"
+                          style={{ background: active ? `${accentColor}14` : C.input }}>
+                          {active && <Check className="w-4 h-4 absolute top-3 right-3" style={{ color: accentColor }} />}
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: active ? `${accentColor}1f` : C.pill, color: active ? accentColor : C.muted }}>
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold" style={{ color: active ? accentColor : C.text }}>{label}</p>
+                            <p className="text-[11px]" style={{ color: C.faint }}>{desc}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: C.faint }}>
+                      {(formConfig.eventDetails.eventType ?? 'in-person') === 'virtual' ? <Link2 className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
+                    </span>
+                    {(formConfig.eventDetails.eventType ?? 'in-person') === 'virtual' ? (
+                      <input type="url" value={formConfig.eventDetails.meetingLink || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, meetingLink: e.target.value } })} placeholder="https://meet.google.com/..." className={`${inputCls} pl-9`} style={inputStyle} />
+                    ) : (
+                      <input type="text" value={formConfig.eventDetails.location || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, location: e.target.value } })} placeholder="Address or venue name" className={`${inputCls} pl-9`} style={inputStyle} />
+                    )}
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                {/* SCHEDULE */}
+                <div className="space-y-3">
+                  <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: C.faint }}>Schedule</p>
+                  <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls} style={labelStyle}>Date</label>
-                    <input type="date" value={formConfig.eventDetails.date || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, date: e.target.value } })} className={`${inputCls} [color-scheme:light]`} style={inputStyle} />
+                    <input type="date" value={formConfig.eventDetails.date || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, date: e.target.value } })} className={`${inputCls}`} style={inputStyle} />
                   </div>
                   <div>
                     <label className={labelCls} style={labelStyle}>Time</label>
-                    <input type="time" value={formConfig.eventDetails.time || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, time: e.target.value } })} className={`${inputCls} [color-scheme:light]`} style={inputStyle} />
+                    <input type="time" value={formConfig.eventDetails.time || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, time: e.target.value } })} className={`${inputCls}`} style={inputStyle} />
                   </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls} style={labelStyle}>Timezone</label>
                     <select value={formConfig.eventDetails.timezone || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, timezone: e.target.value } })} className={inputCls} style={inputStyle}>
                       <option value="">Select timezone…</option>
                       <optgroup label="Africa">
-                        <option value="GMT+0 (Accra)">GMT+0 -- Accra</option>
-                        <option value="GMT+1 (Lagos)">GMT+1 -- Lagos</option>
-                        <option value="GMT+2 (Cairo)">GMT+2 -- Cairo</option>
-                        <option value="GMT+2 (Johannesburg)">GMT+2 -- Johannesburg</option>
-                        <option value="GMT+3 (Nairobi)">GMT+3 -- Nairobi</option>
+                        <option value="GMT+0 (Accra)">GMT+0 - Accra</option>
+                        <option value="GMT+1 (Lagos)">GMT+1 - Lagos</option>
+                        <option value="GMT+2 (Cairo)">GMT+2 - Cairo</option>
+                        <option value="GMT+2 (Johannesburg)">GMT+2 - Johannesburg</option>
+                        <option value="GMT+3 (Nairobi)">GMT+3 - Nairobi</option>
                       </optgroup>
                       <optgroup label="Americas">
-                        <option value="GMT-5 (EST)">GMT-5 -- Eastern (EST)</option>
-                        <option value="GMT-4 (EDT)">GMT-4 -- Eastern Daylight (EDT)</option>
-                        <option value="GMT-6 (CST)">GMT-6 -- Central (CST)</option>
-                        <option value="GMT-5 (CDT)">GMT-5 -- Central Daylight (CDT)</option>
-                        <option value="GMT-7 (MST)">GMT-7 -- Mountain (MST)</option>
-                        <option value="GMT-8 (PST)">GMT-8 -- Pacific (PST)</option>
-                        <option value="GMT-7 (PDT)">GMT-7 -- Pacific Daylight (PDT)</option>
-                        <option value="GMT-9 (AKST)">GMT-9 -- Alaska (AKST)</option>
-                        <option value="GMT-10 (HST)">GMT-10 -- Hawaii (HST)</option>
-                        <option value="GMT-3 (BRT)">GMT-3 -- Brasilia (BRT)</option>
-                        <option value="GMT-5 (COT)">GMT-5 -- Colombia (COT)</option>
-                        <option value="GMT-4 (AMT)">GMT-4 -- Amazon (AMT)</option>
-                        <option value="GMT-3 (ART)">GMT-3 -- Argentina (ART)</option>
+                        <option value="GMT-5 (EST)">GMT-5 - Eastern (EST)</option>
+                        <option value="GMT-4 (EDT)">GMT-4 - Eastern Daylight (EDT)</option>
+                        <option value="GMT-6 (CST)">GMT-6 - Central (CST)</option>
+                        <option value="GMT-5 (CDT)">GMT-5 - Central Daylight (CDT)</option>
+                        <option value="GMT-7 (MST)">GMT-7 - Mountain (MST)</option>
+                        <option value="GMT-8 (PST)">GMT-8 - Pacific (PST)</option>
+                        <option value="GMT-7 (PDT)">GMT-7 - Pacific Daylight (PDT)</option>
+                        <option value="GMT-9 (AKST)">GMT-9 - Alaska (AKST)</option>
+                        <option value="GMT-10 (HST)">GMT-10 - Hawaii (HST)</option>
+                        <option value="GMT-3 (BRT)">GMT-3 - Brasilia (BRT)</option>
+                        <option value="GMT-5 (COT)">GMT-5 - Colombia (COT)</option>
+                        <option value="GMT-4 (AMT)">GMT-4 - Amazon (AMT)</option>
+                        <option value="GMT-3 (ART)">GMT-3 - Argentina (ART)</option>
                       </optgroup>
                       <optgroup label="Europe">
-                        <option value="GMT+0 (GMT)">GMT+0 -- London (GMT)</option>
-                        <option value="GMT+1 (BST)">GMT+1 -- London Daylight (BST)</option>
-                        <option value="GMT+1 (CET)">GMT+1 -- Central Europe (CET)</option>
-                        <option value="GMT+2 (CEST)">GMT+2 -- Central Europe Summer (CEST)</option>
-                        <option value="GMT+2 (EET)">GMT+2 -- Eastern Europe (EET)</option>
-                        <option value="GMT+3 (MSK)">GMT+3 -- Moscow (MSK)</option>
+                        <option value="GMT+0 (GMT)">GMT+0 - London (GMT)</option>
+                        <option value="GMT+1 (BST)">GMT+1 - London Daylight (BST)</option>
+                        <option value="GMT+1 (CET)">GMT+1 - Central Europe (CET)</option>
+                        <option value="GMT+2 (CEST)">GMT+2 - Central Europe Summer (CEST)</option>
+                        <option value="GMT+2 (EET)">GMT+2 - Eastern Europe (EET)</option>
+                        <option value="GMT+3 (MSK)">GMT+3 - Moscow (MSK)</option>
                       </optgroup>
                       <optgroup label="Asia">
-                        <option value="GMT+3 (AST)">GMT+3 -- Arabia (AST)</option>
-                        <option value="GMT+4 (GST)">GMT+4 -- Gulf (GST)</option>
-                        <option value="GMT+5 (PKT)">GMT+5 -- Pakistan (PKT)</option>
-                        <option value="GMT+5:30 (IST)">GMT+5:30 -- India (IST)</option>
-                        <option value="GMT+6 (BST)">GMT+6 -- Bangladesh (BST)</option>
-                        <option value="GMT+7 (WIB)">GMT+7 -- Jakarta (WIB)</option>
-                        <option value="GMT+8 (CST)">GMT+8 -- China/Singapore (CST)</option>
-                        <option value="GMT+8 (PHT)">GMT+8 -- Philippines (PHT)</option>
-                        <option value="GMT+9 (JST)">GMT+9 -- Japan/Korea (JST)</option>
-                        <option value="GMT+5:30 (IST)">GMT+5:30 -- Sri Lanka</option>
+                        <option value="GMT+3 (AST)">GMT+3 - Arabia (AST)</option>
+                        <option value="GMT+4 (GST)">GMT+4 - Gulf (GST)</option>
+                        <option value="GMT+5 (PKT)">GMT+5 - Pakistan (PKT)</option>
+                        <option value="GMT+5:30 (IST)">GMT+5:30 - India (IST)</option>
+                        <option value="GMT+6 (BST)">GMT+6 - Bangladesh (BST)</option>
+                        <option value="GMT+7 (WIB)">GMT+7 - Jakarta (WIB)</option>
+                        <option value="GMT+8 (CST)">GMT+8 - China/Singapore (CST)</option>
+                        <option value="GMT+8 (PHT)">GMT+8 - Philippines (PHT)</option>
+                        <option value="GMT+9 (JST)">GMT+9 - Japan/Korea (JST)</option>
+                        <option value="GMT+5:30 (IST)">GMT+5:30 - Sri Lanka</option>
                       </optgroup>
                       <optgroup label="Pacific">
-                        <option value="GMT+10 (AEST)">GMT+10 -- Sydney (AEST)</option>
-                        <option value="GMT+11 (AEDT)">GMT+11 -- Sydney Daylight (AEDT)</option>
-                        <option value="GMT+12 (NZST)">GMT+12 -- New Zealand (NZST)</option>
+                        <option value="GMT+10 (AEST)">GMT+10 - Sydney (AEST)</option>
+                        <option value="GMT+11 (AEDT)">GMT+11 - Sydney Daylight (AEDT)</option>
+                        <option value="GMT+12 (NZST)">GMT+12 - New Zealand (NZST)</option>
                       </optgroup>
                     </select>
                   </div>
+                  {(formConfig.eventDetails!.recurrence ?? 'once') !== 'once' && (
                   <div>
-                    <label className={labelCls} style={labelStyle}>Capacity (optional)</label>
-                    <input type="number" min={1} value={formConfig.eventDetails.capacity ?? ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, capacity: e.target.value ? Number(e.target.value) : undefined } })} placeholder="Unlimited" className={inputCls} style={inputStyle} />
+                    <label className={labelCls} style={labelStyle}>End date</label>
+                    <input type="date" value={formConfig.eventDetails.recurrenceEndDate || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrenceEndDate: e.target.value } })} className={`${inputCls}`} style={inputStyle} />
+                  </div>
+                  )}
                   </div>
                 </div>
 
-                {/* Recurrence */}
-                <div>
-                  <label className={labelCls} style={labelStyle}>Recurrence</label>
-                  <div className="flex gap-1 p-1 rounded-xl" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
+                {/* REPEATS */}
+                <div className="space-y-3">
+                  <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: C.faint }}>Repeats</p>
+                  <div className="grid grid-cols-3 gap-2">
                     {(['once', 'daily', 'weekly'] as const).map(freq => {
                       const active = (formConfig.eventDetails!.recurrence ?? 'once') === freq;
                       const labels = { once: 'One-time', daily: 'Daily', weekly: 'Weekly' };
                       return (
                         <button key={freq} type="button"
                           onClick={() => updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrence: freq } })}
-                          className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-all"
-                          style={{ background: active ? C.segmentActive : 'transparent', color: active ? C.segmentActiveText : C.faint, boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : undefined }}>
+                          className="py-2.5 rounded-xl text-xs font-semibold transition-all"
+                          style={{ background: active ? `${accentColor}14` : C.input, color: active ? accentColor : C.muted }}>
                           {labels[freq]}
                         </button>
                       );
                     })}
                   </div>
-                </div>
-
-                {(formConfig.eventDetails!.recurrence ?? 'once') !== 'once' && (
-                  <div>
-                    <label className={labelCls} style={labelStyle}>End Date</label>
-                    <input type="date"
-                      value={formConfig.eventDetails.recurrenceEndDate || ''}
-                      onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrenceEndDate: e.target.value } })}
-                      className={`${inputCls} [color-scheme:light]`} style={inputStyle} />
-                  </div>
-                )}
 
                 {(formConfig.eventDetails!.recurrence ?? 'once') === 'weekly' && (
                   <div>
@@ -2986,7 +3013,7 @@ const [isSaving, setIsSaving] = useState(false);
                               updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrenceDays: next } });
                             }}
                             className="w-10 h-9 rounded-lg text-xs font-semibold transition-all"
-                            style={{ background: selected ? accentColor : C.input, color: selected ? C.ctaText : C.faint, border: `1px solid ${selected ? accentColor : C.inputBorder}` }}>
+                            style={{ background: selected ? accentColor : C.input, color: selected ? C.ctaText : C.faint }}>
                             {label}
                           </button>
                         );
@@ -2995,19 +3022,6 @@ const [isSaving, setIsSaving] = useState(false);
                   </div>
                 )}
 
-                {/* Location / Meeting link -- full width below grid */}
-                <div className="mt-2">
-                  {(formConfig.eventDetails.eventType ?? 'in-person') === 'virtual' ? (
-                    <>
-                      <label className={labelCls} style={labelStyle}>Meeting Link</label>
-                      <input type="url" value={formConfig.eventDetails.meetingLink || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, meetingLink: e.target.value } })} placeholder="https://meet.google.com/..." className={inputCls} style={inputStyle} />
-                    </>
-                  ) : (
-                    <>
-                      <label className={labelCls} style={labelStyle}>Address / Venue</label>
-                      <input type="text" value={formConfig.eventDetails.location || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, location: e.target.value } })} placeholder="123 Main St, City" className={inputCls} style={inputStyle} />
-                    </>
-                  )}
                 </div>
               </div>
             )}
@@ -3166,11 +3180,12 @@ const [isSaving, setIsSaving] = useState(false);
                 <label className={labelCls} style={labelStyle}>Accent color</label>
                 <div className="flex gap-3 flex-wrap pl-1 pt-1">
                   {([
-                    { key: 'forest',  color: '#006128', label: 'Forest'  },
+                    { key: 'forest',  color: '#00bf63', label: 'Forest'  },
                     { key: 'lime',    color: '#ADEE66', label: 'Lime'    },
                     { key: 'emerald', color: '#10b981', label: 'Emerald' },
                     { key: 'rose',    color: '#f43f5e', label: 'Rose'    },
                     { key: 'amber',   color: '#f59e0b', label: 'Amber'   },
+                    { key: 'ocean',   color: '#3E93FF', label: 'Ocean'   },
                   ] as const).map(({ key, color, label }) => {
                     const isSelected = formConfig.theme === key && !formConfig.customAccent;
                     return (
@@ -3420,7 +3435,7 @@ const [isSaving, setIsSaving] = useState(false);
             {(activeSection === 'curriculum' && formConfig.isCourse) && (
               <div className="space-y-5">
                 <div className="space-y-3">
-                  <div className="p-3 rounded-xl space-y-3" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
+                  <div className="p-3 rounded-xl space-y-3" style={{ background: C.card }}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <label className={labelCls} style={{ ...labelStyle, marginBottom: 0 }}>AI Course Builder</label>
@@ -4431,6 +4446,7 @@ const [isSaving, setIsSaving] = useState(false);
                                 onChange={html => handleUpdateQuestion(q.id, { lesson: { ...q.lesson, body: html } })}
                                 placeholder="Explain the theory behind this question..."
                               />
+                              <div className="grid grid-cols-2 gap-2 items-start">
                               {q.lesson.imageUrl ? (
                                 <div className="relative group rounded-lg overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
                                   <img src={q.lesson.imageUrl} alt="" className="w-full h-28 object-cover" />
@@ -4463,7 +4479,7 @@ const [isSaving, setIsSaving] = useState(false);
                                       handleUpdateQuestion(q.id, { lesson: { ...q.lesson, imageUrl: url } });
                                     }}
                                   />
-                                  <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-60" style={{ border: `1.5px dashed ${C.inputBorder}`, color: C.faint }}>
+                                  <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-70" style={{ background: C.input, color: C.muted }}>
                                     <ImageIcon className="w-3.5 h-3.5" /> Upload image (optional)
                                   </div>
                                 </label>
@@ -4489,11 +4505,12 @@ const [isSaving, setIsSaving] = useState(false);
                                       handleUpdateQuestion(q.id, { lesson: { ...q.lesson, pdfUrl: url, pdfName: file.name, pdfPages: pages } });
                                     } catch (err: any) { showToast(err?.message || 'PDF upload failed. Please try again.'); }
                                   }} />
-                                  <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-60" style={{ border: `1.5px dashed ${C.inputBorder}`, color: C.faint }}>
+                                  <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-70" style={{ background: C.input, color: C.muted }}>
                                     <FileText className="w-3.5 h-3.5" /> Upload PDF (max 20 MB)
                                   </div>
                                 </label>
                               )}
+                              </div>
                               <div className="flex items-center gap-2">
                                 <input
                                   type="text"
@@ -5002,6 +5019,8 @@ const [isSaving, setIsSaving] = useState(false);
               </div>
             )}
 
+          </motion.div>
+          </AnimatePresence>
           </div>
           </div>
         </div>

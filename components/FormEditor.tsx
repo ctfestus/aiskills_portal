@@ -6,10 +6,10 @@ import { useTheme } from '@/components/ThemeProvider';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Loader2, Save, Check, Plus, Trash2, Image as ImageIcon, Sun, Moon,
-  X, MapPin, ArrowUpRight, ChevronDown, ChevronUp, Sparkles,
+  X, MapPin, ArrowUpRight, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Sparkles,
   Building2, GripVertical, BookOpen, Pencil, Monitor, Smartphone, RotateCcw, ExternalLink, Video, Search,
   HelpCircle, CalendarDays, ClipboardList, Share2, CheckCircle2, Zap, Settings, Upload, Download, Link2, FileText,
-  Lock, LockOpen,
+  Lock, LockOpen, Users,
 } from 'lucide-react';
 import { ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import dynamic from 'next/dynamic';
@@ -210,19 +210,21 @@ interface FormConfig {
 const COURSE_CATEGORIES = ['Excel', 'Power BI', 'SQL', 'Tableau', 'AI'] as const;
 
 const buttonThemes: Record<ThemeColor, string> = {
-  forest:  'bg-[#006128] hover:bg-[#004d1e] text-white',
+  forest:  'bg-[#00bf63] hover:bg-[#00994f] text-white',
   lime:    'bg-[#ADEE66] hover:bg-[#9ad94d] text-black',
   emerald: 'bg-emerald-500 hover:bg-emerald-600 text-white',
   rose:    'bg-rose-500 hover:bg-rose-600 text-white',
   amber:   'bg-amber-500 hover:bg-amber-600 text-white',
+  ocean:   'bg-[#3E93FF] hover:bg-[#2f7fe0] text-white',
 };
 
 const themeAccentColors: Record<ThemeColor, string> = {
-  forest:  '#006128',
+  forest:  '#00bf63',
   lime:    '#ADEE66',
   emerald: '#10b981',
   rose:    '#f43f5e',
   amber:   '#f59e0b',
+  ocean:   '#3E93FF',
 };
 
 const SOCIAL_PLATFORMS = [
@@ -406,31 +408,31 @@ const mergeEventFields = (existingFields: FormField[] = [], generatedFields: any
 // --- Design tokens (light / dark) ---
 const FE_LIGHT = {
   page: '#f1f3f5', card: '#ffffff', cardBorder: 'rgba(0,0,0,0.08)', cardShadow: '0 1px 4px rgba(0,0,0,0.06)',
-  input: '#ffffff', inputBorder: '#d1d5db',
+  input: '#f4f5f7', inputBorder: 'rgba(0,0,0,0.08)',
   text: '#111827', muted: '#4b5563', faint: '#9ca3af',
   section: '#ffffff', sectionBorder: 'rgba(0,0,0,0.07)',
   divider: 'rgba(0,0,0,0.07)', pill: '#eef0f3',
   toggleOff: '#d1d5db',
   segmentBg: '#eef0f3', segmentActive: '#ffffff', segmentActiveText: '#111827',
-  groupBg: '#f7f8fa', groupBorder: 'rgba(0,0,0,0.07)',
-  cta: '#006128', ctaText: 'white',
+  groupBg: '#f4f5f7', groupBorder: 'transparent',
+  cta: '#00bf63', ctaText: 'white',
 };
 const FE_DARK = {
-  page: '#080808', card: '#18181b', cardBorder: 'rgba(255,255,255,0.07)', cardShadow: '0 4px 24px rgba(0,0,0,0.40)',
-  input: '#09090b', inputBorder: 'rgba(255,255,255,0.09)',
+  page: '#080808', card: '#1E1F26', cardBorder: 'rgba(255,255,255,0.07)', cardShadow: '0 4px 24px rgba(0,0,0,0.40)',
+  input: 'rgba(255,255,255,0.05)', inputBorder: 'rgba(255,255,255,0.08)',
   text: '#f0f0f0', muted: '#aaa', faint: '#555',
   section: 'transparent', sectionBorder: 'rgba(255,255,255,0.06)',
   divider: 'rgba(255,255,255,0.06)', pill: '#27272a',
   toggleOff: '#3f3f46',
   segmentBg: '#09090b', segmentActive: '#3f3f46', segmentActiveText: '#f0f0f0',
-  groupBg: 'rgba(255,255,255,0.03)', groupBorder: 'rgba(255,255,255,0.06)',
+  groupBg: 'rgba(255,255,255,0.04)', groupBorder: 'transparent',
   cta: '#ADEE66', ctaText: '#111',
 };
 function useFEC() { const { theme } = useTheme(); return theme === 'dark' ? FE_DARK : FE_LIGHT; }
 
 // --- UI primitives ---
-const inputCls = "w-full rounded-lg px-3 py-2 text-sm outline-none transition-colors placeholder:text-zinc-400";
-const labelCls = "block text-[13.5px] mb-1.5";
+const inputCls = "w-full rounded-lg px-3.5 py-2.5 text-sm outline-none transition-colors placeholder:text-zinc-400";
+const labelCls = "block text-[13.5px] font-medium mb-2";
 
 function Toggle({ checked, onChange, accentColor }: { checked: boolean; onChange: () => void; accentColor?: string }) {
   const FE = useFEC();
@@ -637,6 +639,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const [saved, setSaved] = useState(false);
   const [customSlug, setCustomSlug] = useState('');
   const [activeSection, setActiveSection] = useState<string>('info');
+  const [secDir, setSecDir] = useState(1); // carousel slide direction: 1 = forward, -1 = back
+  const goToSection = (id: string, ids: string[]) => {
+    setSecDir(ids.indexOf(id) >= ids.indexOf(activeSection) ? 1 : -1);
+    setActiveSection(id);
+  };
 
   // Add-field state
   const [newFieldLabel, setNewFieldLabel] = useState('');
@@ -1497,63 +1504,16 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     );
   }
 
-  const accentColor = formConfig.customAccent ?? themeAccentColors[formConfig.theme] ?? '#006128';
+  const accentColor = formConfig.customAccent ?? themeAccentColors[formConfig.theme] ?? '#00bf63';
   const inputStyle = { background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.text };
   const labelStyle = { color: FE.faint };
 
   const defaultPoints = DEFAULT_POINTS;
 
   return (
-    <div className="flex" style={{ minHeight: 'calc(100vh - 96px)', background: FE.page, color: FE.text }}>
-      {/* -- Left Nav Sidebar -- */}
-      <nav className="w-52 flex-shrink-0 overflow-y-auto" style={{ background: FE.card, borderRight: `1px solid ${FE.divider}`, height: 'calc(100vh - 96px)', position: 'sticky', top: '96px' }}>
-        <div className="py-2">
-          {([
-            { label: 'Content', items: [
-              { id: 'info', label: 'Basic Info', icon: BookOpen },
-              { id: 'cover', label: 'Cover Image', icon: ImageIcon },
-              ...(contentType === 'course' ? [{ id: 'curriculum', label: 'Questions & Lessons', icon: HelpCircle }] : []),
-              ...(contentType === 'event' ? [{ id: 'fields', label: 'Registration Fields', icon: ClipboardList }] : []),
-            ]},
-            ...(contentType === 'event' ? [{ label: 'Event', items: [
-              { id: 'event_details', label: 'Event Details', icon: CalendarDays },
-              { id: 'speakers', label: 'Speakers', icon: BookOpen },
-              { id: 'visibility', label: 'Visibility', icon: Share2 },
-              { id: 'cohorts', label: 'Cohorts', icon: Building2 },
-            ]}] : []),
-            { label: 'Settings', items: [
-              ...(contentType === 'course' ? [{ id: 'course_settings', label: 'Course Settings', icon: Settings }] : []),
-              { id: 'appearance', label: 'Appearance', icon: Sun },
-              ...(contentType === 'course' ? [{ id: 'points', label: 'Points & Rewards', icon: Zap }] : []),
-            ]},
-            { label: 'Publishing', items: [
-              ...(contentType === 'course' ? [{ id: 'cohorts', label: 'Cohorts', icon: Building2 }] : []),
-              { id: 'share', label: 'Share URL', icon: Share2 },
-              { id: 'submission', label: 'After Submission', icon: CheckCircle2 },
-            ]},
-          ] as { label: string; items: { id: string; label: string; icon: React.ElementType }[] }[]).map(group => (
-            <div key={group.label} className="mb-1">
-              <p className="px-4 pt-3 pb-1.5 text-[10px] font-semibold tracking-widest uppercase" style={{ color: FE.faint }}>{group.label}</p>
-              {group.items.map(item => {
-                const isActive = activeSection === item.id;
-                const Icon = item.icon;
-                return (
-                  <button key={item.id} type="button" onClick={() => setActiveSection(item.id)}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-all"
-                    style={isActive ? { background: `${accentColor}12`, color: accentColor, borderRight: `2px solid ${accentColor}` } : { color: FE.muted }}
-                  >
-                    <Icon className="w-4 h-4 flex-shrink-0" />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </nav>
-
-      {/* -- Content Area -- */}
-      <div className="flex-1 flex flex-col" style={{ minHeight: 'calc(100vh - 96px)' }}>
+    <div className="flex flex-col" style={{ background: 'transparent', color: FE.text, colorScheme: FE === FE_DARK ? 'dark' : 'light' }}>
+      {/* -- Content Area (no left pane -- section nav is the horizontal stepper below) -- */}
+      <div className="flex-1 flex flex-col">
         {/* Save bar */}
         <div className="flex items-center justify-between px-8 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${FE.divider}`, background: FE.card }}>
           <span className="text-xs" style={{ color: FE.faint }}>
@@ -1570,9 +1530,55 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
             {saved ? 'Saved!' : 'Save Changes'}
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar" style={{ background: FE.page }}>
-          <div className="max-w-3xl mx-auto px-4 py-8">
-          <div className="rounded-2xl p-5 space-y-5" style={{ background: FE.card, border: `1px solid ${FE.cardBorder}`, boxShadow: FE.cardShadow }}>
+        <div className="flex-1">
+          <div>
+          <div>
+          {(() => {
+            const navSections = ([
+              { id: 'info', label: 'Basic Info' },
+              { id: 'cover', label: 'Cover Image' },
+              ...(contentType === 'course' ? [{ id: 'curriculum', label: 'Questions & Lessons' }] : []),
+              ...(contentType === 'event' ? [{ id: 'fields', label: 'Registration Fields' }] : []),
+              ...(contentType === 'event' ? [
+                { id: 'event_details', label: 'Event Details' },
+                { id: 'speakers', label: 'Speakers' },
+                { id: 'visibility', label: 'Visibility' },
+              ] : []),
+              ...(contentType === 'course' ? [{ id: 'course_settings', label: 'Course Settings' }] : []),
+              { id: 'appearance', label: 'Appearance' },
+              ...(contentType === 'course' ? [{ id: 'points', label: 'Points & Rewards' }] : []),
+              { id: 'cohorts', label: 'Cohorts' },
+              { id: 'share', label: 'Share URL' },
+              { id: 'submission', label: 'After Submission' },
+            ] as { id: string; label: string }[]);
+            const ids = navSections.map(s => s.id);
+            const i = ids.indexOf(activeSection);
+            return (
+              <div className="flex items-center justify-between gap-4 px-6 sm:px-8 pt-6 pb-5" style={{ borderBottom: `1px solid ${FE.cardBorder}` }}>
+                <div className="min-w-0">
+                  <h2 className="text-lg sm:text-xl font-bold leading-tight truncate" style={{ color: FE.text }}>{navSections[i]?.label}</h2>
+                  <p className="text-[11px] mt-1 font-medium tracking-wide uppercase" style={{ color: FE.faint }}>Step {i + 1} of {ids.length}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button type="button" disabled={i <= 0} onClick={() => goToSection(ids[i - 1], ids)} aria-label="Previous"
+                    className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70 disabled:opacity-30"
+                    style={{ border: `1px solid ${FE.cardBorder}`, color: FE.muted }}>
+                    <ChevronLeft className="w-4 h-4"/>
+                  </button>
+                  <button type="button" disabled={i >= ids.length - 1} onClick={() => goToSection(ids[i + 1], ids)} aria-label="Next"
+                    className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70 disabled:opacity-30"
+                    style={{ border: `1px solid ${FE.cardBorder}`, color: FE.muted }}>
+                    <ChevronRight className="w-4 h-4"/>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+          <AnimatePresence mode="wait" custom={secDir}>
+          <motion.div key={activeSection} custom={secDir}
+            initial={{ opacity: 0, x: secDir * 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: secDir * -28 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            className="px-6 sm:px-8 py-7 space-y-5">
 
             {activeSection === 'info' && (
               <div className="space-y-5">
@@ -1608,140 +1614,153 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
 
             {activeSection === 'event_details' && formConfig.eventDetails?.isEvent && (
               <div className="space-y-5">
-                <div className="mb-3 rounded-xl p-3 space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <label className={labelCls} style={{ ...labelStyle, marginBottom: 0 }}>AI Event Assistant</label>
-                      <p className="text-[10px] mt-1 leading-relaxed" style={{ color: FE.faint }}>
-                        Generate the event setup, suggested registration fields, and confirmation copy from a short brief.
-                      </p>
+                <div className="flex items-center justify-between gap-4 rounded-2xl p-4" style={{ background: `${accentColor}0e` }}>
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${accentColor}1f`, color: accentColor }}>
+                      <Sparkles className="w-4 h-4" />
                     </div>
-                    <div className="px-2 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ background: `${accentColor}18`, color: accentColor }}>
-                      AI
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold" style={{ color: FE.text }}>AI Event Assistant</p>
+                      <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: FE.faint }}>Generate the setup, registration fields, and confirmation copy from a short brief.</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setEventAssistantOpen(true)}
-                    disabled={!!aiLoadingLabel}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-opacity disabled:opacity-50"
-                    style={{ background: accentColor, color: 'white' }}
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Open Event Assistant
+                  <button type="button" onClick={() => setEventAssistantOpen(true)} disabled={!!aiLoadingLabel}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-opacity disabled:opacity-50 flex-shrink-0"
+                    style={{ background: accentColor, color: 'white' }}>
+                    <Sparkles className="w-3.5 h-3.5" /> Open Assistant
                   </button>
                 </div>
-                {/* Event type toggle */}
-                <div className="flex gap-1 p-1 rounded-xl mb-3" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
-                  {(['in-person', 'virtual'] as const).map(type => {
-                    const active = (formConfig.eventDetails!.eventType ?? 'in-person') === type;
-                    return (
-                      <button key={type} type="button"
-                        onClick={() => updateConfig({ eventDetails: { ...formConfig.eventDetails!, eventType: type } })}
-                        className="flex-1 py-1.5 rounded-lg text-xs font-medium capitalize transition-all"
-                        style={{ background: active ? FE.segmentActive : 'transparent', color: active ? FE.segmentActiveText : FE.faint, boxShadow: active ? '0 1px 3px rgba(0,0,0,0.10)' : undefined }}>
-                        {type === 'in-person' ? '📍 In-Person' : '🎥 Virtual'}
-                      </button>
-                    );
-                  })}
+                {/* FORMAT -- type + location */}
+                <div className="space-y-3">
+                  <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: FE.faint }}>Format</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {([
+                      { type: 'in-person', Icon: MapPin, label: 'In-Person', desc: 'A physical venue' },
+                      { type: 'virtual',   Icon: Video,  label: 'Virtual',   desc: 'An online meeting' },
+                    ] as const).map(({ type, Icon, label, desc }) => {
+                      const active = (formConfig.eventDetails!.eventType ?? 'in-person') === type;
+                      return (
+                        <button key={type} type="button"
+                          onClick={() => updateConfig({ eventDetails: { ...formConfig.eventDetails!, eventType: type } })}
+                          className="relative flex flex-col items-start gap-2.5 p-4 rounded-2xl text-left transition-all"
+                          style={{ background: active ? `${accentColor}14` : FE.input }}>
+                          {active && <Check className="w-4 h-4 absolute top-3 right-3" style={{ color: accentColor }} />}
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: active ? `${accentColor}1f` : FE.pill, color: active ? accentColor : FE.muted }}>
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold" style={{ color: active ? accentColor : FE.text }}>{label}</p>
+                            <p className="text-[11px]" style={{ color: FE.faint }}>{desc}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: FE.faint }}>
+                      {(formConfig.eventDetails.eventType ?? 'in-person') === 'virtual' ? <Link2 className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
+                    </span>
+                    {(formConfig.eventDetails.eventType ?? 'in-person') === 'virtual' ? (
+                      <input type="url" value={formConfig.eventDetails.meetingLink || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, meetingLink: e.target.value } })} placeholder="https://meet.google.com/..." className={`${inputCls} pl-9`} style={inputStyle} />
+                    ) : (
+                      <input type="text" value={formConfig.eventDetails.location || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, location: e.target.value } })} placeholder="Address or venue name" className={`${inputCls} pl-9`} style={inputStyle} />
+                    )}
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                {/* SCHEDULE */}
+                <div className="space-y-3">
+                  <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: FE.faint }}>Schedule</p>
+                  <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls} style={labelStyle}>Date</label>
-                    <input type="date" value={formConfig.eventDetails.date || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, date: e.target.value } })} className={`${inputCls} [color-scheme:light]`} style={inputStyle} />
+                    <input type="date" value={formConfig.eventDetails.date || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, date: e.target.value } })} className={`${inputCls}`} style={inputStyle} />
                   </div>
                   <div>
                     <label className={labelCls} style={labelStyle}>Time</label>
-                    <input type="time" value={formConfig.eventDetails.time || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, time: e.target.value } })} className={`${inputCls} [color-scheme:light]`} style={inputStyle} />
+                    <input type="time" value={formConfig.eventDetails.time || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, time: e.target.value } })} className={`${inputCls}`} style={inputStyle} />
                   </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls} style={labelStyle}>Timezone</label>
                     <select value={formConfig.eventDetails.timezone || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, timezone: e.target.value } })} className={inputCls} style={inputStyle}>
                       <option value="">Select timezone…</option>
                       <optgroup label="Africa">
-                        <option value="GMT+0 (Accra)">GMT+0 -- Accra</option>
-                        <option value="GMT+1 (Lagos)">GMT+1 -- Lagos</option>
-                        <option value="GMT+2 (Cairo)">GMT+2 -- Cairo</option>
-                        <option value="GMT+2 (Johannesburg)">GMT+2 -- Johannesburg</option>
-                        <option value="GMT+3 (Nairobi)">GMT+3 -- Nairobi</option>
+                        <option value="GMT+0 (Accra)">GMT+0 - Accra</option>
+                        <option value="GMT+1 (Lagos)">GMT+1 - Lagos</option>
+                        <option value="GMT+2 (Cairo)">GMT+2 - Cairo</option>
+                        <option value="GMT+2 (Johannesburg)">GMT+2 - Johannesburg</option>
+                        <option value="GMT+3 (Nairobi)">GMT+3 - Nairobi</option>
                       </optgroup>
                       <optgroup label="Americas">
-                        <option value="GMT-5 (EST)">GMT-5 -- Eastern (EST)</option>
-                        <option value="GMT-4 (EDT)">GMT-4 -- Eastern Daylight (EDT)</option>
-                        <option value="GMT-6 (CST)">GMT-6 -- Central (CST)</option>
-                        <option value="GMT-5 (CDT)">GMT-5 -- Central Daylight (CDT)</option>
-                        <option value="GMT-7 (MST)">GMT-7 -- Mountain (MST)</option>
-                        <option value="GMT-8 (PST)">GMT-8 -- Pacific (PST)</option>
-                        <option value="GMT-7 (PDT)">GMT-7 -- Pacific Daylight (PDT)</option>
-                        <option value="GMT-9 (AKST)">GMT-9 -- Alaska (AKST)</option>
-                        <option value="GMT-10 (HST)">GMT-10 -- Hawaii (HST)</option>
-                        <option value="GMT-3 (BRT)">GMT-3 -- Brasilia (BRT)</option>
-                        <option value="GMT-5 (COT)">GMT-5 -- Colombia (COT)</option>
-                        <option value="GMT-4 (AMT)">GMT-4 -- Amazon (AMT)</option>
-                        <option value="GMT-3 (ART)">GMT-3 -- Argentina (ART)</option>
+                        <option value="GMT-5 (EST)">GMT-5 - Eastern (EST)</option>
+                        <option value="GMT-4 (EDT)">GMT-4 - Eastern Daylight (EDT)</option>
+                        <option value="GMT-6 (CST)">GMT-6 - Central (CST)</option>
+                        <option value="GMT-5 (CDT)">GMT-5 - Central Daylight (CDT)</option>
+                        <option value="GMT-7 (MST)">GMT-7 - Mountain (MST)</option>
+                        <option value="GMT-8 (PST)">GMT-8 - Pacific (PST)</option>
+                        <option value="GMT-7 (PDT)">GMT-7 - Pacific Daylight (PDT)</option>
+                        <option value="GMT-9 (AKST)">GMT-9 - Alaska (AKST)</option>
+                        <option value="GMT-10 (HST)">GMT-10 - Hawaii (HST)</option>
+                        <option value="GMT-3 (BRT)">GMT-3 - Brasilia (BRT)</option>
+                        <option value="GMT-5 (COT)">GMT-5 - Colombia (COT)</option>
+                        <option value="GMT-4 (AMT)">GMT-4 - Amazon (AMT)</option>
+                        <option value="GMT-3 (ART)">GMT-3 - Argentina (ART)</option>
                       </optgroup>
                       <optgroup label="Europe">
-                        <option value="GMT+0 (GMT)">GMT+0 -- London (GMT)</option>
-                        <option value="GMT+1 (BST)">GMT+1 -- London Daylight (BST)</option>
-                        <option value="GMT+1 (CET)">GMT+1 -- Central Europe (CET)</option>
-                        <option value="GMT+2 (CEST)">GMT+2 -- Central Europe Summer (CEST)</option>
-                        <option value="GMT+2 (EET)">GMT+2 -- Eastern Europe (EET)</option>
-                        <option value="GMT+3 (MSK)">GMT+3 -- Moscow (MSK)</option>
+                        <option value="GMT+0 (GMT)">GMT+0 - London (GMT)</option>
+                        <option value="GMT+1 (BST)">GMT+1 - London Daylight (BST)</option>
+                        <option value="GMT+1 (CET)">GMT+1 - Central Europe (CET)</option>
+                        <option value="GMT+2 (CEST)">GMT+2 - Central Europe Summer (CEST)</option>
+                        <option value="GMT+2 (EET)">GMT+2 - Eastern Europe (EET)</option>
+                        <option value="GMT+3 (MSK)">GMT+3 - Moscow (MSK)</option>
                       </optgroup>
                       <optgroup label="Asia">
-                        <option value="GMT+3 (AST)">GMT+3 -- Arabia (AST)</option>
-                        <option value="GMT+4 (GST)">GMT+4 -- Gulf (GST)</option>
-                        <option value="GMT+5 (PKT)">GMT+5 -- Pakistan (PKT)</option>
-                        <option value="GMT+5:30 (IST)">GMT+5:30 -- India (IST)</option>
-                        <option value="GMT+6 (BST)">GMT+6 -- Bangladesh (BST)</option>
-                        <option value="GMT+7 (WIB)">GMT+7 -- Jakarta (WIB)</option>
-                        <option value="GMT+8 (CST)">GMT+8 -- China/Singapore (CST)</option>
-                        <option value="GMT+8 (PHT)">GMT+8 -- Philippines (PHT)</option>
-                        <option value="GMT+9 (JST)">GMT+9 -- Japan/Korea (JST)</option>
-                        <option value="GMT+5:30 (IST)">GMT+5:30 -- Sri Lanka</option>
+                        <option value="GMT+3 (AST)">GMT+3 - Arabia (AST)</option>
+                        <option value="GMT+4 (GST)">GMT+4 - Gulf (GST)</option>
+                        <option value="GMT+5 (PKT)">GMT+5 - Pakistan (PKT)</option>
+                        <option value="GMT+5:30 (IST)">GMT+5:30 - India (IST)</option>
+                        <option value="GMT+6 (BST)">GMT+6 - Bangladesh (BST)</option>
+                        <option value="GMT+7 (WIB)">GMT+7 - Jakarta (WIB)</option>
+                        <option value="GMT+8 (CST)">GMT+8 - China/Singapore (CST)</option>
+                        <option value="GMT+8 (PHT)">GMT+8 - Philippines (PHT)</option>
+                        <option value="GMT+9 (JST)">GMT+9 - Japan/Korea (JST)</option>
+                        <option value="GMT+5:30 (IST)">GMT+5:30 - Sri Lanka</option>
                       </optgroup>
                       <optgroup label="Pacific">
-                        <option value="GMT+10 (AEST)">GMT+10 -- Sydney (AEST)</option>
-                        <option value="GMT+11 (AEDT)">GMT+11 -- Sydney Daylight (AEDT)</option>
-                        <option value="GMT+12 (NZST)">GMT+12 -- New Zealand (NZST)</option>
+                        <option value="GMT+10 (AEST)">GMT+10 - Sydney (AEST)</option>
+                        <option value="GMT+11 (AEDT)">GMT+11 - Sydney Daylight (AEDT)</option>
+                        <option value="GMT+12 (NZST)">GMT+12 - New Zealand (NZST)</option>
                       </optgroup>
                     </select>
                   </div>
+                  {(formConfig.eventDetails!.recurrence ?? 'once') !== 'once' && (
                   <div>
-                    <label className={labelCls} style={labelStyle}>Capacity (optional)</label>
-                    <input type="number" min={1} value={formConfig.eventDetails.capacity ?? ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, capacity: e.target.value ? Number(e.target.value) : undefined } })} placeholder="Unlimited" className={inputCls} style={inputStyle} />
+                    <label className={labelCls} style={labelStyle}>End date</label>
+                    <input type="date" value={formConfig.eventDetails.recurrenceEndDate || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrenceEndDate: e.target.value } })} className={`${inputCls}`} style={inputStyle} />
+                  </div>
+                  )}
                   </div>
                 </div>
 
-                {/* Recurrence */}
-                <div>
-                  <label className={labelCls} style={labelStyle}>Recurrence</label>
-                  <div className="flex gap-1 p-1 rounded-xl" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
+                {/* REPEATS */}
+                <div className="space-y-3">
+                  <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: FE.faint }}>Repeats</p>
+                  <div className="grid grid-cols-3 gap-2">
                     {(['once', 'daily', 'weekly'] as const).map(freq => {
                       const active = (formConfig.eventDetails!.recurrence ?? 'once') === freq;
                       const labels = { once: 'One-time', daily: 'Daily', weekly: 'Weekly' };
                       return (
                         <button key={freq} type="button"
                           onClick={() => updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrence: freq } })}
-                          className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-all"
-                          style={{ background: active ? FE.segmentActive : 'transparent', color: active ? FE.segmentActiveText : FE.faint, boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : undefined }}>
+                          className="py-2.5 rounded-xl text-xs font-semibold transition-all"
+                          style={{ background: active ? `${accentColor}14` : FE.input, color: active ? accentColor : FE.muted }}>
                           {labels[freq]}
                         </button>
                       );
                     })}
                   </div>
-                </div>
-
-                {(formConfig.eventDetails!.recurrence ?? 'once') !== 'once' && (
-                  <div>
-                    <label className={labelCls} style={labelStyle}>End Date</label>
-                    <input type="date"
-                      value={formConfig.eventDetails.recurrenceEndDate || ''}
-                      onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrenceEndDate: e.target.value } })}
-                      className={`${inputCls} [color-scheme:light]`} style={inputStyle} />
-                  </div>
-                )}
 
                 {(formConfig.eventDetails!.recurrence ?? 'once') === 'weekly' && (
                   <div>
@@ -1760,7 +1779,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               updateConfig({ eventDetails: { ...formConfig.eventDetails!, recurrenceDays: next } });
                             }}
                             className="w-10 h-9 rounded-lg text-xs font-semibold transition-all"
-                            style={{ background: selected ? accentColor : FE.input, color: selected ? FE.ctaText : FE.faint, border: `1px solid ${selected ? accentColor : FE.inputBorder}` }}>
+                            style={{ background: selected ? accentColor : FE.input, color: selected ? FE.ctaText : FE.faint }}>
                             {label}
                           </button>
                         );
@@ -1769,19 +1788,6 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   </div>
                 )}
 
-                {/* Location / Meeting link -- conditional on event type */}
-                <div className="mt-2">
-                  {(formConfig.eventDetails.eventType ?? 'in-person') === 'virtual' ? (
-                    <>
-                      <label className={labelCls} style={labelStyle}>Meeting Link</label>
-                      <input type="url" value={formConfig.eventDetails.meetingLink || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, meetingLink: e.target.value } })} placeholder="https://meet.google.com/..." className={inputCls} style={inputStyle} />
-                    </>
-                  ) : (
-                    <>
-                      <label className={labelCls} style={labelStyle}>Address / Venue</label>
-                      <input type="text" value={formConfig.eventDetails.location || ''} onChange={e => updateConfig({ eventDetails: { ...formConfig.eventDetails!, location: e.target.value } })} placeholder="123 Main St, City" className={inputCls} style={inputStyle} />
-                    </>
-                  )}
                 </div>
               </div>
             )}
@@ -2148,11 +2154,12 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                 <label className={labelCls} style={labelStyle}>Accent color</label>
                 <div className="flex gap-3 flex-wrap pl-1 pt-1" style={{ '--swatch-ring': FE.card } as any}>
                   {([
-                    { key: 'forest',  color: '#006128', label: 'Forest'  },
+                    { key: 'forest',  color: '#00bf63', label: 'Forest'  },
                     { key: 'lime',    color: '#ADEE66', label: 'Lime'    },
                     { key: 'emerald', color: '#10b981', label: 'Emerald' },
                     { key: 'rose',    color: '#f43f5e', label: 'Rose'    },
                     { key: 'amber',   color: '#f59e0b', label: 'Amber'   },
+                    { key: 'ocean',   color: '#3E93FF', label: 'Ocean'   },
                   ] as const).map(({ key, color, label }) => {
                     const isSelected = formConfig.theme === key && !formConfig.customAccent;
                     return (
@@ -2346,7 +2353,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
             {activeSection === 'curriculum' && formConfig.isCourse && (
               <div className="space-y-5">
                 <div className="space-y-3">
-                  <div className="p-3 rounded-xl space-y-3" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
+                  <div className="p-3 rounded-xl space-y-3" style={{ background: FE.card }}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <label className={labelCls} style={{ ...labelStyle, marginBottom: 0 }}>AI Course Builder</label>
@@ -3283,6 +3290,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                   onChange={html => handleUpdateQuestion(q.id, { lesson: { ...q.lesson, body: html } })}
                                   placeholder="Explain the theory behind this question..."
                                 />
+                                <div className="grid grid-cols-2 gap-2 items-start">
                                 {/* Image: upload or URL */}
                                 {q.lesson.imageUrl ? (
                                   <div className="relative group rounded-lg overflow-hidden" style={{ border: `1px solid ${FE.cardBorder}` }}>
@@ -3316,7 +3324,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                         handleUpdateQuestion(q.id, { lesson: { ...q.lesson, imageUrl: url } });
                                       }}
                                     />
-                                    <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-60" style={{ border: `1.5px dashed ${FE.inputBorder}`, color: FE.faint }}>
+                                    <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-70" style={{ background: FE.input, color: FE.muted }}>
                                       <ImageIcon className="w-3.5 h-3.5" /> Upload image (optional)
                                     </div>
                                   </label>
@@ -3342,11 +3350,12 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                         handleUpdateQuestion(q.id, { lesson: { ...q.lesson, pdfUrl: url, pdfName: file.name, pdfPages: pages } });
                                       } catch (err: any) { showToast(err?.message || 'PDF upload failed. Please try again.'); }
                                     }} />
-                                    <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-60" style={{ border: `1.5px dashed ${FE.inputBorder}`, color: FE.faint }}>
+                                    <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-70" style={{ background: FE.input, color: FE.muted }}>
                                       <FileText className="w-3.5 h-3.5" /> Upload PDF (max 20 MB)
                                     </div>
                                   </label>
                                 )}
+                                </div>
                                 <div className="flex items-center gap-2">
                                   <input
                                     type="text"
@@ -3872,6 +3881,8 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
               </div>
             )}
 
+          </motion.div>
+          </AnimatePresence>
           </div>
           </div>
         </div>
@@ -4362,14 +4373,14 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     <button
                       onClick={() => { setBunnyCollection(''); openBunnyPicker(bunnyPickerQId!, bunnySearch, ''); }}
                       className="w-full text-left px-4 py-2 text-xs font-medium transition-colors"
-                      style={{ background: bunnyCollection === '' ? 'rgba(0,97,40,0.1)' : 'transparent', color: bunnyCollection === '' ? '#006128' : FE.muted }}
+                      style={{ background: bunnyCollection === '' ? 'rgba(0,191,99,0.1)' : 'transparent', color: bunnyCollection === '' ? '#00bf63' : FE.muted }}
                     >All videos</button>
                     {bunnyCollections.map(col => (
                       <button
                         key={col.guid}
                         onClick={() => { setBunnyCollection(col.guid); openBunnyPicker(bunnyPickerQId!, bunnySearch, col.guid); }}
                         className="w-full text-left px-4 py-2 text-xs transition-colors"
-                        style={{ background: bunnyCollection === col.guid ? 'rgba(0,97,40,0.1)' : 'transparent', color: bunnyCollection === col.guid ? '#006128' : FE.muted }}
+                        style={{ background: bunnyCollection === col.guid ? 'rgba(0,191,99,0.1)' : 'transparent', color: bunnyCollection === col.guid ? '#00bf63' : FE.muted }}
                       >
                         <span className="block font-medium truncate">{col.name}</span>
                         <span className="text-[10px]" style={{ color: FE.faint }}>{col.videoCount} videos</span>

@@ -1,20 +1,10 @@
-"use client";
+import { loadBadge } from "@/lib/badge";
+import { getTenantSettings } from "@/lib/get-tenant-settings";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
-
-interface BadgeData {
-  studentName:      string;
-  studentAvatarUrl: string | null;
-  studentUsername:  string | null;
-  badgeName:        string;
-  badgeDescription: string;
-  badgeImageUrl:    string | null;
-  badgeIcon:        string;
-  badgeColor:       string;
-  awardedAt:        string;
-}
+// Server component: the badge is fetched and rendered on the server so it
+// appears in the initial HTML (no client-side spinner) -- important for a public
+// page people open from shared links. The page is non-interactive (links only),
+// so it needs no client JS.
 
 function LinkedInIcon() {
   return (
@@ -24,42 +14,29 @@ function LinkedInIcon() {
   );
 }
 
-export default function BadgePage() {
-  const { id } = useParams() as { id: string };
-  const [state, setState] = useState<"loading" | "notfound" | "ready">("loading");
-  const [data, setData]   = useState<BadgeData | null>(null);
+export default async function BadgePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const result = await loadBadge(id);
 
-  useEffect(() => {
-    fetch(`/api/b/${id}`)
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(d => { setData(d); setState("ready"); })
-      .catch(() => setState("notfound"));
-  }, [id]);
-
-  if (state === "loading") {
+  if (result.status === "notfound") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-300" />
-      </div>
-    );
-  }
-
-  if (state === "notfound" || !data) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="text-center p-8 max-w-sm">
-          <div className="text-5xl mb-4">🔍</div>
-          <h1 className="text-xl font-bold text-gray-800 mb-2">Badge Not Found</h1>
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#F2F5FA' }}>
+        <div className="text-center px-8 py-10 max-w-sm rounded-3xl bg-white" style={{ border: '1px solid rgba(0,0,0,0.07)' }}>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Badge Not Found</h1>
           <p className="text-gray-500 text-sm">This badge does not exist or has not been earned.</p>
         </div>
       </div>
     );
   }
 
-  const awardedDate  = new Date(data.awardedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const awardedYear  = new Date(data.awardedAt).getFullYear();
-  const awardedMonth = new Date(data.awardedAt).getMonth() + 1;
-  const pageUrl      = typeof window !== 'undefined' ? window.location.href : '';
+  const data = result.data;
+  const t = await getTenantSettings();
+  const pageUrl = t.appUrl ? `${t.appUrl}/b/${id}` : `/b/${id}`;
+
+  const awarded      = new Date(data.awardedAt);
+  const awardedDate  = awarded.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const awardedYear  = awarded.getFullYear();
+  const awardedMonth = awarded.getMonth() + 1;
 
   const initials = data.studentName
     .split(' ')
@@ -67,61 +44,72 @@ export default function BadgePage() {
     .map(p => p[0]?.toUpperCase() ?? '')
     .join('');
 
-  const liUrl = pageUrl
+  const liUrl = t.appUrl
     ? `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(data.badgeName)}&issueYear=${awardedYear}&issueMonth=${awardedMonth}&certUrl=${encodeURIComponent(pageUrl)}&certId=${encodeURIComponent(id)}`
     : '#';
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-lg mx-auto px-4 py-12 sm:py-20">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#F2F5FA' }}>
+      <div className="w-full max-w-lg rounded-3xl bg-white overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.07)' }}>
+        <div className="px-6 sm:px-10 py-10 sm:py-12">
 
-        {/* Badge */}
-        <div className="flex flex-col items-center text-center">
-          <div
-            className="w-48 h-48 rounded-3xl flex items-center justify-center mb-6"
-            style={{ background: `${data.badgeColor}18`, boxShadow: `0 8px 40px ${data.badgeColor}30` }}
-          >
-            {data.badgeImageUrl
-              ? (
-                <div className="drop-shadow-lg">
-                  <img src={data.badgeImageUrl} alt={data.badgeName} className="w-40 h-40 object-contain" />
-                </div>
-              )
-              : <span className="text-8xl leading-none">{data.badgeIcon}</span>
-            }
+          {/* Badge */}
+          <div className="flex flex-col items-center text-center">
+            <div
+              className="w-44 h-44 rounded-3xl flex items-center justify-center mb-6"
+              style={{ background: `${data.badgeColor}18`, boxShadow: `0 8px 40px ${data.badgeColor}30` }}
+            >
+              {data.badgeImageUrl
+                ? (
+                  <div className="drop-shadow-lg">
+                    <img src={data.badgeImageUrl} alt={data.badgeName} fetchPriority="high" className="w-36 h-36 object-contain" />
+                  </div>
+                )
+                : <span className="text-8xl leading-none">{data.badgeIcon}</span>
+              }
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 leading-tight">{data.badgeName}</h1>
+            <p className="mt-2 text-sm text-gray-500 max-w-xs leading-relaxed">{data.badgeDescription}</p>
+            <span
+              className="mt-4 inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold"
+              style={{ background: `${data.badgeColor}14`, color: data.badgeColor }}
+            >
+              Awarded {awardedDate}
+            </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 leading-tight">{data.badgeName}</h1>
-          <p className="mt-2 text-sm text-gray-500 max-w-xs leading-relaxed">{data.badgeDescription}</p>
-          <p className="mt-3 text-xs text-gray-400">Awarded on {awardedDate}</p>
+
+          <div className="my-8" style={{ height: 1, background: 'rgba(0,0,0,0.07)' }} />
+
+          {/* Student row */}
+          <div className="flex items-center gap-3">
+            <div
+              className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center"
+              style={{ background: data.badgeColor }}
+            >
+              {data.studentAvatarUrl
+                ? <img src={data.studentAvatarUrl} alt={data.studentName} className="w-full h-full object-cover" />
+                : <span className="text-white font-bold text-sm">{initials}</span>
+              }
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-900 leading-tight truncate">{data.studentName}</p>
+              {data.studentUsername && (
+                <a href={`/s/${data.studentUsername}`} className="text-xs hover:underline" style={{ color: data.badgeColor }}>View Profile</a>
+              )}
+            </div>
+            <a
+              href={liUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-3 py-2 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
+              style={{ background: '#f4f5f7' }}
+            >
+              <LinkedInIcon />
+              Add to LinkedIn
+            </a>
+          </div>
+
         </div>
-
-        <div className="my-8 border-t border-gray-100" />
-
-        {/* Student row */}
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 bg-blue-600 flex items-center justify-center">
-            {data.studentAvatarUrl
-              ? <img src={data.studentAvatarUrl} alt={data.studentName} className="w-full h-full object-cover" />
-              : <span className="text-white font-bold text-sm">{initials}</span>
-            }
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 leading-tight truncate">{data.studentName}</p>
-            {data.studentUsername && (
-              <a href={`/s/${data.studentUsername}`} className="text-xs text-blue-600 hover:underline">View Profile</a>
-            )}
-          </div>
-          <a
-            href={liUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-50 transition-colors flex-shrink-0"
-          >
-            <LinkedInIcon />
-            Add to LinkedIn
-          </a>
-        </div>
-
       </div>
     </div>
   );

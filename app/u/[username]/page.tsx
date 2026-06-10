@@ -23,10 +23,10 @@ const LIGHT = {
   cardShadow:  'none',
   coverBg:     'linear-gradient(135deg,#d4edda,#b8dfc4)',
   avatarBg:    '#d4edda',
-  avatarText:  '#006128',
+  avatarText:  '#00bf63',
   avatarBorder:'#FFFFFF',
   name:        '#111',
-  handle:      '#006128',
+  handle:      '#00bf63',
   bio:         '#555',
   pill:        '#F3F3F3',
   pillBorder:  'transparent',
@@ -35,7 +35,7 @@ const LIGHT = {
   statsMuted:  '#888',
   sectionLabel:'#888',
   statusBg:    '#e8f5ee',
-  statusText:  '#006128',
+  statusText:  '#00bf63',
   ctaBg:       '#F3F3F3',
   ctaText:     '#111',
   socialBg:    '#F3F3F3',
@@ -53,12 +53,12 @@ const DARK = {
   navBorder:   'rgba(255,255,255,0.07)',
   navText:     '#aaa',
   logoText:    '#f0f0f0',
-  card:        '#1c1c1c',
+  card:        '#1E1F26',
   cardShadow:  '0 2px 20px rgba(0,0,0,0.4)',
   coverBg:     'linear-gradient(135deg,#1a3a24,#0f2818)',
   avatarBg:    '#1a3a24',
   avatarText:  '#ADEE66',
-  avatarBorder:'#1c1c1c',
+  avatarBorder:'#1E1F26',
   name:        '#f0f0f0',
   handle:      '#ADEE66',
   bio:         '#aaa',
@@ -75,7 +75,7 @@ const DARK = {
   socialBg:    '#242424',
   toggleBg:    '#2a2a2a',
   toggleIcon:  '#ADEE66',
-  emptyCard:   '#1c1c1c',
+  emptyCard:   '#1E1F26',
   footerText:  '#555',
   footerBold:  '#aaa',
 };
@@ -192,7 +192,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: t.page }}>
-      <Loader2 className="w-6 h-6 animate-spin" style={{ color: '#006128' }} />
+      <Loader2 className="w-6 h-6 animate-spin" style={{ color: '#00bf63' }} />
     </div>
   );
 
@@ -201,7 +201,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
       <p className="text-5xl">🤷</p>
       <h1 className="text-xl font-bold" style={{ color: t.name }}>Profile not found</h1>
       <p className="text-sm" style={{ color: t.bio }}>This username doesn&apos;t exist.</p>
-      <Link href="/" className="text-sm underline" style={{ color: '#006128' }}>Go home</Link>
+      <Link href="/" className="text-sm underline" style={{ color: '#00bf63' }}>Go home</Link>
     </div>
   );
 
@@ -227,7 +227,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
 
         <div className="flex items-center gap-3">
           <button onClick={handleCopy} className="flex items-center gap-1.5 text-sm font-medium" style={{ color: t.navText }}>
-            {copied ? <Check className="w-4 h-4" style={{ color: '#006128' }}/> : <Copy className="w-4 h-4"/>}
+            {copied ? <Check className="w-4 h-4" style={{ color: '#00bf63' }}/> : <Copy className="w-4 h-4"/>}
             <span className="hidden sm:inline">{copied ? 'Copied!' : 'Share Profile'}</span>
           </button>
 
@@ -271,14 +271,14 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
             <div className="flex items-center gap-3 flex-wrap">
               {courses.length > 0 && (
                 <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm" style={{ background: statsBg, transition: 'background 0.3s' }}>
-                  <BookOpen className="w-4 h-4" style={{ color: '#006128' }}/>
+                  <BookOpen className="w-4 h-4" style={{ color: '#00bf63' }}/>
                   <span className="font-semibold" style={{ color: t.statsText }}>{courses.length}</span>
                   <span className="text-xs" style={{ color: t.statsMuted }}>{courses.length === 1 ? 'Course' : 'Courses'}</span>
                 </div>
               )}
               {eventForms.length > 0 && (
                 <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm" style={{ background: statsBg, transition: 'background 0.3s' }}>
-                  <CalendarDays className="w-4 h-4" style={{ color: '#006128' }}/>
+                  <CalendarDays className="w-4 h-4" style={{ color: '#00bf63' }}/>
                   <span className="font-semibold" style={{ color: t.statsText }}>{eventForms.length}</span>
                   <span className="text-xs" style={{ color: t.statsMuted }}>{eventForms.length === 1 ? 'Event' : 'Events'}</span>
                 </div>
@@ -321,7 +321,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
                     <div className="flex items-center gap-2 flex-wrap">
                       {profile.name && <h1 className="text-xl sm:text-2xl font-bold leading-tight" style={{ color: t.name }}>{profile.name}</h1>}
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
-                        style={{ background: dark ? 'rgba(173,238,102,0.12)' : 'rgba(0,97,40,0.08)', color: dark ? '#ADEE66' : '#006128' }}>
+                        style={{ background: dark ? 'rgba(173,238,102,0.12)' : 'rgba(0,191,99,0.08)', color: dark ? '#ADEE66' : '#00bf63' }}>
                         <CheckCircle2 style={{ width: 11, height: 11 }}/> Verified
                       </span>
                     </div>
@@ -347,7 +347,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
                       {websiteUrl && (
                         <a href={websiteUrl} target="_blank" rel="noreferrer"
                           className="flex items-center gap-1.5 text-sm font-medium hover:underline"
-                          style={{ color: dark ? '#ADEE66' : '#006128' }}>
+                          style={{ color: dark ? '#ADEE66' : '#00bf63' }}>
                           <Globe style={{ width: 14, height: 14 }}/> {websiteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}
                         </a>
                       )}
@@ -392,7 +392,7 @@ export default function PublicProfile({ params }: { params: Promise<{ username: 
                       </div>
                       <div className="absolute bottom-1 right-1 w-8 h-8 rounded-full flex items-center justify-center"
                         style={{ background: '#ADEE66' }}>
-                        <CheckCircle2 style={{ width: 18, height: 18, color: '#006128' }}/>
+                        <CheckCircle2 style={{ width: 18, height: 18, color: '#00bf63' }}/>
                       </div>
                     </div>
                     <div className="flex-1 min-w-0 pb-1">
@@ -507,7 +507,7 @@ function SectionHeader({ label, count, t }: { label: string; count?: number; t: 
     <div className="flex items-center gap-2">
       <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: t.sectionLabel, transition: 'color 0.3s' }}>{label}</h2>
       {count !== undefined && (
-        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#ADEE66', color: '#006128' }}>{count}</span>
+        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#ADEE66', color: '#00bf63' }}>{count}</span>
       )}
     </div>
   );
@@ -519,7 +519,7 @@ function CourseCard({ index, href, cover, title, cta, config, creatorName, creat
 }) {
   const dark = t === DARK;
   const accent = '#ADEE66';
-  const accentDark = '#006128';
+  const accentDark = '#00bf63';
   const initials = (creatorName || '?').slice(0, 2).toUpperCase();
 
   const questions: any[] = config?.questions || [];
@@ -560,7 +560,7 @@ function CourseCard({ index, href, cover, title, cta, config, creatorName, creat
         {chips.length > 0 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {chips.map((ch, i) => (
-              <div key={i} style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 20, background: dark ? 'rgba(173,238,102,0.08)' : 'rgba(0,97,40,0.06)' }}>
+              <div key={i} style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 10px', borderRadius: 20, background: dark ? 'rgba(173,238,102,0.08)' : 'rgba(0,191,99,0.06)' }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: dark ? '#ffffff' : '#111111' }}>{ch.label}</span>
               </div>
             ))}
@@ -622,7 +622,7 @@ function EventCard({ index, isLast, href, cover, title, description, status, loc
 }) {
   const dark = t === DARK;
   const accent = '#ADEE66';
-  const accentDark = '#006128';
+  const accentDark = '#00bf63';
   const dotColor = dark ? accent : accentDark;
   const lineColor = dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.12)';
   const ev = config?.eventDetails ?? {};
@@ -689,13 +689,13 @@ function EventCard({ index, isLast, href, cover, title, description, status, loc
           {/* 1. Date + event type pills on same row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             {status && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 7, background: dark ? 'rgba(173,238,102,0.12)' : 'rgba(0,97,40,0.08)' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 7, background: dark ? 'rgba(173,238,102,0.12)' : 'rgba(0,191,99,0.08)' }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: dark ? accent : accentDark }}>{status}</span>
               </span>
             )}
             {eventType && (
               <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 10px', borderRadius: 20, background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, backgroundImage: dark ? 'linear-gradient(90deg,#ADEE66,#6ee7b7)' : 'linear-gradient(90deg,#006128,#0ea472)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, backgroundImage: dark ? 'linear-gradient(90deg,#ADEE66,#6ee7b7)' : 'linear-gradient(90deg,#00bf63,#0ea472)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
                   {eventType === 'virtual' ? 'Virtual' : 'In-Person'}
                 </span>
               </span>

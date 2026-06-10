@@ -3,26 +3,26 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/components/ThemeProvider';
-import { ArrowLeft, Plus, Loader2, Save, X, Upload } from 'lucide-react';
+import { ArrowLeft, Plus, Loader2, Save, X, Upload, Check } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/uploadToCloudinary';
 
 const LIGHT_C = {
-  page: '#EEEAE3', card: 'white', cardBorder: 'rgba(0,0,0,0.07)',
-  cardShadow: '0 1px 4px rgba(0,0,0,0.06)', green: '#006128', lime: '#ADEE66',
-  cta: '#006128', ctaText: 'white', text: '#111', muted: '#555', faint: '#888',
-  divider: 'rgba(0,0,0,0.07)', input: '#F8F6F1', pill: '#F4F1EB',
-  nav: 'rgba(238,234,227,0.92)', navBorder: 'rgba(0,0,0,0.07)',
+  page: '#F2F5FA', card: 'white', cardBorder: 'rgba(0,0,0,0.07)',
+  cardShadow: 'none', green: '#00bf63', lime: '#ADEE66',
+  cta: '#00bf63', ctaText: 'white', text: '#111', muted: '#555', faint: '#888',
+  divider: 'rgba(0,0,0,0.07)', input: '#f4f5f7', pill: '#eef0f3',
+  nav: 'rgba(242,245,250,0.92)', navBorder: 'rgba(0,0,0,0.07)',
   errorBg: '#fef2f2', errorText: '#ef4444', errorBorder: '#fecaca',
 };
 const DARK_C = {
-  page: '#111111', card: '#1c1c1c', cardBorder: 'rgba(255,255,255,0.07)',
-  cardShadow: '0 1px 4px rgba(0,0,0,0.40)', green: '#ADEE66', lime: '#ADEE66',
-  cta: '#ADEE66', ctaText: '#111', text: '#f0f0f0', muted: '#aaa', faint: '#555',
-  divider: 'rgba(255,255,255,0.07)', input: '#1a1a1a', pill: '#242424',
-  nav: 'rgba(17,17,17,0.90)', navBorder: 'rgba(255,255,255,0.07)',
+  page: '#17181E', card: '#1E1F26', cardBorder: 'rgba(255,255,255,0.07)',
+  cardShadow: 'none', green: '#00bf63', lime: '#ADEE66',
+  cta: '#00bf63', ctaText: 'white', text: '#f0f0f0', muted: '#aaa', faint: '#555',
+  divider: 'rgba(255,255,255,0.07)', input: 'rgba(255,255,255,0.05)', pill: '#242630',
+  nav: 'rgba(23,24,30,0.90)', navBorder: 'rgba(255,255,255,0.07)',
   errorBg: 'rgba(239,68,68,0.12)', errorText: '#f87171', errorBorder: 'rgba(239,68,68,0.25)',
 };
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
@@ -42,6 +42,7 @@ function lbl(C: typeof LIGHT_C) {
 
 export default function CreateRecordingPage() {
   const C = useC();
+  const isDark = C === DARK_C;
   const router = useRouter();
 
   const [editId, setEditId]   = useState<string | null>(null);
@@ -195,7 +196,7 @@ export default function CreateRecordingPage() {
     <div style={{ minHeight: '100vh', background: C.page }}>
       {/* Nav */}
       <nav style={{ background: C.nav, borderBottom: `1px solid ${C.navBorder}`, position: 'sticky', top: 0, zIndex: 40 }}>
-        <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 16px', height: 56, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ maxWidth: 880, margin: '0 auto', padding: '0 16px', height: 56, display: 'flex', alignItems: 'center', gap: 12 }}>
           <Link href="/dashboard?section=recordings" style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.muted, textDecoration: 'none', fontSize: 14, fontWeight: 500 }}>
             <ArrowLeft size={16}/> Dashboard
           </Link>
@@ -204,183 +205,197 @@ export default function CreateRecordingPage() {
         </div>
       </nav>
 
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 16px 80px' }}>
+      <div style={{ maxWidth: 880, margin: '0 auto', padding: '32px 16px 80px' }}>
         <form onSubmit={handleSubmit}>
 
-          {/* Basic info */}
-          <div style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 20, padding: 24, marginBottom: 16 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 20 }}>Recording Details</h2>
+          {/* -- One wide card, sections separated by hairlines --- */}
+          <div style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, borderRadius: 18, overflow: 'hidden', marginBottom: 16 }}>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={lbl(C)}>Course / Programme Title *</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Microsoft Excel Masterclass"
-                style={inp(C)} required/>
-            </div>
+            {/* Section: Recording Details */}
+            <div style={{ padding: '26px 30px' }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginTop: 0, marginBottom: 18 }}>Recording Details</h2>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={lbl(C)}>Description</label>
-              <textarea value={description} onChange={e => setDescription(e.target.value)}
-                placeholder="Brief overview of the programme or course…"
-                rows={3} style={{ ...inp(C), resize: 'vertical', lineHeight: 1.6 }}/>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={lbl(C)}>Cover Image</label>
-              <input ref={coverRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => {
-                const file = e.target.files?.[0]; if (!file) return;
-                setCoverUploading(true);
-                try { const url = await uploadToCloudinary(file, 'covers'); setCoverImage(url); }
-                catch (err: any) { setError(err?.message || 'Image upload failed.'); }
-                finally { setCoverUploading(false); e.target.value = ''; }
-              }}/>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input type="url" value={coverImage} onChange={e => setCoverImage(e.target.value)}
-                  placeholder="https://example.com/image.jpg" style={{ ...inp(C), flex: 1 }}/>
-                <button type="button" onClick={() => coverRef.current?.click()} disabled={coverUploading}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderRadius: 10,
-                    border: `1px solid ${C.cardBorder}`, background: C.pill, color: C.muted,
-                    fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  <Upload size={14}/>{coverUploading ? 'Uploading…' : 'Upload'}
-                </button>
+              <div style={{ marginBottom: 16 }}>
+                <label style={lbl(C)}>Course / Programme Title *</label>
+                <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Microsoft Excel Masterclass"
+                  style={inp(C)} required/>
               </div>
-              {coverImage.trim() && (
-                <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.cardBorder}`, position: 'relative' }}>
-                  <img src={coverImage.trim()} alt="Cover" style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }}
-                    onError={e => ((e.target as HTMLImageElement).style.display = 'none')}/>
-                  <button type="button" onClick={() => setCoverImage('')}
-                    style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.55)', border: 'none',
-                      borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <X size={14} color="white"/>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={lbl(C)}>Description</label>
+                <textarea value={description} onChange={e => setDescription(e.target.value)}
+                  placeholder="Brief overview of the programme or course…"
+                  rows={3} style={{ ...inp(C), resize: 'vertical', lineHeight: 1.6 }}/>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={lbl(C)}>Cover Image</label>
+                <input ref={coverRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={async e => {
+                  const file = e.target.files?.[0]; if (!file) return;
+                  setCoverUploading(true);
+                  try { const url = await uploadToCloudinary(file, 'covers'); setCoverImage(url); }
+                  catch (err: any) { setError(err?.message || 'Image upload failed.'); }
+                  finally { setCoverUploading(false); e.target.value = ''; }
+                }}/>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input type="url" value={coverImage} onChange={e => setCoverImage(e.target.value)}
+                    placeholder="https://example.com/image.jpg" style={{ ...inp(C), flex: 1 }}/>
+                  <button type="button" onClick={() => coverRef.current?.click()} disabled={coverUploading}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderRadius: 10,
+                      border: 'none', background: C.pill, color: C.muted,
+                      fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    <Upload size={14}/>{coverUploading ? 'Uploading…' : 'Upload'}
                   </button>
                 </div>
-              )}
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={lbl(C)}>Status</label>
-                <select value={status} onChange={e => setStatus(e.target.value as any)}
-                  style={{ ...inp(C), cursor: 'pointer' }}>
-                  <option value="draft">Draft</option>
-                  <option value="published">Published</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Cohort assignment */}
-          <div style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 20, padding: 24, marginBottom: 16 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 4 }}>Assign to Cohorts</h2>
-            <p style={{ fontSize: 13, color: C.faint, marginBottom: 16 }}>Only students in selected cohorts will see these recordings.</p>
-            {cohorts.length === 0
-              ? <p style={{ fontSize: 13, color: C.faint }}>No cohorts found.</p>
-              : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {cohorts.map(c => (
-                    <button type="button" key={c.id} onClick={() => toggleCohort(c.id)}
-                      style={{
-                        padding: '6px 14px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                        border: selectedCohortIds.includes(c.id) ? `2px solid ${C.cta}` : `1px solid ${C.cardBorder}`,
-                        background: selectedCohortIds.includes(c.id) ? C.cta : C.pill,
-                        color: selectedCohortIds.includes(c.id) ? C.ctaText : C.muted,
-                        transition: 'all 0.15s',
-                      }}>
-                      {c.name}
+                {coverImage.trim() && (
+                  <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.cardBorder}`, position: 'relative' }}>
+                    <img src={coverImage.trim()} alt="Cover" style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }}
+                      onError={e => ((e.target as HTMLImageElement).style.display = 'none')}/>
+                    <button type="button" onClick={() => setCoverImage('')}
+                      style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.55)', border: 'none',
+                        borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                      <X size={14} color="white"/>
                     </button>
-                  ))}
-                </div>
-            }
-          </div>
-
-          {/* Recording entries */}
-          <div style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 20, padding: 24, marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-              <div>
-                <h2 style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 2 }}>Recordings</h2>
-                <p style={{ fontSize: 13, color: C.faint }}>Add each session with its week number, topic, and link.</p>
+                  </div>
+                )}
               </div>
-              <button type="button" onClick={addEntry}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10,
-                  background: C.cta, color: C.ctaText, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none' }}>
-                <Plus size={14}/> Add Recording
-              </button>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={lbl(C)}>Status</label>
+                  <select value={status} onChange={e => setStatus(e.target.value as any)}
+                    style={{ ...inp(C), cursor: 'pointer' }}>
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
-            {entries.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '32px 0', color: C.faint, fontSize: 14 }}>
-                No recordings yet. Click &quot;Add Recording&quot; to get started.
-              </div>
-            )}
+            <div style={{ height: 1, background: C.divider }} />
 
-            {weeks.map(week => {
-              const weekEntries = entries.filter(e => e.week === week);
-              return (
-                <div key={week} style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                    Week {week}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {weekEntries.map(entry => (
-                      <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr auto', gap: 8, alignItems: 'center',
-                        background: C.page, borderRadius: 12, padding: '12px 14px', border: `1px solid ${C.cardBorder}` }}>
-                        <div>
-                          <label style={{ ...lbl(C), marginBottom: 4, fontSize: 11 }}>Week</label>
-                          <input type="number" min={1} value={entry.week}
-                            onChange={e => updateEntry(entry.id, 'week', parseInt(e.target.value) || 1)}
-                            style={{ ...inp(C), padding: '7px 10px', fontSize: 13 }}/>
-                        </div>
-                        <div>
-                          <label style={{ ...lbl(C), marginBottom: 4, fontSize: 11 }}>Topic</label>
-                          <input value={entry.topic} onChange={e => updateEntry(entry.id, 'topic', e.target.value)}
-                            placeholder="e.g. Introduction to Pivot Tables"
-                            style={{ ...inp(C), padding: '7px 10px', fontSize: 13 }}/>
-                        </div>
-                        <div>
-                          <label style={{ ...lbl(C), marginBottom: 4, fontSize: 11 }}>Recording URL</label>
-                          <input value={entry.url} onChange={e => updateEntry(entry.id, 'url', e.target.value)}
-                            placeholder="https://..."
-                            style={{ ...inp(C), padding: '7px 10px', fontSize: 13 }}/>
-                        </div>
-                        <button type="button" onClick={() => removeEntry(entry.id)}
-                          style={{ marginTop: 18, padding: 7, borderRadius: 8, border: 'none', background: 'rgba(239,68,68,0.1)',
-                            color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                          <X size={14}/>
+            {/* Section: Cohorts */}
+            <div style={{ padding: '26px 30px' }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginTop: 0, marginBottom: 4 }}>Assign to Cohorts</h2>
+              <p style={{ fontSize: 13, color: C.faint, marginBottom: 16 }}>Only students in selected cohorts will see these recordings.</p>
+              {cohorts.length === 0
+                ? <p style={{ fontSize: 13, color: C.faint }}>No cohorts found.</p>
+                : <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {cohorts.map(c => {
+                      const sel = selectedCohortIds.includes(c.id);
+                      return (
+                        <button type="button" key={c.id} onClick={() => toggleCohort(c.id)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            padding: '7px 14px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                            border: 'none',
+                            background: sel ? C.cta : C.pill,
+                            color: sel ? C.ctaText : C.muted,
+                            transition: 'all 0.15s',
+                          }}>
+                          {sel && <Check size={13}/>}
+                          {c.name}
                         </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
-                </div>
-              );
-            })}
+              }
+            </div>
 
-            {/* Entries not yet grouped (new ones before week is set) */}
-            {entries.filter(e => !weeks.includes(e.week)).map(entry => (
-              <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr auto', gap: 8, alignItems: 'center',
-                background: C.page, borderRadius: 12, padding: '12px 14px', border: `1px solid ${C.cardBorder}`, marginBottom: 10 }}>
+            <div style={{ height: 1, background: C.divider }} />
+
+            {/* Section: Recordings */}
+            <div style={{ padding: '26px 30px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                 <div>
-                  <label style={{ ...lbl(C), marginBottom: 4, fontSize: 11 }}>Week</label>
-                  <input type="number" min={1} value={entry.week}
-                    onChange={e => updateEntry(entry.id, 'week', parseInt(e.target.value) || 1)}
-                    style={{ ...inp(C), padding: '7px 10px', fontSize: 13 }}/>
+                  <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, marginTop: 0, marginBottom: 2 }}>Recordings</h2>
+                  <p style={{ fontSize: 13, color: C.faint }}>Add each session with its week number, topic, and link.</p>
                 </div>
-                <div>
-                  <label style={{ ...lbl(C), marginBottom: 4, fontSize: 11 }}>Topic</label>
-                  <input value={entry.topic} onChange={e => updateEntry(entry.id, 'topic', e.target.value)}
-                    placeholder="e.g. Introduction to Pivot Tables"
-                    style={{ ...inp(C), padding: '7px 10px', fontSize: 13 }}/>
-                </div>
-                <div>
-                  <label style={{ ...lbl(C), marginBottom: 4, fontSize: 11 }}>Recording URL</label>
-                  <input value={entry.url} onChange={e => updateEntry(entry.id, 'url', e.target.value)}
-                    placeholder="https://..."
-                    style={{ ...inp(C), padding: '7px 10px', fontSize: 13 }}/>
-                </div>
-                <button type="button" onClick={() => removeEntry(entry.id)}
-                  style={{ marginTop: 18, padding: 7, borderRadius: 8, border: 'none', background: 'rgba(239,68,68,0.1)',
-                    color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                  <X size={14}/>
+                <button type="button" onClick={addEntry}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10,
+                    background: C.cta, color: C.ctaText, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none' }}>
+                  <Plus size={14}/> Add Recording
                 </button>
               </div>
-            ))}
+
+              {entries.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '32px 0', color: C.faint, fontSize: 14 }}>
+                  No recordings yet. Click &quot;Add Recording&quot; to get started.
+                </div>
+              )}
+
+              {weeks.map(week => {
+                const weekEntries = entries.filter(e => e.week === week);
+                return (
+                  <div key={week} style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+                      Week {week}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {weekEntries.map(entry => (
+                        <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr auto', gap: 8, alignItems: 'center',
+                          background: C.pill, borderRadius: 12, padding: '12px 14px' }}>
+                          <div>
+                            <label style={{ ...lbl(C), marginBottom: 4, fontSize: 11 }}>Week</label>
+                            <input type="number" min={1} value={entry.week}
+                              onChange={e => updateEntry(entry.id, 'week', parseInt(e.target.value) || 1)}
+                              style={{ ...inp(C), background: C.card, padding: '7px 10px', fontSize: 13 }}/>
+                          </div>
+                          <div>
+                            <label style={{ ...lbl(C), marginBottom: 4, fontSize: 11 }}>Topic</label>
+                            <input value={entry.topic} onChange={e => updateEntry(entry.id, 'topic', e.target.value)}
+                              placeholder="e.g. Introduction to Pivot Tables"
+                              style={{ ...inp(C), background: C.card, padding: '7px 10px', fontSize: 13 }}/>
+                          </div>
+                          <div>
+                            <label style={{ ...lbl(C), marginBottom: 4, fontSize: 11 }}>Recording URL</label>
+                            <input value={entry.url} onChange={e => updateEntry(entry.id, 'url', e.target.value)}
+                              placeholder="https://..."
+                              style={{ ...inp(C), background: C.card, padding: '7px 10px', fontSize: 13 }}/>
+                          </div>
+                          <button type="button" onClick={() => removeEntry(entry.id)}
+                            style={{ marginTop: 18, padding: 7, borderRadius: 8, border: 'none', background: 'rgba(239,68,68,0.1)',
+                              color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                            <X size={14}/>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Entries not yet grouped (new ones before week is set) */}
+              {entries.filter(e => !weeks.includes(e.week)).map(entry => (
+                <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr auto', gap: 8, alignItems: 'center',
+                  background: C.pill, borderRadius: 12, padding: '12px 14px', marginBottom: 10 }}>
+                  <div>
+                    <label style={{ ...lbl(C), marginBottom: 4, fontSize: 11 }}>Week</label>
+                    <input type="number" min={1} value={entry.week}
+                      onChange={e => updateEntry(entry.id, 'week', parseInt(e.target.value) || 1)}
+                      style={{ ...inp(C), background: C.card, padding: '7px 10px', fontSize: 13 }}/>
+                  </div>
+                  <div>
+                    <label style={{ ...lbl(C), marginBottom: 4, fontSize: 11 }}>Topic</label>
+                    <input value={entry.topic} onChange={e => updateEntry(entry.id, 'topic', e.target.value)}
+                      placeholder="e.g. Introduction to Pivot Tables"
+                      style={{ ...inp(C), background: C.card, padding: '7px 10px', fontSize: 13 }}/>
+                  </div>
+                  <div>
+                    <label style={{ ...lbl(C), marginBottom: 4, fontSize: 11 }}>Recording URL</label>
+                    <input value={entry.url} onChange={e => updateEntry(entry.id, 'url', e.target.value)}
+                      placeholder="https://..."
+                      style={{ ...inp(C), background: C.card, padding: '7px 10px', fontSize: 13 }}/>
+                  </div>
+                  <button type="button" onClick={() => removeEntry(entry.id)}
+                    style={{ marginTop: 18, padding: 7, borderRadius: 8, border: 'none', background: 'rgba(239,68,68,0.1)',
+                      color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                    <X size={14}/>
+                  </button>
+                </div>
+              ))}
+            </div>
+
           </div>
 
           {/* Error */}

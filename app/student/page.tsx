@@ -313,26 +313,20 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
     return () => document.removeEventListener('mousedown', h);
   }, [open]);
 
-  const iconBgBlue   = isDark ? 'rgba(62,147,255,0.15)'  : 'rgba(14,9,221,0.08)';
-  const iconBgAmber  = isDark ? 'rgba(245,158,11,0.18)'  : 'rgba(245,158,11,0.10)';
-  const iconBgSubtle = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
-
-  const menuItem = (href: string, Icon: React.ElementType, label: string, iconColor: string, iconBg: string, external?: boolean) => (
+  const menuItem = (href: string, Icon: React.ElementType, label: string, external?: boolean) => (
     <Link key={label} href={href} onClick={() => setOpen(false)}
       {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
       className="profile-menu flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all"
-      style={{ color: C.muted, textDecoration: 'none' }}
+      style={{ color: C.text, textDecoration: 'none' }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.pill; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-      <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: iconBg }}>
-        <Icon className="w-3.5 h-3.5" style={{ color: iconColor }}/>
-      </div>
+      <Icon className="w-[18px] h-[18px] flex-shrink-0" style={{ color: C.text }}/>
       {label}
     </Link>
   );
 
   return (
-    <div className="relative profile-menu">
+    <div className="relative profile-menu" style={{ fontFamily: "'Google Sans Text', sans-serif" }}>
       <button onClick={() => setOpen(o => !o)}
         className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-all hover:shadow-md"
         style={{ background: C.card, borderColor: C.cardBorder }}>
@@ -354,7 +348,7 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
             className="profile-menu absolute right-0 top-full mt-2 w-64 rounded-2xl overflow-hidden z-50"
             style={{
               background: C.card,
-              fontFamily: "'Inter', sans-serif",
+              fontFamily: "'Google Sans Text', sans-serif",
               boxShadow: isDark
                 ? '0 20px 60px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.07)'
                 : '0 20px 60px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.06)',
@@ -379,13 +373,13 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
             {/* Navigation items */}
             <div className="p-2">
               {(profile?.role === 'instructor' || profile?.role === 'admin') &&
-                menuItem('/dashboard', BarChart3, 'Instructor Dashboard', C.faint, iconBgSubtle)}
+                menuItem('/dashboard', BarChart3, 'Instructor Dashboard')}
               {profile?.role === 'staff' &&
-                menuItem('/dashboard#events', LayoutDashboard, 'Staff Dashboard', C.faint, iconBgSubtle)}
-              {menuItem('/student#courses', GraduationCap, 'My Learning', C.faint, iconBgSubtle)}
-              {menuItem('/student#certificates', Award, 'My Certificates', C.faint, iconBgSubtle)}
-              {username && menuItem(`/s/${username}`, User, 'View Profile', C.faint, iconBgSubtle, true)}
-              {menuItem('/settings', Settings, 'Settings', C.faint, iconBgSubtle)}
+                menuItem('/dashboard#events', LayoutDashboard, 'Staff Dashboard')}
+              {menuItem('/student#courses', GraduationCap, 'My Learning')}
+              {menuItem('/student#certificates', Award, 'My Certificates')}
+              {username && menuItem(`/s/${username}`, User, 'View Profile', true)}
+              {menuItem('/settings', Settings, 'Settings')}
             </div>
 
             {/* Sign out */}
@@ -395,10 +389,7 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
                 style={{ color: '#ef4444' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = C.signOutHover; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: 'rgba(239,68,68,0.10)' }}>
-                  <LogOut className="w-3.5 h-3.5"/>
-                </div>
+                <LogOut className="w-[18px] h-[18px] flex-shrink-0"/>
                 Sign out
               </button>
             </div>
@@ -1592,12 +1583,10 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: isPast ? 0.6 : 1, y: 0 }}
         transition={{ delay: index * 0.07, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        className="flex-1"
+        className="flex flex-col gap-2.5"
       >
-        <div className="rounded-2xl overflow-hidden flex flex-col sm:flex-row sm:gap-4 sm:p-4"
-          style={{ background: C.card }}>
-          {/* Cover image -- full-width banner on mobile, 165x165 fixed square on sm+ */}
-          <div className="w-full h-40 flex-shrink-0 sm:w-[165px] sm:h-[165px] sm:rounded-2xl overflow-hidden"
+          {/* Cover */}
+          <div className="relative w-full aspect-video rounded-xl overflow-hidden flex-shrink-0"
             style={{ background: C.thumbBg }}>
             {showImage
               ? <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover"
@@ -1608,8 +1597,6 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
             }
           </div>
 
-          {/* Text content */}
-          <div className="flex-1 min-w-0 flex flex-col gap-2 justify-center p-4 sm:p-0">
             {/* Row 1: Date·Time pill + Mode pill */}
             <div className="flex items-center gap-2 flex-wrap">
               {(dateLabel || timeLabel) && (
@@ -1754,61 +1741,48 @@ function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
                 )}
               </>
             )}
-          </div>
-        </div>
       </motion.div>
     );
 
     return (
-      <div className="relative flex gap-3" style={{ paddingBottom: isLast ? 0 : 20 }}>
-        {/* Dot */}
-        <div className="flex-shrink-0" style={{ width: 12, paddingTop: 26 }}>
-          <div className="w-3 h-3 rounded-full border-2"
-            style={{ borderColor: isPast ? '#ccc' : C.green, background: isPast ? '#e0e0e0' : C.lime }}/>
-        </div>
-        {/* Dashed line -- absolutely positioned so bottom:0 covers the paddingBottom gap */}
-        {!isLast && (
-          <div style={{
-            position: 'absolute',
-            left: 5,   // (12px column - 2px line) / 2 = 5px -> perfectly centred on dot
-            top: 42,   // paddingTop(26) + dot(12) + gap(4)
-            bottom: 0, // extends into paddingBottom, connecting to next card's dot
-            width: 2,
-            background: 'repeating-linear-gradient(to bottom, rgba(128,128,128,0.45) 0px, rgba(128,128,128,0.45) 5px, transparent 5px, transparent 10px)',
-          }}/>
-        )}
-        {/* Card */}
-        {item.source === 'cohort' && item.formSlug
-          ? <Link href={`/${item.formSlug}`} className="flex-1 hover:opacity-90 transition-opacity" style={{ textDecoration: 'none' }}>{card}</Link>
-          : <div className="flex-1">{card}</div>
-        }
-      </div>
+      item.source === 'cohort' && item.formSlug
+        ? <Link href={`/${item.formSlug}`} className="flex-shrink-0 w-[270px] snap-start hover:opacity-90 transition-opacity" style={{ textDecoration: 'none' }}>{card}</Link>
+        : <div className="flex-shrink-0 w-[270px] snap-start">{card}</div>
     );
   };
 
-  const orderedEvents = [
-    ...upcoming,
-    ...past.slice().reverse(), // past sorted most-recent-past first
-  ];
-
-  if (!orderedEvents.length) return (
+  if (!upcoming.length && !past.length) return (
     <EmptyState icon={CalendarDays} title="No upcoming events" body="Your upcoming events will appear here." />
   );
 
+  const EventCarousel = ({ title, items, past: isPastRow }: { title: string; items: any[]; past?: boolean }) => {
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 290, behavior: 'smooth' });
+    return (
+      <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: C.text }}>{title}</h3>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+              style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}><ChevronLeft className="w-4 h-4"/></button>
+            <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+              style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}><ChevronRight className="w-4 h-4"/></button>
+          </div>
+        </div>
+        <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x items-start"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          {items.map((item, i) => <EventCard key={item.id} item={item} past={isPastRow} index={i} />)}
+        </div>
+      </section>
+    );
+  };
+
   return (
-    <div>
-      {orderedEvents.map((item, i) => {
-        const isPastItem = isEventPast(item);
-        return (
-          <EventCard
-            key={item.id}
-            item={item}
-            past={isPastItem}
-            index={i}
-            isLast={i === orderedEvents.length - 1}
-          />
-        );
-      })}
+    <div className="space-y-6">
+      {upcoming.length > 0 && <EventCarousel title="Upcoming" items={upcoming} />}
+      {past.length > 0 && <EventCarousel title="Past" items={past.slice().reverse()} past />}
     </div>
   );
 }
@@ -3294,75 +3268,54 @@ function AnnouncementCard({ ann, C, react, onToggleReaction, onClick }: {
   onClick: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
-  const plainText = (ann.content ?? '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ').trim();
-  const bodyExcerpt = plainText.length > 380 ? plainText.slice(0, 380) + '...' : plainText;
-  const excerpt = ann.subtitle ? ann.subtitle : bodyExcerpt;
-  const pub = new Date(ann.published_at);
-  const dateStr = pub.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   const authorName = ann.author?.full_name || 'Admin';
+  const authorInitials = authorName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
   const hasVideo = !!ann.youtube_url;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
+    <div
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="rounded-2xl overflow-hidden cursor-pointer"
-      style={{ background: C.card, boxShadow: isDark ? 'none' : (hovered ? C.hoverShadow : C.cardShadow), transition: 'box-shadow 0.2s' }}>
-      <div className="flex" style={{ minHeight: 230 }}>
-        {/* Thumbnail - left */}
-        <div style={{ width: 300, flexShrink: 0, background: C.lime, minHeight: 230 }}>
-          <AnnThumbnail ann={ann} isVideo={hasVideo}/>
-        </div>
-        {/* Content - right */}
-        <div className="flex-1 p-4 min-w-0 flex flex-col gap-1.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            {ann.is_pinned && (
-              <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
-                style={{ background: `${C.green}18`, color: C.green }}>Pinned</span>
-            )}
-            {hasVideo && (
-              <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
-                style={{ background: `${C.green}10`, color: C.green }}>Video</span>
-            )}
-            <span className="text-[13px]" style={{ color: C.faint }}>{dateStr}</span>
-          </div>
-          <h3 className="font-bold"
-            style={{ fontSize: 17, lineHeight: 1.3, color: C.text, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {ann.title}
-          </h3>
-          {excerpt && (
-            <p style={{ fontSize: 15, lineHeight: 1.4, color: C.muted, display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-              {excerpt}
-            </p>
-          )}
-          <div className="mt-auto pt-1 flex items-center justify-end">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={e => { e.stopPropagation(); onToggleReaction('like'); }}
-                className="flex items-center gap-1 text-xs"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: react.liked ? '#2563eb' : C.faint, padding: 0 }}>
-                <ThumbsUp className="w-3.5 h-3.5" style={{ fill: react.liked ? '#2563eb' : 'none' }}/>
-                {react.likeCount > 0 && <span>{react.likeCount}</span>}
-              </button>
-              <button
-                onClick={e => { e.stopPropagation(); onToggleReaction('bookmark'); }}
-                className="flex items-center gap-1 text-xs"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: react.bookmarked ? C.green : C.faint, padding: 0 }}>
-                <Bookmark className="w-3.5 h-3.5" style={{ fill: react.bookmarked ? C.green : 'none' }}/>
-              </button>
-            </div>
-          </div>
-        </div>
+      className="flex-shrink-0 snap-start cursor-pointer flex flex-col"
+      style={{ width: 300, padding: 8, borderRadius: 14, boxSizing: 'border-box', background: hovered ? C.pill : 'transparent', transition: 'background 0.2s' }}>
+      {/* Thumbnail */}
+      <div className="relative rounded-xl overflow-hidden w-full" style={{ aspectRatio: '16 / 9', background: C.lime }}>
+        <AnnThumbnail ann={ann} isVideo={hasVideo}/>
+        {ann.is_pinned && (
+          <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-md"
+            style={{ background: 'rgba(0,0,0,0.65)', color: 'white' }}>Pinned</span>
+        )}
       </div>
-    </motion.div>
+      {/* Meta row -- YouTube style: avatar + title/author/date */}
+      <div className="mt-3 flex gap-3 min-w-0">
+        <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden text-xs font-bold"
+          style={{ background: C.green, color: '#fff' }}>
+          {ann.author?.avatar_url
+            ? <img src={ann.author.avatar_url} alt={authorName} className="w-full h-full object-cover"/>
+            : authorInitials}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.35, color: C.text }}>{ann.title}</h3>
+          <div className="flex items-center gap-2 text-[13px] mt-1" style={{ color: C.faint }}>
+            <span>{authorName}</span>
+            {react.likeCount > 0 && (
+              <>
+                <span>&middot;</span>
+                <span>{react.likeCount} {react.likeCount === 1 ? 'like' : 'likes'}</span>
+              </>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={e => { e.stopPropagation(); onToggleReaction('bookmark'); }}
+          aria-label={react.bookmarked ? 'Saved' : 'Save'}
+          className="flex-shrink-0 self-start transition-opacity hover:opacity-70"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: react.bookmarked ? C.green : C.faint, padding: 2 }}>
+          <Bookmark className="w-4 h-4" style={{ fill: react.bookmarked ? C.green : 'none' }}/>
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -3401,7 +3354,7 @@ function AnnouncementModal({ ann, C, react, onToggleReaction, onClose, otherItem
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 24 }}
         className="w-full rounded-2xl overflow-hidden relative"
-        style={{ maxWidth: 1040, background: C.card, boxShadow: '0 32px 80px rgba(0,0,0,0.35)', margin: 'auto' }}>
+        style={{ maxWidth: 640, background: C.card, boxShadow: '0 32px 80px rgba(0,0,0,0.35)', margin: 'auto' }}>
 
         {/* Close */}
         <button onClick={onClose}
@@ -3411,16 +3364,16 @@ function AnnouncementModal({ ann, C, react, onToggleReaction, onClose, otherItem
         </button>
 
         {/* Header: pinned + title + author */}
-        <div className="p-6 md:p-8 pb-5">
+        <div className="p-5 md:p-6 pb-4">
           {ann.is_pinned && (
             <span className="inline-block text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full mb-3"
               style={{ background: `${C.green}18`, color: C.green }}>Pinned</span>
           )}
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.02em', color: C.text, marginBottom: '0.9rem' }}>
+          <h1 style={{ fontSize: '1.4rem', fontWeight: 800, lineHeight: 1.25, letterSpacing: '-0.02em', color: C.text, marginBottom: '0.8rem' }}>
             {ann.title}
           </h1>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden text-sm font-bold"
+            <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden text-sm font-bold"
               style={{ background: C.green, color: '#fff' }}>
               {ann.author?.avatar_url
                 ? <img src={ann.author.avatar_url} alt={authorName} className="w-full h-full object-cover"/>
@@ -3436,14 +3389,14 @@ function AnnouncementModal({ ann, C, react, onToggleReaction, onClose, otherItem
         {/* Cover image -- full width, edge to edge */}
         {ann.cover_image && (
           <img src={ann.cover_image} alt={ann.title}
-            style={{ width: '100%', display: 'block', maxHeight: 420, objectFit: 'cover' }}
+            style={{ width: '100%', display: 'block', aspectRatio: '16/9', maxHeight: 260, objectFit: 'cover' }}
             onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}/>
         )}
 
         {/* Body */}
-        <div className="p-6 md:p-8">
+        <div className="p-5 md:p-6">
           {embedId && (
-            <div className="mb-6" style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', paddingBottom: '56.25%', height: 0 }}>
+            <div className="mb-5" style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', paddingBottom: '56.25%', height: 0 }}>
               <iframe
                 src={`https://www.youtube.com/embed/${embedId}`}
                 title={ann.title}
@@ -3454,14 +3407,14 @@ function AnnouncementModal({ ann, C, react, onToggleReaction, onClose, otherItem
             </div>
           )}
           {ann.content && (
-            <div className="rich-content compact" style={{ color: C.text, fontSize: 17 }}
+            <div className="rich-content compact" style={{ color: C.text, fontSize: 15.5 }}
               dangerouslySetInnerHTML={{ __html: renderAnnouncementContent(ann.content) }}
             />
           )}
-          <div className="flex items-center gap-3 mt-8 pt-5" style={{ borderTop: `1px solid ${C.divider}` }}>
+          <div className="flex items-center gap-3 mt-6 pt-5" style={{ borderTop: `1px solid ${C.divider}` }}>
             <button
               onClick={() => onToggleReaction('like')}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-base font-semibold transition-all"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
               style={{ background: react.liked ? '#2563eb18' : C.pill, border: 'none', cursor: 'pointer', color: react.liked ? '#2563eb' : C.muted }}>
               <ThumbsUp className="w-4 h-4" style={{ fill: react.liked ? '#2563eb' : 'none' }}/>
               {react.liked ? 'Liked' : 'Like'}
@@ -3469,7 +3422,7 @@ function AnnouncementModal({ ann, C, react, onToggleReaction, onClose, otherItem
             </button>
             <button
               onClick={() => onToggleReaction('bookmark')}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-base font-semibold transition-all"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
               style={{ background: react.bookmarked ? `${C.green}18` : C.pill, border: 'none', cursor: 'pointer', color: react.bookmarked ? C.green : C.muted }}>
               <Bookmark className="w-4 h-4" style={{ fill: react.bookmarked ? C.green : 'none' }}/>
               {react.bookmarked ? 'Saved' : 'Save'}
@@ -3479,8 +3432,8 @@ function AnnouncementModal({ ann, C, react, onToggleReaction, onClose, otherItem
 
         {/* More posts */}
         {otherItems.length > 0 && (
-          <div className="px-6 md:px-8 pb-8" style={{ borderTop: `1px solid ${C.divider}` }}>
-            <p className="text-sm font-bold uppercase tracking-wide mt-6 mb-4" style={{ color: C.faint }}>More Posts</p>
+          <div className="px-5 md:px-6 pb-6" style={{ borderTop: `1px solid ${C.divider}` }}>
+            <p className="text-xs font-bold uppercase tracking-wide mt-5 mb-3" style={{ color: C.faint }}>More Posts</p>
             <div className="space-y-3">
               {otherItems.slice(0, 3).map(item => {
                 const embedId = item.youtube_url?.match(/(?:v=|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/)?.[1];
@@ -3531,6 +3484,8 @@ function AnnouncementsSection({ userId: userIdProp, C }: { userId?: string; C: t
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<any>(null);
   const [acting, setActing]   = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
 
   useEffect(() => {
     const load = async () => {
@@ -3609,18 +3564,21 @@ function AnnouncementsSection({ userId: userIdProp, C }: { userId?: string; C: t
   }
 
   if (loading) return (
-    <div className="space-y-3 max-w-5xl">
-      {[0, 1, 2].map(i => (
-        <div key={i} className="rounded-2xl overflow-hidden flex" style={{ background: C.card, minHeight: 230 }}>
-          <div style={{ width: 300, flexShrink: 0, background: C.skeleton }} className="animate-pulse"/>
-          <div className="flex-1 p-4 space-y-2">
-            <Sk h={11} w="30%"/>
-            <Sk h={15} w="75%"/>
-            <Sk h={11}/><Sk h={11} w="60%"/>
+    <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+      <Sk h={22} w="180px"/>
+      <div className="flex gap-4 overflow-hidden mt-4">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="flex-shrink-0" style={{ width: 250 }}>
+            <div className="w-full rounded-xl overflow-hidden" style={{ aspectRatio: '16 / 9', background: C.skeleton }}/>
+            <div className="mt-2.5 space-y-2">
+              <Sk h={11} w="30%"/>
+              <Sk h={14} w="85%"/>
+              <Sk h={11}/><Sk h={11} w="60%"/>
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </section>
   );
 
   if (!items.length) return (
@@ -3629,19 +3587,41 @@ function AnnouncementsSection({ userId: userIdProp, C }: { userId?: string; C: t
 
   return (
     <>
-      <p className="text-base mb-6" style={{ color: C.muted }}>Explore the latest in tech, AI trends, data insights, and actionable tips to level up your career.</p>
-      <div className="space-y-3 max-w-5xl">
-        {items.map(ann => (
-          <AnnouncementCard
-            key={ann.id}
-            ann={ann}
-            C={C}
-            react={reactState[ann.id] ?? { liked: false, bookmarked: false, likeCount: 0, bookmarkCount: 0 }}
-            onToggleReaction={type => toggleReaction(ann.id, type)}
-            onClick={() => setSelected(ann)}
-          />
-        ))}
-      </div>
+      <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+        {/* Header: title + nav arrows */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h3 className="text-xl sm:text-2xl font-bold leading-tight" style={{ color: C.text }}>Tech Blog</h3>
+            <p className="text-sm mt-1" style={{ color: C.muted }}>The latest in tech, AI trends, data insights, and tips to level up your career.</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+              style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+              <ChevronLeft className="w-4 h-4"/>
+            </button>
+            <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+              style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+              <ChevronRight className="w-4 h-4"/>
+            </button>
+          </div>
+        </div>
+        {/* Carousel */}
+        <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          {items.map(ann => (
+            <AnnouncementCard
+              key={ann.id}
+              ann={ann}
+              C={C}
+              react={reactState[ann.id] ?? { liked: false, bookmarked: false, likeCount: 0, bookmarkCount: 0 }}
+              onToggleReaction={type => toggleReaction(ann.id, type)}
+              onClick={() => setSelected(ann)}
+            />
+          ))}
+        </div>
+      </section>
       <AnimatePresence>
         {selected && (
           <AnnouncementModal
@@ -4841,49 +4821,30 @@ function BadgeRow({ title, badges, earnedIds, certIdMap, badgeUuidMap, appUrl, a
                     ? <span className="text-5xl leading-none">{b.icon}</span>
                     : <div className="w-24 h-24 rounded-full flex items-center justify-center" style={{ background: C.pill }}><Lock className="w-8 h-8" style={{ color: C.faint }}/></div>}
               </div>
-              <div className="space-y-1">
-                <p className="text-[15px] font-bold leading-tight" style={{ color: C.text }}>{b.name}</p>
-                <p className="text-xs leading-snug line-clamp-3" style={{ color: C.muted }}>{b.description}</p>
+              <p className="text-[15px] font-bold leading-tight" style={{ color: C.text }}>{b.name}</p>
+              <div className="flex items-center justify-center gap-2 mt-1">
+                {earned && b.image_url && (
+                  <button onClick={() => onDownload(b)} title="Download badge"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center transition-opacity hover:opacity-70"
+                    style={{ background: C.pill, color: C.muted }}>
+                    <Download className="w-3.5 h-3.5"/>
+                  </button>
+                )}
+                {earned && (liCertUrl || liPostUrl) ? (
+                  <a href={liCertUrl || liPostUrl || '#'} target="_blank" rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-opacity hover:opacity-90"
+                    style={{ background: '#0A66C2', color: '#fff' }}>
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    Add to LinkedIn
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold cursor-not-allowed"
+                    style={{ background: C.pill, color: C.faint }}>
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    Add to LinkedIn
+                  </span>
+                )}
               </div>
-              {earned && (
-                <div className="flex items-center justify-center gap-2 mt-1">
-                  {b.image_url && (
-                    <button onClick={() => onDownload(b)} title="Download badge"
-                      className="w-8 h-8 rounded-lg flex items-center justify-center transition-opacity hover:opacity-70"
-                      style={{ background: C.pill, color: C.muted }}>
-                      <Download className="w-3.5 h-3.5"/>
-                    </button>
-                  )}
-                  <div className="relative">
-                    <button onClick={() => setLiOpen(liOpen === b.id ? null : b.id)} title="Share on LinkedIn"
-                      className="w-8 h-8 rounded-lg flex items-center justify-center transition-opacity hover:opacity-80"
-                      style={{ background: '#0A66C2', color: '#fff' }}>
-                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                    </button>
-                    {liOpen === b.id && (
-                      <div className="absolute bottom-10 right-0 z-20 w-48 rounded-xl overflow-hidden shadow-lg"
-                        style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-                        {liCertUrl && (
-                          <a href={liCertUrl} target="_blank" rel="noreferrer" onClick={() => setLiOpen(null)}
-                            className="flex items-center gap-2.5 px-4 py-3 text-xs font-semibold hover:opacity-70 transition-opacity"
-                            style={{ color: C.text, borderBottom: `1px solid ${C.divider}` }}>
-                            <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4 flex-shrink-0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                            Add to Certifications
-                          </a>
-                        )}
-                        {liPostUrl && (
-                          <a href={liPostUrl} target="_blank" rel="noreferrer" onClick={() => setLiOpen(null)}
-                            className="flex items-center gap-2.5 px-4 py-3 text-xs font-semibold hover:opacity-70 transition-opacity"
-                            style={{ color: C.text }}>
-                            <svg viewBox="0 0 24 24" fill="#0A66C2" className="w-4 h-4 flex-shrink-0"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                            Share as Post
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}
@@ -5564,18 +5525,21 @@ function InProgressRow({ items, C }: { items: any[]; C: typeof LIGHT_C }) {
 
       <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-        {items.map(({ form, attempt, isProject }: any) => {
+        {items.map(({ form, attempt, isProject }: any, idx: number) => {
           const { pct, done, total } = inProgressProgress(form, attempt, isProject);
           const cover = form.config?.coverImage;
           const href  = `/${form.slug || form.id}`;
           const data  = { form, isProject, pct, done, total, href };
+          // The first card is the likely LCP element on the overview landing:
+          // prioritize it and skip lazy-loading; lazy-load the rest of the row.
+          const isLcp = idx === 0;
           return (
             <div key={form.id} className="flex-shrink-0 w-[220px] snap-start"
               onMouseEnter={(e) => openHover(data, e.currentTarget)} onMouseLeave={scheduleClose}>
               <a href={href} target="_blank" rel="noreferrer" className="block transition-transform hover:-translate-y-0.5">
                 <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
                   {cover
-                    ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
+                    ? <img src={cover} alt="" loading={isLcp ? undefined : 'lazy'} fetchPriority={isLcp ? 'high' : undefined} className="w-full h-full object-cover"/>
                     : <div className="w-full h-full flex items-center justify-center">{isProject ? <Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>}</div>}
                   <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md" style={{ background: '#22c55e', color: '#ffffff' }}>In progress</span>
                 </div>
@@ -5946,7 +5910,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
       {inProgressItems.length > 0 && <InProgressRow items={inProgressItems} C={C} />}
 
       {/* Upcoming -- deadlines + events, carousel */}
-      <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+      <section className="rounded-2xl p-5 sm:p-6 defer-render" style={{ background: C.card }}>
         <div className="flex items-center justify-between gap-4">
           <h3 className="text-xl sm:text-2xl font-bold leading-tight" style={{ color: C.text }}>Upcoming</h3>
           {upcomingDeadlines.length > 0 && (
@@ -5998,7 +5962,7 @@ function OverviewSection({ user, userEmail, C, onNavigate }: {
 
       {/* Recommended for you -- last on page */}
       {gaps.length > 0 && (
-        <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+        <section className="rounded-2xl p-5 sm:p-6 defer-render" style={{ background: C.card }}>
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-2 min-w-0">
               <TrendingUp className="w-5 h-5 flex-shrink-0" style={{ color: C.green }}/>
@@ -6633,7 +6597,7 @@ export default function StudentDashboard() {
   const [mounted, setMounted] = useState(false);
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl, logoDarkUrl, emailBannerUrl } = useTenant();
+  const { logoUrl, logoDarkUrl, emailBannerUrl, appName } = useTenant();
   const router = useRouter();
   const [user, setUser]       = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -6676,6 +6640,14 @@ export default function StudentDashboard() {
     window.addEventListener('hashchange', apply);
     return () => window.removeEventListener('hashchange', apply);
   }, []);
+
+  // Keep the browser tab title readable (e.g. "My Courses - Festman") instead of
+  // the raw URL/hash. Client-side hash routing means the server metadata title
+  // never updates per section, so we set it here.
+  useEffect(() => {
+    const label = NAV_ITEMS.find(n => n.id === activeSection)?.label ?? 'Dashboard';
+    document.title = appName ? `${label} - ${appName}` : label;
+  }, [activeSection, appName]);
 
   // Activity feed polling -- runs on all tabs
   useEffect(() => {
@@ -6862,7 +6834,7 @@ export default function StudentDashboard() {
           </button>
           {/* Logo / brand */}
           <Link href="/" className="flex items-center block">
-            <img src={(theme === 'dark' ? logoDarkUrl || logoUrl : logoUrl) || undefined} alt="Logo" className="h-8 w-auto" />
+            <img src={(theme === 'dark' ? logoDarkUrl || logoUrl : logoUrl) || undefined} alt="Logo" fetchPriority="high" className="h-8 w-auto" />
           </Link>
         </div>
         <div className="flex items-center gap-2">

@@ -1,5 +1,6 @@
 'use client';
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { MotionConfig } from 'motion/react';
 
 type Theme = 'dark' | 'light';
 
@@ -22,10 +23,12 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTheme(saved);
     document.documentElement.setAttribute('data-theme', saved);
+    document.documentElement.style.colorScheme = saved;
   }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.style.colorScheme = theme;
   }, [theme]);
 
   const toggle = () => {
@@ -33,13 +36,17 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
       const next = prev === 'dark' ? 'light' : 'dark';
       localStorage.setItem('ff-theme', next);
       document.documentElement.setAttribute('data-theme', next);
+      document.documentElement.style.colorScheme = next;
       return next;
     });
   };
 
   return (
     <ThemeContext.Provider value={{ theme, toggle }}>
-      {children}
+      {/* reducedMotion="user" makes every motion/react animation honor the OS "Reduce motion" setting automatically (WCAG 2.3.3). */}
+      <MotionConfig reducedMotion="user">
+        {children}
+      </MotionConfig>
     </ThemeContext.Provider>
   );
 }

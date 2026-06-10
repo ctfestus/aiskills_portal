@@ -24,7 +24,7 @@ const SLIDE = 'transform 0.34s cubic-bezier(0.22, 1, 0.36, 1)';
  * the peek filmstrip; fullscreen shows one large page.
  */
 export default function PdfCarousel({
-  url, pages, fileName, accent = '#006128', isDark = false, allowDownload = true,
+  url, pages, fileName, accent = '#00bf63', isDark = false, allowDownload = true,
 }: PdfCarouselProps) {
   const total = Math.max(1, Math.floor(pages) || 1);
   const [page, setPage] = useState(1);

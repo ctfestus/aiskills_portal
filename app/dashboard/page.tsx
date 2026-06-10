@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useState, useRef, useCallback, Fragment, createContext, useContext, cloneElement, isValidElement } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef, useCallback, createContext, useContext, cloneElement, isValidElement } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Loader2, Plus, FileText, BarChart3, ExternalLink, Trash2, Edit2,
   Share2, Check, Copy, X, CalendarDays, AlignLeft, Settings, User,
-  LogOut, ChevronDown, ChevronRight, ChevronLeft, BookOpen, MapPin, Sun, Moon, Zap,
+  LogOut, ChevronDown, ChevronRight, ChevronLeft, GripVertical, BookOpen, MapPin, Sun, Moon, Zap,
   ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
   Users, Megaphone, Trophy, Menu, CheckCircle2, XCircle,
   UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
@@ -394,7 +394,7 @@ function PushAllButton({ items, C }: { items: { type: string; id: string }[]; C:
 }
 
 // --- ProfileMenu ---
-const MONTSERRAT_CSS = "'Montserrat', sans-serif";
+const PROFILE_MENU_FONT = "'Google Sans Text', sans-serif";
 
 function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; onSignOut: () => void }) {
   const C = useC();
@@ -402,7 +402,7 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
   const btnRef  = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { loadGoogleFont(getFontById('montserrat')); }, []);
+  useEffect(() => { loadGoogleFont(getFontById('google-sans-text')); }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -419,12 +419,12 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
   const avatar   = profile?.avatar_url;
 
   return (
-    <div className="relative" style={{ fontFamily: MONTSERRAT_CSS }}>
+    <div className="relative" style={{ fontFamily: PROFILE_MENU_FONT }}>
       <button
         ref={btnRef}
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-all hover:shadow-sm"
-        style={{ background: C.card, borderColor: C.cardBorder, fontFamily: MONTSERRAT_CSS }}
+        style={{ background: C.card, borderColor: C.cardBorder, fontFamily: PROFILE_MENU_FONT }}
       >
         <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-xs font-bold flex-shrink-0"
           style={{ background: C.lime, color: C.green }}>
@@ -442,7 +442,7 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
             exit={{ opacity: 0, scale: 0.95, y: -4 }}
             transition={{ duration: 0.15 }}
             className="absolute right-0 top-full mt-2 w-56 rounded-2xl overflow-hidden z-50"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', fontFamily: MONTSERRAT_CSS }}
+            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 8px 32px rgba(0,0,0,0.12)', fontFamily: PROFILE_MENU_FONT }}
           >
             <div className="px-4 py-3.5 border-b" style={{ borderColor: C.divider }}>
               <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{name}</p>
@@ -455,21 +455,21 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
               {profile?.role === 'staff' && (
                 <Link href="/student" onClick={() => setOpen(false)}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ff-hover"
-                  style={{ color: C.muted }}>
-                  <GraduationCap className="w-4 h-4" style={{ color: C.faint }}/> My Learning
+                  style={{ color: C.text }}>
+                  <GraduationCap className="w-4 h-4" style={{ color: C.text }}/> My Learning
                 </Link>
               )}
               {username && (
                 <Link href={`/u/${username}`} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ff-hover"
-                  style={{ color: C.muted }}>
-                  <User className="w-4 h-4" style={{ color: C.faint }}/> View public profile
+                  style={{ color: C.text }}>
+                  <User className="w-4 h-4" style={{ color: C.text }}/> View public profile
                 </Link>
               )}
               <Link href="/settings" onClick={() => setOpen(false)}
                 className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ff-hover"
-                style={{ color: C.muted }}>
-                <Settings className="w-4 h-4" style={{ color: C.faint }}/> Settings
+                style={{ color: C.text }}>
+                <Settings className="w-4 h-4" style={{ color: C.text }}/> Settings
               </Link>
             </div>
             <div className="border-t py-1.5" style={{ borderColor: C.divider }}>
@@ -670,7 +670,7 @@ function EventIllustration() {
       {/* Calendar card body */}
       <rect x="55" y="15" width="110" height="90" rx="10" fill="white"/>
       {/* Green header -- rounded top corners only */}
-      <path d="M65,15 H155 Q165,15 165,25 V50 H55 V25 Q55,15 65,15 Z" fill="#006128"/>
+      <path d="M65,15 H155 Q165,15 165,25 V50 H55 V25 Q55,15 65,15 Z" fill="#00bf63"/>
       {/* Calendar ring hooks */}
       <rect x="80" y="10" width="6" height="11" rx="3" fill="#ADEE66"/>
       <rect x="134" y="10" width="6" height="11" rx="3" fill="#ADEE66"/>
@@ -686,7 +686,7 @@ function EventIllustration() {
       <rect x="76" y="62" width="38" height="4" rx="2" fill="#9ad4b0"/>
 
       {/* Schedule row 2 */}
-      <circle cx="68" cy="77" r="3.5" fill="#006128" opacity="0.65"/>
+      <circle cx="68" cy="77" r="3.5" fill="#00bf63" opacity="0.65"/>
       <rect x="76" y="75" width="60" height="4" rx="2" fill="#d4eddd"/>
       <rect x="76" y="75" width="52" height="4" rx="2" fill="#9ad4b0"/>
 
@@ -700,19 +700,19 @@ function EventIllustration() {
         {/* Ticket body */}
         <rect x="154" y="93" width="56" height="28" rx="6" fill="#ADEE66"/>
         {/* Stub divider */}
-        <line x1="172" y1="96" x2="172" y2="118" stroke="#006128" strokeWidth="1" strokeDasharray="2.5,2" opacity="0.4"/>
+        <line x1="172" y1="96" x2="172" y2="118" stroke="#00bf63" strokeWidth="1" strokeDasharray="2.5,2" opacity="0.4"/>
         {/* Barcode lines in stub area */}
-        <rect x="178" y="99" width="2"  height="16" rx="1" fill="#006128" opacity="0.3"/>
-        <rect x="182" y="99" width="1"  height="16" rx="1" fill="#006128" opacity="0.3"/>
-        <rect x="185" y="99" width="3"  height="16" rx="1" fill="#006128" opacity="0.3"/>
-        <rect x="190" y="99" width="1"  height="16" rx="1" fill="#006128" opacity="0.3"/>
-        <rect x="193" y="99" width="2"  height="16" rx="1" fill="#006128" opacity="0.3"/>
-        <rect x="197" y="99" width="1"  height="16" rx="1" fill="#006128" opacity="0.3"/>
-        <rect x="200" y="99" width="3"  height="16" rx="1" fill="#006128" opacity="0.3"/>
+        <rect x="178" y="99" width="2"  height="16" rx="1" fill="#00bf63" opacity="0.3"/>
+        <rect x="182" y="99" width="1"  height="16" rx="1" fill="#00bf63" opacity="0.3"/>
+        <rect x="185" y="99" width="3"  height="16" rx="1" fill="#00bf63" opacity="0.3"/>
+        <rect x="190" y="99" width="1"  height="16" rx="1" fill="#00bf63" opacity="0.3"/>
+        <rect x="193" y="99" width="2"  height="16" rx="1" fill="#00bf63" opacity="0.3"/>
+        <rect x="197" y="99" width="1"  height="16" rx="1" fill="#00bf63" opacity="0.3"/>
+        <rect x="200" y="99" width="3"  height="16" rx="1" fill="#00bf63" opacity="0.3"/>
       </g>
 
       {/* Location pin -- left floating */}
-      <path d="M28,36 C28,29 38,29 38,36 C38,43 33,51 33,51 C33,51 28,43 28,36 Z" fill="#006128" opacity="0.85"/>
+      <path d="M28,36 C28,29 38,29 38,36 C38,43 33,51 33,51 C33,51 28,43 28,36 Z" fill="#00bf63" opacity="0.85"/>
       <circle cx="33" cy="36" r="3.5" fill="white"/>
 
       {/* Attendee avatar row */}
@@ -721,14 +721,14 @@ function EventIllustration() {
       <circle cx="110" cy="131" r="9" fill="#ADEE66" stroke="white" strokeWidth="2"/>
       <circle cx="126" cy="131" r="9" fill="#d4eddd" stroke="white" strokeWidth="2"/>
       {/* +more pill */}
-      <rect x="134" y="122" width="26" height="18" rx="9" fill="#006128"/>
+      <rect x="134" y="122" width="26" height="18" rx="9" fill="#00bf63"/>
       <rect x="138" y="128" width="18" height="3" rx="1.5" fill="white" opacity="0.85"/>
       <rect x="141" y="133" width="12" height="3" rx="1.5" fill="white" opacity="0.55"/>
 
       {/* Floating accents */}
       <circle cx="36"  cy="14" r="4"   fill="#ADEE66" opacity="0.75"/>
       <circle cx="200" cy="20" r="5"   fill="#ADEE66" opacity="0.5"/>
-      <circle cx="216" cy="68" r="2.5" fill="#006128" opacity="0.3"/>
+      <circle cx="216" cy="68" r="2.5" fill="#00bf63" opacity="0.3"/>
       <circle cx="22"  cy="98" r="2.5" fill="#ADEE66" opacity="0.5"/>
       {/* Sparkle */}
       <path d="M207,42 L208.5,38 L210,42 L214,43.5 L210,45 L208.5,49 L207,45 L203,43.5 Z" fill="#ADEE66" opacity="0.8"/>
@@ -1174,9 +1174,11 @@ function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen, setFo
         whileHover={{ opacity: 1 }}
         transition={{ delay: index * 0.07, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       >
-        {/* Card with padding -- padding IS the whitespace around the rounded thumbnail */}
-        <div className="rounded-2xl p-4 flex gap-4 group"
-          style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        {/* Card with padding -- padding IS the whitespace around the rounded thumbnail. Flat at rest (border = the separator), soft lift on hover. */}
+        <div className="rounded-2xl p-4 flex gap-4 group transition-shadow duration-200"
+          style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: 'none' }}
+          onMouseEnter={e => { e.currentTarget.style.boxShadow = C.hoverShadow; }}
+          onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}>
 
           {/* Rounded square cover image -- 180×180 */}
           <div className="relative w-[180px] h-[180px] rounded-2xl overflow-hidden flex-shrink-0 group/img"
@@ -1353,16 +1355,6 @@ function reportExportCSV(headers: string[], rows: (string | number | null | unde
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
-}
-
-function RKpi({ label, value, sub, accent, C }: { label: string; value: string | number; sub?: string; accent?: string; C: typeof LIGHT_C }) {
-  return (
-    <div className="rounded-xl px-4 py-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] mb-2" style={{ color: C.faint }}>{label}</p>
-      <p className="text-2xl font-bold leading-none tabular-nums" style={{ color: accent ?? C.text }}>{value}</p>
-      {sub && <p className="text-[11px] mt-1.5 leading-snug" style={{ color: C.faint }}>{sub}</p>}
-    </div>
-  );
 }
 
 // --- Generic list section ---
@@ -2630,6 +2622,7 @@ const CERT_W = 1860;
 const CERT_H = 1200;
 
 function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
+  const isDark = C === DARK_C;
   const [user, setUser]           = useState<any>(null);
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState(false);
@@ -2750,7 +2743,7 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
         <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Certificate Default Design</h2>
         <p className="text-xs" style={{ color: C.muted }}>Set once. All your courses inherit this design automatically.</p>
         <div>
@@ -2809,6 +2802,7 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
               <option value="sans-serif">Sans-serif (Inter)</option>
               <option value="lato">Lato</option>
               <option value="source-sans-pro">Source Sans Pro</option>
+              <option value="google-sans-text">Google Sans Text</option>
               <option value="script">Script</option>
             </select>
           </div>
@@ -2834,7 +2828,7 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
                   onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(slot, f); e.target.value = ''; }}/>
                 <button onClick={() => ref.current?.click()} disabled={!!uploading}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium"
-                  style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.pill }}>
+                  style={{ border: 'none', color: C.muted, background: C.pill }}>
                   {uploading === slot ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Upload className="w-3.5 h-3.5"/>}
                   {url ? `Replace ${labels[slot]}` : `Upload ${labels[slot]}`}
                 </button>
@@ -2963,7 +2957,7 @@ function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
         };
 
         return (
-          <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+          <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
             <div className="px-5 py-3 border-b flex items-center justify-between" style={{ borderColor: C.divider }}>
               <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Preview</p>
               {selectedElement && (
@@ -3568,91 +3562,87 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
 
       {/* ===================== LIST VIEW ===================== */}
       {viewMode === 'list' && (
-        <>
+        <div className="rounded-2xl" style={{ background: C.card, border: isLight ? `1px solid ${C.cardBorder}` : 'none' }}>
           {/* Header */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3 px-5 py-4" style={{ borderBottom: `1px solid ${C.divider}` }}>
             <div>
-              <h2 className="text-base font-bold" style={{ color: C.text }}>Cohorts</h2>
-              <p className="text-xs mt-0.5" style={{ color: C.faint }}>{cohorts.length} cohort{cohorts.length !== 1 ? 's' : ''}</p>
+              <h2 className="text-lg font-bold leading-none" style={{ color: C.text }}>Cohorts</h2>
             </div>
-            {!isStaff && <div className="flex items-center gap-2">
+            {!isStaff && <div className="flex items-center gap-2 flex-shrink-0">
               <Link href="/admin/groups"
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold no-underline"
-                style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold no-underline transition-opacity hover:opacity-80"
+                style={{ background: C.pill, color: C.muted }}>
                 <Users className="w-4 h-4"/> Groups
               </Link>
               <button onClick={() => setShowCreate(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
                 style={{ background: C.cta, color: C.ctaText }}>
                 <Plus className="w-4 h-4"/> New Cohort
               </button>
             </div>}
           </div>
 
-          {/* Cohort list */}
-          <div className="rounded-2xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-
-            {/* Table header */}
-            <div className="grid grid-cols-[1fr_40px] sm:grid-cols-[1fr_100px_100px_40px] px-5 py-2.5 border-b" style={{ borderColor: C.divider, background: C.card }}>
-              <p className="text-[12.5px] font-semibold uppercase tracking-wide" style={{ color: C.faint }}>Cohort</p>
-              <p className="hidden sm:block text-[13.5px] font-semibold uppercase tracking-wide text-center" style={{ color: C.faint }}>Students</p>
-              <p className="hidden sm:block text-[13.5px] font-semibold uppercase tracking-wide text-center" style={{ color: C.faint }}>Courses</p>
-              <div/>
-            </div>
-            {cohorts.length === 0 ? (
-              <div className="flex flex-col items-center py-16 gap-2">
-                <GraduationCap className="w-8 h-8 opacity-20" style={{ color: C.faint }}/>
-                <p className="text-sm" style={{ color: C.faint }}>No cohorts yet</p>
-                {!isStaff && <button onClick={() => setShowCreate(true)} className="text-xs font-semibold mt-1 underline underline-offset-2" style={{ color: C.green }}>Create your first cohort</button>}
-              </div>
-            ) : cohorts.map(c => {
-              const studentCount = students.filter(s => s.cohort_id === c.id).length;
-              const cCount = cohortCourseCount(c.id);
-              return (
-                <div key={c.id}
-                  className="group grid grid-cols-[1fr_40px] sm:grid-cols-[1fr_100px_100px_40px] items-center px-5 py-2 transition-colors"
-                  style={{ borderBottom: `1px solid ${C.divider}` }}>
-                  {/* Name + description */}
-                  <div className="min-w-0 pr-4">
-                    <p className="text-[13.5px] font-semibold truncate" style={{ color: C.text }}>{c.name}</p>
-                    {c.description && <p className="text-[11.5px] truncate mt-0.5" style={{ color: C.faint }}>{c.description}</p>}
-                  </div>
-                  {/* Students */}
-                  <p className="hidden sm:block text-[13.5px] font-semibold text-center" style={{ color: C.text }}>{studentCount}</p>
-                  {/* Courses */}
-                  <p className="hidden sm:block text-[13.5px] font-semibold text-center" style={{ color: C.text }}>{cCount}</p>
-                  {/* 3-dots menu */}
-                  <div className="relative cohort-menu-btn flex-shrink-0 flex justify-end">
-                    <button
-                      onClick={e => { e.stopPropagation(); setMenuOpenId(menuOpenId === c.id ? null : c.id); }}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                      style={{ color: C.faint, background: menuOpenId === c.id ? C.pill : 'transparent' }}>
-                      <MoreVertical className="w-4 h-4"/>
-                    </button>
-                    {menuOpenId === c.id && (
-                      <div className="absolute right-0 top-8 z-50 rounded-xl overflow-hidden shadow-lg w-32"
-                        style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-                        <button onClick={e => { e.stopPropagation(); openEdit(c); }}
-                          className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-left transition-colors hover:bg-black/5"
-                          style={{ color: C.text }}>
-                          <Edit2 className="w-3.5 h-3.5"/> Edit
-                        </button>
-                        {!isStaff && (
-                          <button onClick={e => { e.stopPropagation(); setMenuOpenId(null); if (window.confirm(`Delete "${c.name}"?`)) deleteCohort(c.id); }}
-                            className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-left transition-colors hover:bg-red-500/10"
-                            style={{ color: '#ef4444' }}>
-                            {deletingId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Trash2 className="w-3.5 h-3.5"/>}
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          {/* Table header */}
+          <div className="grid grid-cols-[1fr_48px] sm:grid-cols-[1fr_100px_100px_48px] px-5 py-3.5" style={{ borderBottom: `1px solid ${C.divider}` }}>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.07em]" style={{ color: C.faint }}>Cohort</span>
+            <span className="hidden sm:block text-[10px] font-semibold uppercase tracking-[0.07em] text-center" style={{ color: C.faint }}>Students</span>
+            <span className="hidden sm:block text-[10px] font-semibold uppercase tracking-[0.07em] text-center" style={{ color: C.faint }}>Courses</span>
+            <div/>
           </div>
-        </>
+
+          {cohorts.length === 0 ? (
+            <div className="flex flex-col items-center py-16 gap-2">
+              <GraduationCap className="w-8 h-8 opacity-20" style={{ color: C.faint }}/>
+              <p className="text-sm" style={{ color: C.faint }}>No cohorts yet</p>
+              {!isStaff && <button onClick={() => setShowCreate(true)} className="text-xs font-semibold mt-1 underline underline-offset-2" style={{ color: C.green }}>Create your first cohort</button>}
+            </div>
+          ) : cohorts.map((c, i) => {
+            const studentCount = students.filter(s => s.cohort_id === c.id).length;
+            const cCount = cohortCourseCount(c.id);
+            return (
+              <div key={c.id}
+                className="grid grid-cols-[1fr_48px] sm:grid-cols-[1fr_100px_100px_48px] items-center px-5 py-3.5"
+                style={{ borderBottom: i < cohorts.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
+                {/* Name + description */}
+                <div className="min-w-0 pr-4">
+                  <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{c.name}</p>
+                  {c.description && <p className="text-xs truncate mt-0.5" style={{ color: C.faint }}>{c.description}</p>}
+                </div>
+                {/* Students */}
+                <p className="hidden sm:block text-sm font-semibold text-center" style={{ color: C.text }}>{studentCount}</p>
+                {/* Courses */}
+                <p className="hidden sm:block text-sm font-semibold text-center" style={{ color: C.text }}>{cCount}</p>
+                {/* 3-dots menu */}
+                <div className="relative cohort-menu-btn flex-shrink-0 flex justify-end">
+                  <button
+                    onClick={e => { e.stopPropagation(); setMenuOpenId(menuOpenId === c.id ? null : c.id); }}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg transition-opacity hover:opacity-70"
+                    style={{ color: C.muted, background: menuOpenId === c.id ? C.pill : 'transparent' }}>
+                    <MoreVertical className="w-4 h-4"/>
+                  </button>
+                  {menuOpenId === c.id && (
+                    <div className="absolute right-0 top-9 z-50 rounded-xl overflow-hidden w-40"
+                      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: isLight ? '0 12px 32px rgba(0,0,0,0.16)' : '0 4px 16px rgba(0,0,0,0.35)' }}>
+                      <button onClick={e => { e.stopPropagation(); openEdit(c); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-opacity hover:opacity-70"
+                        style={{ color: C.text }}>
+                        <ChevronRight className="w-3.5 h-3.5 flex-shrink-0"/> Open
+                      </button>
+                      {!isStaff && (
+                        <button onClick={e => { e.stopPropagation(); setMenuOpenId(null); if (window.confirm(`Delete "${c.name}"?`)) deleteCohort(c.id); }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-opacity hover:opacity-70"
+                          style={{ color: '#ef4444' }}>
+                          {deletingId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Trash2 className="w-3.5 h-3.5"/>}
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {/* ===================== DETAIL VIEW ===================== */}
@@ -4298,15 +4288,34 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
 
 // --- Badges section (admin/instructor) ---
 function BadgesSection({ C }: { C: typeof LIGHT_C }) {
-  const [badges, setBadges] = useState<{ id: string; name: string; description: string; icon: string; color: string; image_url: string | null; category: string }[]>([]);
+  const isDark = C === DARK_C;
+  const [badges, setBadges] = useState<{ id: string; name: string; description: string; icon: string; color: string; image_url: string | null; category: string; managed: 'course' | 'learning_path' | 'virtual_experience' | null }[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
   const [removing, setRemoving]   = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [catIdx, setCatIdx] = useState(0);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
-    supabase.from('badges').select('id, name, description, icon, color, image_url, category').order('category, id')
-      .then(({ data }) => setBadges(data ?? []));
+    (async () => {
+      const [{ data: seeded }, { data: courses }, { data: paths }, { data: ves }] = await Promise.all([
+        supabase.from('badges').select('id, name, description, icon, color, image_url, category').order('id'),
+        supabase.from('courses').select('id, title, badge_image_url').not('badge_image_url', 'is', null),
+        supabase.from('learning_paths').select('id, title, badge_image_url').not('badge_image_url', 'is', null),
+        supabase.from('virtual_experiences').select('id, title, badge_image_url').not('badge_image_url', 'is', null),
+      ]);
+      // Seeded/system badges are editable here; content badges (crs_/lp_/ve_) are
+      // synthesized straight from the course/path/VE so they appear immediately.
+      const achievement = (seeded ?? [])
+        .filter((b: any) => !/^(crs_|lp_|ve_)/.test(b.id))
+        .map((b: any) => ({ ...b, managed: null as const }));
+      const content = [
+        ...(courses ?? []).map((c: any) => ({ id: `crs_${c.id}`, name: `${c.title} Badge`, description: `Awarded for completing ${c.title}`, icon: 'graduated', color: '#6366f1', image_url: c.badge_image_url, category: 'course', managed: 'course' as const })),
+        ...(paths ?? []).map((p: any) => ({ id: `lp_${p.id}`, name: `${p.title} Badge`, description: `Awarded for completing ${p.title}`, icon: 'map', color: '#6366f1', image_url: p.badge_image_url, category: 'learning_path', managed: 'learning_path' as const })),
+        ...(ves ?? []).map((v: any) => ({ id: `ve_${v.id}`, name: `${v.title} Badge`, description: `Awarded for completing ${v.title}`, icon: 'briefcase', color: '#6366f1', image_url: v.badge_image_url, category: 'virtual_experience', managed: 'virtual_experience' as const })),
+      ];
+      setBadges([...achievement, ...content]);
+    })();
   }, []);
 
   const handleUpload = async (badge: typeof badges[0], file: File) => {
@@ -4348,13 +4357,20 @@ function BadgesSection({ C }: { C: typeof LIGHT_C }) {
     }
   };
 
-  return (
-    <div className="p-6 space-y-6 max-w-3xl mx-auto">
-      <div>
-        <h2 className="text-xl font-bold" style={{ color: C.text }}>Badge Images</h2>
-        <p className="text-sm mt-1" style={{ color: C.muted }}>Upload a custom image for each badge. If no image is uploaded, the emoji icon is shown instead.</p>
-      </div>
+  const CATEGORY_META = [
+    { key: 'achievement',        label: 'Achievement' },
+    { key: 'course',             label: 'Course' },
+    { key: 'learning_path',      label: 'Learning Path' },
+    { key: 'virtual_experience', label: 'Virtual Experience' },
+  ] as const;
+  const MANAGED_LABEL: Record<string, string> = { course: 'course editor', learning_path: 'learning path editor', virtual_experience: 'virtual experience editor' };
+  const cats = CATEGORY_META.filter(m => badges.some(b => b.category === m.key));
+  const ci = Math.min(Math.max(catIdx, 0), Math.max(0, cats.length - 1));
+  const activeCat = cats[ci];
+  const activeBadges = activeCat ? badges.filter(b => b.category === activeCat.key) : [];
 
+  return (
+    <div className="max-w-5xl mx-auto space-y-5">
       {msg && (
         <div className="px-4 py-2.5 rounded-xl text-sm font-medium" style={{
           background: msg.ok ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.10)',
@@ -4365,18 +4381,39 @@ function BadgesSection({ C }: { C: typeof LIGHT_C }) {
         </div>
       )}
 
-      <div className="space-y-3">
-        {badges.map(badge => {
+      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
+        {/* Header + badge-type tabs */}
+        <div className="px-5 pt-5 pb-4" style={{ borderBottom: `1px solid ${C.divider}` }}>
+          <h2 className="text-lg font-bold leading-none" style={{ color: C.text }}>Badge Images</h2>
+          <p className="text-xs mt-1.5" style={{ color: C.muted }}>Upload a custom image for each badge. If no image is uploaded, the emoji icon is shown instead.</p>
+          {cats.length > 1 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+              {cats.map((m, i) => {
+                const active = i === ci;
+                return (
+                  <button key={m.key} onClick={() => setCatIdx(i)}
+                    className="text-center px-4 py-4 rounded-md text-sm font-semibold transition-all"
+                    style={{ background: active ? C.cta : C.pill, color: active ? C.ctaText : C.text, border: 'none' }}>
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Badge rows for the active type */}
+        {activeBadges.map((badge, i) => {
           const isUp  = uploading === badge.id;
           const isRem = removing  === badge.id;
           return (
             <div key={badge.id}
-              className="flex items-center gap-4 p-4 rounded-2xl"
-              style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+              className="flex items-center gap-4 px-5 py-4"
+              style={{ borderBottom: i < activeBadges.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
 
               {/* Badge preview */}
               <div className="flex-shrink-0 w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden"
-                style={{ background: badge.image_url ? 'transparent' : `${badge.color}20`, border: `2px solid ${badge.color}40` }}>
+                style={{ background: badge.image_url ? 'transparent' : `${badge.color}20` }}>
                 {badge.image_url
                   ? <img src={badge.image_url} alt={badge.name} className="w-full h-full object-cover" />
                   : <span className="text-2xl">{badge.icon}</span>
@@ -4387,52 +4424,41 @@ function BadgesSection({ C }: { C: typeof LIGHT_C }) {
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm truncate" style={{ color: C.text }}>{badge.name}</p>
                 <p className="text-xs mt-0.5 line-clamp-1" style={{ color: C.muted }}>{badge.description}</p>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <p className="text-xs font-mono" style={{ color: C.faint }}>{badge.id}</p>
-                  <select
-                    value={badge.category}
-                    onChange={async e => {
-                      const category = e.target.value;
-                      await supabase.from('badges').update({ category }).eq('id', badge.id);
-                      setBadges(prev => prev.map(b => b.id === badge.id ? { ...b, category } : b));
-                    }}
-                    className="text-[11px] px-2 py-0.5 rounded-lg border-0 outline-none"
-                    style={{ background: C.pill, color: C.muted }}>
-                    <option value="achievement">Achievement</option>
-                    <option value="course">Course</option>
-                    <option value="learning_path">Learning Path</option>
-                    <option value="virtual_experience">Virtual Experience</option>
-                  </select>
-                </div>
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {badge.image_url && (
+              {badge.managed ? (
+                <span className="text-xs flex-shrink-0 text-right" style={{ color: C.faint }}>
+                  Managed in the {MANAGED_LABEL[badge.managed]}
+                </span>
+              ) : (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {badge.image_url && (
+                    <button
+                      onClick={() => handleRemove(badge)}
+                      disabled={isRem || isUp}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40 transition-opacity"
+                      style={{ background: C.deleteBg, color: C.deleteText, border: 'none' }}>
+                      {isRem ? 'Removing...' : 'Remove'}
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleRemove(badge)}
-                    disabled={isRem || isUp}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40 transition-opacity"
-                    style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}` }}>
-                    {isRem ? 'Removing...' : 'Remove'}
+                    onClick={() => fileRefs.current[badge.id]?.click()}
+                    disabled={isUp || isRem}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40 transition-opacity"
+                    style={{ background: C.cta, color: C.ctaText }}>
+                    <Upload className="w-3.5 h-3.5" />
+                    {isUp ? 'Uploading...' : badge.image_url ? 'Replace' : 'Upload'}
                   </button>
-                )}
-                <button
-                  onClick={() => fileRefs.current[badge.id]?.click()}
-                  disabled={isUp || isRem}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40 transition-opacity"
-                  style={{ background: C.cta, color: C.ctaText }}>
-                  <Upload className="w-3.5 h-3.5" />
-                  {isUp ? 'Uploading...' : badge.image_url ? 'Replace' : 'Upload'}
-                </button>
-                <input
-                  ref={el => { fileRefs.current[badge.id] = el; }}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(badge, f); e.target.value = ''; }}
-                />
-              </div>
+                  <input
+                    ref={el => { fileRefs.current[badge.id] = el; }}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(badge, f); e.target.value = ''; }}
+                  />
+                </div>
+              )}
             </div>
           );
         })}
@@ -4446,53 +4472,44 @@ const HERO_LB = 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)';
 
 function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
   const [cohorts, setCohorts]       = useState<any[]>([]);
-  const [selected, setSelected]     = useState<any>(null);
-  const [rankings, setRankings]     = useState<any[]>([]);
-  const [loadingCohorts, setLoadingCohorts] = useState(true);
-  const [loadingRank, setLoadingRank]       = useState(false);
-  const [refreshKey, setRefreshKey]         = useState(0);
+  const [rankingsByCohort, setRankingsByCohort] = useState<Record<string, any[]>>({});
+  const [loading, setLoading]       = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [cohortFilter, setCohortFilter] = useState('all');
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  // Load cohorts once
+  // Load cohorts + each cohort's rankings (service-role API bypasses RLS)
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from('cohorts').select('id, name').order('created_at', { ascending: false });
-      setCohorts(data ?? []);
-      if (data?.length) setSelected(data[0]);
-      setLoadingCohorts(false);
+      setLoading(true);
+      const { data: cohortData } = await supabase.from('cohorts').select('id, name').order('created_at', { ascending: false });
+      const list = cohortData ?? [];
+      setCohorts(list);
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers = session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+      const entries = await Promise.all(list.map(async (c: any) => {
+        try {
+          const res = await fetch(`/api/leaderboard?cohort_id=${c.id}`, { headers });
+          if (!res.ok) return [c.id, []] as const;
+          const { rankings } = await res.json();
+          return [c.id, rankings ?? []] as const;
+        } catch { return [c.id, []] as const; }
+      }));
+      setRankingsByCohort(Object.fromEntries(entries));
+      setLoading(false);
     })();
-  }, []);
+  }, [refreshKey]);
 
-  // Load rankings when cohort changes or refresh triggered
-  useEffect(() => {
-    if (!selected?.id) return;
-    (async () => {
-      setLoadingRank(true);
-      setRankings([]);
-      try {
-        // Use service-role API to bypass RLS for cross-student reads
-        const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch(`/api/leaderboard?cohort_id=${selected.id}`, {
-          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
-        });
-        if (!res.ok) { setLoadingRank(false); return; }
-        const { rankings: ranked } = await res.json();
-        setRankings(ranked ?? []);
-      } finally {
-        setLoadingRank(false);
-      }
-    })();
-  }, [selected?.id, refreshKey]);
+  const allRankings   = Object.values(rankingsByCohort).flat() as any[];
+  const totalStudents = allRankings.length;
+  const totalXP       = allRankings.reduce((s, r) => s + r.xp, 0);
+  const avgXP         = totalStudents ? Math.round(totalXP / totalStudents) : 0;
 
-  const maxXP   = rankings[0]?.xp ?? 1;
-  const totalXP = rankings.reduce((s, r) => s + r.xp, 0);
-  const avgXP   = rankings.length ? Math.round(totalXP / rankings.length) : 0;
-
-  if (loadingCohorts) return (
+  if (loading) return (
     <div className="space-y-4">
       <div className="rounded-2xl px-5 py-4 h-16" style={{ background: HERO_LB }}/>
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
         {[...Array(6)].map((_, i) => (
           <div key={i} className="flex items-center gap-4 px-5 py-4" style={{ borderBottom: i < 5 ? `1px solid ${C.divider}` : 'none', opacity: 1 - i * 0.12 }}>
             <div className="w-6 h-4 rounded" style={{ background: C.skeleton }}/>
@@ -4532,7 +4549,7 @@ function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
             <div className="text-right">
-              <p className="text-base font-black tabular-nums leading-tight" style={{ color: '#fbbf24' }}>{rankings.length}</p>
+              <p className="text-base font-black tabular-nums leading-tight" style={{ color: '#fbbf24' }}>{totalStudents}</p>
               <p className="text-[10px]" style={{ color: 'rgba(197,210,255,0.7)' }}>Students</p>
             </div>
             <div className="w-px h-8" style={{ background: 'rgba(255,255,255,0.15)' }}/>
@@ -4545,93 +4562,65 @@ function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
               <p className="text-base font-black tabular-nums leading-tight" style={{ color: '#ffffff' }}>{totalXP.toLocaleString()}</p>
               <p className="text-[10px]" style={{ color: 'rgba(197,210,255,0.7)' }}>Total XP</p>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Cohort selector + refresh */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        {cohorts.map(c => {
-          const active = selected?.id === c.id;
-          return (
-            <button key={c.id} onClick={() => setSelected(c)}
-              className="px-3 py-1.5 rounded-xl text-sm font-semibold transition-all"
-              style={{
-                background: active ? C.cta : C.pill,
-                color: active ? C.ctaText : C.muted,
-                border: `1px solid ${active ? C.cta : C.cardBorder}`,
-              }}>
-              {c.name}
+            <button onClick={() => setRefreshKey(k => k + 1)} aria-label="Refresh"
+              className="ml-1 w-8 h-8 rounded-full grid place-items-center flex-shrink-0 transition-opacity hover:opacity-80"
+              style={{ background: 'rgba(255,255,255,0.12)', color: '#ffffff' }}>
+              <TrendingUp className="w-4 h-4"/>
             </button>
-          );
-        })}
-        <button
-          onClick={() => setRefreshKey(k => k + 1)}
-          disabled={loadingRank}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 flex-shrink-0"
-          style={{ background: C.pill, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
-          <TrendingUp className={`w-3.5 h-3.5 ${loadingRank ? 'animate-pulse' : ''}`}/>
-          Refresh
-        </button>
+          </div>
+        </div>
       </div>
 
-      {/* Rankings table */}
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
-        {/* Table header */}
-        <div className="flex items-center gap-3 px-5 py-3" style={{ borderBottom: `1px solid ${C.divider}`, background: C.pill }}>
-          <span className="w-7 text-[11px] font-semibold uppercase tracking-wide" style={{ color: C.faint }}>#</span>
-          <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: C.faint }}>Student</span>
-          <span className="text-[11px] font-semibold uppercase tracking-wide w-24 text-right" style={{ color: C.faint }}>XP</span>
-          <span className="text-[11px] font-semibold uppercase tracking-wide w-20 text-right" style={{ color: C.faint }}>Courses</span>
+      {/* Cohorts stacked vertically -- one section each */}
+      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
+        {/* Filter bar */}
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5" style={{ borderBottom: `1px solid ${C.divider}` }}>
+          <h3 className="text-sm font-bold leading-none" style={{ color: C.text }}>Rankings</h3>
+          <select value={cohortFilter} onChange={e => setCohortFilter(e.target.value)}
+            className="text-sm px-3 py-2 rounded-lg outline-none cursor-pointer"
+            style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
+            <option value="all">All Cohorts</option>
+            {cohorts.filter(c => (rankingsByCohort[c.id] ?? []).length > 0).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
         </div>
-
-        {loadingRank ? (
-          [...Array(5)].map((_, i) => (
-            <div key={i} className="flex items-center gap-3 px-5 py-4 animate-pulse"
-              style={{ borderBottom: i < 4 ? `1px solid ${C.divider}` : 'none', opacity: 1 - i * 0.15 }}>
-              <div className="w-6 h-4 rounded" style={{ background: C.skeleton }}/>
-              <div className="flex-1 h-4 rounded" style={{ background: C.skeleton }}/>
-              <div className="w-20 h-4 rounded" style={{ background: C.skeleton }}/>
-              <div className="w-14 h-4 rounded" style={{ background: C.skeleton }}/>
-            </div>
-          ))
-        ) : rankings.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Users className="w-8 h-8 mb-3" style={{ color: C.faint }}/>
-            <p className="text-sm font-medium" style={{ color: C.muted }}>No students in this cohort yet</p>
-            <p className="text-xs mt-1" style={{ color: C.faint }}>Assign students to see rankings</p>
-          </div>
-        ) : (
-          rankings.map((r, idx) => (
-            <div key={r.id ?? r.rank} className="flex items-center gap-3 px-5 py-3.5 transition-colors"
-              style={{ borderBottom: idx < rankings.length - 1 ? `1px solid ${C.divider}` : 'none' }}
-              onMouseEnter={e => { e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-
-              {/* Rank */}
-              <span className="w-7 text-sm font-bold tabular-nums flex-shrink-0" style={{ color: r.rank <= 3 ? '#f59e0b' : C.faint }}>{r.rank}</span>
-
-              {/* Name + email */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{r.name}</p>
-                <p className="text-[11px] truncate" style={{ color: C.faint }}>{r.email}</p>
+        <div className="p-5 sm:p-6 space-y-9">
+          {(() => {
+            const visible = cohorts.filter(c => (rankingsByCohort[c.id] ?? []).length > 0 && (cohortFilter === 'all' || c.id === cohortFilter));
+            if (visible.length === 0) return (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <Users className="w-8 h-8 mb-3" style={{ color: C.faint }}/>
+                <p className="text-sm font-medium" style={{ color: C.muted }}>No ranked students yet</p>
+                <p className="text-xs mt-1" style={{ color: C.faint }}>Assign students to cohorts to see rankings</p>
               </div>
-
-              {/* XP + bar */}
-              <div className="w-24 text-right flex-shrink-0">
-                <p className="text-sm font-bold tabular-nums" style={{ color: C.text }}>{r.xp.toLocaleString()}</p>
-                <div className="h-1.5 rounded-full mt-1 overflow-hidden" style={{ background: C.pill }}>
-                  <div className="h-full rounded-full transition-all" style={{ width: `${(r.xp / maxXP) * 100}%`, background: r.rank === 1 ? '#f59e0b' : r.rank === 2 ? '#94a3b8' : r.rank === 3 ? '#d97706' : C.green }}/>
+            );
+            return visible.map(c => {
+              const ranks = rankingsByCohort[c.id] ?? [];
+              return (
+                <div key={c.id}>
+                  {/* Cohort section header */}
+                  <div className="pb-3" style={{ borderBottom: `1px solid ${C.divider}` }}>
+                    <h3 className="text-sm font-bold leading-none" style={{ color: C.text }}>{c.name}</h3>
+                  </div>
+                  {/* Rankings */}
+                  {ranks.map((r: any, idx: number) => (
+                    <div key={r.id ?? r.rank} className="flex items-center gap-3 py-3.5"
+                      style={{ borderBottom: idx < ranks.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
+                      {/* Rank */}
+                      <span className="w-7 text-sm font-bold tabular-nums flex-shrink-0" style={{ color: r.rank <= 3 ? '#f59e0b' : C.faint }}>{r.rank}</span>
+                      {/* Name + email */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{r.name}</p>
+                        <p className="text-[11px] truncate" style={{ color: C.faint }}>{r.email}</p>
+                      </div>
+                      {/* XP */}
+                      <span className="text-sm font-bold tabular-nums flex-shrink-0" style={{ color: C.text }}>{r.xp.toLocaleString()} XP</span>
+                    </div>
+                  ))}
                 </div>
-              </div>
-
-              {/* Completions */}
-              <span className="w-20 text-sm font-semibold tabular-nums text-right flex-shrink-0" style={{ color: C.muted }}>
-                {r.completions} course{r.completions !== 1 ? 's' : ''}
-              </span>
-            </div>
-          ))
-        )}
+              );
+            });
+          })()}
+        </div>
       </div>
     </div>
   );
@@ -4648,6 +4637,7 @@ const STATUS_META = {
 
 function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
   const isStaff = useContext(IsStaffContext);
+  const isDark = C === DARK_C;
   const [rows, setRows]           = useState<any[]>([]);
   const [cohorts, setCohorts]     = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -4786,11 +4776,12 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
 
   return (
     <div style={{ padding: '0 0 40px' }}>
+      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
       {/* Header */}
-      <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, padding: '16px 20px', borderBottom: `1px solid ${C.divider}` }}>
         <div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0 }}>Student Tracking</h2>
-          <p style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>Monitor student progress across all your content. Flag stalled or inactive learners.</p>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>Student Tracking</h2>
+          <p style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Monitor student progress across all your content. Flag stalled or inactive learners.</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
@@ -4808,14 +4799,14 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
                 'student_tracking.csv'
               );
             }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.text, fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 10, border: 'none', background: C.pill, color: C.text, fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}>
             <Download style={{ width: 14, height: 14 }} />
             Export CSV
           </button>
           {!isStaff && (
           <button
             onClick={() => { setComposing(v => !v); setMsgResult(null); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 10, border: `1px solid ${composing ? C.cta : C.cardBorder}`, background: composing ? C.cta : C.card, color: composing ? C.ctaText : C.text, fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 10, border: 'none', background: composing ? C.cta : C.pill, color: composing ? C.ctaText : C.text, fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' }}>
             <Send style={{ width: 14, height: 14 }} />
             Message Segment
           </button>
@@ -4823,29 +4814,39 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
         </div>
       </div>
 
-      {/* Stats cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 24 }}>
+      {/* Body */}
+      <div style={{ padding: 24 }}>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" style={{ marginBottom: 24 }}>
         {([
-          { key: 'total',       label: 'Total',       value: stats.total,       color: C.text,    bg: C.card },
-          { key: 'not_started', label: 'Not Started', value: stats.not_started, color: '#6b7280', bg: C.card },
-          { key: 'in_progress', label: 'In Progress', value: stats.in_progress, color: '#f59e0b', bg: C.card },
-          { key: 'stalled',     label: 'Stalled',     value: stats.stalled,     color: '#ef4444', bg: C.card },
-          { key: 'failed',      label: 'Failed',      value: stats.failed,      color: '#dc2626', bg: C.card },
-          { key: 'completed',   label: 'Completed',   value: stats.completed,   color: '#22c55e', bg: C.card },
-          { key: 'at_risk',     label: 'At Risk',     value: stats.at_risk,     color: '#dc2626', bg: C.card },
-        ] as const).map(s => (
-          <div key={s.key}
-            onClick={() => setStatusFilter(statusFilter === s.key ? 'all' : s.key)}
-            style={{ background: C.card, border: `1px solid ${statusFilter === s.key ? s.color : C.cardBorder}`, borderRadius: 12, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.15s' }}>
-            <div style={{ fontSize: 24, fontWeight: 800, color: s.color }}>{s.value}</div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{s.label}</div>
-          </div>
-        ))}
+          { key: 'total',       label: 'Total',       value: stats.total,       color: C.text    },
+          { key: 'not_started', label: 'Not Started', value: stats.not_started, color: '#6b7280' },
+          { key: 'in_progress', label: 'In Progress', value: stats.in_progress, color: '#f59e0b' },
+          { key: 'stalled',     label: 'Stalled',     value: stats.stalled,     color: '#ef4444' },
+          { key: 'completed',   label: 'Completed',   value: stats.completed,   color: '#22c55e' },
+          { key: 'at_risk',     label: 'At Risk',     value: stats.at_risk,     color: '#dc2626' },
+        ] as const).map(s => {
+          const active = statusFilter === s.key;
+          return (
+            <button key={s.key}
+              onClick={() => setStatusFilter(active ? 'all' : s.key)}
+              className="text-left"
+              style={{
+                borderRadius: 12, padding: '14px 16px', cursor: 'pointer', transition: 'all 0.15s',
+                border: 'none',
+                background: active ? `${s.color}1f` : C.pill,
+              }}>
+              <div style={{ fontSize: 24, fontWeight: 800, color: s.color }}>{s.value}</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{s.label}</div>
+            </button>
+          );
+        })}
       </div>
 
       {/* Compose panel */}
       {composing && (
-        <div style={{ background: C.card, border: `1px solid ${C.cta}`, borderRadius: 16, padding: 24, marginBottom: 24 }}>
+        <div style={{ background: C.pill, border: 'none', borderRadius: 16, padding: 24, marginBottom: 24 }}>
           <p style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: '0 0 16px' }}>Compose Message</p>
 
           {/* Cohort + Content filters */}
@@ -4894,7 +4895,7 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
             <p style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subject</p>
             <input
               value={msgSubject} onChange={e => setMsgSubject(e.target.value)}
-              placeholder="e.g. A message from the AI Skills Africa team"
+              placeholder="e.g. A message from the team"
               style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.text, fontSize: 14, outline: 'none', boxSizing: 'border-box' as const }}
             />
           </div>
@@ -4961,12 +4962,12 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
       </div>
 
       {/* Table */}
-      <div style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 16, overflow: 'hidden' }}>
+      <div>
         {/* Table header */}
         <div className="grid grid-cols-[1fr_110px_90px] sm:grid-cols-[1fr_1fr_70px_110px_110px_90px]"
-          style={{ gap: 0, padding: '10px 20px', borderBottom: `1px solid ${C.divider}`, background: C.pill }}>
+          style={{ gap: 0, padding: '14px 4px', borderBottom: `1px solid ${C.divider}` }}>
           {['Student', 'Content', 'Progress', 'Status', 'Last Active', ''].map((h, i) => (
-            <div key={i} className={[1, 2, 4].includes(i) ? 'hidden sm:block' : ''} style={{ fontSize: 11, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</div>
+            <div key={i} className={[1, 2, 4].includes(i) ? 'hidden sm:block' : ''} style={{ fontSize: 10, fontWeight: 600, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{h}</div>
           ))}
         </div>
 
@@ -4987,12 +4988,11 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
             return (
               <div key={nudgeKey}
                 className="grid grid-cols-[1fr_110px_90px] sm:grid-cols-[1fr_1fr_70px_110px_110px_90px]"
-                style={{ gap: 0, padding: '12px 20px', borderBottom: i < filtered.length - 1 ? `1px solid ${C.divider}` : 'none', alignItems: 'center' }}>
+                style={{ gap: 0, padding: '14px 4px', borderBottom: i < filtered.length - 1 ? `1px solid ${C.divider}` : 'none', alignItems: 'center' }}>
                 {/* Student */}
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.studentName || '--'}</div>
                   <div style={{ fontSize: 11, color: C.faint, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.studentEmail}</div>
-                  <div style={{ fontSize: 10, color: C.faint, marginTop: 1 }}>{row.cohortName}</div>
                 </div>
                 {/* Content */}
                 <div className="hidden sm:block" style={{ fontSize: 13, color: C.text, paddingRight: 8, wordBreak: 'break-word' }}>{row.formTitle}</div>
@@ -5061,6 +5061,8 @@ function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
           Showing {filtered.length} of {rows.length} records
         </div>
       )}
+      </div>
+      </div>
     </div>
   );
 }
@@ -5077,6 +5079,7 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
   const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadingBadge, setUploadingBadge] = useState(false);
   const [generatingDesc, setGeneratingDesc] = useState(false);
+  const [lpSection, setLpSection] = useState<'details' | 'content'>('details');
   const coverInputRef = useRef<HTMLInputElement>(null);
   const badgeInputRef = useRef<HTMLInputElement>(null);
   const lpScrollRef = useRef<HTMLDivElement>(null);
@@ -5227,8 +5230,39 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
           <h2 className="text-lg font-bold" style={{ color: C.text }}>{editing.id ? 'Edit Learning Path' : 'New Learning Path'}</h2>
         </div>
 
+        {/* -- Carousel: Details (Basic info + Cohorts) / Content (Courses & VEs) -- */}
+        {(() => {
+          const LP_SECTIONS = [
+            { id: 'details', label: 'Basic Information & Cohorts' },
+            { id: 'content', label: 'Add Courses & Virtual Experiences' },
+          ] as const;
+          const si = LP_SECTIONS.findIndex(s => s.id === lpSection);
+          return (
+          <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: C === DARK_C ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+            <div className="flex items-center justify-between gap-4 px-5 sm:px-6 pt-5 pb-4" style={{ borderBottom: `1px solid ${C.divider}` }}>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold leading-tight truncate" style={{ color: C.text }}>{LP_SECTIONS[si]?.label}</h3>
+                <p className="text-[11px] mt-1 font-medium tracking-wide uppercase" style={{ color: C.faint }}>Step {si + 1} of {LP_SECTIONS.length}</p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button type="button" disabled={si <= 0} onClick={() => setLpSection(LP_SECTIONS[si - 1].id)} aria-label="Previous"
+                  className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70 disabled:opacity-30" style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                  <ChevronLeft className="w-4 h-4"/>
+                </button>
+                <button type="button" disabled={si >= LP_SECTIONS.length - 1} onClick={() => setLpSection(LP_SECTIONS[si + 1].id)} aria-label="Next"
+                  className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70 disabled:opacity-30" style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                  <ChevronRight className="w-4 h-4"/>
+                </button>
+              </div>
+            </div>
+            <AnimatePresence mode="wait">
+            <motion.div key={lpSection} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }} className="p-5 sm:p-6">
+
+            {lpSection === 'details' && (
+            <div className="space-y-6">
+
         {/* Basic info */}
-        <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+        <div className="space-y-4">
           <div>
             <label className="text-xs font-medium mb-1.5 block" style={{ color: C.muted }}>Title *</label>
             <input value={editing.title ?? ''} onChange={e => setEditing((p: any) => ({ ...p, title: e.target.value }))} placeholder="e.g. AI Fundamentals Track" className={inputCls} style={inputStyle}/>
@@ -5240,7 +5274,7 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
               <label className="text-xs font-medium" style={{ color: C.muted }}>Description</label>
               <button onClick={generateDescription} disabled={generatingDesc}
                 className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-opacity hover:opacity-80 disabled:opacity-50"
-                style={{ background: '#6366f118', color: '#6366f1' }}>
+                style={{ background: `${C.green}18`, color: C.green }}>
                 {generatingDesc ? <Loader2 className="w-3 h-3 animate-spin"/> : <Zap className="w-3 h-3"/>}
                 {generatingDesc ? 'Generating…' : 'Generate with AI'}
               </button>
@@ -5329,7 +5363,7 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
         </div>
 
         {/* Cohort assignment */}
-        <div className="rounded-2xl p-5 space-y-3" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+        <div className="space-y-3">
           <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Assign to Cohorts</h3>
           {cohorts.length === 0
             ? <p className="text-sm" style={{ color: C.muted }}>No cohorts found. Create a cohort first.</p>
@@ -5338,8 +5372,8 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
                   const selected = selectedCohorts.includes(c.id);
                   return (
                     <div key={c.id} onClick={() => toggleCohort(c.id)}
-                      className="flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer transition-colors"
-                      style={{ background: selected ? `${C.green}12` : C.input, border: `1px solid ${selected ? C.green : C.cardBorder}` }}>
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors"
+                      style={{ background: selected ? `${C.green}14` : C.pill }}>
                       <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center" style={{ background: selected ? C.green : C.cardBorder }}>
                         {selected && <Check className="w-2.5 h-2.5 text-white"/>}
                       </div>
@@ -5353,46 +5387,54 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
             <p className="text-xs" style={{ color: C.faint }}>{selectedCohorts.length} cohort{selectedCohorts.length !== 1 ? 's' : ''} assigned</p>
           )}
         </div>
+            </div>
+            )}
 
-        {/* Item selection */}
-        <div className="rounded-2xl p-5 space-y-3" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
-          <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Add Courses & Virtual Experiences</h3>
-          {allOptions.length === 0
-            ? <p className="text-sm" style={{ color: C.muted }}>No published courses or virtual experiences found.</p>
-            : <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                {allOptions.map((f: any) => {
-                  const isVE = f.content_type === 'virtual_experience' || f.content_type === 'guided_project' || f.config?.isVirtualExperience || f.config?.isGuidedProject;
+            {lpSection === 'content' && (
+            <div className="space-y-6">
+
+        {/* Item selection -- grouped by type */}
+        {allOptions.length === 0 ? (
+          <p className="text-sm" style={{ color: C.muted }}>No published courses or virtual experiences found.</p>
+        ) : (
+          <div className="space-y-5">
+            {([
+              { label: 'Courses', items: courseOptions },
+              { label: 'Virtual Experiences', items: veOptions },
+            ] as const).filter(g => g.items.length > 0).map(group => (
+              <div key={group.label} className="space-y-1.5">
+                <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>{group.label}</h3>
+                {group.items.map((f: any) => {
                   const selected = selectedIds.includes(f.id);
                   return (
-                    <div key={f.id} onClick={() => toggleItem(f.id)}
-                      className="flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer transition-colors"
-                      style={{ background: selected ? `${C.green}12` : C.input, border: `1px solid ${selected ? C.green : C.cardBorder}` }}>
+                    <div key={f.id} onClick={() => toggleItem(f.id)} role="button" tabIndex={0}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleItem(f.id); } }}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors"
+                      style={{ background: selected ? `${C.green}14` : C.pill }}>
                       <div className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center" style={{ background: selected ? C.green : C.cardBorder }}>
                         {selected && <Check className="w-2.5 h-2.5 text-white"/>}
                       </div>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: isVE ? '#6366f120' : '#3b82f620', color: isVE ? '#6366f1' : '#3b82f6' }}>
-                        {isVE ? 'VE' : 'Course'}
-                      </span>
                       <span className="text-sm flex-1 truncate" style={{ color: C.text }}>{f.title}</span>
                     </div>
                   );
                 })}
               </div>
-          }
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Order selected items */}
         {selectedIds.length > 0 && (
-          <div className="rounded-2xl p-5 space-y-3" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <div className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Order ({selectedIds.length} items)</h3>
             <div className="space-y-1.5">
               {selectedIds.map((id, idx) => {
                 const f = allOptions.find((x: any) => x.id === id);
                 const isVE = f && (f.content_type === 'virtual_experience' || f.content_type === 'guided_project' || f.config?.isVirtualExperience || f.config?.isGuidedProject);
                 return (
-                  <div key={id} className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: C.input, border: `1px solid ${C.cardBorder}` }}>
+                  <div key={id} className="flex items-center gap-2 px-3 py-2.5 rounded-xl" style={{ background: C.pill }}>
                     <span className="text-xs font-bold w-5 text-center flex-shrink-0" style={{ color: C.faint }}>{idx + 1}</span>
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: isVE ? '#6366f120' : '#3b82f620', color: isVE ? '#6366f1' : '#3b82f6' }}>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: C.card, color: C.muted }}>
                       {isVE ? 'VE' : 'Course'}
                     </span>
                     <span className="text-sm flex-1 truncate" style={{ color: C.text }}>{f?.title ?? id}</span>
@@ -5405,6 +5447,15 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
             </div>
           </div>
         )}
+
+            </div>
+            )}
+
+            </motion.div>
+            </AnimatePresence>
+          </div>
+          );
+        })()}
 
         {saveMsg && (
           <p className={`text-sm ${saveMsg.ok ? 'text-emerald-500' : 'text-red-500'}`}>{saveMsg.text}</p>
@@ -5422,7 +5473,7 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <p className="text-sm" style={{ color: C.faint }}>Group courses and virtual experiences into structured learning journeys.</p>
-        <button onClick={() => setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft', next_path_id: null })}
+        <button onClick={() => { setLpSection('details'); setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft', next_path_id: null }); }}
           className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-80 transition-opacity"
           style={{ background: C.cta, color: C.ctaText }}>
           <Plus className="w-4 h-4"/> New Path
@@ -5436,7 +5487,7 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
           </div>
           <p className="font-semibold text-base mb-1" style={{ color: C.text }}>No learning paths yet</p>
           <p className="text-sm mb-6" style={{ color: C.faint }}>Create your first learning path to group courses into a structured journey.</p>
-          <button onClick={() => setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft', next_path_id: null })}
+          <button onClick={() => { setLpSection('details'); setEditing({ title: '', description: '', cover_image: '', item_ids: [], cohort_ids: [], status: 'draft', next_path_id: null }); }}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold"
             style={{ background: C.cta, color: C.ctaText }}>
             <Plus className="w-4 h-4"/> New Learning Path
@@ -5485,7 +5536,7 @@ function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] })
                     </p>
                   )}
                   <div className="flex gap-2 pt-1">
-                    <button onClick={() => setEditing(path)}
+                    <button onClick={() => { setLpSection('details'); setEditing(path); }}
                       className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl transition-all hover:opacity-80"
                       style={{ background: `${C.green}18`, color: C.green }}>
                       Edit
@@ -5680,7 +5731,7 @@ function PaymentOptionsTab({ C, getToken }: { C: typeof LIGHT_C; getToken: () =>
       <div className="space-y-3">
         {options.map((opt: any) => (
           <div key={opt.id} className="p-4 rounded-xl flex items-center gap-4"
-            style={{ background: isDark ? 'rgba(255,255,255,0.03)' : '#f8f9fb', border: `1px solid ${C.cardBorder}` }}>
+            style={{ background: isDark ? 'rgba(255,255,255,0.03)' : '#f8f9fb', border: 'none' }}>
             {/* Logo */}
             <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center overflow-hidden"
               style={{ background: C.pill }}>
@@ -5949,7 +6000,7 @@ function ConfirmationsTab({ C, getToken }: { C: typeof LIGHT_C; getToken: () => 
           const cohort  = c.cohorts ?? {};
           return (
             <div key={c.id} className="p-4 rounded-xl space-y-3"
-              style={{ background: isDark ? 'rgba(255,255,255,0.03)' : '#f8f9fb', border: `1px solid ${C.cardBorder}` }}>
+              style={{ background: isDark ? 'rgba(255,255,255,0.03)' : '#f8f9fb', border: 'none' }}>
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                 <div className="space-y-0.5 flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -6041,6 +6092,7 @@ function StatusBadge({ status, C }: { status: PaymentStatus; C: typeof LIGHT_C }
 }
 
 function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
+  const isDark = C === DARK_C;
   const [payTab, setPayTab] = useState<'enrollments' | 'confirmations' | 'options'>('enrollments');
 
   const [rows,       setRows]       = useState<any[]>([]);
@@ -6097,6 +6149,8 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
   const [menuPos,         setMenuPos]         = useState<{ top?: number; bottom?: number; right: number } | null>(null);
   const [sendingReminder, setSendingReminder] = useState<string | null>(null);
   const [payToast,        setPayToast]        = useState<{ ok: boolean; text: string } | null>(null);
+
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -6417,24 +6471,40 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
   return (
     <>
     <div className="space-y-5">
-      {/* Payment section tabs */}
-      <div className="flex gap-1 p-1 rounded-xl" style={{ background: C.pill }}>
-        {([
-          ['enrollments',   'Enrollments'],
-          ['confirmations', 'Confirmations'],
-          ['options',       'Payment Options'],
-        ] as const).map(([id, label]) => (
-          <button key={id} onClick={() => setPayTab(id)}
-            className="flex-1 py-2 px-2 rounded-lg text-xs sm:text-sm font-semibold transition-all"
-            style={{
-              background: payTab === id ? C.card : 'transparent',
-              color: payTab === id ? C.text : C.faint,
-              boxShadow: payTab === id ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-            }}>
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* White carousel -- section switcher in the header, content in the body */}
+      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
+        {(() => {
+          const SECTIONS = [
+            { id: 'enrollments',   label: 'Enrollments' },
+            { id: 'confirmations', label: 'Confirmations' },
+            { id: 'options',       label: 'Payment Options' },
+          ] as const;
+          const ci = SECTIONS.findIndex(s => s.id === payTab);
+          return (
+            <div className="flex items-center justify-between gap-3 px-5 py-4" style={{ borderBottom: `1px solid ${C.divider}` }}>
+              <div className="flex items-center gap-3 min-w-0">
+                <h2 className="text-lg font-bold leading-none truncate" style={{ color: C.text }}>{SECTIONS[ci]?.label}</h2>
+                <div className="flex items-center gap-1.5">
+                  {SECTIONS.map((s, i) => (
+                    <button key={s.id} onClick={() => setPayTab(s.id)} aria-label={s.label}
+                      className="rounded-full transition-all" style={{ width: i === ci ? 18 : 7, height: 7, background: i === ci ? C.cta : C.cardBorder }} />
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={() => setPayTab(SECTIONS[(ci - 1 + SECTIONS.length) % SECTIONS.length].id)} aria-label="Previous section"
+                  className="w-8 h-8 rounded-full grid place-items-center transition-opacity hover:opacity-70" style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                  <ChevronLeft className="w-4 h-4"/>
+                </button>
+                <button onClick={() => setPayTab(SECTIONS[(ci + 1) % SECTIONS.length].id)} aria-label="Next section"
+                  className="w-8 h-8 rounded-full grid place-items-center transition-opacity hover:opacity-70" style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                  <ChevronRight className="w-4 h-4"/>
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+        <div className="p-5 sm:p-6 space-y-5">
 
       {payTab === 'confirmations' && <ConfirmationsTab C={C} getToken={getToken}/>}
       {payTab === 'options'       && <PaymentOptionsTab C={C} getToken={getToken}/>}
@@ -6443,113 +6513,146 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-xl font-bold tracking-tight leading-none" style={{ color: C.text }}>Payments</h2>
-          <p className="text-xs mt-1.5" style={{ color: C.faint }}>Enrollment-based payment tracking. Access gates are applied automatically.</p>
+          <p className="text-xs" style={{ color: C.faint }}>Enrollment-based payment tracking. Access gates are applied automatically.</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={() => reportExportCSV(
-            ['Email', 'Student', 'Cohort', 'Total Fee', 'Paid', 'Balance', 'Plan', 'Access Status', 'Access Until', 'Next Due'],
-            filtered.map(r => [r.email, r.student_name, r.cohort_name, r.total_fee, r.paid_total, r.balance, r.payment_plan, r.access_status, r.access_until ?? '', r.next_due_date ?? '']),
-            'enrollments-export.csv'
-          )} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-opacity hover:opacity-80"
-            style={{ background: C.pill, color: C.text }}>
-            <Download className="w-3.5 h-3.5"/> Export CSV
-          </button>
-        </div>
-      </div>
-
-      {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <RKpi label="Overdue / Pending" value={withBalance} sub="needs payment" accent="#dc2626" C={C} />
-        <RKpi label="Total Outstanding (GHS)" value={totalOutstanding.toLocaleString()} sub="across all enrollments" C={C} />
-        <RKpi label="Paid / Waived" value={fullyPaid} sub="fully settled" accent="#16a34a" C={C} />
-      </div>
-
-      {/* Outstanding cohort selector */}
-      <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
-        <span className="text-xs font-semibold flex-shrink-0" style={{ color: C.muted }}>Outstanding Cohort:</span>
-        <select value={outstandingCohortId}
-          onChange={async e => {
-            const v = e.target.value;
-            setOutstandingCohortId(v);
-            const token = await getToken();
-            fetch('/api/payments', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ action: 'save-payment-config', outstandingCohortId: v || null }),
-            }).catch(() => {});
-          }}
-          className="flex-1 min-w-[160px] text-sm px-3 py-1.5 rounded-lg outline-none"
-          style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
-          <option value="">-- Select the outstanding cohort --</option>
-          {cohorts.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <span className="hidden sm:inline text-[11px]" style={{ color: C.faint }}>Students moved here lose access to course resources.</span>
-      </div>
-
-      {/* Grace period manager */}
-      <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
-        <span className="text-xs font-semibold flex-shrink-0" style={{ color: C.muted }}>Grace Period:</span>
-        <select
-          value={graceCohortId}
-          onChange={e => {
-            const id = e.target.value;
-            setGraceCohortId(id);
-            setGraceDaysInput(id && gracePeriods[id] != null ? String(gracePeriods[id]) : '');
-            setGraceError('');
-          }}
-          className="flex-1 min-w-[160px] text-sm px-3 py-1.5 rounded-lg outline-none"
-          style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
-          <option value="">-- Select cohort --</option>
-          {cohorts.map((c: any) => (
-            <option key={c.id} value={c.id}>
-              {c.name}{gracePeriods[c.id] != null ? ` (${gracePeriods[c.id]}d)` : ''}
-            </option>
-          ))}
-        </select>
-        <input
-          type="number"
-          min={0}
-          placeholder="Days (blank = none)"
-          value={graceDaysInput}
-          onChange={e => { setGraceDaysInput(e.target.value); setGraceError(''); }}
-          className="w-36 text-sm px-3 py-1.5 rounded-lg outline-none"
-          style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}
-        />
-        <button
-          disabled={!graceCohortId || graceSaving}
-          onClick={async () => {
-            if (!graceCohortId) return;
-            setGraceSaving(true); setGraceError('');
-            const token = await getToken();
-            try {
-              const res = await fetch('/api/payments', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ action: 'save-grace-period', cohortId: graceCohortId, gracePeriodDays: graceDaysInput }),
-              }).then(r => r.json());
-              if (res.error) { setGraceError(res.error); }
-              else {
-                const days = graceDaysInput !== '' ? Number(graceDaysInput) : null;
-                setGracePeriods(prev => ({ ...prev, [graceCohortId]: days }));
-              }
-            } catch { setGraceError('Failed to save.'); }
-            setGraceSaving(false);
-          }}
-          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg disabled:opacity-40"
-          style={{ background: C.cta, color: C.ctaText }}>
-          {graceSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Check className="w-3.5 h-3.5"/>}
-          Save
+        <button onClick={() => reportExportCSV(
+          ['Email', 'Student', 'Cohort', 'Total Fee', 'Paid', 'Balance', 'Plan', 'Access Status', 'Access Until', 'Next Due'],
+          filtered.map(r => [r.email, r.student_name, r.cohort_name, r.total_fee, r.paid_total, r.balance, r.payment_plan, r.access_status, r.access_until ?? '', r.next_due_date ?? '']),
+          'enrollments-export.csv'
+        )} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-opacity hover:opacity-80"
+          style={{ background: C.pill, color: C.text }}>
+          <Download className="w-3.5 h-3.5"/> Export CSV
         </button>
-        {graceError && <span className="text-xs" style={{ color: '#dc2626' }}>{graceError}</span>}
-        <span className="hidden sm:inline text-[11px]" style={{ color: C.faint }}>Days of access after a missed installment before moving to outstanding.</span>
+      </div>
+
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {([
+          { icon: Users,         label: 'Enrollments',      value: rows.length,                       sub: 'total students',         color: C.text,    tint: C.pill },
+          { icon: AlertTriangle, label: 'Overdue / Pending', value: withBalance,                      sub: 'need payment',           color: '#dc2626', tint: 'rgba(220,38,38,0.12)' },
+          { icon: CreditCard,    label: 'Outstanding',      value: totalOutstanding.toLocaleString(), sub: 'across all enrollments', color: '#d97706', tint: 'rgba(217,119,6,0.12)' },
+          { icon: CheckCircle2,  label: 'Paid / Waived',    value: fullyPaid,                         sub: 'fully settled',          color: '#16a34a', tint: 'rgba(22,163,74,0.12)' },
+        ] as const).map(s => {
+          const Icon = s.icon;
+          return (
+            <div key={s.label} className="rounded-2xl p-4" style={{ background: C.pill, border: 'none' }}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl grid place-items-center flex-shrink-0" style={{ background: s.tint }}>
+                  <Icon className="w-4 h-4" style={{ color: s.color === C.text ? C.muted : s.color }} />
+                </div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] leading-tight" style={{ color: C.faint }}>{s.label}</p>
+              </div>
+              <p className="text-2xl font-bold leading-none tabular-nums mt-3" style={{ color: s.color }}>{s.value}</p>
+              <p className="text-[11px] mt-1.5" style={{ color: C.faint }}>{s.sub}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Payment settings -- collapsible card consolidating outstanding cohort + grace period */}
+      <div className="rounded-2xl overflow-hidden" style={{ background: C.pill, border: 'none' }}>
+        <button onClick={() => setSettingsOpen(o => !o)}
+          className="w-full flex items-center justify-between gap-3 px-4 py-3 transition-opacity hover:opacity-80">
+          <span className="flex items-center gap-2">
+            <Settings className="w-4 h-4" style={{ color: C.faint }} />
+            <span className="text-sm font-bold" style={{ color: C.text }}>Payment Settings</span>
+          </span>
+          <ChevronDown className="w-4 h-4 transition-transform" style={{ color: C.faint, transform: settingsOpen ? 'rotate(180deg)' : 'none' }} />
+        </button>
+        {settingsOpen && (
+          <div className="px-4 pb-4 pt-4 grid grid-cols-1 lg:grid-cols-2 gap-5" style={{ borderTop: `1px solid ${C.divider}` }}>
+            {/* Outstanding cohort */}
+            <div>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Outstanding Cohort</label>
+              <select value={outstandingCohortId}
+                onChange={async e => {
+                  const v = e.target.value;
+                  setOutstandingCohortId(v);
+                  const token = await getToken();
+                  fetch('/api/payments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ action: 'save-payment-config', outstandingCohortId: v || null }),
+                  }).catch(() => {});
+                }}
+                className="w-full text-sm px-3 py-2 rounded-lg outline-none"
+                style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
+                <option value="">Select the outstanding cohort</option>
+                {cohorts.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <p className="text-[11px] mt-1.5" style={{ color: C.faint }}>Students moved here lose access to course resources.</p>
+            </div>
+            {/* Grace period */}
+            <div>
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.muted }}>Grace Period</label>
+              <div className="flex gap-2">
+                <select
+                  value={graceCohortId}
+                  onChange={e => {
+                    const id = e.target.value;
+                    setGraceCohortId(id);
+                    setGraceDaysInput(id && gracePeriods[id] != null ? String(gracePeriods[id]) : '');
+                    setGraceError('');
+                  }}
+                  className="flex-1 min-w-0 text-sm px-3 py-2 rounded-lg outline-none"
+                  style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
+                  <option value="">Select cohort</option>
+                  {cohorts.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}{gracePeriods[c.id] != null ? ` (${gracePeriods[c.id]}d)` : ''}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="Days"
+                  value={graceDaysInput}
+                  onChange={e => { setGraceDaysInput(e.target.value); setGraceError(''); }}
+                  className="w-20 text-sm px-3 py-2 rounded-lg outline-none"
+                  style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}
+                />
+                <button
+                  disabled={!graceCohortId || graceSaving}
+                  onClick={async () => {
+                    if (!graceCohortId) return;
+                    setGraceSaving(true); setGraceError('');
+                    const token = await getToken();
+                    try {
+                      const res = await fetch('/api/payments', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ action: 'save-grace-period', cohortId: graceCohortId, gracePeriodDays: graceDaysInput }),
+                      }).then(r => r.json());
+                      if (res.error) { setGraceError(res.error); }
+                      else {
+                        const days = graceDaysInput !== '' ? Number(graceDaysInput) : null;
+                        setGracePeriods(prev => ({ ...prev, [graceCohortId]: days }));
+                      }
+                    } catch { setGraceError('Failed to save.'); }
+                    setGraceSaving(false);
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-40 flex-shrink-0"
+                  style={{ background: C.cta, color: C.ctaText }}>
+                  {graceSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Check className="w-3.5 h-3.5"/>}
+                  Save
+                </button>
+              </div>
+              {graceError && <span className="text-xs block mt-1.5" style={{ color: '#dc2626' }}>{graceError}</span>}
+              <p className="text-[11px] mt-1.5" style={{ color: C.faint }}>Days of access after a missed installment before moving to outstanding.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Filters */}
       <div className="flex gap-2 flex-wrap">
-        <input placeholder="Search by email, name, or cohort..." value={search} onChange={e => setSearch(e.target.value)}
-          className="flex-1 min-w-[180px] text-sm px-3 py-2 rounded-lg outline-none"
-          style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: C.faint }} />
+          <input placeholder="Search by email, name, or cohort..." value={search} onChange={e => setSearch(e.target.value)}
+            className="w-full text-sm pl-9 pr-3 py-2 rounded-lg outline-none"
+            style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+        </div>
         <select value={cohortFilter} onChange={e => setCohortFilter(e.target.value)}
           className="text-sm px-3 py-2 rounded-lg outline-none"
           style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
@@ -6574,7 +6677,13 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
         <div className="fixed inset-0 z-40" onClick={() => { setMenuRow(null); setMenuPos(null); }}/>
       )}
 
-      {/* Table */}
+      {/* Payment Details section header */}
+      <div>
+        <h3 className="text-base font-bold leading-none" style={{ color: C.text }}>Payment Details</h3>
+        <div style={{ height: 1, background: C.divider, marginTop: 14 }} />
+      </div>
+
+      {/* Cohorts -- vertical, one clear section per cohort with spacing */}
       {loading ? (
         <div className="flex items-center gap-2 py-10 justify-center" style={{ color: C.faint }}>
           <Loader2 className="w-4 h-4 animate-spin"/> Loading enrollment data...
@@ -6586,117 +6695,113 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
           {rows.length === 0 ? 'No signed-up students found. Students appear here after completing signup via their invitation link.' : 'No results match your filters.'}
         </div>
       ) : (
-        <div className="rounded-xl overflow-x-auto" style={{ border: `1px solid ${C.cardBorder}` }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: C.pill }}>
-                {['Student', 'Cohort', 'Total Fee', 'Paid', 'Balance', 'Plan', 'Access Status', 'Next Due', ''].map((h, i) => (
-                  <th key={h} className={[1, 2, 3, 5, 7].includes(i) ? 'hidden sm:table-cell' : ''} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, fontSize: 10, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {groupedRows.map(group => {
-                const isOutstandingGroup = outstandingCohortId && group.cohort_id === outstandingCohortId;
-                const groupBalance = group.rows.reduce((s: number, r: any) => s + (r.balance ?? 0), 0);
-                return (
-                  <Fragment key={group.cohort_id}>
-                    <tr style={{ background: isOutstandingGroup ? 'rgba(220,38,38,0.06)' : (C === DARK_C ? 'rgba(255,255,255,0.04)' : '#f1f3f5') }}>
-                      <td colSpan={9} style={{ padding: '6px 10px' }}>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span style={{ fontSize: 11, fontWeight: 700, color: isOutstandingGroup ? '#dc2626' : C.text, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                            {group.cohort_name}
-                          </span>
-                          <span style={{ fontSize: 10, color: C.faint }}>{group.rows.length} student{group.rows.length !== 1 ? 's' : ''}</span>
-                          {groupBalance > 0 && (
-                            <span style={{ fontSize: 10, fontWeight: 600, color: '#dc2626' }}>
-                              Outstanding: {group.rows[0]?.currency ?? ''} {groupBalance.toLocaleString()}
-                            </span>
-                          )}
-                          {isOutstandingGroup && (
-                            <span style={{ fontSize: 9, fontWeight: 700, color: '#dc2626', background: 'rgba(220,38,38,0.12)', padding: '1px 6px', borderRadius: 4, textTransform: 'uppercase' }}>Outstanding Cohort</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                    {group.rows.map((r: any, i: number) => {
-                      const isOutstanding = outstandingCohortId && r.cohort_id === outstandingCohortId;
-                      const accentColor = ACCESS_COLORS[r.access_status] ?? C.muted;
-                      return (
-                        <tr key={r.enrollment_id ?? i} style={{ borderTop: `1px solid ${C.divider}`, background: i % 2 === 0 ? C.card : (C === DARK_C ? '#161616' : '#fafafa') }}>
-                          <td style={{ padding: '8px 10px', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            <div className="flex items-center gap-1.5">
-                              <p style={{ color: C.text, fontWeight: 500 }} title={r.student_name}>{r.student_name || '--'}</p>
-                              {r.is_presignup && (
-                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(245,158,11,0.15)', color: '#b45309' }}>Pending Signup</span>
-                              )}
-                              {!r.is_presignup && r.payment_exempt && (
-                                <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(234,179,8,0.12)', color: '#a16207' }}>Exempt</span>
-                              )}
-                            </div>
-                            <p style={{ color: C.faint, fontSize: 10 }} title={r.email}>{r.email}</p>
-                          </td>
-                          <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: isOutstanding ? '#dc2626' : C.muted, fontWeight: isOutstanding ? 600 : 400, whiteSpace: 'nowrap' }}>
-                            {r.cohort_name ?? '--'}
-                          </td>
-                          <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r.currency} {Number(r.total_fee).toLocaleString()}</td>
-                          <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.text, whiteSpace: 'nowrap' }}>{Number(r.paid_total).toLocaleString()}</td>
-                          <td style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap', color: r.balance > 0 ? '#dc2626' : '#16a34a' }}>
-                            {r.balance > 0 ? r.balance.toLocaleString() : '--'}
-                          </td>
-                          <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.muted, whiteSpace: 'nowrap', textTransform: 'capitalize' }}>{r.payment_plan}</td>
-                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md" style={{ background: `${accentColor}18`, color: accentColor }}>
-                              {r.access_status?.replace(/_/g, ' ')}
-                            </span>
-                          </td>
-                          <td className="hidden sm:table-cell" style={{ padding: '8px 10px', color: C.muted, whiteSpace: 'nowrap', fontSize: 11 }}>
-                            {r.next_due_date ? new Date(r.next_due_date).toLocaleDateString() : '--'}
-                          </td>
-                          <td style={{ padding: '8px 10px' }}>
-                            {r.enrollment_id && (
-                              <div className="flex justify-end">
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    if (menuRow?.enrollment_id === r.enrollment_id) {
-                                      setMenuRow(null); setMenuPos(null);
-                                    } else {
-                                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                      const right = Math.max(8, window.innerWidth - rect.right);
-                                      if (window.innerHeight - rect.bottom >= 270) {
-                                        setMenuPos({ top: rect.bottom + 4, right });
-                                      } else {
-                                        setMenuPos({ bottom: window.innerHeight - rect.top + 4, right });
-                                      }
-                                      setMenuRow(r);
-                                    }
-                                  }}
-                                  className="p-1.5 rounded-lg transition-opacity hover:opacity-70"
-                                  style={{ color: C.muted, background: menuRow?.enrollment_id === r.enrollment_id ? C.pill : 'transparent' }}>
-                                  <MoreVertical className="w-4 h-4"/>
-                                </button>
+        <div className="space-y-9">
+          {groupedRows.map(group => {
+            const isOutstandingGroup = outstandingCohortId && group.cohort_id === outstandingCohortId;
+            const groupBalance = group.rows.reduce((s: number, r: any) => s + (r.balance ?? 0), 0);
+            const currency = group.rows[0]?.currency ?? '';
+            return (
+              <div key={group.cohort_id}>
+                {/* Cohort section header */}
+                <div className="flex items-center gap-2.5 flex-wrap pb-3" style={{ borderBottom: `1px solid ${C.divider}` }}>
+                  <h4 className="text-sm font-bold leading-none" style={{ color: isOutstandingGroup ? '#dc2626' : C.text }}>{group.cohort_name}</h4>
+                  {groupBalance > 0 && (
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(220,38,38,0.1)', color: '#dc2626' }}>
+                      Outstanding {currency} {groupBalance.toLocaleString()}
+                    </span>
+                  )}
+                  {isOutstandingGroup && (
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide" style={{ background: 'rgba(220,38,38,0.12)', color: '#dc2626' }}>Outstanding Cohort</span>
+                  )}
+                </div>
+
+                {/* Cohort enrollments table */}
+                <div className="overflow-x-auto">
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${C.divider}` }}>
+                        {['Student', 'Total Fee', 'Paid', 'Balance', 'Access Status', 'Next Due', ''].map((h, i) => (
+                          <th key={h} className={[1, 2, 5].includes(i) ? 'hidden sm:table-cell' : ''} style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 600, fontSize: 10, color: C.faint, textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.rows.map((r: any, i: number) => {
+                        const accentColor = ACCESS_COLORS[r.access_status] ?? C.muted;
+                        return (
+                          <tr key={r.enrollment_id ?? i} style={{ borderTop: `1px solid ${C.divider}` }}>
+                            <td style={{ padding: '14px 16px', maxWidth: 280 }}>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="truncate" style={{ color: C.text, fontWeight: 500 }} title={r.student_name}>{r.student_name || '--'}</p>
+                                  {r.is_presignup && (
+                                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(245,158,11,0.15)', color: '#b45309' }}>Pending Signup</span>
+                                  )}
+                                  {!r.is_presignup && r.payment_exempt && (
+                                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(234,179,8,0.12)', color: '#a16207' }}>Exempt</span>
+                                  )}
+                                </div>
+                                <p className="truncate" style={{ color: C.faint, fontSize: 10 }} title={r.email}>{r.email}</p>
                               </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-          <div className="px-4 py-2.5 text-xs" style={{ color: C.faint, borderTop: `1px solid ${C.divider}`, background: C.pill }}>
-            {filtered.length} enrollment{filtered.length !== 1 ? 's' : ''}{rows.length !== filtered.length ? ` of ${rows.length}` : ''}
+                            </td>
+                            <td className="hidden sm:table-cell" style={{ padding: '14px 16px', color: C.text, whiteSpace: 'nowrap' }}>{r.currency} {Number(r.total_fee).toLocaleString()}</td>
+                            <td className="hidden sm:table-cell" style={{ padding: '14px 16px', color: C.text, whiteSpace: 'nowrap' }}>{Number(r.paid_total).toLocaleString()}</td>
+                            <td style={{ padding: '14px 16px', fontWeight: 600, whiteSpace: 'nowrap', color: r.balance > 0 ? '#dc2626' : '#16a34a' }}>
+                              {r.balance > 0 ? r.balance.toLocaleString() : '--'}
+                            </td>
+                            <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md" style={{ background: `${accentColor}18`, color: accentColor }}>
+                                {r.access_status?.replace(/_/g, ' ')}
+                              </span>
+                            </td>
+                            <td className="hidden sm:table-cell" style={{ padding: '14px 16px', color: C.muted, whiteSpace: 'nowrap', fontSize: 11 }}>
+                              {r.next_due_date ? new Date(r.next_due_date).toLocaleDateString() : '--'}
+                            </td>
+                            <td style={{ padding: '14px 16px' }}>
+                              {r.enrollment_id && (
+                                <div className="flex justify-end">
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      if (menuRow?.enrollment_id === r.enrollment_id) {
+                                        setMenuRow(null); setMenuPos(null);
+                                      } else {
+                                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                        const right = Math.max(8, window.innerWidth - rect.right);
+                                        if (window.innerHeight - rect.bottom >= 270) {
+                                          setMenuPos({ top: rect.bottom + 4, right });
+                                        } else {
+                                          setMenuPos({ bottom: window.innerHeight - rect.top + 4, right });
+                                        }
+                                        setMenuRow(r);
+                                      }
+                                    }}
+                                    className="p-1.5 rounded-lg transition-opacity hover:opacity-70"
+                                    style={{ color: C.muted, background: menuRow?.enrollment_id === r.enrollment_id ? C.pill : 'transparent' }}>
+                                    <MoreVertical className="w-4 h-4"/>
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+          <div className="text-xs pt-1" style={{ color: C.faint }}>
+            {filtered.length} enrollment{filtered.length !== 1 ? 's' : ''} across {groupedRows.length} cohort{groupedRows.length !== 1 ? 's' : ''}{rows.length !== filtered.length ? ` (filtered from ${rows.length})` : ''}
           </div>
         </div>
       )}
 
       {/* Kebab dropdown - rendered outside table to escape overflow-x-auto clip */}
       {menuRow && menuPos && (
-        <div className="fixed z-50 w-52 rounded-xl shadow-2xl py-1.5"
-          style={{ top: menuPos.top, bottom: menuPos.bottom, right: menuPos.right, background: C.card, border: `1px solid ${C.cardBorder}` }}
+        <div className="fixed z-50 w-52 rounded-xl py-1.5"
+          style={{ top: menuPos.top, bottom: menuPos.bottom, right: menuPos.right, background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: isDark ? '0 4px 16px rgba(0,0,0,0.35)' : '0 12px 32px rgba(0,0,0,0.16)' }}
           onClick={e => e.stopPropagation()}>
           <button onClick={() => { setMenuRow(null); setMenuPos(null); openPay(menuRow); }}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-opacity hover:opacity-70"
@@ -7044,6 +7149,8 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
         </div>
       )}
       </>}
+        </div>
+      </div>
     </div>
 
     {/* Toast notification */}
@@ -7061,6 +7168,7 @@ function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
 
 // --- Branding / Platform settings section ---
 function BrandingSection({ C }: { C: typeof LIGHT_C }) {
+  const isDark = C === DARK_C;
   const [form, setForm] = useState({
     appName:         '',
     orgName:         '',
@@ -7234,8 +7342,8 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
   );
 
   return (
-    <div className="space-y-5 max-w-xl">
-      <div className="rounded-2xl p-5 space-y-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+    <div className="space-y-5 max-w-3xl">
+      <div className="rounded-2xl p-5 space-y-5" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: C.faint }}>Platform Branding</h2>
           <p className="text-xs leading-relaxed" style={{ color: C.muted }}>
@@ -7299,7 +7407,7 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
             {form.logoDarkUrl && (
               <button type="button" onClick={() => setForm(prev => ({ ...prev, logoDarkUrl: '' }))}
                 className="px-3 py-2 rounded-xl text-xs transition-opacity hover:opacity-80"
-                style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}` }}>
+                style={{ background: C.deleteBg, color: C.deleteText, border: 'none' }}>
                 Remove
               </button>
             )}
@@ -7356,7 +7464,7 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
               {form.emailBannerUrl && (
                 <button type="button" onClick={() => setForm(prev => ({ ...prev, emailBannerUrl: '' }))}
                   className="px-3 py-1.5 rounded-xl text-xs transition-opacity hover:opacity-80"
-                  style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}` }}>
+                  style={{ background: C.deleteBg, color: C.deleteText, border: 'none' }}>
                   Remove
                 </button>
               )}
@@ -7370,7 +7478,7 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
           <div className="flex items-center gap-3">
             <input
               type="color"
-              value={form.brandColor || '#006128'}
+              value={form.brandColor || '#00bf63'}
               onChange={e => setForm(prev => ({ ...prev, brandColor: e.target.value }))}
               className="w-10 h-9 rounded-lg cursor-pointer border-0 p-0.5"
               style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}
@@ -7379,7 +7487,7 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
               type="text"
               value={form.brandColor}
               onChange={e => setForm(prev => ({ ...prev, brandColor: e.target.value }))}
-              placeholder="#006128"
+              placeholder="#00bf63"
               className="flex-1 px-3 py-2 rounded-xl text-sm outline-none font-mono"
               style={{ background: C.pill, border: `1px solid ${C.cardBorder}`, color: C.text }}
             />
@@ -7394,7 +7502,7 @@ function BrandingSection({ C }: { C: typeof LIGHT_C }) {
       </div>
 
       {/* Landing Page */}
-      <div className="rounded-2xl p-5 space-y-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      <div className="rounded-2xl p-5 space-y-5" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: C.faint }}>Landing Page</h2>
           <p className="text-xs leading-relaxed" style={{ color: C.muted }}>
@@ -7504,12 +7612,15 @@ function loadFont(family: string) {
   const link = document.createElement('link');
   link.id = id;
   link.rel = 'stylesheet';
-  link.href = `https://fonts.googleapis.com/css2?family=${family.replace(/\s+/g, '+')}:wght@400;500;600;700;800;900&display=swap`;
+  // Google Sans Text only ships 400/500/700 -- the css2 API 400s if you request
+  // a weight a family doesn't have, so use the available subset for it.
+  const weights = family === 'Google Sans Text' ? '400;500;700' : '400;500;600;700;800;900';
+  link.href = `https://fonts.googleapis.com/css2?family=${family.replace(/\s+/g, '+')}:wght@${weights}&display=swap`;
   document.head.appendChild(link);
 }
 
 const FONT_OPTIONS = [
-  'Inter', 'Plus Jakarta Sans', 'Space Grotesk', 'Outfit',
+  'Inter', 'Google Sans Text', 'Plus Jakarta Sans', 'Space Grotesk', 'Outfit',
   'Syne', 'DM Sans', 'Poppins', 'Montserrat', 'Raleway', 'Nunito',
 ];
 
@@ -7545,18 +7656,13 @@ function SitePreview({ config, template, C }: { config: Record<string, string>; 
   const iframeH = scale > 0 ? Math.ceil(containerH / scale) : containerH;
 
   return (
-    <div className="w-full rounded-2xl overflow-hidden border"
-      style={{ borderColor: C.cardBorder, boxShadow: C.cardShadow, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 200px)' }}>
-      {/* Browser chrome */}
-      <div className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0" style={{ background: '#1e1e2e' }}>
-        <div className="flex gap-1.5">
-          {['#ff5f57', '#febc2e', '#28c840'].map(c => (
-            <div key={c} style={{ width: 10, height: 10, borderRadius: '50%', background: c }} />
-          ))}
-        </div>
-        <div className="flex-1 rounded-md px-3 py-1 text-[11px] font-mono truncate" style={{ background: '#2d2d3f', color: '#888' }}>
-          yoursite.com
-        </div>
+    <div className="w-full rounded-2xl overflow-hidden"
+      style={{ border: `1px solid ${C.cardBorder}`, boxShadow: 'none', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 160px)' }}>
+      {/* Clean header */}
+      <div className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0" style={{ background: C.card, borderBottom: `1px solid ${C.divider}` }}>
+        <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+        <span className="text-[11px] font-semibold" style={{ color: C.text }}>Live preview</span>
+        <span className="text-[11px]" style={{ color: C.faint }}>updates as you type</span>
       </div>
 
       {/* Scaled iframe */}
@@ -7575,19 +7681,13 @@ function SitePreview({ config, template, C }: { config: Record<string, string>; 
           }}
         />
       </div>
-
-      {/* Status bar */}
-      <div className="px-4 py-1.5 flex items-center gap-1.5 flex-shrink-0"
-        style={{ background: C.pill, borderTop: `1px solid ${C.cardBorder}` }}>
-        <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-        <span className="text-[11px]" style={{ color: C.faint }}>Live preview -- updates as you type</span>
-      </div>
     </div>
   );
 }
 
 // --- Site Settings Section ---
 function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
+  const isDark = C === DARK_C;
   const [template, setTemplate] = useState('momentum');
   const [config, setConfig]     = useState<Record<string, string>>({});
   const [loading, setLoading]   = useState(true);
@@ -7647,7 +7747,7 @@ function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
     <div className="space-y-1">
       <label className="text-xs font-semibold" style={{ color: C.muted }}>{label}</label>
       <input type="text" value={config[key] ?? ''} onChange={e => set(key, e.target.value)}
-        placeholder={placeholder} className="w-full px-3 py-2 rounded-xl text-sm outline-none"
+        placeholder={placeholder} className="w-full px-3 py-2 rounded-lg text-sm outline-none"
         style={{ background: C.pill, border: `1px solid ${C.cardBorder}`, color: C.text }} />
       {hint && <p className="text-[11px]" style={{ color: C.faint }}>{hint}</p>}
     </div>
@@ -7661,14 +7761,14 @@ function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
         <div className="flex items-center gap-2">
           {/* Swatch -- native picker hidden underneath */}
           <label className="flex-shrink-0 cursor-pointer">
-            <span className="block w-9 h-9 rounded-xl border-2 relative overflow-hidden"
+            <span className="block w-9 h-9 rounded-lg border-2 relative overflow-hidden"
               style={{ background: val, borderColor: C.cardBorder, boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }}>
               <input type="color" value={val} onChange={e => set(key, e.target.value)}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
             </span>
           </label>
           <input type="text" value={config[key] ?? ''} onChange={e => set(key, e.target.value)}
-            placeholder={fallback} className="w-24 px-2 py-2 rounded-xl text-xs outline-none font-mono"
+            placeholder={fallback} className="w-24 px-2 py-2 rounded-lg text-xs outline-none font-mono"
             style={{ background: C.pill, border: `1px solid ${C.cardBorder}`, color: C.text }} />
         </div>
         {hint && <p className="text-[11px]" style={{ color: C.faint }}>{hint}</p>}
@@ -7680,7 +7780,7 @@ function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
     <div className="space-y-1">
       <label className="text-xs font-semibold" style={{ color: C.muted }}>{label}</label>
       <textarea value={config[key] ?? ''} onChange={e => set(key, e.target.value)}
-        placeholder={placeholder} rows={rows} className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-none"
+        placeholder={placeholder} rows={rows} className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
         style={{ background: C.pill, border: `1px solid ${C.cardBorder}`, color: C.text }} />
       {hint && <p className="text-[11px]" style={{ color: C.faint }}>{hint}</p>}
     </div>
@@ -7703,7 +7803,7 @@ function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
       <div className="space-y-1.5">
         <label className="text-xs font-semibold" style={{ color: C.muted }}>{label}</label>
         {url && (
-          <div className="relative rounded-xl overflow-hidden" style={{ height: 90 }}>
+          <div className="relative rounded-lg overflow-hidden" style={{ height: 90 }}>
             <img src={url} alt="" className="w-full h-full object-cover" />
             <button onClick={() => set(key, '')}
               className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center"
@@ -7712,8 +7812,8 @@ function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
             </button>
           </div>
         )}
-        <label className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer border transition-all hover:opacity-80"
-          style={{ background: C.pill, borderColor: C.cardBorder, color: C.text }}>
+        <label className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all hover:opacity-80"
+          style={{ background: C.pill, color: C.text }}>
           {uploading === key
             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
             : <Upload className="w-3.5 h-3.5" />}
@@ -7734,12 +7834,12 @@ function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
           const active = (config[key] || fallback) === f;
           return (
             <button key={f} onClick={() => set(key, f)}
-              className="px-3 py-2 rounded-xl text-sm text-left border transition-all"
+              className="px-3 py-2 rounded text-sm text-left transition-all"
               style={{
                 fontFamily: `'${f}', sans-serif`,
                 background:   active ? C.cta   : C.pill,
                 color:        active ? C.ctaText : C.text,
-                borderColor:  active ? C.cta   : C.cardBorder,
+                
               }}>
               {f}
             </button>
@@ -7767,7 +7867,7 @@ function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
 
   // Accordion section wrapper
   const Sec = (id: string, label: string, preview: React.ReactNode, children: React.ReactNode) => (
-    <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
       <button onClick={() => toggleSec(id)} className="w-full flex items-center gap-3 px-4 py-3.5 text-left transition-opacity hover:opacity-70">
         <span className="flex-1 text-[11px] font-bold uppercase tracking-widest" style={{ color: C.text }}>{label}</span>
         {preview && <span className="flex items-center gap-1">{preview}</span>}
@@ -7808,13 +7908,13 @@ function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
         <div style={{ width: 400 }} className="space-y-4 pb-6 pr-1">
 
         {/* Template selector -- always visible */}
-        <div className="rounded-2xl p-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+        <div className="rounded-2xl p-4" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
           <p className="text-[10px] font-bold uppercase tracking-widest mb-3" style={{ color: C.faint }}>Template</p>
           <div className="flex gap-2 flex-wrap">
             {SITE_TEMPLATES.map(t => (
               <button key={t.id} onClick={() => { setTemplate(t.id); setOpenSections(new Set(['brand','hero'])); }}
-                className="px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
-                style={{ background: template === t.id ? C.cta : C.pill, color: template === t.id ? C.ctaText : C.text, borderColor: template === t.id ? C.cta : C.cardBorder }}>
+                className="px-4 py-2 rounded text-sm font-semibold transition-all"
+                style={{ background: template === t.id ? C.cta : C.pill, color: template === t.id ? C.ctaText : C.text }}>
                 {t.label}
               </button>
             ))}
@@ -8215,8 +8315,8 @@ function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setPanelOpen(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all hover:opacity-80"
-            style={{ background: C.pill, borderColor: C.cardBorder, color: C.text }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all hover:opacity-80"
+            style={{ background: C.pill, color: C.text }}
           >
             {panelOpen
               ? <><ArrowLeft className="w-3.5 h-3.5" /> Hide settings</>
@@ -8226,19 +8326,19 @@ function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
           <div className="flex-1" />
           <button
             onClick={handleOpenPreview}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all hover:opacity-80"
-            style={{ background: C.pill, borderColor: C.cardBorder, color: C.text }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all hover:opacity-80"
+            style={{ background: C.pill, color: C.text }}
           >
             <ExternalLink className="w-3.5 h-3.5" /> Open in new tab
           </button>
           <button onClick={handleSave} disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold disabled:opacity-50 transition-opacity hover:opacity-80"
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded text-xs font-semibold disabled:opacity-50 transition-opacity hover:opacity-80"
             style={{ background: C.cta, color: C.ctaText }}>
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Check className="w-3.5 h-3.5" /> Save</>}
           </button>
         </div>
         {msg && (
-          <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-xl ${msg.ok ? 'text-emerald-600' : 'text-red-500'}`}
+          <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${msg.ok ? 'text-emerald-600' : 'text-red-500'}`}
             style={{ background: msg.ok ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)' }}>
             {msg.ok ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" /> : <XCircle className="w-3.5 h-3.5 flex-shrink-0" />}
             {msg.text}
@@ -8274,7 +8374,7 @@ function StudentDetailPanel({ student, cohortName, detail, loading, onClose, C }
 
         <div className="p-5">
           <a href={`/student?viewAs=${student.id}`} target="_blank" rel="noreferrer"
-            className="flex items-center justify-center gap-2 w-full text-sm font-semibold py-2.5 rounded-xl mb-5"
+            className="flex items-center justify-center gap-2 w-full text-sm font-semibold py-2.5 rounded-lg mb-5"
             style={{ background: C.cta, color: C.ctaText }}>
             <ExternalLink className="w-4 h-4"/>
             Open Student Dashboard
@@ -8366,6 +8466,7 @@ function StudentDetailPanel({ student, cohortName, detail, loading, onClose, C }
 }
 
 function StudentsSection({ C }: { C: typeof LIGHT_C }) {
+  const isDark = C === DARK_C;
   const [students,        setStudents]        = useState<any[]>([]);
   const [cohorts,         setCohorts]         = useState<any[]>([]);
   const [courseCounts,    setCourseCounts]    = useState<Record<string, number>>({});
@@ -8376,6 +8477,8 @@ function StudentsSection({ C }: { C: typeof LIGHT_C }) {
   const [selected,     setSelected]     = useState<any>(null);
   const [detail,       setDetail]       = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [menuRow,      setMenuRow]      = useState<any | null>(null);
+  const [menuPos,      setMenuPos]      = useState<{ top?: number; bottom?: number; right: number } | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -8419,92 +8522,126 @@ function StudentsSection({ C }: { C: typeof LIGHT_C }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold" style={{ color: C.text }}>Students</h2>
-          <p className="text-sm mt-0.5" style={{ color: C.muted }}>
-            {students.length} student{students.length !== 1 ? 's' : ''} across {cohorts.length} cohort{cohorts.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <button
-          onClick={() => reportExportCSV(
-            ['Name', 'Email', 'Cohort', 'Content in Cohort', 'Completed', 'Last Login'],
-            visible.map(s => [
-              s.full_name || '',
-              s.email || '',
-              cohortMap[s.cohort_id] || '',
-              s.cohort_id ? (courseCounts[s.cohort_id] ?? 0) : '',
-              completedCounts[s.id] ?? 0,
-              s.last_login_at ? new Date(s.last_login_at).toLocaleDateString() : 'Never',
-            ]),
-            'students.csv',
-          )}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold flex-shrink-0 transition-opacity hover:opacity-80"
-          style={{ background: C.pill, color: C.text, border: `1px solid ${C.cardBorder}` }}>
-          <Download className="w-3.5 h-3.5" />
-          Export CSV
-        </button>
-      </div>
-
-      <div className="flex gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: C.faint }}/>
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search name or email..."
-            className="w-full pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none"
-            style={{ background: C.input, color: C.text, border: `1.5px solid ${C.cardBorder}` }}/>
-        </div>
-        <select value={filterCohort} onChange={e => setFilterCohort(e.target.value)}
-          className="px-3 py-2.5 rounded-xl text-sm outline-none"
-          style={{ background: C.input, color: C.text, border: `1.5px solid ${C.cardBorder}` }}>
-          <option value="">All Cohorts</option>
-          {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </div>
-
-      <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
-        <div className="grid gap-3 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide grid-cols-[1fr_auto] sm:grid-cols-[2fr_1.5fr_80px_90px_90px_110px]"
-          style={{ background: C.pill, color: C.faint, borderBottom: `1px solid ${C.cardBorder}` }}>
-          <span>Student</span>
-          <span className="hidden sm:inline">Cohort</span>
-          <span className="hidden sm:inline">In Cohort</span>
-          <span className="hidden sm:inline">Completed</span>
-          <span className="hidden sm:inline">Last Login</span>
-          <span></span>
-        </div>
-
-        {loading ? (
-          <div className="py-12 text-center text-sm" style={{ color: C.muted }}>Loading students...</div>
-        ) : visible.length === 0 ? (
-          <div className="py-12 text-center text-sm" style={{ color: C.muted }}>No students found</div>
-        ) : visible.map((s, i) => (
-          <div key={s.id} className="grid gap-3 px-4 py-3 items-center grid-cols-[1fr_auto] sm:grid-cols-[2fr_1.5fr_80px_90px_90px_110px]"
-            style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.cardBorder}` : 'none' }}>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || 'No name'}</p>
-              <p className="text-xs truncate" style={{ color: C.muted }}>{s.email}</p>
-            </div>
-            <span className="hidden sm:block text-sm truncate" style={{ color: C.muted }}>{cohortMap[s.cohort_id] || '--'}</span>
-            <span className="hidden sm:block text-sm tabular-nums" style={{ color: C.text }}>{s.cohort_id ? (courseCounts[s.cohort_id] ?? 0) : '--'}</span>
-            <span className="hidden sm:block text-sm tabular-nums font-semibold" style={{ color: C.green }}>{completedCounts[s.id] ?? 0}</span>
-            <span className="hidden sm:block text-xs" style={{ color: C.faint }}>
-              {s.last_login_at ? new Date(s.last_login_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'Never'}
-            </span>
-            <div className="flex gap-1.5">
-              <button onClick={() => openDetail(s)}
-                className="text-xs px-2.5 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80"
-                style={{ background: C.pill, color: C.text }}>
-                View
-              </button>
-              <a href={`/student?viewAs=${s.id}`} target="_blank" rel="noreferrer"
-                className="text-xs px-2.5 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80"
-                style={{ background: C.cta, color: C.ctaText }}>
-                Login
-              </a>
-            </div>
+      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-5 py-4" style={{ borderBottom: `1px solid ${C.divider}` }}>
+          <div>
+            <h2 className="text-lg font-bold leading-none" style={{ color: C.text }}>Students</h2>
+            <p className="text-xs mt-1.5" style={{ color: C.muted }}>
+              {students.length} student{students.length !== 1 ? 's' : ''} across {cohorts.length} cohort{cohorts.length !== 1 ? 's' : ''}
+            </p>
           </div>
-        ))}
+          <button
+            onClick={() => reportExportCSV(
+              ['Name', 'Email', 'Cohort', 'Content in Cohort', 'Completed', 'Last Login'],
+              visible.map(s => [
+                s.full_name || '',
+                s.email || '',
+                cohortMap[s.cohort_id] || '',
+                s.cohort_id ? (courseCounts[s.cohort_id] ?? 0) : '',
+                completedCounts[s.id] ?? 0,
+                s.last_login_at ? new Date(s.last_login_at).toLocaleDateString() : 'Never',
+              ]),
+              'students.csv',
+            )}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold flex-shrink-0 transition-opacity hover:opacity-80"
+            style={{ background: C.pill, color: C.text }}>
+            <Download className="w-3.5 h-3.5" />
+            Export CSV
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 sm:p-6 space-y-5">
+          {/* Filters */}
+          <div className="flex gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: C.faint }}/>
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search name or email..."
+                className="w-full pl-9 pr-3 py-2.5 rounded-lg text-sm outline-none"
+                style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}/>
+            </div>
+            <select value={filterCohort} onChange={e => setFilterCohort(e.target.value)}
+              className="px-3 py-2.5 rounded-lg text-sm outline-none"
+              style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
+              <option value="">All Cohorts</option>
+              {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
+          {/* Clean table -- borderless, header divider + row hairlines */}
+          <div className="overflow-x-auto">
+            <div className="grid gap-3 px-4 py-3.5 text-[10px] font-semibold uppercase tracking-[0.07em] grid-cols-[1fr_auto] sm:grid-cols-[2fr_1.5fr_80px_90px_90px_48px]"
+              style={{ color: C.faint, borderBottom: `1px solid ${C.divider}` }}>
+              <span>Student</span>
+              <span className="hidden sm:inline">Cohort</span>
+              <span className="hidden sm:block text-center">In Cohort</span>
+              <span className="hidden sm:block text-center">Completed</span>
+              <span className="hidden sm:inline">Last Login</span>
+              <span></span>
+            </div>
+
+            {loading ? (
+              <div className="py-12 text-center text-sm" style={{ color: C.muted }}>Loading students...</div>
+            ) : visible.length === 0 ? (
+              <div className="py-12 text-center text-sm" style={{ color: C.muted }}>No students found</div>
+            ) : visible.map((s, i) => (
+              <div key={s.id} className="grid gap-3 px-4 py-3.5 items-center grid-cols-[1fr_auto] sm:grid-cols-[2fr_1.5fr_80px_90px_90px_48px]"
+                style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || 'No name'}</p>
+                  <p className="text-xs truncate" style={{ color: C.muted }}>{s.email}</p>
+                </div>
+                <span className="hidden sm:block text-sm truncate" style={{ color: C.muted }}>{cohortMap[s.cohort_id] || '--'}</span>
+                <span className="hidden sm:block text-sm tabular-nums text-center" style={{ color: C.text }}>{s.cohort_id ? (courseCounts[s.cohort_id] ?? 0) : '--'}</span>
+                <span className="hidden sm:block text-sm tabular-nums font-semibold text-center" style={{ color: C.green }}>{completedCounts[s.id] ?? 0}</span>
+                <span className="hidden sm:block text-xs" style={{ color: C.faint }}>
+                  {s.last_login_at ? new Date(s.last_login_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'Never'}
+                </span>
+                <div className="flex justify-end">
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      if (menuRow?.id === s.id) { setMenuRow(null); setMenuPos(null); }
+                      else {
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        const right = Math.max(8, window.innerWidth - rect.right);
+                        if (window.innerHeight - rect.bottom >= 130) setMenuPos({ top: rect.bottom + 4, right });
+                        else setMenuPos({ bottom: window.innerHeight - rect.top + 4, right });
+                        setMenuRow(s);
+                      }
+                    }}
+                    className="p-1.5 rounded-lg transition-opacity hover:opacity-70"
+                    style={{ color: C.muted, background: menuRow?.id === s.id ? C.pill : 'transparent' }}>
+                    <MoreVertical className="w-4 h-4"/>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {/* Row action menu */}
+      {menuRow && menuPos && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => { setMenuRow(null); setMenuPos(null); }}/>
+          <div className="fixed z-50 w-44 rounded-lg py-1.5"
+            style={{ top: menuPos.top, bottom: menuPos.bottom, right: menuPos.right, background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: isDark ? '0 4px 16px rgba(0,0,0,0.35)' : '0 12px 32px rgba(0,0,0,0.16)' }}
+            onClick={e => e.stopPropagation()}>
+            <button onClick={() => { const st = menuRow; setMenuRow(null); setMenuPos(null); openDetail(st); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-opacity hover:opacity-70" style={{ color: C.text }}>
+              <Eye className="w-3.5 h-3.5 flex-shrink-0"/> View details
+            </button>
+            <a href={`/student?viewAs=${menuRow.id}`} target="_blank" rel="noreferrer"
+              onClick={() => { setMenuRow(null); setMenuPos(null); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-opacity hover:opacity-70" style={{ color: C.text }}>
+              <ExternalLink className="w-3.5 h-3.5 flex-shrink-0"/> Login as student
+            </a>
+          </div>
+        </>
+      )}
 
       {selected && (
         <StudentDetailPanel
@@ -8709,20 +8846,20 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
     }
   };
 
-  const card = { background: C.card };
-  const thStyle = { color: C.faint, background: isDark ? 'rgba(255,255,255,0.03)' : '#fafafa' };
+  const card = { background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` } as React.CSSProperties;
+  const thStyle = { color: C.faint } as React.CSSProperties;
 
   return (
     <div className="space-y-5 pb-10">
       <div className="rounded-2xl p-5" style={card}>
         <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>Select Live Session</p>
         {eventsLoading ? (
-          <div className="h-10 rounded-xl animate-pulse" style={{ background: C.skeleton }} />
+          <div className="h-10 rounded-lg animate-pulse" style={{ background: C.skeleton }} />
         ) : (
           <select value={selectedEventId} onChange={e => setSelectedEventId(e.target.value)}
-            className="w-full rounded-xl px-4 py-2.5 text-sm"
+            className="w-full rounded-lg px-4 py-2.5 text-sm"
             style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text, outline: 'none' }}>
-            <option value="">-- Choose a live session to view attendance --</option>
+            <option value="">Choose a live session to view attendance</option>
             {events.map(e => (
               <option key={e.id} value={e.id}>{e.title}{e.recurrence && e.recurrence !== 'once' ? ' (recurring)' : ''}</option>
             ))}
@@ -8746,21 +8883,35 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
           </div>
 
           <div className="rounded-2xl overflow-hidden" style={card}>
-            <div className="flex flex-wrap items-start sm:items-center justify-between gap-3 px-4 sm:px-5 py-4">
-              <div>
-                <p className="text-sm font-semibold" style={{ color: C.text }}>Student Report</p>
-                <p className="text-xs mt-0.5" style={{ color: C.faint }}>{registrations.length} registered &middot; {totalSessions} sessions recorded</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+            {/* Carousel switcher header */}
+            <div className="flex items-center justify-between gap-3 px-5 py-4" style={{ borderBottom: `1px solid ${C.divider}` }}>
+              <div className="flex items-center gap-3 min-w-0">
+                <h3 className="text-base font-bold leading-none capitalize" style={{ color: C.text }}>{viewMode}</h3>
+                <div className="flex items-center gap-1.5">
                   {(['summary', 'matrix'] as const).map(m => (
-                    <button key={m} onClick={() => setViewMode(m)}
-                      className="px-3 py-1.5 text-xs font-medium capitalize transition-colors"
-                      style={{ background: viewMode === m ? C.green : 'transparent', color: viewMode === m ? '#fff' : C.muted }}>
-                      {m}
-                    </button>
+                    <button key={m} onClick={() => setViewMode(m)} aria-label={m}
+                      className="rounded-full transition-all"
+                      style={{ width: viewMode === m ? 18 : 7, height: 7, background: viewMode === m ? C.cta : C.cardBorder }} />
                   ))}
                 </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={() => setViewMode(viewMode === 'summary' ? 'matrix' : 'summary')} aria-label="Previous view"
+                  className="w-8 h-8 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+                  style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                  <ChevronLeft className="w-4 h-4"/>
+                </button>
+                <button onClick={() => setViewMode(viewMode === 'summary' ? 'matrix' : 'summary')} aria-label="Next view"
+                  className="w-8 h-8 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+                  style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+                  <ChevronRight className="w-4 h-4"/>
+                </button>
+              </div>
+            </div>
+            {/* Controls row */}
+            <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3" style={{ borderBottom: `1px solid ${C.divider}` }}>
+              <p className="text-xs" style={{ color: C.faint }}>{registrations.length} registered &middot; {totalSessions} sessions recorded</p>
+              <div className="flex flex-wrap items-center gap-2">
                 {sessionDates.length > 1 && (
                   <select value={activeDate ?? ''} onChange={e => setNudgeDate(e.target.value)}
                     title="Session to check absences against"
@@ -8797,7 +8948,7 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
 
             {loading ? (
               <div className="px-5 py-10 space-y-3">
-                {[0,1,2,3].map(i => <div key={i} className="h-12 rounded-xl animate-pulse" style={{ background: C.skeleton }} />)}
+                {[0,1,2,3].map(i => <div key={i} className="h-12 rounded-lg animate-pulse" style={{ background: C.skeleton }} />)}
               </div>
             ) : studentRows.length === 0 ? (
               <div className="px-5 py-16 text-center text-sm" style={{ color: C.faint }}>
@@ -8807,7 +8958,7 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr style={thStyle}>
+                    <tr style={{ ...thStyle, borderBottom: `1px solid ${C.divider}` }}>
                       <th className="px-3 sm:px-4 py-3 text-center" style={{ width: 40 }}>
                         <input type="checkbox" aria-label="Select all absent"
                           checked={allAbsentSelected} disabled={absentRows.length === 0}
@@ -8863,9 +9014,9 @@ function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
               <div className="overflow-x-auto">
                 <table className="text-xs" style={{ borderCollapse: 'collapse', minWidth: '100%' }}>
                   <thead>
-                    <tr style={thStyle}>
+                    <tr style={{ ...thStyle, borderBottom: `1px solid ${C.divider}` }}>
                       <th className="text-left px-5 py-3 font-semibold uppercase tracking-wide sticky left-0"
-                        style={{ ...thStyle, minWidth: 180 }}>Student</th>
+                        style={{ ...thStyle, minWidth: 180, background: C.card }}>Student</th>
                       {sessionDates.map(d => (
                         <th key={d} className="px-3 py-3 font-semibold uppercase tracking-wide text-center" style={{ minWidth: 72 }}>
                           {new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -8946,9 +9097,11 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
   const [tagInput, setTagInput]   = useState('');
   const [fileMode, setFileMode]         = useState<'link' | 'upload'>('link');
   const [fileUploading, setFileUploading] = useState(false);
-  const tagInputRef               = useRef<HTMLInputElement>(null);
   const dataFileRef               = useRef<HTMLInputElement>(null);
   const [expandedAnalystSections, setExpandedAnalystSections] = useState<Record<string, boolean>>({});
+  // Drag-and-drop reordering for analysis phases and their tasks.
+  const [dragState, setDragState] = useState<{ kind: 'section' | 'task'; sectionId: string; id: string } | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   async function getToken() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -8998,16 +9151,6 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     setView('editor');
   }
 
-  function commitTag(raw: string) {
-    const tag = raw.trim();
-    if (!tag) return;
-    setForm(f => ({ ...f, tags: f.tags.includes(tag) ? f.tags : [...f.tags, tag] }));
-    setTagInput('');
-  }
-
-  function removeTag(tag: string) {
-    setForm(f => ({ ...f, tags: f.tags.filter(t => t !== tag) }));
-  }
 
   function normalizeQuestionTypes(questions: string[] = [], types?: (DatasetQuestionType | string)[] | null): DatasetQuestionType[] {
     return questions.map((_, i) => types?.[i] === 'sql' ? 'sql' : 'analytics');
@@ -9390,19 +9533,44 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     syncAnalystSections(sections);
   }
 
+  function reorderArray<T>(arr: T[], from: number, to: number): T[] {
+    if (from === -1 || to === -1 || from === to) return arr;
+    const next = [...arr];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    return next;
+  }
+
+  function reorderAnalystSections(draggedId: string, targetId: string) {
+    if (draggedId === targetId) return;
+    const sections = normalizeAnalystSections(form.analyst_sections, form.sample_questions, form.sample_question_types);
+    syncAnalystSections(reorderArray(sections, sections.findIndex(s => s.id === draggedId), sections.findIndex(s => s.id === targetId)));
+  }
+
+  function reorderAnalystTasks(sectionId: string, draggedId: string, targetId: string) {
+    if (draggedId === targetId) return;
+    const sections = normalizeAnalystSections(form.analyst_sections, form.sample_questions, form.sample_question_types)
+      .map(section => section.id === sectionId
+        ? { ...section, tasks: reorderArray(section.tasks, section.tasks.findIndex(t => t.id === draggedId), section.tasks.findIndex(t => t.id === targetId)) }
+        : section);
+    syncAnalystSections(sections);
+  }
+
   const inputStyle: React.CSSProperties = {
     width: '100%', padding: '9px 12px', borderRadius: 10, fontSize: 14,
     border: `1px solid ${C.cardBorder}`, background: C.input, color: C.text,
     outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
   };
   const font = 'var(--font-sans, Inter, sans-serif)';
+  const isDark = C === DARK_C;
+  const cardBorder = isDark ? 'none' : `1px solid ${C.cardBorder}`;
 
   if (view === 'editor') {
     const EDITOR_TABS = [
-      { id: 'overview' as const,   label: 'Overview',        Icon: FileText },
-      { id: 'dataset' as const,    label: 'Dataset',         Icon: Database },
-      { id: 'phases' as const,     label: 'Analysis Phases', Icon: Search },
-      { id: 'disclaimer' as const, label: 'Disclaimer',      Icon: AlertTriangle },
+      { id: 'overview' as const,   label: 'Overview',        hint: 'Title, category and cover', Icon: FileText },
+      { id: 'dataset' as const,    label: 'Dataset',         hint: 'File and SQL workbench',     Icon: Database },
+      { id: 'phases' as const,     label: 'Analysis Phases', hint: 'Tasks for students',         Icon: Search },
+      { id: 'disclaimer' as const, label: 'Disclaimer',      hint: 'Usage notes',                Icon: AlertTriangle },
     ];
 
     // VE-style: one cohesive C.cta accent for every section head (the `accent` arg is ignored).
@@ -9423,130 +9591,162 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
 
     const analystSections = normalizeAnalystSections(form.analyst_sections, form.sample_questions, form.sample_question_types);
 
+    // Quiet, clickable type tag: shows the current task type and toggles between Analytics/SQL on click.
+    const typeToggle = (active: DatasetQuestionType, onSelect: (t: DatasetQuestionType) => void) => (
+      <button type="button"
+        onClick={() => onSelect(active === 'sql' ? 'analytics' : 'sql')}
+        title="Click to switch between Analytics and SQL"
+        style={{ flexShrink: 0, padding: '4px 10px', borderRadius: 20, border: 'none', background: active === 'sql' ? 'rgba(22,163,74,0.12)' : C.input, color: active === 'sql' ? '#16a34a' : C.faint, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+        {active === 'sql' ? 'SQL' : 'Analytics'}
+      </button>
+    );
+
     const analystSectionEditor = (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {analystSections.length === 0 && (
-          <div style={{ padding: '16px', borderRadius: 12, background: C.page, border: 'none', textAlign: 'center' }}>
-            <p style={{ margin: 0, color: C.faint, fontSize: 13 }}>No analyst sections yet.</p>
+          <div style={{ padding: '28px 16px', borderRadius: 12, background: C.page, textAlign: 'center' }}>
+            <p style={{ margin: 0, color: C.faint, fontSize: 13 }}>No analysis phases yet. Add one to get started.</p>
           </div>
         )}
         {analystSections.map((section, sectionIndex) => {
           const sectionId = section.id || `section-${sectionIndex + 1}`;
           const expanded = expandedAnalystSections[sectionId] !== false;
+          const isDragging = dragState?.kind === 'section' && dragState.id === sectionId;
+          const isDropTarget = dragState?.kind === 'section' && dragOverId === sectionId && dragState.id !== sectionId;
           return (
-            <div key={sectionId} style={{ display: 'grid', gridTemplateColumns: '30px minmax(0, 1fr)', gap: 10 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <span style={{ width: 26, height: 26, borderRadius: '50%', background: `${C.cta}1f`, border: 'none', color: C.cta, fontSize: 11, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{sectionIndex + 1}</span>
-                {sectionIndex < analystSections.length - 1 && <span style={{ flex: 1, minHeight: 16, width: 0, borderLeft: `2px dashed ${C.cardBorder}`, margin: '5px 0' }} />}
+            <div key={sectionId}
+              data-phasecard
+              onDragOver={e => { if (dragState?.kind === 'section') { e.preventDefault(); setDragOverId(sectionId); } }}
+              onDrop={e => { if (dragState?.kind === 'section') { e.preventDefault(); reorderAnalystSections(dragState.id, sectionId); } setDragOverId(null); }}
+              style={{ background: C.page, borderRadius: 14, overflow: 'hidden', opacity: isDragging ? 0.45 : 1, outline: isDropTarget ? `2px solid ${C.cta}` : 'none', outlineOffset: -2 }}>
+              {/* Phase header */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '12px 14px' }}>
+                <span
+                  draggable
+                  onDragStart={e => { setDragState({ kind: 'section', sectionId, id: sectionId }); e.dataTransfer.effectAllowed = 'move'; const card = (e.currentTarget as HTMLElement).closest('[data-phasecard]'); if (card) e.dataTransfer.setDragImage(card, 20, 20); }}
+                  onDragEnd={() => { setDragState(null); setDragOverId(null); }}
+                  title="Drag to reorder phase"
+                  style={{ cursor: 'grab', color: C.faint, display: 'flex', flexShrink: 0, padding: '0 2px' }}
+                >
+                  <GripVertical size={16} />
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setExpandedAnalystSections(prev => ({ ...prev, [sectionId]: !expanded }))}
+                  style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: 'transparent', color: C.faint, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+                >
+                  {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                </button>
+                <span style={{ fontSize: 12, fontWeight: 800, color: C.faint, flexShrink: 0 }}>{sectionIndex + 1}</span>
+                <input
+                  value={section.title}
+                  onChange={e => updateAnalystSection(sectionId, { title: e.target.value })}
+                  placeholder="Phase title, e.g. Channel and audience breakdown"
+                  style={{ flex: 1, border: 'none', background: 'transparent', fontWeight: 700, fontSize: 15, color: C.text, outline: 'none', padding: '4px 0', fontFamily: 'inherit', minWidth: 0 }}
+                />
+                <span style={{ fontSize: 12, color: C.faint, flexShrink: 0 }}>{section.tasks.length} {section.tasks.length === 1 ? 'task' : 'tasks'}</span>
+                <button onClick={() => removeAnalystSection(sectionId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint, display: 'flex', flexShrink: 0, padding: 4 }}>
+                  <Trash2 size={15} />
+                </button>
               </div>
-              <div style={{ border: 'none', borderRadius: 14, background: C.page, overflow: 'hidden', marginBottom: sectionIndex < analystSections.length - 1 ? 4 : 0 }}>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: 12, borderBottom: expanded ? `1px solid ${C.cardBorder}` : 'none' }}>
-                  <button
-                    type="button"
-                    onClick={() => setExpandedAnalystSections(prev => ({ ...prev, [sectionId]: !expanded }))}
-                    style={{ width: 26, height: 26, borderRadius: 8, border: 'none', background: C.input, color: C.faint, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
-                  >
-                    {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  </button>
-                  <input
-                    value={section.title}
-                    onChange={e => updateAnalystSection(sectionId, { title: e.target.value })}
-                    placeholder="e.g. Channel And Audience Breakdown"
-                    style={{ ...inputStyle, background: C.card, fontWeight: 800, fontSize: 14, flex: 1 }}
+              {expanded && (
+                <div style={{ padding: '0 14px 14px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <RichTextEditor
+                    value={section.brief ?? ''}
+                    onChange={html => updateAnalystSection(sectionId, { brief: html })}
+                    placeholder="Briefly describe what this phase asks the learner to investigate."
+                    bgOverride={C.card}
                   />
-                  <button onClick={() => removeAnalystSection(sectionId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-                {expanded && (
-                  <div style={{ padding: 12 }}>
-                    <div style={{ marginBottom: 10 }}>
-                      <RichTextEditor
-                        value={section.brief ?? ''}
-                        onChange={html => updateAnalystSection(sectionId, { brief: html })}
-                        placeholder="Briefly describe what this phase asks the learner to investigate."
-                        bgOverride={C.card}
-                      />
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 150px', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.card, borderRadius: 10, padding: '0 12px', border: `1px solid ${C.cardBorder}` }}>
                       <Video size={15} style={{ color: C.faint, flexShrink: 0 }} />
                       <input
                         value={section.videoUrl ?? ''}
                         onChange={e => updateAnalystSection(sectionId, { videoUrl: e.target.value })}
-                        placeholder="Embed link (optional) -- Canva, YouTube, Vimeo or Bunny"
-                        style={{ ...inputStyle, background: C.card, fontSize: 13 }}
+                        placeholder="Embed link (optional)"
+                        style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 13, color: C.text, padding: '9px 0', fontFamily: 'inherit', minWidth: 0 }}
                       />
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                      <select
-                        value={section.difficulty ?? ''}
-                        onChange={e => updateAnalystSection(sectionId, { difficulty: e.target.value })}
-                        style={{ ...inputStyle, background: C.card, fontSize: 13, cursor: 'pointer' }}
-                      >
-                        <option value="">Difficulty: Auto</option>
-                        <option value="Beginner">Beginner</option>
-                        <option value="Intermediate">Intermediate</option>
-                        <option value="Advanced">Advanced</option>
-                      </select>
-                      <input
-                        value={section.duration ?? ''}
-                        onChange={e => updateAnalystSection(sectionId, { duration: e.target.value })}
-                        placeholder="Duration: Auto (e.g. 30-60 mins)"
-                        style={{ ...inputStyle, background: C.card, fontSize: 13 }}
-                      />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {section.tasks.map((task, taskIndex) => {
-                        const taskId = task.id || `task-${sectionIndex + 1}-${taskIndex + 1}`;
-                        return (
-                          <div key={taskId} style={{ display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr) 112px 24px', gap: 8, alignItems: 'start' }}>
-                            <span style={{ marginTop: 8, width: 22, height: 22, borderRadius: '50%', background: task.type === 'sql' ? 'rgba(8,145,178,0.14)' : `${C.cta}1f`, color: task.type === 'sql' ? '#0891b2' : C.cta, fontSize: 11, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{taskIndex + 1}</span>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-                              <input
-                                value={task.prompt}
-                                onChange={e => updateAnalystTask(sectionId, taskId, { prompt: e.target.value })}
-                                placeholder={task.type === 'sql' ? 'Task description, e.g. Which channel has the highest conversion rate?' : 'Task description, e.g. What targeting recommendation should the team make?'}
-                                style={{ ...inputStyle, background: C.card, fontSize: 13, fontWeight: 600 }}
-                              />
-                              <textarea
-                                value={task.description ?? ''}
-                                onChange={e => updateAnalystTask(sectionId, taskId, { description: e.target.value })}
-                                rows={2}
-                                placeholder={task.type === 'sql' ? 'Instructions for the student (optional), e.g. Use GROUP BY channel and ORDER BY the conversion rate.' : 'Instructions for the student (optional), e.g. Compare the two campaigns and justify your recommendation.'}
-                                style={{ ...inputStyle, background: C.card, fontSize: 12.5, color: C.muted, resize: 'vertical' }}
-                              />
-                            </div>
-                            <select
-                              value={task.type ?? 'analytics'}
-                              onChange={e => updateAnalystTask(sectionId, taskId, { type: e.target.value as DatasetQuestionType })}
-                              style={{ ...inputStyle, background: C.card, fontSize: 12, fontWeight: 600, color: C.muted, padding: '8px 9px' }}
+                    <select
+                      value={section.difficulty ?? ''}
+                      onChange={e => updateAnalystSection(sectionId, { difficulty: e.target.value })}
+                      style={{ ...inputStyle, background: C.card, fontSize: 13, cursor: 'pointer' }}
+                    >
+                      <option value="">Difficulty: Auto</option>
+                      <option value="Beginner">Beginner</option>
+                      <option value="Intermediate">Intermediate</option>
+                      <option value="Advanced">Advanced</option>
+                    </select>
+                    <input
+                      value={section.duration ?? ''}
+                      onChange={e => updateAnalystSection(sectionId, { duration: e.target.value })}
+                      placeholder="Duration: Auto"
+                      style={{ ...inputStyle, background: C.card, fontSize: 13 }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {section.tasks.map((task, taskIndex) => {
+                      const taskId = task.id || `task-${sectionIndex + 1}-${taskIndex + 1}`;
+                      const taskDragging = dragState?.kind === 'task' && dragState.id === taskId;
+                      const taskDropTarget = dragState?.kind === 'task' && dragState.sectionId === sectionId && dragOverId === taskId && dragState.id !== taskId;
+                      return (
+                        <div key={taskId}
+                          data-taskcard
+                          onDragOver={e => { if (dragState?.kind === 'task' && dragState.sectionId === sectionId) { e.preventDefault(); e.stopPropagation(); setDragOverId(taskId); } }}
+                          onDrop={e => { if (dragState?.kind === 'task' && dragState.sectionId === sectionId) { e.preventDefault(); e.stopPropagation(); reorderAnalystTasks(sectionId, dragState.id, taskId); } setDragOverId(null); }}
+                          style={{ background: C.card, borderRadius: 10, padding: 10, opacity: taskDragging ? 0.45 : 1, outline: taskDropTarget ? `2px solid ${C.cta}` : 'none', outlineOffset: -2 }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                            <span
+                              draggable
+                              onDragStart={e => { setDragState({ kind: 'task', sectionId, id: taskId }); e.dataTransfer.effectAllowed = 'move'; const card = (e.currentTarget as HTMLElement).closest('[data-taskcard]'); if (card) e.dataTransfer.setDragImage(card, 20, 20); }}
+                              onDragEnd={() => { setDragState(null); setDragOverId(null); }}
+                              title="Drag to reorder task"
+                              style={{ cursor: 'grab', color: C.faint, display: 'flex', flexShrink: 0, marginTop: 3 }}
                             >
-                              <option value="analytics">Analytics</option>
-                              <option value="sql">SQL</option>
-                            </select>
-                            <button onClick={() => removeAnalystTask(sectionId, taskId)} style={{ marginTop: 6, background: 'none', border: 'none', cursor: 'pointer', color: C.faint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <GripVertical size={14} />
+                            </span>
+                            <textarea
+                              value={task.prompt}
+                              onChange={e => updateAnalystTask(sectionId, taskId, { prompt: e.target.value })}
+                              rows={1}
+                              ref={el => { if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } }}
+                              onInput={e => { const el = e.currentTarget; el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }}
+                              placeholder={task.type === 'sql' ? 'e.g. Which channel has the highest conversion rate?' : 'e.g. What targeting recommendation should the team make?'}
+                              style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 13.5, fontWeight: 600, color: C.text, fontFamily: 'inherit', minWidth: 0, resize: 'none', overflow: 'hidden', lineHeight: 1.5, padding: '2px 0' }}
+                            />
+                            {typeToggle(task.type ?? 'analytics', t => updateAnalystTask(sectionId, taskId, { type: t }))}
+                            <button onClick={() => removeAnalystTask(sectionId, taskId)} style={{ marginTop: 2, background: 'none', border: 'none', cursor: 'pointer', color: C.faint, display: 'flex', flexShrink: 0, padding: 2 }}>
                               <X size={14} />
                             </button>
                           </div>
-                        );
-                      })}
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
-                      <button onClick={() => addAnalystTask(sectionId, 'analytics')} style={{ fontSize: 12, color: C.muted, background: C.input, border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600, padding: '7px 10px' }}>
-                        <Plus size={13} /> Analytics Task
+                          <textarea
+                            value={task.description ?? ''}
+                            onChange={e => updateAnalystTask(sectionId, taskId, { description: e.target.value })}
+                            rows={1}
+                            ref={el => { if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } }}
+                            onInput={e => { const el = e.currentTarget; el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }}
+                            placeholder="Instructions for the student (optional)"
+                            style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 12.5, color: C.muted, resize: 'none', overflow: 'hidden', lineHeight: 1.5, fontFamily: 'inherit', marginTop: 6, boxSizing: 'border-box' }}
+                          />
+                        </div>
+                      );
+                    })}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      <button onClick={() => addAnalystTask(sectionId, 'analytics')} style={{ fontSize: 12.5, color: C.muted, background: C.input, border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600, padding: '7px 11px' }}>
+                        <Plus size={13} /> Analytics task
                       </button>
-                      <button onClick={() => addAnalystTask(sectionId, 'sql')} style={{ fontSize: 12, color: C.muted, background: C.input, border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600, padding: '7px 10px' }}>
-                        <Plus size={13} /> SQL Task
+                      <button onClick={() => addAnalystTask(sectionId, 'sql')} style={{ fontSize: 12.5, color: C.muted, background: C.input, border: 'none', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600, padding: '7px 11px' }}>
+                        <Plus size={13} /> SQL task
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           );
         })}
-        <button onClick={addAnalystSection} style={{ alignSelf: 'flex-start', fontSize: 13, color: C.muted, background: C.input, border: 'none', borderRadius: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, padding: '8px 12px' }}>
-          <Plus size={14} /> Add Analysis Phase
+        <button onClick={addAnalystSection} style={{ alignSelf: 'flex-start', fontSize: 13, color: C.cta, background: 'transparent', border: `1px solid ${C.cta}`, borderRadius: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, padding: '9px 14px' }}>
+          <Plus size={15} /> Add analysis phase
         </button>
       </div>
     );
@@ -9588,14 +9788,23 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
 
         {error && <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', fontSize: 14, color: '#ef4444', fontWeight: 600 }}>{error}</div>}
 
-        {/* Section tabs */}
-        <div className="hide-scrollbar" style={{ display: 'flex', gap: 2, marginBottom: 20, borderBottom: `1px solid ${C.divider}`, overflowX: 'auto' }}>
-          {EDITOR_TABS.map(t => (
-            <button key={t.id} onClick={() => setEditorTab(t.id)}
-              style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '10px 15px', marginBottom: -1, border: 'none', borderBottom: `2px solid ${editorTab === t.id ? C.cta : 'transparent'}`, background: 'transparent', color: editorTab === t.id ? C.text : C.muted, fontWeight: editorTab === t.id ? 700 : 600, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: font }}>
-              <t.Icon size={15} /> {t.label}
-            </button>
-          ))}
+        {/* Large option switcher */}
+        <div className="hide-scrollbar" style={{ display: 'flex', gap: 12, marginBottom: 20, maxWidth: 1100, overflowX: 'auto' }}>
+          {EDITOR_TABS.map(t => {
+            const active = editorTab === t.id;
+            return (
+              <button key={t.id} onClick={() => setEditorTab(t.id)}
+                style={{ flex: '1 1 0', minWidth: 168, display: 'flex', alignItems: 'center', gap: 12, padding: '15px 16px', borderRadius: 14, border: 'none', background: active ? C.cta : C.card, cursor: 'pointer', textAlign: 'left', fontFamily: font, transition: 'background 0.15s' }}>
+                <div style={{ width: 40, height: 40, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: active ? 'rgba(255,255,255,0.2)' : `${C.cta}14` }}>
+                  <t.Icon size={19} color={active ? C.ctaText : C.cta} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14.5, color: active ? C.ctaText : C.text, whiteSpace: 'nowrap' }}>{t.label}</div>
+                  <div style={{ fontSize: 12, color: active ? 'rgba(255,255,255,0.85)' : C.faint, marginTop: 2, whiteSpace: 'nowrap' }}>{t.hint}</div>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         <div style={{ maxWidth: 1100, display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -9609,67 +9818,37 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                   <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Title *</label>
                   <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. West Africa Retail Sales 2020-2023" style={{ ...inputStyle, fontSize: 16, fontWeight: 600, padding: '11px 14px' }} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Category</label>
-                    {(() => {
-                      const CATEGORIES = ['Finance', 'Human Resources', 'Fintech', 'E-Commerce', 'Marketing', 'Health Care', 'Hospitality', 'Sport', 'Retail', 'Banking', 'Telecom', 'Other'];
-                      const isOther = !!form.category && !CATEGORIES.slice(0, -1).includes(form.category);
-                      const selectVal = isOther ? 'Other' : (form.category ?? '');
-                      return (
-                        <>
-                          <select
-                            value={selectVal}
-                            onChange={e => {
-                              if (e.target.value === 'Other') setForm(f => ({ ...f, category: '' }));
-                              else setForm(f => ({ ...f, category: e.target.value }));
-                            }}
-                            style={{ ...inputStyle, background: 'none', backgroundColor: C.input, appearance: 'none', WebkitAppearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: 34, cursor: 'pointer' }}
-                          >
-                            <option value="">Select category...</option>
-                            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                          {(selectVal === 'Other' || isOther) && (
-                            <input
-                              autoFocus
-                              value={isOther ? form.category ?? '' : ''}
-                              onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                              placeholder="Specify category..."
-                              style={{ ...inputStyle, marginTop: 8 }}
-                            />
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Tags</label>
-                    <div
-                      onClick={() => tagInputRef.current?.focus()}
-                      style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', padding: '7px 10px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.input, cursor: 'text', minHeight: 42 }}
-                    >
-                      {form.tags.map(tag => (
-                        <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px 4px 12px', borderRadius: 20, background: 'white', border: `1px solid ${C.cardBorder}`, color: '#111', fontSize: 13, fontWeight: 600, flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-                          {tag}
-                          <button onClick={e => { e.stopPropagation(); removeTag(tag); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, display: 'flex', alignItems: 'center', color: '#999' }}>
-                            <X size={11} />
-                          </button>
-                        </span>
-                      ))}
-                      <input
-                        ref={tagInputRef}
-                        value={tagInput}
-                        onChange={e => setTagInput(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commitTag(tagInput); }
-                          if (e.key === 'Backspace' && !tagInput && form.tags.length) removeTag(form.tags[form.tags.length - 1]);
-                        }}
-                        onBlur={() => commitTag(tagInput)}
-                        placeholder={form.tags.length === 0 ? 'Type and press Enter...' : ''}
-                        style={{ flex: 1, minWidth: 80, border: 'none', background: 'transparent', outline: 'none', fontSize: 13, color: C.text, padding: '2px 2px' }}
-                      />
-                    </div>
-                  </div>
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Category</label>
+                  {(() => {
+                    const CATEGORIES = ['Finance', 'Human Resources', 'Fintech', 'E-Commerce', 'Marketing', 'Health Care', 'Hospitality', 'Sport', 'Retail', 'Banking', 'Telecom', 'Other'];
+                    const isOther = !!form.category && !CATEGORIES.slice(0, -1).includes(form.category);
+                    const selectVal = isOther ? 'Other' : (form.category ?? '');
+                    return (
+                      <>
+                        <select
+                          value={selectVal}
+                          onChange={e => {
+                            if (e.target.value === 'Other') setForm(f => ({ ...f, category: '' }));
+                            else setForm(f => ({ ...f, category: e.target.value }));
+                          }}
+                          style={{ ...inputStyle, background: 'none', backgroundColor: C.input, appearance: 'none', WebkitAppearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: 34, cursor: 'pointer' }}
+                        >
+                          <option value="">Select category...</option>
+                          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        {(selectVal === 'Other' || isOther) && (
+                          <input
+                            autoFocus
+                            value={isOther ? form.category ?? '' : ''}
+                            onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                            placeholder="Specify category..."
+                            style={{ ...inputStyle, marginTop: 8 }}
+                          />
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label style={{ fontSize: 13, fontWeight: 700, color: C.muted, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Description</label>
@@ -9696,6 +9875,7 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                 onClear={() => setForm(f => ({ ...f, cover_image_url: null, cover_image_alt: null }))}
                 C={C}
                 token=""
+                previewMaxWidth={360}
               />
             </>)}
           </>)}
@@ -9819,12 +9999,12 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
               </div>
 
               <button onClick={() => setForm(f => ({ ...f, sql_workbench_enabled: !f.sql_workbench_enabled }))}
-                style={{ marginTop: 16, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px', borderRadius: 12, border: 'none', background: form.sql_workbench_enabled ? 'rgba(8,145,178,0.08)' : C.input, cursor: 'pointer', textAlign: 'left' }}>
+                style={{ marginTop: 16, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px', borderRadius: 12, border: 'none', background: form.sql_workbench_enabled ? 'rgba(22,163,74,0.08)' : C.input, cursor: 'pointer', textAlign: 'left' }}>
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: 'block', fontSize: 13, fontWeight: 800, color: C.text }}>SQL Workbench</span>
                   <span style={{ display: 'block', marginTop: 3, fontSize: 12, color: C.faint, lineHeight: 1.45 }}>Show browser SQL practice for CSV, Excel, or ZIP table datasets.</span>
                 </span>
-                <span style={{ width: 38, height: 22, borderRadius: 999, background: form.sql_workbench_enabled ? '#0891b2' : C.cardBorder, position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                <span style={{ width: 38, height: 22, borderRadius: 999, background: form.sql_workbench_enabled ? '#16a34a' : C.cardBorder, position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
                   <span style={{ position: 'absolute', top: 3, left: form.sql_workbench_enabled ? 19 : 3, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
                 </span>
               </button>
@@ -9833,9 +10013,9 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
 
             {/* Analyst task sections card */}
             {editorTab === 'phases' && card(<>
-              {sectionHead(<Search size={16} color="white" />, 'Analyst Task Brief', '#d97706')}
-              <p style={{ fontSize: 12, color: C.faint, margin: '-6px 0 14px', lineHeight: 1.45 }}>
-                Create dataset-specific analysis phases. Mark only tasks that can be answered with SELECT/WITH queries as SQL.
+              {sectionHead(<Search size={16} color="white" />, 'Analysis Phases', '#d97706')}
+              <p style={{ fontSize: 12.5, color: C.faint, margin: '-6px 0 16px', lineHeight: 1.5 }}>
+                Break the dataset into phases, each with its own tasks. Mark only tasks answerable with SELECT/WITH queries as SQL.
               </p>
               {analystSectionEditor}
             </>)}
@@ -9866,12 +10046,12 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <input ref={importRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
           {datasets.length > 0 && (
-            <button onClick={exportAllDatasets} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            <button onClick={exportAllDatasets} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: cardBorder, background: C.card, color: C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
               <Download size={14} /> Export All
             </button>
           )}
           <button onClick={() => { setImportMsg(null); importRef.current?.click(); }} disabled={importing}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.card, color: importMsg ? (importMsg.ok ? '#16a34a' : '#ef4444') : C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: cardBorder, background: C.card, color: importMsg ? (importMsg.ok ? '#16a34a' : '#ef4444') : C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
             <Upload size={14} /> {importing ? 'Importing...' : importMsg ? importMsg.text : 'Import'}
           </button>
           <button onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
@@ -9888,7 +10068,7 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
       )}
 
       {!loading && datasets.length === 0 && (
-        <div style={{ textAlign: 'center', padding: 60, background: C.card, borderRadius: 16, border: `1px solid ${C.cardBorder}` }}>
+        <div style={{ textAlign: 'center', padding: 60, background: C.card, borderRadius: 16, border: cardBorder }}>
           <Database size={36} style={{ color: C.faint, margin: '0 auto 12px' }} />
           <p style={{ fontWeight: 600, color: C.text, marginBottom: 4 }}>No datasets yet</p>
           <p style={{ fontSize: 13, color: C.faint, marginBottom: 16 }}>Create your first dataset to share with students.</p>
@@ -9901,7 +10081,7 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
       {!loading && datasets.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {datasets.map(d => (
-            <div key={d.id} style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div key={d.id} style={{ background: C.card, border: cardBorder, borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
               {d.cover_image_url && (
                 <img src={d.cover_image_url} alt={d.cover_image_alt ?? ''} style={{ width: 72, height: 48, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
               )}
@@ -9927,8 +10107,8 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                 </button>
                 <span title={d.sql_workbench_enabled ? 'SQL Workbench enabled' : 'SQL Workbench disabled'} style={{
                   padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                  background: d.sql_workbench_enabled ? 'rgba(8,145,178,0.12)' : C.pill,
-                  color: d.sql_workbench_enabled ? '#0891b2' : C.faint,
+                  background: d.sql_workbench_enabled ? 'rgba(22,163,74,0.12)' : C.pill,
+                  color: d.sql_workbench_enabled ? '#16a34a' : C.faint,
                 }}>
                   SQL {d.sql_workbench_enabled ? 'On' : 'Off'}
                 </span>
@@ -10015,7 +10195,7 @@ function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen, setFo
           {section === 'courses' ? (
             <CreateCourseMenu C={C} />
           ) : (
-            <Link href={href} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+            <Link href={href} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80"
               style={{ background: C.cta, color: C.ctaText }}>
               <Plus className="w-4 h-4"/> New {label}
             </Link>
@@ -10057,7 +10237,7 @@ export default function DashboardPage() {
   const C = useC();
   const router = useRouter();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl, logoDarkUrl } = useTenant();
+  const { logoUrl, logoDarkUrl, appName } = useTenant();
   const [forms, setForms]           = useState<any[]>(_cache.forms ?? []);
   const [loading, setLoading]       = useState(_cache.forms === null);
   const [user, setUser]             = useState<any>(_cache.user ?? null);
@@ -10090,6 +10270,14 @@ export default function DashboardPage() {
     window.addEventListener('hashchange', apply);
     return () => window.removeEventListener('hashchange', apply);
   }, []);
+
+  // Keep the browser tab title readable (e.g. "Courses - Festman") instead of
+  // the raw URL/hash. Client-side hash routing means the server metadata title
+  // never updates per section, so we set it here.
+  useEffect(() => {
+    const label = NAV_ITEMS.find(n => n.id === activeSection)?.label ?? 'Dashboard';
+    document.title = appName ? `${label} - ${appName}` : label;
+  }, [activeSection, appName]);
 
   function goSection(id: SectionId) {
     if (isStaff && !STAFF_SECTION_IDS.has(id)) id = 'events';
@@ -10234,11 +10422,11 @@ export default function DashboardPage() {
       <div className="min-h-screen animate-pulse" style={{ background: C.page }}>
         <div className="sticky top-0 z-20 border-b px-6 md:px-10 h-14 flex items-center justify-between backdrop-blur-md" style={{ background: C.nav, borderColor: C.navBorder }}>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl" style={{ background: C.skeleton }}/>
+            <div className="w-8 h-8 rounded-lg" style={{ background: C.skeleton }}/>
             <div className="h-4 w-24 rounded-lg" style={{ background: C.skeleton }}/>
           </div>
           <div className="flex items-center gap-3">
-            <div className="h-8 w-28 rounded-xl" style={{ background: C.skeleton }}/>
+            <div className="h-8 w-28 rounded-lg" style={{ background: C.skeleton }}/>
             <div className="w-24 h-8 rounded-full" style={{ background: C.skeleton }}/>
           </div>
         </div>
@@ -10283,7 +10471,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           {/* Mobile sidebar toggle */}
           <button onClick={() => setSidebarOpen(o => !o)}
-            className="md:hidden p-2 rounded-xl transition-colors" style={{ color: C.faint }}>
+            className="md:hidden p-2 rounded-lg transition-colors" style={{ color: C.faint }}>
             <Menu className="w-5 h-5"/>
           </button>
           <Link href="/dashboard" className="flex items-center gap-2">
@@ -10291,7 +10479,7 @@ export default function DashboardPage() {
           </Link>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={toggleTheme} className="p-2 rounded-xl transition-colors flex-shrink-0" style={{ color: C.faint }}>
+          <button onClick={toggleTheme} className="p-2 rounded-lg transition-colors flex-shrink-0" style={{ color: C.faint }}>
             {theme === 'dark' ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
           </button>
           <ProfileMenu user={user} profile={profile} onSignOut={handleSignOut}/>
@@ -10350,7 +10538,7 @@ export default function DashboardPage() {
                       return (
                         <button key={item.id}
                           onClick={() => { goSection(item.id); setSidebarOpen(false); }}
-                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors text-left"
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left"
                           style={{ color: isActive ? C.green : C.muted }}
                           onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.text; }}
                           onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.muted; }}
@@ -10383,7 +10571,7 @@ export default function DashboardPage() {
                 <div className="space-y-0.5">
                   {group.items.map(item => (
                     <Link key={item.id} href={item.href}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors text-left"
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left"
                       style={{ color: C.muted, textDecoration: 'none' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = C.text; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = C.muted; }}
@@ -10404,7 +10592,7 @@ export default function DashboardPage() {
           {/* Sidebar footer */}
           <div className="px-3 pb-4 pt-2 border-t" style={{ borderColor: C.divider }}>
             {!isStaff && <Link href="/settings"
-              className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-normal transition-colors"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-normal transition-colors"
               style={{ color: C.muted }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = C.text; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = C.muted; }}>
@@ -10440,7 +10628,7 @@ export default function DashboardPage() {
                   {!isStaff && activeSection === 'courses' && forms.filter(f => f.content_type === 'course').length > 0 && (
                     <button
                       onClick={() => exportAllInSection(forms, 'course', 'courses_bulk')}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
                       style={{ background: C.card, color: C.muted }}>
                       <Download className="w-3.5 h-3.5" /> Export All
                     </button>
@@ -10465,7 +10653,7 @@ export default function DashboardPage() {
                   {activeSection === 'events' && (
                     <Link
                       href="/create?type=event"
-                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80"
                       style={{ background: C.cta, color: C.ctaText }}>
                       <Plus className="w-4 h-4"/> New Event
                     </Link>
@@ -10506,10 +10694,10 @@ export default function DashboardPage() {
               <p className="text-sm mb-6" style={{ color: C.muted }}>This will permanently delete this item and all its responses. This cannot be undone.</p>
               <div className="flex items-center justify-end gap-3">
                 <button onClick={() => setFormToDelete(null)} disabled={isDeleting}
-                  className="px-4 py-2 text-sm font-medium rounded-xl transition-colors ff-hover"
+                  className="px-4 py-2 text-sm font-medium rounded-lg transition-colors ff-hover"
                   style={{ color: C.muted }}>Cancel</button>
                 <button onClick={confirmDelete} disabled={isDeleting}
-                  className="px-4 py-2 text-sm font-medium rounded-xl flex items-center gap-2 transition-colors"
+                  className="px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-2 transition-colors"
                   style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}` }}>
                   {isDeleting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Trash2 className="w-4 h-4"/>}
                   Delete
