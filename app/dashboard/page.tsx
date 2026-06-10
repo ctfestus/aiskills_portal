@@ -4308,7 +4308,7 @@ function BadgesSection({ C }: { C: typeof LIGHT_C }) {
       // synthesized straight from the course/path/VE so they appear immediately.
       const achievement = (seeded ?? [])
         .filter((b: any) => !/^(crs_|lp_|ve_)/.test(b.id))
-        .map((b: any) => ({ ...b, managed: null as const }));
+        .map((b: any) => ({ ...b, managed: null as 'course' | 'learning_path' | 'virtual_experience' | null }));
       const content = [
         ...(courses ?? []).map((c: any) => ({ id: `crs_${c.id}`, name: `${c.title} Badge`, description: `Awarded for completing ${c.title}`, icon: 'graduated', color: '#6366f1', image_url: c.badge_image_url, category: 'course', managed: 'course' as const })),
         ...(paths ?? []).map((p: any) => ({ id: `lp_${p.id}`, name: `${p.title} Badge`, description: `Awarded for completing ${p.title}`, icon: 'map', color: '#6366f1', image_url: p.badge_image_url, category: 'learning_path', managed: 'learning_path' as const })),
