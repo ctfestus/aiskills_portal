@@ -34,8 +34,7 @@
       "Bash(awk 'NR>=8615 && NR<=8632' app/dashboard/page.tsx)",
       "Bash(awk -F: '$1>=8400 && $1<=8650')",
       "Bash(git add *)",
-      "Bash(git commit *)",
-      "PowerShell(npx.cmd tsc --noEmit 2>&1 | Select-Object -First 25; if \\($LASTEXITCODE -eq 0\\) { \"TYPECHECK: PASS \\(exit 0\\)\" } else { \"TYPECHECK: errors \\(exit $LASTEXITCODE\\)\" })"
+      "Bash(git commit *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\DELL\\Documents\\ALL Apps\\Landing pages\\elevate-landing\\lib",

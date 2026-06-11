@@ -243,7 +243,7 @@ export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
                 fontFamily: `'${f}', sans-serif`,
                 background:   active ? C.cta   : C.pill,
                 color:        active ? C.ctaText : C.text,
-                
+
               }}>
               {f}
             </button>
