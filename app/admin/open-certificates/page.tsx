@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback, useMemo, type ReactNode } fro
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { supabase } from '@/lib/supabase';
-import { useTheme } from '@/components/ThemeProvider';
+import { LIGHT_C, useC } from '@/lib/theme';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import {
   Plus, Loader2, Award, Upload, X, Check, Copy, ExternalLink,
@@ -13,51 +13,6 @@ import {
   Calendar, Bold, Italic, List, ListOrdered,
 } from 'lucide-react';
 
-const LIGHT_C = {
-  page:          '#F2F5FA',
-  nav:           'rgba(255,255,255,0.98)',
-  navBorder:     'rgba(0,0,0,0.07)',
-  card:          'white',
-  cardBorder:    'rgba(0,0,0,0.07)',
-  cardShadow:    'none',
-  cta:           '#0e09dd',
-  ctaText:       'white',
-  text:          '#111',
-  muted:         '#555',
-  faint:         '#888',
-  divider:       'rgba(0,0,0,0.07)',
-  input:         '#F7F7F7',
-  pill:          '#F4F4F4',
-  deleteBg:      '#fef2f2',
-  deleteText:    '#ef4444',
-  deleteBorder:  '#fecaca',
-  successBg:     '#f0fdf4',
-  successText:   '#16a34a',
-  successBorder: '#bbf7d0',
-};
-const DARK_C = {
-  page:          '#17181E',
-  nav:           '#1E1F26',
-  navBorder:     'rgba(255,255,255,0.07)',
-  card:          '#1E1F26',
-  cardBorder:    'rgba(255,255,255,0.07)',
-  cardShadow:    'none',
-  cta:           '#3E93FF',
-  ctaText:       'white',
-  text:          '#e2e8f0',
-  muted:         '#A8B5C2',
-  faint:         '#6b7a89',
-  divider:       'rgba(255,255,255,0.07)',
-  input:         '#2a2b34',
-  pill:          '#2a2b34',
-  deleteBg:      'rgba(239,68,68,0.12)',
-  deleteText:    '#f87171',
-  deleteBorder:  'rgba(239,68,68,0.25)',
-  successBg:     'rgba(22,163,74,0.12)',
-  successText:   '#4ade80',
-  successBorder: 'rgba(22,163,74,0.3)',
-};
-function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 function useIsMobile() {
   const [m, setM] = useState(false);
   useEffect(() => {

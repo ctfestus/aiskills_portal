@@ -40,48 +40,10 @@ const INDUSTRIES = [
 import Link from 'next/link';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
+import { useC } from '@/lib/theme';
 
 const PEXELS_KEY = process.env.NEXT_PUBLIC_PEXELS_API_KEY ?? '';
 
-const LIGHT_C = {
-  page:        '#F2F5FA',
-  nav:         'rgba(255,255,255,0.98)',
-  navBorder:   'rgba(0,0,0,0.07)',
-  card:        'white',
-  cardBorder:  'rgba(0,0,0,0.07)',
-  cardShadow:  'none',
-  green:       '#0e09dd',
-  lime:        '#e0e0f5',
-  cta:         '#0e09dd',
-  ctaText:     'white',
-  text:        '#111',
-  muted:       '#555',
-  faint:       '#888',
-  divider:     'rgba(0,0,0,0.07)',
-  pill:        '#F4F4F4',
-  input:       '#F7F7F7',
-  inputBorder: 'rgba(0,0,0,0.07)',
-};
-const DARK_C = {
-  page:        '#17181E',
-  nav:         '#1E1F26',
-  navBorder:   'rgba(255,255,255,0.07)',
-  card:        '#1E1F26',
-  cardBorder:  'rgba(255,255,255,0.07)',
-  cardShadow:  'none',
-  green:       '#3E93FF',
-  lime:        'rgba(62,147,255,0.15)',
-  cta:         '#3E93FF',
-  ctaText:     'white',
-  text:        '#A8B5C2',
-  muted:       '#A8B5C2',
-  faint:       '#6b7a89',
-  divider:     'rgba(255,255,255,0.07)',
-  pill:        '#2a2b34',
-  input:       '#2a2b34',
-  inputBorder: 'rgba(255,255,255,0.07)',
-};
-function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
 const SOCIAL_FIELDS = [
   { key: 'twitter',   label: 'X / Twitter', icon: Twitter,   placeholder: 'https://x.com/username' },

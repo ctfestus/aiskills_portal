@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
-import { useTheme } from '@/components/ThemeProvider';
+import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Code2, FileSpreadsheet, LayoutDashboard, Briefcase, ClipboardList, Eye, FileText } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -13,52 +13,6 @@ import { useRouter } from 'next/navigation';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { sanitizeRichText, sanitizePlainText } from '@/lib/sanitize';
 
-// --- Design tokens ---
-const LIGHT_C = {
-  page:        '#F2F5FA',
-  nav:         'rgba(255,255,255,0.98)',
-  navBorder:   'rgba(0,0,0,0.07)',
-  card:        'white',
-  cardBorder:  'rgba(0,0,0,0.07)',
-  cardShadow:  'none',
-  hoverShadow: 'none',
-  green:       '#0e09dd',
-  lime:        '#e0e0f5',
-  cta:         '#0e09dd',
-  ctaText:     'white',
-  text:        '#111',
-  muted:       '#555',
-  faint:       '#888',
-  divider:     'rgba(0,0,0,0.07)',
-  pill:        '#F4F4F4',
-  input:       '#F7F7F7',
-  errorBg:     '#fef2f2',
-  errorText:   '#ef4444',
-  errorBorder: '#fecaca',
-};
-const DARK_C = {
-  page:        '#17181E',
-  nav:         '#1E1F26',
-  navBorder:   'rgba(255,255,255,0.07)',
-  card:        '#1E1F26',
-  cardBorder:  'rgba(255,255,255,0.07)',
-  cardShadow:  'none',
-  hoverShadow: 'none',
-  green:       '#3E93FF',
-  lime:        'rgba(62,147,255,0.15)',
-  cta:         '#3E93FF',
-  ctaText:     'white',
-  text:        '#A8B5C2',
-  muted:       '#A8B5C2',
-  faint:       '#6b7a89',
-  divider:     'rgba(255,255,255,0.07)',
-  pill:        '#2a2b34',
-  input:       '#2a2b34',
-  errorBg:     'rgba(239,68,68,0.12)',
-  errorText:   '#f87171',
-  errorBorder: 'rgba(239,68,68,0.25)',
-};
-function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
 type AssignmentType = 'standard' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'virtual_experience' | 'document_review';
 

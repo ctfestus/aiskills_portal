@@ -17,7 +17,7 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const bg        = bgOverride ?? (dark ? 'rgba(255,255,255,0.05)' : '#f4f5f7');
-  const border    = dark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)';
+  const border    = dark ? 'none' : '1px solid rgba(0,0,0,0.08)';
   const toolDiv   = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
   const textColor = dark ? '#f0f0f0' : '#111';
   const phColor   = dark ? '#555' : '#bbb';

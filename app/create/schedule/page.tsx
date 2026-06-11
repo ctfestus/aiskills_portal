@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
-import { useTheme } from '@/components/ThemeProvider';
+import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 import { motion } from 'motion/react';
 import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X } from 'lucide-react';
 import Link from 'next/link';
@@ -11,24 +11,7 @@ import { useRouter } from 'next/navigation';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { sanitizeRichText, sanitizePlainText } from '@/lib/sanitize';
 
-// --- Design tokens ---
-const LIGHT_C = {
-  page: '#F2F5FA', card: 'white', cardBorder: 'rgba(0,0,0,0.07)',
-  cardShadow: 'none', green: '#00bf63', lime: '#ADEE66',
-  cta: '#00bf63', ctaText: 'white', text: '#111', muted: '#555', faint: '#888',
-  divider: 'rgba(0,0,0,0.07)', input: '#f4f5f7', pill: '#eef0f3',
-  nav: 'rgba(242,245,250,0.92)', navBorder: 'rgba(0,0,0,0.07)',
-  errorBg: '#fef2f2', errorText: '#ef4444', errorBorder: '#fecaca',
-};
-const DARK_C = {
-  page: '#17181E', card: '#1E1F26', cardBorder: 'rgba(255,255,255,0.07)',
-  cardShadow: 'none', green: '#00bf63', lime: '#ADEE66',
-  cta: '#00bf63', ctaText: 'white', text: '#f0f0f0', muted: '#aaa', faint: '#555',
-  divider: 'rgba(255,255,255,0.07)', input: 'rgba(255,255,255,0.05)', pill: '#242630',
-  nav: 'rgba(23,24,30,0.90)', navBorder: 'rgba(255,255,255,0.07)',
-  errorBg: 'rgba(239,68,68,0.12)', errorText: '#f87171', errorBorder: 'rgba(239,68,68,0.25)',
-};
-function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
+// --- Design tokens: standard palette from lib/theme.ts ---
 
 // --- Types ---
 interface Topic {

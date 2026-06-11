@@ -2,26 +2,10 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useTheme } from '@/components/ThemeProvider';
+import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Loader2, X, Search, Star, Mail, Edit2, ChevronLeft, Wand2, UserPlus } from 'lucide-react';
 
-const LIGHT_C = {
-  page: '#F2F5FA', nav: 'rgba(255,255,255,0.98)', navBorder: 'rgba(0,0,0,0.07)',
-  card: 'white', cardBorder: 'rgba(0,0,0,0.07)', cta: '#0e09dd', ctaText: 'white',
-  text: '#111', muted: '#555', faint: '#888', divider: 'rgba(0,0,0,0.07)',
-  input: '#F7F7F7', pill: '#F4F4F4', errorBg: '#fef2f2', errorText: '#ef4444',
-  errorBorder: '#fecaca', successBg: '#f0fdf4', successText: '#16a34a', successBorder: '#bbf7d0',
-};
-const DARK_C = {
-  page: '#17181E', nav: '#1E1F26', navBorder: 'rgba(255,255,255,0.07)',
-  card: '#1E1F26', cardBorder: 'rgba(255,255,255,0.07)', cta: '#3E93FF', ctaText: 'white',
-  text: '#e2e8f0', muted: '#A8B5C2', faint: '#6b7a89', divider: 'rgba(255,255,255,0.07)',
-  input: '#2a2b34', pill: '#2a2b34', errorBg: 'rgba(239,68,68,0.12)', errorText: '#f87171',
-  errorBorder: 'rgba(239,68,68,0.25)', successBg: 'rgba(22,163,74,0.12)', successText: '#4ade80',
-  successBorder: 'rgba(22,163,74,0.3)',
-};
-function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
 type Cohort = { id: string; name: string };
 type Student = { id: string; full_name: string; email: string; avatar_url?: string | null };
@@ -53,7 +37,7 @@ function StudentPickerRow({ student, selected, onToggle, C }: { student: Student
       style={{
         width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
         padding: '8px 10px',
-        background: selected ? (C === LIGHT_C ? 'rgba(14,9,221,0.06)' : 'rgba(62,147,255,0.1)') : 'transparent',
+        background: selected ? (C === DARK_C ? 'rgba(62,147,255,0.1)' : 'rgba(0,191,99,0.08)') : 'transparent',
         border: `1px solid ${selected ? C.cta : 'transparent'}`,
         borderRadius: 8, cursor: 'pointer',
       }}>

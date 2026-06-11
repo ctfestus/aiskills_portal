@@ -46,9 +46,9 @@ function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
   const text    = isDark ? '#f0f0f0' : '#111';
   const faint   = isDark ? '#6b7a89' : '#888';
   const pill    = isDark ? '#2a2b34' : '#F4F4F4';
-  const cta     = isDark ? '#3E93FF' : '#0e09dd';
-  const lime    = isDark ? 'rgba(62,147,255,0.15)' : '#e0e0f5';
-  const green   = isDark ? '#3E93FF' : '#0e09dd';
+  const cta     = isDark ? '#3E93FF' : '#00bf63';
+  const lime    = isDark ? 'rgba(62,147,255,0.15)' : '#dcfce7';
+  const green   = isDark ? '#3E93FF' : '#00bf63';
 
   const signOutHover = isDark ? 'rgba(239,68,68,0.10)'   : 'rgba(239,68,68,0.08)';
 

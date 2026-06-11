@@ -29,55 +29,7 @@ import { computeAccess } from '@/lib/enrollment-access';
 import CalendarSection from '@/components/StudentCalendar';
 import { DataPlaygroundGrid } from '@/components/data-playground/DataPlayground';
 import { buildGoogleCalUrl, buildOutlookCalUrl, buildYahooCalUrl, downloadIcs, buildCalendarFields, isRecurring } from '@/lib/calendar-links';
-
-// --- Design tokens ---
-const LIGHT_C = {
-  page:        '#F2F5FA',
-  nav:         'rgba(255,255,255,0.98)',
-  navBorder:   'rgba(0,0,0,0.07)',
-  card:        'white',
-  cardBorder:  'rgba(0,0,0,0.07)',
-  cardShadow:  '0 2px 12px rgba(0,0,0,0.08)',
-  hoverShadow: '0 8px 28px rgba(0,0,0,0.14)',
-  green:       '#0e09dd',
-  lime:        '#e0e0f5',
-  cta:         '#0e09dd',
-  ctaText:     'white',
-  text:        '#111',
-  muted:       '#555',
-  faint:       '#888',
-  divider:     'rgba(0,0,0,0.07)',
-  pill:        '#F4F4F4',
-  input:       '#F7F7F7',
-  skeleton:    '#EBEBEB',
-  thumbBg:     '#e6e5fb',
-  overlayBtn:  'rgba(255,255,255,0.92)',
-  signOutHover:'rgba(239,68,68,0.08)',
-};
-const DARK_C = {
-  page:        '#17181E',
-  nav:         '#1E1F26',
-  navBorder:   'rgba(255,255,255,0.07)',
-  card:        '#1E1F26',
-  cardBorder:  'rgba(255,255,255,0.07)',
-  cardShadow:  '0 4px 20px rgba(0,0,0,0.45)',
-  hoverShadow: '0 12px 36px rgba(0,0,0,0.60)',
-  green:       '#3E93FF',
-  lime:        'rgba(62,147,255,0.15)',
-  cta:         '#3E93FF',
-  ctaText:     'white',
-  text:        '#A8B5C2',
-  muted:       '#A8B5C2',
-  faint:       '#6b7a89',
-  divider:     'rgba(255,255,255,0.07)',
-  pill:        '#2a2b34',
-  input:       '#2a2b34',
-  skeleton:    '#2a2b34',
-  thumbBg:     '#16152a',
-  overlayBtn:  'rgba(0,0,0,0.65)',
-  signOutHover:'rgba(239,68,68,0.10)',
-};
-function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
+import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 
 function stripSqlSolutions(questions: any[] = []) {
   return questions.map(q => {
@@ -4530,7 +4482,7 @@ function RecordingsSection({ userId, C }: { userId: string; C: typeof LIGHT_C })
                   padding: '6px 14px', borderRadius: 999, fontSize: 13, fontWeight: 700,
                   whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: 0, border: 'none',
                   background: currentWeek === w ? C.green : C.pill,
-                  color: currentWeek === w ? (C === LIGHT_C ? '#fff' : '#111') : C.muted,
+                  color: currentWeek === w ? (C === DARK_C ? '#111' : '#fff') : C.muted,
                   transition: 'all 0.15s',
                 }}>
                 Week {w}
@@ -4553,7 +4505,7 @@ function RecordingsSection({ userId, C }: { userId: string; C: typeof LIGHT_C })
                   {/* Play button */}
                   <div style={{ width: 40, height: 40, borderRadius: 12, background: C.green,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Play size={16} fill={C === LIGHT_C ? '#fff' : '#111'} style={{ color: C === LIGHT_C ? '#fff' : '#111', marginLeft: 2 }}/>
+                    <Play size={16} fill={C === DARK_C ? '#111' : '#fff'} style={{ color: C === DARK_C ? '#111' : '#fff', marginLeft: 2 }}/>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.3 }} className="truncate">
@@ -6597,7 +6549,9 @@ export default function StudentDashboard() {
   const [mounted, setMounted] = useState(false);
   const C = useC();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl, logoDarkUrl, emailBannerUrl, appName } = useTenant();
+  const { logoUrl, logoDarkUrl, emailBannerUrl, appName, primaryColor } = useTenant();
+  // Dark mode keeps the ocean accent; light mode uses the tenant's primary color.
+  const navAccent = theme === 'dark' ? '#3E93FF' : (primaryColor || '#3E93FF');
   const router = useRouter();
   const [user, setUser]       = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -6905,13 +6859,13 @@ export default function StudentDashboard() {
                             style={{
                               padding: navCollapsed ? '10px 0' : '8px 12px',
                               justifyContent: navCollapsed ? 'center' : 'flex-start',
-                              color: isActive ? C.green : C.muted,
+                              color: isActive ? navAccent : C.muted,
                             }}
                             onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.text; }}
                             onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.muted; }}>
                             <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
-                              style={{ background: isActive ? `${C.green}18` : C.pill }}>
-                              <item.Icon className="w-4 h-4" style={{ color: isActive ? C.green : theme === 'dark' ? 'rgba(255,255,255,0.35)' : '#9ca3af' }}/>
+                              style={{ background: isActive ? `${navAccent}18` : C.pill }}>
+                              <item.Icon className="w-4 h-4" style={{ color: isActive ? navAccent : theme === 'dark' ? 'rgba(255,255,255,0.35)' : '#9ca3af' }}/>
                             </div>
                             {!navCollapsed && <span className="truncate">{item.label}</span>}
                           </button>
