@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { LIGHT_C, useC } from '@/lib/theme';
+import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Loader2, X, Search, Star, Mail, Edit2, ChevronLeft, Wand2, UserPlus } from 'lucide-react';
 
@@ -37,7 +37,7 @@ function StudentPickerRow({ student, selected, onToggle, C }: { student: Student
       style={{
         width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
         padding: '8px 10px',
-        background: selected ? (C === LIGHT_C ? 'rgba(0,191,99,0.08)' : 'rgba(62,147,255,0.1)') : 'transparent',
+        background: selected ? (C === DARK_C ? 'rgba(62,147,255,0.1)' : 'rgba(0,191,99,0.08)') : 'transparent',
         border: `1px solid ${selected ? C.cta : 'transparent'}`,
         borderRadius: 8, cursor: 'pointer',
       }}>

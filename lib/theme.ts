@@ -1,6 +1,8 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useTheme } from '@/components/ThemeProvider';
+import { useTenant } from '@/components/TenantProvider';
 
 // --- Canonical design tokens (single source of truth) ---
 // Light = professional/neutral with a green CTA (#00bf63); Dark = ocean accent (#3E93FF).
@@ -86,8 +88,17 @@ export const DARK_C: typeof LIGHT_C = {
 
 export type ThemeColors = typeof LIGHT_C;
 
-/** Returns the active palette for the current theme. */
+/**
+ * Returns the active palette for the current theme.
+ * In light mode the primary CTA (`cta`) is branded with the tenant's primary colour;
+ * dark mode keeps the canonical ocean accent. Memoized so the returned object identity
+ * is stable across renders (only changes when theme or tenant colour changes).
+ */
 export function useC(): ThemeColors {
   const { theme } = useTheme();
-  return theme === 'dark' ? DARK_C : LIGHT_C;
+  const { primaryColor } = useTenant();
+  return useMemo(() => {
+    if (theme === 'dark') return DARK_C;
+    return primaryColor && primaryColor !== LIGHT_C.cta ? { ...LIGHT_C, cta: primaryColor } : LIGHT_C;
+  }, [theme, primaryColor]);
 }

@@ -9734,7 +9734,9 @@ export default function DashboardPage() {
   const C = useC();
   const router = useRouter();
   const { toggle: toggleTheme, theme } = useTheme();
-  const { logoUrl, logoDarkUrl, appName } = useTenant();
+  const { logoUrl, logoDarkUrl, appName, primaryColor } = useTenant();
+  // Dark mode keeps the ocean accent; light mode uses the tenant's primary color.
+  const navAccent = theme === 'dark' ? '#3E93FF' : (primaryColor || '#3E93FF');
   const [forms, setForms]           = useState<any[]>(_cache.forms ?? []);
   const [loading, setLoading]       = useState(_cache.forms === null);
   const [user, setUser]             = useState<any>(_cache.user ?? null);
@@ -10036,14 +10038,14 @@ export default function DashboardPage() {
                         <button key={item.id}
                           onClick={() => { goSection(item.id); setSidebarOpen(false); }}
                           className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left"
-                          style={{ color: isActive ? C.green : C.muted }}
+                          style={{ color: isActive ? navAccent : C.muted }}
                           onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.text; }}
                           onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.muted; }}
                         >
                           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
-                            style={{ background: isActive ? `${C.green}18` : C.pill }}>
+                            style={{ background: isActive ? `${navAccent}18` : C.pill }}>
                             <item.Icon className="w-4 h-4"
-                              style={{ color: isActive ? C.green : theme === 'dark' ? 'rgba(255,255,255,0.35)' : '#9ca3af' }}/>
+                              style={{ color: isActive ? navAccent : theme === 'dark' ? 'rgba(255,255,255,0.35)' : '#9ca3af' }}/>
                           </div>
                           <span className="flex-1 truncate font-normal">{item.label}</span>
                           {isSoon && (
