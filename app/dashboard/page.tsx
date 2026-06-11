@@ -31,6 +31,8 @@ import { isScheduledSessionDate } from '@/lib/event-sessions';
 import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 import { downloadJSON, exportContent, exportAssignment, exportAllInSection, exportAllAssignments } from '@/lib/dashboard-export';
 import { PushButton, PushAllButton, GenericListSection, SectionEmptyState } from '@/components/dashboard/primitives';
+import { ImportButton } from '@/components/dashboard/ImportButton';
+import { SYNC_ENABLED } from '@/lib/sync';
 import { SchedulesManageSection } from '@/components/dashboard/SchedulesManageSection';
 import { RecordingsManageSection } from '@/components/dashboard/RecordingsManageSection';
 import { IsStaffContext } from '@/components/dashboard/context';
@@ -42,117 +44,6 @@ const SHARE_PLATFORMS = [
   { id: 'facebook', label: 'Facebook',   icon: <svg viewBox="0 0 24 24" fill="#1877F2" className="w-4 h-4"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>, href: (u:string) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}` },
   { id: 'whatsapp', label: 'WhatsApp',   icon: <svg viewBox="0 0 24 24" fill="#25D366" className="w-4 h-4"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>, href: (u:string,t:string,d:string) => `https://wa.me/?text=${encodeURIComponent(`${t}\n${d}\n\n${u}`)}` },
 ];
-
-const SYNC_ENABLED = process.env.NEXT_PUBLIC_SYNC_ENABLED === 'true';
-
-type BulkSummary = { created: number; updated: number; failed: number; warnings: number };
-type ImportState =
-  | { status: 'idle' }
-  | { status: 'importing'; current: number; total: number }
-  | { status: 'done'; summary: BulkSummary }
-  | { status: 'warning'; message: string }
-  | { status: 'error'; message: string };
-
-function ImportButton({ types, onImported, onBulkDone, C }: {
-  types: string[];
-  onImported: (result: { id: string; type: string }) => void;
-  onBulkDone?: () => void;
-  C: typeof LIGHT_C;
-}) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [state, setState] = useState<ImportState>({ status: 'idle' });
-
-  const postItem = async (item: any, token: string) => {
-    const res = await fetch('/api/content-import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...item, mode: 'sync' }),
-    });
-    return res.json();
-  };
-
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setState({ status: 'importing', current: 0, total: 1 });
-    try {
-      const text = await file.text();
-      const payload = JSON.parse(text);
-      if (payload.exportVersion !== 1) throw new Error('Unrecognised export file.');
-
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token ?? '';
-
-      if (payload.bulkExport === true) {
-        const items: any[] = payload.items ?? [];
-        const invalid = items.filter(it => !types.includes(it.type));
-        if (invalid.length) throw new Error(`Bulk file contains "${invalid[0].type}" which is not allowed here.`);
-        const summary: BulkSummary = { created: 0, updated: 0, failed: 0, warnings: 0 };
-        setState({ status: 'importing', current: 0, total: items.length });
-        for (let i = 0; i < items.length; i++) {
-          setState({ status: 'importing', current: i + 1, total: items.length });
-          try {
-            const result = await postItem(items[i], token);
-            if (result.error) {
-              summary.failed++;
-            } else {
-              if (Array.isArray(result.sqlWarnings) && result.sqlWarnings.length) summary.warnings += result.sqlWarnings.length;
-              if (result.action === 'updated') { summary.updated++; } else { summary.created++; }
-            }
-          } catch { summary.failed++; }
-        }
-        setState({ status: 'done', summary });
-        setTimeout(() => { setState({ status: 'idle' }); onBulkDone?.(); }, 2500);
-      } else {
-        if (!types.includes(payload.type)) throw new Error(`File is a "${payload.type}", expected ${types.join(' or ')}.`);
-        const res = await fetch('/api/content-import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(payload),
-        });
-        const result = await res.json();
-        if (result.error) {
-          const issueText = Array.isArray(result.issues) && result.issues.length ? ` ${result.issues[0]}` : '';
-          throw new Error(`${result.error}${issueText}`);
-        }
-        const warning = Array.isArray(result.sqlWarnings) && result.sqlWarnings.length ? result.sqlWarnings[0] : '';
-        setState(warning ? { status: 'warning', message: `Imported with SQL warning: ${warning}` } : { status: 'idle' });
-        onImported(result);
-        if (warning) setTimeout(() => setState({ status: 'idle' }), 5000);
-      }
-    } catch (err: any) {
-      setState({ status: 'error', message: err.message || 'Import failed.' });
-    } finally {
-      if (fileRef.current) fileRef.current.value = '';
-    }
-  };
-
-  const busy = state.status === 'importing';
-  const label = state.status === 'importing'
-    ? `${state.current}/${state.total}`
-    : state.status === 'done'
-    ? `+${state.summary.created} ~${state.summary.updated} !${state.summary.warnings} x${state.summary.failed}`
-    : 'Import';
-
-  return (
-    <div className="relative">
-      <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFile} />
-      <button onClick={() => { setState({ status: 'idle' }); fileRef.current?.click(); }} disabled={busy}
-        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
-        style={{ background: C.card, color: state.status === 'done' ? C.green : state.status === 'warning' ? '#f59e0b' : C.muted }}>
-        <Upload className="w-3.5 h-3.5" /> {label}
-      </button>
-      {(state.status === 'error' || state.status === 'warning') && (
-        <p className="absolute top-full left-0 mt-1 text-xs px-2.5 py-1.5 rounded-xl z-10 whitespace-nowrap"
-          style={state.status === 'error'
-            ? { background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}` }
-            : { background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.30)' }}>
-          {state.message}
-        </p>
-      )}
-    </div>
-  );
-}
 
 // --- Sync Push helpers ---
 // --- ProfileMenu ---
