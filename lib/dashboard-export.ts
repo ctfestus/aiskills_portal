@@ -94,3 +94,63 @@ export async function exportAllAssignments(assignments: any[], label: string) {
   }));
   downloadJSON({ exportVersion: 1, bulkExport: true, exportedAt: new Date().toISOString(), items }, label);
 }
+
+export function exportCSV(rows: any[], title: string) {
+  const headers = ['Name', 'Email', 'Status', 'Score', 'Result', 'Submitted At'];
+  const csvRows = rows.map(row => {
+    const sub = row.sub;
+    const status = sub?.status ?? 'Not Started';
+    const score  = sub?.score != null ? sub.score : '';
+    const result = sub?.score != null ? (sub.score >= 85 ? 'Passed' : 'Failed') : '';
+    const date   = sub?.updated_at ? new Date(sub.updated_at).toLocaleDateString() : '';
+    return [row.full_name || '', row.email || '', status, score, result, date]
+      .map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+  });
+  const csv  = [headers.join(','), ...csvRows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `${title.replace(/\s+/g, '_')}_responses.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function exportGroupCSV(rows: any[], title: string) {
+  const headers = ['Group', 'Leader', 'Members', 'Participants', 'Status', 'Score', 'Result', 'Submitted By', 'Submitted At'];
+  const csvRows = rows.map(row => {
+    const sub = row.sub;
+    const status = sub?.status ?? 'Not Started';
+    const score  = sub?.score != null ? sub.score : '';
+    const result = sub?.score != null ? (sub.score >= 85 ? 'Passed' : 'Failed') : '';
+    const date   = sub?.updated_at ? new Date(sub.updated_at).toLocaleDateString() : '';
+    return [
+      row.name || '',
+      row.leader?.full_name || row.leader?.email || '',
+      row.members.length,
+      sub ? `${row.participants.length}/${row.members.length}` : '',
+      status,
+      score,
+      result,
+      sub?.submitted_by_student?.full_name || sub?.student?.full_name || '',
+      date,
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+  });
+  const csv  = [headers.join(','), ...csvRows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `${title.replace(/\s+/g, '_')}_group_responses.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function reportExportCSV(headers: string[], rows: (string | number | null | undefined)[][], filename: string) {
+  const escape = (v: string | number | null | undefined) => {
+    const s = String(v ?? '');
+    const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
+  const csv = [headers.map(escape).join(','), ...rows.map(r => r.map(escape).join(','))].join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
