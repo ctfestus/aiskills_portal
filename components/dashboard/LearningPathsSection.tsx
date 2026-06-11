@@ -498,5 +498,3 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
     </div>
   );
 }
-
-
