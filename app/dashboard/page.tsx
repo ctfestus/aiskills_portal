@@ -29,8 +29,8 @@ import { PexelsImagePicker } from '@/components/PexelsImagePicker';
 import { loadGoogleFont, getFontById } from '@/lib/fonts';
 import { isScheduledSessionDate } from '@/lib/event-sessions';
 import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
-import { downloadJSON, exportContent, exportAssignment, exportAllInSection, exportAllAssignments } from '@/lib/dashboard-export';
-import { PushButton, PushAllButton, GenericListSection, SectionEmptyState } from '@/components/dashboard/primitives';
+import { downloadJSON, exportContent, exportAssignment, exportAllInSection, exportAllAssignments, exportCSV, exportGroupCSV } from '@/lib/dashboard-export';
+import { PushButton, PushAllButton, GenericListSection, SectionEmptyState, StudentAvatar } from '@/components/dashboard/primitives';
 import { ImportButton } from '@/components/dashboard/ImportButton';
 import { SYNC_ENABLED } from '@/lib/sync';
 import { SchedulesManageSection } from '@/components/dashboard/SchedulesManageSection';
@@ -1014,61 +1014,6 @@ function reportExportCSV(headers: string[], rows: (string | number | null | unde
 // --- Generic list section ---
 // --- Recordings manage section ---
 // --- Assignments manage section ---
-function exportCSV(rows: any[], title: string) {
-  const headers = ['Name', 'Email', 'Status', 'Score', 'Result', 'Submitted At'];
-  const csvRows = rows.map(row => {
-    const sub = row.sub;
-    const status = sub?.status ?? 'Not Started';
-    const score  = sub?.score != null ? sub.score : '';
-    const result = sub?.score != null ? (sub.score >= 85 ? 'Passed' : 'Failed') : '';
-    const date   = sub?.updated_at ? new Date(sub.updated_at).toLocaleDateString() : '';
-    return [row.full_name || '', row.email || '', status, score, result, date]
-      .map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
-  });
-  const csv  = [headers.join(','), ...csvRows].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = `${title.replace(/\s+/g, '_')}_responses.csv`; a.click();
-  URL.revokeObjectURL(url);
-}
-
-function exportGroupCSV(rows: any[], title: string) {
-  const headers = ['Group', 'Leader', 'Members', 'Participants', 'Status', 'Score', 'Result', 'Submitted By', 'Submitted At'];
-  const csvRows = rows.map(row => {
-    const sub = row.sub;
-    const status = sub?.status ?? 'Not Started';
-    const score  = sub?.score != null ? sub.score : '';
-    const result = sub?.score != null ? (sub.score >= 85 ? 'Passed' : 'Failed') : '';
-    const date   = sub?.updated_at ? new Date(sub.updated_at).toLocaleDateString() : '';
-    return [
-      row.name || '',
-      row.leader?.full_name || row.leader?.email || '',
-      row.members.length,
-      sub ? `${row.participants.length}/${row.members.length}` : '',
-      status,
-      score,
-      result,
-      sub?.submitted_by_student?.full_name || sub?.student?.full_name || '',
-      date,
-    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
-  });
-  const csv  = [headers.join(','), ...csvRows].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = `${title.replace(/\s+/g, '_')}_group_responses.csv`; a.click();
-  URL.revokeObjectURL(url);
-}
-
-function StudentAvatar({ name, email, size = 32, C }: { name?: string; email?: string; size?: number; C: any }) {
-  const label = (name || email || '?').slice(0, 2).toUpperCase();
-  return (
-    <div className="rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold"
-      style={{ width: size, height: size, background: C.lime, color: C.green }}>{label}</div>
-  );
-}
-
 function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';

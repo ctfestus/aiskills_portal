@@ -199,3 +199,11 @@ export function SectionEmptyState({ Icon, label, createHref, createLabel, C }: {
     </div>
   );
 }
+
+export function StudentAvatar({ name, email, size = 32, C }: { name?: string; email?: string; size?: number; C: any }) {
+  const label = (name || email || '?').slice(0, 2).toUpperCase();
+  return (
+    <div className="rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold"
+      style={{ width: size, height: size, background: C.lime, color: C.green }}>{label}</div>
+  );
+}
