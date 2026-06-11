@@ -29,55 +29,7 @@ import { computeAccess } from '@/lib/enrollment-access';
 import CalendarSection from '@/components/StudentCalendar';
 import { DataPlaygroundGrid } from '@/components/data-playground/DataPlayground';
 import { buildGoogleCalUrl, buildOutlookCalUrl, buildYahooCalUrl, downloadIcs, buildCalendarFields, isRecurring } from '@/lib/calendar-links';
-
-// --- Design tokens ---
-const LIGHT_C = {
-  page:        '#F2F5FA',
-  nav:         'rgba(255,255,255,0.98)',
-  navBorder:   'rgba(0,0,0,0.07)',
-  card:        'white',
-  cardBorder:  'rgba(0,0,0,0.07)',
-  cardShadow:  '0 2px 12px rgba(0,0,0,0.08)',
-  hoverShadow: '0 8px 28px rgba(0,0,0,0.14)',
-  green:       '#0e09dd',
-  lime:        '#e0e0f5',
-  cta:         '#0e09dd',
-  ctaText:     'white',
-  text:        '#111',
-  muted:       '#555',
-  faint:       '#888',
-  divider:     'rgba(0,0,0,0.07)',
-  pill:        '#F4F4F4',
-  input:       '#F7F7F7',
-  skeleton:    '#EBEBEB',
-  thumbBg:     '#e6e5fb',
-  overlayBtn:  'rgba(255,255,255,0.92)',
-  signOutHover:'rgba(239,68,68,0.08)',
-};
-const DARK_C = {
-  page:        '#17181E',
-  nav:         '#1E1F26',
-  navBorder:   'rgba(255,255,255,0.07)',
-  card:        '#1E1F26',
-  cardBorder:  'rgba(255,255,255,0.07)',
-  cardShadow:  '0 4px 20px rgba(0,0,0,0.45)',
-  hoverShadow: '0 12px 36px rgba(0,0,0,0.60)',
-  green:       '#3E93FF',
-  lime:        'rgba(62,147,255,0.15)',
-  cta:         '#3E93FF',
-  ctaText:     'white',
-  text:        '#A8B5C2',
-  muted:       '#A8B5C2',
-  faint:       '#6b7a89',
-  divider:     'rgba(255,255,255,0.07)',
-  pill:        '#2a2b34',
-  input:       '#2a2b34',
-  skeleton:    '#2a2b34',
-  thumbBg:     '#16152a',
-  overlayBtn:  'rgba(0,0,0,0.65)',
-  signOutHover:'rgba(239,68,68,0.10)',
-};
-function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
+import { LIGHT_C, useC } from '@/lib/theme';
 
 function stripSqlSolutions(questions: any[] = []) {
   return questions.map(q => {

@@ -28,69 +28,7 @@ import { TEMPLATES as SITE_TEMPLATES } from '@/lib/site-templates';
 import { PexelsImagePicker } from '@/components/PexelsImagePicker';
 import { loadGoogleFont, getFontById } from '@/lib/fonts';
 import { isScheduledSessionDate } from '@/lib/event-sessions';
-
-// --- Design tokens ---
-const LIGHT_C = {
-  page:        '#F2F5FA',
-  nav:         'rgba(255,255,255,0.98)',
-  navBorder:   'rgba(0,0,0,0.07)',
-  card:        'white',
-  cardBorder:  'rgba(0,0,0,0.07)',
-  cardShadow:  '0 2px 12px rgba(0,0,0,0.08)',
-  hoverShadow: '0 8px 28px rgba(0,0,0,0.14)',
-  green:       '#0e09dd',
-  lime:        '#e0e0f5',
-  cta:         '#0e09dd',
-  ctaText:     'white',
-  text:        '#111',
-  muted:       '#555',
-  faint:       '#888',
-  divider:     'rgba(0,0,0,0.07)',
-  pill:        '#F4F4F4',
-  input:       '#F7F7F7',
-  skeleton:    '#EBEBEB',
-  thumbBg:     '#e6e5fb',
-  overlayBtn:  'rgba(255,255,255,0.92)',
-  overlayText: '#111',
-  pastOverlay: 'rgba(255,255,255,0.45)',
-  formBadgeBg: '#F4F4F4',
-  formBadgeText: '#555',
-  deleteBg:    '#fef2f2',
-  deleteText:  '#ef4444',
-  deleteBorder:'#fecaca',
-  signOutHover:'rgba(239,68,68,0.08)',
-};
-const DARK_C = {
-  page:        '#17181E',
-  nav:         '#1E1F26',
-  navBorder:   'rgba(255,255,255,0.07)',
-  card:        '#1E1F26',
-  cardBorder:  'rgba(255,255,255,0.07)',
-  cardShadow:  '0 4px 20px rgba(0,0,0,0.45)',
-  hoverShadow: '0 12px 36px rgba(0,0,0,0.60)',
-  green:       '#3E93FF',
-  lime:        'rgba(62,147,255,0.15)',
-  cta:         '#3E93FF',
-  ctaText:     'white',
-  text:        '#A8B5C2',
-  muted:       '#A8B5C2',
-  faint:       '#6b7a89',
-  divider:     'rgba(255,255,255,0.07)',
-  pill:        '#2a2b34',
-  input:       '#2a2b34',
-  skeleton:    '#2a2b34',
-  thumbBg:     '#16152a',
-  overlayBtn:  'rgba(0,0,0,0.65)',
-  overlayText: '#A8B5C2',
-  pastOverlay: 'rgba(0,0,0,0.45)',
-  formBadgeBg: '#2a2b34',
-  formBadgeText: '#A8B5C2',
-  deleteBg:    'rgba(239,68,68,0.12)',
-  deleteText:  '#f87171',
-  deleteBorder:'rgba(239,68,68,0.25)',
-  signOutHover:'rgba(239,68,68,0.10)',
-};
-function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
+import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 
 // --- Social share SVGs ---
 const SHARE_PLATFORMS = [
@@ -2567,7 +2505,7 @@ function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
               <p className="text-xs" style={{ color: C.faint }}>{new Date(a.created_at).toLocaleDateString()}</p>
             </button>
             {/* Actions */}
-            <div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <Link href={`/create/assignment?edit=${a.id}`}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold hover:opacity-80"
                 style={{ background: C.pill, color: C.muted, textDecoration: 'none' }}>
@@ -3706,7 +3644,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                                 <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || '--'}</p>
                                 <p className="text-xs truncate" style={{ color: C.faint }}>{s.email}</p>
                               </div>
-                              {!isStaff && <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
+                              {!isStaff && <div className="flex items-center gap-1 transition-all">
                                 <button onClick={() => setReassignId(reassignId === s.id ? null : s.id)}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-blue-500/10"
                                   style={{ color: '#3b82f6' }}>
@@ -3825,7 +3763,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                         </div>
                         <button onClick={e => { e.stopPropagation(); handleDeleteUser(s.id, s.full_name || s.email); }}
                           disabled={deletingUserId === s.id}
-                          className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-red-500/10 disabled:opacity-40"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:bg-red-500/10 disabled:opacity-40"
                           style={{ color: '#dc2626' }}>
                           {deletingUserId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Trash2 className="w-3.5 h-3.5"/>}
                           Delete
@@ -4049,7 +3987,7 @@ function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                           <div key={e.id} className="flex items-center gap-3 px-4 py-2.5 group"
                             style={{ borderBottom: i < allowedEmails.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
                             <p className="flex-1 text-sm truncate" style={{ color: C.text }}>{e.email}</p>
-                            <button onClick={() => removeEmail(e.id)} className="opacity-0 group-hover:opacity-100 p-1 rounded-lg transition-all hover:bg-red-500/10" style={{ color: '#ef4444' }}>
+                            <button onClick={() => removeEmail(e.id)} className="p-1 rounded-lg transition-all hover:bg-red-500/10" style={{ color: '#ef4444' }}>
                               <X className="w-3.5 h-3.5"/>
                             </button>
                           </div>
@@ -9576,8 +9514,8 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     // VE-style: one cohesive C.cta accent for every section head (the `accent` arg is ignored).
     const sectionHead = (icon: React.ReactNode, label: string, _accent?: string) => (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-        <div style={{ width: 32, height: 32, borderRadius: 9, background: `${C.cta}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          {isValidElement(icon) ? cloneElement(icon as React.ReactElement<{ color?: string }>, { color: C.cta }) : icon}
+        <div style={{ width: 32, height: 32, borderRadius: 9, background: C.pill, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {isValidElement(icon) ? cloneElement(icon as React.ReactElement<{ color?: string }>, { color: C.muted }) : icon}
         </div>
         <span style={{ fontWeight: 700, fontSize: 15, color: C.text }}>{label}</span>
       </div>
@@ -9795,8 +9733,8 @@ function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
             return (
               <button key={t.id} onClick={() => setEditorTab(t.id)}
                 style={{ flex: '1 1 0', minWidth: 168, display: 'flex', alignItems: 'center', gap: 12, padding: '15px 16px', borderRadius: 14, border: 'none', background: active ? C.cta : C.card, cursor: 'pointer', textAlign: 'left', fontFamily: font, transition: 'background 0.15s' }}>
-                <div style={{ width: 40, height: 40, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: active ? 'rgba(255,255,255,0.2)' : `${C.cta}14` }}>
-                  <t.Icon size={19} color={active ? C.ctaText : C.cta} />
+                <div style={{ width: 40, height: 40, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: active ? 'rgba(255,255,255,0.2)' : C.pill }}>
+                  <t.Icon size={19} color={active ? C.ctaText : C.muted} />
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 14.5, color: active ? C.ctaText : C.text, whiteSpace: 'nowrap' }}>{t.label}</div>

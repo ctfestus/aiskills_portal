@@ -5,47 +5,7 @@ import { Sun, Moon } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
 import { DataPlaygroundGrid } from '@/components/data-playground/DataPlayground';
-
-// --- Design tokens (mirrored from student page) ---
-const LIGHT_C = {
-  page:       '#F2F5FA',
-  nav:        'rgba(255,255,255,0.98)',
-  navBorder:  'rgba(0,0,0,0.07)',
-  card:       'white',
-  cardBorder: 'rgba(0,0,0,0.07)',
-  cardShadow: '0 2px 12px rgba(0,0,0,0.08)',
-  green:      '#0e09dd',
-  lime:       '#e0e0f5',
-  cta:        '#0e09dd',
-  ctaText:    'white',
-  text:       '#111',
-  muted:      '#555',
-  faint:      '#888',
-  divider:    'rgba(0,0,0,0.07)',
-  pill:       '#F4F4F4',
-  input:      '#F7F7F7',
-  skeleton:   '#EBEBEB',
-};
-const DARK_C = {
-  page:       '#17181E',
-  nav:        '#1E1F26',
-  navBorder:  'rgba(255,255,255,0.07)',
-  card:       '#1E1F26',
-  cardBorder: 'rgba(255,255,255,0.07)',
-  cardShadow: '0 4px 20px rgba(0,0,0,0.45)',
-  green:      '#3E93FF',
-  lime:       'rgba(62,147,255,0.15)',
-  cta:        '#3E93FF',
-  ctaText:    'white',
-  text:       '#f8fafc',
-  muted:      '#A8B5C2',
-  faint:      '#6b7a89',
-  divider:    'rgba(255,255,255,0.07)',
-  pill:       '#2a2b34',
-  input:      '#2a2b34',
-  skeleton:   '#2a2b34',
-};
-function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
+import { useC } from '@/lib/theme';
 
 export default function DataPlaygroundPage() {
   const C = useC();
