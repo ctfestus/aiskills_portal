@@ -1,36 +1,16 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useState, useRef, useCallback, useContext, cloneElement, isValidElement } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-  Loader2, Plus, FileText, BarChart3, ExternalLink, Trash2, Edit2,
-  Share2, Check, Copy, X, CalendarDays, AlignLeft, Settings, User,
-  LogOut, ChevronDown, ChevronRight, ChevronLeft, GripVertical, BookOpen, MapPin, Sun, Moon, Zap,
-  ShoppingBag, GraduationCap, ClipboardList, ArrowRight, ArrowLeft, Award, Upload,
-  Users, Megaphone, Trophy, Menu, CheckCircle2, XCircle,
-  UserPlus, Search, UserMinus, Download, TrendingUp, Briefcase,
-  Activity, AlertTriangle, Clock, CheckCircle, MinusCircle, Send, CreditCard, RefreshCw, Palette, Mail, Video, PlayCircle, MoreVertical, Database, Sparkles, Eye, Save,
-} from 'lucide-react';
-import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS, TextPositions, defaultTextPositions } from '@/components/CertificateTemplate';
+import { Loader2, Plus, Trash2, Settings, Sun, Moon, Download, Menu } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Star } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
-import { ReviewReportView, REVIEW_TYPES } from '@/components/ReviewReportView';
-import { parseReviewNotes, inferReviewType } from '@/lib/reviewRecord';
-import { RichTextEditor } from '@/components/RichTextEditor';
-import { sanitizeRichText } from '@/lib/sanitize';
-import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/uploadToCloudinary';
-import { TEMPLATES as SITE_TEMPLATES } from '@/lib/site-templates';
-import { PexelsImagePicker } from '@/components/PexelsImagePicker';
-import { loadGoogleFont, getFontById } from '@/lib/fonts';
-import { isScheduledSessionDate } from '@/lib/event-sessions';
-import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
-import { downloadJSON, exportContent, exportAssignment, exportAllInSection, exportAllAssignments, exportCSV, exportGroupCSV, reportExportCSV } from '@/lib/dashboard-export';
-import { PushButton, PushAllButton, SectionEmptyState, StudentAvatar } from '@/components/dashboard/primitives';
+import { useC } from '@/lib/theme';
+import { exportAllInSection } from '@/lib/dashboard-export';
+import { PushAllButton } from '@/components/dashboard/primitives';
 import { ImportButton } from '@/components/dashboard/ImportButton';
 import { SYNC_ENABLED } from '@/lib/sync';
 import { IsStaffContext } from '@/components/dashboard/context';
