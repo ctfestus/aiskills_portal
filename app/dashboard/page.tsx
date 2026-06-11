@@ -29,7 +29,7 @@ import { PexelsImagePicker } from '@/components/PexelsImagePicker';
 import { loadGoogleFont, getFontById } from '@/lib/fonts';
 import { isScheduledSessionDate } from '@/lib/event-sessions';
 import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
-import { downloadJSON, exportContent, exportAssignment, exportAllInSection, exportAllAssignments, exportCSV, exportGroupCSV } from '@/lib/dashboard-export';
+import { downloadJSON, exportContent, exportAssignment, exportAllInSection, exportAllAssignments, exportCSV, exportGroupCSV, reportExportCSV } from '@/lib/dashboard-export';
 import { PushButton, PushAllButton, GenericListSection, SectionEmptyState, StudentAvatar } from '@/components/dashboard/primitives';
 import { ImportButton } from '@/components/dashboard/ImportButton';
 import { SYNC_ENABLED } from '@/lib/sync';
@@ -1001,19 +1001,6 @@ function ComingSoon({ id, C }: { id: SectionId; C: typeof LIGHT_C }) {
 
 
 // --- Shared UI primitives ---
-function reportExportCSV(headers: string[], rows: (string | number | null | undefined)[][], filename: string) {
-  const escape = (v: string | number | null | undefined) => {
-    const s = String(v ?? '');
-    const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
-    return `"${safe.replace(/"/g, '""')}"`;
-  };
-  const csv = [headers.map(escape).join(','), ...rows.map(r => r.map(escape).join(','))].join('\n');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
-
 
 
 // --- Cohorts section ---

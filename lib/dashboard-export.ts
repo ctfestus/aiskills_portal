@@ -141,3 +141,16 @@ export function exportGroupCSV(rows: any[], title: string) {
   a.href = url; a.download = `${title.replace(/\s+/g, '_')}_group_responses.csv`; a.click();
   URL.revokeObjectURL(url);
 }
+
+export function reportExportCSV(headers: string[], rows: (string | number | null | undefined)[][], filename: string) {
+  const escape = (v: string | number | null | undefined) => {
+    const s = String(v ?? '');
+    const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
+  const csv = [headers.map(escape).join(','), ...rows.map(r => r.map(escape).join(','))].join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
