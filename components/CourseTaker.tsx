@@ -14,6 +14,7 @@ import {
   Check, Play, FileText, FlaskConical, ListChecks,
 } from 'lucide-react';
 import { AnimatedField } from '@/components/AnimatedField';
+import type { QuestionType, DownloadItem, CourseQuestion } from '@/lib/course-schema';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { supabase } from '@/lib/supabase';
 import { getFontById, loadGoogleFont } from '@/lib/fonts';
@@ -59,8 +60,8 @@ function MenuIcon({ className }: { className?: string }) {
 }
 
 type ShowAnswers = 'per_question' | 'after_quiz' | 'none';
-type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise' | 'document_review';
 
+// QuestionType / DownloadItem / CourseQuestion come from the canonical contract in lib/course-schema.
 const REVIEW_TYPES: QuestionType[] = ['code_review', 'excel_review', 'dashboard_critique', 'document_review'];
 
 function escapeHtml(value: string): string {
@@ -92,65 +93,6 @@ function renderBody(html: string): string {
 
 const INLINE_CODE_BADGE_CLASSES =
   '[&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[0.9em] [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_:not(pre)>code]:bg-emerald-50 [&_:not(pre)>code]:text-emerald-700 dark:[&_:not(pre)>code]:bg-emerald-500/15 dark:[&_:not(pre)>code]:text-emerald-400 [&_:not(pre)>code]:before:content-none [&_:not(pre)>code]:after:content-none';
-
-interface DownloadItem {
-  id: string;
-  title: string;
-  description?: string;
-  fileUrl?: string;
-  fileName?: string;
-  linkUrl?: string;
-  type: 'file' | 'link';
-  pdfPages?: number;
-}
-
-interface CourseQuestion {
-  id: string;
-  type?: QuestionType;
-  question: string;
-  options: string[];
-  correctAnswer: string;
-  explanation?: string;
-  optionImages?: string[];
-  hint?: string;
-  codeSnippet?: string;
-  codeLanguage?: string;
-  lessonOnly?: boolean;
-  lockUntilPrevious?: boolean;
-  isSection?: boolean;
-  sectionTitle?: string;
-  sectionDescription?: string;
-  isDownloads?: boolean;
-  downloadsTitle?: string;
-  downloadsDescription?: string;
-  downloadItems?: DownloadItem[];
-  lesson?: {
-    title?: string;
-    body?: string;
-    imageUrl?: string;
-    videoUrl?: string;
-    pdfUrl?: string;
-    pdfName?: string;
-    pdfPages?: number;
-  };
-  // AI review fields
-  rubric?: string[];
-  schema?: string;
-  context?: string;
-  minScore?: number;
-  reviewLanguage?: string;
-  documentReviewMode?: 'ai_only' | 'manual' | 'hybrid';
-  sqlTables?: { id?: string; tableName: string; fileName?: string; fileUrl?: string; csvUrl?: string; seedSql?: string }[];
-  sqlStarterCode?: string;
-  sqlSolution?: string;
-  sqlExpectedResult?: { columns: string[]; rows: unknown[][] };
-  sqlHints?: string[];
-  sqlResultOrdered?: boolean;
-  sqlNumericTolerance?: number;
-  sqlRequiredPatterns?: string[];
-}
-
-
 
 // -- Confetti burst --
 function burstConfetti(canvas: HTMLCanvasElement, accent: string) {
