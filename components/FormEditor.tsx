@@ -12,6 +12,10 @@ import {
   Lock, LockOpen, Users,
 } from 'lucide-react';
 import type { ThemeColor, ThemeMode } from '@/lib/theme-types';
+import type {
+  FieldType, FormField, QuestionType, DownloadItem, CourseQuestion,
+  Speaker, EventDetails, PostSubmission, PointsMilestone, PointsSystem, FormConfig,
+} from '@/lib/course-schema';
 import dynamic from 'next/dynamic';
 import GeneratingOverlay from '@/components/GeneratingOverlay';
 import { ImageCropModal } from '@/components/ImageCropModal';
@@ -33,136 +37,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// --- Types ---
-type FieldType = 'text' | 'email' | 'textarea' | 'number' | 'select' | 'phone' | 'company' | 'social' | 'description';
-
-interface FormField {
-  id: string;
-  name: string;
-  label: string;
-  type: FieldType;
-  placeholder?: string;
-  options?: string[];
-  required?: boolean;
-  socialPlatforms?: string[];
-  description?: string;
-}
-
-type QuestionType = 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code' | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise' | 'document_review';
-
-interface DownloadItem {
-  id: string;
-  title: string;
-  description?: string;
-  fileUrl?: string;
-  fileName?: string;
-  linkUrl?: string;
-  type: 'file' | 'link';
-  pdfPages?: number;   // set when the uploaded file is a PDF, enables inline carousel
-}
-
-interface CourseQuestion {
-  id: string;
-  type?: QuestionType;
-  question: string;
-  options: string[];
-  correctAnswer: string;
-  explanation?: string;
-  optionImages?: string[];
-  hint?: string;
-  codeSnippet?: string;
-  codeLanguage?: string;
-  lessonOnly?: boolean;
-  lockUntilPrevious?: boolean;
-  isSection?: boolean;
-  sectionTitle?: string;
-  sectionDescription?: string;
-  isDownloads?: boolean;
-  downloadsTitle?: string;
-  downloadsDescription?: string;
-  downloadItems?: DownloadItem[];
-  lesson?: {
-    title?: string;
-    body?: string;
-    imageUrl?: string;
-    videoUrl?: string;
-    pdfUrl?: string;
-    pdfName?: string;
-    pdfPages?: number;
-  };
-  // AI review fields (code_review | excel_review | dashboard_critique | document_review)
-  rubric?: string[];
-  schema?: string;
-  context?: string;
-  minScore?: number;
-  reviewLanguage?: string;
-  documentReviewMode?: 'ai_only' | 'manual' | 'hybrid';
-  sqlTables?: { id?: string; tableName: string; fileName?: string; fileUrl?: string; csvUrl?: string; seedSql?: string }[];
-  sqlStarterCode?: string;
-  sqlSolution?: string;
-  sqlExpectedResult?: { columns: string[]; rows: unknown[][] };
-  sqlHints?: string[];
-  sqlResultOrdered?: boolean;
-  sqlNumericTolerance?: number;
-  sqlRequiredPatterns?: string[];
-}
-
-interface Speaker {
-  id: string;
-  name: string;
-  title?: string;
-  bio?: string;
-  avatar_url?: string;
-  linkedin_url?: string;
-}
-
-interface EventDetails {
-  isEvent: boolean;
-  date?: string;
-  time?: string;
-  location?: string;
-  timezone?: string;
-  isPrivate?: boolean;
-  capacity?: number;
-  eventType?: 'in-person' | 'virtual';
-  meetingLink?: string;
-  speakers?: Speaker[];
-  recurrence?: 'once' | 'daily' | 'weekly';
-  recurrenceEndDate?: string;
-  recurrenceDays?: number[];
-}
-
-interface PostSubmission {
-  type: 'default' | 'redirect' | 'button' | 'events' | 'notice';
-  redirectUrl?: string;
-  buttonLabel?: string;
-  buttonUrl?: string;
-  relatedEventIds?: string[];
-  noticeTitle?: string;
-  noticeBody?: string;
-}
-
-interface PointsMilestone {
-  id: string;
-  points: number;
-  label: string;
-  description: string;
-  rewardUrl?: string;
-}
-
-interface PointsSystem {
-  enabled: boolean;
-  basePoints: number;
-  timeBonusEnabled: boolean;
-  timeBonusSeconds: number;
-  timeBonusMultiplier: number;
-  streakEnabled: boolean;
-  streakCount: number;
-  streakBonus: number;
-  hintPenalty: number;
-  solutionPenalty: number;
-  milestones: PointsMilestone[];
-}
+// --- Types: the content contract is canonical in lib/course-schema (imported above) ---
 
 const DEFAULT_POINTS: PointsSystem = {
   enabled: false,
@@ -177,34 +52,6 @@ const DEFAULT_POINTS: PointsSystem = {
   solutionPenalty: 30,
   milestones: [],
 };
-
-interface FormConfig {
-  title: string;
-  description: string;
-  coverImage: string;
-  theme: ThemeColor;
-  customAccent?: string;
-  mode: ThemeMode;
-  font: string;
-  fields: FormField[];
-  eventDetails?: EventDetails;
-  isCourse?: boolean;
-  questions?: CourseQuestion[];
-  learnOutcomes?: string[];
-  showAnswers?: 'per_question' | 'after_quiz' | 'none';
-  lessonTiming?: 'before' | 'after';
-  passmark?: number;
-  courseTimer?: number;
-  timer?: number;
-  maxAttempts?: number;
-  postSubmission?: PostSubmission;
-  pointsSystem?: PointsSystem;
-  pointsEnabled?: boolean;
-  pointsBase?: number;
-  deadline_days?: number | null;
-  category?: string | null;
-  badgeImageUrl?: string | null;
-}
 
 // --- Constants ---
 const COURSE_CATEGORIES = ['Excel', 'Power BI', 'SQL', 'Tableau', 'AI'] as const;
@@ -742,7 +589,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     setIsLoading(true);
     (async () => {
       if (contentType === 'course') {
-        const { data: course } = await supabase.from('courses').select('id, title, description, slug, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, badge_image_url, deadline_days, theme, mode, font, custom_accent, category').eq('id', formId).maybeSingle();
+        const { data: course } = await supabase.from('courses').select('id, title, description, slug, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, badge_image_url, deadline_days, theme, mode, font, custom_accent, category, show_answers, lesson_timing, max_attempts').eq('id', formId).maybeSingle();
         if (course) {
           setFormConfig({
             isCourse: true,
@@ -752,10 +599,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
             questions: course.questions ?? [],
             fields: course.fields ?? [],
             passmark: course.passmark,
-            timer: course.course_timer,
+            courseTimer: course.course_timer,
+            showAnswers: course.show_answers ?? undefined,
+            lessonTiming: course.lesson_timing ?? undefined,
+            maxAttempts: course.max_attempts ?? undefined,
             learnOutcomes: course.learn_outcomes ?? [],
-            pointsEnabled: course.points_enabled,
-            pointsBase: course.points_base,
             pointsSystem: { ...DEFAULT_POINTS, enabled: course.points_enabled ?? false, basePoints: course.points_base ?? 100 },
             postSubmission: course.post_submission,
             deadline_days: course.deadline_days,
