@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { downloadJSON } from '@/lib/dashboard-export';
 import { PexelsImagePicker } from '@/components/PexelsImagePicker';
 import { RichTextEditor } from '@/components/RichTextEditor';
-import { LIGHT_C, DARK_C } from '@/lib/theme';
+import { LIGHT_C, DARK_C, cardStyle } from '@/lib/theme';
 
 type DatasetFile = { name: string; url: string };
 type DatasetQuestionType = 'sql' | 'analytics';
@@ -537,7 +537,7 @@ export function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
     );
 
     const card = (children: React.ReactNode) => (
-      <div style={{ background: C.card, borderRadius: 18, padding: 24, border: 'none' }}>
+      <div style={{ ...cardStyle(C), borderRadius: 18, padding: 24 }}>
         {children}
       </div>
     );
@@ -1021,7 +1021,7 @@ export function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
       )}
 
       {!loading && datasets.length === 0 && (
-        <div style={{ textAlign: 'center', padding: 60, background: C.card, borderRadius: 16, border: cardBorder }}>
+        <div style={{ textAlign: 'center', padding: 60, ...cardStyle(C), borderRadius: 16 }}>
           <Database size={36} style={{ color: C.faint, margin: '0 auto 12px' }} />
           <p style={{ fontWeight: 600, color: C.text, marginBottom: 4 }}>No datasets yet</p>
           <p style={{ fontSize: 13, color: C.faint, marginBottom: 16 }}>Create your first dataset to share with students.</p>
@@ -1034,7 +1034,7 @@ export function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
       {!loading && datasets.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {datasets.map(d => (
-            <div key={d.id} style={{ background: C.card, border: cardBorder, borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div key={d.id} style={{ ...cardStyle(C), borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
               {d.cover_image_url && (
                 <img src={d.cover_image_url} alt={d.cover_image_alt ?? ''} style={{ width: 72, height: 48, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
               )}

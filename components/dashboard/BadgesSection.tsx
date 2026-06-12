@@ -5,10 +5,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { LIGHT_C, DARK_C } from '@/lib/theme';
+import { LIGHT_C, cardStyle } from '@/lib/theme';
 
 export function BadgesSection({ C }: { C: typeof LIGHT_C }) {
-  const isDark = C === DARK_C;
   const [badges, setBadges] = useState<{ id: string; name: string; description: string; icon: string; color: string; image_url: string | null; category: string; managed: 'course' | 'learning_path' | 'virtual_experience' | null }[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
   const [removing, setRemoving]   = useState<string | null>(null);
@@ -101,7 +100,7 @@ export function BadgesSection({ C }: { C: typeof LIGHT_C }) {
         </div>
       )}
 
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
+      <div className="rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
         {/* Header + badge-type tabs */}
         <div className="px-5 pt-5 pb-4" style={{ borderBottom: `1px solid ${C.divider}` }}>
           <h2 className="text-lg font-bold leading-none" style={{ color: C.text }}>Badge Images</h2>

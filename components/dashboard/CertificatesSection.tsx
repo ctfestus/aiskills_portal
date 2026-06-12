@@ -7,13 +7,12 @@ import { Check, CheckCircle2, Loader2, Trash2, Upload, XCircle } from 'lucide-re
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import CertificateTemplate, { CertificateSettings, DEFAULT_CERT_SETTINGS, TextPositions, defaultTextPositions } from '@/components/CertificateTemplate';
-import { LIGHT_C, DARK_C } from '@/lib/theme';
+import { LIGHT_C, cardStyle } from '@/lib/theme';
 
 const CERT_W = 1860;
 const CERT_H = 1200;
 
 export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
-  const isDark = C === DARK_C;
   const [user, setUser]           = useState<any>(null);
   const [loading, setLoading]     = useState(true);
   const [saving, setSaving]       = useState(false);
@@ -134,7 +133,7 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl p-5 space-y-4" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+      <div className="rounded-2xl p-5 space-y-4" style={{ ...cardStyle(C) }}>
         <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Certificate Default Design</h2>
         <p className="text-xs" style={{ color: C.muted }}>Set once. All your courses inherit this design automatically.</p>
         <div>
@@ -348,7 +347,7 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
         };
 
         return (
-          <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+          <div className="rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
             <div className="px-5 py-3 border-b flex items-center justify-between" style={{ borderColor: C.divider }}>
               <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Preview</p>
               {selectedElement && (

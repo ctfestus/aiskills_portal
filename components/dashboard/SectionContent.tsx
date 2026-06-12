@@ -3,7 +3,7 @@
 import { useState, useEffect, useContext } from 'react';
 import Link from 'next/link';
 import { BookOpen, CalendarDays, Plus, Users, Megaphone } from 'lucide-react';
-import { LIGHT_C } from '@/lib/theme';
+import { LIGHT_C, cardStyle } from '@/lib/theme';
 import { GenericListSection } from '@/components/dashboard/primitives';
 import { IsStaffContext } from '@/components/dashboard/context';
 import { STAFF_SECTION_IDS, COMING_SOON, ComingSoon, type SectionId } from '@/components/dashboard/nav';
@@ -80,7 +80,7 @@ export function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen
     const href = section === 'courses' ? '/create?type=course' : '/create?type=event';
     const label = section === 'courses' ? 'course' : 'event';
     return (
-      <div className="text-center py-24 rounded-3xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+      <div className="text-center py-24 rounded-3xl" style={{ ...cardStyle(C) }}>
         <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: C.lime }}>
           {section === 'courses' ? <BookOpen className="w-7 h-7" style={{ color: C.green }}/> : <CalendarDays className="w-7 h-7" style={{ color: C.green }}/>}
         </div>

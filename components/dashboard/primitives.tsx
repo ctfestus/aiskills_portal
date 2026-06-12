@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Send, Plus, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { LIGHT_C } from '@/lib/theme';
+import { LIGHT_C, cardStyle } from '@/lib/theme';
 
 export function PushButton({ type, id, C }: { type: string; id: string; C: typeof LIGHT_C }) {
   const [state, setState] = useState<'idle'|'pushing'|'done'|'error'>('idle');
@@ -137,7 +137,7 @@ export function GenericListSection({ table, label, createHref, createLabel, Icon
   );
 
   if (!items.length) return (
-    <div className="text-center py-24 rounded-3xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+    <div className="text-center py-24 rounded-3xl" style={{ ...cardStyle(C) }}>
       <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: C.lime }}>
         <Icon className="w-7 h-7" style={{ color: C.green }}/>
       </div>
@@ -161,7 +161,7 @@ export function GenericListSection({ table, label, createHref, createLabel, Icon
       </div>
       <div className="space-y-3">
         {items.map(item => (
-          <div key={item.id} className="flex items-center justify-between gap-3 p-4 rounded-2xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <div key={item.id} className="flex items-center justify-between gap-3 p-4 rounded-2xl" style={{ ...cardStyle(C) }}>
             <div className="min-w-0 flex-1">{renderRow(item)}</div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <Link href={`${createHref}?edit=${item.id}`}
@@ -186,7 +186,7 @@ export function SectionEmptyState({ Icon, label, createHref, createLabel, C }: {
   Icon: React.ElementType; label: string; createHref: string; createLabel: string; C: typeof LIGHT_C;
 }) {
   return (
-    <div className="text-center py-24 rounded-3xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+    <div className="text-center py-24 rounded-3xl" style={{ ...cardStyle(C) }}>
       <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: C.lime }}>
         <Icon className="w-7 h-7" style={{ color: C.green }}/>
       </div>

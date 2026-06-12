@@ -6,7 +6,7 @@ import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Briefcase, Loader2, Copy, Download, Trash2, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { LIGHT_C } from '@/lib/theme';
+import { LIGHT_C, cardStyle } from '@/lib/theme';
 import { SYNC_ENABLED } from '@/lib/sync';
 import { exportContent, exportAllInSection } from '@/lib/dashboard-export';
 import { PushButton, PushAllButton } from '@/components/dashboard/primitives';
@@ -39,7 +39,7 @@ function VEIndustryRow({ industry, forms, handleDuplicate, duplicatingId, setFor
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 340, behavior: 'smooth' });
   return (
-    <section className="rounded-2xl p-5 sm:p-6 mb-6" style={{ background: C.card }}>
+    <section className="rounded-2xl p-5 sm:p-6 mb-6" style={{ ...cardStyle(C) }}>
       <div className="flex items-center justify-between gap-4 mb-4">
         <h2 className="text-lg sm:text-xl font-bold truncate" style={{ color: C.text }}>{industry.replace(/\b\w/g, c => c.toUpperCase())}</h2>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -61,7 +61,7 @@ function VEIndustryRow({ industry, forms, handleDuplicate, duplicatingId, setFor
           const color = GP_IND_COLORS[cfg.industry] || '#6366f1';
           const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
           return (
-            <div key={form.id} className="flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ background: C.card }}>
+            <div key={form.id} className="flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
               {cfg.coverImage
                 ? <img src={cfg.coverImage} alt="" loading="lazy" className="w-full h-28 object-cover" />
                 : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${color}18` }}>
@@ -188,7 +188,7 @@ export function VirtualExperiencesManageSection({ C, forms, setFormToDelete, onD
 
   if (gpForms.length === 0) {
     return (
-      <div className="text-center py-24 rounded-3xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+      <div className="text-center py-24 rounded-3xl" style={{ ...cardStyle(C) }}>
         <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: '#6366f120' }}>
           <Briefcase className="w-6 h-6" style={{ color: '#6366f1' }} />
         </div>

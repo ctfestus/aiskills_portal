@@ -12,7 +12,7 @@ import { ReviewReportView, REVIEW_TYPES } from '@/components/ReviewReportView';
 import { parseReviewNotes, inferReviewType } from '@/lib/reviewRecord';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { useTheme } from '@/components/ThemeProvider';
-import { LIGHT_C } from '@/lib/theme';
+import { LIGHT_C, cardStyle } from '@/lib/theme';
 import { SYNC_ENABLED } from '@/lib/sync';
 import { exportAssignment, exportAllAssignments, exportCSV, exportGroupCSV } from '@/lib/dashboard-export';
 import { PushButton, PushAllButton, StudentAvatar } from '@/components/dashboard/primitives';
@@ -184,7 +184,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
         )}
 
         {/* Student card */}
-        <div className="rounded-2xl p-5 mb-4" style={{ background: C.card }}>
+        <div className="rounded-2xl p-5 mb-4" style={{ ...cardStyle(C) }}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <StudentAvatar name={viewingSub.student?.full_name} email={viewingSub.student?.email} size={40} C={C}/>
@@ -276,7 +276,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
         </div>
 
         {/* Grade panel */}
-        <div className="rounded-2xl p-5" style={{ background: C.card }}>
+        <div className="rounded-2xl p-5" style={{ ...cardStyle(C) }}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold" style={{ color: C.text }}>Grade Submission</h3>
             <span className="text-xs" style={{ color: C.faint }}>Passmark: 85%</span>
@@ -398,13 +398,13 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
               { key: 'requirements',           label: 'Requirements' },
               { key: 'submission_instructions',label: 'Submission Instructions' },
             ].filter(f => selected[f.key]).map(f => (
-              <div key={f.key} className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+              <div key={f.key} className="rounded-2xl p-5" style={{ ...cardStyle(C) }}>
                 <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.faint }}>{f.label}</p>
                 <div className="rich-content text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(selected[f.key]) }}/>
               </div>
             ))}
             {!selected.scenario && !selected.brief && !selected.tasks && !selected.requirements && (
-              <div className="text-center py-16 rounded-2xl" style={{ background: C.card }}>
+              <div className="text-center py-16 rounded-2xl" style={{ ...cardStyle(C) }}>
                 <p className="text-sm" style={{ color: C.faint }}>No details added yet. <Link href={`/create/assignment?edit=${selected.id}`} style={{ color: C.green }}>Edit assignment</Link></p>
               </div>
             )}
@@ -422,7 +422,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                 { label: 'Graded',     value: graded,                  icon: CheckCircle2,color:'#d97706', bg: 'rgba(217,119,6,0.12)' },
                 { label: 'Pass Rate',  value: `${passRate}%`,          icon: TrendingUp, color: '#10b981', bg: 'rgba(16,185,129,0.08)' },
               ].map(s => (
-                <div key={s.label} className="rounded-2xl p-4" style={{ background: C.card }}>
+                <div key={s.label} className="rounded-2xl p-4" style={{ ...cardStyle(C) }}>
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-semibold" style={{ color: C.faint }}>{s.label}</p>
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: s.bg }}>
@@ -448,7 +448,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
             {loadingSubs ? (
               <div className="space-y-2">{[0,1,2,3].map(i => <div key={i} className="h-16 rounded-2xl animate-pulse" style={{ background: C.card }}/>)}</div>
             ) : responseRows.length === 0 ? (
-              <div className="text-center py-16 rounded-2xl" style={{ background: C.card }}>
+              <div className="text-center py-16 rounded-2xl" style={{ ...cardStyle(C) }}>
                 <p className="text-sm font-medium mb-1" style={{ color: C.text }}>{isGroupAssignment ? 'No groups assigned' : 'No students assigned'}</p>
                 <p className="text-xs" style={{ color: C.faint }}>{(selected.group_ids?.length ?? 0) > 0 ? 'No group members found for this assignment.' : 'Assign a cohort to this assignment first.'}</p>
               </div>
@@ -628,7 +628,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
 
   // -- Assignment list ---
   if (!assignments.length) return (
-    <div className="text-center py-24 rounded-3xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+    <div className="text-center py-24 rounded-3xl" style={{ ...cardStyle(C) }}>
       <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: C.lime }}>
         <ClipboardList className="w-7 h-7" style={{ color: C.green }}/>
       </div>

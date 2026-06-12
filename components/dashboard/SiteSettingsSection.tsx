@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ExternalLink, 
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { TEMPLATES as SITE_TEMPLATES } from '@/lib/site-templates';
-import { LIGHT_C, DARK_C } from '@/lib/theme';
+import { LIGHT_C, cardStyle } from '@/lib/theme';
 
 function loadFont(family: string) {
   if (!family || family === 'Inter') return;
@@ -91,7 +91,6 @@ function SitePreview({ config, template, C }: { config: Record<string, string>; 
 
 // --- Site Settings Section ---
 export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
-  const isDark = C === DARK_C;
   const [template, setTemplate] = useState('momentum');
   const [config, setConfig]     = useState<Record<string, string>>({});
   const [loading, setLoading]   = useState(true);
@@ -271,7 +270,7 @@ export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
 
   // Accordion section wrapper
   const Sec = (id: string, label: string, preview: React.ReactNode, children: React.ReactNode) => (
-    <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+    <div className="rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
       <button onClick={() => toggleSec(id)} className="w-full flex items-center gap-3 px-4 py-3.5 text-left transition-opacity hover:opacity-70">
         <span className="flex-1 text-[11px] font-bold uppercase tracking-widest" style={{ color: C.text }}>{label}</span>
         {preview && <span className="flex items-center gap-1">{preview}</span>}
@@ -312,7 +311,7 @@ export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
         <div style={{ width: 400 }} className="space-y-4 pb-6 pr-1">
 
         {/* Template selector -- always visible */}
-        <div className="rounded-2xl p-4" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+        <div className="rounded-2xl p-4" style={{ ...cardStyle(C) }}>
           <p className="text-[10px] font-bold uppercase tracking-widest mb-3" style={{ color: C.faint }}>Template</p>
           <div className="flex gap-2 flex-wrap">
             {SITE_TEMPLATES.map(t => (

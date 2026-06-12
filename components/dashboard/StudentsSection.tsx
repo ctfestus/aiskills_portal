@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { Download, ExternalLink, Eye, MoreVertical, Search, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { reportExportCSV } from '@/lib/dashboard-export';
-import { LIGHT_C, DARK_C } from '@/lib/theme';
+import { LIGHT_C, DARK_C, cardStyle } from '@/lib/theme';
 
 function StudentDetailPanel({ student, cohortName, detail, loading, onClose, C }: {
   student: any; cohortName: string; detail: any; loading: boolean; onClose: () => void; C: typeof LIGHT_C;
@@ -178,7 +178,7 @@ export function StudentsSection({ C }: { C: typeof LIGHT_C }) {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
+      <div className="rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-5 py-4" style={{ borderBottom: `1px solid ${C.divider}` }}>
           <div>

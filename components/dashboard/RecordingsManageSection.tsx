@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { Video, Plus, Edit2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { deleteFromCloudinary } from '@/lib/uploadToCloudinary';
-import { LIGHT_C } from '@/lib/theme';
+import { LIGHT_C, cardStyle } from '@/lib/theme';
 import { SectionEmptyState } from '@/components/dashboard/primitives';
 import { IsStaffContext } from '@/components/dashboard/context';
 
@@ -59,7 +59,7 @@ export function RecordingsManageSection({ C }: { C: typeof LIGHT_C }) {
       <div className="space-y-3">
         {items.map(item => (
           <div key={item.id} className="flex items-center justify-between gap-3 p-4 rounded-2xl"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+            style={{ ...cardStyle(C) }}>
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-sm truncate" style={{ color: C.text }}>{item.title}</p>
               <p className="text-xs mt-0.5" style={{ color: C.faint }}>

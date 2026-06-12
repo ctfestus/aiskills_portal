@@ -6,10 +6,9 @@ import { useState, useEffect, useRef } from 'react';
 import { CheckCircle2, Loader2, Upload, XCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
-import { LIGHT_C, DARK_C } from '@/lib/theme';
+import { LIGHT_C, cardStyle } from '@/lib/theme';
 
 export function BrandingSection({ C }: { C: typeof LIGHT_C }) {
-  const isDark = C === DARK_C;
   const [form, setForm] = useState({
     appName:         '',
     orgName:         '',
@@ -184,7 +183,7 @@ export function BrandingSection({ C }: { C: typeof LIGHT_C }) {
 
   return (
     <div className="space-y-5 max-w-3xl">
-      <div className="rounded-2xl p-5 space-y-5" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+      <div className="rounded-2xl p-5 space-y-5" style={{ ...cardStyle(C) }}>
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: C.faint }}>Platform Branding</h2>
           <p className="text-xs leading-relaxed" style={{ color: C.muted }}>
@@ -343,7 +342,7 @@ export function BrandingSection({ C }: { C: typeof LIGHT_C }) {
       </div>
 
       {/* Landing Page */}
-      <div className="rounded-2xl p-5 space-y-5" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+      <div className="rounded-2xl p-5 space-y-5" style={{ ...cardStyle(C) }}>
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: C.faint }}>Landing Page</h2>
           <p className="text-xs leading-relaxed" style={{ color: C.muted }}>

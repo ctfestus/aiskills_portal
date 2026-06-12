@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, Edit2, GraduationCap, Loader2, Mail, MoreVertical, Plus, Search, Trash2, Upload, UserMinus, UserPlus, Users, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { IsStaffContext } from '@/components/dashboard/context';
-import { LIGHT_C } from '@/lib/theme';
+import { LIGHT_C, cardStyle, modalStyle } from '@/lib/theme';
 
 export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   const isStaff = useContext(IsStaffContext);
@@ -500,7 +500,7 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
     !cq || (c.title ?? '').toLowerCase().includes(cq)
   );
 
-  const card  = { background: C.card, border: `1px solid ${C.cardBorder}` };
+  const card  = cardStyle(C);
   const input = { background: C.input, border: `1px solid ${C.cardBorder}`, color: C.text };
 
   const TABS = [
@@ -549,7 +549,7 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
 
       {/* ===================== LIST VIEW ===================== */}
       {viewMode === 'list' && (
-        <div className="rounded-2xl" style={{ background: C.card, border: isLight ? `1px solid ${C.cardBorder}` : 'none' }}>
+        <div className="rounded-2xl" style={{ ...cardStyle(C) }}>
           {/* Header */}
           <div className="flex items-center justify-between gap-3 px-5 py-4" style={{ borderBottom: `1px solid ${C.divider}` }}>
             <div>
@@ -1053,7 +1053,7 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
       {!isStaff && showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}
           onClick={() => setShowCreate(false)}>
-          <div className="w-full max-w-md rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 24px 80px rgba(0,0,0,0.35)' }}
+          <div className="w-full max-w-md rounded-2xl overflow-hidden" style={{ ...modalStyle(C) }}
             onClick={e => e.stopPropagation()}>
             <div className="px-6 pt-5 pb-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.divider}` }}>
               <div>
@@ -1105,7 +1105,7 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
       {editOpen && selectedCohort && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}
           onClick={() => setEditOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 24px 80px rgba(0,0,0,0.35)' }}
+          <div className="w-full max-w-md rounded-2xl overflow-hidden" style={{ ...modalStyle(C) }}
             onClick={e => e.stopPropagation()}>
             <div className="px-6 pt-5 pb-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.divider}` }}>
               <div>
@@ -1158,7 +1158,7 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}
           onClick={() => { setAddAdmissionOpen(false); setAddAdmissionLog([]); }}>
           <div className="w-full max-w-lg rounded-2xl overflow-hidden flex flex-col max-h-[92vh]"
-            style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: '0 24px 80px rgba(0,0,0,0.35)' }}
+            style={{ ...modalStyle(C) }}
             onClick={e => e.stopPropagation()}>
             <div className="px-6 pt-5 pb-4 flex items-start justify-between flex-shrink-0" style={{ borderBottom: `1px solid ${C.divider}` }}>
               <div>
