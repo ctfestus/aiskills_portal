@@ -123,5 +123,7 @@ export const cardStyle = (C: ThemeColors) => ({
 export const modalStyle = (C: ThemeColors) => ({
   background: C.card,
   border: `1px solid ${C.cardBorder}`,
-  boxShadow: C === DARK_C ? 'none' : '0 24px 80px rgba(0,0,0,0.35)',
+  // Detect dark by value (the page background), not object identity, so a copied/derived dark
+  // palette still gets the flat treatment instead of falling through to the light-mode shadow.
+  boxShadow: C.page === DARK_C.page ? 'none' : '0 24px 80px rgba(0,0,0,0.35)',
 });
