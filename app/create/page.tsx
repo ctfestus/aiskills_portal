@@ -926,7 +926,7 @@ const [isSaving, setIsSaving] = useState(false);
     } else if (editId) {
       // Load existing content from purpose-built tables
       Promise.all([
-        supabase.from('courses').select('id, title, description, slug, status, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, badge_image_url, deadline_days, theme, mode, font, custom_accent, category').eq('id', editId).maybeSingle(),
+        supabase.from('courses').select('id, title, description, slug, status, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, badge_image_url, deadline_days, theme, mode, font, custom_accent, category, show_answers, lesson_timing, max_attempts').eq('id', editId).maybeSingle(),
         supabase.from('events').select('id, title, description, slug, status, cohort_ids, fields, event_date, event_time, timezone, location, event_type, capacity, meeting_link, is_private, post_submission, cover_image, deadline_days, theme, mode, font, custom_accent, speakers, recurrence, recurrence_end_date, recurrence_days').eq('id', editId).maybeSingle(),
       ]).then(([{ data: course }, { data: event }]) => {
         let id: string | null = null;
@@ -944,9 +944,13 @@ const [isSaving, setIsSaving] = useState(false);
           id = course.id; slug = course.slug || ''; cohortIds = course.cohort_ids || []; status = course.status;
           config = { isCourse: true, title: course.title, description: course.description,
             questions: course.questions ?? [], fields: course.fields ?? [],
-            passmark: course.passmark, course_timer: course.course_timer,
-            learnOutcomes: course.learn_outcomes, points_enabled: course.points_enabled,
-            points_base: course.points_base,
+            passmark: course.passmark, courseTimer: course.course_timer,
+            learnOutcomes: course.learn_outcomes,
+            showAnswers: course.show_answers ?? undefined,
+            lessonTiming: course.lesson_timing ?? undefined,
+            maxAttempts: course.max_attempts ?? undefined,
+            // Partial by design: see app/[id]/page.tsx -- normalizing to a full
+            // DEFAULT_POINTS_SYSTEM object would silently change XP scoring.
             pointsSystem: { enabled: course.points_enabled ?? true, basePoints: course.points_base ?? 50 },
             postSubmission: course.post_submission,
             coverImage: course.cover_image, badgeImageUrl: course.badge_image_url ?? null,
