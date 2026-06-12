@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
-import { adminClient } from '@/lib/admin-client';
+import { requireRole, isAuthError } from '@/lib/api-auth';
+import { normalizeFormConfig } from '@/lib/course-schema';
 import { compareResults, SQLResult, SQLTableConfig } from '@/lib/sql-engine';
 import { computeServerSqlResult } from '@/lib/sql-engine-server';
 
@@ -161,18 +162,9 @@ async function preflightImportedCourseSql(cfg: any): Promise<{ config: any; warn
 }
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer '))
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const supabase = adminClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
-  if (authError || !user)
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: student } = await supabase.from('students').select('role').eq('id', user.id).single();
-  if (!student || !['instructor', 'admin'].includes(student.role))
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const auth = await requireRole(req, ['instructor', 'admin']);
+  if (isAuthError(auth)) return auth.error;
+  const { user, supabase } = auth;
 
   let body: any;
   try { body = await req.json(); } catch {
@@ -189,8 +181,10 @@ export async function POST(req: NextRequest) {
 
   // -- Course ---
   if (type === 'course') {
-    let cfg = body.config;
-    if (!cfg) return NextResponse.json({ error: 'config required' }, { status: 400 });
+    if (!body.config) return NextResponse.json({ error: 'config required' }, { status: 400 });
+    // Ingest boundary: imported files may carry legacy aliases (timer, points_enabled, ...).
+    // Collapse them to the canonical shape once, here, so the writes below read only canonical keys.
+    let cfg: any = normalizeFormConfig(body.config);
 
     const sqlPreflight = await preflightImportedCourseSql(cfg);
     cfg = sqlPreflight.config;
@@ -213,10 +207,10 @@ export async function POST(req: NextRequest) {
           questions:       cfg.questions ?? [],
           fields:          cfg.fields ?? [],
           passmark:        cfg.passmark ?? 50,
-          course_timer:    cfg.courseTimer ?? cfg.course_timer ?? null,
+          course_timer:    cfg.courseTimer ?? null,
           learn_outcomes:  cfg.learnOutcomes ?? [],
-          points_enabled:  cfg.pointsSystem?.enabled ?? cfg.points_enabled ?? true,
-          points_base:     cfg.pointsSystem?.basePoints ?? cfg.points_base ?? 50,
+          points_enabled:  cfg.pointsSystem?.enabled ?? true,
+          points_base:     cfg.pointsSystem?.basePoints ?? 50,
           post_submission: cfg.postSubmission ?? null,
         }).eq('id', existing.id);
         if (upErr) {
@@ -246,10 +240,10 @@ export async function POST(req: NextRequest) {
         questions:       cfg.questions ?? [],
         fields:          cfg.fields ?? [],
         passmark:        cfg.passmark ?? 50,
-        course_timer:    cfg.courseTimer ?? cfg.course_timer ?? null,
+        course_timer:    cfg.courseTimer ?? null,
         learn_outcomes:  cfg.learnOutcomes ?? [],
-        points_enabled:  cfg.pointsSystem?.enabled ?? cfg.points_enabled ?? true,
-        points_base:     cfg.pointsSystem?.basePoints ?? cfg.points_base ?? 50,
+        points_enabled:  cfg.pointsSystem?.enabled ?? true,
+        points_base:     cfg.pointsSystem?.basePoints ?? 50,
         post_submission: cfg.postSubmission ?? null,
       }).select('id, slug').single();
       if (!error) return NextResponse.json({ id: data.id, slug: data.slug, type: 'course', action: 'created', sqlWarnings });

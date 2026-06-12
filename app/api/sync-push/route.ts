@@ -1,22 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
-import { adminClient } from '@/lib/admin-client';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer '))
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const db = adminClient();
-  const { data: { user }, error: authError } = await db.auth.getUser(authHeader.slice(7));
-  if (authError || !user)
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: student } = await db.from('students').select('role').eq('id', user.id).single();
-  if (!student || !['instructor', 'admin'].includes(student.role))
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const auth = await requireRole(req, ['instructor', 'admin']);
+  if (isAuthError(auth)) return auth.error;
+  const { user, supabase: db } = auth;
 
   const syncUrl = process.env.PLATFORM_SYNC_URL;
   const syncKey = process.env.PLATFORM_SYNC_KEY;
@@ -49,10 +40,10 @@ export async function POST(req: NextRequest) {
         questions: c.questions ?? [],
         fields: c.fields ?? [],
         passmark: c.passmark,
-        course_timer: c.course_timer,
+        courseTimer: c.course_timer,
         learnOutcomes: c.learn_outcomes,
-        points_enabled: c.points_enabled,
-        points_base: c.points_base,
+        // Partial by design (mirrors the page reconstructions): only enabled/basePoints are
+        // persisted, and receivers read pointsSystem first with their own fallbacks.
         pointsSystem: { enabled: c.points_enabled ?? false, basePoints: c.points_base ?? 100 },
         postSubmission: c.post_submission,
         coverImage: c.cover_image,
