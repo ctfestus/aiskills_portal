@@ -11,7 +11,7 @@ import {
   HelpCircle, CalendarDays, ClipboardList, Share2, CheckCircle2, Zap, Settings, Upload, Download, Link2, FileText,
   Lock, LockOpen, Users,
 } from 'lucide-react';
-import { ThemeColor, ThemeMode } from '@/components/AnimatedField';
+import type { ThemeColor, ThemeMode } from '@/lib/theme-types';
 import dynamic from 'next/dynamic';
 import GeneratingOverlay from '@/components/GeneratingOverlay';
 import { ImageCropModal } from '@/components/ImageCropModal';
