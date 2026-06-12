@@ -193,7 +193,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                 <p className="text-xs mt-0.5" style={{ color: C.faint }}>{viewingSub.student?.email}{viewingSub.updated_at ? ` · ${new Date(viewingSub.updated_at).toLocaleDateString()}` : ''}</p>
               </div>
             </div>
-            <span className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{ background: viewingSub.status === 'graded' ? '#f0fdf4' : viewingSub.status === 'submitted' ? '#eff6ff' : '#f4f1eb', color: viewingSub.status === 'graded' ? '#16a34a' : viewingSub.status === 'submitted' ? '#2563eb' : '#888' }}>
+            <span className="text-xs font-semibold px-3 py-1.5 rounded-full" style={{ background: viewingSub.status === 'graded' ? 'rgba(22,163,74,0.12)' : viewingSub.status === 'submitted' ? 'rgba(37,99,235,0.12)' : C.pill, color: viewingSub.status === 'graded' ? '#16a34a' : viewingSub.status === 'submitted' ? '#2563eb' : C.faint }}>
               {viewingSub.status.charAt(0).toUpperCase() + viewingSub.status.slice(1)}
             </span>
           </div>
@@ -398,7 +398,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
               { key: 'requirements',           label: 'Requirements' },
               { key: 'submission_instructions',label: 'Submission Instructions' },
             ].filter(f => selected[f.key]).map(f => (
-              <div key={f.key} className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.green}50`, boxShadow: C.cardShadow }}>
+              <div key={f.key} className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
                 <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.faint }}>{f.label}</p>
                 <div className="rich-content text-sm" dangerouslySetInnerHTML={{ __html: sanitizeRichText(selected[f.key]) }}/>
               </div>
@@ -418,8 +418,8 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
             <div className="grid grid-cols-4 gap-3 mb-5">
               {[
                 { label: isGroupAssignment ? 'Groups' : 'Assigned', value: isGroupAssignment ? groupRows.length : assignedStudents.length, icon: Users, color: C.text, bg: C.card },
-                { label: 'Responded',  value: responded,               icon: FileText,   color: '#2563eb', bg: '#eff6ff' },
-                { label: 'Graded',     value: graded,                  icon: CheckCircle2,color:'#7c3aed', bg: '#f5f3ff' },
+                { label: 'Responded',  value: responded,               icon: FileText,   color: '#2563eb', bg: 'rgba(37,99,235,0.12)' },
+                { label: 'Graded',     value: graded,                  icon: CheckCircle2,color:'#d97706', bg: 'rgba(217,119,6,0.12)' },
                 { label: 'Pass Rate',  value: `${passRate}%`,          icon: TrendingUp, color: '#10b981', bg: 'rgba(16,185,129,0.08)' },
               ].map(s => (
                 <div key={s.label} className="rounded-2xl p-4" style={{ background: C.card }}>
@@ -470,8 +470,8 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                   const sc = sub?.score ?? null;
                   const isPassed = sc != null && sc >= 85;
                   const isExpanded = expandedGroups.has(row.id);
-                  const statusCfg = status === 'graded'    ? { label: 'Graded',      bg: '#f0fdf4', color: '#16a34a' }
-                                  : status === 'submitted' ? { label: 'Submitted',   bg: '#eff6ff', color: '#2563eb' }
+                  const statusCfg = status === 'graded'    ? { label: 'Graded',      bg: 'rgba(22,163,74,0.12)', color: '#16a34a' }
+                                  : status === 'submitted' ? { label: 'Submitted',   bg: 'rgba(37,99,235,0.12)', color: '#2563eb' }
                                   : status === 'draft'     ? { label: 'Draft',       bg: C.pill,    color: C.muted   }
                                   :                          { label: 'Not Started', bg: C.pill,    color: C.faint   };
                   return (
@@ -515,7 +515,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                       </div>
                       {isExpanded && (
                         <div className="px-5 pb-4">
-                          <div className="rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4" style={{ background: C.input, border: `1px solid ${C.divider}` }}>
+                          <div className="rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4" style={{ background: C.input, border: `1px solid ${C.cardBorder}` }}>
                             <div>
                               <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: C.faint }}>Group Members</p>
                               <div className="space-y-2">
@@ -531,7 +531,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                                         </div>
                                       </div>
                                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                                        {member.is_leader && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#fff7ed', color: '#d97706' }}>Leader</span>}
+                                        {member.is_leader && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(217,119,6,0.12)', color: '#d97706' }}>Leader</span>}
                                         {sub && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: participated ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.10)', color: participated ? '#10b981' : '#ef4444' }}>{participated ? 'Participant' : 'Not marked'}</span>}
                                       </div>
                                     </div>
@@ -573,8 +573,8 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                   const status  = sub?.status ?? 'not_started';
                   const sc      = sub?.score ?? null;
                   const isPassed = sc != null && sc >= 85;
-                  const statusCfg = status === 'graded'    ? { label: 'Graded',      bg: '#f0fdf4', color: '#16a34a' }
-                                  : status === 'submitted' ? { label: 'Submitted',   bg: '#eff6ff', color: '#2563eb' }
+                  const statusCfg = status === 'graded'    ? { label: 'Graded',      bg: 'rgba(22,163,74,0.12)', color: '#16a34a' }
+                                  : status === 'submitted' ? { label: 'Submitted',   bg: 'rgba(37,99,235,0.12)', color: '#2563eb' }
                                   : status === 'draft'     ? { label: 'Draft',       bg: C.pill,    color: C.muted   }
                                   :                          { label: 'Not Started', bg: C.pill,    color: C.faint   };
                   return (
