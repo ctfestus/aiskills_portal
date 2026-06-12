@@ -1,7 +1,8 @@
 import React from 'react';
+import type { ThemeColor, ThemeMode } from '@/lib/theme-types';
 
-export type ThemeColor = 'forest' | 'lime' | 'emerald' | 'rose' | 'amber' | 'ocean';
-export type ThemeMode = 'light' | 'dark' | 'auto';
+// Re-exported for existing consumers; the canonical definitions live in lib/theme-types.
+export type { ThemeColor, ThemeMode };
 
 const themeStyles: Record<ThemeColor, React.CSSProperties> = {
   forest:  { '--theme-color-1': '#00bf63', '--theme-color-2': '#ADEE66' } as React.CSSProperties,
