@@ -957,7 +957,7 @@ export function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                   <span style={{ display: 'block', fontSize: 13, fontWeight: 800, color: C.text }}>SQL Workbench</span>
                   <span style={{ display: 'block', marginTop: 3, fontSize: 12, color: C.faint, lineHeight: 1.45 }}>Show browser SQL practice for CSV, Excel, or ZIP table datasets.</span>
                 </span>
-                <span style={{ width: 38, height: 22, borderRadius: 999, background: form.sql_workbench_enabled ? '#16a34a' : C.cardBorder, position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                <span style={{ width: 38, height: 22, borderRadius: 999, background: form.sql_workbench_enabled ? '#16a34a' : C.faint, position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
                   <span style={{ position: 'absolute', top: 3, left: form.sql_workbench_enabled ? 19 : 3, width: 16, height: 16, borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
                 </span>
               </button>

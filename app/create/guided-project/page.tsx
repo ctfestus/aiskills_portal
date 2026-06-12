@@ -229,7 +229,7 @@ function RubricBuilder({ criteria, onChange, C, inp, sessionToken }: {
           value={draft}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-          style={{ ...inp, fontSize: 12, padding: '6px 10px' }}
+          style={{ ...inp, background: C.card, fontSize: 12, padding: '6px 10px' }}
           placeholder="e.g. Must include a KPI row with at least 3 metrics"
         />
         <button onClick={add} disabled={!draft.trim()}
@@ -1556,7 +1556,7 @@ function VirtualExperienceCreatePageInner() {
                                                     correctAnswer: e.target.value === 'mcq' ? '' : undefined,
                                                     expectedAnswer: undefined,
                                                   })}
-                                                  style={{ padding: '2px 6px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.text, fontSize: 11, fontWeight: 700 }}>
+                                                  style={{ padding: '2px 6px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.text, fontSize: 11, fontWeight: 700 }}>
                                                   <option value="mcq">Multiple Choice</option>
                                                   <option value="text">Short Answer</option>
                                                   <option value="upload">File Upload</option>
@@ -1575,7 +1575,7 @@ function VirtualExperienceCreatePageInner() {
                                               </div>
                                               <input value={req.description}
                                                 onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}
-                                                style={{ ...inp, fontSize: 12 }}
+                                                style={{ ...inp, background: C.card, fontSize: 12 }}
                                                 placeholder={req.type === 'mcq' ? 'Hint: which column(s) to analyse…' : req.type === 'upload' ? 'Instructions for the student…' : 'Prompt or context…'} />
                                               {req.type === 'mcq' && (
                                                 <div className="space-y-1">
@@ -1597,7 +1597,7 @@ function VirtualExperienceCreatePageInner() {
                                                             updateReq(mod.id, les.id, req.id, { options: newOpts, correctAnswer: req.correctAnswer === opt ? e.target.value : req.correctAnswer });
                                                           }}
                                                           className="flex-1 bg-transparent text-[13px] outline-none"
-                                                          style={{ ...inp, padding: '4px 8px', fontSize: 12, borderColor: isCorrect ? C.cta : C.cardBorder, color: isCorrect ? C.cta : C.text, fontWeight: isCorrect ? 600 : 400 }}
+                                                          style={{ ...inp, background: C.card, padding: '4px 8px', fontSize: 12, borderColor: isCorrect ? C.cta : C.cardBorder, color: isCorrect ? C.cta : C.text, fontWeight: isCorrect ? 600 : 400 }}
                                                           placeholder={`Option ${letter}…`} />
                                                       </div>
                                                     );
@@ -1632,10 +1632,10 @@ function VirtualExperienceCreatePageInner() {
                                                   </button>
                                                   {req.aiReview ? (
                                                     <input value={req.context || ''} onChange={e => updateReq(mod.id, les.id, req.id, { context: e.target.value })}
-                                                      style={{ ...inp, fontSize: 12 }} placeholder="Rubric / grading guidance for AI (e.g. 'Award points for mentioning X and Y…')…" />
+                                                      style={{ ...inp, background: C.card, fontSize: 12 }} placeholder="Rubric / grading guidance for AI (e.g. 'Award points for mentioning X and Y…')…" />
                                                   ) : (
                                                     <input value={req.expectedAnswer || ''} onChange={e => updateReq(mod.id, les.id, req.id, { expectedAnswer: e.target.value })}
-                                                      style={{ ...inp, fontSize: 12 }} placeholder="Expected answer for exact match (optional -- leave blank to accept any response)…" />
+                                                      style={{ ...inp, background: C.card, fontSize: 12 }} placeholder="Expected answer for exact match (optional -- leave blank to accept any response)…" />
                                                   )}
                                                 </div>
                                               )}
@@ -1674,7 +1674,7 @@ function VirtualExperienceCreatePageInner() {
                                                       spellCheck={false}
                                                       placeholder="Paste CREATE TABLE statements or describe the DataFrame columns. The AI uses this to validate student code against the actual schema."
                                                       className="w-full resize-none outline-none text-[12px] font-mono px-3 py-2.5 rounded-lg"
-                                                      style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}`, lineHeight: 1.6 }}
+                                                      style={{ background: C.card, color: C.text, border: `1px solid ${C.cardBorder}`, lineHeight: 1.6 }}
                                                     />
                                                   </div>
                                                   <div className="flex items-center gap-3">
@@ -1685,7 +1685,7 @@ function VirtualExperienceCreatePageInner() {
                                                       onChange={e => updateReq(mod.id, les.id, req.id, { minScore: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
                                                       placeholder="0"
                                                       className="w-20 outline-none text-[12px] font-mono px-2 py-1 rounded-lg"
-                                                      style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}
+                                                      style={{ background: C.card, color: C.text, border: `1px solid ${C.cardBorder}` }}
                                                     />
                                                     <p className="text-[11px]" style={{ color: C.muted }}>out of 10 · leave blank for no gate</p>
                                                   </div>
@@ -1713,7 +1713,7 @@ function VirtualExperienceCreatePageInner() {
                                                       spellCheck={false}
                                                       placeholder="Include the domain so the AI applies the right expertise. e.g. This is a financial model for a retail business. B5 should calculate total revenue using SUMIF on column D, C10 should show profit margin as a percentage. Or: This is an HR payroll sheet. Column F should calculate net pay after tax deductions. Or: This is a BI sales dashboard for a fintech company. D12 should show month-on-month growth using XLOOKUP."
                                                       className="w-full resize-none outline-none text-[12px] font-mono px-3 py-2.5 rounded-lg"
-                                                      style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}`, lineHeight: 1.6 }}
+                                                      style={{ background: C.card, color: C.text, border: `1px solid ${C.cardBorder}`, lineHeight: 1.6 }}
                                                     />
                                                   </div>
                                                   <div className="flex items-center gap-3">
@@ -1724,7 +1724,7 @@ function VirtualExperienceCreatePageInner() {
                                                       onChange={e => updateReq(mod.id, les.id, req.id, { minScore: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
                                                       placeholder="0"
                                                       className="w-20 outline-none text-[12px] font-mono px-2 py-1 rounded-lg"
-                                                      style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}
+                                                      style={{ background: C.card, color: C.text, border: `1px solid ${C.cardBorder}` }}
                                                     />
                                                     <p className="text-[11px]" style={{ color: C.muted }}>out of 10 · leave blank for no gate</p>
                                                   </div>
