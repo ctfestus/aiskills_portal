@@ -102,3 +102,26 @@ export function useC(): ThemeColors {
     return primaryColor && primaryColor !== LIGHT_C.cta ? { ...LIGHT_C, cta: primaryColor } : LIGHT_C;
   }, [theme, primaryColor]);
 }
+
+/**
+ * Standard card surface -- single source of truth for a card's background/shadow so every card
+ * stays consistent. Spread into a style prop and add layout as needed:
+ *   style={{ ...cardStyle(C), borderRadius: 16, padding: 20 }}
+ * Borderless and flat in both modes: cards are separated from the page by background contrast
+ * (C.card vs C.page), with no border and no drop shadow.
+ */
+export const cardStyle = (C: ThemeColors) => ({
+  background: C.card,
+  boxShadow: 'none',
+});
+
+/**
+ * Standard modal / overlay surface. Like a card, but keeps a strong elevation shadow in light
+ * mode (modals sit above the page and need lift); stays flat in dark, where a black shadow on the
+ * near-black page only reads as a muddy halo. Use for dialogs, drawers, and popovers over a backdrop.
+ */
+export const modalStyle = (C: ThemeColors) => ({
+  background: C.card,
+  border: `1px solid ${C.cardBorder}`,
+  boxShadow: C === DARK_C ? 'none' : '0 24px 80px rgba(0,0,0,0.35)',
+});

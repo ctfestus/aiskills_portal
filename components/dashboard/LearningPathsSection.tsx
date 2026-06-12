@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, Loader2, Plus, Upload, X, Zap } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
-import { LIGHT_C, DARK_C } from '@/lib/theme';
+import { LIGHT_C, cardStyle } from '@/lib/theme';
 
 export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] }) {
   const [paths, setPaths]           = useState<any[]>([]);
@@ -179,7 +179,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
           ] as const;
           const si = LP_SECTIONS.findIndex(s => s.id === lpSection);
           return (
-          <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: C === DARK_C ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+          <div className="rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
             <div className="flex items-center justify-between gap-4 px-5 sm:px-6 pt-5 pb-4" style={{ borderBottom: `1px solid ${C.divider}` }}>
               <div className="min-w-0">
                 <h3 className="text-base font-bold leading-tight truncate" style={{ color: C.text }}>{LP_SECTIONS[si]?.label}</h3>
@@ -422,7 +422,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
       </div>
 
       {paths.length === 0 ? (
-        <div className="text-center py-24 rounded-3xl" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+        <div className="text-center py-24 rounded-3xl" style={{ ...cardStyle(C) }}>
           <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: `${C.green}18` }}>
             <BookOpen className="w-6 h-6" style={{ color: C.green }}/>
           </div>
@@ -435,7 +435,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
           </button>
         </div>
       ) : (
-        <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+        <section className="rounded-2xl p-5 sm:p-6" style={{ ...cardStyle(C) }}>
           <div className="flex items-center justify-between gap-4 mb-4">
             <h2 className="text-lg sm:text-xl font-bold" style={{ color: C.text }}>Learning Paths</h2>
             <div className="flex items-center gap-2 flex-shrink-0">
@@ -455,7 +455,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
           {paths.map((path: any) => {
             const assignedCohortNames = (path.cohort_ids ?? []).map((id: string) => cohorts.find((c: any) => c.id === id)?.name).filter(Boolean);
             return (
-              <div key={path.id} className="flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ background: C.card }}>
+              <div key={path.id} className="flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
                 {path.cover_image
                   ? <img src={path.cover_image} alt="" loading="lazy" className="w-full h-28 object-cover"/>
                   : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${C.green}12` }}>

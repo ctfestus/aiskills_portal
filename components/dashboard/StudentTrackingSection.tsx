@@ -7,7 +7,7 @@ import { AlertTriangle, Check, CheckCircle, Clock, Download, Loader2, MinusCircl
 import { supabase } from '@/lib/supabase';
 import { reportExportCSV } from '@/lib/dashboard-export';
 import { IsStaffContext } from '@/components/dashboard/context';
-import { LIGHT_C, DARK_C } from '@/lib/theme';
+import { LIGHT_C, cardStyle } from '@/lib/theme';
 
 const STATUS_META = {
   not_started: { label: 'Not Started', color: '#6b7280', bg: 'rgba(107,114,128,0.12)', Icon: MinusCircle },
@@ -19,7 +19,6 @@ const STATUS_META = {
 
 export function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
   const isStaff = useContext(IsStaffContext);
-  const isDark = C === DARK_C;
   const [rows, setRows]           = useState<any[]>([]);
   const [cohorts, setCohorts]     = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -158,7 +157,7 @@ export function StudentTrackingSection({ C }: { C: typeof LIGHT_C }) {
 
   return (
     <div style={{ padding: '0 0 40px' }}>
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
+      <div className="rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, padding: '16px 20px', borderBottom: `1px solid ${C.divider}` }}>
         <div>

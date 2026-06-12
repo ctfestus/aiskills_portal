@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { TrendingUp, Trophy, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/components/ThemeProvider';
-import { LIGHT_C } from '@/lib/theme';
+import { LIGHT_C , cardStyle } from '@/lib/theme';
 
 const HERO_LB = 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)';
 
@@ -17,7 +17,6 @@ export function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [cohortFilter, setCohortFilter] = useState('all');
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
 
   // Load cohorts + each cohort's rankings (service-role API bypasses RLS)
   useEffect(() => {
@@ -49,7 +48,7 @@ export function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
   if (loading) return (
     <div className="space-y-4">
       <div className="rounded-2xl px-5 py-4 h-16" style={{ background: HERO_LB }}/>
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
+      <div className="rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
         {[...Array(6)].map((_, i) => (
           <div key={i} className="flex items-center gap-4 px-5 py-4" style={{ borderBottom: i < 5 ? `1px solid ${C.divider}` : 'none', opacity: 1 - i * 0.12 }}>
             <div className="w-6 h-4 rounded" style={{ background: C.skeleton }}/>
@@ -112,7 +111,7 @@ export function LeaderboardSection({ C }: { C: typeof LIGHT_C }) {
       </div>
 
       {/* Cohorts stacked vertically -- one section each */}
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
+      <div className="rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
         {/* Filter bar */}
         <div className="flex items-center justify-between gap-3 px-5 py-3.5" style={{ borderBottom: `1px solid ${C.divider}` }}>
           <h3 className="text-sm font-bold leading-none" style={{ color: C.text }}>Rankings</h3>

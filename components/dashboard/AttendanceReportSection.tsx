@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Mail, Download, CheckCircle2, MinusCircle } 
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/components/ThemeProvider';
 import { isScheduledSessionDate } from '@/lib/event-sessions';
-import { LIGHT_C } from '@/lib/theme';
+import { LIGHT_C, cardStyle } from '@/lib/theme';
 
 function computeExpectedSessionDates(event: any): string[] {
   if (!event?.event_date) return [];
@@ -188,7 +188,7 @@ export function AttendanceReportSection({ C }: { C: typeof LIGHT_C }) {
     }
   };
 
-  const card = { background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` } as React.CSSProperties;
+  const card = cardStyle(C) as React.CSSProperties;
   const thStyle = { color: C.faint } as React.CSSProperties;
 
   return (

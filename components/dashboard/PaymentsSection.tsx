@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { reportExportCSV } from '@/lib/dashboard-export';
 import { useTheme } from '@/components/ThemeProvider';
-import { LIGHT_C, DARK_C } from '@/lib/theme';
+import { LIGHT_C, DARK_C, cardStyle, modalStyle } from '@/lib/theme';
 
 type PaymentStatus = 'unpaid' | 'partial' | 'paid' | 'waived' | string;
 
@@ -224,7 +224,7 @@ function PaymentOptionsTab({ C, getToken }: { C: typeof LIGHT_C; getToken: () =>
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
           <div className="w-full max-w-lg rounded-2xl overflow-hidden flex flex-col max-h-[92vh]"
-            style={{ background: C.card, boxShadow: '0 24px 80px rgba(0,0,0,0.35)' }}>
+            style={{ ...modalStyle(C) }}>
             {/* Header */}
             <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0">
               <h3 className="text-base font-bold" style={{ color: C.text }}>{editing.id ? 'Edit Option' : 'New Payment Option'}</h3>
@@ -511,7 +511,7 @@ function ConfirmationsTab({ C, getToken }: { C: typeof LIGHT_C; getToken: () => 
       {rejectId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="w-full max-w-sm rounded-2xl p-6 space-y-4"
-            style={{ background: C.card, boxShadow: '0 24px 80px rgba(0,0,0,0.35)' }}>
+            style={{ ...modalStyle(C) }}>
             <h3 className="text-base font-bold" style={{ color: C.text }}>Reject Confirmation</h3>
             <p className="text-sm" style={{ color: C.muted }}>Optionally add a note explaining why this was rejected.</p>
             <textarea rows={3} value={rejectNote} onChange={e => setRejectNote(e.target.value)}
@@ -924,7 +924,7 @@ export function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
     <>
     <div className="space-y-5">
       {/* White carousel -- section switcher in the header, content in the body */}
-      <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: isDark ? 'none' : `1px solid ${C.cardBorder}` }}>
+      <div className="rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
         {(() => {
           const SECTIONS = [
             { id: 'enrollments',   label: 'Enrollments' },
@@ -1028,7 +1028,7 @@ export function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
                   }).catch(() => {});
                 }}
                 className="w-full text-sm px-3 py-2 rounded-lg outline-none"
-                style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
+                style={{ background: C.card, color: C.text, border: `1px solid ${C.cardBorder}` }}>
                 <option value="">Select the outstanding cohort</option>
                 {cohorts.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -1047,7 +1047,7 @@ export function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
                     setGraceError('');
                   }}
                   className="flex-1 min-w-0 text-sm px-3 py-2 rounded-lg outline-none"
-                  style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}>
+                  style={{ background: C.card, color: C.text, border: `1px solid ${C.cardBorder}` }}>
                   <option value="">Select cohort</option>
                   {cohorts.map((c: any) => (
                     <option key={c.id} value={c.id}>
@@ -1062,7 +1062,7 @@ export function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
                   value={graceDaysInput}
                   onChange={e => { setGraceDaysInput(e.target.value); setGraceError(''); }}
                   className="w-20 text-sm px-3 py-2 rounded-lg outline-none"
-                  style={{ background: C.input, color: C.text, border: `1px solid ${C.cardBorder}` }}
+                  style={{ background: C.card, color: C.text, border: `1px solid ${C.cardBorder}` }}
                 />
                 <button
                   disabled={!graceCohortId || graceSaving}
@@ -1324,7 +1324,7 @@ export function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
       {/* Record Payment modal */}
       {payRow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setPayRow(null)}>
-          <div className="w-full max-w-md rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }} onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded-2xl overflow-hidden" style={{ ...modalStyle(C) }} onClick={e => e.stopPropagation()}>
             <div className="px-6 pt-6 pb-5" style={{ borderBottom: `1px solid ${C.divider}` }}>
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -1396,7 +1396,7 @@ export function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
       {/* Payment History modal */}
       {histRow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setHistRow(null)}>
-          <div className="w-full max-w-lg rounded-2xl overflow-hidden max-h-[90vh] flex flex-col" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }} onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-lg rounded-2xl overflow-hidden max-h-[90vh] flex flex-col" style={{ ...modalStyle(C) }} onClick={e => e.stopPropagation()}>
             <div className="px-6 pt-6 pb-5 flex-shrink-0" style={{ borderBottom: `1px solid ${C.divider}` }}>
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -1511,7 +1511,7 @@ export function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
       {/* Edit Enrollment modal */}
       {editRow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setEditRow(null)}>
-          <div className="w-full max-w-md rounded-2xl flex flex-col" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded-2xl flex flex-col" style={{ ...modalStyle(C), maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 flex-shrink-0" style={{ borderBottom: `1px solid ${C.divider}` }}>
               <div>

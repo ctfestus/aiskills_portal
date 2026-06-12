@@ -13,7 +13,7 @@ import {
   CalendarDays, AlignLeft, ChevronDown, ChevronRight, ChevronLeft, BookOpen, MapPin,
   Download, Briefcase, Video, Database,
 } from 'lucide-react';
-import { LIGHT_C, useC } from '@/lib/theme';
+import { LIGHT_C, useC, cardStyle } from '@/lib/theme';
 import { exportContent } from '@/lib/dashboard-export';
 import { SYNC_ENABLED } from '@/lib/sync';
 import { PushButton } from '@/components/dashboard/primitives';
@@ -628,7 +628,7 @@ export function CourseToolRow({ tool, forms, shareMenuOpen, setShareMenuOpen, se
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 340, behavior: 'smooth' });
   return (
-    <section className="rounded-2xl p-5 sm:p-6 mb-6" style={{ background: C.card }}>
+    <section className="rounded-2xl p-5 sm:p-6 mb-6" style={{ ...cardStyle(C) }}>
       <div className="flex items-center justify-between gap-4 mb-4">
         <h2 className="text-lg sm:text-xl font-bold truncate" style={{ color: C.text }}>{tool}</h2>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -715,7 +715,7 @@ export function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen
       >
         {/* Card with padding -- padding IS the whitespace around the rounded thumbnail. Flat at rest (border = the separator), soft lift on hover. */}
         <div className="rounded-2xl p-4 flex gap-4 group transition-shadow duration-200"
-          style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: 'none' }}
+          style={{ ...cardStyle(C) }}
           onMouseEnter={e => { e.currentTarget.style.boxShadow = C.hoverShadow; }}
           onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}>
 
