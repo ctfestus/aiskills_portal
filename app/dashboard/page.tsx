@@ -136,9 +136,10 @@ export default function DashboardPage() {
         allRows.push({ ...c, _response_count: responseCounts[c.id] ?? 0, content_type: 'course', config: {
           isCourse: true, title: c.title, description: c.description,
           questions: c.questions ?? [], fields: c.fields ?? [],
-          passmark: c.passmark, course_timer: c.course_timer,
-          learnOutcomes: c.learn_outcomes, points_enabled: c.points_enabled,
-          points_base: c.points_base,
+          passmark: c.passmark, courseTimer: c.course_timer,
+          learnOutcomes: c.learn_outcomes,
+          // Partial by design: see app/[id]/page.tsx -- normalizing to a full
+          // DEFAULT_POINTS_SYSTEM object would silently change XP scoring.
           pointsSystem: { enabled: c.points_enabled ?? false, basePoints: c.points_base ?? 100 },
           postSubmission: c.post_submission,
           coverImage: c.cover_image, deadline_days: c.deadline_days,

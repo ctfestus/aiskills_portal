@@ -2385,9 +2385,10 @@ export default function FormDetailPage() {
         formData = { ...courseRow, content_type: 'course', config: {
           isCourse: true, title: courseRow.title, description: courseRow.description,
           questions: courseRow.questions ?? [], fields: courseRow.fields ?? [],
-          passmark: courseRow.passmark, course_timer: courseRow.course_timer,
-          learnOutcomes: courseRow.learn_outcomes, points_enabled: courseRow.points_enabled,
-          points_base: courseRow.points_base,
+          passmark: courseRow.passmark, courseTimer: courseRow.course_timer,
+          learnOutcomes: courseRow.learn_outcomes,
+          // Partial by design: see app/[id]/page.tsx -- normalizing to a full
+          // DEFAULT_POINTS_SYSTEM object would silently change XP scoring.
           pointsSystem: { enabled: courseRow.points_enabled ?? false, basePoints: courseRow.points_base ?? 100 },
           postSubmission: courseRow.post_submission,
           coverImage: courseRow.cover_image, deadline_days: courseRow.deadline_days,
