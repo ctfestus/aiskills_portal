@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { adminClient } from '@/lib/admin-client';
+import { normalizeFormConfig } from '@/lib/course-schema';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,8 +54,10 @@ export async function POST(req: NextRequest) {
 
   // -- Course ---
   if (type === 'course') {
-    const cfg   = payload.config;
-    if (!cfg) return NextResponse.json({ error: 'config required' }, { status: 400 });
+    if (!payload.config) return NextResponse.json({ error: 'config required' }, { status: 400 });
+    // Ingest boundary: the pushing platform may run an older version that still sends
+    // legacy aliases (course_timer, points_enabled, ...). Collapse to canonical once, here.
+    const cfg   = normalizeFormConfig(payload.config) as any;
     const title = payload.title || cfg.title || 'Synced Course';
 
     const { data: existing } = await db
@@ -72,10 +75,10 @@ export async function POST(req: NextRequest) {
         questions:       cfg.questions ?? [],
         fields:          cfg.fields ?? [],
         passmark:        cfg.passmark ?? 50,
-        course_timer:    cfg.courseTimer ?? cfg.course_timer ?? null,
+        course_timer:    cfg.courseTimer ?? null,
         learn_outcomes:  cfg.learnOutcomes ?? [],
-        points_enabled:  cfg.pointsSystem?.enabled ?? cfg.points_enabled ?? true,
-        points_base:     cfg.pointsSystem?.basePoints ?? cfg.points_base ?? 50,
+        points_enabled:  cfg.pointsSystem?.enabled ?? true,
+        points_base:     cfg.pointsSystem?.basePoints ?? 50,
         post_submission: cfg.postSubmission ?? null,
       }).eq('id', existing.id);
       if (upErr) {
@@ -104,10 +107,10 @@ export async function POST(req: NextRequest) {
         questions:       cfg.questions ?? [],
         fields:          cfg.fields ?? [],
         passmark:        cfg.passmark ?? 50,
-        course_timer:    cfg.courseTimer ?? cfg.course_timer ?? null,
+        course_timer:    cfg.courseTimer ?? null,
         learn_outcomes:  cfg.learnOutcomes ?? [],
-        points_enabled:  cfg.pointsSystem?.enabled ?? cfg.points_enabled ?? true,
-        points_base:     cfg.pointsSystem?.basePoints ?? cfg.points_base ?? 50,
+        points_enabled:  cfg.pointsSystem?.enabled ?? true,
+        points_base:     cfg.pointsSystem?.basePoints ?? 50,
         post_submission: cfg.postSubmission ?? null,
       }).select('id, slug').single();
       if (!error) return NextResponse.json({ id: data.id, slug: data.slug, type: 'course', action: 'created' });
