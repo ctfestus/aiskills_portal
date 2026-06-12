@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { adminClient } from '@/lib/admin-client';
+import { requireRole, requireUser, isAuthError } from '@/lib/api-auth';
+import { normalizeFormConfig, validateFormConfig, normalizeQuestions } from '@/lib/course-schema';
 import { sendAssignmentNotifications } from '@/lib/send-assignment-notification';
 import { autoRegisterEventCohorts } from '@/lib/auto-register-event-cohorts';
 import { getVectorIndex } from '@/lib/vector';
@@ -21,21 +23,6 @@ export const dynamic = 'force-dynamic';
 
 function shortSlug() {
   return randomBytes(5).toString('base64url').slice(0, 7).toLowerCase();
-}
-
-// Ensure every question has a unique id and a correctAnswer string.
-// MCP sends `correct` as a 0-based index; CourseTaker expects `correctAnswer` as the option string.
-function normalizeQuestions(questions: any[]): any[] {
-  return (questions ?? []).map(q => {
-    const normalized: any = {
-      ...q,
-      id: q.id || randomBytes(6).toString('base64url'),
-    };
-    if (!normalized.correctAnswer && typeof normalized.correct === 'number' && Array.isArray(normalized.options)) {
-      normalized.correctAnswer = normalized.options[normalized.correct] ?? '';
-    }
-    return normalized;
-  });
 }
 
 // Helper: find content by ID across all three tables.
@@ -68,40 +55,26 @@ async function upsertCohortAssignments(
 }
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const jwt = authHeader.slice(7);
-
-  const supabase = adminClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { data: student } = await supabase.from('students').select('role').eq('id', user.id).single();
-  if (!student || !['instructor', 'admin', 'staff'].includes(student.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await requireRole(req, ['instructor', 'admin', 'staff']);
+  if (isAuthError(auth)) return auth.error;
+  const { user, supabase, role } = auth;
 
   let body: any;
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { title, description, config, slug: preferredSlug, cohort_ids, deadline_days, status: bodyStatus } = body;
-  if (!config) return NextResponse.json({ error: 'config is required' }, { status: 400 });
+  const { title, description, slug: preferredSlug, cohort_ids, deadline_days, status: bodyStatus } = body;
+  const config = normalizeFormConfig(body.config);
+  const valid = validateFormConfig(config);
+  if (!valid.ok) return NextResponse.json({ error: valid.error }, { status: 400 });
 
   const formStatus = bodyStatus === 'draft' ? 'draft' : 'published';
 
-  const isCourse = Boolean(config?.isCourse);
-  const isEvent  = Boolean(config?.eventDetails?.isEvent);
-  if (student.role === 'staff' && !isEvent) {
+  const isCourse = Boolean(config.isCourse);
+  const isEvent  = Boolean(config.eventDetails?.isEvent);
+  if (role === 'staff' && !isEvent) {
     return NextResponse.json({ error: 'Staff can only create live sessions.' }, { status: 403 });
-  }
-  if (!isCourse && !isEvent) {
-    return NextResponse.json({ error: 'config must set isCourse or eventDetails.isEvent' }, { status: 400 });
   }
   const content_type = isCourse ? 'course' : 'event';
 
@@ -140,8 +113,8 @@ export async function POST(req: NextRequest) {
           passmark:       config.passmark        ?? 50,
           course_timer:   config.courseTimer     ?? null,
           learn_outcomes: config.learnOutcomes   ?? [],
-          points_enabled: config.pointsSystem?.enabled   ?? config.pointsEnabled   ?? true,
-          points_base:    config.pointsSystem?.basePoints ?? config.pointsBase      ?? 50,
+          points_enabled: config.pointsSystem?.enabled   ?? true,
+          points_base:    config.pointsSystem?.basePoints ?? 50,
           post_submission: config.postSubmission ?? null,
           category:       config.category        ?? null,
           lesson_timing:  config.lessonTiming    ?? null,
@@ -218,37 +191,27 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const jwt = authHeader.slice(7);
-
-  const supabase = adminClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase.from('students').select('role').eq('id', user.id).single();
-  if (!profile || !['instructor', 'admin', 'staff'].includes(profile.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await requireRole(req, ['instructor', 'admin', 'staff']);
+  if (isAuthError(auth)) return auth.error;
+  const { user, supabase, role } = auth;
 
   let body: any;
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { id, title, description, config, slug: preferredSlug, cohort_ids, deadline_days, status: bodyStatus } = body;
-  if (!id || !config) return NextResponse.json({ error: 'id and config are required' }, { status: 400 });
+  const { id, title, description, slug: preferredSlug, cohort_ids, deadline_days, status: bodyStatus } = body;
+  if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+  const config = normalizeFormConfig(body.config);
+  const valid = validateFormConfig(config);
+  if (!valid.ok) return NextResponse.json({ error: valid.error }, { status: 400 });
 
   const found = await findContentById(supabase, id);
   if (!found) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (profile.role === 'staff' && found.table !== 'events') {
+  if (role === 'staff' && found.table !== 'events') {
     return NextResponse.json({ error: 'Staff can only edit live sessions.' }, { status: 403 });
   }
-  if (found.row.user_id !== user.id && profile.role !== 'admin' && profile.role !== 'staff') {
+  if (found.row.user_id !== user.id && role !== 'admin' && role !== 'staff') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -277,10 +240,10 @@ export async function PUT(req: NextRequest) {
       questions:      normalizeQuestions(config.questions),
       fields:         config.fields         ?? [],
       passmark:       config.passmark        ?? 50,
-      course_timer:   config.timer           ?? config.courseTimer ?? null,
+      course_timer:   config.courseTimer     ?? null,
       learn_outcomes: config.learnOutcomes   ?? [],
-      points_enabled: config.pointsSystem?.enabled   ?? config.pointsEnabled   ?? true,
-      points_base:    config.pointsSystem?.basePoints ?? config.pointsBase      ?? 50,
+      points_enabled: config.pointsSystem?.enabled   ?? true,
+      points_base:    config.pointsSystem?.basePoints ?? 50,
       post_submission: config.postSubmission ?? null,
       category:       config.category        ?? null,
       lesson_timing:  config.lessonTiming    ?? null,
@@ -370,22 +333,9 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const jwt = authHeader.slice(7);
-
-  const supabase = adminClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase.from('students').select('role').eq('id', user.id).single();
-  if (!profile || !['instructor', 'admin', 'staff'].includes(profile.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await requireRole(req, ['instructor', 'admin', 'staff']);
+  if (isAuthError(auth)) return auth.error;
+  const { user, supabase, role } = auth;
 
   let formId: string, status: string;
   try {
@@ -397,10 +347,10 @@ export async function PATCH(req: NextRequest) {
 
   const found = await findContentById(supabase, formId);
   if (!found) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (profile.role === 'staff' && found.table !== 'events') {
+  if (role === 'staff' && found.table !== 'events') {
     return NextResponse.json({ error: 'Staff can only publish live sessions.' }, { status: 403 });
   }
-  if (found.row.user_id !== user.id && profile.role !== 'admin' && profile.role !== 'staff') {
+  if (found.row.user_id !== user.id && role !== 'admin' && role !== 'staff') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -432,17 +382,9 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const jwt = authHeader.slice(7);
-
-  const supabase = adminClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireUser(req);
+  if (isAuthError(auth)) return auth.error;
+  const { user, supabase } = auth;
 
   const { searchParams } = new URL(req.url);
   const formId = searchParams.get('id');
