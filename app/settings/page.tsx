@@ -298,7 +298,7 @@ function SelectField({ value, onChange, options, placeholder }: { value: string;
   return (
     <select value={value} onChange={e => onChange(e.target.value)}
       className="w-full rounded-xl px-3 py-2.5 text-sm border focus:outline-none appearance-none"
-      style={{ background: C.input, border: `1px solid ${C.cardBorder}`, color: value ? C.text : C.faint }}>
+      style={{ background: C.card, border: `1px solid ${C.cardBorder}`, color: value ? C.text : C.faint }}>
       <option value="">{placeholder}</option>
       {options.map(o => <option key={o} value={o}>{o}</option>)}
     </select>
