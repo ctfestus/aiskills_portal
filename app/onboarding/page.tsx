@@ -214,17 +214,17 @@ export default function OnboardingPage() {
         .eq('id', userId);
       if (updateErr) throw updateErr;
 
-      // Trigger onboarding email sequence (fire-and-forget)
+      // Trigger onboarding email sequence (fire-and-forget).
+      // The route derives email/userId from the verified token; only the display name is sent.
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.email) {
+      if (session?.access_token) {
         fetch('/api/trigger/onboarding', {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({
-            email:  session.user.email,
-            name:   name.trim() || 'there',
-            userId,
-          }),
+          headers: {
+            'Content-Type':  'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ name: name.trim() || 'there' }),
         }).catch(() => {});
       }
 
