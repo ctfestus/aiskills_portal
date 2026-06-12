@@ -671,11 +671,11 @@ export default function CreateAssignmentPage() {
                 <div key={resource.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto auto', gap: 10, alignItems: 'center', padding: 14, borderRadius: 10, background: C.page, border: `1px solid ${C.divider}` }}>
                   <input type="text" placeholder="Resource name" value={resource.name}
                     onChange={e => updateResource(resource.id, 'name', sanitizePlainText(e.target.value))}
-                    style={{ ...inputStyle(C), width: '100%' }} maxLength={200}/>
+                    style={{ ...inputStyle(C), background: C.page === DARK_C.page ? C.input : C.card, width: '100%' }} maxLength={200}/>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     <input type="url" placeholder={resource.resource_type === 'file' ? 'Upload a file or paste URL…' : 'https://…'} value={resource.url}
                       onChange={e => updateResource(resource.id, 'url', e.target.value)}
-                      style={{ ...inputStyle(C), width: '100%', flex: 1 }}/>
+                      style={{ ...inputStyle(C), background: C.page === DARK_C.page ? C.input : C.card, width: '100%', flex: 1 }}/>
                     {resource.resource_type === 'file' && (
                       <>
                         <input type="file" style={{ display: 'none' }} ref={el => { resourceFileRefs.current[resource.id] = el; }}
