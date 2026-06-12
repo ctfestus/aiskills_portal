@@ -324,6 +324,9 @@ export default function PublicFormPage() {
           isCourse: true, questions: stripSqlSolutions(course.questions ?? []), fields: course.fields ?? [],
           passmark: course.passmark, courseTimer: course.course_timer,
           learnOutcomes: course.learn_outcomes,
+          // Partial by design: CourseTaker fills the missing fields with player defaults (time
+          // bonus/streaks ON), which differ from DEFAULT_POINTS_SYSTEM (all OFF). Running this
+          // through normalizeFormConfig would silently change XP scoring.
           pointsSystem: { enabled: course.points_enabled ?? false, basePoints: course.points_base ?? 100 },
           postSubmission: course.post_submission,
           coverImage: course.cover_image, deadline_days: course.deadline_days,
