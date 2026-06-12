@@ -184,7 +184,7 @@ function DataGrid({
 }) {
   const divider = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.055)';
   const headerBg = isDark ? '#1b1b1f' : '#f8fafc';
-  const rowBg = isDark ? '#141416' : '#ffffff';
+  const rowBg = isDark ? '#1E1F26' : '#ffffff';
   const numColor = isDark ? '#2e3355' : '#cbd5e1';
   const visibleRows = result?.rows.slice(0, 100) ?? [];
 
@@ -192,7 +192,7 @@ function DataGrid({
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3">
         <Database className="w-5 h-5" style={{ color: isDark ? '#252840' : '#d8ddef' }} />
-        <p className="text-[12px] font-mono" style={{ color: isDark ? '#252840' : '#b8c2d8' }}>{emptyMessage}</p>
+        <p className="text-[12px] font-mono" style={{ color: isDark ? '#6b7a89' : '#888888' }}>{emptyMessage}</p>
       </div>
     );
   }
@@ -499,13 +499,13 @@ export default function SQLExercisePlayer({
   // ---- Tokens ----
   // "Sections, not borders": panels are opaque rounded cards floating on the canvas
   // seam; toolbars are tonal bands (translucent overlay) rather than hairline-divided strips.
-  const canvas    = isDark ? '#0f0f10' : '#F2F5FA';                                  // matches the main course page background
-  const leftBg    = isDark ? '#141416' : '#ffffff';                                  // unified card surface (same as other lesson cards)
-  const editorBg  = isDark ? '#141416' : '#ffffff';
-  const resultsBg = isDark ? '#141416' : '#ffffff';
-  const headerBg  = isDark ? '#0f0f10' : '#F2F5FA';                                  // inset header block -- matches the main page background
-  const text      = isDark ? '#e4e4e7' : '#1a1d2e';
-  const muted     = isDark ? '#6b7280' : '#94a3b8';
+  const canvas    = isDark ? '#17181E' : '#F2F5FA';                                  // matches the main course page background
+  const leftBg    = isDark ? '#1E1F26' : '#ffffff';                                  // unified card surface (same as other lesson cards)
+  const editorBg  = isDark ? '#1E1F26' : '#ffffff';
+  const resultsBg = isDark ? '#1E1F26' : '#ffffff';
+  const headerBg  = isDark ? '#17181E' : '#F2F5FA';                                  // inset header block -- matches the main page background
+  const text      = isDark ? '#ACB8C5' : '#111111';
+  const muted     = isDark ? '#A8B5C2' : '#555555';
   const subtle    = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)';       // soft control fill
   const border    = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)';       // faint divider for the in-lesson <hr>/popover only
 
@@ -834,9 +834,9 @@ export default function SQLExercisePlayer({
               )}
               {lesson?.body && (
                 <div
-                  className={`prose max-w-none ve-lesson-body [&_blockquote]:border-l-[color:var(--lesson-accent)] [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[13px] [&_:not(pre)>code]:text-[var(--lesson-accent)] [&_:not(pre)>code]:bg-[var(--lesson-accent-bg)] [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_pre]:bg-[var(--lesson-code-bg)] [&_pre]:border-l-4 [&_pre]:border-l-[color:var(--lesson-accent)] [&_pre]:rounded-r-md [&_pre]:py-3 [&_pre]:px-4 [&_pre_code]:font-mono [&_pre_code]:text-[13px] [&_pre_code]:bg-transparent [&_pre_code]:border-0 [&_pre_code]:p-0 [&_pre_code]:text-[var(--lesson-pre-text)] ${isDark ? 'dark prose-invert prose-p:text-zinc-300 prose-p:leading-[1.65] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-pre:bg-transparent' : 'prose-p:text-[#3d4f72] prose-p:leading-[1.65] prose-headings:text-[#1a1d2e] prose-headings:font-semibold prose-strong:text-[#1a1d2e] prose-li:text-[#3d4f72] prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-pre:bg-transparent'}`}
+                  className={`prose max-w-none ve-lesson-body [&_blockquote]:border-l-[color:var(--lesson-accent)] [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[13px] [&_:not(pre)>code]:text-[var(--lesson-accent)] [&_:not(pre)>code]:bg-[var(--lesson-accent-bg)] [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_pre]:bg-[var(--lesson-code-bg)] [&_pre]:border-l-4 [&_pre]:border-l-[color:var(--lesson-accent)] [&_pre]:rounded-r-md [&_pre]:py-3 [&_pre]:px-4 [&_pre_code]:font-mono [&_pre_code]:text-[13px] [&_pre_code]:bg-transparent [&_pre_code]:border-0 [&_pre_code]:p-0 [&_pre_code]:text-[var(--lesson-pre-text)] ${isDark ? 'dark prose-invert prose-p:text-[#A8B5C2] prose-p:leading-[1.65] prose-headings:text-[#ACB8C5] prose-headings:font-semibold prose-strong:text-[#ACB8C5] prose-a:text-blue-400 prose-li:text-[#A8B5C2] prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:text-[#6b7a89] prose-blockquote:not-italic prose-pre:bg-transparent' : 'prose-p:text-[#555555] prose-p:leading-[1.65] prose-headings:text-[#111111] prose-headings:font-semibold prose-strong:text-[#111111] prose-li:text-[#555555] prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:text-[#888888] prose-blockquote:not-italic prose-pre:bg-transparent'}`}
                   style={{
-                    color: isDark ? '#d4d4d8' : '#3d4f72',
+                    color: isDark ? '#A8B5C2' : '#555555',
                     fontSize: 15,
                     '--lesson-accent': accentColor,
                     '--lesson-accent-bg': `${accentColor}22`,
@@ -857,7 +857,7 @@ export default function SQLExercisePlayer({
                     Task
                   </p>
                   <div
-                    className={`prose max-w-none ve-lesson-body [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[var(--lesson-accent)] [&_:not(pre)>code]:bg-[var(--lesson-accent-bg)] [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 ${isDark ? 'dark prose-invert prose-p:text-zinc-300 prose-p:leading-[1.65] prose-li:text-zinc-300' : 'prose-p:text-[#3d4f72] prose-p:leading-[1.65] prose-li:text-[#3d4f72]'}`}
+                    className={`prose max-w-none ve-lesson-body [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[var(--lesson-accent)] [&_:not(pre)>code]:bg-[var(--lesson-accent-bg)] [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 ${isDark ? 'dark prose-invert prose-p:text-[#A8B5C2] prose-p:leading-[1.65] prose-li:text-[#A8B5C2]' : 'prose-p:text-[#555555] prose-p:leading-[1.65] prose-li:text-[#555555]'}`}
                     style={{
                       fontSize: 15,
                       '--lesson-accent': accentColor,
@@ -880,7 +880,7 @@ export default function SQLExercisePlayer({
                 {availableHints.map((h, i) => (
                   <li key={i} className="flex items-start gap-3">
                     <span className="text-[14px] flex-shrink-0 mt-0.5">💡</span>
-                    <p className="text-[14px] leading-relaxed" style={{ color: isDark ? '#d4d4d8' : '#3d4f72' }}>{h}</p>
+                    <p className="text-[14px] leading-relaxed" style={{ color: isDark ? '#A8B5C2' : '#555555' }}>{h}</p>
                   </li>
                 ))}
               </ul>
@@ -951,7 +951,7 @@ export default function SQLExercisePlayer({
                 style={{ background: isDark ? 'rgba(52,211,153,0.10)' : 'rgba(52,211,153,0.10)' }}
               >
                 <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: '#34d399' }}>Solution</span>
-                <span className="text-[12px]" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
+                <span className="text-[12px]" style={{ color: isDark ? '#A8B5C2' : '#555555' }}>
                   The solution has been loaded into the editor. Click Run Code to see the result.
                 </span>
               </div>
@@ -1005,7 +1005,7 @@ export default function SQLExercisePlayer({
                   onClick={checkAnswer}
                   disabled={!runtime || busy}
                   className="inline-flex items-center justify-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40"
-                  style={{ background: accentColor, color: '#052033' }}
+                  style={{ background: accentColor, color: '#ffffff' }}
                 >
                   {checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                   Submit Answer
@@ -1017,7 +1017,7 @@ export default function SQLExercisePlayer({
                   onClick={continueIncorrect}
                   disabled={busy}
                   className="inline-flex items-center justify-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-40"
-                  style={{ background: accentColor, color: '#052033' }}
+                  style={{ background: accentColor, color: '#ffffff' }}
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
                   {isLastQuestion ? 'Finish Course' : 'Continue'}
@@ -1028,7 +1028,7 @@ export default function SQLExercisePlayer({
                   type="button"
                   onClick={onNext}
                   className="inline-flex items-center justify-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold"
-                  style={{ background: accentColor, color: '#052033' }}
+                  style={{ background: accentColor, color: '#ffffff' }}
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
                   {isLastQuestion ? 'Finish Course' : 'Continue'}
@@ -1149,10 +1149,10 @@ export default function SQLExercisePlayer({
                     >
                       {feedback.passed ? 'Correct' : 'Incorrect'}
                     </p>
-                    <p className="text-[13px] font-semibold" style={{ color: isDark ? '#f1f5f9' : '#1a1d2e' }}>
+                    <p className="text-[13px] font-semibold" style={{ color: isDark ? '#ACB8C5' : '#111111' }}>
                       {feedback.passed ? 'Your query is correct!' : 'There was a problem with your query'}
                       {' '}
-                      <span className="font-normal" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>{feedback.message}</span>
+                      <span className="font-normal" style={{ color: isDark ? '#A8B5C2' : '#555555' }}>{feedback.message}</span>
                     </p>
                   </div>
 

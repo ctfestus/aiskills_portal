@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { safeEmbedUrl as getVideoEmbedUrl } from '@/lib/safe-embed-url';
+import { DARK_C, LIGHT_C } from '@/lib/theme';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -222,7 +223,7 @@ function SortableItem({ id, label, idx, accent, isDark, isChecking }: {
       ref={setNodeRef}
       style={style}
       className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all duration-150 ${
-        isDark ? 'border-zinc-700 bg-zinc-800/60 text-white' : 'border-zinc-200 bg-zinc-50 text-zinc-900'
+        isDark ? 'border-zinc-700 bg-zinc-800/60 text-[#ACB8C5]' : 'border-zinc-200 bg-zinc-50 text-[#111111]'
       } ${isChecking ? 'pointer-events-none' : ''}`}
     >
       <span
@@ -524,9 +525,17 @@ export function CourseTaker({
   const fontStyle = { fontFamily: fontOption.cssFamily };
   const isDark = (config.mode ?? 'dark') === 'auto' ? systemDark : (config.mode ?? 'dark') !== 'light';
   const cardBg = isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm';
-  const textColor = isDark ? 'text-white' : 'text-zinc-900';
-  const mutedColor = isDark ? 'text-zinc-400' : 'text-zinc-500';
+  const textColor = isDark ? 'text-[#ACB8C5]' : 'text-[#111111]';
+  const mutedColor = isDark ? 'text-[#A8B5C2]' : 'text-[#555555]';
+  const faintColor = isDark ? 'text-[#6b7a89]' : 'text-[#888888]';
   const subtleBg = isDark ? 'bg-zinc-800/60' : 'bg-zinc-50';
+  // Text tones mirror the shared theme (DARK_C/LIGHT_C) so the player matches the dashboard.
+  // Two forms of the same tones: textColor/mutedColor/faintColor (above) for className, and
+  // txt/txtMuted/txtFaint (below) for inline style={{ color }}. Roles: headings/primary = text,
+  // body/secondary = muted, labels/metadata = faint. Button text on colored backgrounds stays white.
+  const txt      = isDark ? DARK_C.text  : LIGHT_C.text;
+  const txtMuted = isDark ? DARK_C.muted : LIGHT_C.muted;
+  const txtFaint = isDark ? DARK_C.faint : LIGHT_C.faint;
 
   // Shuffle helper
   const shuffle = (arr: string[]) => {
@@ -1334,13 +1343,13 @@ export function CourseTaker({
                 {isLessonOnly ? (
                   <div className="flex items-center gap-3 py-2">
                     <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                    <p className="text-sm font-medium" style={{ color: isDark ? '#a1a1aa' : '#71717a' }}>
+                    <p className="text-sm font-medium" style={{ color: txtMuted }}>
                       You have completed all lessons in this course.
                     </p>
                   </div>
                 ) : (
                   <>
-                    <div className="text-[11px] font-semibold mb-3" style={{ color: isDark ? '#a1a1aa' : '#71717a' }}>Score progress</div>
+                    <div className="text-[11px] font-semibold mb-3" style={{ color: txtMuted }}>Score progress</div>
 
                     <div className="relative pt-7 pb-8">
                       <div className="h-4 rounded-full overflow-hidden" style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' }}>
@@ -1367,7 +1376,7 @@ export function CourseTaker({
                         You: {submittedPct}%
                       </div>
                       <div
-                        className={`absolute bottom-0 -translate-x-1/2 px-2 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap ${isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-zinc-100 text-zinc-600'}`}
+                        className={`absolute bottom-0 -translate-x-1/2 px-2 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap ${isDark ? 'bg-zinc-800 text-[#A8B5C2]' : 'bg-zinc-100 text-[#555555]'}`}
                         style={{ left: `${passMarker}%` }}
                       >
                         Pass mark
@@ -1522,7 +1531,7 @@ export function CourseTaker({
                 <span className="text-[11px] font-black w-5 tabular-nums text-right" style={{ color: accent }}>{rankCtx.rank}</span>
                 <span className={`text-sm font-semibold flex-1 truncate ${textColor}`}>
                   {rankCtx.me.name || 'You'}
-                  <span className={`ml-1.5 text-[10px] font-normal px-1.5 py-0.5 rounded-md ${isDark ? 'bg-zinc-700 text-zinc-400' : 'bg-zinc-200 text-zinc-500'}`}>you</span>
+                  <span className={`ml-1.5 text-[10px] font-normal px-1.5 py-0.5 rounded-md ${isDark ? 'bg-zinc-700 text-[#A8B5C2]' : 'bg-zinc-200 text-[#555555]'}`}>you</span>
                 </span>
                 <span className="text-sm font-bold tabular-nums" style={{ color: accent }}>{rankCtx.me.percentage ?? 0}%</span>
               </div>
@@ -1753,7 +1762,7 @@ export function CourseTaker({
             <button
               onClick={onRetake}
               className={`flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl font-semibold text-sm border transition-all hover:opacity-80 active:scale-[0.98]`}
-              style={{ background: 'transparent', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)', color: isDark ? '#a1a1aa' : '#555' }}
+              style={{ background: 'transparent', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)', color: txtMuted }}
             >
               <RotateCcw className="w-4 h-4" /> Retake Course
             </button>
@@ -1835,7 +1844,7 @@ export function CourseTaker({
                     </a>
                     <button
                       onClick={() => { setExistingCertId(null); setPhase('course'); }}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px', borderRadius: 14, fontWeight: 500, fontSize: 13, background: 'transparent', border: `1px solid ${overlayBorder}`, cursor: 'pointer', color: isDark ? '#a1a1aa' : '#71717a' }}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px', borderRadius: 14, fontWeight: 500, fontSize: 13, background: 'transparent', border: `1px solid ${overlayBorder}`, cursor: 'pointer', color: txtMuted }}
                     >
                       <RotateCcw className="w-3.5 h-3.5" /> Retake course anyway
                     </button>
@@ -1873,7 +1882,7 @@ export function CourseTaker({
                     </button>
                     <button
                       onClick={handleStartFresh}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px', borderRadius: 14, fontWeight: 500, fontSize: 13, background: 'transparent', border: `1px solid ${overlayBorder}`, cursor: 'pointer', color: isDark ? '#a1a1aa' : '#71717a' }}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px', borderRadius: 14, fontWeight: 500, fontSize: 13, background: 'transparent', border: `1px solid ${overlayBorder}`, cursor: 'pointer', color: txtMuted }}
                     >
                       <RotateCcw className="w-3.5 h-3.5" /> Start over
                     </button>
@@ -1909,7 +1918,7 @@ export function CourseTaker({
           </div>
 
           {(courseTimerMins > 0 || maxAttempts > 0) && (
-            <div className={`flex items-start gap-3 p-3 rounded-xl border text-xs ${isDark ? 'border-zinc-700 bg-zinc-800/40 text-zinc-400' : 'border-zinc-200 bg-zinc-50 text-zinc-500'}`}>
+            <div className={`flex items-start gap-3 p-3 rounded-xl border text-xs ${isDark ? 'border-zinc-700 bg-zinc-800/40 text-[#A8B5C2]' : 'border-zinc-200 bg-zinc-50 text-[#555555]'}`}>
               <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-500" />
               <div className="space-y-0.5">
                 {courseTimerMins > 0 && <p>Time limit: <span className="font-semibold text-amber-400">{courseTimerMins} minute{courseTimerMins > 1 ? 's' : ''}</span></p>}
@@ -1942,7 +1951,7 @@ export function CourseTaker({
                   value={studentName}
                   onChange={e => setStudentName(e.target.value)}
                   placeholder="Enter your full name..."
-                  className={`w-full bg-transparent border-none outline-none px-4 py-3 text-sm ${isDark ? 'text-white placeholder:text-zinc-600' : 'text-zinc-900 placeholder:text-zinc-400'}`}
+                  className={`w-full bg-transparent border-none outline-none px-4 py-3 text-sm ${isDark ? 'text-[#ACB8C5] placeholder:text-zinc-600' : 'text-[#111111] placeholder:text-zinc-400'}`}
                 />
               </AnimatedField>
             </div>
@@ -1954,7 +1963,7 @@ export function CourseTaker({
                   value={studentEmail}
                   onChange={e => { setStudentEmail(e.target.value); setAttemptError(''); }}
                   placeholder="you@example.com"
-                  className={`w-full bg-transparent border-none outline-none px-4 py-3 text-sm ${isDark ? 'text-white placeholder:text-zinc-600' : 'text-zinc-900 placeholder:text-zinc-400'}`}
+                  className={`w-full bg-transparent border-none outline-none px-4 py-3 text-sm ${isDark ? 'text-[#ACB8C5] placeholder:text-zinc-600' : 'text-[#111111] placeholder:text-zinc-400'}`}
                 />
               </AnimatedField>
             </div>
@@ -1972,8 +1981,8 @@ export function CourseTaker({
               <div className="h-0.5 w-full" style={{ background: accent }} />
               <div className="p-4 space-y-3">
                 <div>
-                  <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>You&apos;ve already completed this course</p>
-                  <p className={`text-xs mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Your certificate is ready to view and share.</p>
+                  <p className={`text-sm font-semibold ${textColor}`}>You&apos;ve already completed this course</p>
+                  <p className={`text-xs mt-0.5 ${mutedColor}`}>Your certificate is ready to view and share.</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <a href={`/certificate/${existingCertId}`} target="_blank" rel="noreferrer"
@@ -1982,7 +1991,7 @@ export function CourseTaker({
                     🎓 View Certificate
                   </a>
                   <button onClick={() => { setExistingCertId(null); setPhase('course'); }}
-                    className={`px-3 py-2 rounded-xl text-sm font-medium flex items-center gap-1.5 transition-all active:scale-[0.98] whitespace-nowrap ${isDark ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60' : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/60'}`}>
+                    className={`px-3 py-2 rounded-xl text-sm font-medium flex items-center gap-1.5 transition-all active:scale-[0.98] whitespace-nowrap ${isDark ? 'text-[#A8B5C2] hover:text-[#ACB8C5] hover:bg-zinc-700/60' : 'text-[#555555] hover:text-[#111111] hover:bg-zinc-200/60'}`}>
                     <RotateCcw className="w-3.5 h-3.5" /> Retake anyway
                   </button>
                 </div>
@@ -1999,13 +2008,13 @@ export function CourseTaker({
               <div className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>Continue where you left off</p>
-                    <p className={`text-xs mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                    <p className={`text-sm font-semibold ${textColor}`}>Continue where you left off</p>
+                    <p className={`text-xs mt-0.5 ${mutedColor}`}>
                       Slide {savedProgress.current_question_index + 1} of {totalSlides}
                       {savedProgress.points > 0 && <> &middot; <span style={{ color: accent }}>{savedProgress.points} XP earned</span></>}
                     </p>
                   </div>
-                  <span className={`text-xs font-semibold tabular-nums px-2 py-1 rounded-lg ${isDark ? 'bg-zinc-700 text-zinc-300' : 'bg-zinc-200 text-zinc-600'}`}>
+                  <span className={`text-xs font-semibold tabular-nums px-2 py-1 rounded-lg ${isDark ? 'bg-zinc-700 text-[#A8B5C2]' : 'bg-zinc-200 text-[#555555]'}`}>
                     {savedPct}%
                   </span>
                 </div>
@@ -2013,7 +2022,7 @@ export function CourseTaker({
                   <button onClick={handleResume} className="py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] hover:opacity-90" style={{ background: accent, color: 'white' }}>
                     Continue <ArrowRight className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={handleStartFresh} className={`py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] ${isDark ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/60' : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-200/60'}`}>
+                  <button onClick={handleStartFresh} className={`py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] ${isDark ? 'text-[#A8B5C2] hover:text-[#ACB8C5] hover:bg-zinc-700/60' : 'text-[#555555] hover:text-[#111111] hover:bg-zinc-200/60'}`}>
                     <RotateCcw className="w-3.5 h-3.5" /> Start over
                   </button>
                 </div>
@@ -2592,10 +2601,10 @@ export function CourseTaker({
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className={`font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+              <p className={`font-semibold ${textColor}`}>
                 {finishPending.length} question{finishPending.length > 1 ? 's' : ''} unanswered
               </p>
-              <p className={`text-sm mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+              <p className={`text-sm mt-0.5 ${mutedColor}`}>
                 Go back to answer them or submit anyway.
               </p>
             </div>
@@ -2618,7 +2627,7 @@ export function CourseTaker({
           <div className="flex gap-2 pt-1">
             <button
               onClick={() => { setFinishPending(null); finishCourse(score); }}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'bg-zinc-800 text-[#A8B5C2] hover:bg-zinc-700' : 'bg-zinc-100 text-[#555555] hover:bg-zinc-200'}`}
             >
               Submit anyway
             </button>
@@ -2697,7 +2706,7 @@ export function CourseTaker({
             style={{ background: '#18181b', border: '1px solid rgba(255,255,255,0.1)', maxWidth: 420, width: 'calc(100vw - 32px)' }}
           >
             <Loader2 className="w-4 h-4 text-zinc-400 flex-shrink-0 animate-spin" />
-            <p className="flex-1 text-xs text-zinc-300">Saving your result...</p>
+            <p className="flex-1 text-xs text-[#A8B5C2]">Saving your result...</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -2715,7 +2724,7 @@ export function CourseTaker({
             style={{ background: '#18181b', border: '1px solid rgba(239,68,68,0.4)', maxWidth: 420, width: 'calc(100vw - 32px)' }}
           >
             <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
-            <p className="flex-1 text-xs text-zinc-300">{submitError}</p>
+            <p className="flex-1 text-xs text-[#A8B5C2]">{submitError}</p>
             <button
               onClick={() => finishCourse(score)}
               className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-opacity hover:opacity-80"
@@ -2740,7 +2749,7 @@ export function CourseTaker({
         <div
           className={`flex-shrink-0 flex items-center px-4 sm:px-6 ${questionType === 'sql_exercise' ? 'gap-4' : 'justify-between py-2'}`}
           style={{
-            background: isDark ? '#0f0f10' : '#F2F5FA',
+            background: isDark ? '#17181E' : '#F2F5FA',
             minHeight: 44,
           }}
         >
@@ -2769,10 +2778,10 @@ export function CourseTaker({
                 {pointsEnabled && (
                   <div
                     className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full"
-                    style={{ background: isDark ? '#141416' : '#ffffff', marginTop: 6 }}
+                    style={{ background: isDark ? '#1E1F26' : '#ffffff', marginTop: 6 }}
                   >
                     <span className="text-[14px]">🏆</span>
-                    <span className="text-[11px] font-medium" style={{ color: isDark ? '#6b7280' : '#9ca3af' }}>XP</span>
+                    <span className="text-[11px] font-medium" style={{ color: txtFaint }}>XP</span>
                     <span className="text-[13px] font-bold tabular-nums" style={{ color: accent }}>
                       {displayedPoints.toLocaleString()}
                     </span>
@@ -2787,7 +2796,7 @@ export function CourseTaker({
                 )}
                 {reviewMode && (
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                    style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: isDark ? '#d4d4d8' : '#52525b' }}>
+                    style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: txtMuted }}>
                     Review Mode
                   </span>
                 )}
@@ -2869,7 +2878,7 @@ export function CourseTaker({
                 )}
                 {reviewMode && (
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full mr-2"
-                    style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: isDark ? '#d4d4d8' : '#52525b' }}>
+                    style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: txtMuted }}>
                     Review Mode
                   </span>
                 )}
@@ -2926,7 +2935,7 @@ export function CourseTaker({
         </div>
 
         {/* Body row: sidebar + content */}
-        <div className="relative flex flex-1 overflow-hidden" style={{ background: isDark ? '#0f0f10' : '#F2F5FA' }}>
+        <div className="relative flex flex-1 overflow-hidden" style={{ background: isDark ? '#17181E' : '#F2F5FA' }}>
 
         {/* -- SIDEBAR (non-inline only) -- */}
         {!inlineMode && (
@@ -2945,14 +2954,14 @@ export function CourseTaker({
               style={{
                 width: sidebarOpen ? 'min(100vw, 360px)' : 48,
                 minWidth: sidebarOpen ? 'min(100vw, 360px)' : 48,
-                background: isDark ? '#141416' : '#ffffff',
+                background: isDark ? '#1E1F26' : '#ffffff',
                 overflow: sidebarOpen ? 'hidden' : 'visible',
               }}
             >
               {/* Header row -- course title + close (open), or centered hamburger (collapsed) */}
               <div className={`${sidebarOpen ? 'flex items-start justify-between gap-2 px-4' : 'hidden sm:flex justify-center px-0'} pt-3 pb-1 flex-shrink-0`}>
                 {sidebarOpen && config.title && (
-                  <p className="text-xl font-bold leading-snug pt-1 min-w-0" style={{ color: isDark ? '#b6c4df' : '#111' }}>
+                  <p className="text-xl font-bold leading-snug pt-1 min-w-0" style={{ color: isDark ? '#ACB8C5' : '#111' }}>
                     {config.title}
                   </p>
                 )}
@@ -3030,7 +3039,7 @@ export function CourseTaker({
                             Module {gi + 1}
                           </span>
                           <span className="text-[15px] font-bold leading-snug"
-                            style={{ color: isDark ? '#b6c4df' : '#1a1a1a' }}>
+                            style={{ color: isDark ? '#ACB8C5' : '#1a1a1a' }}>
                             {group.sectionTitle}
                           </span>
                         </div>
@@ -3039,7 +3048,7 @@ export function CourseTaker({
                           <ChevronRight
                             className="w-4 h-4 transition-transform duration-200"
                             style={{
-                              color: isDark ? '#888' : '#6b7280',
+                              color: txtFaint,
                               transform: isCollapsed ? 'rotate(90deg)' : 'rotate(-90deg)',
                             }}
                           />
@@ -3113,11 +3122,11 @@ export function CourseTaker({
                                 {/* Text */}
                                 <span className="flex-1 min-w-0">
                                   <span className={`block text-[14px] leading-snug line-clamp-2 ${isCurrent ? 'font-semibold' : 'font-normal'}`}
-                                    style={{ color: isDark ? '#b6c4df' : isCurrent ? '#111' : '#1f2937' }}>
+                                    style={{ color: isDark ? '#ACB8C5' : isCurrent ? '#111' : '#1f2937' }}>
                                     {title}
                                   </span>
                                   <span className="flex items-center gap-1.5 mt-0.5 text-[12px]"
-                                    style={{ color: isDark ? '#b6c4df' : '#8a94a3' }}>
+                                    style={{ color: txtFaint }}>
                                     <KindIcon className="w-3 h-3 flex-shrink-0" />
                                     {kind}
                                   </span>
@@ -3139,7 +3148,7 @@ export function CourseTaker({
         {/* -- MAIN CONTENT COLUMN -- */}
         <div
           className={inlineMode ? 'flex-1 flex flex-col' : 'flex-1 overflow-hidden flex flex-col'}
-          style={{ background: isDark ? '#0f0f10' : '#F2F5FA' }}
+          style={{ background: isDark ? '#17181E' : '#F2F5FA' }}
         >
 
           {/* SQL exercise player -- rendered outside AnimatePresence so CSS transforms from motion.div don't break its fixed positioning during slide transitions */}
@@ -3194,18 +3203,18 @@ export function CourseTaker({
                     const dlItems: DownloadItem[] = (currentQuestion as any).downloadItems || [];
                     const isLast = currentQuestionIndex >= totalSlides - 1;
                     return (
-                      <div className="rounded-xl overflow-hidden" style={{ background: isDark ? '#141416' : '#ffffff' }}>
+                      <div className="rounded-xl overflow-hidden" style={{ background: isDark ? '#1E1F26' : '#ffffff' }}>
                         <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-4 sm:pb-5" style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#F2F5FA'}` }}>
                           <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: accent }}>Downloads</p>
-                          <h1 className="text-xl font-bold leading-snug" style={{ color: isDark ? '#b6c4df' : '#111' }}>
+                          <h1 className="text-xl font-bold leading-snug" style={{ color: isDark ? '#ACB8C5' : '#111' }}>
                             {(currentQuestion as any).downloadsTitle || 'Downloads'}
                           </h1>
                         </div>
                         {(currentQuestion as any).downloadsDescription && (
                           <div className="px-4 sm:px-8 pt-4 pb-2">
                             <div
-                              className={`prose prose-sm max-w-none ${isDark ? '[&_*]:!text-[#a1a1aa] [&_strong]:!text-white [&_b]:!text-white' : '[&_*]:!text-[#555]'}`}
-                              style={{ color: isDark ? '#a1a1aa' : '#555' }}
+                              className={`prose prose-sm max-w-none ${isDark ? '[&_*]:!text-[#A8B5C2] [&_strong]:!text-[#ACB8C5] [&_b]:!text-[#ACB8C5]' : '[&_*]:!text-[#555555]'}`}
+                              style={{ color: txtMuted }}
                               dangerouslySetInnerHTML={{ __html: sanitizeRichText((currentQuestion as any).downloadsDescription) }}
                             />
                           </div>
@@ -3229,17 +3238,17 @@ export function CourseTaker({
                                       />
                                     )}
                                     <div className="space-y-1">
-                                      <h3 className="text-lg font-bold leading-snug" style={{ color: isDark ? '#ffffff' : '#111' }}>
+                                      <h3 className="text-lg font-bold leading-snug" style={{ color: txt }}>
                                         {item.title || 'Download file'}
                                       </h3>
                                       {item.description ? (
                                         <div
-                                          className={`text-sm leading-relaxed prose max-w-none ${isDark ? '[&_*]:!text-[#a1a1aa] [&_strong]:!text-white [&_b]:!text-white' : '[&_*]:!text-[#555]'}`}
-                                          style={{ color: isDark ? '#a1a1aa' : '#666' }}
+                                          className={`text-sm leading-relaxed prose max-w-none ${isDark ? '[&_*]:!text-[#A8B5C2] [&_strong]:!text-[#ACB8C5] [&_b]:!text-[#ACB8C5]' : '[&_*]:!text-[#555555]'}`}
+                                          style={{ color: txtMuted }}
                                           dangerouslySetInnerHTML={{ __html: sanitizeRichText(item.description) }}
                                         />
                                       ) : (
-                                        <p className="text-sm" style={{ color: isDark ? '#a1a1aa' : '#666' }}>
+                                        <p className="text-sm" style={{ color: txtMuted }}>
                                           {item.type === 'file' ? 'Download the file using the link below:' : 'Open the link below:'}
                                         </p>
                                       )}
@@ -3250,14 +3259,14 @@ export function CourseTaker({
                                       </div>
                                     )}
                                     {item.type === 'file' && !isPdfEmbed && (
-                                      <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl" style={{ background: isDark ? '#141416' : '#ffffff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}>
-                                        <svg className="w-5 h-5 flex-shrink-0" style={{ color: isDark ? '#a1a1aa' : '#888' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                                      <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl" style={{ background: isDark ? '#1E1F26' : '#ffffff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}>
+                                        <svg className="w-5 h-5 flex-shrink-0" style={{ color: txtMuted }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
                                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" strokeLinecap="round" strokeLinejoin="round" />
                                           <polyline points="14 2 14 8 20 8" strokeLinecap="round" strokeLinejoin="round" />
                                         </svg>
                                         <div className="text-left">
-                                          <p className="text-[10px] font-medium leading-none mb-0.5" style={{ color: isDark ? '#71717a' : '#999' }}>File Type</p>
-                                          <p className="text-sm font-bold leading-none" style={{ color: isDark ? '#ffffff' : '#111' }}>Document</p>
+                                          <p className="text-[10px] font-medium leading-none mb-0.5" style={{ color: txtFaint }}>File Type</p>
+                                          <p className="text-sm font-bold leading-none" style={{ color: txt }}>Document</p>
                                         </div>
                                       </div>
                                     )}
@@ -3296,7 +3305,7 @@ export function CourseTaker({
                       <div
                         className="rounded-xl overflow-hidden"
                         style={{
-                          background: isDark ? '#141416' : '#ffffff',
+                          background: isDark ? '#1E1F26' : '#ffffff',
                         }}
                       >
                         {/* Lesson header */}
@@ -3305,7 +3314,7 @@ export function CourseTaker({
                           style={{ borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#F2F5FA'}` }}
                         >
                           <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: accent }}>Lesson</p>
-                          <h1 className="text-xl font-bold leading-snug" style={{ color: isDark ? '#b6c4df' : '#111' }}>
+                          <h1 className="text-xl font-bold leading-snug" style={{ color: isDark ? '#ACB8C5' : '#111' }}>
                             {lesson.title || 'Lesson Content'}
                           </h1>
                         </div>
@@ -3345,10 +3354,10 @@ export function CourseTaker({
                           <div className="px-4 sm:px-8 pt-4 sm:pt-6 pb-5 sm:pb-6">
                             <div
                               className={`prose prose-sm max-w-none [font-size:15.5px] ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark
-                                ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
-                                : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
+                                ? 'prose-invert prose-p:text-[#A8B5C2] prose-p:leading-[1.6] prose-headings:text-[#ACB8C5] prose-headings:font-semibold prose-strong:text-[#ACB8C5] prose-a:text-blue-400 prose-li:text-[#A8B5C2] prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-[#3E93FF] prose-blockquote:text-[#6b7a89] prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
+                                : 'prose-p:text-[#555555] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#555555] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-[#00bf63] prose-blockquote:text-[#888888] prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
                               }`}
-                              style={{ color: isDark ? '#d4d4d8' : '#3f3f46', ...fontStyle }}
+                              style={{ color: isDark ? '#A8B5C2' : '#555555', ...fontStyle }}
                               dangerouslySetInnerHTML={{ __html: renderBody(lesson.body) }}
                             />
                           </div>
@@ -3370,7 +3379,7 @@ export function CourseTaker({
                   })() : <div
                     className="rounded-xl overflow-hidden"
                     style={{
-                      background: isDark ? '#141416' : '#ffffff',
+                      background: isDark ? '#1E1F26' : '#ffffff',
                     }}
                   >
                   <div className="px-4 sm:px-8 pt-5 sm:pt-8 pb-5 sm:pb-8">
@@ -3401,7 +3410,7 @@ export function CourseTaker({
                     </motion.div>
                   )}
 
-                  <h2 className={`text-lg sm:text-2xl font-semibold leading-snug mb-5 sm:mb-8 ${isDark ? 'text-[#b6c4df]' : 'text-zinc-900'}`}>
+                  <h2 className={`text-lg sm:text-2xl font-semibold leading-snug mb-5 sm:mb-8 ${textColor}`}>
                     {currentQuestion.question}
                   </h2>
 
@@ -3417,7 +3426,7 @@ export function CourseTaker({
                           onKeyDown={e => { if (e.key === 'Enter' && !isChecking && fillBlankAnswer.trim()) handleCheck(); }}
                           placeholder="Type your answer here..."
                           disabled={isChecking}
-                          className={`w-full bg-transparent border-none outline-none px-4 py-3 text-sm ${isDark ? 'text-white placeholder:text-zinc-600' : 'text-zinc-900 placeholder:text-zinc-400'} disabled:opacity-60`}
+                          className={`w-full bg-transparent border-none outline-none px-4 py-3 text-sm ${isDark ? 'text-[#ACB8C5] placeholder:text-zinc-600' : 'text-[#111111] placeholder:text-zinc-400'} disabled:opacity-60`}
                         />
                       </AnimatedField>
                       {isChecking && (
@@ -3498,7 +3507,7 @@ export function CourseTaker({
                             {imgSrc ? (
                               <img src={imgSrc} alt={`Option ${idx + 1}`} className="w-full h-72 object-cover group-hover:scale-105 transition-transform duration-300" />
                             ) : (
-                              <div className={`w-full h-72 flex items-center justify-center text-sm ${isDark ? 'bg-zinc-800 text-zinc-600' : 'bg-zinc-100 text-zinc-400'}`}>No image</div>
+                              <div className={`w-full h-72 flex items-center justify-center text-sm ${isDark ? 'bg-zinc-800 text-[#6b7a89]' : 'bg-zinc-100 text-[#888888]'}`}>No image</div>
                             )}
                             <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
                             <div className="absolute bottom-0 inset-x-0 px-3 py-2.5 flex items-center justify-between">
@@ -3545,10 +3554,10 @@ export function CourseTaker({
                       {currentQuestion.lesson.body && (
                         <div
                           className={`mb-6 prose prose-sm max-w-none [font-size:15.5px] ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark
-                            ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
-                            : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
+                            ? 'prose-invert prose-p:text-[#A8B5C2] prose-p:leading-[1.6] prose-headings:text-[#ACB8C5] prose-headings:font-semibold prose-strong:text-[#ACB8C5] prose-a:text-blue-400 prose-li:text-[#A8B5C2] prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-[#3E93FF] prose-blockquote:text-[#6b7a89] prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
+                            : 'prose-p:text-[#555555] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#555555] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-[#00bf63] prose-blockquote:text-[#888888] prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
                           }`}
-                          style={{ color: isDark ? '#d4d4d8' : '#3f3f46', ...fontStyle }}
+                          style={{ color: isDark ? '#A8B5C2' : '#555555', ...fontStyle }}
                           dangerouslySetInnerHTML={{ __html: renderBody(currentQuestion.lesson.body) }}
                         />
                       )}
@@ -3627,7 +3636,7 @@ export function CourseTaker({
                   {questionType === 'code' && currentQuestion.codeSnippet && (
                     <div className="mb-8 rounded-2xl overflow-hidden border border-zinc-700/60 shadow-lg">
                       <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-700/60" style={{ background: '#111827' }}>
-                        <span className="text-[11px] font-mono font-semibold text-zinc-400 uppercase tracking-wider">
+                        <span className="text-[11px] font-mono font-semibold text-[#6b7a89] uppercase tracking-wider">
                           {currentQuestion.codeLanguage || 'javascript'}
                         </span>
                         <div className="flex gap-1.5">
@@ -3663,11 +3672,11 @@ export function CourseTaker({
                             ? { color: '#f43f5e' }
                             : isSelected
                               ? { color: accent }
-                              : { color: isDark ? '#52525b' : '#a1a1aa' };
+                              : { color: txtFaint };
                         const borderWidth = (showCorrect || showWrong || isSelected) ? 'border-2' : 'border-[1.5px]';
                         const optionTextColor = (isSelected || showCorrect || showWrong)
-                          ? (isDark ? 'text-white' : 'text-zinc-900')
-                          : (isDark ? 'text-zinc-400' : 'text-zinc-500');
+                          ? textColor
+                          : mutedColor;
                         if (showCorrect) {
                           borderStyle = 'border-emerald-500';
                           bgStyle = 'bg-emerald-500/10';
@@ -3713,7 +3722,7 @@ export function CourseTaker({
                     if (REVIEW_TYPES.includes(questionType)) {
                       const done = reviewCompleted.has(currentQuestion.id);
                       return (
-                        <div className="px-4 sm:px-8 py-3 sm:py-4 flex justify-end" style={{ background: isDark ? '#141416' : '#ffffff' }}>
+                        <div className="px-4 sm:px-8 py-3 sm:py-4 flex justify-end" style={{ background: isDark ? '#1E1F26' : '#ffffff' }}>
                           <button
                             onClick={handleNext}
                             disabled={!done}
@@ -3730,11 +3739,11 @@ export function CourseTaker({
                     const hasLesson = (currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl) && (config as any).lessonTiming !== 'before';
                     const footerBg = isChecking
                       ? (isCorrect ? (isDark ? '#0a2e1a' : '#f0fdf4') : (isDark ? '#662525' : '#fff1f1'))
-                      : (isDark ? '#141416' : '#ffffff');
+                      : (isDark ? '#1E1F26' : '#ffffff');
                     return (
                       <div className="px-4 sm:px-8 py-3 sm:py-4" style={{ background: footerBg }}>
                         {isChecking && currentQuestion?.explanation && (
-                          <div className={`mb-3 text-sm leading-relaxed ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                          <div className={`mb-3 text-sm leading-relaxed ${mutedColor}`}>
                             <span className="font-semibold text-[11px] uppercase tracking-wider opacity-50 mr-2">Explanation</span>
                             {currentQuestion.explanation}
                           </div>
@@ -3777,7 +3786,7 @@ export function CourseTaker({
                                 (questionType === 'fill_blank' || questionType === 'arrange') && (
                                   <button onClick={() => handleCheck()} disabled={!isAnswered()}
                                     className="px-6 py-2.5 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
-                                    style={{ background: isAnswered() ? accent : (isDark ? '#27272a' : '#e4e4e7'), color: isAnswered() ? 'white' : (isDark ? '#52525b' : '#a1a1aa') }}>
+                                    style={{ background: isAnswered() ? accent : (isDark ? '#27272a' : '#e4e4e7'), color: isAnswered() ? 'white' : txtFaint }}>
                                     Check Answer
                                   </button>
                                 )
@@ -3785,7 +3794,7 @@ export function CourseTaker({
                             ) : (
                               <>
                                 {relatedAssignment && currentQuestionIndex === totalQuestions - 1 && (
-                                  <p className="text-xs hidden sm:block" style={{ color: isDark ? '#a1a1aa' : '#52525b' }}>
+                                  <p className="text-xs hidden sm:block" style={{ color: txtMuted }}>
                                     Complete to unlock <span className="font-semibold" style={{ color: accent }}>{relatedAssignment.title}</span>
                                   </p>
                                 )}
@@ -3837,7 +3846,7 @@ export function CourseTaker({
                 }}
               >
                 <div className={`flex items-center justify-between px-4 py-3.5 border-b flex-shrink-0 ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
-                  <p className="text-sm font-bold" style={{ color: isDark ? '#fff' : '#111' }}>Course Contents</p>
+                  <p className="text-sm font-bold" style={{ color: txt }}>Course Contents</p>
                   <button onClick={() => setShowChapters(false)} className={`p-1 rounded-lg transition-colors ${isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}>
                     <X className="w-4 h-4" />
                   </button>
@@ -3865,10 +3874,10 @@ export function CourseTaker({
                             style={{ background: isCurrent ? (isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)') : 'transparent', opacity: locked ? 0.55 : 1, cursor: locked ? 'not-allowed' : 'pointer' }}
                           >
                             <span className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold"
-                              style={{ background: isCurrent ? accent : answered ? `${accent}25` : isDark ? '#2a2a2a' : '#f0f0f0', color: isCurrent ? '#fff' : answered ? accent : isDark ? '#555' : '#aaa' }}>
+                              style={{ background: isCurrent ? accent : answered ? `${accent}25` : isDark ? '#2a2a2a' : '#f0f0f0', color: isCurrent ? '#fff' : answered ? accent : txtFaint }}>
                               {answered ? '✓' : locked ? <Lock className="w-3 h-3" /> : (q as any).lessonOnly ? '◉' : idx + 1}
                             </span>
-                            <span className="flex-1 text-[13px] leading-snug line-clamp-2" style={{ color: isCurrent ? (isDark ? '#fff' : '#111') : isDark ? '#999' : '#555' }}>
+                            <span className="flex-1 text-[13px] leading-snug line-clamp-2" style={{ color: isCurrent ? txt : txtMuted }}>
                               {(q as any).isDownloads
                                 ? ((q as any).downloadsTitle || 'Downloads')
                                 : (q as any).lessonOnly
@@ -3924,8 +3933,8 @@ export function CourseTaker({
               {/* header row */}
               <div className="flex items-start justify-between px-5 sm:px-8 pt-4 sm:pt-5 pb-3 sm:pb-4 flex-shrink-0">
                 <div>
-                  <p className={`text-[11px] font-semibold tracking-widest uppercase mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>Lesson</p>
-                  <h3 className={`text-lg sm:text-xl font-bold leading-snug ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                  <p className={`text-[11px] font-semibold tracking-widest uppercase mb-1 ${faintColor}`}>Lesson</p>
+                  <h3 className={`text-lg sm:text-xl font-bold leading-snug ${textColor}`}>
                     {currentQuestion.lesson.title || 'Theory'}
                   </h3>
                 </div>
@@ -3961,10 +3970,10 @@ export function CourseTaker({
                   {currentQuestion.lesson.body && (
                     <div
                       className={`prose prose-base sm:prose-lg max-w-none ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark
-                        ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.65] prose-headings:text-white prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-300 prose-blockquote:not-italic'
-                        : 'prose-p:text-zinc-700 prose-p:leading-[1.65] prose-headings:text-zinc-900 prose-strong:text-zinc-900 prose-li:text-zinc-700 prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-emerald-500 prose-blockquote:text-zinc-700 prose-blockquote:not-italic'
+                        ? 'prose-invert prose-p:text-[#A8B5C2] prose-p:leading-[1.65] prose-headings:text-[#ACB8C5] prose-strong:text-[#ACB8C5] prose-a:text-blue-400 prose-li:text-[#A8B5C2] prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-[#3E93FF] prose-blockquote:text-[#6b7a89] prose-blockquote:not-italic'
+                        : 'prose-p:text-[#555555] prose-p:leading-[1.65] prose-headings:text-[#111111] prose-strong:text-[#111111] prose-li:text-[#555555] prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-[#00bf63] prose-blockquote:text-[#888888] prose-blockquote:not-italic'
                       }`}
-                      style={{ color: isDark ? '#d4d4d8' : '#3f3f46', ...fontStyle }}
+                      style={{ color: isDark ? '#A8B5C2' : '#555555', ...fontStyle }}
                       dangerouslySetInnerHTML={{ __html: renderBody(currentQuestion.lesson.body) }}
                     />
                   )}
