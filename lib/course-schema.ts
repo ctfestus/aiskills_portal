@@ -8,7 +8,7 @@
 // `pointsBase`, and snake_case DB columns) are accepted ONLY on ingest, via normalizeFormConfig,
 // and collapsed into the canonical shape. Never read the aliases downstream.
 
-import type { ThemeColor, ThemeMode } from '@/components/AnimatedField';
+import type { ThemeColor, ThemeMode } from '@/lib/theme-types';
 
 export type { ThemeColor, ThemeMode };
 
