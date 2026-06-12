@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
-async function resolveInstructor(req: NextRequest) {
-  const header = req.headers.get('authorization');
-  if (!header?.startsWith('Bearer ')) return null;
-  const { data: { user }, error } = await adminClient().auth.getUser(header.slice(7));
-  if (error || !user) return null;
-  const { data: profile } = await adminClient().from('students').select('role').eq('id', user.id).maybeSingle();
-  if (profile?.role !== 'admin' && profile?.role !== 'instructor') return null;
-  return user;
-}
 
 export async function GET(req: NextRequest) {
-  const user = await resolveInstructor(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
+  const { user } = auth;
 
   const { data, error } = await adminClient()
     .from('programs')
@@ -28,8 +21,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await resolveInstructor(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
+  const { user } = auth;
 
   let body: any;
   try { body = await req.json(); } catch {
@@ -61,8 +55,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const user = await resolveInstructor(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
+  const { user } = auth;
 
   let body: any;
   try { body = await req.json(); } catch {
@@ -105,8 +100,9 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const user = await resolveInstructor(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
+  const { user } = auth;
 
   let body: any;
   try { body = await req.json(); } catch {

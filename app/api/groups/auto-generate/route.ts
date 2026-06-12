@@ -1,23 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
-async function getStaffUser(req: NextRequest) {
-  const auth = req.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return null;
-  const supabase = adminClient();
-  const { data: { user }, error } = await supabase.auth.getUser(auth.slice(7));
-  if (error || !user) return null;
-  const { data: profile } = await supabase
-    .from('students').select('role').eq('id', user.id).single();
-  if (!profile || !['admin', 'instructor'].includes(profile.role)) return null;
-  return user;
-}
 
 export async function POST(req: NextRequest) {
-  const user = await getStaffUser(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
+  const { user } = auth;
 
   const body = await req.json().catch(() => ({}));
   const { cohort_id, group_size, name_prefix = 'Group', shuffle = true } = body as {

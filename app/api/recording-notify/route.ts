@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { Resend } from 'resend';
 import { recordingPublishedEmail } from '@/lib/email-templates';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
@@ -14,20 +15,10 @@ function adminClient() {
   );
 }
 
-async function requireInstructor(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return null;
-  const db = adminClient();
-  const { data: { user }, error } = await db.auth.getUser(token);
-  if (error || !user) return null;
-  const { data: student } = await db.from('students').select('role').eq('id', user.id).maybeSingle();
-  if (!student || !['admin', 'instructor', 'staff'].includes(student.role)) return null;
-  return user;
-}
 
 export async function POST(req: NextRequest) {
-  const user = await requireInstructor(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireRole(req, ['admin', 'instructor', 'staff']);
+  if (isAuthError(auth)) return auth.error;
 
   const { recordingId, newWeeks } = await req.json();
   if (!recordingId) return NextResponse.json({ error: 'recordingId required' }, { status: 400 });

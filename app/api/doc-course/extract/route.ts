@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
-import { adminClient } from '@/lib/admin-client';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { getRedis } from '@/lib/redis';
 import { cloudinary } from '@/lib/cloudinary-server';
 
@@ -20,18 +20,6 @@ const SUPPORTED_MIME: Record<string, string> = {
   ppt:  'application/vnd.ms-powerpoint',
 };
 
-async function authenticate(req: NextRequest): Promise<{ userId: string } | NextResponse> {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const supabase = adminClient();
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { data: student } = await supabase.from('students').select('role').eq('id', user.id).single();
-  if (!student || !['instructor', 'admin'].includes(student.role)) {
-    return NextResponse.json({ error: 'Forbidden: instructor or admin access required' }, { status: 403 });
-  }
-  return { userId: user.id };
-}
 
 async function checkRateLimit(userId: string): Promise<NextResponse | null> {
   const redis = getRedis();
@@ -133,8 +121,9 @@ async function uploadPdf(file: File, userId: string): Promise<{ pdfUrl: string; 
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await authenticate(req);
-  if (auth instanceof NextResponse) return auth;
+  const authRes = await requireRole(req, ['instructor', 'admin']);
+  if (isAuthError(authRes)) return authRes.error;
+  const auth = { userId: authRes.user.id };
 
   const rateLimitError = await checkRateLimit(auth.userId);
   if (rateLimitError) return rateLimitError;
