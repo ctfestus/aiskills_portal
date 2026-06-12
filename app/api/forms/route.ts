@@ -201,10 +201,11 @@ export async function PUT(req: NextRequest) {
   }
 
   const { id, title, description, slug: preferredSlug, cohort_ids, deadline_days, status: bodyStatus } = body;
-  if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+  // PUT routes by the existing row's table (course / event / virtual_experience), so we do NOT
+  // gate on the course/event shape here -- virtual_experiences carry neither isCourse nor
+  // eventDetails.isEvent and were always editable through this path. Presence-only, as before.
+  if (!id || !body.config) return NextResponse.json({ error: 'id and config are required' }, { status: 400 });
   const config = normalizeFormConfig(body.config);
-  const valid = validateFormConfig(config);
-  if (!valid.ok) return NextResponse.json({ error: valid.error }, { status: 400 });
 
   const found = await findContentById(supabase, id);
   if (!found) return NextResponse.json({ error: 'Not found' }, { status: 404 });
