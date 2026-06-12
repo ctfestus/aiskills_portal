@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { createAdmissionRecord } from '@/lib/db-payments';
 import { Resend } from 'resend';
 import { cohortInviteEmail } from '@/lib/email-templates';
@@ -16,23 +17,9 @@ function adminClient() {
   return createClient(url, key);
 }
 
-async function getSessionUser(req: NextRequest): Promise<{ id: string; email: string; role: string } | null> {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const token = authHeader.slice(7);
-  const db = adminClient();
-  const { data: { user } } = await db.auth.getUser(token);
-  if (!user?.email) return null;
-  const { data: student } = await db.from('students').select('role').eq('id', user.id).single();
-  return { id: user.id, email: user.email.trim().toLowerCase(), role: student?.role ?? 'student' };
-}
-
 export async function POST(req: NextRequest) {
-  const sessionUser = await getSessionUser(req);
-  if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['instructor', 'admin'].includes(sessionUser.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await requireRole(req, ['instructor', 'admin']);
+  if (isAuthError(auth)) return auth.error;
 
   let body: any;
   try { body = await req.json(); } catch {
@@ -341,11 +328,8 @@ export async function POST(req: NextRequest) {
 
 // GET /api/admissions?cohortId=xxx
 export async function GET(req: NextRequest) {
-  const sessionUser = await getSessionUser(req);
-  if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['instructor', 'admin'].includes(sessionUser.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await requireRole(req, ['instructor', 'admin']);
+  if (isAuthError(auth)) return auth.error;
 
   const cohortId = req.nextUrl.searchParams.get('cohortId');
   const db = adminClient();

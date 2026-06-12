@@ -1,16 +1,9 @@
 import { Type } from '@google/genai';
 import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
-
-function adminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-}
 
 const schema = {
   type: Type.OBJECT,
@@ -19,16 +12,8 @@ const schema = {
 };
 
 export async function POST(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: { user }, error } = await adminClient().auth.getUser(token);
-  if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: profile } = await adminClient().from('students').select('role').eq('id', user.id).single();
-  if (!profile || !['admin', 'instructor'].includes(profile.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
 
   let body: any;
   try { body = await req.json(); } catch {

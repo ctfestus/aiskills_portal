@@ -1,7 +1,7 @@
 ﻿import { Type } from '@google/genai';
 import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { getRedis } from '@/lib/redis';
 import { pdfPageImageUrl } from '@/lib/cloudinary-pdf';
 
@@ -20,32 +20,6 @@ const ALLOWED_ACTIONS = new Set([
   'generate_doc_course_outline',
   'generate_doc_course_full',
 ]);
-
-function adminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-}
-
-async function authenticate(req: NextRequest): Promise<
-  { user: any; profile: any } | NextResponse
-> {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const supabase = adminClient();
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: profile } = await supabase
-    .from('students').select('role').eq('id', user.id).single();
-  if (!profile || !['instructor', 'admin'].includes(profile.role)) {
-    return NextResponse.json({ error: 'Forbidden: instructor or admin access required' }, { status: 403 });
-  }
-
-  return { user, profile };
-}
 
 async function checkRateLimit(userId: string): Promise<NextResponse | null> {
   const redis = getRedis();
@@ -432,9 +406,9 @@ STRONGLY honor the creator's focus: if they ask for SQL, make SQL lessons sql_ex
 
 export async function POST(req: NextRequest) {
   // 1. Authentication + RBAC -- instructors and admins only
-  const authResult = await authenticate(req);
-  if (authResult instanceof NextResponse) return authResult;
-  const { user, profile: userProfile } = authResult as { user: any; profile: any };
+  const auth = await requireRole(req, ['instructor', 'admin']);
+  if (isAuthError(auth)) return auth.error;
+  const { user, role: userRole } = auth;
 
   // 2. Per-user rate limit -- 20 requests per hour
   const rateLimitError = await checkRateLimit(user.id);
@@ -777,7 +751,7 @@ Requirements:
 
     // -- Generate SQL course outline (step 1 of 2) ---
     if (action === 'generate_sql_course_outline') {
-      const rateLimitErr = await checkSqlCourseRateLimit(user.id, userProfile?.role ?? 'instructor');
+      const rateLimitErr = await checkSqlCourseRateLimit(user.id, userRole);
       if (rateLimitErr) return rateLimitErr;
 
       const title      = clamp(body.title, 200);
@@ -1002,7 +976,7 @@ ${JSON.stringify(structure.sharedDatasetPlan?.tables ?? [], null, 2)}`;
 
     // -- Generate full SQL course from approved outline (step 2 of 2) ---
     if (action === 'generate_sql_course_full') {
-      const rateLimitErr = await checkSqlCourseRateLimit(user.id, userProfile?.role ?? 'instructor');
+      const rateLimitErr = await checkSqlCourseRateLimit(user.id, userRole);
       if (rateLimitErr) return rateLimitErr;
 
       const outline  = body.outline;
@@ -1303,7 +1277,7 @@ ${JSON.stringify(lessonInput, null, 2)}`;
 
     // -- Generate course outline from a document (step 1 of 2) ---
     if (action === 'generate_doc_course_outline') {
-      const rateLimitErr = await checkDocCourseRateLimit(user.id, userProfile?.role ?? 'instructor');
+      const rateLimitErr = await checkDocCourseRateLimit(user.id, userRole);
       if (rateLimitErr) return rateLimitErr;
 
       const sourceText = clamp(body.sourceText, 100_000);
@@ -1453,7 +1427,7 @@ ${sourceText}`;
 
     // -- Generate full course from approved document outline (step 2 of 2) ---
     if (action === 'generate_doc_course_full') {
-      const rateLimitErr = await checkDocCourseRateLimit(user.id, userProfile?.role ?? 'instructor');
+      const rateLimitErr = await checkDocCourseRateLimit(user.id, userRole);
       if (rateLimitErr) return rateLimitErr;
 
       const outline    = body.outline;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,26 +7,6 @@ const LIBRARY_ID = process.env.BUNNY_LIBRARY_ID!;
 const API_KEY    = process.env.BUNNY_API_KEY!;
 // Optional override -- if not set we auto-detect from the library info
 const CDN_HOST   = process.env.BUNNY_CDN_HOSTNAME ?? '';
-
-function serviceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-}
-
-async function verifyCreator(req: NextRequest): Promise<string | null> {
-  const auth = req.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return null;
-  const { data: { user } } = await serviceClient().auth.getUser(auth.slice(7));
-  if (!user) return null;
-
-  const { data: profile } = await serviceClient()
-    .from('students').select('role').eq('id', user.id).single();
-  if (!profile || !['instructor', 'admin'].includes(profile.role)) return null;
-
-  return user.id;
-}
 
 // Cache the CDN hostname so we only fetch library info once per process
 let cachedCdnHost = CDN_HOST;
@@ -60,8 +40,8 @@ function thumbnailUrl(cdnHost: string, guid: string, fileName: string): string |
 // GET /api/bunny?page=1&search=intro&collection=guid
 // GET /api/bunny?collections=1
 export async function GET(req: NextRequest) {
-  const userId = await verifyCreator(req);
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireRole(req, ['instructor', 'admin']);
+  if (isAuthError(auth)) return auth.error;
 
   if (!LIBRARY_ID || !API_KEY) {
     return NextResponse.json({ error: 'Bunny not configured' }, { status: 503 });

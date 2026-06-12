@@ -1,24 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminClient } from '@/lib/admin-client';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_ROLES = new Set(['admin', 'instructor', 'staff']);
-
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const supabase = adminClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
-  if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: profile } = await supabase.from('students').select('role').eq('id', user.id).single();
-  if (!profile || !ALLOWED_ROLES.has(profile.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await requireRole(req, ['admin', 'instructor', 'staff']);
+  if (isAuthError(auth)) return auth.error;
+  const { user, supabase, role } = auth;
 
   let body: any;
   try { body = await req.json(); } catch {
@@ -46,7 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .eq('id', id)
     .single();
   if (!existing) return NextResponse.json({ error: 'Cohort not found.' }, { status: 404 });
-  if (profile.role === 'instructor' && existing.created_by !== user.id) {
+  if (role === 'instructor' && existing.created_by !== user.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

@@ -4,7 +4,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { adminClient } from '@/lib/admin-client';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { blastEmail } from '@/lib/email-templates';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 
@@ -23,20 +23,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Email service not configured' }, { status: 503 });
   }
 
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const supabase = adminClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
-  if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  // Staff have view-only tracking -- they cannot send bulk messages.
-  const { data: caller } = await supabase.from('students').select('role').eq('id', user.id).single();
-  if (caller?.role === 'staff') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  // Staff have view-only tracking -- they cannot send bulk messages. Students never could
+  // send to anyone (recipients are scoped to content the caller owns), so only
+  // instructors and admins are allowed through.
+  const auth = await requireRole(req, ['instructor', 'admin']);
+  if (isAuthError(auth)) return auth.error;
+  const { user, supabase } = auth;
 
   const t = await getTenantSettings();
   const FROM = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
