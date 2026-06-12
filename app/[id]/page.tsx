@@ -323,8 +323,7 @@ export default function PublicFormPage() {
           title: course.title, description: course.description,
           isCourse: true, questions: stripSqlSolutions(course.questions ?? []), fields: course.fields ?? [],
           passmark: course.passmark, courseTimer: course.course_timer,
-          learnOutcomes: course.learn_outcomes, points_enabled: course.points_enabled,
-          points_base: course.points_base,
+          learnOutcomes: course.learn_outcomes,
           pointsSystem: { enabled: course.points_enabled ?? false, basePoints: course.points_base ?? 100 },
           postSubmission: course.post_submission,
           coverImage: course.cover_image, deadline_days: course.deadline_days,
@@ -1110,11 +1109,11 @@ export default function PublicFormPage() {
                 <div style={{ padding: '20px 20px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
                   {/* Pass mark / XP */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    {config.points_enabled ? (
+                    {config.pointsSystem?.enabled ? (
                       <>
                         <span style={{ fontSize: 12, fontWeight: 600, color: cp.muted, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>Total XP</span>
                         <span style={{ fontSize: 16, fontWeight: 800, color: accentColor }}>
-                          {questions.filter((q: any) => !q.isSection).length * (config.pointsSystem?.basePoints ?? config.points_base ?? 100)} XP
+                          {questions.filter((q: any) => !q.isSection).length * (config.pointsSystem?.basePoints ?? 100)} XP
                         </span>
                       </>
                     ) : (
