@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminClient } from '@/lib/admin-client';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { sendAssignmentReminders } from '@/lib/remind-unsubmitted';
 
 export const dynamic = 'force-dynamic';
@@ -7,21 +7,9 @@ export const dynamic = 'force-dynamic';
 // On-demand: email students who have not submitted an assignment. Instructor/admin only.
 // Used by the MCP remind_unsubmitted tool.
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const supabase = adminClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { data: profile } = await supabase.from('students').select('role').eq('id', user.id).single();
-  if (!profile || !['instructor', 'admin'].includes(profile.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await requireRole(req, ['instructor', 'admin']);
+  if (isAuthError(auth)) return auth.error;
+  const { supabase } = auth;
 
   let body: any;
   try { body = await req.json(); } catch {

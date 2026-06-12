@@ -5,29 +5,13 @@
  * with the REINDEX_SECRET -- secret never reaches the browser.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient }              from '@supabase/supabase-js';
-
-function adminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-}
+import { requireRole, isAuthError } from '@/lib/api-auth';
 
 export async function POST(req: NextRequest) {
   // 1. Verify caller is an authenticated instructor or admin
-  const token = req.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const supabase = adminClient();
-  const { data: { user } } = await supabase.auth.getUser(token);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: profile } = await supabase
-    .from('students').select('role').eq('id', user.id).single();
-  if (!profile || !['instructor', 'admin'].includes(profile.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await requireRole(req, ['instructor', 'admin']);
+  if (isAuthError(auth)) return auth.error;
+  const { user, supabase, role } = auth;
 
   // 2. Parse and validate formId
   let formId: string;
@@ -46,7 +30,7 @@ export async function POST(req: NextRequest) {
   ]);
   const content = course ?? eventRow ?? ve;
   if (!content) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (content.user_id !== user.id && profile.role !== 'admin') {
+  if (content.user_id !== user.id && role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

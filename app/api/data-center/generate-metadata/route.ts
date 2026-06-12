@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { generateJSON } from '@/lib/ai';
 import { Type } from '@google/genai';
 import { validatePublicDatasetUrl } from '@/lib/dataset-url-safety';
@@ -12,20 +12,6 @@ const MAX_ZIP_ENTRY_BYTES = 512 * 1024;
 const MAX_XLSX_SHEETS    = 10;
 const MAX_SAMPLE_CHARS    = 64 * 1024;
 
-function adminClient() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-}
-
-async function getSessionUser(req: NextRequest) {
-  const token = req.headers.get('authorization')?.slice(7);
-  if (!token) return null;
-  const { data: { user } } = await adminClient().auth.getUser(token);
-  if (!user) return null;
-  const { data: s } = await adminClient().from('students').select('role').eq('id', user.id).single();
-  const role = s?.role ?? 'student';
-  if (role !== 'admin' && role !== 'instructor') return null;
-  return { id: user.id, role };
-}
 
 async function safeFetch(url: string): Promise<ArrayBuffer> {
   const controller = new AbortController();
@@ -163,8 +149,8 @@ const schema = {
 };
 
 export async function POST(req: NextRequest) {
-  const user = await getSessionUser(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
 
   const { file_url, file_name } = await req.json();
   if (!file_url) return NextResponse.json({ error: 'file_url is required' }, { status: 400 });

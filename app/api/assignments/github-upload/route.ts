@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import path from 'path';
 
 export const dynamic = 'force-dynamic';
@@ -12,20 +12,6 @@ const ALLOWED_EXTENSIONS = new Set([
   '.zip', '.json', '.txt', '.md',
 ]);
 
-function adminClient() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-}
-
-async function getSessionUser(req: NextRequest) {
-  const token = req.headers.get('authorization')?.slice(7);
-  if (!token) return null;
-  const { data: { user } } = await adminClient().auth.getUser(token);
-  if (!user) return null;
-  const { data: s } = await adminClient().from('students').select('role').eq('id', user.id).single();
-  const role = s?.role ?? 'student';
-  if (role !== 'admin' && role !== 'instructor') return null;
-  return user;
-}
 
 function sanitizeFilename(raw: string): string {
   const base = path.basename(raw);
@@ -40,8 +26,8 @@ function sanitizeFolder(raw: string | null): string {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await getSessionUser(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
 
   const token  = process.env.GITHUB_TOKEN;
   const owner  = process.env.GITHUB_REPO_OWNER;
@@ -101,8 +87,8 @@ export async function POST(req: NextRequest) {
 // Body: { url: string } -- a raw.githubusercontent.com URL produced by POST.
 // Removes the file from the repo (working tree; git history retains it).
 export async function DELETE(req: NextRequest) {
-  const user = await getSessionUser(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
 
   const token = process.env.GITHUB_TOKEN;
   const owner = process.env.GITHUB_REPO_OWNER;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 import { Resend } from 'resend';
 import { milestoneEmail, courseResultEmail, badgeEarnedEmail } from '@/lib/email-templates';
 import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
@@ -79,13 +80,6 @@ function countCompletedRequirements(modules: any[], progress: any) {
 const adminClient = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
-async function getUser(req: NextRequest) {
-  const auth = req.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return null;
-  const { data: { user }, error } = await adminClient().auth.getUser(auth.slice(7));
-  if (error || !user) return null;
-  return user;
-}
 
 // -- GET /api/guided-project-progress?veId= ---
 export async function GET(req: NextRequest) {
@@ -102,8 +96,9 @@ export async function GET(req: NextRequest) {
   // Group member reviewing a graded group submission: return the submitter's attempt
   // (the actual graded work lives in the submitter's guided_project_attempts row).
   if (groupId && assignmentId) {
-    const user = await getUser(req);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authRes = await requireUser(req);
+    if (isAuthError(authRes)) return authRes.error;
+    const { user } = authRes;
 
     // Requester must be a member of the group.
     const { data: membership } = await supabase
@@ -137,8 +132,9 @@ export async function GET(req: NextRequest) {
 
   // Creator/admin view -- return all attempts for a VE
   if (!studentId) {
-    const user = await getUser(req);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authRes = await requireUser(req);
+    if (isAuthError(authRes)) return authRes.error;
+    const { user } = authRes;
 
     const [{ data: ve }, { data: profile }] = await Promise.all([
       supabase.from('virtual_experiences').select('user_id').eq('id', veId).single(),
@@ -192,8 +188,9 @@ export async function GET(req: NextRequest) {
   }
 
   // Student view
-  const user = await getUser(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authRes = await requireUser(req);
+  if (isAuthError(authRes)) return authRes.error;
+  const { user } = authRes;
   if (user.id !== studentId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -215,8 +212,9 @@ export async function POST(req: NextRequest) {
 
   // -- Instructor review --
   if (body.action === 'review') {
-    const user = await getUser(req);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authRes = await requireUser(req);
+    if (isAuthError(authRes)) return authRes.error;
+    const { user } = authRes;
 
     const { attemptId, score, feedback } = body;
     if (!attemptId) return NextResponse.json({ error: 'attemptId required' }, { status: 400 });
@@ -261,8 +259,9 @@ export async function POST(req: NextRequest) {
     const resolvedVeId = veId ?? body.formId;
     if (!resolvedVeId) return NextResponse.json({ error: 'veId required' }, { status: 400 });
 
-    const certUser = await getUser(req);
-    if (!certUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const certAuth = await requireUser(req);
+    if (isAuthError(certAuth)) return certAuth.error;
+    const certUser = certAuth.user;
 
     // Verify VE access before certificate issuance
     const [{ data: certVe }, { data: certStudentRow }] = await Promise.all([
@@ -397,8 +396,9 @@ export async function POST(req: NextRequest) {
 
   if (!resolvedVeId) return NextResponse.json({ error: 'veId required' }, { status: 400 });
 
-  const progressUser = await getUser(req);
-  if (!progressUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const progressAuth = await requireUser(req);
+  if (isAuthError(progressAuth)) return progressAuth.error;
+  const progressUser = progressAuth.user;
 
   // Verify VE access before saving progress
   const [{ data: ve }, { data: progressStudentRow }] = await Promise.all([
