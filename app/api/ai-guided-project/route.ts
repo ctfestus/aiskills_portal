@@ -1,35 +1,12 @@
 import { Type } from '@google/genai';
 import { generateJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { getRedis } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 
 const ALLOWED_ACTIONS = new Set(['generate', 'generate-from-data', 'improve']);
-
-function adminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-}
-
-async function authenticate(req: NextRequest): Promise<{ user: any; role: string } | NextResponse> {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: { user }, error } = await adminClient().auth.getUser(token);
-  if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: profile } = await adminClient()
-    .from('students').select('role').eq('id', user.id).single();
-  if (!profile || !['instructor', 'admin'].includes(profile.role)) {
-    return NextResponse.json({ error: 'Forbidden: instructor or admin access required' }, { status: 403 });
-  }
-
-  return { user, role: profile.role };
-}
 
 async function checkRateLimit(userId: string, role: string): Promise<NextResponse | null> {
   const redis = getRedis();
@@ -120,8 +97,8 @@ const moduleSchema = {
 };
 
 export async function POST(req: NextRequest) {
-  const auth = await authenticate(req);
-  if (auth instanceof NextResponse) return auth;
+  const auth = await requireRole(req, ['instructor', 'admin']);
+  if (isAuthError(auth)) return auth.error;
 
   const body = await req.json();
   const { action } = body;

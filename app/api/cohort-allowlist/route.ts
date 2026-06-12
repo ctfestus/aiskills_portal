@@ -7,27 +7,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { adminClient } from '@/lib/admin-client';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { cohortInviteEmail } from '@/lib/email-templates';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-
-async function getAuthUser(req: NextRequest) {
-  const header = req.headers.get('authorization');
-  if (!header?.startsWith('Bearer ')) return null;
-  const { data: { user }, error } = await adminClient().auth.getUser(header.slice(7));
-  if (error || !user) return null;
-  return user;
-}
-
-async function requireInstructor(req: NextRequest) {
-  const user = await getAuthUser(req);
-  if (!user) return null;
-  const { data: student } = await adminClient()
-    .from('students').select('role').eq('id', user.id).maybeSingle();
-  if (!student || !['admin', 'instructor'].includes(student.role)) return null;
-  return user;
-}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -52,8 +36,8 @@ export async function GET(req: NextRequest) {
 
   // --- Admin: list emails for a cohort ---
   if (cohortId) {
-    const user = await requireInstructor(req);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await requireRole(req, ['admin', 'instructor']);
+    if (isAuthError(auth)) return auth.error;
 
     const { data } = await adminClient()
       .from('cohort_allowed_emails')
@@ -68,8 +52,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await requireInstructor(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
+  const { user } = auth;
 
   let body: any;
   try { body = await req.json(); } catch {
@@ -161,8 +146,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const user = await requireInstructor(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
 
   let body: any;
   try { body = await req.json(); } catch {
