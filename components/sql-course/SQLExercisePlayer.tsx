@@ -33,6 +33,8 @@ import {
 } from '@/lib/sql-engine';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { safeEmbedUrl } from '@/lib/safe-embed-url';
+import { LessonRenderer } from '@/components/lesson/LessonRenderer';
+import type { LessonDoc } from '@/lib/lesson-doc';
 
 const vscDarkHighlight = syntaxHighlighting(HighlightStyle.define([
   { tag: tags.keyword,             color: '#569cd6', fontWeight: '600' },
@@ -531,7 +533,7 @@ export default function SQLExercisePlayer({
   const displayedRowCount = Math.min(rowCount, 100);
   const totalRowCount = visibleResult?.totalRows ?? rowCount;
   const busy       = running || checking;
-  const lesson     = question.lesson as { title?: string; body?: string; imageUrl?: string; videoUrl?: string } | undefined;
+  const lesson     = question.lesson as { title?: string; body?: string; doc?: LessonDoc; imageUrl?: string; videoUrl?: string } | undefined;
 
   useEffect(() => {
     if (saved?.query || !firstTableName) return;
@@ -747,7 +749,7 @@ export default function SQLExercisePlayer({
         {/* ══════════ MOBILE TAB BAR ══════════ */}
         {isMobile && (
           <div className="flex-shrink-0 flex items-stretch gap-1.5 px-2 pt-2">
-            {(lesson?.title || lesson?.body || lesson?.videoUrl || lesson?.imageUrl || question.question) && (
+            {(lesson?.title || lesson?.doc || lesson?.body || lesson?.videoUrl || lesson?.imageUrl || question.question) && (
               <button
                 type="button"
                 onClick={() => setMobileTab('lesson')}
@@ -832,7 +834,9 @@ export default function SQLExercisePlayer({
                   <img src={lesson.imageUrl} alt="" className="w-full object-cover" />
                 </div>
               )}
-              {lesson?.body && (
+              {lesson?.doc ? (
+                <LessonRenderer doc={lesson.doc} isDark={isDark} />
+              ) : lesson?.body ? (
                 <div
                   className={`prose max-w-none ve-lesson-body [&_blockquote]:border-l-[color:var(--lesson-accent)] [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[13px] [&_:not(pre)>code]:text-[var(--lesson-accent)] [&_:not(pre)>code]:bg-[var(--lesson-accent-bg)] [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_pre]:bg-[var(--lesson-code-bg)] [&_pre]:border-l-4 [&_pre]:border-l-[color:var(--lesson-accent)] [&_pre]:rounded-r-md [&_pre]:py-3 [&_pre]:px-4 [&_pre_code]:font-mono [&_pre_code]:text-[13px] [&_pre_code]:bg-transparent [&_pre_code]:border-0 [&_pre_code]:p-0 [&_pre_code]:text-[var(--lesson-pre-text)] ${isDark ? 'dark prose-invert prose-p:text-[#A8B5C2] prose-p:leading-[1.65] prose-headings:text-[#ACB8C5] prose-headings:font-semibold prose-strong:text-[#ACB8C5] prose-a:text-blue-400 prose-li:text-[#A8B5C2] prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:text-[#6b7a89] prose-blockquote:not-italic prose-pre:bg-transparent' : 'prose-p:text-[#555555] prose-p:leading-[1.65] prose-headings:text-[#111111] prose-headings:font-semibold prose-strong:text-[#111111] prose-li:text-[#555555] prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:text-[#888888] prose-blockquote:not-italic prose-pre:bg-transparent'}`}
                   style={{
@@ -845,12 +849,12 @@ export default function SQLExercisePlayer({
                   } as React.CSSProperties}
                   dangerouslySetInnerHTML={{ __html: renderRichText(lesson.body) }}
                 />
-              )}
+              ) : null}
 
               {/* Task / question instructions */}
               {question.question && (
                 <>
-                  {(lesson?.body || (isFirstTaskForLesson && lesson?.title)) && (
+                  {(lesson?.doc || lesson?.body || (isFirstTaskForLesson && lesson?.title)) && (
                     <hr className="my-4" style={{ borderColor: border }} />
                   )}
                   <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>

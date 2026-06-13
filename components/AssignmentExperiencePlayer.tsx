@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
+import { LessonRenderer } from '@/components/lesson/LessonRenderer';
+import type { LessonDoc } from '@/lib/lesson-doc';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
 import CodeReviewPlayer from '@/components/CodeReviewPlayer';
 import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
@@ -31,6 +33,7 @@ interface Lesson {
   id: string;
   title: string;
   body: string;
+  doc?: LessonDoc;
   videoUrl?: string;
   requirements: Requirement[];
 }
@@ -380,10 +383,14 @@ export default function AssignmentExperiencePlayer({
               )}
 
               {/* Body */}
-              {currentLes.body && (
+              {(currentLes.doc || currentLes.body) && (
                 <div className="px-6 py-5">
-                  <div className="rich-content text-sm leading-relaxed" style={{ color: isDark ? '#ccc' : '#333' }}
-                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentLes.body) }}/>
+                  {currentLes.doc ? (
+                    <LessonRenderer doc={currentLes.doc} isDark={isDark} />
+                  ) : (
+                    <div className="rich-content text-sm leading-relaxed" style={{ color: isDark ? '#ccc' : '#333' }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentLes.body) }}/>
+                  )}
                 </div>
               )}
 

@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
+import { LessonRenderer } from '@/components/lesson/LessonRenderer';
+import type { LessonDoc } from '@/lib/lesson-doc';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
 import CodeReviewPlayer from '@/components/CodeReviewPlayer';
 import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
@@ -35,6 +37,7 @@ interface Lesson {
   id: string;
   title: string;
   body: string;
+  doc?: LessonDoc;
   videoUrl?: string;
   requirements: Requirement[];
 }
@@ -827,15 +830,19 @@ export default function VirtualExperienceTaker({
                 )}
 
                 {/* Lesson body */}
-                {currentLes.body && (
+                {(currentLes.doc || currentLes.body) && (
                   <div className="px-4 sm:px-8 pt-5 sm:pt-6 pb-6">
-                    <div
-                      className={`prose prose-sm max-w-none [font-size:14.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
-                        ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900 prose-table:w-full prose-thead:border-b prose-thead:border-zinc-700 prose-th:text-zinc-300 prose-th:font-semibold prose-th:py-2 prose-th:px-3 prose-td:text-zinc-400 prose-td:py-2 prose-td:px-3 prose-tr:border-b prose-tr:border-zinc-800'
-                        : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50 prose-table:w-full prose-thead:border-b prose-thead:border-zinc-200 prose-th:text-zinc-700 prose-th:font-semibold prose-th:py-2 prose-th:px-3 prose-td:text-zinc-600 prose-td:py-2 prose-td:px-3 prose-tr:border-b prose-tr:border-zinc-100'
-                      }`}
-                      dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentLes.body) }}
-                    />
+                    {currentLes.doc ? (
+                      <LessonRenderer doc={currentLes.doc} isDark={isDark} />
+                    ) : (
+                      <div
+                        className={`prose prose-sm max-w-none [font-size:14.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark
+                          ? 'prose-invert prose-p:text-zinc-300 prose-p:leading-[1.6] prose-headings:text-white prose-headings:font-semibold prose-strong:text-white prose-a:text-blue-400 prose-li:text-zinc-300 prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-indigo-500 prose-blockquote:text-zinc-400 prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900 prose-table:w-full prose-thead:border-b prose-thead:border-zinc-700 prose-th:text-zinc-300 prose-th:font-semibold prose-th:py-2 prose-th:px-3 prose-td:text-zinc-400 prose-td:py-2 prose-td:px-3 prose-tr:border-b prose-tr:border-zinc-800'
+                          : 'prose-p:text-[#111] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#111] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-indigo-400 prose-blockquote:text-zinc-600 prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50 prose-table:w-full prose-thead:border-b prose-thead:border-zinc-200 prose-th:text-zinc-700 prose-th:font-semibold prose-th:py-2 prose-th:px-3 prose-td:text-zinc-600 prose-td:py-2 prose-td:px-3 prose-tr:border-b prose-tr:border-zinc-100'
+                        }`}
+                        dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentLes.body) }}
+                      />
+                    )}
                   </div>
                 )}
 

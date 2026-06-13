@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import type { LessonDoc } from '@/lib/lesson-doc';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight, ChevronLeft,
@@ -42,7 +43,7 @@ function SortableVEShell({ id, children }: {
   );
   return <div ref={setNodeRef} style={style}>{children({ dragHandle, isDragging })}</div>;
 }
-import { RichTextEditor } from '@/components/RichTextEditor';
+import { LessonEditor } from '@/components/lesson/LessonEditor';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
@@ -84,7 +85,8 @@ interface Requirement {
 interface Lesson {
   id: string;
   title: string;
-  body: string;
+  body: string;           // sanitized HTML; lossy fallback when `doc` is present
+  doc?: LessonDoc;        // canonical interactive-lesson content (TipTap/ProseMirror JSON)
   videoUrl?: string;
   requirements: Requirement[];
 }
@@ -1505,9 +1507,11 @@ function VirtualExperienceCreatePageInner() {
                                   {expandedModules.has(expandKey) && (
                                     <div className="px-3 pb-3 space-y-3 border-t" style={{ borderColor: C.divider }}>
                                       <div className="pt-3">
-                                        <RichTextEditor
-                                          value={les.body || ''}
-                                          onChange={html => updateLesson(mod.id, les.id, { body: html })}
+                                        <LessonEditor
+                                          key={les.id}
+                                          doc={les.doc}
+                                          bodyFallback={les.body}
+                                          onChange={({ doc, body }) => updateLesson(mod.id, les.id, { doc, body })}
                                           placeholder="Write the mission content here. What should the student read, understand, or do?"
                                         />
                                       </div>
