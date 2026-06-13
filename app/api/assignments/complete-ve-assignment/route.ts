@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 import { Resend } from 'resend';
 import { submissionConfirmEmail } from '@/lib/email-templates';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
@@ -55,18 +56,11 @@ function chooseCurrentLesson(modules: any[], existing: any, incomingModuleId?: s
   return { moduleId: incomingModuleId || null, lessonId: incomingLessonId || null };
 }
 
-async function getUser(req: NextRequest) {
-  const auth = req.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return null;
-  const supabase = adminClient();
-  const { data: { user }, error } = await supabase.auth.getUser(auth.slice(7));
-  if (error || !user) return null;
-  return user;
-}
 
 export async function POST(req: NextRequest) {
-  const user = await getUser(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authRes = await requireUser(req);
+  if (isAuthError(authRes)) return authRes.error;
+  const { user } = authRes;
 
   const body = await req.json().catch(() => ({}));
   const { assignmentId, progress, currentModuleId, currentLessonId, groupId, participants } = body;

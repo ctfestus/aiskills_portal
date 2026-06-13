@@ -5,22 +5,17 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
-async function getAuthUser(req: NextRequest) {
-  const header = req.headers.get('authorization');
-  if (!header?.startsWith('Bearer ') || header.length <= 7) return null;
-  const { data: { user }, error } = await adminClient().auth.getUser(header.slice(7));
-  if (error || !user) return null;
-  return user;
-}
 
 const PASS_MARK = 85;
 
 export async function POST(req: NextRequest) {
-  const user = await getAuthUser(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireUser(req);
+  if (isAuthError(auth)) return auth.error;
+  const { user } = auth;
 
   let body: { submissionId?: string };
   try { body = await req.json(); } catch {

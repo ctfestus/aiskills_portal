@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { confirmationEmail } from '@/lib/email-templates';
@@ -20,18 +21,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Require authenticated student
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const jwt = authHeader.slice(7);
-
-  const supabase = adminClient();
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireUser(req);
+  if (isAuthError(auth)) return auth.error;
+  const { user, supabase } = auth;
 
   // Confirm they are a student
   const { data: student } = await supabase

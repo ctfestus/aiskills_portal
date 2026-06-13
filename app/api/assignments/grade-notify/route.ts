@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { adminClient } from '@/lib/admin-client';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { assignmentGradedEmail } from '@/lib/email-templates';
 
@@ -13,29 +14,13 @@ export const dynamic = 'force-dynamic';
 
 const PASS_MARK = 85;
 
-async function getAuthUser(req: NextRequest) {
-  const header = req.headers.get('authorization');
-  if (!header?.startsWith('Bearer ') || header.length <= 7) return null;
-  const { data: { user }, error } = await adminClient().auth.getUser(header.slice(7));
-  if (error || !user) return null;
-  return user;
-}
 
 export async function POST(req: NextRequest) {
   if (!process.env.RESEND_API_KEY) return NextResponse.json({ ok: true }); // silently skip if no email configured
 
-  const user = await getAuthUser(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   // Only instructors/admins can trigger grade notifications
-  const { data: sender } = await adminClient()
-    .from('students')
-    .select('role')
-    .eq('id', user.id)
-    .maybeSingle();
-  if (sender?.role !== 'admin' && sender?.role !== 'instructor') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
 
   let body: { submissionId?: string; assignmentTitle?: string };
   try { body = await req.json(); } catch {

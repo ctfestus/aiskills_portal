@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminClient } from '@/lib/admin-client';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const token = authHeader.slice(7);
-
-  const supabase = adminClient();
-  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-  if (userError || !user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireUser(req);
+  if (isAuthError(auth)) return auth.error;
+  const { user, supabase } = auth;
+  if (!user.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   let body: { currentPassword?: string; newPassword?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid request body' }, { status: 400 }); }

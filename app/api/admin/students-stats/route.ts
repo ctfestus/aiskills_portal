@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminClient } from '@/lib/admin-client';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const supabase = adminClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.slice(7));
-  if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Org-wide per-student stats power the dashboard Students section -- staff never see it
+  // (STAFF_SECTION_IDS excludes 'students'), so this is instructor/admin only.
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
+  const { supabase } = auth;
 
   const [
     { data: completedCourses },

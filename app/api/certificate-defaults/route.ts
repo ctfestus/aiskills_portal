@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { data: { user }, error: authErr } = await adminClient().auth.getUser(authHeader.slice(7));
-  if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireUser(req);
+  if (isAuthError(auth)) return auth.error;
+  const { user } = auth;
 
   const { data } = await adminClient()
     .from('certificate_defaults')
@@ -22,13 +19,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { data: { user }, error: authErr } = await adminClient().auth.getUser(authHeader.slice(7));
-  if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireUser(req);
+  if (isAuthError(auth)) return auth.error;
+  const { user } = auth;
 
   let body: any;
   try { body = await req.json(); } catch {
