@@ -514,7 +514,7 @@ export default function SettingsPage() {
         </div>
       </nav>
 
-      <div className="max-w-2xl mx-auto px-5 md:px-6 py-8 space-y-6 pb-16">
+      <div className="max-w-3xl mx-auto px-5 md:px-6 py-8 space-y-6 pb-16">
 
         {/* Error */}
         <AnimatePresence>

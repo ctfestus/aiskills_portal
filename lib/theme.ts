@@ -16,7 +16,9 @@ export const LIGHT_C = {
   navBorder:     'rgba(0,0,0,0.07)',
   card:          'white',
   cardBorder:    'rgba(0,0,0,0.07)',
-  cardShadow:    '0 2px 12px rgba(0,0,0,0.08)',
+  // Flat cards (no shadow) in both modes -- cards separate by card-vs-page contrast,
+  // matching the dark palette below. hoverShadow kept subtle for hover lift only.
+  cardShadow:    'none',
   hoverShadow:   '0 8px 28px rgba(0,0,0,0.14)',
   green:         '#00bf63',
   lime:          '#dcfce7',
