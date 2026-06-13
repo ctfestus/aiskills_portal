@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser, isAuthError } from '@/lib/api-auth';
+import { requireUser, requireRole, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 import { sendPathNotification } from '@/lib/send-path-notification';
 
@@ -16,11 +16,20 @@ async function getSessionUser(req: NextRequest): Promise<{ id: string; email: st
   return { id: auth.user.id, email: auth.user.email.trim().toLowerCase() };
 }
 
+// Authoring (list/create/update/delete) writes through the service-role client and can
+// publish to arbitrary cohorts with notification emails -- instructors and admins only.
+// Students only ever use the get-student-paths action.
+async function getInstructorUser(req: NextRequest): Promise<{ id: string; email: string } | null> {
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth) || !auth.user.email) return null;
+  return { id: auth.user.id, email: auth.user.email.trim().toLowerCase() };
+}
+
 export const dynamic = 'force-dynamic';
 
 // GET -- instructor fetches their own learning paths
 export async function GET(req: NextRequest) {
-  const user = await getSessionUser(req);
+  const user = await getInstructorUser(req);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { data: paths, error } = await adminClient()
@@ -44,7 +53,7 @@ export async function POST(req: NextRequest) {
 
   // -- Create ---
   if (action === 'create') {
-    const user = await getSessionUser(req);
+    const user = await getInstructorUser(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { title, description, cover_image, badge_image_url, item_ids, cohort_ids, status, next_path_id } = body;
@@ -79,7 +88,7 @@ export async function POST(req: NextRequest) {
 
   // -- Update ---
   if (action === 'update') {
-    const user = await getSessionUser(req);
+    const user = await getInstructorUser(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { id, title, description, cover_image, badge_image_url, item_ids, cohort_ids, status, next_path_id } = body;
@@ -127,7 +136,7 @@ export async function POST(req: NextRequest) {
 
   // -- Delete ---
   if (action === 'delete') {
-    const user = await getSessionUser(req);
+    const user = await getInstructorUser(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { id } = body;
