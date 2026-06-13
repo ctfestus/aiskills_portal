@@ -5,12 +5,12 @@
 import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Briefcase, Copy, Download, Trash2, Plus, Edit2, BarChart3, Send, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, Copy, Download, Trash2, Plus, Edit2, BarChart3, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C, cardStyle } from '@/lib/theme';
 import { SYNC_ENABLED } from '@/lib/sync';
 import { exportContent, exportAllInSection } from '@/lib/dashboard-export';
-import { PushAllButton } from '@/components/dashboard/primitives';
+import { PushAllButton, usePushStatus, PushStatusPill } from '@/components/dashboard/primitives';
 import { ImportButton } from '@/components/dashboard/ImportButton';
 import { CardActionsMenu, type CardAction } from '@/components/dashboard/content-cards';
 
@@ -40,32 +40,10 @@ function VECard({ form, handleDuplicate, setFormToDelete, C }: {
   form: any; handleDuplicate: (f: any) => void; setFormToDelete: (id: string) => void; C: typeof LIGHT_C;
 }) {
   const router = useRouter();
-  const [pushState, setPushState] = useState<'idle'|'pushing'|'done'|'error'>('idle');
-  const [pushMsg, setPushMsg] = useState('');
+  const { state: pushState, msg: pushMsg, push } = usePushStatus('virtual_experience', form.id);
   const cfg = form.config || {};
   const color = GP_IND_COLORS[cfg.industry] || '#6366f1';
   const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
-
-  async function push() {
-    setPushState('pushing');
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/sync-push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ type: 'virtual_experience', id: form.id }),
-      });
-      const result = await res.json();
-      if (result.error) throw new Error(result.error);
-      setPushMsg(result.action === 'updated' ? 'Updated' : 'Pushed');
-      setPushState('done');
-      setTimeout(() => setPushState('idle'), 2500);
-    } catch (err: any) {
-      setPushMsg(err.message || 'Push failed');
-      setPushState('error');
-      setTimeout(() => setPushState('idle'), 3000);
-    }
-  }
 
   const actions: CardAction[] = [
     { key: 'report', label: 'Report', Icon: BarChart3, href: `/dashboard/${form.id}` },
@@ -76,21 +54,12 @@ function VECard({ form, handleDuplicate, setFormToDelete, C }: {
     { key: 'delete', label: 'Delete', Icon: Trash2, danger: true, onClick: () => setFormToDelete(form.id) },
   ];
 
-  const pillLabel = pushState === 'pushing' ? 'Pushing' : pushState === 'done' ? pushMsg : pushState === 'error' ? 'Failed' : '';
-  const pillBg = pushState === 'error' ? 'rgba(239,68,68,0.95)' : pushState === 'done' ? 'rgba(16,185,129,0.95)' : 'rgba(17,17,17,0.72)';
-
   return (
     <div className="group relative flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
       <div className="absolute top-2 right-2 z-10" onClick={e => e.stopPropagation()}>
         <CardActionsMenu form={form} actions={actions}/>
       </div>
-      {pushState !== 'idle' && (
-        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
-          style={{ background: pillBg, color: '#fff' }}>
-          {pushState === 'pushing' && <Loader2 className="w-3 h-3 animate-spin"/>}
-          {pillLabel}
-        </div>
-      )}
+      <PushStatusPill state={pushState} msg={pushMsg}/>
       {/* Thumbnail (click -> report/detail) */}
       <div role="button" tabIndex={0}
         onClick={() => router.push(`/dashboard/${form.id}`)}

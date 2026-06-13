@@ -6,9 +6,53 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Send, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Send, Plus, Edit2, Trash2, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C, cardStyle } from '@/lib/theme';
+
+export type PushState = 'idle' | 'pushing' | 'done' | 'error';
+
+// Shared sync-push state machine: drives both the kebab "Push" action and the
+// thumbnail status pill. Fires POST /api/sync-push and auto-clears the result.
+export function usePushStatus(type: string, id: string) {
+  const [state, setState] = useState<PushState>('idle');
+  const [msg, setMsg] = useState('');
+  async function push() {
+    setState('pushing');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/sync-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ type, id }),
+      });
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      setMsg(result.action === 'updated' ? 'Updated' : 'Pushed');
+      setState('done');
+      setTimeout(() => setState('idle'), 2500);
+    } catch (err: any) {
+      setMsg(err.message || 'Push failed');
+      setState('error');
+      setTimeout(() => setState('idle'), 3000);
+    }
+  }
+  return { state, msg, push };
+}
+
+// Status pill shown on a card thumbnail while/after a push. Renders nothing when idle.
+export function PushStatusPill({ state, msg, className = 'top-2 left-2' }: { state: PushState; msg: string; className?: string }) {
+  if (state === 'idle') return null;
+  const label = state === 'pushing' ? 'Pushing' : state === 'done' ? msg : 'Failed';
+  const bg = state === 'error' ? 'rgba(239,68,68,0.95)' : state === 'done' ? 'rgba(16,185,129,0.95)' : 'rgba(17,17,17,0.72)';
+  return (
+    <div className={`absolute z-10 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${className}`}
+      style={{ background: bg, color: '#fff' }}>
+      {state === 'pushing' && <Loader2 className="w-3 h-3 animate-spin"/>}
+      {label}
+    </div>
+  );
+}
 
 export function PushButton({ type, id, C }: { type: string; id: string; C: typeof LIGHT_C }) {
   const [state, setState] = useState<'idle'|'pushing'|'done'|'error'>('idle');

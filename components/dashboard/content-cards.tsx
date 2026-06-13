@@ -11,12 +11,12 @@ import { sanitizeRichText } from '@/lib/sanitize';
 import {
   Plus, FileText, BarChart3, ExternalLink, Trash2, Edit2, Share2, Check, Copy, X,
   CalendarDays, AlignLeft, ChevronDown, ChevronRight, ChevronLeft, BookOpen, MapPin,
-  Download, Briefcase, Video, Database, MoreVertical,
+  Download, Briefcase, Video, Database, MoreVertical, Send,
 } from 'lucide-react';
 import { LIGHT_C, useC, cardStyle } from '@/lib/theme';
 import { exportContent } from '@/lib/dashboard-export';
 import { SYNC_ENABLED } from '@/lib/sync';
-import { PushButton } from '@/components/dashboard/primitives';
+import { usePushStatus, PushStatusPill } from '@/components/dashboard/primitives';
 import { IsStaffContext } from '@/components/dashboard/context';
 
 // --- Social share SVGs ---
@@ -581,6 +581,8 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
   const type = getFormType(form);
   const meta = getTypeMeta(C)[type];
   const [coverError, setCoverError] = useState(false);
+  const { state: pushState, msg: pushMsg, push } = usePushStatus('course', form.id);
+  const canPush = SYNC_ENABLED && form.content_type === 'course';
 
   return (
     <motion.div
@@ -612,9 +614,11 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
               { key: 'preview', label: 'Preview', Icon: ExternalLink, href: `/${form.slug || form.id}`, external: true },
               { key: 'share', label: 'Share', Icon: Share2, share: true },
               { key: 'export', label: 'Export', Icon: Download, onClick: () => exportContent(form) },
+              ...(canPush ? [{ key: 'push', label: 'Push to platform', Icon: Send, onClick: push } as CardAction] : []),
               { key: 'delete', label: 'Delete', Icon: Trash2, danger: true, onClick: () => setFormToDelete(form.id) },
             ]}/>
         </div>
+        <PushStatusPill state={pushState} msg={pushMsg} className="top-3 left-3"/>
       </div>
 
       {/* Content */}
@@ -634,15 +638,10 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
 
 
         {/* Footer: informational only (actions live in the card's top-right menu). */}
-        {(type !== 'course' || (SYNC_ENABLED && form.content_type === 'course')) && (
-          <div className="flex items-center justify-between pt-3 border-t mt-auto" style={{ borderColor: C.divider }}>
-            {type !== 'course' ? (
-              <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: C.faint }}>
-                <BarChart3 className="w-3.5 h-3.5"/>
-                {form._response_count ?? 0} responses
-              </div>
-            ) : <div/>}
-            {SYNC_ENABLED && form.content_type === 'course' ? <PushButton type="course" id={form.id} C={C} /> : <div/>}
+        {type !== 'course' && (
+          <div className="flex items-center gap-1.5 text-xs font-medium pt-3 border-t mt-auto" style={{ borderColor: C.divider, color: C.faint }}>
+            <BarChart3 className="w-3.5 h-3.5"/>
+            {form._response_count ?? 0} responses
           </div>
         )}
       </div>
