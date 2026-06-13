@@ -5,16 +5,16 @@ import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 import {
-  BookOpen, CalendarDays, ClipboardList, Users, Megaphone,
-  Calendar, Trophy, Award, ChevronDown, LogOut,
+  BookOpen, CalendarDays, ClipboardList,
+  Award, ChevronDown, LogOut,
   Settings, User, Sun, Moon, Menu, X,
   CheckCircle, AlertCircle, AlertTriangle, ExternalLink,
   GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
-  Play, FileText, BarChart3, Video,
+  Play, FileText, BarChart3,
   Zap, RefreshCw, Briefcase, LayoutDashboard,
-  Copy, Check, Layers, Film,
+  Copy, Check,
   CreditCard, Send, Wallet, TrendingDown, CalendarCheck,
-  Medal, Database,
+  Medal,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -25,6 +25,7 @@ import { computeAccess } from '@/lib/enrollment-access';
 import CalendarSection from '@/components/StudentCalendar';
 import { LIGHT_C, useC } from '@/lib/theme';
 import { Sk, CarouselSkeleton, EmptyState, StatusBadge, ProgressBar, HoverPreviewCard, stripSqlSolutions } from '@/components/student/shared';
+import { NAV_ITEMS, NAV_GROUPS, type SectionId } from '@/components/student/nav';
 import { CoursesSection, LearningPathsSection } from '@/components/student/courses-paths';
 import { EventsSection } from '@/components/student/events';
 import { AssignmentsSection } from '@/components/student/assignments';
@@ -315,34 +316,7 @@ function ProfileMenu({ user, profile, onSignOut }: { user: any; profile: any; on
   );
 }
 
-// --- Nav items ---
-const NAV_ITEMS = [
-  { id: 'overview',          label: 'Dashboard',           Icon: LayoutDashboard },
-  { id: 'courses',           label: 'My Courses',          Icon: Film            },
-  { id: 'learning_paths',    label: 'Learning Paths',      Icon: Layers          },
-  { id: 'virtual_experiences', label: 'Virtual Experiences', Icon: Briefcase     },
-  { id: 'data_center',       label: 'Data Playground',      Icon: Database        },
-  { id: 'events',            label: 'Live Sessions',        Icon: CalendarDays    },
-  { id: 'assignments',       label: 'Assignments',         Icon: ClipboardList   },
-  { id: 'calendar',          label: 'Calendar',            Icon: CalendarCheck   },
-  { id: 'community',         label: 'Community',           Icon: Users           },
-  { id: 'announcements',     label: 'Tech Blog',            Icon: Megaphone       },
-  { id: 'schedule',          label: 'Schedule',            Icon: Calendar        },
-  { id: 'recordings',       label: 'Recordings',          Icon: Video           },
-  { id: 'leaderboard',       label: 'Leaderboard',         Icon: Trophy          },
-  { id: 'certificates',      label: 'Certificates',        Icon: Award           },
-  { id: 'badges',            label: 'Badges',              Icon: Medal           },
-  { id: 'payments',          label: 'Payments',            Icon: CreditCard      },
-] as const;
-type SectionId = typeof NAV_ITEMS[number]['id'];
-
-const NAV_GROUPS: { label: string; items: SectionId[] }[] = [
-  { label: 'Learn',       items: ['overview', 'courses', 'learning_paths', 'virtual_experiences', 'data_center'] },
-  { label: 'Activities',  items: ['events', 'assignments', 'calendar', 'schedule', 'recordings'] },
-  { label: 'Community',   items: ['community', 'announcements'] },
-  { label: 'Achievements', items: ['leaderboard', 'certificates', 'badges'] },
-  { label: 'Account',     items: ['payments'] },
-];
+// NAV_ITEMS, NAV_GROUPS, SectionId live in @/components/student/nav
 
 
 
