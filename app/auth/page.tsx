@@ -155,6 +155,9 @@ export default function AuthPage() {
     >
       <style>{`
         .auth-input::placeholder { color: ${t.inputPlaceholder} !important; }
+        /* These inputs draw their own focus indicator (border + ring) on focus,
+           so suppress the global green :focus-visible outline to avoid a double border. */
+        .auth-input:focus-visible { outline: none !important; }
       `}</style>
 
       <motion.div
