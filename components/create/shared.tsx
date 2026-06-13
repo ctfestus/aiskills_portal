@@ -1,11 +1,12 @@
 'use client';
 
-// Theme-independent editor constants and the SocialIcon presentational helper, extracted
-// verbatim from app/create/page.tsx. SOCIAL_SVGS is internal (only SocialIcon uses it).
-// NOTE: the editor's local theme (LIGHT_C/DARK_C/useC) and the themed primitives that depend
-// on it are intentionally NOT touched here -- that is a separate decision.
+// Shared create-editor building blocks, extracted verbatim from app/create/page.tsx:
+// constants (FIELD_TYPE_LABELS, SOCIAL_PLATFORMS, TEMPLATES, uid), the SocialIcon helper
+// (SOCIAL_SVGS is internal to it), the isRequired predicate, and the themed primitives
+// Toggle/SwitchToggle. The local theme itself lives in ./theme (useC).
 
 import React from 'react';
+import { useC } from '@/components/create/theme';
 import { CalendarDays, ClipboardList, HelpCircle, Video } from 'lucide-react';
 import type { FieldType, FormField, FormConfig } from '@/lib/course-schema';
 
@@ -186,3 +187,32 @@ export const SOCIAL_PLATFORMS = [
 ];
 
 export const isRequired = (f: FormField) => f.required !== false;
+
+export function Toggle({ checked, onChange, accentColor }: { checked: boolean; onChange: () => void; accentColor?: string }) {
+  const C = useC();
+  return (
+    <button type="button" onClick={onChange} className="flex items-center gap-1.5">
+      <span className="relative inline-flex w-7 h-4 rounded-full transition-colors"
+        style={{ background: checked ? (accentColor ?? C.green) : C.toggleOff }}>
+        <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${checked ? 'translate-x-3' : ''}`} />
+      </span>
+      <span className="text-[11px] font-medium" style={{ color: checked ? (accentColor ?? C.green) : C.faint }}>
+        {checked ? 'Required' : 'Optional'}
+      </span>
+    </button>
+  );
+}
+
+export function SwitchToggle({ checked, onChange, accentColor }: { checked: boolean; onChange: (v: boolean) => void; accentColor?: string }) {
+  const C = useC();
+  return (
+    <button type="button" onClick={() => onChange(!checked)} className="flex-shrink-0">
+      <span
+        className="relative inline-flex w-9 h-5 rounded-full transition-colors"
+        style={{ background: checked ? (accentColor ?? C.green) : C.toggleOff }}
+      >
+        <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${checked ? 'translate-x-4' : ''}`} />
+      </span>
+    </button>
+  );
+}

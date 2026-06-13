@@ -20,7 +20,8 @@ import type {
   FieldType, FormField, QuestionType, DownloadItem, CourseQuestion,
   Speaker, EventDetails, PostSubmission, PointsMilestone, PointsSystem, FormConfig,
 } from '@/lib/course-schema';
-import { SocialIcon, FIELD_TYPE_LABELS, TEMPLATES, SOCIAL_PLATFORMS, isRequired } from '@/components/create/shared';
+import { useC } from '@/components/create/theme';
+import { SocialIcon, FIELD_TYPE_LABELS, TEMPLATES, SOCIAL_PLATFORMS, isRequired, Toggle, SwitchToggle } from '@/components/create/shared';
 import { FormPreview } from '@/components/create/FormPreview';
 import GeneratingOverlay from '@/components/GeneratingOverlay';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -129,80 +130,10 @@ const mergeEventFields = (existingFields: FormField[] = [], generatedFields: any
   return Array.from(byName.values());
 };
 
-// --- Design tokens ---
-const LIGHT_C = {
-  page: '#f1f3f5', nav: 'rgba(255,255,255,0.97)', navBorder: 'rgba(0,0,0,0.07)',
-  card: '#ffffff', cardBorder: 'rgba(0,0,0,0.08)', cardShadow: '0 1px 4px rgba(0,0,0,0.06)',
-  green: '#00bf63', lime: '#ADEE66', cta: '#00bf63', ctaText: 'white',
-  text: '#111827', muted: '#4b5563', faint: '#9ca3af', toggleOff: '#d1d5db',
-  divider: 'rgba(0,0,0,0.07)', pill: '#eef0f3', input: '#f4f5f7', inputBorder: 'rgba(0,0,0,0.08)',
-  segmentActive: '#ffffff', segmentActiveText: '#111827',
-  groupBg: '#f4f5f7', groupBorder: 'transparent',
-};
-const DARK_C = {
-  page: '#111111', nav: 'rgba(17,17,17,0.90)', navBorder: 'rgba(255,255,255,0.07)',
-  card: '#1c1c1c', cardBorder: 'rgba(255,255,255,0.07)', cardShadow: '0 1px 4px rgba(0,0,0,0.40)',
-  green: '#ADEE66', lime: '#ADEE66', cta: '#ADEE66', ctaText: '#111',
-  text: '#f0f0f0', muted: '#aaa', faint: '#555', toggleOff: '#3a3a3a',
-  divider: 'rgba(255,255,255,0.07)', pill: '#242424', input: 'rgba(255,255,255,0.05)', inputBorder: 'rgba(255,255,255,0.08)',
-  segmentActive: '#2e2e2e', segmentActiveText: '#f0f0f0',
-  groupBg: 'rgba(255,255,255,0.04)', groupBorder: 'transparent',
-};
-function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
 // --- UI primitives ---
 const inputCls = "w-full rounded-lg px-3.5 py-2.5 text-sm outline-none transition-colors placeholder:text-[#bbb]";
 const labelCls = "block text-xs font-medium mb-2";
-
-function Toggle({ checked, onChange, accentColor }: { checked: boolean; onChange: () => void; accentColor?: string }) {
-  const C = useC();
-  return (
-    <button type="button" onClick={onChange} className="flex items-center gap-1.5">
-      <span className="relative inline-flex w-7 h-4 rounded-full transition-colors"
-        style={{ background: checked ? (accentColor ?? C.green) : C.toggleOff }}>
-        <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${checked ? 'translate-x-3' : ''}`} />
-      </span>
-      <span className="text-[11px] font-medium" style={{ color: checked ? (accentColor ?? C.green) : C.faint }}>
-        {checked ? 'Required' : 'Optional'}
-      </span>
-    </button>
-  );
-}
-
-function SwitchToggle({ checked, onChange, accentColor }: { checked: boolean; onChange: (v: boolean) => void; accentColor?: string }) {
-  const C = useC();
-  return (
-    <button type="button" onClick={() => onChange(!checked)} className="flex-shrink-0">
-      <span
-        className="relative inline-flex w-9 h-5 rounded-full transition-colors"
-        style={{ background: checked ? (accentColor ?? C.green) : C.toggleOff }}
-      >
-        <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${checked ? 'translate-x-4' : ''}`} />
-      </span>
-    </button>
-  );
-}
-
-function EditorSection({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
-  const C = useC();
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="last:border-b-0" style={{ borderBottom: `1px solid ${C.divider}` }}>
-      <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between py-3 px-1 group">
-        <span className="text-[11px] font-semibold tracking-widest uppercase transition-colors" style={{ color: C.faint }}>{title}</span>
-        {open ? <ChevronUp className="w-3.5 h-3.5" style={{ color: C.faint }} /> : <ChevronDown className="w-3.5 h-3.5" style={{ color: C.faint }} />}
-      </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden">
-            <div className="pb-4 space-y-3">{children}</div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 
 // --- Sortable Field Card ---
 interface FieldCardProps {
