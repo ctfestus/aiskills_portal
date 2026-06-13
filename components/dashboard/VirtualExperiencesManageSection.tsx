@@ -4,13 +4,14 @@
 
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Briefcase, Loader2, Copy, Download, Trash2, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, Copy, Download, Trash2, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C, cardStyle } from '@/lib/theme';
 import { SYNC_ENABLED } from '@/lib/sync';
 import { exportContent, exportAllInSection } from '@/lib/dashboard-export';
 import { PushButton, PushAllButton } from '@/components/dashboard/primitives';
 import { ImportButton } from '@/components/dashboard/ImportButton';
+import { CardActionsMenu } from '@/components/dashboard/content-cards';
 
 const GP_IND_COLORS: Record<string, string> = {
   fintech: '#6366f1', marketing: '#f59e0b', hr: '#10b981', finance: '#3b82f6',
@@ -61,7 +62,14 @@ function VEIndustryRow({ industry, forms, handleDuplicate, duplicatingId, setFor
           const color = GP_IND_COLORS[cfg.industry] || '#6366f1';
           const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
           return (
-            <div key={form.id} className="flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
+            <div key={form.id} className="relative flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
+              <div className="absolute top-2 right-2 z-10">
+                <CardActionsMenu form={form} actions={[
+                  { key: 'duplicate', label: 'Duplicate', Icon: Copy, onClick: () => handleDuplicate(form) },
+                  { key: 'export', label: 'Export', Icon: Download, onClick: () => exportContent(form) },
+                  { key: 'delete', label: 'Delete', Icon: Trash2, danger: true, onClick: () => setFormToDelete(form.id) },
+                ]}/>
+              </div>
               {cfg.coverImage
                 ? <img src={cfg.coverImage} alt="" loading="lazy" className="w-full h-28 object-cover" />
                 : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${color}18` }}>
@@ -88,24 +96,7 @@ function VEIndustryRow({ industry, forms, handleDuplicate, duplicatingId, setFor
                     style={{ background: `${color}18`, color }}>
                     Edit
                   </Link>
-                  <button onClick={() => handleDuplicate(form)} disabled={!!duplicatingId}
-                    className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80 disabled:opacity-50"
-                    style={{ background: C.pill, color: C.muted }} title="Duplicate">
-                    {duplicatingId === form.id
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                  <button onClick={() => exportContent(form)}
-                    className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
-                    style={{ background: C.pill, color: C.muted }} title="Export">
-                    <Download className="w-3.5 h-3.5" />
-                  </button>
                   {SYNC_ENABLED && <PushButton type="virtual_experience" id={form.id} C={C} />}
-                  <button onClick={() => setFormToDelete(form.id)}
-                    className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
-                    style={{ background: C.deleteBg, color: C.deleteText }} title="Delete">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
                 </div>
               </div>
             </div>

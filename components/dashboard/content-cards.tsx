@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useContext } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import Link from 'next/link';
@@ -11,7 +11,7 @@ import { sanitizeRichText } from '@/lib/sanitize';
 import {
   Plus, FileText, BarChart3, ExternalLink, Trash2, Edit2, Share2, Check, Copy, X,
   CalendarDays, AlignLeft, ChevronDown, ChevronRight, ChevronLeft, BookOpen, MapPin,
-  Download, Briefcase, Video, Database,
+  Download, Briefcase, Video, Database, MoreVertical,
 } from 'lucide-react';
 import { LIGHT_C, useC, cardStyle } from '@/lib/theme';
 import { exportContent } from '@/lib/dashboard-export';
@@ -161,25 +161,85 @@ export function CreateCourseMenu({ C }: { C: any }) {
   );
 }
 
-function ShareButton({ form, shareMenuOpen, setShareMenuOpen }: { form: any; shareMenuOpen: string | null; setShareMenuOpen: (id: string | null) => void }) {
+// --- Card actions kebab (consolidates per-card actions into one top-right menu) ---
+export type CardAction = {
+  key: string; label: string; Icon: any; danger?: boolean;
+  href?: string; external?: boolean; onClick?: () => void; share?: boolean;
+};
+
+// One "more options" (vertical-dots) menu for a content card. Renders the dropdown in a portal
+// so it is never clipped by the card's overflow-hidden thumbnail. `share` actions reuse the
+// existing ShareMenu popover (shareMenuOpen/setShareMenuOpen only needed if a share action exists).
+export function CardActionsMenu({ form, actions, shareMenuOpen, setShareMenuOpen }: {
+  form: any; actions: CardAction[]; shareMenuOpen?: string | null; setShareMenuOpen?: (id: string | null) => void;
+}) {
   const C = useC();
   const btnRef = useRef<HTMLButtonElement>(null);
-  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
-  const isOpen = shareMenuOpen === form.id;
-  const handleClick = useCallback(() => {
-    if (isOpen) { setShareMenuOpen(null); } else { if (btnRef.current) setTriggerRect(btnRef.current.getBoundingClientRect()); setShareMenuOpen(form.id); }
-  }, [isOpen, form.id, setShareMenuOpen]);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [shareRect, setShareRect] = useState<DOMRect | null>(null);
+  const MENU_W = 188;
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    let left = r.right - MENU_W;
+    if (left < 8) left = 8;
+    if (left + MENU_W > window.innerWidth - 8) left = window.innerWidth - MENU_W - 8;
+    setPos({ top: r.bottom + 6, left });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onDown = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node) && !btnRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('scroll', close, true);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('scroll', close, true); };
+  }, [open]);
+
+  const run = (a: CardAction) => {
+    setOpen(false);
+    if (a.share) {
+      if (btnRef.current && setShareMenuOpen) { setShareRect(btnRef.current.getBoundingClientRect()); setShareMenuOpen(form.id); }
+      return;
+    }
+    a.onClick?.();
+  };
+
+  const itemCls = "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-left transition-colors ff-hover";
+
   return (
-    <div>
-      <button ref={btnRef} onClick={handleClick}
-        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-colors text-xs font-medium"
-        style={{ background: C.pill, color: C.muted }}>
-        <Share2 className="w-3 h-3"/> Share
+    <>
+      <button ref={btnRef} type="button" title="More options" aria-label="More options"
+        onClick={e => { e.stopPropagation(); e.preventDefault(); setOpen(o => !o); }}
+        className="p-1.5 rounded-full backdrop-blur-md transition-all hover:scale-110"
+        style={{ background: C.overlayBtn, color: C.overlayText }}>
+        <MoreVertical className="w-3.5 h-3.5"/>
       </button>
+      {open && pos && createPortal(
+        <div ref={menuRef} onClick={e => e.stopPropagation()}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: MENU_W, zIndex: 9999, background: C.card, border: `1px solid ${C.cardBorder}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.14)', overflow: 'hidden', padding: 4 }}>
+          {actions.map(a => {
+            const inner = <><a.Icon className="w-3.5 h-3.5 flex-shrink-0"/><span>{a.label}</span></>;
+            const color = a.danger ? '#ef4444' : C.text;
+            if (a.href) {
+              return a.external
+                ? <a key={a.key} href={a.href} target="_blank" rel="noreferrer" onClick={() => setOpen(false)} className={itemCls} style={{ color }}>{inner}</a>
+                : <Link key={a.key} href={a.href} onClick={() => setOpen(false)} className={itemCls} style={{ color }}>{inner}</Link>;
+            }
+            return <button key={a.key} type="button" onClick={() => run(a)} className={itemCls} style={{ color }}>{inner}</button>;
+          })}
+        </div>,
+        document.body
+      )}
       <AnimatePresence>
-        {isOpen && triggerRect && <ShareMenu form={form} triggerRect={triggerRect} onClose={() => setShareMenuOpen(null)}/>}
+        {shareMenuOpen === form.id && shareRect && <ShareMenu form={form} triggerRect={shareRect} onClose={() => setShareMenuOpen?.(null)}/>}
       </AnimatePresence>
-    </div>
+    </>
   );
 }
 
@@ -544,18 +604,16 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
               <meta.Icon className="w-10 h-10 opacity-20" style={{ color: C.green }}/>
             </div>
         }
-        {/* Hover actions */}
-        <div className="absolute top-3 right-3 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <Link href={`/dashboard/${form.id}?tab=settings`} onClick={e => e.stopPropagation()}
-            className="p-1.5 rounded-full backdrop-blur-md transition-all hover:scale-110"
-            style={{ background: C.overlayBtn, color: C.overlayText }} title="Edit">
-            <Edit2 className="w-3.5 h-3.5"/>
-          </Link>
-          <button onClick={e => { e.stopPropagation(); setFormToDelete(form.id); }}
-            className="p-1.5 rounded-full backdrop-blur-md transition-all hover:scale-110"
-            style={{ background: C.overlayBtn, color: '#ef4444' }} title="Delete">
-            <Trash2 className="w-3.5 h-3.5"/>
-          </button>
+        {/* Actions menu */}
+        <div className="absolute top-3 right-3" onClick={e => e.stopPropagation()}>
+          <CardActionsMenu form={form} shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen}
+            actions={[
+              { key: 'edit', label: 'Edit', Icon: Edit2, href: `/dashboard/${form.id}?tab=settings` },
+              { key: 'preview', label: 'Preview', Icon: ExternalLink, href: `/${form.slug || form.id}`, external: true },
+              { key: 'share', label: 'Share', Icon: Share2, share: true },
+              { key: 'export', label: 'Export', Icon: Download, onClick: () => exportContent(form) },
+              { key: 'delete', label: 'Delete', Icon: Trash2, danger: true, onClick: () => setFormToDelete(form.id) },
+            ]}/>
         </div>
       </div>
 
@@ -575,31 +633,18 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
         )}
 
 
-        <div className="flex items-center justify-between pt-3 border-t mt-auto" style={{ borderColor: C.divider }}>
-          {type !== 'course' && (
-            <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: C.faint }}>
-              <BarChart3 className="w-3.5 h-3.5"/>
-              {form._response_count ?? 0} responses
-            </div>
-          )}
-          {type === 'course' && <div/>}
-          <div className="flex items-center gap-2">
-            <ShareButton form={form} shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen}/>
-            <button onClick={() => exportContent(form)} title="Export"
-              className="p-1.5 rounded-lg transition-colors hover:opacity-70"
-              style={{ background: C.pill, color: C.muted }}>
-              <Download className="w-3.5 h-3.5"/>
-            </button>
-            {SYNC_ENABLED && form.content_type === 'course' && (
-              <PushButton type="course" id={form.id} C={C} />
-            )}
-            <a href={`/${form.slug || form.id}`} target="_blank" rel="noreferrer"
-              className="p-1.5 rounded-lg transition-colors hover:opacity-70"
-              style={{ background: C.pill, color: C.muted }} title="View live">
-              <ExternalLink className="w-3.5 h-3.5"/>
-            </a>
+        {/* Footer: informational only (actions live in the card's top-right menu). */}
+        {(type !== 'course' || (SYNC_ENABLED && form.content_type === 'course')) && (
+          <div className="flex items-center justify-between pt-3 border-t mt-auto" style={{ borderColor: C.divider }}>
+            {type !== 'course' ? (
+              <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: C.faint }}>
+                <BarChart3 className="w-3.5 h-3.5"/>
+                {form._response_count ?? 0} responses
+              </div>
+            ) : <div/>}
+            {SYNC_ENABLED && form.content_type === 'course' ? <PushButton type="course" id={form.id} C={C} /> : <div/>}
           </div>
-        </div>
+        )}
       </div>
     </motion.div>
   );
@@ -714,10 +759,20 @@ export function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen
         transition={{ delay: index * 0.07, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       >
         {/* Card with padding -- padding IS the whitespace around the rounded thumbnail. Flat at rest (border = the separator), soft lift on hover. */}
-        <div className="rounded-2xl p-4 flex gap-4 group transition-shadow duration-200"
+        <div className="relative rounded-2xl p-4 flex gap-4 group transition-shadow duration-200"
           style={{ ...cardStyle(C) }}
           onMouseEnter={e => { e.currentTarget.style.boxShadow = C.hoverShadow; }}
           onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; }}>
+          <div className="absolute top-3 right-3 z-10">
+            <CardActionsMenu form={form} shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen}
+              actions={[
+                { key: 'edit', label: 'Edit', Icon: Edit2, href: `/dashboard/${form.id}?tab=settings` },
+                { key: 'preview', label: 'Preview', Icon: ExternalLink, href: `/${form.slug || form.id}`, external: true },
+                { key: 'share', label: 'Share', Icon: Share2, share: true },
+                { key: 'export', label: 'Export', Icon: Download, onClick: () => exportContent(form) },
+                ...(!isStaff ? [{ key: 'delete', label: 'Delete', Icon: Trash2, danger: true, onClick: () => setFormToDelete(form.id) }] : []),
+              ]}/>
+          </div>
 
           {/* Rounded square cover image -- 180×180 */}
           <div className="relative w-[180px] h-[180px] rounded-2xl overflow-hidden flex-shrink-0 group/img"
@@ -735,20 +790,6 @@ export function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen
                   }
                 </div>
             }
-            {/* Edit/Delete overlay on hover */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ background: 'rgba(0,0,0,0.45)' }}>
-              <Link href={`/dashboard/${form.id}?tab=settings`}
-                className="p-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.9)', color: '#111' }} title="Edit">
-                <Edit2 className="w-3.5 h-3.5"/>
-              </Link>
-              {!isStaff && (
-                <button onClick={() => setFormToDelete(form.id)}
-                  className="p-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.9)', color: '#ef4444' }} title="Delete">
-                  <Trash2 className="w-3.5 h-3.5"/>
-                </button>
-              )}
-            </div>
           </div>
 
           {/* Text content */}
@@ -795,25 +836,12 @@ export function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen
                 dangerouslySetInnerHTML={{ __html: sanitizeRichText(form.config.description) }} />
             )}
 
-            {/* Footer actions */}
+            {/* Footer: responses + Insights (actions live in the card's top-right menu) */}
             <div className="flex items-center justify-between pt-2 border-t mt-1" style={{ borderColor: C.divider }}>
               <span className="text-xs flex items-center gap-1" style={{ color: C.faint }}>
                 <BarChart3 className="w-3 h-3"/>{form._response_count ?? 0} responses
               </span>
-              <div className="flex items-center gap-2">
-                <Link href={`/dashboard/${form.id}`} className="text-xs font-medium hover:opacity-60 transition-opacity" style={{ color: C.green }}>Insights</Link>
-                <ShareButton form={form} shareMenuOpen={shareMenuOpen} setShareMenuOpen={setShareMenuOpen}/>
-                <button onClick={() => exportContent(form)} title="Export"
-                  className="p-1 rounded-md hover:opacity-60 transition-opacity"
-                  style={{ background: C.pill, color: C.muted }}>
-                  <Download className="w-3.5 h-3.5"/>
-                </button>
-                <a href={`/${form.slug || form.id}`} target="_blank" rel="noreferrer"
-                  className="p-1 rounded-md hover:opacity-60 transition-opacity"
-                  style={{ background: C.pill, color: C.muted }}>
-                  <ExternalLink className="w-3.5 h-3.5"/>
-                </a>
-              </div>
+              <Link href={`/dashboard/${form.id}`} className="text-xs font-medium hover:opacity-60 transition-opacity" style={{ color: C.green }}>Insights</Link>
             </div>
           </div>
         </div>
