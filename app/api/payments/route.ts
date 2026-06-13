@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
@@ -26,19 +27,14 @@ function adminClient() {
 }
 
 async function getSessionUser(req: NextRequest): Promise<{ id: string; email: string; role: string } | null> {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const token = authHeader.slice(7);
-  const { data: { user } } = await adminClient().auth.getUser(token);
-  if (!user?.email) return null;
-
-  const { data: student } = await adminClient()
+  const auth = await requireUser(req);
+  if (isAuthError(auth) || !auth.user.email) return null;
+  const { data: student } = await auth.supabase
     .from('students')
     .select('role')
-    .eq('id', user.id)
+    .eq('id', auth.user.id)
     .single();
-
-  return { id: user.id, email: user.email.trim().toLowerCase(), role: student?.role ?? 'student' };
+  return { id: auth.user.id, email: auth.user.email.trim().toLowerCase(), role: student?.role ?? 'student' };
 }
 
 // -- GET --

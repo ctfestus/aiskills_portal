@@ -1,7 +1,7 @@
 import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateStream } from '@/lib/ai';
-import { adminClient } from '@/lib/admin-client';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // allow up to 60s for streaming LLM responses
@@ -10,16 +10,8 @@ const MAX_PROMPT_LENGTH = 500;
 
 export async function POST(req: NextRequest) {
   // -- Auth ---
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const jwt = authHeader.slice(7);
-
-  const { data: { user }, error: authError } = await adminClient().auth.getUser(jwt);
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const auth = await requireUser(req);
+  if (isAuthError(auth)) return auth.error;
 
   // -- Parse & validate body ---
   let body: any;

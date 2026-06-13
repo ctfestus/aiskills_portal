@@ -11,7 +11,7 @@ function userClient(jwt: string) {
   );
 }
 
-// Admin client used only for auth.getUser() and cross-student data queries.
+// Admin client used only for cross-student data queries (auth is requireUser).
 function adminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

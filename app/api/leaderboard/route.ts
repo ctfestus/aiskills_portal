@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
@@ -11,11 +12,8 @@ function adminClient() {
 }
 
 async function getSessionUser(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const token = authHeader.slice(7);
-  const { data: { user } } = await adminClient().auth.getUser(token);
-  return user ?? null;
+  const auth = await requireUser(req);
+  return isAuthError(auth) ? null : auth.user;
 }
 
 // GET /api/leaderboard?cohort_id=...
