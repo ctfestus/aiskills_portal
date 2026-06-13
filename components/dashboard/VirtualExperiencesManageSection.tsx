@@ -4,7 +4,8 @@
 
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, Briefcase, Copy, Download, Trash2, Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ChevronLeft, ChevronRight, Briefcase, Copy, Download, Trash2, Plus, Edit2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C, cardStyle } from '@/lib/theme';
 import { SYNC_ENABLED } from '@/lib/sync';
@@ -34,10 +35,11 @@ function groupVEsByIndustry(forms: any[]): [string, any[]][] {
 }
 
 // One industry group rendered as a titled carousel of VE management cards
-function VEIndustryRow({ industry, forms, handleDuplicate, duplicatingId, setFormToDelete, C }: {
-  industry: string; forms: any[]; handleDuplicate: (f: any) => void; duplicatingId: string | null; setFormToDelete: (id: string) => void; C: typeof LIGHT_C;
+function VEIndustryRow({ industry, forms, handleDuplicate, setFormToDelete, C }: {
+  industry: string; forms: any[]; handleDuplicate: (f: any) => void; setFormToDelete: (id: string) => void; C: typeof LIGHT_C;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
   const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 340, behavior: 'smooth' });
   return (
     <section className="rounded-2xl p-5 sm:p-6 mb-6" style={{ ...cardStyle(C) }}>
@@ -62,19 +64,26 @@ function VEIndustryRow({ industry, forms, handleDuplicate, duplicatingId, setFor
           const color = GP_IND_COLORS[cfg.industry] || '#6366f1';
           const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
           return (
-            <div key={form.id} className="relative flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
-              <div className="absolute top-2 right-2 z-10">
+            <div key={form.id} className="group relative flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
+              <div className="absolute top-2 right-2 z-10" onClick={e => e.stopPropagation()}>
                 <CardActionsMenu form={form} actions={[
+                  { key: 'edit', label: 'Edit', Icon: Edit2, href: `/create/guided-project?id=${form.id}` },
                   { key: 'duplicate', label: 'Duplicate', Icon: Copy, onClick: () => handleDuplicate(form) },
                   { key: 'export', label: 'Export', Icon: Download, onClick: () => exportContent(form) },
                   { key: 'delete', label: 'Delete', Icon: Trash2, danger: true, onClick: () => setFormToDelete(form.id) },
                 ]}/>
               </div>
-              {cfg.coverImage
-                ? <img src={cfg.coverImage} alt="" loading="lazy" className="w-full h-28 object-cover" />
-                : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${color}18` }}>
-                    <Briefcase className="w-8 h-8" style={{ color }} />
-                  </div>}
+              {/* Thumbnail (click -> report/detail) */}
+              <div role="button" tabIndex={0}
+                onClick={() => router.push(`/dashboard/${form.id}`)}
+                onKeyDown={e => e.key === 'Enter' && router.push(`/dashboard/${form.id}`)}
+                className="cursor-pointer">
+                {cfg.coverImage
+                  ? <img src={cfg.coverImage} alt="" loading="lazy" className="w-full h-28 object-cover group-hover:opacity-90 transition-opacity" />
+                  : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${color}18` }}>
+                      <Briefcase className="w-8 h-8" style={{ color }} />
+                    </div>}
+              </div>
               <div className="p-4 space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: `${color}18`, color }}>{cfg.industry || 'Project'}</span>
@@ -83,21 +92,15 @@ function VEIndustryRow({ industry, forms, handleDuplicate, duplicatingId, setFor
                     <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>Draft</span>
                   )}
                 </div>
-                <p className="font-semibold text-sm" style={{ color: C.text }}>{form.title}</p>
+                <Link href={`/dashboard/${form.id}`} className="block">
+                  <p className="font-semibold text-sm hover:opacity-70 transition-opacity" style={{ color: C.text }}>{form.title}</p>
+                </Link>
                 <p className="text-xs" style={{ color: C.faint }}>{cfg.company} · {totalLessons} lesson{totalLessons !== 1 ? 's' : ''}</p>
-                <div className="flex gap-2 pt-1">
-                  <Link href={`/dashboard/${form.id}`}
-                    className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl border transition-all hover:opacity-70"
-                    style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
-                    Report
-                  </Link>
-                  <Link href={`/create/guided-project?id=${form.id}`}
-                    className="flex-1 text-center text-xs font-medium py-1.5 rounded-xl transition-all hover:opacity-80"
-                    style={{ background: `${color}18`, color }}>
-                    Edit
-                  </Link>
-                  {SYNC_ENABLED && <PushButton type="virtual_experience" id={form.id} C={C} />}
-                </div>
+                {SYNC_ENABLED && (
+                  <div className="pt-1">
+                    <PushButton type="virtual_experience" id={form.id} C={C} />
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -227,7 +230,7 @@ export function VirtualExperiencesManageSection({ C, forms, setFormToDelete, onD
       </div>
       {groupVEsByIndustry(gpForms).map(([industry, list]) => (
         <VEIndustryRow key={industry} industry={industry} forms={list}
-          handleDuplicate={handleDuplicate} duplicatingId={duplicatingId} setFormToDelete={setFormToDelete} C={C}/>
+          handleDuplicate={handleDuplicate} setFormToDelete={setFormToDelete} C={C}/>
       ))}
     </div>
   );
