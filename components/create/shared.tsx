@@ -1,11 +1,11 @@
 'use client';
 
-// Theme-independent editor constants and the SocialIcon presentational helper, extracted
-// verbatim from app/create/page.tsx. SOCIAL_SVGS is internal (only SocialIcon uses it).
-// NOTE: the editor's local theme (LIGHT_C/DARK_C/useC) and the themed primitives that depend
-// on it are intentionally NOT touched here -- that is a separate decision.
+// Shared create-editor building blocks, extracted verbatim from app/create/page.tsx:
+// constants (FIELD_TYPE_LABELS, SOCIAL_PLATFORMS, TEMPLATES, uid), the SocialIcon helper
+// (SOCIAL_SVGS is internal to it), the isRequired predicate, and the themed primitives
+// Toggle/SwitchToggle. The local theme itself lives in ./theme (useC).
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useC } from '@/components/create/theme';
 import { CalendarDays, ClipboardList, HelpCircle, Video } from 'lucide-react';
 import type { FieldType, FormField, FormConfig } from '@/lib/course-schema';
