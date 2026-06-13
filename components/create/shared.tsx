@@ -216,3 +216,7 @@ export function SwitchToggle({ checked, onChange, accentColor }: { checked: bool
     </button>
   );
 }
+
+// --- UI primitives ---
+export const inputCls = "w-full rounded-lg px-3.5 py-2.5 text-sm outline-none transition-colors placeholder:text-[#bbb]";
+export const labelCls = "block text-xs font-medium mb-2";
