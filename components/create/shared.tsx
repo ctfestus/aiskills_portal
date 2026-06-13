@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { CalendarDays, ClipboardList, HelpCircle, Video } from 'lucide-react';
-import type { FieldType, FormConfig } from '@/lib/course-schema';
+import type { FieldType, FormField, FormConfig } from '@/lib/course-schema';
 
 const SOCIAL_SVGS: Record<string, React.ReactNode> = {
   linkedin: (
@@ -173,3 +173,16 @@ export const TEMPLATES: { key: string; label: string; description: string; icon:
     },
   },
 ];
+
+export const SOCIAL_PLATFORMS = [
+  { id: 'linkedin',  name: 'LinkedIn',    placeholder: 'linkedin.com/in/username' },
+  { id: 'twitter',   name: 'X (Twitter)', placeholder: 'x.com/username'           },
+  { id: 'instagram', name: 'Instagram',   placeholder: 'instagram.com/username'   },
+  { id: 'facebook',  name: 'Facebook',    placeholder: 'facebook.com/username'    },
+  { id: 'tiktok',    name: 'TikTok',      placeholder: 'tiktok.com/@username'     },
+  { id: 'youtube',   name: 'YouTube',     placeholder: 'youtube.com/@channel'     },
+  { id: 'github',    name: 'GitHub',      placeholder: 'github.com/username'      },
+  { id: 'website',   name: 'Website',     placeholder: 'https://yourwebsite.com' },
+];
+
+export const isRequired = (f: FormField) => f.required !== false;
