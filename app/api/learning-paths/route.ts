@@ -19,9 +19,10 @@ async function getSessionUser(req: NextRequest): Promise<{ id: string; email: st
 // Authoring (list/create/update/delete) writes through the service-role client and can
 // publish to arbitrary cohorts with notification emails -- instructors and admins only.
 // Students only ever use the get-student-paths action.
-async function getInstructorUser(req: NextRequest): Promise<{ id: string; email: string } | null> {
+async function getInstructorUser(req: NextRequest): Promise<{ id: string; email: string } | NextResponse> {
   const auth = await requireRole(req, ['admin', 'instructor']);
-  if (isAuthError(auth) || !auth.user.email) return null;
+  if (isAuthError(auth)) return auth.error; // 401 unauthenticated, 403 wrong role
+  if (!auth.user.email) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return { id: auth.user.id, email: auth.user.email.trim().toLowerCase() };
 }
 
@@ -30,7 +31,7 @@ export const dynamic = 'force-dynamic';
 // GET -- instructor fetches their own learning paths
 export async function GET(req: NextRequest) {
   const user = await getInstructorUser(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (user instanceof NextResponse) return user;
 
   const { data: paths, error } = await adminClient()
     .from('learning_paths')
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
   // -- Create ---
   if (action === 'create') {
     const user = await getInstructorUser(req);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (user instanceof NextResponse) return user;
 
     const { title, description, cover_image, badge_image_url, item_ids, cohort_ids, status, next_path_id } = body;
     if (!title?.trim()) return NextResponse.json({ error: 'title is required' }, { status: 400 });
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest) {
   // -- Update ---
   if (action === 'update') {
     const user = await getInstructorUser(req);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (user instanceof NextResponse) return user;
 
     const { id, title, description, cover_image, badge_image_url, item_ids, cohort_ids, status, next_path_id } = body;
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
@@ -137,7 +138,7 @@ export async function POST(req: NextRequest) {
   // -- Delete ---
   if (action === 'delete') {
     const user = await getInstructorUser(req);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (user instanceof NextResponse) return user;
 
     const { id } = body;
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
