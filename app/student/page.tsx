@@ -2,32 +2,28 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
-import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 import {
   BookOpen, CalendarDays, ClipboardList, Users, Megaphone,
   Calendar, Trophy, Award, ChevronDown, LogOut,
   Settings, User, Sun, Moon, Menu, X,
-  CheckCircle, Clock, AlertCircle, AlertTriangle, Star, ExternalLink,
+  CheckCircle, AlertCircle, AlertTriangle, Star, ExternalLink,
   GraduationCap, TrendingUp, Loader2, ChevronRight, ChevronLeft,
-  Play, FileText, BarChart3, Plus, ArrowLeft, Upload, Video,
-  ThumbsUp, Bookmark, MapPin, Zap, RefreshCw, Briefcase, Search, LayoutDashboard,
-  Copy, Check, Layers, Repeat, Film,
-  CreditCard, XCircle, Send, Wallet, TrendingDown, CalendarCheck,
-  Lock, Flame, Medal, Download, Database,
+  Play, FileText, BarChart3, ArrowLeft, Video,
+  ThumbsUp, Bookmark, Zap, RefreshCw, Briefcase, LayoutDashboard,
+  Copy, Check, Layers, Film,
+  CreditCard, Send, Wallet, TrendingDown, CalendarCheck,
+  Lock, Medal, Download, Database,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
 import { sanitizeRichText, renderAnnouncementContent } from '@/lib/sanitize';
-import { getToolIcon } from '@/lib/tool-icons';
-import { RichTextEditor } from '@/components/RichTextEditor';
 import { computeAccess } from '@/lib/enrollment-access';
 import CalendarSection from '@/components/StudentCalendar';
 import { DataPlaygroundGrid } from '@/components/data-playground/DataPlayground';
-import { buildGoogleCalUrl, buildOutlookCalUrl, buildYahooCalUrl, downloadIcs, buildCalendarFields, isRecurring } from '@/lib/calendar-links';
 import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 import { Sk, CarouselSkeleton, EmptyState, StatusBadge, ProgressBar, HoverPreviewCard, stripSqlSolutions } from '@/components/student/shared';
 import { CoursesSection, LearningPathsSection } from '@/components/student/courses-paths';
