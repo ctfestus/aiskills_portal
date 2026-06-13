@@ -1,0 +1,892 @@
+'use client';
+
+// Courses + Learning Paths sections, extracted verbatim from app/student/page.tsx.
+// Only the two section components are exported; the rest are file-internal.
+
+import { useEffect, useState, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { createPortal } from 'react-dom';
+import Link from 'next/link';
+import {
+  BookOpen, Award, X, CheckCircle, ChevronRight, ChevronLeft, Play, FileText, Search, Layers, Lock,
+} from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { useTheme } from '@/components/ThemeProvider';
+import { sanitizeRichText } from '@/lib/sanitize';
+import { getToolIcon } from '@/lib/tool-icons';
+import { computeAccess } from '@/lib/enrollment-access';
+import { LIGHT_C } from '@/lib/theme';
+import { CarouselSkeleton, EmptyState, ProgressBar, HoverPreviewCard, stripSqlSolutions } from '@/components/student/shared';
+
+// --- Course card ---
+function CourseCard({ course, deadline, C, onDetails, hideCategory }: { course: any; deadline?: Date | null; C: typeof LIGHT_C; onDetails: () => void; hideCategory?: boolean }) {
+  const questions = course.form?.questions ?? course.config?.questions ?? course.form?.config?.questions ?? [];
+  const countableQ = questions.filter((q: any) => !q.isSection);
+  const answeredQ = countableQ.filter((q: any) => !!(course.answers ?? {})[q.id]).length;
+  const totalQ = countableQ.length;
+  const currentIdx = course.current_question_index ?? 0;
+  const completed = !!course.completed_at;
+  const passed = course.passed === true;
+  const progress = completed ? 100 : (totalQ > 0 ? Math.round((answeredQ / totalQ) * 100) : 0);
+  const score = course.score ?? 0;
+  const coverImage = course.config?.coverImage ?? course.form?.config?.coverImage;
+  const description: string = course.form?.config?.description ?? course.form?.description ?? '';
+  const category: string | null = course.form?.category ?? null;
+  const categoryIcon = category ? getToolIcon(category) : null;
+  const certId: string | null = course.cert_id ?? null;
+  const [imgErr, setImgErr] = useState(false);
+
+  const courseUrl = `/${course.slug || course.form?.slug || course.form_id}`;
+  const actionHref = courseUrl;
+  const actionLabel = completed ? (passed ? 'Review' : 'Retake') : currentIdx > 0 ? 'Continue' : 'Start';
+
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
+  const daysLeft = deadline && !completed
+    ? Math.ceil((deadline.getTime() - nowMs) / 86400000)
+    : null;
+  const deadlineLabel = daysLeft === null ? null
+    : daysLeft < 0  ? 'Overdue'
+    : daysLeft === 0 ? 'Due today'
+    : `${daysLeft}d left`;
+  const deadlineColor = daysLeft === null ? null
+    : daysLeft < 0  ? '#ef4444'
+    : daysLeft <= 3 ? '#f59e0b'
+    : '#6b7280';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl overflow-hidden flex flex-col"
+      style={{ background: C.card, minHeight: 500, boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}
+    >
+      {/* Cover -- clicking opens the detail pane */}
+      <div className="p-3 cursor-pointer" onClick={onDetails}>
+        <div className="relative h-44 overflow-hidden rounded-xl group">
+          {coverImage && !imgErr
+            ? <img src={coverImage} alt={course.form?.title} onError={() => setImgErr(true)}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
+            : <div className="w-full h-full flex items-center justify-center">
+                <BookOpen className="w-10 h-10 opacity-30" style={{ color: C.green }}/>
+              </div>
+          }
+          {completed && (
+            <div className="absolute top-2 right-2">
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
+                style={{ background: passed ? '#f0fdf4' : '#fef2f2', color: passed ? '#16a34a' : '#dc2626' }}>
+                {passed ? 'Passed' : 'Not passed'}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-5 flex flex-col flex-1">
+        {/* Category tag */}
+        {category && !hideCategory && (
+          <div className="self-start inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-3"
+            style={{ background: C.pill }}>
+            {categoryIcon && <img src={categoryIcon} alt={category} className="w-3.5 h-3.5 object-contain flex-shrink-0" />}
+            <span className="text-[11px] font-semibold" style={{ color: C.muted }}>{category}</span>
+          </div>
+        )}
+
+        <h3 className="mb-1.5 line-clamp-2 leading-snug cursor-pointer hover:opacity-70 transition-opacity"
+          style={{ color: C.text, fontSize: '17.5px', fontFamily: 'var(--font-lato)', fontWeight: 900 }} onClick={onDetails}>
+          {course.form?.title ?? 'Untitled Course'}
+        </h3>
+
+        {description && (
+          <p className="mb-2.5 line-clamp-4" style={{ color: C.faint, fontSize: '14.5px', fontFamily: 'var(--font-lato)', lineHeight: 1.45 }}>
+            {description.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim()}
+          </p>
+        )}
+
+        {deadlineLabel && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full mb-2"
+            style={{ background: `${deadlineColor ?? '#6b7280'}18`, color: deadlineColor ?? '#6b7280' }}>
+            ⏰ {deadlineLabel}
+          </span>
+        )}
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs" style={{ color: C.faint }}>
+            {completed ? 'Completed' : currentIdx > 0 ? `${progress}% done` : `${totalQ} questions`}
+          </span>
+          {completed && score > 0 && (
+            <span className="text-xs font-semibold" style={{ color: passed ? '#16a34a' : '#dc2626' }}>Score: {score}%</span>
+          )}
+        </div>
+        <ProgressBar value={progress} color="#22c55e"/>
+
+        <div className="mt-auto pt-4 flex items-center justify-between gap-2">
+          {/* Details button */}
+          <button onClick={onDetails}
+            className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl transition-opacity hover:opacity-70"
+            style={{ background: C.pill, color: C.muted }}>
+            <FileText className="w-3.5 h-3.5"/>
+            Details
+          </button>
+
+          <div className="flex items-center gap-2">
+            {/* Primary action */}
+            <a href={actionHref} target="_blank" rel="noreferrer"
+              className="flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl transition-opacity hover:opacity-70 dashboard-cta"
+              style={{
+                background: completed ? C.pill : C.cta,
+                color: completed ? C.muted : C.ctaText,
+              }}>
+              <Play className="w-3.5 h-3.5"/>
+              {actionLabel}
+            </a>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// --- Course detail right pane ---
+function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT_C; onClose: () => void }) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const config = course.config ?? course.form?.config ?? {};
+  const questions: any[] = course.form?.questions ?? config.questions ?? [];
+  const lessons = questions.filter((q: any) => q.lesson?.title || q.lesson?.body);
+  const lessonCount = lessons.length;
+  const countableDetailQ = questions.filter((q: any) => !q.isSection);
+  const answeredDetailQ = countableDetailQ.filter((q: any) => !!(course.answers ?? {})[q.id]).length;
+  const assessmentCount = countableDetailQ.length;
+  const currentIdx = course.current_question_index ?? 0;
+  const completed = !!course.completed_at;
+  const passed = course.passed === true;
+  const score = course.score ?? 0;
+  const certId: string | null = course.cert_id ?? null;
+  const progress = completed ? 100 : (assessmentCount > 0 ? Math.round((answeredDetailQ / assessmentCount) * 100) : 0);
+  const [imgErr, setImgErr] = useState(false);
+
+  const courseUrl = `/${course.slug || course.form?.slug || course.form_id}`;
+  const actionHref = completed && passed && certId ? `/certificate/${certId}` : courseUrl;
+  const actionLabel = completed ? (passed && certId ? 'View Certificate' : 'Retake') : currentIdx > 0 ? 'Continue' : 'Start';
+
+  return (
+    <>
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 z-40"
+        style={{ background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(2px)' }}
+        onClick={onClose}
+      />
+      {/* Drawer */}
+      <motion.div
+        initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+        className="fixed right-0 top-0 bottom-0 z-50 flex flex-col"
+        style={{ width: 'min(600px, 100vw)', background: C.card, boxShadow: '-4px 0 40px rgba(0,0,0,0.18)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 flex-shrink-0"
+          style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+          <span className="text-sm font-semibold" style={{ color: C.text }}>Course Details</span>
+          <button onClick={onClose}
+            className="p-1.5 rounded-lg transition-opacity hover:opacity-70"
+            style={{ color: C.muted }}>
+            <X className="w-4 h-4"/>
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Cover image */}
+          {config.coverImage && !imgErr && (
+            <div style={{ height: 180, overflow: 'hidden', flexShrink: 0 }}>
+              <img src={config.coverImage} alt={course.form?.title}
+                onError={() => setImgErr(true)}
+                className="w-full h-full object-cover object-center"/>
+            </div>
+          )}
+
+          <div className="p-5 space-y-5">
+            {/* Title + status badge */}
+            <div>
+              <h2 className="text-base font-bold leading-snug mb-2" style={{ color: C.text }}>
+                {course.form?.title ?? 'Untitled Course'}
+              </h2>
+              {completed && (
+                <span className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full"
+                  style={{ background: passed ? '#f0fdf4' : '#fef2f2', color: passed ? '#16a34a' : '#dc2626' }}>
+                  {passed ? `Passed  Score: ${score}%` : `Not passed  Score: ${score}%`}
+                </span>
+              )}
+              {!completed && currentIdx > 0 && (
+                <div className="mt-2 space-y-1">
+                  <div className="flex justify-between text-xs" style={{ color: C.faint }}>
+                    <span>{progress}% complete</span>
+                    <span>{Math.min(currentIdx, assessmentCount)} / {assessmentCount} questions</span>
+                  </div>
+                  <ProgressBar value={progress} color={C.green}/>
+                </div>
+              )}
+            </div>
+
+
+            {/* Description */}
+            {config.description && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>About this course</p>
+                <div className="rich-preview text-sm leading-relaxed" style={{ color: C.muted }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeRichText(config.description) }}/>
+              </div>
+            )}
+
+            {/* Learning outcomes */}
+            {(config.learnOutcomes ?? []).length > 0 && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: C.faint }}>What you will learn</p>
+                <div className="space-y-2">
+                  {(config.learnOutcomes as string[]).map((outcome: string, i: number) => (
+                    <div key={i} className="flex items-start gap-2.5">
+                      <div className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5"
+                        style={{ background: `${C.green}1a` }}>
+                        <CheckCircle className="w-3 h-3" style={{ color: C.green }}/>
+                      </div>
+                      <span className="text-sm leading-snug" style={{ color: C.text }}>{outcome}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Course outline */}
+            {lessonCount > 0 && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: C.faint }}>Course outline</p>
+                <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+                  {lessons.map((q: any, i: number) => (
+                    <div key={q.id} className="flex items-center gap-3 px-4 py-3"
+                      style={{ borderBottom: i < lessonCount - 1 ? `1px solid ${C.cardBorder}` : 'none' }}>
+                      <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
+                        style={{ background: `${C.green}18` }}>
+                        <span className="text-[10px] font-bold" style={{ color: C.green }}>{i + 1}</span>
+                      </div>
+                      <span className="text-sm flex-1 leading-snug" style={{ color: C.text }}>
+                        {q.lesson?.title || `Lesson ${i + 1}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer CTA */}
+        <div className="p-4 flex-shrink-0 space-y-2" style={{ borderTop: `1px solid ${C.cardBorder}` }}>
+          {completed && passed && certId && (
+            <a href={courseUrl} target="_blank" rel="noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-70"
+              style={{ background: C.pill, color: C.muted }}>
+              <Play className="w-4 h-4"/> Review course
+            </a>
+          )}
+          <a href={actionHref} target="_blank" rel="noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80 dashboard-cta"
+            style={{ background: completed && passed && certId ? C.green : C.cta, color: C.ctaText }}>
+            {completed && passed && certId ? <Award className="w-4 h-4"/> : <Play className="w-4 h-4"/>}
+            {actionLabel}
+          </a>
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
+// --- Learning Paths section (shown above courses) ---
+export function LearningPathsSection({ C }: { C: typeof LIGHT_C }) {
+  const [paths, setPaths]         = useState<any[]>([]);
+  const [loading, setLoading]     = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { setLoading(false); return; }
+      const res = await fetch('/api/learning-paths', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'get-student-paths' }),
+      });
+      if (res.ok) { const { paths: p } = await res.json(); setPaths(p ?? []); }
+      setLoading(false);
+    })();
+  }, []);
+
+  if (loading) return <CarouselSkeleton C={C}/>;
+
+  if (!paths.length) return (
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: C.pill }}>
+        <Layers className="w-7 h-7" style={{ color: C.faint }}/>
+      </div>
+      <p className="font-semibold text-base mb-1" style={{ color: C.text }}>No learning paths yet</p>
+      <p className="text-sm max-w-xs" style={{ color: C.muted }}>Your instructor hasn&apos;t assigned any learning paths to your cohort yet.</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      {paths.map((path: any) => (
+        <PathRow key={path.id} path={path} C={C} />
+      ))}
+    </div>
+  );
+}
+
+// One learning path rendered as a titled, horizontally-scrolling carousel of course cards
+function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const totalItems     = (path.item_ids ?? []).length;
+  const completedIds: string[] = path.progress?.completed_item_ids ?? [];
+  const completedCount = completedIds.length;
+  const allDone        = completedCount === totalItems && totalItems > 0;
+  const pathCertId     = path.progress?.cert_id ?? null;
+  const items: any[]   = path.items ?? [];
+
+  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+
+  // Hover preview (desktop / hover-capable pointers only)
+  const [hover, setHover] = useState<{ data: any; left: number; top: number; originX: number; originY: number } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
+  const scheduleClose = () => { cancelClose(); closeTimer.current = setTimeout(() => setHover(null), 120); };
+  const openHover = (data: any, el: HTMLElement) => {
+    if (typeof window === 'undefined' || !window.matchMedia('(hover: hover)').matches) return;
+    cancelClose();
+    const r = el.getBoundingClientRect();
+    const W = 320, H = 420;
+    const left = Math.max(12, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 12));
+    const top  = Math.max(12, Math.min(r.top - 20, window.innerHeight - H - 12));
+    const originX = Math.max(0, Math.min(r.left + r.width / 2 - left, W));
+    const originY = Math.max(0, Math.min(r.top + r.height / 2 - top, H));
+    setHover({ data, left, top, originX, originY });
+  };
+  useEffect(() => () => cancelClose(), []);
+
+  return (
+    <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+      {/* Header: title + nav arrows */}
+      <div className="flex items-start justify-between gap-4 mb-1">
+        <div className="min-w-0">
+          <h3 className="text-xl sm:text-2xl font-bold leading-tight" style={{ color: C.text }}>{path.title}</h3>
+          {allDone && <span className="inline-block mt-1.5 text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#f0fdf4', color: '#16a34a' }}>Completed</span>}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {pathCertId && (
+            <a href={`/certificate/${pathCertId}`} target="_blank" rel="noreferrer"
+              className="hidden sm:flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-opacity hover:opacity-80"
+              style={{ background: '#f0fdf4', color: '#16a34a' }}>
+              <Award className="w-3 h-3"/> Certificate
+            </a>
+          )}
+          <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronLeft className="w-4 h-4"/>
+          </button>
+          <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronRight className="w-4 h-4"/>
+          </button>
+        </div>
+      </div>
+
+      {path.description && <p className="text-sm mt-2 mb-4" style={{ color: C.muted }}>{path.description}</p>}
+
+      {/* Carousel */}
+      <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {items.map((item: any, idx: number) => {
+          const done      = completedIds.includes(item.id);
+          const isCurrent = !done && (idx === 0 || completedIds.includes(items[idx - 1]?.id));
+          const isLocked  = !done && !isCurrent;
+          const isVE = item.content_type === 'virtual_experience' || item.content_type === 'guided_project' || item.config?.isVirtualExperience || item.config?.isGuidedProject;
+          const href = isVE ? `/student?section=virtual_experiences` : `/${item.slug || item.id}`;
+          const cover = item.cover_image;
+
+          const card = (
+            <>
+              <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
+                {cover
+                  ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
+                  : <div className="w-full h-full flex items-center justify-center">
+                      {isVE ? <Layers className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>}
+                    </div>}
+                {/* Status -- light-green chip with white text for active items */}
+                {!isLocked && (
+                  <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
+                    style={{ background: done ? '#16a34a' : '#22c55e', color: '#ffffff' }}>
+                    {done ? 'Completed' : 'In progress'}
+                  </span>
+                )}
+                {/* Locked -- small lock chip top-right, cover stays bright */}
+                {isLocked && (
+                  <span className="absolute top-2 right-2 w-6 h-6 rounded-full grid place-items-center shadow-sm" style={{ background: 'rgba(255,255,255,0.92)' }}>
+                    <Lock className="w-3 h-3" style={{ color: '#475569' }}/>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs mt-2" style={{ color: C.faint }}>{isVE ? 'Virtual Experience' : 'Course'}</p>
+              <p className="text-[15px] font-bold leading-snug mt-0.5 line-clamp-2" style={{ color: C.text }}>{item.title}</p>
+            </>
+          );
+
+          return (
+            <div key={item.id} className="flex-shrink-0 w-[220px] snap-start"
+              onMouseEnter={(e) => openHover({ item, isVE, done, isCurrent, isLocked, href }, e.currentTarget)}
+              onMouseLeave={scheduleClose}>
+              {isLocked
+                ? <div className="cursor-not-allowed">{card}</div>
+                : <a href={href} target="_blank" rel="noreferrer" className="block transition-transform hover:-translate-y-0.5">{card}</a>}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Hover preview -- grows out of the hovered card */}
+      {typeof document !== 'undefined' && hover && createPortal(
+        <HoverPreviewCard
+          key={hover.data.item.id}
+          left={hover.left}
+          top={hover.top}
+          originX={hover.originX}
+          originY={hover.originY}
+          onEnter={cancelClose}
+          onLeave={scheduleClose}
+        >
+          <PathItemPreview
+            item={hover.data.item}
+            isVE={hover.data.isVE}
+            done={hover.data.done}
+            isCurrent={hover.data.isCurrent}
+            isLocked={hover.data.isLocked}
+            href={hover.data.href}
+            C={C}
+          />
+        </HoverPreviewCard>,
+        document.body,
+      )}
+    </section>
+  );
+}
+
+// Group courses by their tool/category; named tools alphabetical, "Other" last
+function groupCoursesByTool(courses: any[]): [string, any[]][] {
+  const groups = new Map<string, any[]>();
+  for (const c of courses) {
+    const key = (c.form?.category ?? '').trim() || 'Other';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(c);
+  }
+  return [...groups.entries()].sort((a, b) => {
+    if (a[0] === 'Other') return 1;
+    if (b[0] === 'Other') return -1;
+    return a[0].localeCompare(b[0]);
+  });
+}
+
+function PathItemPreview({ item, isVE, done, isCurrent, isLocked, href, C }: {
+  item: any; isVE: boolean; done: boolean; isCurrent: boolean; isLocked: boolean; href: string; C: typeof LIGHT_C;
+}) {
+  const cover = item.cover_image;
+  const desc = (item.description || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.card, boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
+      <div className="relative w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
+        {cover
+          ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
+          : <div className="w-full h-full flex items-center justify-center">{isVE ? <Layers className="w-9 h-9" style={{ color: '#16a34a' }}/> : <BookOpen className="w-9 h-9" style={{ color: '#16a34a' }}/>}</div>}
+        {!isLocked && (
+          <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
+            style={{ background: done ? '#16a34a' : '#22c55e', color: '#ffffff' }}>
+            {done ? 'Completed' : 'In progress'}
+          </span>
+        )}
+        {isLocked && (
+          <span className="absolute top-2 right-2 w-6 h-6 rounded-full grid place-items-center shadow-sm" style={{ background: 'rgba(255,255,255,0.92)' }}>
+            <Lock className="w-3 h-3" style={{ color: '#475569' }}/>
+          </span>
+        )}
+      </div>
+      <div className="p-5">
+        <p className="text-xs mb-1" style={{ color: C.faint }}>{isVE ? 'Virtual Experience' : 'Course'}</p>
+        <h3 className="text-lg font-bold leading-snug mb-2 line-clamp-2" style={{ color: C.text }}>{item.title}</h3>
+        {desc && <p className="text-sm leading-relaxed line-clamp-4 mb-4" style={{ color: C.muted }}>{desc}</p>}
+        {isLocked ? (
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl" style={{ background: C.pill, color: C.faint }}>
+            <Lock className="w-3.5 h-3.5"/> Locked
+          </span>
+        ) : (
+          <a href={href} target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl transition-opacity hover:opacity-90"
+            style={{ background: done ? C.pill : '#16a34a', color: done ? C.muted : '#ffffff' }}>
+            <Play className="w-3.5 h-3.5"/>{done ? 'Review' : isCurrent ? 'Start' : 'Open'}
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// One tool group rendered as a titled, horizontally-scrolling carousel of course cards
+function ToolRow({ tool, courses, deadlines, C, onDetails }: { tool: string; courses: any[]; deadlines: Record<string, Date | null>; C: typeof LIGHT_C; onDetails: (c: any) => void }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const icon = getToolIcon(tool);
+  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+
+  // Hover preview: show the full course card in a floating popover (desktop / hover-capable pointers only)
+  const [hover, setHover] = useState<{ course: any; left: number; top: number; originX: number; originY: number } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
+  const scheduleClose = () => { cancelClose(); closeTimer.current = setTimeout(() => setHover(null), 120); };
+  const openHover = (course: any, el: HTMLElement) => {
+    if (typeof window === 'undefined' || !window.matchMedia('(hover: hover)').matches) return;
+    cancelClose();
+    const r = el.getBoundingClientRect();
+    const W = 320, H = 540;
+    const left = Math.max(12, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 12));
+    const top  = Math.max(12, Math.min(r.top - 20, window.innerHeight - H - 12));
+    // Grow from the hovered card: transform-origin = the card's center relative to the popover box
+    const originX = Math.max(0, Math.min(r.left + r.width / 2 - left, W));
+    const originY = Math.max(0, Math.min(r.top + r.height / 2 - top, H));
+    setHover({ course, left, top, originX, originY });
+  };
+  useEffect(() => () => cancelClose(), []);
+
+  return (
+    <section className="rounded-2xl p-5 sm:p-6" style={{ background: C.card }}>
+      {/* Header: tool name + nav arrows */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {icon && <img src={icon} alt="" className="w-6 h-6 object-contain flex-shrink-0"/>}
+          <h3 className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: C.text }}>{tool}</h3>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronLeft className="w-4 h-4"/>
+          </button>
+          <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+            className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+            style={{ border: `1px solid ${C.cardBorder}`, color: C.muted }}>
+            <ChevronRight className="w-4 h-4"/>
+          </button>
+        </div>
+      </div>
+
+      {/* Carousel */}
+      <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-1 mt-4 snap-x"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {courses.map((c: any) => {
+          const completed  = !!c.completed_at;
+          const currentIdx = c.current_question_index ?? 0;
+          const cover      = c.form?.config?.coverImage ?? c.form?.cover_image;
+          const title      = c.form?.title ?? 'Untitled Course';
+          const status     = completed ? 'Completed' : currentIdx > 0 ? 'In progress' : null;
+          const questions  = c.form?.questions ?? c.form?.config?.questions ?? [];
+          const countableQ = questions.filter((q: any) => !q.isSection);
+          const answeredQ  = countableQ.filter((q: any) => !!(c.answers ?? {})[q.id]).length;
+          const totalQ     = countableQ.length;
+          const progress   = completed ? 100 : (totalQ > 0 ? Math.round((answeredQ / totalQ) * 100) : 0);
+          return (
+            <div key={c.form_id} className="flex-shrink-0 w-[220px] snap-start"
+              onMouseEnter={(e) => openHover(c, e.currentTarget)} onMouseLeave={scheduleClose}>
+              <button onClick={() => onDetails(c)} className="block w-full text-left transition-transform hover:-translate-y-0.5">
+                <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
+                  {cover
+                    ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
+                    : <div className="w-full h-full flex items-center justify-center"><BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/></div>}
+                  {status && (
+                    <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
+                      style={{ background: completed ? '#16a34a' : '#22c55e', color: '#ffffff' }}>
+                      {status}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs mt-2" style={{ color: C.faint }}>Course</p>
+                <p className="text-[15px] font-bold leading-snug mt-0.5 mb-2.5 line-clamp-2" style={{ color: C.text }}>{title}</p>
+                <ProgressBar value={progress} color="#22c55e"/>
+                <p className="text-[11px] mt-1" style={{ color: C.faint }}>
+                  {completed ? 'Completed' : currentIdx > 0 ? `${progress}% complete` : `${totalQ} questions`}
+                </p>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Hover preview -- the full course card in a floating popover */}
+      {typeof document !== 'undefined' && hover && createPortal(
+        <HoverPreviewCard
+          key={hover.course.form_id}
+          left={hover.left}
+          top={hover.top}
+          originX={hover.originX}
+          originY={hover.originY}
+          onEnter={cancelClose}
+          onLeave={scheduleClose}
+        >
+          <CourseCard
+            course={hover.course}
+            deadline={deadlines[hover.course.form_id]}
+            C={C}
+            onDetails={() => { setHover(null); onDetails(hover.course); }}
+            hideCategory
+          />
+        </HoverPreviewCard>,
+        document.body,
+      )}
+    </section>
+  );
+}
+
+// --- Courses section ---
+export function CoursesSection({ userEmail, userId: userIdProp, C, isOutstandingProp }: { userEmail: string; userId?: string; C: typeof LIGHT_C; isOutstandingProp?: boolean }) {
+  const [courses,   setCourses]   = useState<any[]>([]);
+  const [deadlines, setDeadlines] = useState<Record<string, Date | null>>({});
+  const [loading,   setLoading]   = useState(true);
+  const [detailCourse, setDetailCourse] = useState<any>(null);
+  // VE attempt status map: formId -> { started, completed }
+  const [veStatusMap, setVeStatusMap] = useState<Record<string, { started: boolean; completed: boolean }>>({});
+  const [isOutstandingInternal, setIsOutstandingInternal] = useState(false);
+  const isOutstanding = isOutstandingProp ?? isOutstandingInternal;
+  // Semantic search
+  const [searchQuery,   setSearchQuery]   = useState('');
+  const searchTimer = useRef<any>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
+      const effectiveUserId = userIdProp ?? user.id;
+
+      // Get student's cohort -- original_cohort_id being set means they're currently in outstanding
+      const { data: student } = await supabase
+        .from('students')
+        .select('cohort_id, original_cohort_id, payment_exempt')
+        .eq('id', effectiveUserId)
+        .single();
+
+      // Query by student_id only -- cohort_id filter breaks when student is moved to outstanding cohort
+      const { data: enrollment } = await supabase
+        .from('bootcamp_enrollments')
+        .select('access_status, total_fee, deposit_required, paid_total, payment_plan, bootcamp_ends_at, cohort_id, payment_installments ( due_date, status )')
+        .eq('student_id', effectiveUserId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      // Compute access live so overdue/grace status reflects today's date without needing an admin action
+      let liveStatus = enrollment?.access_status ?? null;
+      if (enrollment) {
+        const { data: settings } = await supabase
+          .from('cohort_payment_settings')
+          .select('post_bootcamp_access_months, grace_period_days')
+          .eq('cohort_id', enrollment.cohort_id)
+          .maybeSingle();
+        liveStatus = computeAccess({
+          payment_plan:                enrollment.payment_plan as any,
+          total_fee:                   Number(enrollment.total_fee),
+          deposit_required:            Number(enrollment.deposit_required),
+          paid_total:                  Number(enrollment.paid_total),
+          bootcamp_ends_at:            enrollment.bootcamp_ends_at ? new Date(enrollment.bootcamp_ends_at) : null,
+          post_bootcamp_access_months: settings?.post_bootcamp_access_months ?? 3,
+          grace_period_days:           settings?.grace_period_days ?? null,
+          installments:                (enrollment.payment_installments ?? []).map((i: any) => ({ due_date: new Date(i.due_date), status: i.status })),
+        }).access_status;
+      }
+
+      const restrictedByPayment = !student?.payment_exempt && ['pending_deposit', 'overdue', 'expired'].includes(liveStatus ?? '');
+      const outstanding = !!student?.original_cohort_id || restrictedByPayment;
+      setIsOutstandingInternal(outstanding);
+
+      // Get session token for authenticated API calls
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? '';
+
+
+      // Load cohort courses + student attempts + certificates in parallel
+      const [{ data: cohortCourseRows }, { data: attempts }, certsRes] = await Promise.all([
+        student?.cohort_id && !restrictedByPayment
+          ? supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes, category, content_type:id').contains('cohort_ids', [student.cohort_id]).eq('status', 'published')
+          : Promise.resolve({ data: [] }),
+        supabase.from('course_attempts')
+          .select('course_id, score, points, current_question_index, completed_at, passed, updated_at, answers')
+          .eq('student_id', effectiveUserId)
+          .order('started_at', { ascending: false }),
+        token
+          ? fetch('/api/course', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ action: 'get-my-certificates' }),
+            }).then(r => r.json())
+          : Promise.resolve({ certs: [] }),
+      ]);
+
+      // Build cert lookup: form_id -> cert id
+      const certMap: Record<string, string> = {};
+      for (const c of (certsRes?.certs ?? [])) certMap[c.form_id ?? c.course_id] = c.id;
+
+      // Normalize course rows with config shape
+      const normalizeCourse = (c: any) => ({
+        ...c, content_type: 'course',
+        config: { isCourse: true, title: c.title, coverImage: c.cover_image,
+          questions: stripSqlSolutions(c.questions ?? []), deadline_days: c.deadline_days, passmark: c.passmark,
+          description: c.description ?? '', learnOutcomes: c.learn_outcomes ?? [] },
+      });
+      const cohortCourses = (cohortCourseRows ?? []).map(normalizeCourse);
+
+      // Deduplicate: one row per course.
+      // A passed+completed attempt always wins over in-progress (student retaking a passed course).
+      // Among completed, prefer higher score. For failed courses, prefer in-progress (retake flow).
+      const progressMap: Record<string, any> = {};
+      for (const a of attempts ?? []) {
+        const ex = progressMap[a.course_id];
+        if (!ex) { progressMap[a.course_id] = a; continue; }
+        // a is passed+completed and ex is in-progress -- elevate the passing attempt
+        if (a.passed && a.completed_at && !ex.completed_at) { progressMap[a.course_id] = a; continue; }
+        // ex is already passed+completed -- never overwrite with an in-progress attempt
+        if (ex.passed && ex.completed_at && !a.completed_at) continue;
+        // Prefer in-progress over a completed-but-failed attempt (student is retaking)
+        if (!a.completed_at && ex.completed_at && !ex.passed) { progressMap[a.course_id] = a; continue; }
+        // Among completed, prefer higher score
+        if (ex.completed_at && a.completed_at && a.score > ex.score) progressMap[a.course_id] = a;
+      }
+
+      // Merge: cohort courses + any extra courses the student has attempted
+      const cohortIds = new Set(cohortCourses.map((f: any) => f.id));
+      const extraIds  = Object.keys(progressMap).filter(id => !cohortIds.has(id));
+
+      let extraForms: any[] = [];
+      if (extraIds.length) {
+        const { data } = await supabase.from('courses').select('id, title, slug, cover_image, questions, deadline_days, passmark, description, learn_outcomes, category').in('id', extraIds).eq('status', 'published');
+        extraForms = (data ?? []).map(normalizeCourse);
+      }
+
+      const allForms = [...cohortCourses, ...extraForms];
+      setCourses(allForms.map(f => ({ ...progressMap[f.id], form: f, form_id: f.id, cert_id: certMap[f.id] ?? null })));
+
+      // Fetch cohort_assignments to compute deadlines
+      if (student?.cohort_id && cohortCourses.length) {
+        const cohortFormIds = cohortCourses.map((f: any) => f.id);
+        const { data: assignments } = await supabase
+          .from('cohort_assignments')
+          .select('content_id, assigned_at')
+          .eq('cohort_id', student.cohort_id)
+          .in('content_id', cohortFormIds);
+
+        const dlMap: Record<string, Date | null> = {};
+        for (const form of cohortCourses as any[]) {
+          const asgn = (assignments ?? []).find((a: any) => a.content_id === form.id);
+          const deadlineDays = form.config?.deadline_days;
+          dlMap[form.id] = asgn && deadlineDays
+            ? new Date(new Date(asgn.assigned_at).getTime() + Number(deadlineDays) * 86400000)
+            : null;
+        }
+        setDeadlines(dlMap);
+      }
+
+      // Load guided_project_attempts for VE status in search results
+      const { data: veAttempts } = await supabase
+        .from('guided_project_attempts')
+        .select('ve_id, completed_at')
+        .eq('student_id', effectiveUserId);
+      if (veAttempts?.length) {
+        const map: Record<string, { started: boolean; completed: boolean }> = {};
+        for (const a of veAttempts) {
+          map[a.ve_id] = { started: true, completed: Boolean(a.completed_at) };
+        }
+        setVeStatusMap(map);
+      }
+
+      setLoading(false);
+    };
+    load();
+  }, [userEmail]);
+
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return null;
+    return courses.filter((c: any) => {
+      const title    = (c.form?.title ?? '').toLowerCase();
+      const desc     = (c.form?.config?.description ?? c.form?.description ?? '').replace(/<[^>]*>/g, ' ').toLowerCase();
+      const category = (c.form?.category ?? '').toLowerCase();
+      return title.includes(q) || desc.includes(q) || category.includes(q);
+    });
+  }, [searchQuery, courses]);
+
+  if (loading) return <CarouselSkeleton C={C}/>;
+
+  return (
+    <div className="space-y-6">
+      {/* Empty state */}
+      {!courses.length && !isOutstanding && (
+        <EmptyState icon={BookOpen} title="No courses yet"
+          body="You have not started any courses. Browse available courses to get started."
+          action={<Link href="/" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold hover:opacity-80 dashboard-cta"
+            style={{ background: C.cta, color: C.ctaText }}><BookOpen className="w-4 h-4"/> Browse courses</Link>}/>
+      )}
+
+      {/* Semantic search bar */}
+      <div className="relative">
+        <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: C.muted }} />
+        <input
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Search courses by topic, skill, or keyword…"
+          className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm outline-none transition-all"
+          style={{
+            background:  C.card,
+            border:      `1px solid ${C.cardBorder}`,
+            color:       C.text,
+          }}
+        />
+      </div>
+
+      {/* Search results */}
+      {searchResults !== null && (
+        <div>
+          {searchResults.length === 0 ? (
+            <p className="text-sm text-center py-6" style={{ color: C.muted }}>
+              No courses found for &ldquo;{searchQuery}&rdquo;
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {searchResults.map((c: any) => (
+                <CourseCard key={c.form_id} course={c} deadline={deadlines[c.form_id]} C={C} onDetails={() => setDetailCourse(c)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Courses grouped by tool -- hidden while searching */}
+      {searchResults === null && (
+        <div className="space-y-6">
+          {groupCoursesByTool(courses).map(([tool, list]) => (
+            <ToolRow key={tool} tool={tool} courses={list} deadlines={deadlines} C={C} onDetails={setDetailCourse} />
+          ))}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {detailCourse && (
+          <CourseDetailPane course={detailCourse} C={C} onClose={() => setDetailCourse(null)}/>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

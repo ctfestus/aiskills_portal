@@ -4,7 +4,7 @@
 // Extracted verbatim from app/student/page.tsx as the foundation of its decomposition;
 // sections import these instead of relying on definitions living in the route file.
 
-import React from 'react';
+import React, { useState, useEffect, type ReactNode } from 'react';
 import { LIGHT_C, useC } from '@/lib/theme';
 
 // --- Skeleton ---
@@ -89,6 +89,40 @@ export function ProgressBar({ value, max = 100, color }: { value: number; max?: 
   return (
     <div className="w-full rounded-full overflow-hidden" style={{ height: 6, background: C.pill }}>
       <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color ?? C.green }}/>
+    </div>
+  );
+}
+
+// --- Strip server-only fields before handing questions to the client ---
+export function stripSqlSolutions(questions: any[] = []) {
+  return questions.map(q => {
+    if (!q || typeof q !== 'object') return q;
+    const { sqlSolution, ...safeQuestion } = q;
+    return safeQuestion;
+  });
+}
+
+// Floating hover preview -- grows out of the hovered card via a CSS transition (mount flag on rAF)
+export function HoverPreviewCard({ left, top, originX, originY, onEnter, onLeave, children }: {
+  left: number; top: number; originX: number; originY: number;
+  onEnter: () => void; onLeave: () => void; children: ReactNode;
+}) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => { const id = requestAnimationFrame(() => setShown(true)); return () => cancelAnimationFrame(id); }, []);
+  return (
+    <div
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
+      style={{
+        position: 'fixed', left, top, width: 320, zIndex: 200,
+        transformOrigin: `${originX}px ${originY}px`,
+        opacity: shown ? 1 : 0,
+        transform: shown ? 'scale(1)' : 'scale(0.55)',
+        transition: 'opacity 0.3s ease-out, transform 0.42s cubic-bezier(0.16,1,0.3,1)',
+        willChange: 'opacity, transform',
+      }}
+    >
+      {children}
     </div>
   );
 }
