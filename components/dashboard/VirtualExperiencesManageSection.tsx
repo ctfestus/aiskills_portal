@@ -5,7 +5,7 @@
 import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Briefcase, Copy, Download, Trash2, Plus, Edit2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, Copy, Download, Trash2, Plus, Edit2, BarChart3 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C, cardStyle } from '@/lib/theme';
 import { SYNC_ENABLED } from '@/lib/sync';
@@ -67,6 +67,7 @@ function VEIndustryRow({ industry, forms, handleDuplicate, setFormToDelete, C }:
             <div key={form.id} className="group relative flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
               <div className="absolute top-2 right-2 z-10" onClick={e => e.stopPropagation()}>
                 <CardActionsMenu form={form} actions={[
+                  { key: 'report', label: 'Report', Icon: BarChart3, href: `/dashboard/${form.id}` },
                   { key: 'edit', label: 'Edit', Icon: Edit2, href: `/create/guided-project?id=${form.id}` },
                   { key: 'duplicate', label: 'Duplicate', Icon: Copy, onClick: () => handleDuplicate(form) },
                   { key: 'export', label: 'Export', Icon: Download, onClick: () => exportContent(form) },
