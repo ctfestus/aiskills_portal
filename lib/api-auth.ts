@@ -12,6 +12,8 @@ type Supabase = ReturnType<typeof adminClient>;
 export interface AuthedUser {
   user: { id: string; email?: string };
   supabase: Supabase;
+  /** The verified Bearer JWT -- for routes that need a user-scoped (RLS) client. */
+  token: string;
 }
 export interface AuthedRole extends AuthedUser {
   role: string;
@@ -38,7 +40,7 @@ export async function requireUser(req: NextRequest): Promise<AuthedUser | { erro
   if (error || !user) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
-  return { user: { id: user.id, email: user.email ?? undefined }, supabase };
+  return { user: { id: user.id, email: user.email ?? undefined }, supabase, token: jwt };
 }
 
 /**

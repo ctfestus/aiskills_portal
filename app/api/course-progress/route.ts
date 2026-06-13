@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 
 // User-scoped client -- RLS enforces ownership at the DB level.
@@ -19,17 +20,9 @@ function adminClient() {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const jwt = auth.slice(7);
-
-  // Verify the token is valid
-  const { data: { user }, error: authError } = await adminClient().auth.getUser(jwt);
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const authRes = await requireUser(req);
+  if (isAuthError(authRes)) return authRes.error;
+  const { token: jwt } = authRes;
 
   const { searchParams } = new URL(req.url);
   const formId  = searchParams.get('formId');

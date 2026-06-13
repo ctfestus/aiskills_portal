@@ -1,4 +1,5 @@
 import { Type } from '@google/genai';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 import { generateVisionJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -20,13 +21,9 @@ function adminClient() {
 }
 
 async function authenticate(req: NextRequest): Promise<{ userId: string } | NextResponse> {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: { user }, error } = await adminClient().auth.getUser(token);
-  if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  return { userId: user.id };
+  const auth = await requireUser(req);
+  if (isAuthError(auth)) return auth.error;
+  return { userId: auth.user.id };
 }
 
 async function checkRateLimit(userId: string): Promise<NextResponse | null> {

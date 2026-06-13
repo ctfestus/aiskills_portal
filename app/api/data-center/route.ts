@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
@@ -17,33 +18,18 @@ function publicClient() {
   return createClient(url, key);
 }
 
-async function getSessionUser(req: NextRequest): Promise<{ id: string; role: string } | null> {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const token = authHeader.slice(7);
-  const { data: { user } } = await adminClient().auth.getUser(token);
-  if (!user) return null;
-  const { data: student } = await adminClient()
-    .from('students')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-  return { id: user.id, role: student?.role ?? 'student' };
-}
-
-function isStaff(role: string) {
-  return role === 'admin' || role === 'instructor';
-}
 
 // GET - list datasets
 // Public (no auth): published only
 // Authenticated student: published only
 // Authenticated staff: all (including drafts)
 export async function GET(req: NextRequest) {
-  const sessionUser = await getSessionUser(req);
+  // Optional auth: staff (admin/instructor) see drafts; everyone else (students,
+  // anonymous, invalid token) sees published only.
+  const staffAuth = await requireRole(req, ['admin', 'instructor']);
+  const showAll = !isAuthError(staffAuth);
 
   const FIELDS = 'id,title,description,cover_image_url,cover_image_alt,tags,category,sample_questions,sample_question_types,analyst_sections,file_url,file_name,files,row_count,source,source_url,scenario,disclaimer,table_type,sql_workbench_enabled,is_published,created_at,created_by';
-  const showAll = sessionUser && isStaff(sessionUser.role);
   const db = showAll ? adminClient() : publicClient();
   let query = db
     .from('data_center_datasets')
@@ -61,9 +47,9 @@ export async function GET(req: NextRequest) {
 
 // POST - create dataset (staff only)
 export async function POST(req: NextRequest) {
-  const sessionUser = await getSessionUser(req);
-  if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!isStaff(sessionUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
+  const sessionUser = { id: auth.user.id };
 
   const body = await req.json();
   const {
@@ -109,9 +95,9 @@ export async function POST(req: NextRequest) {
 
 // PUT - update dataset (staff only)
 export async function PUT(req: NextRequest) {
-  const sessionUser = await getSessionUser(req);
-  if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!isStaff(sessionUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
+  const sessionUser = { id: auth.user.id };
 
   const body = await req.json();
   const { id, ...fields } = body;
@@ -141,9 +127,9 @@ export async function PUT(req: NextRequest) {
 
 // DELETE - delete dataset (staff only)
 export async function DELETE(req: NextRequest) {
-  const sessionUser = await getSessionUser(req);
-  if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!isStaff(sessionUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
+  const sessionUser = { id: auth.user.id };
 
   const id = req.nextUrl.searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });

@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
 type WorkspaceLink = { url: string; label?: string };
 type WorkspaceFile = { url: string; name: string };
 
-async function getUser(req: NextRequest) {
-  const auth = req.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return null;
-  const { data: { user }, error } = await adminClient().auth.getUser(auth.slice(7));
-  if (error || !user) return null;
-  return user;
-}
 
 function cleanLinks(value: unknown): WorkspaceLink[] {
   if (!Array.isArray(value)) return [];
@@ -67,8 +61,9 @@ async function validateAccess(assignmentId: string, groupId: string, userId: str
 }
 
 export async function GET(req: NextRequest) {
-  const user = await getUser(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authRes = await requireUser(req);
+  if (isAuthError(authRes)) return authRes.error;
+  const { user } = authRes;
 
   const url = new URL(req.url);
   const assignmentId = url.searchParams.get('assignmentId');
@@ -103,8 +98,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const user = await getUser(req);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authRes = await requireUser(req);
+  if (isAuthError(authRes)) return authRes.error;
+  const { user } = authRes;
 
   const body = await req.json().catch(() => ({}));
   const assignmentId = String(body.assignmentId ?? '').trim();

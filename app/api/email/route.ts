@@ -1,4 +1,5 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
 import { confirmationEmail, reminderEmail, courseResultEmail, blastEmail } from '@/lib/email-templates';
@@ -22,12 +23,8 @@ const getAdminSupabase = () => {
 
 // Returns the authenticated user from a Bearer token, or null.
 async function getAuthUser(req: NextRequest) {
-  const auth = req.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return null;
-  const token = auth.slice(7);
-  const { data: { user }, error } = await getAdminSupabase().auth.getUser(token);
-  if (error || !user) return null;
-  return user;
+  const auth = await requireUser(req);
+  return isAuthError(auth) ? null : auth.user;
 }
 
 // Kept for blast/reminder paths that only need the user ID.
