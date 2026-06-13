@@ -11,7 +11,7 @@ import { renderAnnouncementContent } from '@/lib/sanitize';
 import { LIGHT_C, useC } from '@/lib/theme';
 import { Sk, EmptyState } from '@/components/student/shared';
 import {
-  Users, Megaphone, X, ExternalLink, ChevronRight, ChevronLeft, Play, ThumbsUp, Bookmark, Check,
+  Users, Megaphone, X, ExternalLink, ChevronRight, ChevronLeft, Play, ThumbsUp, Bookmark,
 } from 'lucide-react';
 
 // --- Community section ---
@@ -488,4 +488,3 @@ export function AnnouncementsSection({ userId: userIdProp, C }: { userId?: strin
     </>
   );
 }
-
