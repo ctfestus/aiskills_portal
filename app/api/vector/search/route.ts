@@ -6,6 +6,7 @@
  * Auth: Bearer token (Supabase session)
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 import { getVectorIndex } from '@/lib/vector';
 
@@ -19,10 +20,8 @@ function adminClient() {
 }
 
 async function getSessionUser(req: NextRequest) {
-  const token = req.headers.get('authorization')?.slice(7);
-  if (!token) return null;
-  const { data: { user } } = await adminClient().auth.getUser(token);
-  return user ?? null;
+  const auth = await requireUser(req);
+  return isAuthError(auth) ? null : auth.user;
 }
 
 export async function GET(req: NextRequest) {

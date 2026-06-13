@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { Resend } from 'resend';
 import { adminClient } from '@/lib/admin-client';
 import { openCertificateEmail } from '@/lib/email-templates';
@@ -21,19 +22,8 @@ function missingMigrationResponse() {
 }
 
 async function resolveUser(req: NextRequest) {
-  const header = req.headers.get('authorization');
-  if (!header?.startsWith('Bearer ')) return null;
-  const { data: { user }, error } = await adminClient().auth.getUser(header.slice(7));
-  if (error || !user) return null;
-
-  const { data: profile } = await adminClient()
-    .from('students')
-    .select('role')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (profile?.role !== 'admin' && profile?.role !== 'instructor') return null;
-  return user;
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  return isAuthError(auth) ? null : auth.user;
 }
 
 export async function GET(req: NextRequest) {

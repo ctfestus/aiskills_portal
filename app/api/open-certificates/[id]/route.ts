@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminClient } from '@/lib/admin-client';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,20 +10,9 @@ export async function PATCH(
 ) {
   const { id } = await params;
 
-  const header = req.headers.get('authorization');
-  if (!header?.startsWith('Bearer ')) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: { user }, error: authErr } = await adminClient().auth.getUser(header.slice(7));
-  if (authErr || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: profile } = await adminClient()
-    .from('students')
-    .select('role')
-    .eq('id', user.id)
-    .maybeSingle();
-  if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
-    return NextResponse.json({ error: 'Only instructors and admins can update certificates.' }, { status: 403 });
-  }
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
+  const { user } = auth;
 
   let body: any;
   try { body = await req.json(); } catch {

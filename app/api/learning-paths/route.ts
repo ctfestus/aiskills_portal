@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 import { sendPathNotification } from '@/lib/send-path-notification';
 
@@ -10,12 +11,9 @@ function adminClient() {
 }
 
 async function getSessionUser(req: NextRequest): Promise<{ id: string; email: string } | null> {
-  const auth = req.headers.get('authorization');
-  if (!auth?.startsWith('Bearer ')) return null;
-  const token = auth.slice(7);
-  const { data: { user } } = await adminClient().auth.getUser(token);
-  if (!user?.email) return null;
-  return { id: user.id, email: user.email.trim().toLowerCase() };
+  const auth = await requireUser(req);
+  if (isAuthError(auth) || !auth.user.email) return null;
+  return { id: auth.user.id, email: auth.user.email.trim().toLowerCase() };
 }
 
 export const dynamic = 'force-dynamic';

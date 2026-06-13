@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminClient } from '@/lib/admin-client';
+import { requireUser, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
@@ -8,11 +8,9 @@ export async function GET(req: NextRequest) {
   const scheduleId = req.nextUrl.searchParams.get('id');
   if (!scheduleId) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
-  const token = req.headers.get('authorization')?.replace('Bearer ', '');
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { data: { user }, error } = await adminClient().auth.getUser(token);
-  if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireUser(req);
+  if (isAuthError(auth)) return auth.error;
+  const { token } = auth;
 
   // User-scoped client -- queries run as the authenticated user so RLS policies fire
   const supabase = createClient(
