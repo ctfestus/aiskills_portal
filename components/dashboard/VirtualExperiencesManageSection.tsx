@@ -5,14 +5,14 @@
 import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Briefcase, Copy, Download, Trash2, Plus, Edit2, BarChart3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, Copy, Download, Trash2, Plus, Edit2, BarChart3, Send, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C, cardStyle } from '@/lib/theme';
 import { SYNC_ENABLED } from '@/lib/sync';
 import { exportContent, exportAllInSection } from '@/lib/dashboard-export';
-import { PushButton, PushAllButton } from '@/components/dashboard/primitives';
+import { PushAllButton } from '@/components/dashboard/primitives';
 import { ImportButton } from '@/components/dashboard/ImportButton';
-import { CardActionsMenu } from '@/components/dashboard/content-cards';
+import { CardActionsMenu, type CardAction } from '@/components/dashboard/content-cards';
 
 const GP_IND_COLORS: Record<string, string> = {
   fintech: '#6366f1', marketing: '#f59e0b', hr: '#10b981', finance: '#3b82f6',
@@ -34,12 +34,96 @@ function groupVEsByIndustry(forms: any[]): [string, any[]][] {
   });
 }
 
+// A single VE management card: click-to-report thumbnail, kebab actions, and a
+// push-status pill that surfaces on the thumbnail while/after a sync push.
+function VECard({ form, handleDuplicate, setFormToDelete, C }: {
+  form: any; handleDuplicate: (f: any) => void; setFormToDelete: (id: string) => void; C: typeof LIGHT_C;
+}) {
+  const router = useRouter();
+  const [pushState, setPushState] = useState<'idle'|'pushing'|'done'|'error'>('idle');
+  const [pushMsg, setPushMsg] = useState('');
+  const cfg = form.config || {};
+  const color = GP_IND_COLORS[cfg.industry] || '#6366f1';
+  const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
+
+  async function push() {
+    setPushState('pushing');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/sync-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ type: 'virtual_experience', id: form.id }),
+      });
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      setPushMsg(result.action === 'updated' ? 'Updated' : 'Pushed');
+      setPushState('done');
+      setTimeout(() => setPushState('idle'), 2500);
+    } catch (err: any) {
+      setPushMsg(err.message || 'Push failed');
+      setPushState('error');
+      setTimeout(() => setPushState('idle'), 3000);
+    }
+  }
+
+  const actions: CardAction[] = [
+    { key: 'report', label: 'Report', Icon: BarChart3, href: `/dashboard/${form.id}` },
+    { key: 'edit', label: 'Edit', Icon: Edit2, href: `/create/guided-project?id=${form.id}` },
+    { key: 'duplicate', label: 'Duplicate', Icon: Copy, onClick: () => handleDuplicate(form) },
+    { key: 'export', label: 'Export', Icon: Download, onClick: () => exportContent(form) },
+    ...(SYNC_ENABLED ? [{ key: 'push', label: 'Push to platform', Icon: Send, onClick: push } as CardAction] : []),
+    { key: 'delete', label: 'Delete', Icon: Trash2, danger: true, onClick: () => setFormToDelete(form.id) },
+  ];
+
+  const pillLabel = pushState === 'pushing' ? 'Pushing' : pushState === 'done' ? pushMsg : pushState === 'error' ? 'Failed' : '';
+  const pillBg = pushState === 'error' ? 'rgba(239,68,68,0.95)' : pushState === 'done' ? 'rgba(16,185,129,0.95)' : 'rgba(17,17,17,0.72)';
+
+  return (
+    <div className="group relative flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
+      <div className="absolute top-2 right-2 z-10" onClick={e => e.stopPropagation()}>
+        <CardActionsMenu form={form} actions={actions}/>
+      </div>
+      {pushState !== 'idle' && (
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
+          style={{ background: pillBg, color: '#fff' }}>
+          {pushState === 'pushing' && <Loader2 className="w-3 h-3 animate-spin"/>}
+          {pillLabel}
+        </div>
+      )}
+      {/* Thumbnail (click -> report/detail) */}
+      <div role="button" tabIndex={0}
+        onClick={() => router.push(`/dashboard/${form.id}`)}
+        onKeyDown={e => e.key === 'Enter' && router.push(`/dashboard/${form.id}`)}
+        className="cursor-pointer">
+        {cfg.coverImage
+          ? <img src={cfg.coverImage} alt="" loading="lazy" className="w-full h-28 object-cover group-hover:opacity-90 transition-opacity" />
+          : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${color}18` }}>
+              <Briefcase className="w-8 h-8" style={{ color }} />
+            </div>}
+      </div>
+      <div className="p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: `${color}18`, color }}>{cfg.industry || 'Project'}</span>
+          <span className="text-[10px]" style={{ color: C.faint }}>{cfg.difficulty}</span>
+          {form.status === 'draft' && (
+            <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>Draft</span>
+          )}
+        </div>
+        <Link href={`/dashboard/${form.id}`} className="block">
+          <p className="font-semibold text-sm hover:opacity-70 transition-opacity" style={{ color: C.text }}>{form.title}</p>
+        </Link>
+        <p className="text-xs" style={{ color: C.faint }}>{cfg.company} · {totalLessons} lesson{totalLessons !== 1 ? 's' : ''}</p>
+      </div>
+    </div>
+  );
+}
+
 // One industry group rendered as a titled carousel of VE management cards
 function VEIndustryRow({ industry, forms, handleDuplicate, setFormToDelete, C }: {
   industry: string; forms: any[]; handleDuplicate: (f: any) => void; setFormToDelete: (id: string) => void; C: typeof LIGHT_C;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
   const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 340, behavior: 'smooth' });
   return (
     <section className="rounded-2xl p-5 sm:p-6 mb-6" style={{ ...cardStyle(C) }}>
@@ -59,53 +143,9 @@ function VEIndustryRow({ industry, forms, handleDuplicate, setFormToDelete, C }:
         </div>
       </div>
       <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-2 snap-x" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-        {forms.map(form => {
-          const cfg   = form.config || {};
-          const color = GP_IND_COLORS[cfg.industry] || '#6366f1';
-          const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
-          return (
-            <div key={form.id} className="group relative flex-shrink-0 w-[300px] snap-start rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
-              <div className="absolute top-2 right-2 z-10" onClick={e => e.stopPropagation()}>
-                <CardActionsMenu form={form} actions={[
-                  { key: 'report', label: 'Report', Icon: BarChart3, href: `/dashboard/${form.id}` },
-                  { key: 'edit', label: 'Edit', Icon: Edit2, href: `/create/guided-project?id=${form.id}` },
-                  { key: 'duplicate', label: 'Duplicate', Icon: Copy, onClick: () => handleDuplicate(form) },
-                  { key: 'export', label: 'Export', Icon: Download, onClick: () => exportContent(form) },
-                  { key: 'delete', label: 'Delete', Icon: Trash2, danger: true, onClick: () => setFormToDelete(form.id) },
-                ]}/>
-              </div>
-              {/* Thumbnail (click -> report/detail) */}
-              <div role="button" tabIndex={0}
-                onClick={() => router.push(`/dashboard/${form.id}`)}
-                onKeyDown={e => e.key === 'Enter' && router.push(`/dashboard/${form.id}`)}
-                className="cursor-pointer">
-                {cfg.coverImage
-                  ? <img src={cfg.coverImage} alt="" loading="lazy" className="w-full h-28 object-cover group-hover:opacity-90 transition-opacity" />
-                  : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${color}18` }}>
-                      <Briefcase className="w-8 h-8" style={{ color }} />
-                    </div>}
-              </div>
-              <div className="p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: `${color}18`, color }}>{cfg.industry || 'Project'}</span>
-                  <span className="text-[10px]" style={{ color: C.faint }}>{cfg.difficulty}</span>
-                  {form.status === 'draft' && (
-                    <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>Draft</span>
-                  )}
-                </div>
-                <Link href={`/dashboard/${form.id}`} className="block">
-                  <p className="font-semibold text-sm hover:opacity-70 transition-opacity" style={{ color: C.text }}>{form.title}</p>
-                </Link>
-                <p className="text-xs" style={{ color: C.faint }}>{cfg.company} · {totalLessons} lesson{totalLessons !== 1 ? 's' : ''}</p>
-                {SYNC_ENABLED && (
-                  <div className="pt-1">
-                    <PushButton type="virtual_experience" id={form.id} C={C} />
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {forms.map(form => (
+          <VECard key={form.id} form={form} handleDuplicate={handleDuplicate} setFormToDelete={setFormToDelete} C={C}/>
+        ))}
       </div>
     </section>
   );
