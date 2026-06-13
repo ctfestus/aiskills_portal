@@ -47,7 +47,9 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
   eslint: {
-    ignoreDuringBuilds: true,
+    // Run ESLint during `next build`. The lint is clean of errors (only warnings remain,
+    // which do not fail the build), so this is a guardrail against new error-level violations.
+    ignoreDuringBuilds: false,
   },
   typescript: {
     ignoreBuildErrors: false,
