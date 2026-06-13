@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, X, Loader2, Check, Image as ImageIcon, Upload } from 'lucide-react';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import { supabase } from '@/lib/supabase';
 
 interface Photo {
   id: number;
@@ -60,7 +61,10 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C, previ
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/pexels-search?q=${encodeURIComponent(q)}&per_page=18`);
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/pexels-search?q=${encodeURIComponent(q)}&per_page=18`, {
+        headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+      });
       const json = await res.json();
       if (!res.ok) { setError(json.error ?? 'Search failed'); return; }
       setPhotos(json.photos ?? []);

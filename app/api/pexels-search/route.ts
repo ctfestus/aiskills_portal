@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
+// Clamp a pagination param to a sane integer range before forwarding it upstream.
+function clampInt(raw: string | null, def: number, min: number, max: number): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return def;
+  return Math.min(max, Math.max(min, Math.trunc(n)));
+}
+
 export async function GET(req: NextRequest) {
+  // Authoring-only: this proxies Pexels on the server's API key, so it must not be an
+  // open relay anyone can use to drain the quota. The cover-image picker is staff-only.
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  if (isAuthError(auth)) return auth.error;
+
   const q = req.nextUrl.searchParams.get('q')?.trim();
-  const page = req.nextUrl.searchParams.get('page') ?? '1';
-  const perPage = req.nextUrl.searchParams.get('per_page') ?? '15';
+  const page = clampInt(req.nextUrl.searchParams.get('page'), 1, 1, 1000);
+  const perPage = clampInt(req.nextUrl.searchParams.get('per_page'), 15, 1, 80);
 
   if (!q) return NextResponse.json({ error: 'q is required' }, { status: 400 });
 

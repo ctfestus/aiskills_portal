@@ -153,6 +153,9 @@ async function isAllowedUrl(url: string): Promise<boolean> {
   });
 }
 
+// Intentionally unauthenticated: this only proxies files attached to PUBLISHED datasets
+// (enforced by isAllowedUrl below), which are themselves public. The SSRF surface is closed
+// by validatePublicDatasetUrl + the published-dataset allowlist, not by a login check.
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get('url');
   if (!url) return NextResponse.json({ error: 'Missing url param' }, { status: 400 });
