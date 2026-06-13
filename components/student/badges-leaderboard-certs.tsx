@@ -2,7 +2,7 @@
 
 // Badges, Leaderboard and Certificates sections, extracted verbatim from
 // app/student/page.tsx. The three *Section components are exported; BADGE_TABS,
-// BadgeTabId, BadgeRow, groupCertsByType and CertRow are file-internal.
+// BadgeRow, groupCertsByType and CertRow are file-internal.
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -20,12 +20,11 @@ const BADGE_TABS = [
   { id: 'learning_path',     label: 'Learning Paths'     },
   { id: 'virtual_experience',label: 'Virtual Experiences'},
 ] as const;
-type BadgeTabId = typeof BADGE_TABS[number]['id'];
 
 // One badge category rendered as a titled, horizontally-scrolling carousel
-function BadgeRow({ title, badges, earnedIds, certIdMap, badgeUuidMap, appUrl, appName, liOpen, setLiOpen, onDownload, C }: {
+function BadgeRow({ title, badges, earnedIds, certIdMap, badgeUuidMap, appUrl, appName, onDownload, C }: {
   title: string; badges: any[]; earnedIds: Set<string>; certIdMap: Record<string, string>; badgeUuidMap: Record<string, string>;
-  appUrl: string; appName?: string | null; liOpen: string | null; setLiOpen: (v: string | null) => void; onDownload: (b: any) => void; C: typeof LIGHT_C;
+  appUrl: string; appName?: string | null; onDownload: (b: any) => void; C: typeof LIGHT_C;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
@@ -103,7 +102,6 @@ function BadgeRow({ title, badges, earnedIds, certIdMap, badgeUuidMap, appUrl, a
 
 export function StudentBadgesSection({ userId, C }: { userId: string; C: typeof LIGHT_C }) {
   const { appName, appUrl } = useTenant();
-  const [liOpen, setLiOpen]         = useState<string | null>(null);
   const [allBadges, setAllBadges]   = useState<{ id: string; name: string; description: string; icon: string; color: string; image_url: string | null; category: string }[]>([]);
   const [earnedIds, setEarnedIds]   = useState<Set<string>>(new Set());
   const [streak, setStreak]         = useState<{ current_streak: number; longest_streak: number } | null>(null);
@@ -188,7 +186,7 @@ export function StudentBadgesSection({ userId, C }: { userId: string; C: typeof 
           return (
             <BadgeRow key={t.id} title={t.label} badges={list}
               earnedIds={earnedIds} certIdMap={certIdMap} badgeUuidMap={badgeUuidMap}
-              appUrl={appUrl} appName={appName} liOpen={liOpen} setLiOpen={setLiOpen} onDownload={handleDownload} C={C} />
+              appUrl={appUrl} appName={appName} onDownload={handleDownload} C={C} />
           );
         })
       )}
@@ -479,7 +477,7 @@ function CertRow({ title, certs, C }: { title: string; certs: any[]; C: typeof L
   );
 }
 
-export function CertificatesSection({ userId, userEmail, userName, C }: { userId: string; userEmail: string; userName: string; C: typeof LIGHT_C }) {
+export function CertificatesSection({ userId, userEmail, C }: { userId: string; userEmail: string; C: typeof LIGHT_C }) {
   const [certs, setCerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

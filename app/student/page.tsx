@@ -2137,7 +2137,7 @@ export default function StudentDashboard() {
               <LeaderboardSection userEmail={effectiveEmail} C={C}/>
             )}
             {activeSection === 'certificates' && user && (
-              <CertificatesSection userId={effectiveId} userEmail={effectiveEmail} userName={viewingAs?.name ?? userName} C={C}/>
+              <CertificatesSection userId={effectiveId} userEmail={effectiveEmail} C={C}/>
             )}
             {activeSection === 'payments' && user && (
               <PaymentsSection userId={effectiveId} C={C} readOnly={!!viewingAs}/>
