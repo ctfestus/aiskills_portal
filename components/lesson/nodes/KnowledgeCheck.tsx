@@ -15,6 +15,7 @@ import { createPortal } from 'react-dom';
 import { Check, Plus, X, CheckCircle2, XCircle, HelpCircle, PartyPopper } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
+import { useTenant } from '@/components/TenantProvider';
 
 function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
   const editable = editor.isEditable;
@@ -28,6 +29,8 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
     ? { border: 'none' }
     : { borderStyle, borderWidth: 1, ...(borderColor ? { borderColor } : {}) };
 
+  const { primaryColor } = useTenant();
+  const accent = primaryColor || '#10b981';
   const [selected, setSelected] = useState<number | null>(null);
   const [celebrate, setCelebrate] = useState(false);
   const submitted = selected !== null;
@@ -141,7 +144,7 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
               onClick={() => onSelect(i)}
             >
               <span className="lesson-check__marker">
-                {showCorrect ? <CheckCircle2 width={15} height={15} /> : showWrong ? <XCircle width={15} height={15} /> : String.fromCharCode(65 + i)}
+                {showCorrect ? <CheckCircle2 width={20} height={20} strokeWidth={2.5} /> : showWrong ? <XCircle width={15} height={15} /> : String.fromCharCode(65 + i)}
               </span>
               <span>{opt}</span>
             </button>
@@ -150,17 +153,13 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
       </div>
       {submitted && (
         <div className="lesson-check__feedback">
-          {selected === correctIndex ? (
-            <div className="lesson-check__big-correct"><CheckCircle2 width={46} height={46} strokeWidth={2.5} /></div>
-          ) : (
-            <p className="lesson-check__verdict">Not quite</p>
-          )}
+          {selected !== correctIndex && <p className="lesson-check__verdict">Not quite</p>}
           {explanation && <p className="lesson-check__explain">{explanation}</p>}
           <button type="button" className="lesson-check__retry" onClick={() => { setSelected(null); setCelebrate(false); }}>Try again</button>
         </div>
       )}
       {celebrate && createPortal(
-        <div className="lesson-check__toast" role="status">
+        <div className="lesson-check__toast" role="status" style={{ background: accent }}>
           <PartyPopper width={20} height={20} />
           <span>Correct! Nice work</span>
         </div>,
