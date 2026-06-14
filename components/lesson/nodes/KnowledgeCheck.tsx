@@ -144,7 +144,7 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
               onClick={() => onSelect(i)}
             >
               <span className="lesson-check__marker">
-                {showCorrect ? <CheckCircle2 width={26} height={26} strokeWidth={2.5} /> : showWrong ? <XCircle width={15} height={15} /> : String.fromCharCode(65 + i)}
+                {showCorrect ? <CheckCircle2 width={26} height={26} strokeWidth={2.5} /> : showWrong ? <XCircle width={26} height={26} strokeWidth={2.5} /> : String.fromCharCode(65 + i)}
               </span>
               <span>{opt}</span>
             </button>
