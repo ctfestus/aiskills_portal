@@ -38,7 +38,7 @@ function RunnableCodeView({ node, updateAttributes, editor }: NodeViewProps) {
           </select>
           {isSql && (
             <span className="lesson-code__hint" data-on={setupSql.trim() ? 'true' : 'false'}>
-              {setupSql.trim() ? 'Runnable' : 'Add setup SQL to enable Run'}
+              {setupSql.trim() ? 'Runnable' : 'Copyable snippet'}
             </span>
           )}
         </div>
