@@ -284,13 +284,13 @@ export function LessonContentStyles() {
 .lesson-content .lesson-carousel__slides { flex: 1; min-width: 0; }
 .lesson-content .lesson-carousel__slide { display: none; background: #ffffff; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 10px 28px rgba(0,0,0,0.07); overflow: hidden; }
 .lesson-content.dark .lesson-carousel__slide { background: #1a1a1e; box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
-.lesson-content .lesson-carousel__cover-wrap { position: relative; }
-.lesson-content .lesson-carousel__cover { display: block; width: 100%; max-height: 280px; object-fit: cover; }
+.lesson-content .lesson-carousel__cover-wrap { position: relative; margin-bottom: 14px; }
+.lesson-content .lesson-carousel__cover { display: block; width: 100%; height: auto; border-radius: 10px; }
 .lesson-content .lesson-carousel__cover-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
 .lesson-content .lesson-carousel__cover-btn { font-size: 11px; font-weight: 600; color: #fff; background: rgba(0,0,0,0.55); border: none; border-radius: 6px; padding: 4px 8px; cursor: pointer; }
 .lesson-content .lesson-carousel__cover-btn:hover { background: rgba(0,0,0,0.7); }
-.lesson-content .lesson-carousel__cover-add { display: flex; align-items: center; justify-content: center; gap: 6px; height: 110px; font-size: 13px; font-weight: 600; color: #71717a; border-bottom: 1px dashed #d4d4d8; cursor: pointer; }
-.lesson-content.dark .lesson-carousel__cover-add { color: #a1a1aa; border-bottom-color: #3f3f46; }
+.lesson-content .lesson-carousel__cover-add { display: flex; align-items: center; justify-content: center; gap: 6px; height: 110px; margin-bottom: 14px; font-size: 13px; font-weight: 600; color: #71717a; border: 1px dashed #d4d4d8; border-radius: 10px; cursor: pointer; }
+.lesson-content.dark .lesson-carousel__cover-add { color: #a1a1aa; border-color: #3f3f46; }
 .lesson-content .lesson-carousel__spin { animation: lesson-code-spin 0.8s linear infinite; }
 .lesson-content .lesson-carousel__body { padding: 18px 22px 20px; }
 .lesson-content .lesson-carousel__body > :last-child { margin-bottom: 0; }

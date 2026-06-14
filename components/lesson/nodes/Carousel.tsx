@@ -147,6 +147,7 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
 
   return (
     <NodeViewWrapper className="lesson-carousel__slide" data-slide-index={index}>
+      <div className="lesson-carousel__body">
       {cover ? (
         <div className="lesson-carousel__cover-wrap" contentEditable={false}>
           <img className="lesson-carousel__cover" src={cover} alt={coverAlt} draggable={false} />
@@ -167,7 +168,6 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
           <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
         </label>
       ) : null}
-      <div className="lesson-carousel__body">
         <NodeViewContent />
       </div>
     </NodeViewWrapper>
