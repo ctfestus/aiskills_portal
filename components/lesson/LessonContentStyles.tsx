@@ -178,7 +178,8 @@ export function LessonContentStyles() {
 .lesson-content.dark .lesson-check__marker { background: rgba(255,255,255,0.08); color: #a1a1aa; }
 .lesson-content .lesson-check__option[data-correct="true"] { border-color: #10b981; background: #ecfdf5; color: #065f46; }
 .lesson-content.dark .lesson-check__option[data-correct="true"] { background: rgba(16,185,129,0.12); color: #6ee7b7; }
-.lesson-content .lesson-check__option[data-correct="true"] .lesson-check__marker { background: #10b981; color: #fff; }
+.lesson-content .lesson-check__option[data-correct="true"] .lesson-check__marker { background: transparent; color: #10b981; }
+.lesson-content.dark .lesson-check__option[data-correct="true"] .lesson-check__marker { color: #34d399; }
 .lesson-content .lesson-check__option[data-wrong="true"] { border-color: #f43f5e; background: #fff1f2; color: #9f1239; }
 .lesson-content.dark .lesson-check__option[data-wrong="true"] { background: rgba(244,63,94,0.12); color: #fda4af; }
 .lesson-content .lesson-check__option[data-wrong="true"] .lesson-check__marker { background: #f43f5e; color: #fff; }
@@ -195,6 +196,7 @@ export function LessonContentStyles() {
 @keyframes lesson-check-bigpop { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: scale(1); } }
 .lesson-content .lesson-check__option[data-correct="true"] .lesson-check__marker { width: 30px; height: 30px; animation: lesson-check-bigpop 0.32s cubic-bezier(0.2,0.8,0.2,1.5); }
 .lesson-check__toast { position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%); z-index: 2000; display: inline-flex; align-items: center; gap: 9px; padding: 12px 20px; border-radius: 999px; background: #10b981; color: #fff; font-size: 14px; font-weight: 700; box-shadow: 0 12px 32px rgba(0,0,0,0.28); animation: lesson-check-toastpop 0.32s cubic-bezier(0.2,0.8,0.2,1.4); }
+.lesson-check__toast-emoji { font-size: 18px; line-height: 1; }
 @keyframes lesson-check-toastpop { from { opacity: 0; transform: translateX(-50%) translateY(14px) scale(0.92); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .lesson-check__toast, .lesson-content .lesson-check__option[data-correct="true"] .lesson-check__marker { animation: none; } }
 .lesson-content .lesson-check__q-input { width: 100%; font: inherit; font-weight: 600; font-size: 15px; color: #18181b; background: transparent; border: none; border-bottom: 1px solid #e4e4e7; outline: none; padding: 2px 0 6px; margin-bottom: 10px; }

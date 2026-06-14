@@ -12,7 +12,7 @@ import { useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { createPortal } from 'react-dom';
-import { Check, Plus, X, CheckCircle2, XCircle, HelpCircle, PartyPopper } from 'lucide-react';
+import { Check, Plus, X, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
 import { useTenant } from '@/components/TenantProvider';
@@ -144,7 +144,7 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
               onClick={() => onSelect(i)}
             >
               <span className="lesson-check__marker">
-                {showCorrect ? <CheckCircle2 width={20} height={20} strokeWidth={2.5} /> : showWrong ? <XCircle width={15} height={15} /> : String.fromCharCode(65 + i)}
+                {showCorrect ? <CheckCircle2 width={26} height={26} strokeWidth={2.5} /> : showWrong ? <XCircle width={15} height={15} /> : String.fromCharCode(65 + i)}
               </span>
               <span>{opt}</span>
             </button>
@@ -160,7 +160,7 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
       )}
       {celebrate && createPortal(
         <div className="lesson-check__toast" role="status" style={{ background: accent }}>
-          <PartyPopper width={20} height={20} />
+          <span className="lesson-check__toast-emoji" aria-hidden="true">🎉</span>
           <span>Correct! Nice work</span>
         </div>,
         document.body,
