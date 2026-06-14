@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import type { LessonDoc } from '@/lib/lesson-doc';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight, ChevronLeft,
@@ -42,10 +43,62 @@ function SortableVEShell({ id, children }: {
   );
   return <div ref={setNodeRef} style={style}>{children({ dragHandle, isDragging })}</div>;
 }
-import { RichTextEditor } from '@/components/RichTextEditor';
+import { LessonEditor } from '@/components/lesson/LessonEditor';
+import { lessonHtmlToDoc } from '@/components/lesson/extensions';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+
+// Convert AI-generated lesson bodies (HTML) into canonical interactive docs so VE
+// lessons stay doc-canonical, matching the course generate_lesson flow. The HTML
+// `body` is kept as the lossy fallback. Runs client-side (generateJSON needs a DOM).
+function attachLessonDocs<T extends { modules?: unknown[] }>(cfg: T): T {
+  if (!cfg?.modules) return cfg;
+  return {
+    ...cfg,
+    modules: (cfg.modules as any[]).map((m: any) => ({
+      ...m,
+      lessons: Array.isArray(m?.lessons)
+        ? m.lessons.map((l: any) => {
+            if (!l?.body) return l;
+            try { return { ...l, doc: lessonHtmlToDoc(l.body) }; }
+            catch { return l; } // keep body-only if the HTML cannot be parsed
+          })
+        : m?.lessons,
+    })),
+  };
+}
+
+// Like attachLessonDocs, but preserves the ORIGINAL interactive doc for any lesson the
+// AI left unchanged (same id, same body). Used after "improve", which strips doc to
+// body-only server-side -- rebuilding doc from the lossy HTML would otherwise destroy
+// accordions / tabs / knowledge checks / runnable code on lessons the AI did not touch.
+// Lessons the AI actually rewrote (body changed) are reconverted from the new body.
+function preserveLessonDocs<T extends { modules?: unknown[] }>(cfg: T, prior: { modules?: any[] } | null | undefined): T {
+  if (!cfg?.modules) return cfg;
+  // Compare bodies ignoring whitespace so harmless reformatting by the AI is not
+  // mistaken for a rewrite (which would trigger a lossy doc rebuild).
+  const norm = (s?: string) => (s || '').replace(/\s+/g, ' ').trim();
+  const priorById = new Map<string, { body?: string; doc?: LessonDoc }>();
+  (prior?.modules || []).forEach((m: any) => (m?.lessons || []).forEach((l: any) => {
+    if (l?.id) priorById.set(l.id, { body: l.body, doc: l.doc });
+  }));
+  return {
+    ...cfg,
+    modules: (cfg.modules as any[]).map((m: any) => ({
+      ...m,
+      lessons: Array.isArray(m?.lessons)
+        ? m.lessons.map((l: any) => {
+            if (!l?.body) return l;
+            const prev = l.id ? priorById.get(l.id) : undefined;
+            if (prev?.doc && norm(prev.body) === norm(l.body)) return { ...l, doc: prev.doc };
+            try { return { ...l, doc: lessonHtmlToDoc(l.body) }; }
+            catch { return l; }
+          })
+        : m?.lessons,
+    })),
+  };
+}
 
 // Design tokens
 const LIGHT_C = {
@@ -84,7 +137,8 @@ interface Requirement {
 interface Lesson {
   id: string;
   title: string;
-  body: string;
+  body: string;           // sanitized HTML; lossy fallback when `doc` is present
+  doc?: LessonDoc;        // canonical interactive-lesson content (TipTap/ProseMirror JSON)
   videoUrl?: string;
   requirements: Requirement[];
 }
@@ -552,7 +606,7 @@ function VirtualExperienceCreatePageInner() {
           json.config.dataset = { filename: '', description: '', url: datasetUrl.trim() };
         }
       }
-      setConfig(json.config);
+      setConfig(attachLessonDocs(json.config));
       setTitle(json.config.company ? `${json.config.company} - ${effectiveIndustry.charAt(0).toUpperCase()+effectiveIndustry.slice(1)} Project` : 'Virtual Experience');
       setCoverImage(json.config.coverImage || '');
       setExpandedModules(new Set((json.config.modules || []).map((m: Module) => m.id)));
@@ -577,7 +631,7 @@ function VirtualExperienceCreatePageInner() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
-      setConfig(json.config);
+      setConfig(attachLessonDocs(json.config));
       setTitle(json.config.company ? `${json.config.company} - ${effectiveIndustry.charAt(0).toUpperCase()+effectiveIndustry.slice(1)} Project` : 'Virtual Experience');
       setCoverImage(json.config.coverImage || '');
       setExpandedModules(new Set((json.config.modules || []).map((m: Module) => m.id)));
@@ -668,7 +722,7 @@ function VirtualExperienceCreatePageInner() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed');
       if (json.config) {
-        setConfig(json.config as ProjectConfig);
+        setConfig(preserveLessonDocs(json.config, config) as ProjectConfig);
         setImproveInstruction('');
         setShowImprove(false);
       }
@@ -1505,9 +1559,11 @@ function VirtualExperienceCreatePageInner() {
                                   {expandedModules.has(expandKey) && (
                                     <div className="px-3 pb-3 space-y-3 border-t" style={{ borderColor: C.divider }}>
                                       <div className="pt-3">
-                                        <RichTextEditor
-                                          value={les.body || ''}
-                                          onChange={html => updateLesson(mod.id, les.id, { body: html })}
+                                        <LessonEditor
+                                          key={les.id}
+                                          doc={les.doc}
+                                          bodyFallback={les.body}
+                                          onChange={({ doc, body }) => updateLesson(mod.id, les.id, { doc, body })}
                                           placeholder="Write the mission content here. What should the student read, understand, or do?"
                                         />
                                       </div>

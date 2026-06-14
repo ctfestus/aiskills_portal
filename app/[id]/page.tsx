@@ -949,7 +949,7 @@ export default function PublicFormPage() {
 
   if (config.isCourse) {
     const questions = config.questions || [];
-    const lessonCount = questions.filter((q: any) => q.lesson?.title || q.lesson?.body).length;
+    const lessonCount = questions.filter((q: any) => q.lesson?.title || q.lesson?.body || q.lesson?.doc).length;
 
     const cp = {
       bg:      dark ? '#0d0d0d' : '#F5F5F3',
@@ -1045,7 +1045,7 @@ export default function PublicFormPage() {
                   if (q.isSection) {
                     if (cur) sectionGroups.push(cur);
                     cur = { id: q.id, title: q.sectionTitle || 'Section', items: [] };
-                  } else if (q.lesson?.title || q.lesson?.body) {
+                  } else if (q.lesson?.title || q.lesson?.body || q.lesson?.doc) {
                     if (!cur) cur = { id: '__default__', title: '', items: [] };
                     cur.items.push(q);
                   }
@@ -1086,7 +1086,7 @@ export default function PublicFormPage() {
                           ))}
                         </div>
                       );
-                    }) : questions.filter((q: any) => q.lesson?.title || q.lesson?.body).map((q: any, i: number, arr: any[]) => (
+                    }) : questions.filter((q: any) => q.lesson?.title || q.lesson?.body || q.lesson?.doc).map((q: any, i: number, arr: any[]) => (
                       <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 24px', borderBottom: i < arr.length - 1 ? `1px solid ${cp.divider}` : 'none', background: i % 2 === 0 ? 'transparent' : cp.subtle }}>
                         <div style={{ width: 22, height: 22, borderRadius: 7, background: `${accentColor}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <span style={{ fontSize: 10, fontWeight: 800, color: accentColor }}>{i + 1}</span>

@@ -20,6 +20,8 @@ import dynamic from 'next/dynamic';
 import GeneratingOverlay from '@/components/GeneratingOverlay';
 import { ImageCropModal } from '@/components/ImageCropModal';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { LessonEditor } from '@/components/lesson/LessonEditor';
+import { lessonHtmlToDoc } from '@/components/lesson/extensions';
 import { getFontById, loadGoogleFont } from '@/lib/fonts';
 import { FontPickerModal } from '@/components/FontPickerModal';
 import { supabase } from '@/lib/supabase';
@@ -896,13 +898,18 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
             };
           }
           if (action === 'generate_lesson') {
+            const newBody = data.body || item.lesson?.body || '';
             return {
               ...item,
               lesson: {
+                // preserve existing lesson assets (imageUrl, pdfUrl/pdfName/pdfPages)
+                ...item.lesson,
                 title: data.title || item.lesson?.title || '',
-                body: data.body || item.lesson?.body || '',
-                imageUrl: item.lesson?.imageUrl || '',
+                body: newBody,
                 videoUrl: data.videoUrl || item.lesson?.videoUrl || '',
+                // rebuild the canonical doc from the regenerated HTML so the lesson
+                // stays doc-canonical (not body-only) and renders interactively.
+                doc: newBody ? lessonHtmlToDoc(newBody) : undefined,
               },
             };
           }
@@ -3133,9 +3140,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                   style={inputStyle}
                                   placeholder="Lesson title (optional)..."
                                 />
-                                <RichTextEditor
-                                  value={q.lesson.body || ''}
-                                  onChange={html => handleUpdateQuestion(q.id, { lesson: { ...q.lesson, body: html } })}
+                                <LessonEditor
+                                  key={q.id}
+                                  doc={q.lesson.doc}
+                                  bodyFallback={q.lesson.body}
+                                  onChange={({ doc, body }) => handleUpdateQuestion(q.id, { lesson: { ...q.lesson, doc, body } })}
                                   placeholder="Explain the theory behind this question..."
                                 />
                                 <div className="grid grid-cols-2 gap-2 items-start">

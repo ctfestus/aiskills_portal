@@ -26,6 +26,19 @@ import { SortableFieldCard } from '@/components/create/SortableFieldCard';
 import { FormPreview } from '@/components/create/FormPreview';
 import GeneratingOverlay from '@/components/GeneratingOverlay';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { LessonEditor } from '@/components/lesson/LessonEditor';
+import { lessonHtmlToDoc } from '@/components/lesson/extensions';
+
+// Convert AI-generated question lessons (HTML body) into canonical interactive docs
+// so full course generation produces doc-canonical lessons, matching the per-lesson
+// generate_lesson flow. Body is kept as the lossy fallback. Runs client-side.
+function attachQuestionLessonDocs(questions: any[]): any[] {
+  return (questions || []).map((q: any) => {
+    if (!q?.lesson?.body || q.lesson.doc) return q;
+    try { return { ...q, lesson: { ...q.lesson, doc: lessonHtmlToDoc(q.lesson.body) } }; }
+    catch { return q; } // keep body-only if the HTML cannot be parsed
+  });
+}
 import { getFontById } from '@/lib/fonts';
 import { FontPickerModal } from '@/components/FontPickerModal';
 import { supabase } from '@/lib/supabase';
@@ -637,7 +650,7 @@ const [isSaving, setIsSaving] = useState(false);
         mode: 'dark',
         font: 'google-sans-text',
         fields: [],
-        questions: data.questions || [],
+        questions: attachQuestionLessonDocs(data.questions || []),
         learnOutcomes: data.learnOutcomes || [],
       });
       setSqlWizardStep(null);
@@ -786,7 +799,7 @@ const [isSaving, setIsSaving] = useState(false);
         mode: 'dark',
         font: 'google-sans-text',
         fields: [],
-        questions: data.questions || [],
+        questions: attachQuestionLessonDocs(data.questions || []),
         learnOutcomes: data.learnOutcomes || [],
       });
       setDocWizardStep(null);
@@ -1028,13 +1041,18 @@ const [isSaving, setIsSaving] = useState(false);
             };
           }
           if (action === 'generate_lesson') {
+            const newBody = data.body || item.lesson?.body || '';
             return {
               ...item,
               lesson: {
+                // preserve existing lesson assets (imageUrl, pdfUrl/pdfName/pdfPages)
+                ...item.lesson,
                 title: data.title || item.lesson?.title || '',
-                body: data.body || item.lesson?.body || '',
-                imageUrl: item.lesson?.imageUrl || '',
+                body: newBody,
                 videoUrl: data.videoUrl || item.lesson?.videoUrl || '',
+                // rebuild the canonical doc from the regenerated HTML so the lesson
+                // stays doc-canonical (not body-only) and renders interactively.
+                doc: newBody ? lessonHtmlToDoc(newBody) : undefined,
               },
             };
           }
@@ -3681,9 +3699,11 @@ const [isSaving, setIsSaving] = useState(false);
                                 style={inputStyle}
                                 placeholder="Lesson title (optional)..."
                               />
-                              <RichTextEditor
-                                value={q.lesson.body || ''}
-                                onChange={html => handleUpdateQuestion(q.id, { lesson: { ...q.lesson, body: html } })}
+                              <LessonEditor
+                                key={q.id}
+                                doc={q.lesson.doc}
+                                bodyFallback={q.lesson.body}
+                                onChange={({ doc, body }) => handleUpdateQuestion(q.id, { lesson: { ...q.lesson, doc, body } })}
                                 placeholder="Explain the theory behind this question..."
                               />
                               <div className="grid grid-cols-2 gap-2 items-start">

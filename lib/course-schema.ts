@@ -9,8 +9,10 @@
 // and collapsed into the canonical shape. Never read the aliases downstream.
 
 import type { ThemeColor, ThemeMode } from '@/lib/theme-types';
+import type { LessonDoc } from '@/lib/lesson-doc';
 
 export type { ThemeColor, ThemeMode };
+export type { LessonDoc };
 
 // --- Types ---
 
@@ -66,7 +68,8 @@ export interface CourseQuestion {
   downloadItems?: DownloadItem[];
   lesson?: {
     title?: string;
-    body?: string;
+    body?: string;          // sanitized HTML; canonical for legacy lessons, lossy fallback when `doc` is present
+    doc?: LessonDoc;        // canonical interactive-lesson content (TipTap/ProseMirror JSON); see lib/lesson-doc.ts
     imageUrl?: string;
     videoUrl?: string;
     pdfUrl?: string;

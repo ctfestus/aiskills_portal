@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { adminClient } from '@/lib/admin-client';
 import { requireRole, requireUser, isAuthError } from '@/lib/api-auth';
 import { normalizeFormConfig, validateFormConfig, normalizeQuestions } from '@/lib/course-schema';
+import { extractDocImageUrls } from '@/lib/lesson-doc';
 import { sendAssignmentNotifications } from '@/lib/send-assignment-notification';
 import { autoRegisterEventCohorts } from '@/lib/auto-register-event-cohorts';
 import { getVectorIndex } from '@/lib/vector';
@@ -410,6 +411,8 @@ export async function DELETE(req: NextRequest) {
       row?.cover_image,
       ...(row?.questions ?? []).map((q: any) => q.imageUrl),
       ...(row?.questions ?? []).flatMap((q: any) => [q.lesson?.imageUrl]),
+      // inline images stored inside interactive lesson docs (lesson.doc)
+      ...(row?.questions ?? []).flatMap((q: any) => extractDocImageUrls(q.lesson?.doc)),
     ];
     await deleteCloudinaryUrls(urls);
   }
@@ -424,8 +427,11 @@ export async function DELETE(req: NextRequest) {
   }
 
   if (found.table === 'virtual_experiences') {
-    const { data: row } = await supabase.from('virtual_experiences').select('cover_image, dataset').eq('id', formId).single();
-    await deleteCloudinaryUrls([row?.cover_image]);
+    const { data: row } = await supabase.from('virtual_experiences').select('cover_image, dataset, modules').eq('id', formId).single();
+    // inline images stored inside interactive lesson docs across all module lessons
+    const docImageUrls = ((row?.modules ?? []) as any[]).flatMap((m: any) =>
+      ((m?.lessons ?? []) as any[]).flatMap((l: any) => extractDocImageUrls(l?.doc)));
+    await deleteCloudinaryUrls([row?.cover_image, ...docImageUrls]);
     const datasetUrl = row?.dataset?.url;
     if (datasetUrl?.includes('/storage/v1/object/public/datasets/')) {
       const storagePath = datasetUrl.split('/storage/v1/object/public/datasets/')[1];

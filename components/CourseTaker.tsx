@@ -16,6 +16,7 @@ import {
 import { AnimatedField } from '@/components/AnimatedField';
 import type { QuestionType, DownloadItem, CourseQuestion } from '@/lib/course-schema';
 import { sanitizeRichText } from '@/lib/sanitize';
+import { LessonRenderer } from '@/components/lesson/LessonRenderer';
 import { supabase } from '@/lib/supabase';
 import { getFontById, loadGoogleFont } from '@/lib/fonts';
 import {
@@ -560,7 +561,7 @@ export function CourseTaker({
       }
     }
     // Auto-open lesson before question if timing is set to 'before' (only for unanswered questions)
-    if ((config as any).lessonTiming === 'before' && (currentQuestion.lesson?.body || currentQuestion.lesson?.videoUrl || currentQuestion.lesson?.imageUrl) && !prevAnswer) {
+    if ((config as any).lessonTiming === 'before' && (currentQuestion.lesson?.doc || currentQuestion.lesson?.body || currentQuestion.lesson?.videoUrl || currentQuestion.lesson?.imageUrl || currentQuestion.lesson?.pdfUrl) && !prevAnswer) {
       setLessonOpen(true);
     } else {
       setLessonOpen(false);
@@ -3292,16 +3293,20 @@ export function CourseTaker({
                         )}
 
                         {/* Body */}
-                        {lesson.body && (
+                        {(lesson.doc || lesson.body) && (
                           <div className="px-4 sm:px-8 pt-4 sm:pt-6 pb-5 sm:pb-6">
-                            <div
-                              className={`prose prose-sm max-w-none [font-size:15.5px] ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark
-                                ? 'prose-invert prose-p:text-[#A8B5C2] prose-p:leading-[1.6] prose-headings:text-[#ACB8C5] prose-headings:font-semibold prose-strong:text-[#ACB8C5] prose-a:text-blue-400 prose-li:text-[#A8B5C2] prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-[#3E93FF] prose-blockquote:text-[#6b7a89] prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
-                                : 'prose-p:text-[#555555] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#555555] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-[#00bf63] prose-blockquote:text-[#888888] prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
-                              }`}
-                              style={{ color: isDark ? '#A8B5C2' : '#555555', ...fontStyle }}
-                              dangerouslySetInnerHTML={{ __html: renderBody(lesson.body) }}
-                            />
+                            {lesson.doc ? (
+                              <LessonRenderer key={currentQuestion.id} doc={lesson.doc} isDark={isDark} />
+                            ) : (
+                              <div
+                                className={`prose prose-sm max-w-none [font-size:15.5px] ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark
+                                  ? 'prose-invert prose-p:text-[#A8B5C2] prose-p:leading-[1.6] prose-headings:text-[#ACB8C5] prose-headings:font-semibold prose-strong:text-[#ACB8C5] prose-a:text-blue-400 prose-li:text-[#A8B5C2] prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-[#3E93FF] prose-blockquote:text-[#6b7a89] prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
+                                  : 'prose-p:text-[#555555] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#555555] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-[#00bf63] prose-blockquote:text-[#888888] prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
+                                }`}
+                                style={{ color: isDark ? '#A8B5C2' : '#555555', ...fontStyle }}
+                                dangerouslySetInnerHTML={{ __html: renderBody(lesson.body) }}
+                              />
+                            )}
                           </div>
                         )}
 
@@ -3471,7 +3476,7 @@ export function CourseTaker({
                   )}
 
                   {/* -- Lesson content for review questions -- */}
-                  {REVIEW_TYPES.includes(questionType) && currentQuestion.lesson && (currentQuestion.lesson.body || currentQuestion.lesson.videoUrl || currentQuestion.lesson.imageUrl) && (
+                  {REVIEW_TYPES.includes(questionType) && currentQuestion.lesson && (currentQuestion.lesson.doc || currentQuestion.lesson.body || currentQuestion.lesson.videoUrl || currentQuestion.lesson.imageUrl || currentQuestion.lesson.pdfUrl) && (
                     <>
                       {currentQuestion.lesson.videoUrl && getVideoEmbedUrl(currentQuestion.lesson.videoUrl) && (
                         <div className="mb-4 rounded-lg overflow-hidden" style={getVideoEmbedUrl(currentQuestion.lesson.videoUrl)!.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9' }}>
@@ -3493,15 +3498,21 @@ export function CourseTaker({
                           <PdfCarousel url={currentQuestion.lesson.pdfUrl} pages={currentQuestion.lesson.pdfPages || 1} fileName={currentQuestion.lesson.pdfName} accent={accent} isDark={isDark} />
                         </div>
                       )}
-                      {currentQuestion.lesson.body && (
-                        <div
-                          className={`mb-6 prose prose-sm max-w-none [font-size:15.5px] ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark
-                            ? 'prose-invert prose-p:text-[#A8B5C2] prose-p:leading-[1.6] prose-headings:text-[#ACB8C5] prose-headings:font-semibold prose-strong:text-[#ACB8C5] prose-a:text-blue-400 prose-li:text-[#A8B5C2] prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-[#3E93FF] prose-blockquote:text-[#6b7a89] prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
-                            : 'prose-p:text-[#555555] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#555555] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-[#00bf63] prose-blockquote:text-[#888888] prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
-                          }`}
-                          style={{ color: isDark ? '#A8B5C2' : '#555555', ...fontStyle }}
-                          dangerouslySetInnerHTML={{ __html: renderBody(currentQuestion.lesson.body) }}
-                        />
+                      {(currentQuestion.lesson.doc || currentQuestion.lesson.body) && (
+                        currentQuestion.lesson.doc ? (
+                          <div className="mb-6">
+                            <LessonRenderer key={currentQuestion.id} doc={currentQuestion.lesson.doc} isDark={isDark} />
+                          </div>
+                        ) : (
+                          <div
+                            className={`mb-6 prose prose-sm max-w-none [font-size:15.5px] ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark
+                              ? 'prose-invert prose-p:text-[#A8B5C2] prose-p:leading-[1.6] prose-headings:text-[#ACB8C5] prose-headings:font-semibold prose-strong:text-[#ACB8C5] prose-a:text-blue-400 prose-li:text-[#A8B5C2] prose-li:leading-[1.6] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:border-[#3E93FF] prose-blockquote:text-[#6b7a89] prose-blockquote:not-italic prose-code:text-emerald-400 prose-pre:bg-zinc-900'
+                              : 'prose-p:text-[#555555] prose-p:leading-[1.6] prose-headings:text-[#111] prose-headings:font-semibold prose-strong:text-[#111] prose-li:text-[#555555] prose-li:leading-[1.6] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:border-[#00bf63] prose-blockquote:text-[#888888] prose-blockquote:not-italic prose-code:text-emerald-700 prose-pre:bg-zinc-50'
+                            }`}
+                            style={{ color: isDark ? '#A8B5C2' : '#555555', ...fontStyle }}
+                            dangerouslySetInnerHTML={{ __html: renderBody(currentQuestion.lesson.body) }}
+                          />
+                        )
                       )}
                     </>
                   )}
@@ -3678,7 +3689,7 @@ export function CourseTaker({
                       );
                     }
 
-                    const hasLesson = (currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl) && (config as any).lessonTiming !== 'before';
+                    const hasLesson = (currentQuestion?.lesson?.doc || currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl || currentQuestion?.lesson?.pdfUrl) && (config as any).lessonTiming !== 'before';
                     const footerBg = isChecking
                       ? (isCorrect ? (isDark ? '#0a2e1a' : '#f0fdf4') : (isDark ? '#662525' : '#fff1f1'))
                       : (isDark ? '#1E1F26' : '#ffffff');
@@ -3909,15 +3920,19 @@ export function CourseTaker({
                   {currentQuestion.lesson.pdfUrl && (
                     <PdfCarousel url={currentQuestion.lesson.pdfUrl} pages={currentQuestion.lesson.pdfPages || 1} fileName={currentQuestion.lesson.pdfName} accent={accent} isDark={isDark} />
                   )}
-                  {currentQuestion.lesson.body && (
-                    <div
-                      className={`prose prose-base sm:prose-lg max-w-none ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark
-                        ? 'prose-invert prose-p:text-[#A8B5C2] prose-p:leading-[1.65] prose-headings:text-[#ACB8C5] prose-strong:text-[#ACB8C5] prose-a:text-blue-400 prose-li:text-[#A8B5C2] prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-[#3E93FF] prose-blockquote:text-[#6b7a89] prose-blockquote:not-italic'
-                        : 'prose-p:text-[#555555] prose-p:leading-[1.65] prose-headings:text-[#111111] prose-strong:text-[#111111] prose-li:text-[#555555] prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-[#00bf63] prose-blockquote:text-[#888888] prose-blockquote:not-italic'
-                      }`}
-                      style={{ color: isDark ? '#A8B5C2' : '#555555', ...fontStyle }}
-                      dangerouslySetInnerHTML={{ __html: renderBody(currentQuestion.lesson.body) }}
-                    />
+                  {(currentQuestion.lesson.doc || currentQuestion.lesson.body) && (
+                    currentQuestion.lesson.doc ? (
+                      <LessonRenderer key={currentQuestion.id} doc={currentQuestion.lesson.doc} isDark={isDark} />
+                    ) : (
+                      <div
+                        className={`prose prose-base sm:prose-lg max-w-none ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark
+                          ? 'prose-invert prose-p:text-[#A8B5C2] prose-p:leading-[1.65] prose-headings:text-[#ACB8C5] prose-strong:text-[#ACB8C5] prose-a:text-blue-400 prose-li:text-[#A8B5C2] prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-[#3E93FF] prose-blockquote:text-[#6b7a89] prose-blockquote:not-italic'
+                          : 'prose-p:text-[#555555] prose-p:leading-[1.65] prose-headings:text-[#111111] prose-strong:text-[#111111] prose-li:text-[#555555] prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-[#00bf63] prose-blockquote:text-[#888888] prose-blockquote:not-italic'
+                        }`}
+                        style={{ color: isDark ? '#A8B5C2' : '#555555', ...fontStyle }}
+                        dangerouslySetInnerHTML={{ __html: renderBody(currentQuestion.lesson.body) }}
+                      />
+                    )
                   )}
                   {(config as any).lessonTiming === 'before' && !isChecking ? (
                     <button

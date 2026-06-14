@@ -152,7 +152,7 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
   const isDark = theme === 'dark';
   const config = course.config ?? course.form?.config ?? {};
   const questions: any[] = course.form?.questions ?? config.questions ?? [];
-  const lessons = questions.filter((q: any) => q.lesson?.title || q.lesson?.body);
+  const lessons = questions.filter((q: any) => q.lesson?.title || q.lesson?.body || q.lesson?.doc);
   const lessonCount = lessons.length;
   const countableDetailQ = questions.filter((q: any) => !q.isSection);
   const answeredDetailQ = countableDetailQ.filter((q: any) => !!(course.answers ?? {})[q.id]).length;
