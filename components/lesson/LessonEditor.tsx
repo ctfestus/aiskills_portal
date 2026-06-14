@@ -13,7 +13,7 @@
 // is intentionally uncontrolled after mount to avoid caret resets on every keystroke.
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import Placeholder from '@tiptap/extension-placeholder';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code2, FileCode2,
@@ -151,24 +151,25 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
           <TableBtn dark={dark} danger onClick={() => editor.chain().focus().deleteTable().run()}>Delete table</TableBtn>
           <span className="w-px h-4 mx-1" style={{ background: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }} />
           {(() => {
-            const t = editor.getAttributes('table');
-            const mode = (t.borderMode as string) || 'all';
-            const color = (t.borderColor as string) || '';
-            const set = (attrs: Record<string, unknown>) => editor.chain().focus().updateAttributes('table', attrs).run();
+            const cell = editor.getAttributes('tableCell');
+            const header = editor.getAttributes('tableHeader');
+            const mode = (cell.cellBorder || header.cellBorder || 'all') as string;
+            const color = (cell.cellBorderColor || header.cellBorderColor || '') as string;
             return (
               <>
-                <TableBtn dark={dark} active={mode === 'all'} onClick={() => set({ borderMode: 'all' })}>All borders</TableBtn>
-                <TableBtn dark={dark} active={mode === 'outline'} onClick={() => set({ borderMode: 'outline' })}>Outline</TableBtn>
-                <TableBtn dark={dark} active={mode === 'minimal'} onClick={() => set({ borderMode: 'minimal' })}>Minimal</TableBtn>
+                <TableBtn dark={dark} active={mode === 'all'} onClick={() => setTableCellsAttr(editor, { cellBorder: 'all' })}>All</TableBtn>
+                <TableBtn dark={dark} active={mode === 'horizontal'} onClick={() => setTableCellsAttr(editor, { cellBorder: 'horizontal' })}>Horizontal</TableBtn>
+                <TableBtn dark={dark} active={mode === 'vertical'} onClick={() => setTableCellsAttr(editor, { cellBorder: 'vertical' })}>Vertical</TableBtn>
+                <TableBtn dark={dark} active={mode === 'none'} onClick={() => setTableCellsAttr(editor, { cellBorder: 'none' })}>None</TableBtn>
                 <input
                   type="color"
                   value={color || '#94a3b8'}
                   title="Border color"
                   onMouseDown={(e) => e.stopPropagation()}
-                  onChange={(e) => set({ borderColor: e.target.value })}
+                  onChange={(e) => setTableCellsAttr(editor, { cellBorderColor: e.target.value })}
                   style={{ width: 26, height: 22, padding: 0, border: `1px solid ${dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)'}`, borderRadius: 6, background: 'none', cursor: 'pointer' }}
                 />
-                {color && <TableBtn dark={dark} onClick={() => set({ borderColor: '' })}>Reset color</TableBtn>}
+                {color && <TableBtn dark={dark} onClick={() => setTableCellsAttr(editor, { cellBorderColor: null })}>Reset color</TableBtn>}
               </>
             );
           })()}
@@ -192,6 +193,30 @@ function Toolbar({ dark, children }: { dark: boolean; children: React.ReactNode 
 
 function Divider({ dark }: { dark: boolean }) {
   return <div className="w-px h-4 mx-1" style={{ background: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }} />;
+}
+
+// Apply border attrs to EVERY cell in the table containing the current selection.
+// Border styling lives on cells (the resizable table's node view ignores table-level
+// attrs), so a table-wide change walks the table and sets each cell.
+function setTableCellsAttr(editor: Editor, attrs: Record<string, unknown>) {
+  editor.chain().focus().command(({ tr, state }) => {
+    const { $from } = state.selection;
+    let tablePos = -1;
+    let tableNode: any = null;
+    for (let d = $from.depth; d > 0; d -= 1) {
+      const n = $from.node(d);
+      if (n.type.spec.tableRole === 'table') { tableNode = n; tablePos = $from.before(d); break; }
+    }
+    if (!tableNode) return false;
+    tableNode.descendants((node: any, pos: number) => {
+      const role = node.type.spec.tableRole;
+      if (role === 'cell' || role === 'header_cell') {
+        Object.entries(attrs).forEach(([k, v]) => tr.setNodeAttribute(tablePos + 1 + pos, k, v));
+      }
+      return true;
+    });
+    return true;
+  }).run();
 }
 
 function TableBtn({ dark, danger, active, onClick, children }: { dark: boolean; danger?: boolean; active?: boolean; onClick: () => void; children: React.ReactNode }) {

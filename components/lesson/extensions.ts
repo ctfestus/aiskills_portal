@@ -24,27 +24,31 @@ import { Tabs, TabPanel } from '@/components/lesson/nodes/Tabs';
 import { KnowledgeCheck } from '@/components/lesson/nodes/KnowledgeCheck';
 import { RunnableCode } from '@/components/lesson/nodes/RunnableCode';
 
-// Table with border controls: a border mode (all / outline / minimal) and an optional
-// free border color, surfaced as data-attributes + a CSS var that LessonContentStyles
-// reads. No node view needed -- the LessonEditor table toolbar sets these attrs.
-const LessonTable = Table.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      borderMode: {
-        default: 'all',
-        parseHTML: (el) => el.getAttribute('data-border-mode') || 'all',
-        renderHTML: (attrs) => ({ 'data-border-mode': attrs.borderMode }),
-      },
-      borderColor: {
-        default: '',
-        parseHTML: (el) => el.getAttribute('data-border-color') || '',
-        renderHTML: (attrs) => (attrs.borderColor
-          ? { 'data-border-color': attrs.borderColor, style: `--lesson-table-border:${attrs.borderColor}` }
-          : {}),
-      },
-    };
+// Border styling lives on the CELLS, not the table. TipTap's resizable Table renders
+// through its own TableView, which ignores custom table-level attributes (and the
+// editor path overwrites the table style with the column width) -- so table-level
+// attrs never reliably reach the DOM, especially in the read-only player. Cell
+// renderHTML is reliable in both. cellBorder = which sides show; cellBorderColor = a
+// free color via the --cbc CSS var. The table toolbar sets these on every cell.
+const cellBorderAttrs = {
+  cellBorder: {
+    default: null as string | null,
+    parseHTML: (el: HTMLElement) => el.getAttribute('data-cb'),
+    renderHTML: (attrs: Record<string, unknown>) => (attrs.cellBorder ? { 'data-cb': attrs.cellBorder } : {}),
   },
+  cellBorderColor: {
+    default: null as string | null,
+    parseHTML: (el: HTMLElement) => el.getAttribute('data-cbc'),
+    renderHTML: (attrs: Record<string, unknown>) => (attrs.cellBorderColor
+      ? { 'data-cbc': attrs.cellBorderColor, style: `--cbc:${attrs.cellBorderColor}` }
+      : {}),
+  },
+};
+const LessonTableCell = TableCell.extend({
+  addAttributes() { return { ...this.parent?.(), ...cellBorderAttrs }; },
+});
+const LessonTableHeader = TableHeader.extend({
+  addAttributes() { return { ...this.parent?.(), ...cellBorderAttrs }; },
 });
 
 export const lessonExtensions: Extensions = [
@@ -56,10 +60,10 @@ export const lessonExtensions: Extensions = [
   // URL-only images (with align/size/caption/border controls); base64 is rejected so
   // large image data never lands inside the questions JSONB.
   LessonImage.configure({ inline: false, allowBase64: false }),
-  LessonTable.configure({ resizable: true }),
+  Table.configure({ resizable: true }),
   TableRow,
-  TableHeader,
-  TableCell,
+  LessonTableHeader,
+  LessonTableCell,
   Callout,
   Accordion,
   AccordionItem,

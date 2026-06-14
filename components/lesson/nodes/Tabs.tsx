@@ -16,14 +16,21 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
 import { Plus, X } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { ColorField, Segmented, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
 
 const MAX_TABS = 12;
 
-function TabsView({ node, editor, getPos }: NodeViewProps) {
+function TabsView({ node, editor, getPos, updateAttributes }: NodeViewProps) {
   const editable = editor.isEditable;
   const count = node.childCount;
   const [active, setActive] = useState(0);
   const current = Math.min(active, count - 1);
+
+  const borderStyle = (node.attrs.borderStyle as BorderStyle) || 'solid';
+  const borderColor = (node.attrs.borderColor as string) || '';
+  const wrapperStyle: React.CSSProperties = borderStyle === 'none'
+    ? { border: 'none' }
+    : { borderStyle, borderWidth: 1, ...(borderColor ? { borderColor } : {}) };
 
   const labels: string[] = [];
   node.forEach((child) => labels.push((child.attrs.label as string) || ''));
@@ -65,7 +72,7 @@ function TabsView({ node, editor, getPos }: NodeViewProps) {
   };
 
   return (
-    <NodeViewWrapper className="lesson-tabs" data-active={current}>
+    <NodeViewWrapper className="lesson-tabs" data-active={current} style={wrapperStyle}>
       <div className="lesson-tabs__bar" contentEditable={false}>
         {labels.map((label, i) => (
           <div key={i} className="lesson-tabs__tab" data-active={i === current ? 'true' : 'false'}>
@@ -103,6 +110,14 @@ function TabsView({ node, editor, getPos }: NodeViewProps) {
           >
             <Plus width={13} height={13} />
           </button>
+        )}
+        {editable && (
+          <span className="lesson-tabs__style">
+            <Segmented<BorderStyle> title="Border" value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} />
+            {borderStyle !== 'none' && (
+              <ColorField title="Border color" value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} />
+            )}
+          </span>
         )}
       </div>
       <NodeViewContent className="lesson-tabs__panels" />
@@ -171,6 +186,13 @@ export const Tabs = Node.create({
   content: 'tabPanel+',
   defining: true,
   isolating: true,
+
+  addAttributes() {
+    return {
+      borderStyle: { default: 'solid' },
+      borderColor: { default: '' },
+    };
+  },
 
   parseHTML() {
     return [{ tag: 'div[data-tabs]' }];
