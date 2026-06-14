@@ -255,8 +255,6 @@ export function LessonContentStyles() {
 .lesson-content.dark .lesson-code__result th { background: #1a1d2e; }
 .lesson-content .lesson-code__result-note { font-size: 11.5px; color: #71717a; padding: 6px 12px; margin: 0; }
 
-.lesson-content .lesson-style__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 8px; margin-bottom: 8px; border-radius: 8px; background: rgba(0,0,0,0.04); }
-.lesson-content.dark .lesson-style__bar { background: rgba(255,255,255,0.06); }
 .lesson-content .lesson-style__seg { display: inline-flex; gap: 2px; }
 .lesson-content .lesson-style__seg button { font-size: 11px; font-weight: 600; padding: 3px 8px; border: 1px solid transparent; border-radius: 6px; background: rgba(0,0,0,0.05); color: #52525b; cursor: pointer; }
 .lesson-content.dark .lesson-style__seg button { background: rgba(255,255,255,0.08); color: #a1a1aa; }
@@ -269,7 +267,22 @@ export function LessonContentStyles() {
 .lesson-content.dark .lesson-style__color-reset:hover { background: rgba(255,255,255,0.08); }
 .lesson-content .lesson-style__label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #a1a1aa; }
 
-.lesson-content .lesson-image { margin: 0.9rem 0; }
+.lesson-content .lesson-style-menu { display: inline-flex; }
+.lesson-content .lesson-style-menu__trigger { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 7px; border: none; background: rgba(0,0,0,0.05); color: #52525b; cursor: pointer; }
+.lesson-content.dark .lesson-style-menu__trigger { background: rgba(255,255,255,0.08); color: #a1a1aa; }
+.lesson-content .lesson-style-menu__trigger:hover, .lesson-content .lesson-style-menu__trigger[data-open="true"] { background: rgba(0,0,0,0.1); color: #18181b; }
+.lesson-content.dark .lesson-style-menu__trigger:hover, .lesson-content.dark .lesson-style-menu__trigger[data-open="true"] { background: rgba(255,255,255,0.16); color: #fafafa; }
+.lesson-content .lesson-block-corner { position: absolute; top: 8px; right: 8px; z-index: 5; }
+.lesson-content .lesson-block-corner .lesson-style-menu__trigger { background: rgba(255,255,255,0.92); color: #3f3f46; box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
+.lesson-content.dark .lesson-block-corner .lesson-style-menu__trigger { background: rgba(30,30,34,0.92); color: #e4e4e7; }
+.lesson-style-menu__panel { z-index: 1000; min-width: 220px; max-width: 280px; display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background: #ffffff; border: 1px solid #e4e4e7; box-shadow: 0 10px 30px rgba(0,0,0,0.16); font-size: 13px; }
+.lesson-style-menu__panel.dark { background: #1c1c20; border-color: #2e2e33; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+.lesson-style-menu__row { display: flex; flex-direction: column; gap: 5px; }
+.lesson-style-menu__row-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #71717a; }
+.lesson-style-menu__panel.dark .lesson-style-menu__row-label { color: #a1a1aa; }
+.lesson-style-menu__row-control { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+.lesson-content .lesson-image { margin: 0.9rem 0; position: relative; }
 .lesson-content .lesson-image > img { display: block; height: auto; margin: 0; box-sizing: border-box; }
 .lesson-content .lesson-image__caption { font-size: 12.5px; color: #71717a; margin-top: 6px; }
 .lesson-content.dark .lesson-image__caption { color: #a1a1aa; }
@@ -279,7 +292,7 @@ export function LessonContentStyles() {
 .lesson-content .lesson-image__alt-input { font: inherit; font-size: 11px; width: 110px; padding: 3px 7px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.12); background: rgba(0,0,0,0.02); color: #52525b; outline: none; }
 .lesson-content.dark .lesson-image__alt-input { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); color: #d4d4d8; }
 
-.lesson-content .lesson-carousel { margin: 0.9rem 0; --card-border-default: #e4e4e7; }
+.lesson-content .lesson-carousel { margin: 0.9rem 0; position: relative; --card-border-default: #e4e4e7; }
 .lesson-content.dark .lesson-carousel { --card-border-default: #3f3f46; }
 .lesson-content .lesson-carousel__viewport { display: flex; align-items: center; gap: 8px; }
 .lesson-content .lesson-carousel__slides { flex: 1; min-width: 0; }

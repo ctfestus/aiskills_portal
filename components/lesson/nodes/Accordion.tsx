@@ -13,7 +13,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
 import { ChevronRight, Plus } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
-import { ColorField, Segmented, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
+import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
 
 function AccordionItemView({ node, updateAttributes, editor }: NodeViewProps) {
   const editable = editor.isEditable;
@@ -50,10 +50,12 @@ function AccordionItemView({ node, updateAttributes, editor }: NodeViewProps) {
         )}
         {editable && (
           <span className="lesson-accordion__controls">
-            <Segmented<BorderStyle> title="Border" value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} />
-            {borderStyle !== 'none' && (
-              <ColorField title="Border color" value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} />
-            )}
+            <StyleMenu>
+              <MenuRow label="Border"><Segmented<BorderStyle> value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} /></MenuRow>
+              {borderStyle !== 'none' && (
+                <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
+              )}
+            </StyleMenu>
           </span>
         )}
       </div>

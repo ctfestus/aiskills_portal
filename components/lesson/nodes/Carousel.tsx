@@ -18,7 +18,7 @@ import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewP
 import { ChevronLeft, ChevronRight, Check, Plus, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
-import { ColorField, Segmented, StyleBar, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
+import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
 
 const MAX_SLIDES = 20;
 
@@ -81,13 +81,15 @@ function CarouselView({ node, editor, getPos, updateAttributes }: NodeViewProps)
   return (
     <NodeViewWrapper className="lesson-carousel" data-active={current} style={cardVars}>
       {editable && (
-        <StyleBar>
-          <Segmented<RadiusKey> title="Roundness" value={radius} onChange={(v) => updateAttributes({ radius: v })} options={RADIUS_OPTIONS} />
-          <Segmented<BorderStyle> title="Card border" value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} />
-          {borderStyle !== 'none' && (
-            <ColorField title="Border color" value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} />
-          )}
-        </StyleBar>
+        <div className="lesson-block-corner">
+          <StyleMenu>
+            <MenuRow label="Roundness"><Segmented<RadiusKey> value={radius} onChange={(v) => updateAttributes({ radius: v })} options={RADIUS_OPTIONS} /></MenuRow>
+            <MenuRow label="Card border"><Segmented<BorderStyle> value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} /></MenuRow>
+            {borderStyle !== 'none' && (
+              <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
+            )}
+          </StyleMenu>
+        </div>
       )}
 
       <div className="lesson-carousel__viewport">

@@ -8,7 +8,7 @@
 import Image from '@tiptap/extension-image';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import {
-  ColorField, Segmented, StyleBar, BORDER_STYLE_OPTIONS, borderCss, type BorderStyle,
+  ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, borderCss, type BorderStyle,
 } from '@/components/lesson/nodes/StyleControls';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 
@@ -33,41 +33,46 @@ function ImageView({ node, updateAttributes, editor }: NodeViewProps) {
   return (
     <NodeViewWrapper className="lesson-image" style={{ display: 'flex', flexDirection: 'column', alignItems }}>
       {editable && (
-        <StyleBar>
-          <Segmented<Align>
-            title="Align"
-            value={align}
-            onChange={(v) => updateAttributes({ align: v })}
-            options={[{ value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }]}
-          />
-          <Segmented<Size>
-            title="Size"
-            value={size}
-            onChange={(v) => updateAttributes({ size: v })}
-            options={[{ value: 'small', label: 'S' }, { value: 'medium', label: 'M' }, { value: 'full', label: 'Full' }]}
-          />
-          <Segmented<'rounded' | 'square'>
-            title="Corners"
-            value={rounded ? 'rounded' : 'square'}
-            onChange={(v) => updateAttributes({ rounded: v === 'rounded' })}
-            options={[{ value: 'rounded', label: 'Rounded' }, { value: 'square', label: 'Square' }]}
-          />
-          <Segmented<BorderStyle>
-            title="Border"
-            value={borderStyle}
-            onChange={(v) => updateAttributes({ borderStyle: v })}
-            options={BORDER_STYLE_OPTIONS}
-          />
-          {borderStyle !== 'none' && (
-            <ColorField title="Border color" value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} />
-          )}
-          <NodeTextInput
-            className="lesson-image__alt-input"
-            value={alt}
-            placeholder="Alt text"
-            onCommit={(v) => updateAttributes({ alt: v })}
-          />
-        </StyleBar>
+        <div className="lesson-block-corner">
+          <StyleMenu>
+            <MenuRow label="Align">
+              <Segmented<Align>
+                value={align}
+                onChange={(v) => updateAttributes({ align: v })}
+                options={[{ value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }]}
+              />
+            </MenuRow>
+            <MenuRow label="Size">
+              <Segmented<Size>
+                value={size}
+                onChange={(v) => updateAttributes({ size: v })}
+                options={[{ value: 'small', label: 'S' }, { value: 'medium', label: 'M' }, { value: 'full', label: 'Full' }]}
+              />
+            </MenuRow>
+            <MenuRow label="Corners">
+              <Segmented<'rounded' | 'square'>
+                value={rounded ? 'rounded' : 'square'}
+                onChange={(v) => updateAttributes({ rounded: v === 'rounded' })}
+                options={[{ value: 'rounded', label: 'Rounded' }, { value: 'square', label: 'Square' }]}
+              />
+            </MenuRow>
+            <MenuRow label="Border">
+              <Segmented<BorderStyle>
+                value={borderStyle}
+                onChange={(v) => updateAttributes({ borderStyle: v })}
+                options={BORDER_STYLE_OPTIONS}
+              />
+            </MenuRow>
+            {borderStyle !== 'none' && (
+              <MenuRow label="Color">
+                <ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} />
+              </MenuRow>
+            )}
+            <MenuRow label="Alt text">
+              <NodeTextInput className="lesson-image__alt-input" value={alt} placeholder="Describe the image" onCommit={(v) => updateAttributes({ alt: v })} />
+            </MenuRow>
+          </StyleMenu>
+        </div>
       )}
 
       <img

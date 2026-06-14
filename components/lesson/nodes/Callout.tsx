@@ -11,7 +11,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
 import { Info, Lightbulb, AlertTriangle, FileText, CheckCircle2 } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
-import { ColorField, Segmented, StyleBar, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
+import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
 
 export type CalloutVariant = 'note' | 'tip' | 'warning' | 'info' | 'success';
 
@@ -48,21 +48,21 @@ function CalloutView({ node, updateAttributes, editor }: NodeViewProps) {
 
   return (
     <NodeViewWrapper className="lesson-callout" data-variant={variant} style={wrapperStyle}>
-      {editable && (
-        <StyleBar>
-          <Segmented<CalloutVariant> title="Variant" value={variant} onChange={(v) => updateAttributes({ variant: v })} options={VARIANT_OPTIONS} />
-          <Segmented<BorderStyle> title="Border" value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} />
-          {borderStyle !== 'none' && (
-            <ColorField title="Border color" value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} />
-          )}
-        </StyleBar>
-      )}
       <div className="lesson-callout__head" contentEditable={false}>
         <Icon className="lesson-callout__icon" width={15} height={15} />
         {editable ? (
           <NodeTextInput className="lesson-callout__title-input" value={title} placeholder={label} onCommit={(v) => updateAttributes({ title: v })} />
         ) : (
           <span className="lesson-callout__label">{title || label}</span>
+        )}
+        {editable && (
+          <StyleMenu>
+            <MenuRow label="Style"><Segmented<CalloutVariant> value={variant} onChange={(v) => updateAttributes({ variant: v })} options={VARIANT_OPTIONS} /></MenuRow>
+            <MenuRow label="Border"><Segmented<BorderStyle> value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} /></MenuRow>
+            {borderStyle !== 'none' && (
+              <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
+            )}
+          </StyleMenu>
         )}
       </div>
       <NodeViewContent className="lesson-callout__body" />
