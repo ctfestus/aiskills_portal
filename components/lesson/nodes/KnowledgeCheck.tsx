@@ -11,8 +11,11 @@
 import { useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
+import { createPortal } from 'react-dom';
 import { Check, Plus, X, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
+import { useTenant } from '@/components/TenantProvider';
 
 function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
   const editable = editor.isEditable;
@@ -20,9 +23,25 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
   const options = (node.attrs.options as string[]) || [];
   const correctIndex = (node.attrs.correctIndex as number) ?? 0;
   const explanation = (node.attrs.explanation as string) || '';
+  const borderStyle = (node.attrs.borderStyle as BorderStyle) || 'solid';
+  const borderColor = (node.attrs.borderColor as string) || '';
+  const wrapperStyle: React.CSSProperties = borderStyle === 'none'
+    ? { border: 'none' }
+    : { borderStyle, borderWidth: 1, ...(borderColor ? { borderColor } : {}) };
 
+  const { primaryColor } = useTenant();
+  const accent = primaryColor || '#10b981';
   const [selected, setSelected] = useState<number | null>(null);
+  const [celebrate, setCelebrate] = useState(false);
   const submitted = selected !== null;
+
+  const onSelect = (i: number) => {
+    setSelected(i);
+    if (i === correctIndex) {
+      setCelebrate(true);
+      window.setTimeout(() => setCelebrate(false), 2600);
+    }
+  };
 
   const setOption = (i: number, value: string) =>
     updateAttributes({ options: options.map((o, j) => (j === i ? value : o)) });
@@ -38,8 +57,16 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
 
   if (editable) {
     return (
-      <NodeViewWrapper className="lesson-check" data-editing="true" contentEditable={false}>
-        <div className="lesson-check__badge"><HelpCircle width={13} height={13} /> Knowledge check</div>
+      <NodeViewWrapper className="lesson-check" data-editing="true" contentEditable={false} style={wrapperStyle}>
+        <div className="lesson-check__bar">
+          <div className="lesson-check__badge"><HelpCircle width={13} height={13} /> Knowledge check</div>
+          <StyleMenu>
+            <MenuRow label="Border"><Segmented<BorderStyle> value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} /></MenuRow>
+            {borderStyle !== 'none' && (
+              <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
+            )}
+          </StyleMenu>
+        </div>
         <NodeTextInput
           className="lesson-check__q-input"
           value={question}
@@ -98,7 +125,7 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
   const state = submitted ? (selected === correctIndex ? 'correct' : 'incorrect') : 'idle';
 
   return (
-    <NodeViewWrapper className="lesson-check" data-state={state} contentEditable={false}>
+    <NodeViewWrapper className="lesson-check" data-state={state} contentEditable={false} style={wrapperStyle}>
       <div className="lesson-check__badge"><HelpCircle width={13} height={13} /> Knowledge check</div>
       {question && <p className="lesson-check__question">{question}</p>}
       <div className="lesson-check__options">
@@ -114,24 +141,31 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
               data-wrong={showWrong ? 'true' : 'false'}
               data-chosen={selected === i ? 'true' : 'false'}
               disabled={submitted}
-              onClick={() => setSelected(i)}
+              onClick={() => onSelect(i)}
             >
-              <span className="lesson-check__marker">
-                {showCorrect ? <CheckCircle2 width={15} height={15} /> : showWrong ? <XCircle width={15} height={15} /> : String.fromCharCode(65 + i)}
+              <span className="lesson-check__opt-text">{opt}</span>
+              <span className="lesson-check__opt-end">
+                {showCorrect && <CheckCircle2 className="lesson-check__icon" width={17} height={17} />}
+                {showWrong && <XCircle className="lesson-check__icon" width={17} height={17} />}
+                <span className="lesson-check__num">{i + 1}</span>
               </span>
-              <span>{opt}</span>
             </button>
           );
         })}
       </div>
       {submitted && (
         <div className="lesson-check__feedback">
-          <p className="lesson-check__verdict">
-            {selected === correctIndex ? 'Correct' : 'Not quite'}
-          </p>
+          {selected !== correctIndex && <p className="lesson-check__verdict">Not quite</p>}
           {explanation && <p className="lesson-check__explain">{explanation}</p>}
-          <button type="button" className="lesson-check__retry" onClick={() => setSelected(null)}>Try again</button>
+          <button type="button" className="lesson-check__retry" onClick={() => { setSelected(null); setCelebrate(false); }}>Try again</button>
         </div>
+      )}
+      {celebrate && createPortal(
+        <div className="lesson-check__toast" role="status" style={{ background: accent }}>
+          <span className="lesson-check__toast-emoji" aria-hidden="true">🎉</span>
+          <span>Correct! Nice work</span>
+        </div>,
+        document.body,
       )}
     </NodeViewWrapper>
   );
@@ -149,6 +183,8 @@ export const KnowledgeCheck = Node.create({
       options: { default: ['', ''] },
       correctIndex: { default: 0 },
       explanation: { default: '' },
+      borderStyle: { default: 'solid' },
+      borderColor: { default: '' },
     };
   },
 

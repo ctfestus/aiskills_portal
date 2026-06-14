@@ -18,9 +18,10 @@ import Placeholder from '@tiptap/extension-placeholder';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code2, FileCode2,
   List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote,
-  Image as ImageIcon, Table as TableIcon, Info, Loader2, ChevronsUpDown, LayoutGrid, HelpCircle, Terminal,
+  Image as ImageIcon, Table as TableIcon, Info, Loader2, ChevronsUpDown, LayoutGrid, HelpCircle, Terminal, GalleryHorizontal,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
+import { StyleMenu, MenuRow, Segmented, ColorField } from '@/components/lesson/nodes/StyleControls';
 import { lessonExtensions } from '@/components/lesson/extensions';
 import { LessonContentStyles } from '@/components/lesson/LessonContentStyles';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
@@ -126,6 +127,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         <Btn dark={dark} title="Callout" onClick={() => editor.chain().focus().insertContent({ type: 'callout', attrs: { variant: 'note' }, content: [{ type: 'paragraph' }] }).run()}><Info className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Collapsible sections" onClick={() => editor.chain().focus().insertContent({ type: 'accordion', content: [{ type: 'accordionItem', attrs: { title: '', open: false }, content: [{ type: 'paragraph' }] }] }).run()}><ChevronsUpDown className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Tabs" onClick={() => editor.chain().focus().insertContent({ type: 'tabs', content: [{ type: 'tabPanel', attrs: { label: 'Tab 1' }, content: [{ type: 'paragraph' }] }, { type: 'tabPanel', attrs: { label: 'Tab 2' }, content: [{ type: 'paragraph' }] }] }).run()}><LayoutGrid className="w-3.5 h-3.5" /></Btn>
+        <Btn dark={dark} title="Carousel (stepped slides)" onClick={() => editor.chain().focus().insertContent({ type: 'carousel', content: [{ type: 'carouselSlide', content: [{ type: 'paragraph' }] }, { type: 'carouselSlide', content: [{ type: 'paragraph' }] }] }).run()}><GalleryHorizontal className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Knowledge check" onClick={() => editor.chain().focus().insertContent({ type: 'knowledgeCheck', attrs: { question: '', options: ['', ''], correctIndex: 0, explanation: '' } }).run()}><HelpCircle className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Runnable code (SQL)" onClick={() => editor.chain().focus().insertContent({ type: 'runnableCode', attrs: { language: 'sql', code: '', setupSql: '' } }).run()}><Terminal className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Table" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableIcon className="w-3.5 h-3.5" /></Btn>
@@ -141,40 +143,37 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         </label>
       </Toolbar>
 
-      {editor.isActive('table') && (
-        <div className="flex items-center flex-wrap gap-1 px-2 py-1.5" style={{ borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
-          <TableBtn dark={dark} onClick={() => editor.chain().focus().addRowAfter().run()}>+ Row</TableBtn>
-          <TableBtn dark={dark} onClick={() => editor.chain().focus().deleteRow().run()}>- Row</TableBtn>
-          <TableBtn dark={dark} onClick={() => editor.chain().focus().addColumnAfter().run()}>+ Column</TableBtn>
-          <TableBtn dark={dark} onClick={() => editor.chain().focus().deleteColumn().run()}>- Column</TableBtn>
-          <TableBtn dark={dark} onClick={() => editor.chain().focus().toggleHeaderRow().run()}>Header row</TableBtn>
-          <TableBtn dark={dark} danger onClick={() => editor.chain().focus().deleteTable().run()}>Delete table</TableBtn>
-          <span className="w-px h-4 mx-1" style={{ background: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }} />
-          {(() => {
-            const cell = editor.getAttributes('tableCell');
-            const header = editor.getAttributes('tableHeader');
-            const mode = (cell.cellBorder || header.cellBorder || 'all') as string;
-            const color = (cell.cellBorderColor || header.cellBorderColor || '') as string;
-            return (
-              <>
-                <TableBtn dark={dark} active={mode === 'all'} onClick={() => setTableCellsAttr(editor, { cellBorder: 'all' })}>All</TableBtn>
-                <TableBtn dark={dark} active={mode === 'horizontal'} onClick={() => setTableCellsAttr(editor, { cellBorder: 'horizontal' })}>Horizontal</TableBtn>
-                <TableBtn dark={dark} active={mode === 'vertical'} onClick={() => setTableCellsAttr(editor, { cellBorder: 'vertical' })}>Vertical</TableBtn>
-                <TableBtn dark={dark} active={mode === 'none'} onClick={() => setTableCellsAttr(editor, { cellBorder: 'none' })}>None</TableBtn>
-                <input
-                  type="color"
-                  value={color || '#94a3b8'}
-                  title="Border color"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onChange={(e) => setTableCellsAttr(editor, { cellBorderColor: e.target.value })}
-                  style={{ width: 26, height: 22, padding: 0, border: `1px solid ${dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)'}`, borderRadius: 6, background: 'none', cursor: 'pointer' }}
-                />
-                {color && <TableBtn dark={dark} onClick={() => setTableCellsAttr(editor, { cellBorderColor: null })}>Reset color</TableBtn>}
-              </>
-            );
-          })()}
-        </div>
-      )}
+      {editor.isActive('table') && (() => {
+        const cell = editor.getAttributes('tableCell');
+        const header = editor.getAttributes('tableHeader');
+        const mode = (cell.cellBorder || header.cellBorder || 'all') as string;
+        const color = (cell.cellBorderColor || header.cellBorderColor || '') as string;
+        return (
+          <div className="flex items-center gap-2 px-2 py-1.5" style={{ borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
+            <span className="text-[11px] font-semibold" style={{ color: dark ? '#888' : '#888' }}>Table</span>
+            <StyleMenu>
+              <MenuRow label="Rows">
+                <TableBtn dark={dark} onClick={() => editor.chain().focus().addRowAfter().run()}>+ Row</TableBtn>
+                <TableBtn dark={dark} onClick={() => editor.chain().focus().deleteRow().run()}>- Row</TableBtn>
+              </MenuRow>
+              <MenuRow label="Columns">
+                <TableBtn dark={dark} onClick={() => editor.chain().focus().addColumnAfter().run()}>+ Column</TableBtn>
+                <TableBtn dark={dark} onClick={() => editor.chain().focus().deleteColumn().run()}>- Column</TableBtn>
+              </MenuRow>
+              <MenuRow label="Header">
+                <TableBtn dark={dark} onClick={() => editor.chain().focus().toggleHeaderRow().run()}>Toggle header row</TableBtn>
+              </MenuRow>
+              <MenuRow label="Cell borders">
+                <Segmented<string> value={mode} onChange={(v) => setTableCellsAttr(editor, { cellBorder: v })} options={[{ value: 'all', label: 'All' }, { value: 'horizontal', label: 'Horiz' }, { value: 'vertical', label: 'Vert' }, { value: 'none', label: 'None' }]} />
+              </MenuRow>
+              <MenuRow label="Border color">
+                <ColorField value={color} onChange={(v) => setTableCellsAttr(editor, { cellBorderColor: v || null })} />
+              </MenuRow>
+              <TableBtn dark={dark} danger onClick={() => editor.chain().focus().deleteTable().run()}>Delete table</TableBtn>
+            </StyleMenu>
+          </div>
+        );
+      })()}
 
       <div className={`lesson-content ${dark ? 'dark' : ''} px-3 py-2.5 min-h-[140px] max-h-[460px] overflow-y-auto`}>
         <EditorContent editor={editor} />
