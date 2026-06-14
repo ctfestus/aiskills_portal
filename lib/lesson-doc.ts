@@ -36,18 +36,20 @@ function isObject(value: unknown): value is Record<string, unknown> {
  */
 export function extractDocImageUrls(doc: LessonDoc | null | undefined): string[] {
   const urls: string[] = [];
+  const push = (v: unknown) => { if (typeof v === 'string' && v.trim()) urls.push(v); };
   const visit = (node: unknown) => {
     if (Array.isArray(node)) {
       node.forEach(visit);
       return;
     }
     if (!isObject(node)) return;
-    if (node.type === 'image' && isObject(node.attrs)) {
-      const src = node.attrs.src;
-      if (typeof src === 'string' && src.trim()) urls.push(src);
+    if (isObject(node.attrs)) {
+      // inline images (attrs.src) and carousel slide covers (attrs.cover)
+      if (node.type === 'image') push(node.attrs.src);
+      if (node.type === 'carouselSlide') push(node.attrs.cover);
     }
     if (Array.isArray(node.content)) node.content.forEach(visit);
   };
   visit(doc as unknown);
-  return urls;
+  return [...new Set(urls)];
 }

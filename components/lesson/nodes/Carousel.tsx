@@ -98,7 +98,8 @@ function CarouselView({ node, editor, getPos, updateAttributes }: NodeViewProps)
           className="lesson-carousel__arrow"
           aria-label="Previous slide"
           disabled={current === 0}
-          onMouseDown={(e) => { e.preventDefault(); go(current - 1); }}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => go(current - 1)}
         >
           <ChevronLeft width={20} height={20} />
         </button>
@@ -108,7 +109,8 @@ function CarouselView({ node, editor, getPos, updateAttributes }: NodeViewProps)
           className="lesson-carousel__arrow"
           aria-label="Next slide"
           disabled={current >= count - 1}
-          onMouseDown={(e) => { e.preventDefault(); go(current + 1); }}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => go(current + 1)}
         >
           <ChevronRight width={20} height={20} />
         </button>
@@ -121,7 +123,8 @@ function CarouselView({ node, editor, getPos, updateAttributes }: NodeViewProps)
               type="button"
               className="lesson-carousel__dot"
               data-active={i === current ? 'true' : 'false'}
-              onMouseDown={(e) => { e.preventDefault(); go(i); }}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => go(i)}
             >
               {i + 1}
             </button>
@@ -238,8 +241,16 @@ export const CarouselSlide = Node.create({
     return [{ tag: 'div[data-carousel-slide]' }];
   },
 
-  renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes, { 'data-carousel-slide': '' }), 0];
+  // Fallback HTML: title as a bold line + body (sanitizer keeps p/strong; the wrapper
+  // div is stripped but its children are kept), matching accordion/tab titles.
+  renderHTML({ node, HTMLAttributes }) {
+    const title = (node.attrs.title as string) || '';
+    return [
+      'div',
+      mergeAttributes(HTMLAttributes, { 'data-carousel-slide': '' }),
+      ...(title ? [['p', ['strong', title]]] : []),
+      ['div', 0],
+    ];
   },
 
   addNodeView() {
