@@ -149,6 +149,29 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
           <TableBtn dark={dark} onClick={() => editor.chain().focus().deleteColumn().run()}>- Column</TableBtn>
           <TableBtn dark={dark} onClick={() => editor.chain().focus().toggleHeaderRow().run()}>Header row</TableBtn>
           <TableBtn dark={dark} danger onClick={() => editor.chain().focus().deleteTable().run()}>Delete table</TableBtn>
+          <span className="w-px h-4 mx-1" style={{ background: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }} />
+          {(() => {
+            const t = editor.getAttributes('table');
+            const mode = (t.borderMode as string) || 'all';
+            const color = (t.borderColor as string) || '';
+            const set = (attrs: Record<string, unknown>) => editor.chain().focus().updateAttributes('table', attrs).run();
+            return (
+              <>
+                <TableBtn dark={dark} active={mode === 'all'} onClick={() => set({ borderMode: 'all' })}>All borders</TableBtn>
+                <TableBtn dark={dark} active={mode === 'outline'} onClick={() => set({ borderMode: 'outline' })}>Outline</TableBtn>
+                <TableBtn dark={dark} active={mode === 'minimal'} onClick={() => set({ borderMode: 'minimal' })}>Minimal</TableBtn>
+                <input
+                  type="color"
+                  value={color || '#94a3b8'}
+                  title="Border color"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onChange={(e) => set({ borderColor: e.target.value })}
+                  style={{ width: 26, height: 22, padding: 0, border: `1px solid ${dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)'}`, borderRadius: 6, background: 'none', cursor: 'pointer' }}
+                />
+                {color && <TableBtn dark={dark} onClick={() => set({ borderColor: '' })}>Reset color</TableBtn>}
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -171,14 +194,15 @@ function Divider({ dark }: { dark: boolean }) {
   return <div className="w-px h-4 mx-1" style={{ background: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }} />;
 }
 
-function TableBtn({ dark, danger, onClick, children }: { dark: boolean; danger?: boolean; onClick: () => void; children: React.ReactNode }) {
-  const color = danger ? '#e5484d' : (dark ? '#aaa' : '#555');
+function TableBtn({ dark, danger, active, onClick, children }: { dark: boolean; danger?: boolean; active?: boolean; onClick: () => void; children: React.ReactNode }) {
+  const txt = active ? '#fff' : danger ? '#e5484d' : (dark ? '#aaa' : '#555');
+  const bg = active ? '#10b981' : (dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)');
   return (
     <button
       type="button"
       onMouseDown={(e) => { e.preventDefault(); onClick(); }}
       className="text-[11px] font-semibold px-2 py-1 rounded transition-colors"
-      style={{ color, background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }}
+      style={{ color: txt, background: bg }}
     >
       {children}
     </button>

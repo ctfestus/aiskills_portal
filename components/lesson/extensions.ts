@@ -12,17 +12,40 @@
 
 import { generateJSON, type Extensions } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
-import { Image } from '@tiptap/extension-image';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
 import type { LessonDoc } from '@/lib/lesson-doc';
+import { LessonImage } from '@/components/lesson/nodes/LessonImage';
 import { Callout } from '@/components/lesson/nodes/Callout';
 import { Accordion, AccordionItem } from '@/components/lesson/nodes/Accordion';
 import { Tabs, TabPanel } from '@/components/lesson/nodes/Tabs';
 import { KnowledgeCheck } from '@/components/lesson/nodes/KnowledgeCheck';
 import { RunnableCode } from '@/components/lesson/nodes/RunnableCode';
+
+// Table with border controls: a border mode (all / outline / minimal) and an optional
+// free border color, surfaced as data-attributes + a CSS var that LessonContentStyles
+// reads. No node view needed -- the LessonEditor table toolbar sets these attrs.
+const LessonTable = Table.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      borderMode: {
+        default: 'all',
+        parseHTML: (el) => el.getAttribute('data-border-mode') || 'all',
+        renderHTML: (attrs) => ({ 'data-border-mode': attrs.borderMode }),
+      },
+      borderColor: {
+        default: '',
+        parseHTML: (el) => el.getAttribute('data-border-color') || '',
+        renderHTML: (attrs) => (attrs.borderColor
+          ? { 'data-border-color': attrs.borderColor, style: `--lesson-table-border:${attrs.borderColor}` }
+          : {}),
+      },
+    };
+  },
+});
 
 export const lessonExtensions: Extensions = [
   // StarterKit (3.23.x) bundles document/paragraph/text, headings, bullet/ordered
@@ -30,10 +53,10 @@ export const lessonExtensions: Extensions = [
   // hard break, link, underline, and history. Do NOT also register link/underline
   // separately -- TipTap throws on duplicate extension names.
   StarterKit,
-  // URL-only images: inline uploads go to Cloudinary; base64 is rejected so large
-  // image data never lands inside the questions JSONB.
-  Image.configure({ inline: false, allowBase64: false }),
-  Table.configure({ resizable: true }),
+  // URL-only images (with align/size/caption/border controls); base64 is rejected so
+  // large image data never lands inside the questions JSONB.
+  LessonImage.configure({ inline: false, allowBase64: false }),
+  LessonTable.configure({ resizable: true }),
   TableRow,
   TableHeader,
   TableCell,
