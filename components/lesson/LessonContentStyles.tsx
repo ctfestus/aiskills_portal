@@ -279,13 +279,14 @@ export function LessonContentStyles() {
 .lesson-content .lesson-image__alt-input { font: inherit; font-size: 11px; width: 110px; padding: 3px 7px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.12); background: rgba(0,0,0,0.02); color: #52525b; outline: none; }
 .lesson-content.dark .lesson-image__alt-input { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); color: #d4d4d8; }
 
-.lesson-content .lesson-carousel { margin: 0.9rem 0; }
+.lesson-content .lesson-carousel { margin: 0.9rem 0; --card-border-default: #e4e4e7; }
+.lesson-content.dark .lesson-carousel { --card-border-default: #3f3f46; }
 .lesson-content .lesson-carousel__viewport { display: flex; align-items: center; gap: 8px; }
 .lesson-content .lesson-carousel__slides { flex: 1; min-width: 0; }
-.lesson-content .lesson-carousel__slide { display: none; background: #ffffff; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 10px 28px rgba(0,0,0,0.07); overflow: hidden; }
+.lesson-content .lesson-carousel__slide { display: none; background: #ffffff; border-radius: var(--card-radius, 14px); border-style: var(--card-border-style, none); border-width: var(--card-border-width, 0); border-color: var(--card-border-color, var(--card-border-default, #e4e4e7)); box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 10px 28px rgba(0,0,0,0.07); overflow: hidden; }
 .lesson-content.dark .lesson-carousel__slide { background: #1a1a1e; box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
 .lesson-content .lesson-carousel__cover-wrap { position: relative; margin-bottom: 14px; }
-.lesson-content .lesson-carousel__cover { display: block; width: 100%; height: auto; border-radius: 10px; }
+.lesson-content .lesson-carousel__cover { display: block; width: 100%; height: auto; border-radius: var(--cover-radius, 10px); }
 .lesson-content .lesson-carousel__cover-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
 .lesson-content .lesson-carousel__cover-btn { font-size: 11px; font-weight: 600; color: #fff; background: rgba(0,0,0,0.55); border: none; border-radius: 6px; padding: 4px 8px; cursor: pointer; }
 .lesson-content .lesson-carousel__cover-btn:hover { background: rgba(0,0,0,0.7); }

@@ -7,6 +7,10 @@
 // data-active on the wrapper; each slide tags itself with data-slide-index; CSS pairs
 // them so only the active slide shows -- no fragile cross-node ProseMirror reactivity.
 // Capped at 20 slides (the :nth pairs + addSlide guard).
+//
+// Card appearance (roundness + border) is set ONCE on the carousel and applied to
+// EVERY slide via inherited CSS variables (--card-radius / --cover-radius /
+// --card-border-*). Per-slide attrs are content only (cover image, title).
 
 import { useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
@@ -14,7 +18,7 @@ import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewP
 import { ChevronLeft, ChevronRight, Check, Plus, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
-import { ColorField, Segmented, StyleBar, BORDER_STYLE_OPTIONS, borderCss, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
+import { ColorField, Segmented, StyleBar, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
 
 const MAX_SLIDES = 20;
 
@@ -28,11 +32,23 @@ const RADIUS_OPTIONS: { value: RadiusKey; label: string }[] = [
   { value: 'lg', label: 'L' },
 ];
 
-function CarouselView({ node, editor, getPos }: NodeViewProps) {
+function CarouselView({ node, editor, getPos, updateAttributes }: NodeViewProps) {
   const editable = editor.isEditable;
   const count = node.childCount;
   const [active, setActive] = useState(0);
   const current = Math.min(active, count - 1);
+
+  // Carousel-wide card appearance, applied to all slides via CSS variables.
+  const radius = (node.attrs.radius as RadiusKey) in CARD_RADIUS ? (node.attrs.radius as RadiusKey) : 'md';
+  const borderStyle = (node.attrs.borderStyle as BorderStyle) || 'none';
+  const borderColor = (node.attrs.borderColor as string) || '';
+  const cardVars = {
+    '--card-radius': `${CARD_RADIUS[radius]}px`,
+    '--cover-radius': `${COVER_RADIUS[radius]}px`,
+    '--card-border-style': borderStyle === 'none' ? 'none' : borderStyle,
+    '--card-border-width': borderStyle === 'none' ? '0' : '1px',
+    ...(borderColor ? { '--card-border-color': borderColor } : {}),
+  } as React.CSSProperties;
 
   const go = (i: number) => setActive(Math.max(0, Math.min(i, count - 1)));
 
@@ -63,7 +79,17 @@ function CarouselView({ node, editor, getPos }: NodeViewProps) {
   };
 
   return (
-    <NodeViewWrapper className="lesson-carousel" data-active={current}>
+    <NodeViewWrapper className="lesson-carousel" data-active={current} style={cardVars}>
+      {editable && (
+        <StyleBar>
+          <Segmented<RadiusKey> title="Roundness" value={radius} onChange={(v) => updateAttributes({ radius: v })} options={RADIUS_OPTIONS} />
+          <Segmented<BorderStyle> title="Card border" value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} />
+          {borderStyle !== 'none' && (
+            <ColorField title="Border color" value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} />
+          )}
+        </StyleBar>
+      )}
+
       <div className="lesson-carousel__viewport">
         <button
           type="button"
@@ -128,17 +154,14 @@ function CarouselView({ node, editor, getPos }: NodeViewProps) {
 }
 
 function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewProps) {
-  // Each slide is a shadowed card: an optional cover image fills the top (flush to
-  // the rounded card corners) and the text body sits below. Tags itself with its
-  // index; the parent wrapper carries data-active. CSS pairs them so visibility does
-  // not depend on ReactNodeViewRenderer's DOM nesting.
+  // Each slide is a card: an optional cover image, an optional title, and the body.
+  // Card roundness/border come from the parent carousel's CSS variables. Tags itself
+  // with its index; the parent wrapper carries data-active. CSS pairs them so
+  // visibility does not depend on ReactNodeViewRenderer's DOM nesting.
   const editable = editor.isEditable;
   const cover = (node.attrs.cover as string) || '';
   const coverAlt = (node.attrs.coverAlt as string) || '';
   const title = (node.attrs.title as string) || '';
-  const borderStyle = (node.attrs.borderStyle as BorderStyle) || 'none';
-  const borderColor = (node.attrs.borderColor as string) || '';
-  const radius = (node.attrs.radius as RadiusKey) in CARD_RADIUS ? (node.attrs.radius as RadiusKey) : 'md';
   const [uploading, setUploading] = useState(false);
 
   let index = 0;
@@ -162,37 +185,28 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
   };
 
   return (
-    <NodeViewWrapper className="lesson-carousel__slide" data-slide-index={index} style={{ ...borderCss(borderStyle, borderColor, '#e4e4e7'), borderRadius: CARD_RADIUS[radius] }}>
+    <NodeViewWrapper className="lesson-carousel__slide" data-slide-index={index}>
       <div className="lesson-carousel__body">
-      {editable && (
-        <StyleBar>
-          <Segmented<RadiusKey> title="Roundness" value={radius} onChange={(v) => updateAttributes({ radius: v })} options={RADIUS_OPTIONS} />
-          <Segmented<BorderStyle> title="Card border" value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} />
-          {borderStyle !== 'none' && (
-            <ColorField title="Border color" value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} />
-          )}
-        </StyleBar>
-      )}
-      {cover ? (
-        <div className="lesson-carousel__cover-wrap" contentEditable={false}>
-          <img className="lesson-carousel__cover" src={cover} alt={coverAlt} draggable={false} style={{ borderRadius: COVER_RADIUS[radius] }} />
-          {editable && (
-            <div className="lesson-carousel__cover-actions">
-              <label className="lesson-carousel__cover-btn">
-                {uploading ? 'Uploading...' : 'Change'}
-                <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
-              </label>
-              <button type="button" className="lesson-carousel__cover-btn" onMouseDown={(e) => { e.preventDefault(); updateAttributes({ cover: '' }); }}>Remove</button>
-            </div>
-          )}
-        </div>
-      ) : editable ? (
-        <label className="lesson-carousel__cover-add" contentEditable={false}>
-          {uploading ? <Loader2 className="lesson-carousel__spin" width={15} height={15} /> : <ImageIcon width={15} height={15} />}
-          {uploading ? 'Uploading...' : 'Add cover image'}
-          <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
-        </label>
-      ) : null}
+        {cover ? (
+          <div className="lesson-carousel__cover-wrap" contentEditable={false}>
+            <img className="lesson-carousel__cover" src={cover} alt={coverAlt} draggable={false} />
+            {editable && (
+              <div className="lesson-carousel__cover-actions">
+                <label className="lesson-carousel__cover-btn">
+                  {uploading ? 'Uploading...' : 'Change'}
+                  <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
+                </label>
+                <button type="button" className="lesson-carousel__cover-btn" onMouseDown={(e) => { e.preventDefault(); updateAttributes({ cover: '' }); }}>Remove</button>
+              </div>
+            )}
+          </div>
+        ) : editable ? (
+          <label className="lesson-carousel__cover-add" contentEditable={false}>
+            {uploading ? <Loader2 className="lesson-carousel__spin" width={15} height={15} /> : <ImageIcon width={15} height={15} />}
+            {uploading ? 'Uploading...' : 'Add cover image'}
+            <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
+          </label>
+        ) : null}
         {editable ? (
           <NodeTextInput className="lesson-carousel__title-input" value={title} placeholder="Card title (optional)" onCommit={(v) => updateAttributes({ title: v })} />
         ) : title ? (
@@ -215,9 +229,6 @@ export const CarouselSlide = Node.create({
       cover: { default: '' },
       coverAlt: { default: '' },
       title: { default: '' },
-      borderStyle: { default: 'none' },
-      borderColor: { default: '' },
-      radius: { default: 'md' },
     };
   },
 
@@ -240,6 +251,14 @@ export const Carousel = Node.create({
   content: 'carouselSlide+',
   defining: true,
   isolating: true,
+
+  addAttributes() {
+    return {
+      radius: { default: 'md' },
+      borderStyle: { default: 'none' },
+      borderColor: { default: '' },
+    };
+  },
 
   parseHTML() {
     return [{ tag: 'div[data-carousel]' }];
