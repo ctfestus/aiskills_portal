@@ -36,7 +36,11 @@ function RunnableCodeView({ node, updateAttributes, editor }: NodeViewProps) {
           >
             {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
-          {isSql && <span className="lesson-code__hint">Runnable</span>}
+          {isSql && (
+            <span className="lesson-code__hint" data-on={setupSql.trim() ? 'true' : 'false'}>
+              {setupSql.trim() ? 'Runnable' : 'Add setup SQL to enable Run'}
+            </span>
+          )}
         </div>
         <NodeTextInput
           multiline

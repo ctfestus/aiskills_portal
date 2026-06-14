@@ -76,6 +76,9 @@ function attachLessonDocs<T extends { modules?: unknown[] }>(cfg: T): T {
 // Lessons the AI actually rewrote (body changed) are reconverted from the new body.
 function preserveLessonDocs<T extends { modules?: unknown[] }>(cfg: T, prior: { modules?: any[] } | null | undefined): T {
   if (!cfg?.modules) return cfg;
+  // Compare bodies ignoring whitespace so harmless reformatting by the AI is not
+  // mistaken for a rewrite (which would trigger a lossy doc rebuild).
+  const norm = (s?: string) => (s || '').replace(/\s+/g, ' ').trim();
   const priorById = new Map<string, { body?: string; doc?: LessonDoc }>();
   (prior?.modules || []).forEach((m: any) => (m?.lessons || []).forEach((l: any) => {
     if (l?.id) priorById.set(l.id, { body: l.body, doc: l.doc });
@@ -88,7 +91,7 @@ function preserveLessonDocs<T extends { modules?: unknown[] }>(cfg: T, prior: { 
         ? m.lessons.map((l: any) => {
             if (!l?.body) return l;
             const prev = l.id ? priorById.get(l.id) : undefined;
-            if (prev?.doc && prev.body === l.body) return { ...l, doc: prev.doc };
+            if (prev?.doc && norm(prev.body) === norm(l.body)) return { ...l, doc: prev.doc };
             try { return { ...l, doc: lessonHtmlToDoc(l.body) }; }
             catch { return l; }
           })

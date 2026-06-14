@@ -197,6 +197,7 @@ export function LessonContentStyles() {
 .lesson-content .lesson-code__lang-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #8b93a7; }
 .lesson-content .lesson-code__lang { font-size: 12px; font-weight: 600; color: #c9d1d9; background: #0f1120; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 3px 6px; }
 .lesson-content .lesson-code__hint { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #6ee7b7; }
+.lesson-content .lesson-code__hint[data-on="false"] { color: #8b93a7; font-weight: 600; text-transform: none; letter-spacing: 0; }
 .lesson-content .lesson-code__actions { display: inline-flex; gap: 6px; }
 .lesson-content .lesson-code__btn { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #c9d1d9; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; padding: 4px 10px; cursor: pointer; }
 .lesson-content .lesson-code__btn:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
