@@ -44,9 +44,30 @@ function SortableVEShell({ id, children }: {
   return <div ref={setNodeRef} style={style}>{children({ dragHandle, isDragging })}</div>;
 }
 import { LessonEditor } from '@/components/lesson/LessonEditor';
+import { lessonHtmlToDoc } from '@/components/lesson/extensions';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+
+// Convert AI-generated lesson bodies (HTML) into canonical interactive docs so VE
+// lessons stay doc-canonical, matching the course generate_lesson flow. The HTML
+// `body` is kept as the lossy fallback. Runs client-side (generateJSON needs a DOM).
+function attachLessonDocs<T extends { modules?: unknown[] }>(cfg: T): T {
+  if (!cfg?.modules) return cfg;
+  return {
+    ...cfg,
+    modules: (cfg.modules as any[]).map((m: any) => ({
+      ...m,
+      lessons: Array.isArray(m?.lessons)
+        ? m.lessons.map((l: any) => {
+            if (!l?.body) return l;
+            try { return { ...l, doc: lessonHtmlToDoc(l.body) }; }
+            catch { return l; } // keep body-only if the HTML cannot be parsed
+          })
+        : m?.lessons,
+    })),
+  };
+}
 
 // Design tokens
 const LIGHT_C = {
@@ -554,7 +575,7 @@ function VirtualExperienceCreatePageInner() {
           json.config.dataset = { filename: '', description: '', url: datasetUrl.trim() };
         }
       }
-      setConfig(json.config);
+      setConfig(attachLessonDocs(json.config));
       setTitle(json.config.company ? `${json.config.company} - ${effectiveIndustry.charAt(0).toUpperCase()+effectiveIndustry.slice(1)} Project` : 'Virtual Experience');
       setCoverImage(json.config.coverImage || '');
       setExpandedModules(new Set((json.config.modules || []).map((m: Module) => m.id)));
@@ -579,7 +600,7 @@ function VirtualExperienceCreatePageInner() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
-      setConfig(json.config);
+      setConfig(attachLessonDocs(json.config));
       setTitle(json.config.company ? `${json.config.company} - ${effectiveIndustry.charAt(0).toUpperCase()+effectiveIndustry.slice(1)} Project` : 'Virtual Experience');
       setCoverImage(json.config.coverImage || '');
       setExpandedModules(new Set((json.config.modules || []).map((m: Module) => m.id)));
@@ -670,7 +691,7 @@ function VirtualExperienceCreatePageInner() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed');
       if (json.config) {
-        setConfig(json.config as ProjectConfig);
+        setConfig(attachLessonDocs(json.config) as ProjectConfig);
         setImproveInstruction('');
         setShowImprove(false);
       }

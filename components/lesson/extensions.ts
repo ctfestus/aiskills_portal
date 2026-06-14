@@ -10,18 +10,19 @@
 // code) are appended to `lessonExtensions` in later phases so both surfaces gain
 // them at the same time.
 
-import { generateHTML, generateJSON, type Extensions } from '@tiptap/core';
+import { generateJSON, type Extensions } from '@tiptap/core';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Image } from '@tiptap/extension-image';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
-import { sanitizeRichText } from '@/lib/sanitize';
 import type { LessonDoc } from '@/lib/lesson-doc';
 import { Callout } from '@/components/lesson/nodes/Callout';
-import { Accordion } from '@/components/lesson/nodes/Accordion';
+import { Accordion, AccordionItem } from '@/components/lesson/nodes/Accordion';
 import { Tabs, TabPanel } from '@/components/lesson/nodes/Tabs';
+import { KnowledgeCheck } from '@/components/lesson/nodes/KnowledgeCheck';
+import { RunnableCode } from '@/components/lesson/nodes/RunnableCode';
 
 export const lessonExtensions: Extensions = [
   // StarterKit (3.23.x) bundles document/paragraph/text, headings, bullet/ordered
@@ -38,23 +39,12 @@ export const lessonExtensions: Extensions = [
   TableCell,
   Callout,
   Accordion,
+  AccordionItem,
   Tabs,
   TabPanel,
+  KnowledgeCheck,
+  RunnableCode,
 ];
-
-/**
- * Serialize a lesson doc to sanitized HTML for the `lesson.body` fallback.
- *
- * TipTap's generateHTML uses the ProseMirror DOMSerializer, which needs a DOM, so
- * call this client-side or at runtime -- not in a server (RSC / route handler)
- * context. The fallback is intentionally lossy: sanitizeRichText drops tags it does
- * not allow (e.g. images), which is fine because every live renderer reads the
- * canonical `doc`; `body` exists only for legacy renderers and exports.
- */
-export function lessonDocToHtml(doc: LessonDoc | null | undefined): string {
-  if (!doc?.content?.length) return '';
-  return sanitizeRichText(generateHTML(doc as Parameters<typeof generateHTML>[0], lessonExtensions));
-}
 
 /**
  * Build a canonical lesson doc from an HTML string (e.g. AI-generated lesson body),

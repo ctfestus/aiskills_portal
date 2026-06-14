@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
 import { Plus, X } from 'lucide-react';
+import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 
 const MAX_TABS = 12;
 
@@ -70,12 +71,12 @@ function TabsView({ node, editor, getPos }: NodeViewProps) {
           <div key={i} className="lesson-tabs__tab" data-active={i === current ? 'true' : 'false'}>
             {editable ? (
               <>
-                <input
+                <NodeTextInput
                   className="lesson-tabs__label-input"
                   value={label}
                   placeholder={`Tab ${i + 1}`}
                   onFocus={() => setActive(i)}
-                  onChange={(e) => setLabel(i, e.target.value)}
+                  onCommit={(v) => setLabel(i, v)}
                 />
                 {count > 1 && (
                   <button
@@ -109,11 +110,20 @@ function TabsView({ node, editor, getPos }: NodeViewProps) {
   );
 }
 
-function TabPanelView() {
-  // Label lives in the parent tab bar; the panel renders only its body. Active/
-  // inactive visibility is driven by the parent wrapper's data-active via CSS.
+function TabPanelView({ getPos, editor }: NodeViewProps) {
+  // Label lives in the parent tab bar; the panel renders only its body. The panel
+  // tags itself with its own index (data-tab-index); the parent wrapper carries
+  // data-active. CSS pairs them with a descendant selector, so visibility does not
+  // depend on the DOM nesting that ReactNodeViewRenderer produces.
+  let index = 0;
+  if (typeof getPos === 'function') {
+    const pos = getPos();
+    if (pos != null) {
+      try { index = editor.state.doc.resolve(pos).index(); } catch { index = 0; }
+    }
+  }
   return (
-    <NodeViewWrapper className="lesson-tab-panel">
+    <NodeViewWrapper className="lesson-tab-panel" data-tab-index={index}>
       <NodeViewContent />
     </NodeViewWrapper>
   );

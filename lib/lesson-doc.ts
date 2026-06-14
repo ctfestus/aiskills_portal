@@ -6,8 +6,8 @@
 //
 // This module is intentionally DEPENDENCY-FREE (no TipTap, no React) so it can be
 // imported by server routes (e.g. the delete-cleanup path in app/api/forms/route.ts)
-// without pulling the editor bundle into a server context. The TipTap-dependent
-// serializer (`lessonDocToHtml`) lives in components/lesson/extensions.ts instead.
+// without pulling the editor bundle into a server context. TipTap-dependent helpers
+// (e.g. `lessonHtmlToDoc`) live in components/lesson/extensions.ts instead.
 
 /**
  * Structural shape of a ProseMirror document node. This is intentionally a
