@@ -105,9 +105,10 @@ export function LessonContentStyles() {
 .lesson-content .ProseMirror > :last-child { margin-bottom: 0; }
 .lesson-content .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #a1a1aa; float: left; height: 0; pointer-events: none; }
 
-.lesson-content .lesson-accordion { margin: 0.8rem 0; }
-.lesson-content .lesson-accordion__item { border: 1px solid #e4e4e7; border-radius: 10px; margin: 0.4rem 0; overflow: hidden; }
-.lesson-content.dark .lesson-accordion__item { border-color: #2e2e33; }
+.lesson-content .lesson-accordion { margin: 0.8rem 0; --acc-border-default: #e4e4e7; }
+.lesson-content.dark .lesson-accordion { --acc-border-default: #3f3f46; }
+.lesson-content .lesson-accordion__toolbar { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+.lesson-content .lesson-accordion__item { border-style: var(--acc-border-style, solid); border-width: var(--acc-border-width, 1px); border-color: var(--acc-border-color, var(--acc-border-default, #e4e4e7)); border-radius: 10px; margin: 0.4rem 0; overflow: hidden; }
 .lesson-content .lesson-accordion__head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-weight: 600; font-size: 14px; background: #f8fafc; cursor: pointer; user-select: none; }
 .lesson-content.dark .lesson-accordion__head { background: rgba(255,255,255,0.04); }
 .lesson-content .lesson-accordion__chevron { flex-shrink: 0; transition: transform 0.18s; color: #71717a; }
@@ -124,7 +125,6 @@ export function LessonContentStyles() {
 .lesson-content .lesson-accordion__add:hover { background: rgba(0,0,0,0.03); }
 .lesson-content.dark .lesson-accordion__add { color: #a1a1aa; border-color: #3f3f46; }
 .lesson-content.dark .lesson-accordion__add:hover { background: rgba(255,255,255,0.05); }
-.lesson-content .lesson-accordion__controls { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
 
 .lesson-content .lesson-tabs { margin: 0.8rem 0; border: 1px solid #e4e4e7; border-radius: 10px; overflow: hidden; }
 .lesson-content.dark .lesson-tabs { border-color: #2e2e33; }
