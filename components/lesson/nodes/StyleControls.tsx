@@ -139,6 +139,7 @@ export function StyleMenu({ children }: { children: React.ReactNode }) {
         className="lesson-style-menu__trigger"
         aria-label="Formatting options"
         data-open={open ? 'true' : 'false'}
+        data-theme={dark ? 'dark' : 'light'}
         onMouseDown={toggle}
       >
         <MoreVertical width={15} height={15} />

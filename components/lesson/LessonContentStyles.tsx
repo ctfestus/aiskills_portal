@@ -267,14 +267,14 @@ export function LessonContentStyles() {
 .lesson-content.dark .lesson-style__color-reset:hover { background: rgba(255,255,255,0.08); }
 .lesson-content .lesson-style__label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #a1a1aa; }
 
-.lesson-content .lesson-style-menu { display: inline-flex; }
-.lesson-content .lesson-style-menu__trigger { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 7px; border: none; background: rgba(0,0,0,0.05); color: #52525b; cursor: pointer; }
-.lesson-content.dark .lesson-style-menu__trigger { background: rgba(255,255,255,0.08); color: #a1a1aa; }
-.lesson-content .lesson-style-menu__trigger:hover, .lesson-content .lesson-style-menu__trigger[data-open="true"] { background: rgba(0,0,0,0.1); color: #18181b; }
-.lesson-content.dark .lesson-style-menu__trigger:hover, .lesson-content.dark .lesson-style-menu__trigger[data-open="true"] { background: rgba(255,255,255,0.16); color: #fafafa; }
+.lesson-style-menu { display: inline-flex; }
+.lesson-style-menu__trigger { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 7px; border: none; background: rgba(0,0,0,0.05); color: #52525b; cursor: pointer; }
+.lesson-style-menu__trigger[data-theme="dark"] { background: rgba(255,255,255,0.08); color: #a1a1aa; }
+.lesson-style-menu__trigger:hover, .lesson-style-menu__trigger[data-open="true"] { background: rgba(0,0,0,0.1); color: #18181b; }
+.lesson-style-menu__trigger[data-theme="dark"]:hover, .lesson-style-menu__trigger[data-theme="dark"][data-open="true"] { background: rgba(255,255,255,0.16); color: #fafafa; }
 .lesson-content .lesson-block-corner { position: absolute; top: 8px; right: 8px; z-index: 5; }
-.lesson-content .lesson-block-corner .lesson-style-menu__trigger { background: rgba(255,255,255,0.92); color: #3f3f46; box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
-.lesson-content.dark .lesson-block-corner .lesson-style-menu__trigger { background: rgba(30,30,34,0.92); color: #e4e4e7; }
+.lesson-block-corner .lesson-style-menu__trigger { background: rgba(255,255,255,0.92); color: #3f3f46; box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
+.lesson-block-corner .lesson-style-menu__trigger[data-theme="dark"] { background: rgba(30,30,34,0.92); color: #e4e4e7; }
 .lesson-style-menu__panel { z-index: 1000; min-width: 220px; max-width: 280px; display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background: #ffffff; border: 1px solid #e4e4e7; box-shadow: 0 10px 30px rgba(0,0,0,0.16); font-size: 13px; }
 .lesson-style-menu__panel.dark { background: #1c1c20; border-color: #2e2e33; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
 .lesson-style-menu__row { display: flex; flex-direction: column; gap: 5px; }
