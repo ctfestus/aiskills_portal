@@ -13,15 +13,22 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
 import { ChevronRight, Plus } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { ColorField, Segmented, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
 
 function AccordionItemView({ node, updateAttributes, editor }: NodeViewProps) {
   const editable = editor.isEditable;
   const [open, setOpen] = useState<boolean>(!!node.attrs.open);
   const isOpen = editable ? true : open; // always expanded while authoring
   const title = (node.attrs.title as string) || '';
+  const borderStyle = (node.attrs.borderStyle as BorderStyle) || 'solid';
+  const borderColor = (node.attrs.borderColor as string) || '';
+
+  const wrapperStyle: React.CSSProperties = borderStyle === 'none'
+    ? { border: 'none' }
+    : { borderStyle, borderWidth: 1, ...(borderColor ? { borderColor } : {}) };
 
   return (
-    <NodeViewWrapper className="lesson-accordion__item" data-open={isOpen ? 'true' : 'false'}>
+    <NodeViewWrapper className="lesson-accordion__item" data-open={isOpen ? 'true' : 'false'} style={wrapperStyle}>
       <div
         className="lesson-accordion__head"
         contentEditable={false}
@@ -40,6 +47,14 @@ function AccordionItemView({ node, updateAttributes, editor }: NodeViewProps) {
           />
         ) : (
           <span className="lesson-accordion__title">{title || 'Section'}</span>
+        )}
+        {editable && (
+          <span className="lesson-accordion__controls">
+            <Segmented<BorderStyle> title="Border" value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} />
+            {borderStyle !== 'none' && (
+              <ColorField title="Border color" value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} />
+            )}
+          </span>
         )}
       </div>
       <NodeViewContent className="lesson-accordion__body" />
@@ -96,6 +111,8 @@ export const AccordionItem = Node.create({
         parseHTML: (el) => el.getAttribute('data-open') === 'true',
         renderHTML: (attrs) => ({ 'data-open': attrs.open ? 'true' : 'false' }),
       },
+      borderStyle: { default: 'solid' },
+      borderColor: { default: '' },
     };
   },
 
