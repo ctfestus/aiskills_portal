@@ -13,6 +13,8 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
 import { ChevronLeft, ChevronRight, Check, Plus, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { ColorField, Segmented, StyleBar, BORDER_STYLE_OPTIONS, borderCss, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
 
 const MAX_SLIDES = 20;
 
@@ -123,6 +125,9 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
   const editable = editor.isEditable;
   const cover = (node.attrs.cover as string) || '';
   const coverAlt = (node.attrs.coverAlt as string) || '';
+  const title = (node.attrs.title as string) || '';
+  const borderStyle = (node.attrs.borderStyle as BorderStyle) || 'none';
+  const borderColor = (node.attrs.borderColor as string) || '';
   const [uploading, setUploading] = useState(false);
 
   let index = 0;
@@ -146,8 +151,16 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
   };
 
   return (
-    <NodeViewWrapper className="lesson-carousel__slide" data-slide-index={index}>
+    <NodeViewWrapper className="lesson-carousel__slide" data-slide-index={index} style={borderCss(borderStyle, borderColor, '#e4e4e7')}>
       <div className="lesson-carousel__body">
+      {editable && (
+        <StyleBar>
+          <Segmented<BorderStyle> title="Card border" value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} />
+          {borderStyle !== 'none' && (
+            <ColorField title="Border color" value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} />
+          )}
+        </StyleBar>
+      )}
       {cover ? (
         <div className="lesson-carousel__cover-wrap" contentEditable={false}>
           <img className="lesson-carousel__cover" src={cover} alt={coverAlt} draggable={false} />
@@ -168,6 +181,11 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
           <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
         </label>
       ) : null}
+        {editable ? (
+          <NodeTextInput className="lesson-carousel__title-input" value={title} placeholder="Card title (optional)" onCommit={(v) => updateAttributes({ title: v })} />
+        ) : title ? (
+          <p className="lesson-carousel__title">{title}</p>
+        ) : null}
         <NodeViewContent />
       </div>
     </NodeViewWrapper>
@@ -184,6 +202,9 @@ export const CarouselSlide = Node.create({
     return {
       cover: { default: '' },
       coverAlt: { default: '' },
+      title: { default: '' },
+      borderStyle: { default: 'none' },
+      borderColor: { default: '' },
     };
   },
 

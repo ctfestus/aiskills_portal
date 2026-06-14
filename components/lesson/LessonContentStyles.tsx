@@ -294,6 +294,11 @@ export function LessonContentStyles() {
 .lesson-content .lesson-carousel__spin { animation: lesson-code-spin 0.8s linear infinite; }
 .lesson-content .lesson-carousel__body { padding: 18px 22px 20px; }
 .lesson-content .lesson-carousel__body > :last-child { margin-bottom: 0; }
+.lesson-content .lesson-carousel__title { font-size: 1.2rem; font-weight: 700; color: #18181b; margin: 0 0 8px; letter-spacing: -0.01em; }
+.lesson-content.dark .lesson-carousel__title { color: #fafafa; }
+.lesson-content .lesson-carousel__title-input { width: 100%; font: inherit; font-size: 1.2rem; font-weight: 700; color: #18181b; background: transparent; border: none; outline: none; padding: 0; margin-bottom: 8px; letter-spacing: -0.01em; }
+.lesson-content.dark .lesson-carousel__title-input { color: #fafafa; }
+.lesson-content .lesson-carousel__title-input::placeholder { color: #a1a1aa; font-weight: 600; }
 .lesson-content .lesson-carousel[data-active="0"] .lesson-carousel__slide[data-slide-index="0"],
 .lesson-content .lesson-carousel[data-active="1"] .lesson-carousel__slide[data-slide-index="1"],
 .lesson-content .lesson-carousel[data-active="2"] .lesson-carousel__slide[data-slide-index="2"],
@@ -313,7 +318,9 @@ export function LessonContentStyles() {
 .lesson-content .lesson-carousel[data-active="16"] .lesson-carousel__slide[data-slide-index="16"],
 .lesson-content .lesson-carousel[data-active="17"] .lesson-carousel__slide[data-slide-index="17"],
 .lesson-content .lesson-carousel[data-active="18"] .lesson-carousel__slide[data-slide-index="18"],
-.lesson-content .lesson-carousel[data-active="19"] .lesson-carousel__slide[data-slide-index="19"] { display: block; }
+.lesson-content .lesson-carousel[data-active="19"] .lesson-carousel__slide[data-slide-index="19"] { display: block; animation: lesson-carousel-slide 0.28s ease; }
+@keyframes lesson-carousel-slide { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .lesson-content .lesson-carousel__slide { animation: none !important; } }
 .lesson-content .lesson-carousel__arrow { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 999px; border: none; background: #111827; color: #fff; cursor: pointer; transition: opacity 0.15s; }
 .lesson-content.dark .lesson-carousel__arrow { background: #e4e4e7; color: #18181b; }
 .lesson-content .lesson-carousel__arrow:disabled { opacity: 0.25; cursor: default; }
