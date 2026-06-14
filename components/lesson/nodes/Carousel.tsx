@@ -11,7 +11,8 @@
 import { useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
-import { ChevronLeft, ChevronRight, Check, Plus, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Plus, X, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 
 const MAX_SLIDES = 20;
 
@@ -114,9 +115,16 @@ function CarouselView({ node, editor, getPos }: NodeViewProps) {
   );
 }
 
-function CarouselSlideView({ getPos, editor }: NodeViewProps) {
-  // Tags itself with its index; the parent wrapper carries data-active. CSS pairs
-  // them so visibility does not depend on ReactNodeViewRenderer's DOM nesting.
+function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewProps) {
+  // Each slide is a shadowed card: an optional cover image fills the top (flush to
+  // the rounded card corners) and the text body sits below. Tags itself with its
+  // index; the parent wrapper carries data-active. CSS pairs them so visibility does
+  // not depend on ReactNodeViewRenderer's DOM nesting.
+  const editable = editor.isEditable;
+  const cover = (node.attrs.cover as string) || '';
+  const coverAlt = (node.attrs.coverAlt as string) || '';
+  const [uploading, setUploading] = useState(false);
+
   let index = 0;
   if (typeof getPos === 'function') {
     const pos = getPos();
@@ -124,9 +132,44 @@ function CarouselSlideView({ getPos, editor }: NodeViewProps) {
       try { index = editor.state.doc.resolve(pos).index(); } catch { index = 0; }
     }
   }
+
+  const upload = async (file: File) => {
+    setUploading(true);
+    try {
+      const url = await uploadToCloudinary(file, 'lesson-images');
+      updateAttributes({ cover: url });
+    } catch {
+      if (typeof window !== 'undefined') window.alert('Image upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <NodeViewWrapper className="lesson-carousel__slide" data-slide-index={index}>
-      <NodeViewContent />
+      {cover ? (
+        <div className="lesson-carousel__cover-wrap" contentEditable={false}>
+          <img className="lesson-carousel__cover" src={cover} alt={coverAlt} draggable={false} />
+          {editable && (
+            <div className="lesson-carousel__cover-actions">
+              <label className="lesson-carousel__cover-btn">
+                {uploading ? 'Uploading...' : 'Change'}
+                <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
+              </label>
+              <button type="button" className="lesson-carousel__cover-btn" onMouseDown={(e) => { e.preventDefault(); updateAttributes({ cover: '' }); }}>Remove</button>
+            </div>
+          )}
+        </div>
+      ) : editable ? (
+        <label className="lesson-carousel__cover-add" contentEditable={false}>
+          {uploading ? <Loader2 className="lesson-carousel__spin" width={15} height={15} /> : <ImageIcon width={15} height={15} />}
+          {uploading ? 'Uploading...' : 'Add cover image'}
+          <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
+        </label>
+      ) : null}
+      <div className="lesson-carousel__body">
+        <NodeViewContent />
+      </div>
     </NodeViewWrapper>
   );
 }
@@ -136,6 +179,13 @@ export const CarouselSlide = Node.create({
   content: 'block+',
   defining: true,
   isolating: true,
+
+  addAttributes() {
+    return {
+      cover: { default: '' },
+      coverAlt: { default: '' },
+    };
+  },
 
   parseHTML() {
     return [{ tag: 'div[data-carousel-slide]' }];
