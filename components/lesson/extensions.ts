@@ -23,6 +23,7 @@ import { Accordion, AccordionItem } from '@/components/lesson/nodes/Accordion';
 import { Tabs, TabPanel } from '@/components/lesson/nodes/Tabs';
 import { KnowledgeCheck } from '@/components/lesson/nodes/KnowledgeCheck';
 import { RunnableCode } from '@/components/lesson/nodes/RunnableCode';
+import { Carousel, CarouselSlide } from '@/components/lesson/nodes/Carousel';
 
 // Border styling lives on the CELLS, not the table. TipTap's resizable Table renders
 // through its own TableView, which ignores custom table-level attributes (and the
@@ -71,6 +72,8 @@ export const lessonExtensions: Extensions = [
   TabPanel,
   KnowledgeCheck,
   RunnableCode,
+  Carousel,
+  CarouselSlide,
 ];
 
 /**
