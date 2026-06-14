@@ -17,7 +17,7 @@ type Size = 'small' | 'medium' | 'full';
 
 const SIZE_MAX: Record<Size, string> = { small: '320px', medium: '480px', full: '100%' };
 
-function ImageView({ node, updateAttributes, editor, selected }: NodeViewProps) {
+function ImageView({ node, updateAttributes, editor }: NodeViewProps) {
   const editable = editor.isEditable;
   const src = node.attrs.src as string;
   const alt = (node.attrs.alt as string) || '';
@@ -32,7 +32,7 @@ function ImageView({ node, updateAttributes, editor, selected }: NodeViewProps) 
 
   return (
     <NodeViewWrapper className="lesson-image" style={{ display: 'flex', flexDirection: 'column', alignItems }}>
-      {editable && selected && (
+      {editable && (
         <StyleBar>
           <Segmented<Align>
             title="Align"
