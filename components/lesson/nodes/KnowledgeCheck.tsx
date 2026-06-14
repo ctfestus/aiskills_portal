@@ -13,6 +13,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Check, Plus, X, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
 
 function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
   const editable = editor.isEditable;
@@ -20,6 +21,11 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
   const options = (node.attrs.options as string[]) || [];
   const correctIndex = (node.attrs.correctIndex as number) ?? 0;
   const explanation = (node.attrs.explanation as string) || '';
+  const borderStyle = (node.attrs.borderStyle as BorderStyle) || 'solid';
+  const borderColor = (node.attrs.borderColor as string) || '';
+  const wrapperStyle: React.CSSProperties = borderStyle === 'none'
+    ? { border: 'none' }
+    : { borderStyle, borderWidth: 1, ...(borderColor ? { borderColor } : {}) };
 
   const [selected, setSelected] = useState<number | null>(null);
   const submitted = selected !== null;
@@ -38,8 +44,16 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
 
   if (editable) {
     return (
-      <NodeViewWrapper className="lesson-check" data-editing="true" contentEditable={false}>
-        <div className="lesson-check__badge"><HelpCircle width={13} height={13} /> Knowledge check</div>
+      <NodeViewWrapper className="lesson-check" data-editing="true" contentEditable={false} style={wrapperStyle}>
+        <div className="lesson-check__bar">
+          <div className="lesson-check__badge"><HelpCircle width={13} height={13} /> Knowledge check</div>
+          <StyleMenu>
+            <MenuRow label="Border"><Segmented<BorderStyle> value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} /></MenuRow>
+            {borderStyle !== 'none' && (
+              <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
+            )}
+          </StyleMenu>
+        </div>
         <NodeTextInput
           className="lesson-check__q-input"
           value={question}
@@ -98,7 +112,7 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
   const state = submitted ? (selected === correctIndex ? 'correct' : 'incorrect') : 'idle';
 
   return (
-    <NodeViewWrapper className="lesson-check" data-state={state} contentEditable={false}>
+    <NodeViewWrapper className="lesson-check" data-state={state} contentEditable={false} style={wrapperStyle}>
       <div className="lesson-check__badge"><HelpCircle width={13} height={13} /> Knowledge check</div>
       {question && <p className="lesson-check__question">{question}</p>}
       <div className="lesson-check__options">
@@ -149,6 +163,8 @@ export const KnowledgeCheck = Node.create({
       options: { default: ['', ''] },
       correctIndex: { default: 0 },
       explanation: { default: '' },
+      borderStyle: { default: 'solid' },
+      borderColor: { default: '' },
     };
   },
 

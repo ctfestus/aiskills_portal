@@ -165,6 +165,8 @@ export function LessonContentStyles() {
 .lesson-content.dark .lesson-check { border-color: #2e2e33; background: rgba(255,255,255,0.03); }
 .lesson-content .lesson-check__badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #047857; margin-bottom: 8px; }
 .lesson-content.dark .lesson-check__badge { color: #6ee7b7; }
+.lesson-content .lesson-check__bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.lesson-content .lesson-check__bar .lesson-check__badge { margin-bottom: 0; }
 .lesson-content .lesson-check__question { font-weight: 600; color: #18181b; margin: 0 0 10px; }
 .lesson-content.dark .lesson-check__question { color: #fafafa; }
 .lesson-content .lesson-check__options { display: flex; flex-direction: column; gap: 7px; }
