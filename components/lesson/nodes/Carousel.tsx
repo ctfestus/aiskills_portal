@@ -18,6 +18,16 @@ import { ColorField, Segmented, StyleBar, BORDER_STYLE_OPTIONS, borderCss, type 
 
 const MAX_SLIDES = 20;
 
+type RadiusKey = 'none' | 'sm' | 'md' | 'lg';
+const CARD_RADIUS: Record<RadiusKey, number> = { none: 0, sm: 8, md: 14, lg: 22 };
+const COVER_RADIUS: Record<RadiusKey, number> = { none: 0, sm: 6, md: 10, lg: 16 };
+const RADIUS_OPTIONS: { value: RadiusKey; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'sm', label: 'S' },
+  { value: 'md', label: 'M' },
+  { value: 'lg', label: 'L' },
+];
+
 function CarouselView({ node, editor, getPos }: NodeViewProps) {
   const editable = editor.isEditable;
   const count = node.childCount;
@@ -128,6 +138,7 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
   const title = (node.attrs.title as string) || '';
   const borderStyle = (node.attrs.borderStyle as BorderStyle) || 'none';
   const borderColor = (node.attrs.borderColor as string) || '';
+  const radius = (node.attrs.radius as RadiusKey) in CARD_RADIUS ? (node.attrs.radius as RadiusKey) : 'md';
   const [uploading, setUploading] = useState(false);
 
   let index = 0;
@@ -151,10 +162,11 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
   };
 
   return (
-    <NodeViewWrapper className="lesson-carousel__slide" data-slide-index={index} style={borderCss(borderStyle, borderColor, '#e4e4e7')}>
+    <NodeViewWrapper className="lesson-carousel__slide" data-slide-index={index} style={{ ...borderCss(borderStyle, borderColor, '#e4e4e7'), borderRadius: CARD_RADIUS[radius] }}>
       <div className="lesson-carousel__body">
       {editable && (
         <StyleBar>
+          <Segmented<RadiusKey> title="Roundness" value={radius} onChange={(v) => updateAttributes({ radius: v })} options={RADIUS_OPTIONS} />
           <Segmented<BorderStyle> title="Card border" value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} />
           {borderStyle !== 'none' && (
             <ColorField title="Border color" value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} />
@@ -163,7 +175,7 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
       )}
       {cover ? (
         <div className="lesson-carousel__cover-wrap" contentEditable={false}>
-          <img className="lesson-carousel__cover" src={cover} alt={coverAlt} draggable={false} />
+          <img className="lesson-carousel__cover" src={cover} alt={coverAlt} draggable={false} style={{ borderRadius: COVER_RADIUS[radius] }} />
           {editable && (
             <div className="lesson-carousel__cover-actions">
               <label className="lesson-carousel__cover-btn">
@@ -205,6 +217,7 @@ export const CarouselSlide = Node.create({
       title: { default: '' },
       borderStyle: { default: 'none' },
       borderColor: { default: '' },
+      radius: { default: 'md' },
     };
   },
 
