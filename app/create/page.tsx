@@ -28,6 +28,17 @@ import GeneratingOverlay from '@/components/GeneratingOverlay';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { LessonEditor } from '@/components/lesson/LessonEditor';
 import { lessonHtmlToDoc } from '@/components/lesson/extensions';
+
+// Convert AI-generated question lessons (HTML body) into canonical interactive docs
+// so full course generation produces doc-canonical lessons, matching the per-lesson
+// generate_lesson flow. Body is kept as the lossy fallback. Runs client-side.
+function attachQuestionLessonDocs(questions: any[]): any[] {
+  return (questions || []).map((q: any) => {
+    if (!q?.lesson?.body || q.lesson.doc) return q;
+    try { return { ...q, lesson: { ...q.lesson, doc: lessonHtmlToDoc(q.lesson.body) } }; }
+    catch { return q; } // keep body-only if the HTML cannot be parsed
+  });
+}
 import { getFontById } from '@/lib/fonts';
 import { FontPickerModal } from '@/components/FontPickerModal';
 import { supabase } from '@/lib/supabase';
@@ -639,7 +650,7 @@ const [isSaving, setIsSaving] = useState(false);
         mode: 'dark',
         font: 'google-sans-text',
         fields: [],
-        questions: data.questions || [],
+        questions: attachQuestionLessonDocs(data.questions || []),
         learnOutcomes: data.learnOutcomes || [],
       });
       setSqlWizardStep(null);
@@ -788,7 +799,7 @@ const [isSaving, setIsSaving] = useState(false);
         mode: 'dark',
         font: 'google-sans-text',
         fields: [],
-        questions: data.questions || [],
+        questions: attachQuestionLessonDocs(data.questions || []),
         learnOutcomes: data.learnOutcomes || [],
       });
       setDocWizardStep(null);

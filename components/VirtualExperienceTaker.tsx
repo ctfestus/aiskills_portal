@@ -833,7 +833,7 @@ export default function VirtualExperienceTaker({
                 {(currentLes.doc || currentLes.body) && (
                   <div className="px-4 sm:px-8 pt-5 sm:pt-6 pb-6">
                     {currentLes.doc ? (
-                      <LessonRenderer doc={currentLes.doc} isDark={isDark} />
+                      <LessonRenderer key={currentLes.id} doc={currentLes.doc} isDark={isDark} />
                     ) : (
                       <div
                         className={`prose prose-sm max-w-none [font-size:14.5px] ve-lesson-body ${isDark ? 'dark' : ''} ${isDark

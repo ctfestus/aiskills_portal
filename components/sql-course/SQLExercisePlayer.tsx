@@ -835,7 +835,7 @@ export default function SQLExercisePlayer({
                 </div>
               )}
               {lesson?.doc ? (
-                <LessonRenderer doc={lesson.doc} isDark={isDark} />
+                <LessonRenderer key={question.id} doc={lesson.doc} isDark={isDark} />
               ) : lesson?.body ? (
                 <div
                   className={`prose max-w-none ve-lesson-body [&_blockquote]:border-l-[color:var(--lesson-accent)] [&_:not(pre)>code]:font-mono [&_:not(pre)>code]:text-[13px] [&_:not(pre)>code]:text-[var(--lesson-accent)] [&_:not(pre)>code]:bg-[var(--lesson-accent-bg)] [&_:not(pre)>code]:rounded [&_:not(pre)>code]:px-1.5 [&_:not(pre)>code]:py-0.5 [&_pre]:bg-[var(--lesson-code-bg)] [&_pre]:border-l-4 [&_pre]:border-l-[color:var(--lesson-accent)] [&_pre]:rounded-r-md [&_pre]:py-3 [&_pre]:px-4 [&_pre_code]:font-mono [&_pre_code]:text-[13px] [&_pre_code]:bg-transparent [&_pre_code]:border-0 [&_pre_code]:p-0 [&_pre_code]:text-[var(--lesson-pre-text)] ${isDark ? 'dark prose-invert prose-p:text-[#A8B5C2] prose-p:leading-[1.65] prose-headings:text-[#ACB8C5] prose-headings:font-semibold prose-strong:text-[#ACB8C5] prose-a:text-blue-400 prose-li:text-[#A8B5C2] prose-li:leading-[1.65] prose-hr:border-zinc-800 prose-blockquote:border-l-4 prose-blockquote:text-[#6b7a89] prose-blockquote:not-italic prose-pre:bg-transparent' : 'prose-p:text-[#555555] prose-p:leading-[1.65] prose-headings:text-[#111111] prose-headings:font-semibold prose-strong:text-[#111111] prose-li:text-[#555555] prose-li:leading-[1.65] prose-a:text-blue-600 prose-hr:border-zinc-200 prose-blockquote:border-l-4 prose-blockquote:text-[#888888] prose-blockquote:not-italic prose-pre:bg-transparent'}`}

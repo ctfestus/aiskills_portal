@@ -3296,7 +3296,7 @@ export function CourseTaker({
                         {(lesson.doc || lesson.body) && (
                           <div className="px-4 sm:px-8 pt-4 sm:pt-6 pb-5 sm:pb-6">
                             {lesson.doc ? (
-                              <LessonRenderer doc={lesson.doc} isDark={isDark} />
+                              <LessonRenderer key={currentQuestion.id} doc={lesson.doc} isDark={isDark} />
                             ) : (
                               <div
                                 className={`prose prose-sm max-w-none [font-size:15.5px] ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark
@@ -3501,7 +3501,7 @@ export function CourseTaker({
                       {(currentQuestion.lesson.doc || currentQuestion.lesson.body) && (
                         currentQuestion.lesson.doc ? (
                           <div className="mb-6">
-                            <LessonRenderer doc={currentQuestion.lesson.doc} isDark={isDark} />
+                            <LessonRenderer key={currentQuestion.id} doc={currentQuestion.lesson.doc} isDark={isDark} />
                           </div>
                         ) : (
                           <div
@@ -3922,7 +3922,7 @@ export function CourseTaker({
                   )}
                   {(currentQuestion.lesson.doc || currentQuestion.lesson.body) && (
                     currentQuestion.lesson.doc ? (
-                      <LessonRenderer doc={currentQuestion.lesson.doc} isDark={isDark} />
+                      <LessonRenderer key={currentQuestion.id} doc={currentQuestion.lesson.doc} isDark={isDark} />
                     ) : (
                       <div
                         className={`prose prose-base sm:prose-lg max-w-none ve-lesson-body ${INLINE_CODE_BADGE_CLASSES} ${isDark ? 'dark' : ''} ${isDark

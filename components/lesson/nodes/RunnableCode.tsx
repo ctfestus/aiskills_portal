@@ -76,6 +76,9 @@ function RunnableCodePlayer({ language, initialCode, setupSql, isSql }: {
   const [result, setResult] = useState<SQLResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const runtimeRef = useRef<SQLRuntime | null>(null);
+  // Run is only offered when the block carries its own dataset (a setup script that
+  // seeds tables). Without one, the block is a read-only, copyable snippet.
+  const canRun = isSql && setupSql.trim().length > 0;
 
   // Tear the DuckDB runtime down when the block unmounts.
   useEffect(() => () => { runtimeRef.current?.close().catch(() => {}); }, []);
@@ -108,7 +111,7 @@ function RunnableCodePlayer({ language, initialCode, setupSql, isSql }: {
       <div className="lesson-code__bar">
         <span className="lesson-code__lang-label">{language}</span>
         <div className="lesson-code__actions">
-          {isSql && (
+          {canRun && (
             <button type="button" className="lesson-code__btn" onClick={run} disabled={running}>
               {running ? <Loader2 className="lesson-code__spin" width={13} height={13} /> : <Play width={13} height={13} />}
               {running ? 'Running' : 'Run'}
@@ -121,7 +124,7 @@ function RunnableCodePlayer({ language, initialCode, setupSql, isSql }: {
         </div>
       </div>
 
-      {isSql ? (
+      {canRun ? (
         <textarea
           className="lesson-code__editor lesson-code__editor--run"
           value={code}

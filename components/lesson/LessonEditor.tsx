@@ -141,6 +141,17 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         </label>
       </Toolbar>
 
+      {editor.isActive('table') && (
+        <div className="flex items-center flex-wrap gap-1 px-2 py-1.5" style={{ borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
+          <TableBtn dark={dark} onClick={() => editor.chain().focus().addRowAfter().run()}>+ Row</TableBtn>
+          <TableBtn dark={dark} onClick={() => editor.chain().focus().deleteRow().run()}>- Row</TableBtn>
+          <TableBtn dark={dark} onClick={() => editor.chain().focus().addColumnAfter().run()}>+ Column</TableBtn>
+          <TableBtn dark={dark} onClick={() => editor.chain().focus().deleteColumn().run()}>- Column</TableBtn>
+          <TableBtn dark={dark} onClick={() => editor.chain().focus().toggleHeaderRow().run()}>Header row</TableBtn>
+          <TableBtn dark={dark} danger onClick={() => editor.chain().focus().deleteTable().run()}>Delete table</TableBtn>
+        </div>
+      )}
+
       <div className={`lesson-content ${dark ? 'dark' : ''} px-3 py-2.5 min-h-[140px] max-h-[460px] overflow-y-auto`}>
         <EditorContent editor={editor} />
       </div>
@@ -158,6 +169,20 @@ function Toolbar({ dark, children }: { dark: boolean; children: React.ReactNode 
 
 function Divider({ dark }: { dark: boolean }) {
   return <div className="w-px h-4 mx-1" style={{ background: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }} />;
+}
+
+function TableBtn({ dark, danger, onClick, children }: { dark: boolean; danger?: boolean; onClick: () => void; children: React.ReactNode }) {
+  const color = danger ? '#e5484d' : (dark ? '#aaa' : '#555');
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => { e.preventDefault(); onClick(); }}
+      className="text-[11px] font-semibold px-2 py-1 rounded transition-colors"
+      style={{ color, background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }}
+    >
+      {children}
+    </button>
+  );
 }
 
 function Btn({ dark, title, active, onClick, children }: { dark: boolean; title: string; active?: boolean; onClick: () => void; children: React.ReactNode }) {

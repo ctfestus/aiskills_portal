@@ -69,6 +69,34 @@ function attachLessonDocs<T extends { modules?: unknown[] }>(cfg: T): T {
   };
 }
 
+// Like attachLessonDocs, but preserves the ORIGINAL interactive doc for any lesson the
+// AI left unchanged (same id, same body). Used after "improve", which strips doc to
+// body-only server-side -- rebuilding doc from the lossy HTML would otherwise destroy
+// accordions / tabs / knowledge checks / runnable code on lessons the AI did not touch.
+// Lessons the AI actually rewrote (body changed) are reconverted from the new body.
+function preserveLessonDocs<T extends { modules?: unknown[] }>(cfg: T, prior: { modules?: any[] } | null | undefined): T {
+  if (!cfg?.modules) return cfg;
+  const priorById = new Map<string, { body?: string; doc?: LessonDoc }>();
+  (prior?.modules || []).forEach((m: any) => (m?.lessons || []).forEach((l: any) => {
+    if (l?.id) priorById.set(l.id, { body: l.body, doc: l.doc });
+  }));
+  return {
+    ...cfg,
+    modules: (cfg.modules as any[]).map((m: any) => ({
+      ...m,
+      lessons: Array.isArray(m?.lessons)
+        ? m.lessons.map((l: any) => {
+            if (!l?.body) return l;
+            const prev = l.id ? priorById.get(l.id) : undefined;
+            if (prev?.doc && prev.body === l.body) return { ...l, doc: prev.doc };
+            try { return { ...l, doc: lessonHtmlToDoc(l.body) }; }
+            catch { return l; }
+          })
+        : m?.lessons,
+    })),
+  };
+}
+
 // Design tokens
 const LIGHT_C = {
   page: '#F2F5FA', card: '#ffffff', cardBorder: 'rgba(0,0,0,0.08)',
@@ -691,7 +719,7 @@ function VirtualExperienceCreatePageInner() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed');
       if (json.config) {
-        setConfig(attachLessonDocs(json.config) as ProjectConfig);
+        setConfig(preserveLessonDocs(json.config, config) as ProjectConfig);
         setImproveInstruction('');
         setShowImprove(false);
       }

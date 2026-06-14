@@ -386,7 +386,7 @@ export default function AssignmentExperiencePlayer({
               {(currentLes.doc || currentLes.body) && (
                 <div className="px-6 py-5">
                   {currentLes.doc ? (
-                    <LessonRenderer doc={currentLes.doc} isDark={isDark} />
+                    <LessonRenderer key={currentLes.id} doc={currentLes.doc} isDark={isDark} />
                   ) : (
                     <div className="rich-content text-sm leading-relaxed" style={{ color: isDark ? '#ccc' : '#333' }}
                       dangerouslySetInnerHTML={{ __html: sanitizeRichText(currentLes.body) }}/>

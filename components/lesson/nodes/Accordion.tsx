@@ -27,6 +27,8 @@ function AccordionItemView({ node, updateAttributes, editor }: NodeViewProps) {
         contentEditable={false}
         onClick={editable ? undefined : () => setOpen((o) => !o)}
         role={editable ? undefined : 'button'}
+        tabIndex={editable ? undefined : 0}
+        onKeyDown={editable ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((o) => !o); } }}
       >
         <ChevronRight className="lesson-accordion__chevron" width={15} height={15} />
         {editable ? (
