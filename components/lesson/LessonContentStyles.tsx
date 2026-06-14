@@ -170,17 +170,18 @@ export function LessonContentStyles() {
 .lesson-content .lesson-check__question { font-weight: 600; color: #18181b; margin: 0 0 10px; }
 .lesson-content.dark .lesson-check__question { color: #fafafa; }
 .lesson-content .lesson-check__options { display: flex; flex-direction: column; gap: 7px; }
-.lesson-content .lesson-check__option { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 12px; border: 1px solid #e4e4e7; border-radius: 9px; background: #ffffff; color: #3f3f46; cursor: pointer; font: inherit; font-size: 14px; transition: border-color 0.15s, background 0.15s; }
-.lesson-content.dark .lesson-check__option { border-color: #3f3f46; background: rgba(255,255,255,0.02); color: #d4d4d8; }
-.lesson-content .lesson-check__option:hover:not(:disabled) { border-color: #10b981; }
+.lesson-content .lesson-check__option { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 12px; border: none; border-radius: 9px; background: #f4f4f5; color: #3f3f46; cursor: pointer; font: inherit; font-size: 14px; transition: background 0.15s, color 0.15s; }
+.lesson-content.dark .lesson-check__option { background: rgba(255,255,255,0.05); color: #d4d4d8; }
+.lesson-content .lesson-check__option:hover:not(:disabled) { background: #ecfdf5; color: #065f46; }
+.lesson-content.dark .lesson-check__option:hover:not(:disabled) { background: rgba(16,185,129,0.12); color: #6ee7b7; }
 .lesson-content .lesson-check__option:disabled { cursor: default; }
 .lesson-content .lesson-check__marker { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px; background: #f4f4f5; font-size: 11px; font-weight: 700; color: #71717a; }
 .lesson-content.dark .lesson-check__marker { background: rgba(255,255,255,0.08); color: #a1a1aa; }
-.lesson-content .lesson-check__option[data-correct="true"] { border-color: #10b981; background: #ecfdf5; color: #065f46; }
+.lesson-content .lesson-check__option[data-correct="true"] { background: #ecfdf5; color: #065f46; }
 .lesson-content.dark .lesson-check__option[data-correct="true"] { background: rgba(16,185,129,0.12); color: #6ee7b7; }
 .lesson-content .lesson-check__option[data-correct="true"] .lesson-check__marker { background: transparent; color: #10b981; }
 .lesson-content.dark .lesson-check__option[data-correct="true"] .lesson-check__marker { color: #34d399; }
-.lesson-content .lesson-check__option[data-wrong="true"] { border-color: #f43f5e; background: #fff1f2; color: #9f1239; }
+.lesson-content .lesson-check__option[data-wrong="true"] { background: #fff1f2; color: #9f1239; }
 .lesson-content.dark .lesson-check__option[data-wrong="true"] { background: rgba(244,63,94,0.12); color: #fda4af; }
 .lesson-content .lesson-check__option[data-wrong="true"] .lesson-check__marker { background: transparent; color: #f43f5e; }
 .lesson-content.dark .lesson-check__option[data-wrong="true"] .lesson-check__marker { color: #fb7185; }
