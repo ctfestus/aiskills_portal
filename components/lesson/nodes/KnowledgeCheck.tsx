@@ -11,7 +11,8 @@
 import { useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
-import { Check, Plus, X, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Check, Plus, X, CheckCircle2, XCircle, HelpCircle, PartyPopper } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
 
@@ -28,7 +29,16 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
     : { borderStyle, borderWidth: 1, ...(borderColor ? { borderColor } : {}) };
 
   const [selected, setSelected] = useState<number | null>(null);
+  const [celebrate, setCelebrate] = useState(false);
   const submitted = selected !== null;
+
+  const onSelect = (i: number) => {
+    setSelected(i);
+    if (i === correctIndex) {
+      setCelebrate(true);
+      window.setTimeout(() => setCelebrate(false), 2600);
+    }
+  };
 
   const setOption = (i: number, value: string) =>
     updateAttributes({ options: options.map((o, j) => (j === i ? value : o)) });
@@ -128,7 +138,7 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
               data-wrong={showWrong ? 'true' : 'false'}
               data-chosen={selected === i ? 'true' : 'false'}
               disabled={submitted}
-              onClick={() => setSelected(i)}
+              onClick={() => onSelect(i)}
             >
               <span className="lesson-check__marker">
                 {showCorrect ? <CheckCircle2 width={15} height={15} /> : showWrong ? <XCircle width={15} height={15} /> : String.fromCharCode(65 + i)}
@@ -140,12 +150,21 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
       </div>
       {submitted && (
         <div className="lesson-check__feedback">
-          <p className="lesson-check__verdict">
-            {selected === correctIndex ? 'Correct' : 'Not quite'}
-          </p>
+          {selected === correctIndex ? (
+            <div className="lesson-check__big-correct"><CheckCircle2 width={46} height={46} strokeWidth={2.5} /></div>
+          ) : (
+            <p className="lesson-check__verdict">Not quite</p>
+          )}
           {explanation && <p className="lesson-check__explain">{explanation}</p>}
-          <button type="button" className="lesson-check__retry" onClick={() => setSelected(null)}>Try again</button>
+          <button type="button" className="lesson-check__retry" onClick={() => { setSelected(null); setCelebrate(false); }}>Try again</button>
         </div>
+      )}
+      {celebrate && createPortal(
+        <div className="lesson-check__toast" role="status">
+          <PartyPopper width={20} height={20} />
+          <span>Correct! Nice work</span>
+        </div>,
+        document.body,
       )}
     </NodeViewWrapper>
   );
