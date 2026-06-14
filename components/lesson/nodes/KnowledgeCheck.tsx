@@ -143,10 +143,12 @@ function KnowledgeCheckView({ node, updateAttributes, editor }: NodeViewProps) {
               disabled={submitted}
               onClick={() => onSelect(i)}
             >
-              <span className="lesson-check__marker">
-                {showCorrect ? <CheckCircle2 width={26} height={26} strokeWidth={2.5} /> : showWrong ? <XCircle width={26} height={26} strokeWidth={2.5} /> : String.fromCharCode(65 + i)}
+              <span className="lesson-check__opt-text">{opt}</span>
+              <span className="lesson-check__opt-end">
+                {showCorrect && <CheckCircle2 className="lesson-check__icon" width={17} height={17} />}
+                {showWrong && <XCircle className="lesson-check__icon" width={17} height={17} />}
+                <span className="lesson-check__num">{i + 1}</span>
               </span>
-              <span>{opt}</span>
             </button>
           );
         })}
