@@ -798,7 +798,7 @@ export default function VirtualExperienceTaker({
 
         {/* Lesson content: subtle grey background, single white card */}
         <div ref={mainScrollRef} className="flex-1 overflow-y-auto" style={{ background: isDark ? '#141414' : '#F2F5FA' }}>
-          <div className="max-w-2xl mx-auto w-full px-2 sm:px-4 py-4 sm:py-8 space-y-4">
+          <div className="max-w-4xl mx-auto w-full px-2 sm:px-4 py-4 sm:py-8 space-y-4">
           {!currentLes && modules.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <BookOpen className="w-10 h-10 mb-3 opacity-20" style={{ color: muted }} />
