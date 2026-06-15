@@ -173,10 +173,8 @@ export default function VirtualExperienceTaker({
   const muted    = isDark ? '#888' : '#666';
   const subtle   = isDark ? '#262626' : '#f0f0ec';
 
-  const navSurface = isDark ? surface : '#ffffff';
   const navText    = isDark ? text : '#111';
   const navMuted   = isDark ? muted : '#666';
-  const navBorder  = isDark ? border : 'rgba(0,0,0,0.08)';
 
   const modules = config.modules || [];
   const flat    = allLessons(modules);
@@ -587,9 +585,9 @@ export default function VirtualExperienceTaker({
   return (
     <div className="relative flex flex-col h-screen overflow-hidden font-sans" style={{ background: bg, color: text }}>
 
-      {/* Full-width nav bar */}
-      <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 py-2 border-b"
-        style={{ background: navSurface, borderColor: navBorder, minHeight: 44 }}>
+      {/* Full-width nav bar -- same background as the body, no divider (matches course) */}
+      <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 py-2"
+        style={{ background: isDark ? '#141414' : '#F2F5FA', minHeight: 44 }}>
         {/* Left: logo */}
         <div className="flex items-center flex-shrink-0">
           {(isDark ? (logoDarkUrl || logoUrl) : logoUrl) && (
@@ -646,11 +644,11 @@ export default function VirtualExperienceTaker({
         }}>
 
         {/* Toggle + title header */}
-        <div className={`flex items-center pt-3 pb-2 flex-shrink-0 ${sidebarOpen ? 'px-3' : 'justify-center'}`}>
+        <div className={`flex pt-3 pb-1 flex-shrink-0 ${sidebarOpen ? 'items-start px-4' : 'items-center justify-center'}`}>
           {sidebarOpen ? (
             <>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold truncate" style={{ color: text }}>
+                <p className="text-xl font-bold leading-snug pt-1" style={{ color: text }}>
                   {config.title || config.company || 'Virtual Experience'}
                 </p>
               </div>
