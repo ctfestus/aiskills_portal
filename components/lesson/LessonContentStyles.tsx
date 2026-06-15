@@ -56,7 +56,9 @@ export function LessonContentStyles() {
 .lesson-content td[data-cb="all"], .lesson-content th[data-cb="all"] { border-width: 1px; border-style: solid; }
 .lesson-content td[data-cb="horizontal"], .lesson-content th[data-cb="horizontal"] { border-width: 1px 0; border-style: solid; }
 .lesson-content td[data-cb="vertical"], .lesson-content th[data-cb="vertical"] { border-width: 0 1px; border-style: solid; }
-.lesson-content .tableWrapper { overflow-x: auto; }
+.lesson-content .tableWrapper { overflow-x: auto; container-type: inline-size; }
+/* Narrow column: keep columns readable and let the table scroll sideways instead of crushing every cell to a few characters. Keyed to the wrapper's own width. */
+@container (max-width: 560px) { .lesson-content th, .lesson-content td { min-width: 7.5rem; } }
 .lesson-content .column-resize-handle { background: #10b981; width: 3px; pointer-events: none; }
 .lesson-content .selectedCell:after { background: rgba(16,185,129,0.12); content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 
@@ -305,9 +307,9 @@ export function LessonContentStyles() {
 .lesson-content .lesson-image__alt-input { font: inherit; font-size: 11px; width: 110px; padding: 3px 7px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.12); background: rgba(0,0,0,0.02); color: #52525b; outline: none; }
 .lesson-content.dark .lesson-image__alt-input { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); color: #d4d4d8; }
 
-.lesson-content .lesson-carousel { margin: 0.9rem 0; position: relative; --card-border-default: #e4e4e7; }
+.lesson-content .lesson-carousel { margin: 0.9rem 0; position: relative; container-type: inline-size; --card-border-default: #e4e4e7; }
 .lesson-content.dark .lesson-carousel { --card-border-default: #3f3f46; }
-.lesson-content .lesson-carousel__viewport { display: flex; align-items: center; gap: 8px; }
+.lesson-content .lesson-carousel__viewport { display: flex; align-items: center; gap: 8px; position: relative; }
 .lesson-content .lesson-carousel__slides { flex: 1; min-width: 0; }
 .lesson-content .lesson-carousel__slide { display: none; background: #ffffff; border-radius: var(--card-radius, 14px); border-style: var(--card-border-style, none); border-width: var(--card-border-width, 0); border-color: var(--card-border-color, var(--card-border-default, #e4e4e7)); box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 10px 28px rgba(0,0,0,0.07); overflow: hidden; }
 .lesson-content.dark .lesson-carousel__slide { background: #1a1a1e; box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
@@ -351,6 +353,15 @@ export function LessonContentStyles() {
 .lesson-content .lesson-carousel__arrow { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 999px; border: none; background: #111827; color: #fff; cursor: pointer; transition: opacity 0.15s; }
 .lesson-content.dark .lesson-carousel__arrow { background: #e4e4e7; color: #18181b; }
 .lesson-content .lesson-carousel__arrow:disabled { opacity: 0.25; cursor: default; }
+/* Narrow column: float the arrows over the card so the slide spans full width instead of going long and thin. Keyed to the carousel's own width (container query), so it adapts in narrow sidebars too, not just small screens. */
+@container (max-width: 560px) {
+  .lesson-content .lesson-carousel__viewport { gap: 0; }
+  .lesson-content .lesson-carousel__arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; width: 34px; height: 34px; background: rgba(17,24,39,0.82); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+  .lesson-content.dark .lesson-carousel__arrow { background: rgba(228,228,231,0.9); }
+  .lesson-content .lesson-carousel__arrow:first-child { left: 6px; }
+  .lesson-content .lesson-carousel__arrow:last-child { right: 6px; }
+  .lesson-content .lesson-carousel__body { padding-left: 44px; padding-right: 44px; }
+}
 .lesson-content .lesson-carousel__nav { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
 .lesson-content .lesson-carousel__dot-wrap { display: inline-flex; align-items: center; }
 .lesson-content .lesson-carousel__dot { min-width: 26px; height: 26px; padding: 0 6px; border-radius: 999px; border: 1.5px solid transparent; background: transparent; color: #71717a; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
