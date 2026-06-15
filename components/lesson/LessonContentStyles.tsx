@@ -472,10 +472,12 @@ ${stepReveal}
 /* Connector line is on the entry (always full height) at the dot column's center
    (date col 60 + gap 12 + dot half 7 = 79px), running from below the dot to the
    entry's bottom edge -- i.e. up to the next dot. Hidden on the last entry. */
-.lesson-content .lesson-timeline__entry::after { content: ''; position: absolute; left: 79px; top: 22px; bottom: 0; width: 2px; transform: translateX(-50%); background: #e4e4e7; }
+.lesson-content .lesson-timeline__entry::after { content: ''; position: absolute; left: 139px; top: 22px; bottom: 0; width: 2px; transform: translateX(-50%); background: #e4e4e7; }
 .lesson-content.dark .lesson-timeline__entry::after { background: #3f3f46; }
 .lesson-content .lesson-timeline__entry[data-last="true"]::after { display: none; }
-.lesson-content .lesson-timeline__date-col { flex-shrink: 0; width: 60px; padding-top: 2px; text-align: right; }
+/* Wide enough for a short phrase (not just a year), right-aligned so short labels
+   still hug the line; longer ones wrap within the column without shifting the dots. */
+.lesson-content .lesson-timeline__date-col { flex-shrink: 0; width: 120px; padding-top: 2px; text-align: right; overflow-wrap: break-word; }
 .lesson-content .lesson-timeline__dot { position: relative; flex-shrink: 0; width: 14px; }
 .lesson-content .lesson-timeline__dot::before { content: ''; position: absolute; left: 50%; top: 6px; transform: translateX(-50%); width: 12px; height: 12px; border-radius: 999px; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.18); z-index: 1; }
 .lesson-content .lesson-timeline__content { flex: 1; min-width: 0; }

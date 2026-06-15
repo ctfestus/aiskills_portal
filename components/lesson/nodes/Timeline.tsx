@@ -41,7 +41,7 @@ function TimelineEntryView({ node, getPos, editor, updateAttributes }: NodeViewP
     <NodeViewWrapper className="lesson-timeline__entry" data-last={isLast ? 'true' : 'false'}>
       <div className="lesson-timeline__date-col" contentEditable={false}>
         {editable ? (
-          <NodeTextInput className="lesson-timeline__date-input" value={date} placeholder="Date" onCommit={(v) => updateAttributes({ date: v })} />
+          <NodeTextInput className="lesson-timeline__date-input" value={date} placeholder="Date / label" onCommit={(v) => updateAttributes({ date: v })} />
         ) : date ? (
           <span className="lesson-timeline__date">{date}</span>
         ) : null}
