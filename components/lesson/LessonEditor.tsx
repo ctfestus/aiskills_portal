@@ -25,6 +25,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import { StyleMenu, MenuRow, Segmented, ColorField } from '@/components/lesson/nodes/StyleControls';
 import { lessonExtensions } from '@/components/lesson/extensions';
 import { LessonContentStyles } from '@/components/lesson/LessonContentStyles';
+import { GlossaryTooltip } from '@/components/lesson/GlossaryTooltip';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { sanitizeRichText } from '@/lib/sanitize';
 import type { LessonDoc } from '@/lib/lesson-doc';
@@ -202,6 +203,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
       <div className={`lesson-content ${dark ? 'dark' : ''} px-3 py-2.5 min-h-[140px] max-h-[460px] overflow-y-auto`}>
         <EditorContent editor={editor} />
       </div>
+      <GlossaryTooltip />
     </div>
   );
 }

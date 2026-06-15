@@ -453,13 +453,21 @@ ${stepReveal}
 .lesson-content.dark .lesson-stepper__add { color: #a1a1aa; border-color: #3f3f46; }
 
 /* Glossary term (inline definition tooltip) */
-.lesson-content .lesson-term { position: relative; border-bottom: 1px dotted #10b981; cursor: help; }
+.lesson-content .lesson-term { border-bottom: 1px dotted #10b981; cursor: help; }
 .lesson-content.dark .lesson-term { border-bottom-color: #34d399; }
-.lesson-content .lesson-term::after { content: attr(data-definition); position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); z-index: 60; width: max-content; max-width: 260px; padding: 8px 11px; border-radius: 8px; background: #18181b; color: #fff; font-size: 12.5px; font-weight: 400; line-height: 1.4; text-align: left; white-space: normal; box-shadow: 0 6px 20px rgba(0,0,0,0.28); opacity: 0; visibility: hidden; transition: opacity 0.15s; pointer-events: none; }
-.lesson-content .lesson-term::before { content: ''; position: absolute; left: 50%; bottom: calc(100% + 3px); transform: translateX(-50%); border: 5px solid transparent; border-top-color: #18181b; z-index: 60; opacity: 0; visibility: hidden; transition: opacity 0.15s; pointer-events: none; }
-.lesson-content .lesson-term:hover::after, .lesson-content .lesson-term:focus::after, .lesson-content .lesson-term:hover::before, .lesson-content .lesson-term:focus::before { opacity: 1; visibility: visible; }
-.lesson-content.dark .lesson-term::after { background: #f4f4f5; color: #18181b; }
-.lesson-content.dark .lesson-term::before { border-top-color: #f4f4f5; }
+/* The definition popover is rendered by GlossaryTooltip into a body portal (fixed +
+   global, so the lesson card's overflow can never clip it). These rules are global,
+   not scoped under .lesson-content, because the portal lives outside it. */
+.lesson-term-tip { position: relative; max-width: 300px; padding: 11px 14px; border-radius: 12px; background: rgba(24,24,27,0.97); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.08); color: #f4f4f5; font-size: 13px; line-height: 1.5; font-weight: 450; box-shadow: 0 10px 30px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.16); transform-origin: bottom center; animation: lesson-term-tip-in 0.15s ease; }
+.lesson-term-tip[data-placement="bottom"] { transform-origin: top center; }
+.lesson-term-tip[data-theme="dark"] { background: rgba(244,244,245,0.97); border-color: rgba(0,0,0,0.06); color: #18181b; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+.lesson-term-tip::after { content: ''; position: absolute; left: 50%; transform: translateX(-50%); border: 6px solid transparent; }
+.lesson-term-tip[data-placement="top"]::after { top: 100%; border-top-color: rgba(24,24,27,0.97); }
+.lesson-term-tip[data-placement="bottom"]::after { bottom: 100%; border-bottom-color: rgba(24,24,27,0.97); }
+.lesson-term-tip[data-theme="dark"][data-placement="top"]::after { border-top-color: rgba(244,244,245,0.97); }
+.lesson-term-tip[data-theme="dark"][data-placement="bottom"]::after { border-bottom-color: rgba(244,244,245,0.97); }
+@keyframes lesson-term-tip-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .lesson-term-tip { animation: none; } }
 
 /* Timeline */
 .lesson-content .lesson-timeline { margin: 0.9rem 0; }
