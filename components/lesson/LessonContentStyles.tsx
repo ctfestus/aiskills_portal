@@ -468,13 +468,16 @@ ${stepReveal}
 .lesson-content .lesson-timeline { margin: 0.9rem 0; }
 /* Layout per entry: [date column] [dot + connector] [title + body]. */
 .lesson-content .lesson-timeline__entry { position: relative; display: flex; gap: 12px; padding-bottom: 24px; }
-.lesson-content .lesson-timeline__entry[data-last="true"] { padding-bottom: 0; }
 /* Connector line is on the entry (always full height) at the dot column's center
-   (date col 60 + gap 12 + dot half 7 = 79px), running from below the dot to the
-   entry's bottom edge -- i.e. up to the next dot. Hidden on the last entry. */
+   (date col 120 + gap 12 + dot half 7 = 139px), running from below the dot to the
+   entry's bottom edge -- i.e. up to the next dot. */
 .lesson-content .lesson-timeline__entry::after { content: ''; position: absolute; left: 139px; top: 22px; bottom: 0; width: 2px; transform: translateX(-50%); background: #e4e4e7; }
 .lesson-content.dark .lesson-timeline__entry::after { background: #3f3f46; }
-.lesson-content .lesson-timeline__entry[data-last="true"]::after { display: none; }
+/* Last entry: no connector and no trailing space. Keyed off TipTap's per-node wrapper
+   (.node-timelineEntry) so it always tracks the real DOM order -- a React-derived flag
+   would go stale because adding a sibling need not re-render the previous entry. */
+.lesson-content [data-node-view-content-react] > .node-timelineEntry:last-child .lesson-timeline__entry { padding-bottom: 0; }
+.lesson-content [data-node-view-content-react] > .node-timelineEntry:last-child .lesson-timeline__entry::after { display: none; }
 /* Wide enough for a short phrase (not just a year), right-aligned so short labels
    still hug the line; longer ones wrap within the column without shifting the dots. */
 .lesson-content .lesson-timeline__date-col { flex-shrink: 0; width: 120px; padding-top: 2px; text-align: right; overflow-wrap: break-word; }

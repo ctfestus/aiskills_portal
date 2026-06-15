@@ -26,19 +26,11 @@ function TimelineEntryView({ node, getPos, editor, updateAttributes }: NodeViewP
     editor.chain().focus().deleteRange({ from: pos, to: pos + node.nodeSize }).run();
   };
 
-  // Last entry hides its connector line. We can't use CSS :last-child: TipTap wraps
-  // every node view in its own div.node-<name>, so each entry is the lone child of
-  // its wrapper and :last-child would match all of them.
-  let isLast = false;
-  if (typeof getPos === 'function') {
-    const pos = getPos();
-    if (pos != null) {
-      try { const $pos = editor.state.doc.resolve(pos); isLast = $pos.index() === $pos.parent.childCount - 1; } catch { isLast = false; }
-    }
-  }
-
+  // The last entry hides its connector line, handled purely in CSS via the wrapper's
+  // :last-child (see LessonContentStyles). Deriving "lastness" in React here would go
+  // stale: adding/removing a sibling does not necessarily re-render this node view.
   return (
-    <NodeViewWrapper className="lesson-timeline__entry" data-last={isLast ? 'true' : 'false'}>
+    <NodeViewWrapper className="lesson-timeline__entry">
       <div className="lesson-timeline__date-col" contentEditable={false}>
         {editable ? (
           <NodeTextInput className="lesson-timeline__date-input" value={date} placeholder="Date / label" onCommit={(v) => updateAttributes({ date: v })} />
