@@ -466,13 +466,16 @@ ${stepReveal}
 
 /* Timeline */
 .lesson-content .lesson-timeline { margin: 0.9rem 0; }
-.lesson-content .lesson-timeline__entry { position: relative; display: flex; gap: 14px; padding-bottom: 18px; }
+.lesson-content .lesson-timeline__entry { position: relative; display: flex; gap: 14px; padding-bottom: 24px; }
 .lesson-content .lesson-timeline__entry:last-child { padding-bottom: 0; }
+/* Connector line is on the entry (which always has full height), not the empty dot
+   div (which would only stretch via flex and can collapse). Runs from below the dot
+   to the entry's bottom edge -- i.e. up to the next dot. Hidden on the last entry. */
+.lesson-content .lesson-timeline__entry::after { content: ''; position: absolute; left: 7px; top: 20px; bottom: 0; width: 2px; transform: translateX(-50%); background: #e4e4e7; }
+.lesson-content.dark .lesson-timeline__entry::after { background: #3f3f46; }
+.lesson-content .lesson-timeline__entry:last-child::after { display: none; }
 .lesson-content .lesson-timeline__dot { position: relative; flex-shrink: 0; width: 14px; }
 .lesson-content .lesson-timeline__dot::before { content: ''; position: absolute; left: 50%; top: 5px; transform: translateX(-50%); width: 12px; height: 12px; border-radius: 999px; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.18); z-index: 1; }
-.lesson-content .lesson-timeline__dot::after { content: ''; position: absolute; left: 50%; top: 5px; bottom: -18px; transform: translateX(-50%); width: 2px; background: #e4e4e7; }
-.lesson-content.dark .lesson-timeline__dot::after { background: #3f3f46; }
-.lesson-content .lesson-timeline__entry:last-child .lesson-timeline__dot::after { display: none; }
 .lesson-content .lesson-timeline__content { flex: 1; min-width: 0; }
 .lesson-content .lesson-timeline__meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 4px; }
 .lesson-content .lesson-timeline__date { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; color: #10b981; }
