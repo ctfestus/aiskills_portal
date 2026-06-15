@@ -53,3 +53,38 @@ export function extractDocImageUrls(doc: LessonDoc | null | undefined): string[]
   visit(doc as unknown);
   return [...new Set(urls)];
 }
+
+/**
+ * Return the doc with every glossary-term definition inlined into its text as
+ * "term (definition)" and the `glossaryTerm` mark removed. The HTML body fallback is
+ * run through a sanitizer that strips data-* attributes -- where the definition lives
+ * (data-definition) -- so without this the body / export / legacy path would lose the
+ * definition entirely (the canonical `doc` keeps it either way). Pure JSON traversal
+ * (no TipTap, no DOM); returns the SAME reference when there is nothing to inline, so
+ * callers can cheaply skip regenerating HTML.
+ */
+export function inlineGlossaryDefinitions<T extends LessonDoc | null | undefined>(doc: T): T {
+  if (!isObject(doc as unknown)) return doc;
+  const visit = (node: LessonDoc): LessonDoc => {
+    let next = node;
+    if (typeof node.text === 'string' && Array.isArray(node.marks)) {
+      const term = node.marks.find((m) => m && m.type === 'glossaryTerm');
+      const def = term?.attrs?.definition;
+      if (term && typeof def === 'string' && def.trim()) {
+        next = {
+          ...node,
+          text: `${node.text} (${def.trim()})`,
+          marks: node.marks.filter((m) => m.type !== 'glossaryTerm'),
+        };
+      }
+    }
+    if (Array.isArray(next.content)) {
+      const mapped = next.content.map(visit);
+      if (mapped.some((child, i) => child !== next.content![i])) {
+        next = { ...next, content: mapped };
+      }
+    }
+    return next;
+  };
+  return visit(doc as LessonDoc) as T;
+}

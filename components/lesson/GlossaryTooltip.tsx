@@ -4,12 +4,16 @@
 //
 // The glossary is a TipTap mark (plain DOM spans), not a node view, so it can't host
 // its own React popover. A pure-CSS ::after tooltip also gets clipped by the lesson
-// card's overflow (scroll / rounded corners). This one component listens for
-// hover/focus on any `.lesson-term` element via event delegation and portals a fixed,
-// positioned tooltip to <body> -- so it is never clipped and can be styled freely.
-// Mounted by both LessonRenderer (player) and LessonEditor (authoring preview).
+// card's overflow (scroll / rounded corners). This component listens for hover/focus
+// on any `.lesson-term` element via event delegation and portals a fixed, positioned
+// tooltip to <body> -- never clipped, freely styled.
+//
+// Both LessonRenderer and LessonEditor mount it, and a page can show several lessons
+// at once, so a module-level registry elects a single OWNER instance: only the owner
+// attaches the document listeners and renders the portal. Ownership passes to the next
+// instance when the owner unmounts (tracked via useSyncExternalStore).
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
 interface TipState {
@@ -22,16 +26,43 @@ interface TipState {
 
 const GAP = 10; // px between the term and the tooltip
 
+const registry: symbol[] = [];
+const subscribers = new Set<() => void>();
+function emitOwnership() { subscribers.forEach((cb) => cb()); }
+function subscribeOwnership(cb: () => void) { subscribers.add(cb); return () => { subscribers.delete(cb); }; }
+
 export function GlossaryTooltip() {
+  const idRef = useRef<symbol | null>(null);
+  if (idRef.current === null) idRef.current = Symbol('glossary-tooltip');
   const [tip, setTip] = useState<TipState | null>(null);
 
+  // Register for this instance's lifetime; recompute every instance's ownership on change.
   useEffect(() => {
+    const id = idRef.current!;
+    registry.push(id);
+    emitOwnership();
+    return () => {
+      const i = registry.indexOf(id);
+      if (i >= 0) registry.splice(i, 1);
+      emitOwnership();
+    };
+  }, []);
+
+  const isOwner = useSyncExternalStore(
+    subscribeOwnership,
+    () => registry[0] === idRef.current,
+    () => false, // server: no tooltip
+  );
+
+  // Only the owner wires up the (single) set of document listeners.
+  useEffect(() => {
+    if (!isOwner) return undefined;
     const show = (el: HTMLElement) => {
       const def = el.getAttribute('data-definition');
       if (!def) return;
       const r = el.getBoundingClientRect();
       const placement: 'top' | 'bottom' = r.top > 140 ? 'top' : 'bottom';
-      const half = 160; // keep the tooltip within the viewport (max-width 300 + margin)
+      const half = 160; // keep within the viewport (max-width 300 + margin)
       const x = Math.min(Math.max(r.left + r.width / 2, half + 8), window.innerWidth - half - 8);
       setTip({
         text: def,
@@ -61,10 +92,11 @@ export function GlossaryTooltip() {
       document.removeEventListener('focusout', onBlur);
       window.removeEventListener('scroll', hide, true);
       window.removeEventListener('resize', hide);
+      setTip(null); // clear when ownership is lost or on unmount
     };
-  }, []);
+  }, [isOwner]);
 
-  if (!tip || typeof document === 'undefined') return null;
+  if (!isOwner || !tip || typeof document === 'undefined') return null;
 
   return createPortal(
     <div

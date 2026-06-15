@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
+import { generateHTML, type JSONContent } from '@tiptap/core';
 import Placeholder from '@tiptap/extension-placeholder';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code2, FileCode2,
@@ -28,7 +29,7 @@ import { LessonContentStyles } from '@/components/lesson/LessonContentStyles';
 import { GlossaryTooltip } from '@/components/lesson/GlossaryTooltip';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { sanitizeRichText } from '@/lib/sanitize';
-import type { LessonDoc } from '@/lib/lesson-doc';
+import { inlineGlossaryDefinitions, type LessonDoc } from '@/lib/lesson-doc';
 
 interface LessonEditorProps {
   doc?: LessonDoc;
@@ -55,10 +56,16 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
     immediatelyRender: false, // required under Next SSR
     onUpdate: ({ editor }) => {
       skipNextSync.current = true;
-      onChangeRef.current({
-        doc: editor.getJSON() as LessonDoc,
-        body: sanitizeRichText(editor.getHTML()),
-      });
+      // Canonical doc keeps the glossary marks; the lossy body fallback would drop the
+      // definitions (the sanitizer strips data-* attrs), so inline them as readable
+      // text first. inlineGlossaryDefinitions returns the same doc when there is no
+      // glossary, so the common path stays on the cheap editor.getHTML().
+      const doc = editor.getJSON() as LessonDoc;
+      const inlined = inlineGlossaryDefinitions(doc);
+      const html = inlined === doc
+        ? editor.getHTML()
+        : generateHTML(inlined as unknown as JSONContent, lessonExtensions);
+      onChangeRef.current({ doc, body: sanitizeRichText(html) });
     },
   });
 

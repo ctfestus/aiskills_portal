@@ -58,13 +58,20 @@ function FlipCardView({ node, getPos, editor, updateAttributes }: NodeViewProps)
 
   return (
     <NodeViewWrapper className="lesson-flip" data-flipped={flipped ? 'true' : 'false'}>
-      <button type="button" className="lesson-flip__card" aria-label="Flip card" onClick={() => setFlipped((f) => !f)}>
+      <button
+        type="button"
+        className="lesson-flip__card"
+        aria-pressed={flipped}
+        aria-label={flipped ? 'Showing the back. Activate to flip back to the front.' : 'Showing the front. Activate to flip and reveal the back.'}
+        onClick={() => setFlipped((f) => !f)}
+      >
         <span className="lesson-flip__inner">
-          <span className="lesson-flip__face lesson-flip__face--front">
+          {/* Only the visible face is exposed to assistive tech, so the hidden side (often the answer) is not announced before the learner flips. */}
+          <span className="lesson-flip__face lesson-flip__face--front" aria-hidden={flipped}>
             <span className="lesson-flip__text">{front}</span>
             <span className="lesson-flip__hint"><RefreshCw width={12} height={12} /> Flip</span>
           </span>
-          <span className="lesson-flip__face lesson-flip__face--back">
+          <span className="lesson-flip__face lesson-flip__face--back" aria-hidden={!flipped}>
             <span className="lesson-flip__text">{back}</span>
           </span>
         </span>
