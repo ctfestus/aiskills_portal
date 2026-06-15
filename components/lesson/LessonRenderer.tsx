@@ -12,6 +12,7 @@ import { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { lessonExtensions } from '@/components/lesson/extensions';
 import { LessonContentStyles } from '@/components/lesson/LessonContentStyles';
+import { GlossaryTooltip } from '@/components/lesson/GlossaryTooltip';
 import type { LessonDoc } from '@/lib/lesson-doc';
 
 interface LessonRendererProps {
@@ -40,6 +41,7 @@ export function LessonRenderer({ doc, isDark = false, className = '' }: LessonRe
     <div className={`lesson-content ${isDark ? 'dark' : ''} ${className}`.trim()}>
       <LessonContentStyles />
       <EditorContent editor={editor} />
+      <GlossaryTooltip />
     </div>
   );
 }

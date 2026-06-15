@@ -9,6 +9,19 @@
 // No indigo, purple, or blue accents.
 
 export function LessonContentStyles() {
+  // Stepper progressive reveal: when N steps are revealed, show steps 0..N-1. Generated
+  // (rather than hand-written) so the cumulative selectors don't bloat the source.
+  const stepReveal = Array.from({ length: 12 }, (_, r) => {
+    const revealed = r + 1;
+    const show = Array.from({ length: revealed }, (_, i) =>
+      `.lesson-content .lesson-stepper[data-revealed="${revealed}"] .lesson-step[data-step-index="${i}"]`,
+    ).join(',\n');
+    // Only the newest revealed step (index revealed-1) animates in -- already-shown
+    // steps match a rule with no animation, so they don't re-play on each reveal. It
+    // also has no connector below it (would dangle into empty space).
+    const last = `.lesson-content .lesson-stepper[data-revealed="${revealed}"] .lesson-step[data-step-index="${revealed - 1}"]`;
+    return `${show} { display: flex; }\n${last} { animation: lesson-step-in 0.34s cubic-bezier(0.2,0.7,0.3,1); }\n${last}::after { display: none; }`;
+  }).join('\n');
   return (
     <style>{`
 .lesson-content { font-size: 15.5px; line-height: 1.6; color: #3f3f46; }
@@ -371,6 +384,120 @@ export function LessonContentStyles() {
 .lesson-content .lesson-carousel__remove:hover { color: #ef4444; }
 .lesson-content .lesson-carousel__add { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px dashed #cbd5e1; background: transparent; color: #71717a; cursor: pointer; border-radius: 999px; margin-left: 4px; }
 .lesson-content.dark .lesson-carousel__add { border-color: #3f3f46; color: #a1a1aa; }
+
+/* Flip cards (flashcards) */
+.lesson-content .lesson-flip-deck { margin: 0.9rem 0; }
+/* TipTap renders child node views inside an inner [data-node-view-content-react]
+   wrapper, so the grid must sit on that wrapper -- not the NodeViewContent element --
+   or the cards stack vertically (the wrapper would be the lone grid item). */
+.lesson-content .lesson-flip-deck__grid > [data-node-view-content-react] { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; align-items: start; }
+.lesson-content .lesson-flip { min-width: 0; }
+.lesson-content .lesson-flip__card { display: block; width: 100%; padding: 0; border: none; background: transparent; cursor: pointer; perspective: 1000px; font: inherit; }
+/* Both faces share one grid cell so the card grows to the taller side's content
+   (instead of clipping against a fixed height) while still flipping in 3D. */
+.lesson-content .lesson-flip__inner { position: relative; display: grid; width: 100%; min-height: 120px; transition: transform 0.5s cubic-bezier(0.4,0.2,0.2,1); transform-style: preserve-3d; }
+.lesson-content .lesson-flip[data-flipped="true"] .lesson-flip__inner { transform: rotateY(180deg); }
+.lesson-content .lesson-flip__face { grid-area: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 18px; border-radius: 12px; text-align: center; backface-visibility: hidden; -webkit-backface-visibility: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 22px rgba(0,0,0,0.07); }
+.lesson-content .lesson-flip__face--front { background: #ffffff; color: #18181b; font-weight: 600; }
+.lesson-content .lesson-flip__face--back { background: #ecfdf5; color: #065f46; transform: rotateY(180deg); }
+.lesson-content.dark .lesson-flip__face--front { background: #1a1a1e; color: #fafafa; }
+.lesson-content.dark .lesson-flip__face--back { background: rgba(16,185,129,0.16); color: #6ee7b7; }
+.lesson-content .lesson-flip__text { font-size: 15px; line-height: 1.45; }
+.lesson-content .lesson-flip__hint { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #a1a1aa; }
+@media (prefers-reduced-motion: reduce) { .lesson-content .lesson-flip__inner { transition: none; } }
+.lesson-content .lesson-flip__edit { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 12px 12px 14px; border: 1px solid #e4e4e7; border-radius: 12px; background: #ffffff; min-height: 132px; box-sizing: border-box; }
+.lesson-content.dark .lesson-flip__edit { border-color: #3f3f46; background: #1a1a1e; }
+.lesson-content .lesson-flip__edit-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #a1a1aa; }
+.lesson-content .lesson-flip__edit-input { width: 100%; font: inherit; font-size: 13.5px; color: #18181b; background: transparent; border: none; outline: none; resize: vertical; min-height: 28px; box-sizing: border-box; }
+.lesson-content.dark .lesson-flip__edit-input { color: #fafafa; }
+.lesson-content .lesson-flip__edit-input::placeholder { color: #a1a1aa; }
+.lesson-content .lesson-flip__edit-divider { border-top: 1px dashed #e4e4e7; margin: 4px 0; }
+.lesson-content.dark .lesson-flip__edit-divider { border-top-color: #3f3f46; }
+.lesson-content .lesson-flip__remove { position: absolute; top: 6px; right: 6px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: transparent; color: #c4c4c8; cursor: pointer; border-radius: 6px; }
+.lesson-content .lesson-flip__remove:hover { color: #ef4444; background: rgba(0,0,0,0.04); }
+.lesson-content .lesson-flip-deck__add { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; padding: 5px 10px; font-size: 12px; font-weight: 600; color: #52525b; background: transparent; border: 1px dashed #cbd5e1; border-radius: 8px; cursor: pointer; }
+.lesson-content .lesson-flip-deck__add:hover { background: rgba(0,0,0,0.03); }
+.lesson-content.dark .lesson-flip-deck__add { color: #a1a1aa; border-color: #3f3f46; }
+
+/* Vertical stepper */
+.lesson-content .lesson-stepper { margin: 0.9rem 0; }
+.lesson-content .lesson-step { display: none; gap: 14px; margin-top: 22px; position: relative; }
+.lesson-content .lesson-step[data-step-index="0"] { margin-top: 0; }
+/* Static dashed connector from each marker to the next. It spans this step's full
+   height plus the gap, so it reaches the next marker regardless of body length; the
+   generated rules above hide it on the last revealed step. */
+.lesson-content .lesson-step::after { content: ''; position: absolute; left: 15px; top: 32px; bottom: -22px; width: 2px; transform: translateX(-50%); z-index: 0; background-image: repeating-linear-gradient(to bottom, #10b981 0 5px, transparent 5px 11px); background-size: 2px 11px; background-repeat: repeat-y; }
+.lesson-content.dark .lesson-step::after { background-image: repeating-linear-gradient(to bottom, #34d399 0 5px, transparent 5px 11px); }
+/* New steps animate in as they are revealed (keyed to the newest step in the rules above). */
+@keyframes lesson-step-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .lesson-content .lesson-step { animation: none !important; } }
+${stepReveal}
+.lesson-content .lesson-step__marker { flex-shrink: 0; position: relative; z-index: 1; }
+.lesson-content .lesson-step__num { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 999px; background: #10b981; color: #fff; font-size: 13px; font-weight: 700; }
+.lesson-content .lesson-step__main { flex: 1; min-width: 0; }
+.lesson-content .lesson-step__head { display: flex; align-items: center; gap: 8px; min-height: 30px; margin-bottom: 2px; }
+.lesson-content .lesson-step__title { font-size: 1.05rem; font-weight: 700; color: #18181b; margin: 0; }
+.lesson-content.dark .lesson-step__title { color: #fafafa; }
+.lesson-content .lesson-step__title-input { flex: 1; min-width: 0; font: inherit; font-size: 1.05rem; font-weight: 700; color: #18181b; background: transparent; border: none; outline: none; padding: 0; }
+.lesson-content.dark .lesson-step__title-input { color: #fafafa; }
+.lesson-content .lesson-step__title-input::placeholder { color: #a1a1aa; font-weight: 600; }
+.lesson-content .lesson-step__body > :last-child { margin-bottom: 0; }
+.lesson-content .lesson-step__remove { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: transparent; color: #c4c4c8; cursor: pointer; border-radius: 6px; flex-shrink: 0; }
+.lesson-content .lesson-step__remove:hover { color: #ef4444; }
+.lesson-content .lesson-stepper__next { display: inline-flex; align-items: center; gap: 6px; margin: 16px 0 0 44px; padding: 8px 16px; border-radius: 999px; border: none; background: #10b981; color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.lesson-content .lesson-stepper__next:hover { background: #059669; }
+.lesson-content .lesson-stepper__done { display: inline-flex; align-items: center; gap: 6px; margin: 16px 0 0 44px; color: #047857; font-size: 13px; font-weight: 600; }
+.lesson-content.dark .lesson-stepper__done { color: #6ee7b7; }
+.lesson-content .lesson-stepper__add { display: inline-flex; align-items: center; gap: 5px; margin-top: 16px; padding: 5px 10px; font-size: 12px; font-weight: 600; color: #52525b; background: transparent; border: 1px dashed #cbd5e1; border-radius: 8px; cursor: pointer; }
+.lesson-content .lesson-stepper__add:hover { background: rgba(0,0,0,0.03); }
+.lesson-content.dark .lesson-stepper__add { color: #a1a1aa; border-color: #3f3f46; }
+
+/* Glossary term (inline definition tooltip) */
+.lesson-content .lesson-term { border-bottom: 1px dotted #10b981; cursor: help; }
+.lesson-content.dark .lesson-term { border-bottom-color: #34d399; }
+/* The definition popover is rendered by GlossaryTooltip into a body portal (fixed +
+   global, so the lesson card's overflow can never clip it). These rules are global,
+   not scoped under .lesson-content, because the portal lives outside it. */
+.lesson-term-tip { max-width: 300px; padding: 11px 14px; border-radius: 12px; background: #ffffff; border: 1px solid rgba(0,0,0,0.08); color: #27272a; font-size: 13px; line-height: 1.5; font-weight: 450; box-shadow: 0 12px 32px rgba(0,0,0,0.16), 0 3px 8px rgba(0,0,0,0.08); transform-origin: bottom center; animation: lesson-term-tip-in 0.15s ease; }
+.lesson-term-tip[data-placement="bottom"] { transform-origin: top center; }
+.lesson-term-tip[data-theme="dark"] { background: #1c1c20; border-color: rgba(255,255,255,0.1); color: #e4e4e7; box-shadow: 0 12px 32px rgba(0,0,0,0.55), 0 3px 8px rgba(0,0,0,0.4); }
+@keyframes lesson-term-tip-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .lesson-term-tip { animation: none; } }
+
+/* Timeline */
+.lesson-content .lesson-timeline { margin: 0.9rem 0; }
+/* Layout per entry: [date column] [dot + connector] [title + body]. */
+.lesson-content .lesson-timeline__entry { position: relative; display: flex; gap: 12px; padding-bottom: 24px; }
+.lesson-content .lesson-timeline__entry[data-last="true"] { padding-bottom: 0; }
+/* Connector line is on the entry (always full height) at the dot column's center
+   (date col 60 + gap 12 + dot half 7 = 79px), running from below the dot to the
+   entry's bottom edge -- i.e. up to the next dot. Hidden on the last entry. */
+.lesson-content .lesson-timeline__entry::after { content: ''; position: absolute; left: 139px; top: 22px; bottom: 0; width: 2px; transform: translateX(-50%); background: #e4e4e7; }
+.lesson-content.dark .lesson-timeline__entry::after { background: #3f3f46; }
+.lesson-content .lesson-timeline__entry[data-last="true"]::after { display: none; }
+/* Wide enough for a short phrase (not just a year), right-aligned so short labels
+   still hug the line; longer ones wrap within the column without shifting the dots. */
+.lesson-content .lesson-timeline__date-col { flex-shrink: 0; width: 120px; padding-top: 2px; text-align: right; overflow-wrap: break-word; }
+.lesson-content .lesson-timeline__dot { position: relative; flex-shrink: 0; width: 14px; }
+.lesson-content .lesson-timeline__dot::before { content: ''; position: absolute; left: 50%; top: 6px; transform: translateX(-50%); width: 12px; height: 12px; border-radius: 999px; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.18); z-index: 1; }
+.lesson-content .lesson-timeline__content { flex: 1; min-width: 0; }
+.lesson-content .lesson-timeline__meta { display: flex; align-items: baseline; gap: 8px; min-height: 22px; margin-bottom: 4px; }
+.lesson-content .lesson-timeline__date { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.5; color: #10b981; }
+.lesson-content.dark .lesson-timeline__date { color: #34d399; }
+.lesson-content .lesson-timeline__title { font-size: 1.05rem; font-weight: 700; color: #18181b; }
+.lesson-content.dark .lesson-timeline__title { color: #fafafa; }
+.lesson-content .lesson-timeline__body > :last-child { margin-bottom: 0; }
+.lesson-content .lesson-timeline__date-input { width: 100%; text-align: right; font: inherit; font-size: 12px; font-weight: 700; color: #10b981; background: transparent; border: none; border-bottom: 1px dashed #d4d4d8; outline: none; padding: 1px 0; }
+.lesson-content.dark .lesson-timeline__date-input { border-bottom-color: #3f3f46; }
+.lesson-content .lesson-timeline__date-input::placeholder { color: #a1a1aa; font-weight: 600; }
+.lesson-content .lesson-timeline__title-input { flex: 1; min-width: 0; font: inherit; font-size: 1.05rem; font-weight: 700; color: #18181b; background: transparent; border: none; outline: none; padding: 0; }
+.lesson-content.dark .lesson-timeline__title-input { color: #fafafa; }
+.lesson-content .lesson-timeline__title-input::placeholder { color: #a1a1aa; font-weight: 600; }
+.lesson-content .lesson-timeline__remove { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: transparent; color: #c4c4c8; cursor: pointer; border-radius: 6px; flex-shrink: 0; }
+.lesson-content .lesson-timeline__remove:hover { color: #ef4444; }
+.lesson-content .lesson-timeline__add { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600; color: #52525b; background: transparent; border: 1px dashed #cbd5e1; border-radius: 8px; cursor: pointer; }
+.lesson-content .lesson-timeline__add:hover { background: rgba(0,0,0,0.03); }
+.lesson-content.dark .lesson-timeline__add { color: #a1a1aa; border-color: #3f3f46; }
 `}</style>
   );
 }
