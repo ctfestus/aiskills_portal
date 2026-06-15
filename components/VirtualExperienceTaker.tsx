@@ -4,9 +4,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import {
   CheckCircle2, Circle, ChevronRight, ChevronLeft,
-  Menu, X, Loader2, Trophy, BookOpen, Lock, Download, Award, Star, Clock,
+  X, Loader2, Trophy, BookOpen, Lock, Download, Award, Star, Clock,
   Link as LinkIcon, Upload as UploadIcon,
-  ArrowLeftToLine, ArrowRightFromLine,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -17,6 +16,17 @@ import CodeReviewPlayer from '@/components/CodeReviewPlayer';
 import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
 import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
 import AiReviewDisclaimer from '@/components/AiReviewDisclaimer';
+
+// Hamburger -- matches the course player (tighter line spacing than lucide's Menu).
+function MenuIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" className={className}>
+      <line x1="4" y1="7" x2="20" y2="7" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="17" x2="20" y2="17" />
+    </svg>
+  );
+}
 
 // Types
 interface Requirement {
@@ -604,11 +614,11 @@ export default function VirtualExperienceTaker({
       </div>
 
       {/* Body row */}
-      <div className="relative flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden" style={{ background: isDark ? '#141414' : '#F2F5FA' }}>
 
       {/* Mobile backdrop: tap to close sidebar */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-30 sm:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-black/60 z-[55] sm:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Mobile open button -- tab flush from left edge of content when sidebar is closed */}
@@ -619,7 +629,7 @@ export default function VirtualExperienceTaker({
             className="px-2.5 py-2 rounded-r-lg hover:opacity-80 transition-opacity"
             style={{ color: muted, background: surface, ...(isDark ? {} : { border: `1px solid ${border}`, borderLeft: 'none' }) }}
           >
-            <ArrowRightFromLine className="w-4 h-4" strokeWidth={2.5} />
+            <MenuIcon className="w-5 h-5" />
           </button>
           <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white">
             Open course outline
@@ -627,16 +637,16 @@ export default function VirtualExperienceTaker({
         </div>
       )}
 
-      {/* Sidebar: absolute overlay on mobile, in-flow on sm+ */}
-      <aside className={`absolute inset-y-0 left-0 z-40 sm:relative sm:inset-auto flex-shrink-0 flex flex-col border-r transition-all duration-300 ${!sidebarOpen ? '-translate-x-full sm:translate-x-0' : 'translate-x-0'}`}
+      {/* Sidebar: absolute overlay on mobile, in-flow on sm+ -- rounded card to match the course player */}
+      <aside className={`absolute inset-y-0 left-0 z-[56] rounded-r-2xl sm:relative sm:inset-auto sm:z-40 flex-shrink-0 flex flex-col transition-all duration-300 sm:my-3 sm:ml-3 sm:rounded-2xl ${!sidebarOpen ? '-translate-x-full sm:translate-x-0' : 'translate-x-0'}`}
         style={{
-          width: sidebarOpen ? 'min(100vw, 280px)' : 44, minWidth: sidebarOpen ? 'min(100vw, 280px)' : 44,
-          background: surface, borderColor: border,
+          width: sidebarOpen ? 'min(100vw, 360px)' : 48, minWidth: sidebarOpen ? 'min(100vw, 360px)' : 48,
+          background: surface,
           overflow: sidebarOpen ? 'hidden' : 'visible',
         }}>
 
         {/* Toggle + title header */}
-        <div className={`flex items-center pt-3 pb-2 border-b flex-shrink-0 ${sidebarOpen ? 'px-3' : 'justify-center'}`} style={{ borderColor: border }}>
+        <div className={`flex items-center pt-3 pb-2 flex-shrink-0 ${sidebarOpen ? 'px-3' : 'justify-center'}`}>
           {sidebarOpen ? (
             <>
               <div className="min-w-0 flex-1">
@@ -646,7 +656,7 @@ export default function VirtualExperienceTaker({
               </div>
               <div className="relative group ml-2 flex-shrink-0">
                 <button onClick={() => setSidebarOpen(false)} style={{ color: muted }} className="hover:opacity-60 p-1">
-                  <ArrowLeftToLine className="w-4 h-4" strokeWidth={2.5} />
+                  <X className="w-4 h-4" strokeWidth={2.5} />
                 </button>
                 {/* Tooltip below: aside has overflow:hidden so left direction is clipped */}
                 <span className="pointer-events-none absolute top-full mt-1 right-0 z-50 px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white">
@@ -657,7 +667,7 @@ export default function VirtualExperienceTaker({
           ) : (
             <div className="relative group hidden sm:flex">
               <button onClick={() => setSidebarOpen(true)} style={{ color: muted }} className="hover:opacity-60 p-1">
-                <ArrowRightFromLine className="w-4 h-4" strokeWidth={2.5} />
+                <MenuIcon className="w-5 h-5" />
               </button>
               <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white">
                 Expand outline
@@ -788,7 +798,7 @@ export default function VirtualExperienceTaker({
 
         {/* Lesson content: subtle grey background, single white card */}
         <div ref={mainScrollRef} className="flex-1 overflow-y-auto" style={{ background: isDark ? '#141414' : '#F2F5FA' }}>
-          <div className="max-w-4xl mx-auto w-full px-2 sm:px-4 py-4 sm:py-8 space-y-4">
+          <div className="max-w-2xl mx-auto w-full px-2 sm:px-4 py-4 sm:py-8 space-y-4">
           {!currentLes && modules.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <BookOpen className="w-10 h-10 mb-3 opacity-20" style={{ color: muted }} />
