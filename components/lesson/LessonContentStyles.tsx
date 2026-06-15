@@ -458,14 +458,9 @@ ${stepReveal}
 /* The definition popover is rendered by GlossaryTooltip into a body portal (fixed +
    global, so the lesson card's overflow can never clip it). These rules are global,
    not scoped under .lesson-content, because the portal lives outside it. */
-.lesson-term-tip { position: relative; max-width: 300px; padding: 11px 14px; border-radius: 12px; background: rgba(24,24,27,0.97); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.08); color: #f4f4f5; font-size: 13px; line-height: 1.5; font-weight: 450; box-shadow: 0 10px 30px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.16); transform-origin: bottom center; animation: lesson-term-tip-in 0.15s ease; }
+.lesson-term-tip { max-width: 300px; padding: 11px 14px; border-radius: 12px; background: #ffffff; border: 1px solid rgba(0,0,0,0.08); color: #27272a; font-size: 13px; line-height: 1.5; font-weight: 450; box-shadow: 0 12px 32px rgba(0,0,0,0.16), 0 3px 8px rgba(0,0,0,0.08); transform-origin: bottom center; animation: lesson-term-tip-in 0.15s ease; }
 .lesson-term-tip[data-placement="bottom"] { transform-origin: top center; }
-.lesson-term-tip[data-theme="dark"] { background: rgba(244,244,245,0.97); border-color: rgba(0,0,0,0.06); color: #18181b; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-.lesson-term-tip::after { content: ''; position: absolute; left: 50%; transform: translateX(-50%); border: 6px solid transparent; }
-.lesson-term-tip[data-placement="top"]::after { top: 100%; border-top-color: rgba(24,24,27,0.97); }
-.lesson-term-tip[data-placement="bottom"]::after { bottom: 100%; border-bottom-color: rgba(24,24,27,0.97); }
-.lesson-term-tip[data-theme="dark"][data-placement="top"]::after { border-top-color: rgba(244,244,245,0.97); }
-.lesson-term-tip[data-theme="dark"][data-placement="bottom"]::after { border-bottom-color: rgba(244,244,245,0.97); }
+.lesson-term-tip[data-theme="dark"] { background: #1c1c20; border-color: rgba(255,255,255,0.1); color: #e4e4e7; box-shadow: 0 12px 32px rgba(0,0,0,0.55), 0 3px 8px rgba(0,0,0,0.4); }
 @keyframes lesson-term-tip-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .lesson-term-tip { animation: none; } }
 
