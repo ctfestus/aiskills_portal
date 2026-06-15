@@ -9,6 +9,15 @@
 // No indigo, purple, or blue accents.
 
 export function LessonContentStyles() {
+  // Stepper progressive reveal: when N steps are revealed, show steps 0..N-1. Generated
+  // (rather than hand-written) so the cumulative selectors don't bloat the source.
+  const stepReveal = Array.from({ length: 12 }, (_, r) => {
+    const revealed = r + 1;
+    const sels = Array.from({ length: revealed }, (_, i) =>
+      `.lesson-content .lesson-stepper[data-revealed="${revealed}"] .lesson-step[data-step-index="${i}"]`,
+    ).join(',\n');
+    return `${sels} { display: flex; }`;
+  }).join('\n');
   return (
     <style>{`
 .lesson-content { font-size: 15.5px; line-height: 1.6; color: #3f3f46; }
@@ -371,6 +380,100 @@ export function LessonContentStyles() {
 .lesson-content .lesson-carousel__remove:hover { color: #ef4444; }
 .lesson-content .lesson-carousel__add { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px dashed #cbd5e1; background: transparent; color: #71717a; cursor: pointer; border-radius: 999px; margin-left: 4px; }
 .lesson-content.dark .lesson-carousel__add { border-color: #3f3f46; color: #a1a1aa; }
+
+/* Flip cards (flashcards) */
+.lesson-content .lesson-flip-deck { margin: 0.9rem 0; }
+.lesson-content .lesson-flip-deck__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.lesson-content .lesson-flip { min-width: 0; }
+.lesson-content .lesson-flip__card { display: block; width: 100%; padding: 0; border: none; background: transparent; cursor: pointer; perspective: 1000px; font: inherit; }
+.lesson-content .lesson-flip__inner { position: relative; display: block; width: 100%; min-height: 132px; transition: transform 0.5s cubic-bezier(0.4,0.2,0.2,1); transform-style: preserve-3d; }
+.lesson-content .lesson-flip[data-flipped="true"] .lesson-flip__inner { transform: rotateY(180deg); }
+.lesson-content .lesson-flip__face { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; border-radius: 12px; text-align: center; backface-visibility: hidden; -webkit-backface-visibility: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 22px rgba(0,0,0,0.07); }
+.lesson-content .lesson-flip__face--front { background: #ffffff; color: #18181b; font-weight: 600; }
+.lesson-content .lesson-flip__face--back { background: #ecfdf5; color: #065f46; transform: rotateY(180deg); }
+.lesson-content.dark .lesson-flip__face--front { background: #1a1a1e; color: #fafafa; }
+.lesson-content.dark .lesson-flip__face--back { background: rgba(16,185,129,0.16); color: #6ee7b7; }
+.lesson-content .lesson-flip__text { font-size: 15px; line-height: 1.45; }
+.lesson-content .lesson-flip__hint { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: #a1a1aa; }
+@media (prefers-reduced-motion: reduce) { .lesson-content .lesson-flip__inner { transition: none; } }
+.lesson-content .lesson-flip__edit { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 12px 12px 14px; border: 1px solid #e4e4e7; border-radius: 12px; background: #ffffff; min-height: 132px; box-sizing: border-box; }
+.lesson-content.dark .lesson-flip__edit { border-color: #3f3f46; background: #1a1a1e; }
+.lesson-content .lesson-flip__edit-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #a1a1aa; }
+.lesson-content .lesson-flip__edit-input { width: 100%; font: inherit; font-size: 13.5px; color: #18181b; background: transparent; border: none; outline: none; resize: vertical; min-height: 28px; box-sizing: border-box; }
+.lesson-content.dark .lesson-flip__edit-input { color: #fafafa; }
+.lesson-content .lesson-flip__edit-input::placeholder { color: #a1a1aa; }
+.lesson-content .lesson-flip__edit-divider { border-top: 1px dashed #e4e4e7; margin: 4px 0; }
+.lesson-content.dark .lesson-flip__edit-divider { border-top-color: #3f3f46; }
+.lesson-content .lesson-flip__remove { position: absolute; top: 6px; right: 6px; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: transparent; color: #c4c4c8; cursor: pointer; border-radius: 6px; }
+.lesson-content .lesson-flip__remove:hover { color: #ef4444; background: rgba(0,0,0,0.04); }
+.lesson-content .lesson-flip-deck__add { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; padding: 5px 10px; font-size: 12px; font-weight: 600; color: #52525b; background: transparent; border: 1px dashed #cbd5e1; border-radius: 8px; cursor: pointer; }
+.lesson-content .lesson-flip-deck__add:hover { background: rgba(0,0,0,0.03); }
+.lesson-content.dark .lesson-flip-deck__add { color: #a1a1aa; border-color: #3f3f46; }
+
+/* Vertical stepper */
+.lesson-content .lesson-stepper { margin: 0.9rem 0; }
+.lesson-content .lesson-step { display: none; gap: 14px; margin-top: 18px; position: relative; }
+.lesson-content .lesson-step[data-step-index="0"] { margin-top: 0; }
+.lesson-content .lesson-step::before { content: ''; position: absolute; left: 15px; top: -18px; height: 18px; width: 2px; background: #e4e4e7; }
+.lesson-content.dark .lesson-step::before { background: #3f3f46; }
+.lesson-content .lesson-step[data-step-index="0"]::before { display: none; }
+${stepReveal}
+.lesson-content .lesson-step__marker { flex-shrink: 0; }
+.lesson-content .lesson-step__num { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 999px; background: #10b981; color: #fff; font-size: 13px; font-weight: 700; }
+.lesson-content .lesson-step__main { flex: 1; min-width: 0; }
+.lesson-content .lesson-step__head { display: flex; align-items: center; gap: 8px; min-height: 30px; margin-bottom: 2px; }
+.lesson-content .lesson-step__title { font-size: 1.05rem; font-weight: 700; color: #18181b; margin: 0; }
+.lesson-content.dark .lesson-step__title { color: #fafafa; }
+.lesson-content .lesson-step__title-input { flex: 1; min-width: 0; font: inherit; font-size: 1.05rem; font-weight: 700; color: #18181b; background: transparent; border: none; outline: none; padding: 0; }
+.lesson-content.dark .lesson-step__title-input { color: #fafafa; }
+.lesson-content .lesson-step__title-input::placeholder { color: #a1a1aa; font-weight: 600; }
+.lesson-content .lesson-step__body > :last-child { margin-bottom: 0; }
+.lesson-content .lesson-step__remove { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: transparent; color: #c4c4c8; cursor: pointer; border-radius: 6px; flex-shrink: 0; }
+.lesson-content .lesson-step__remove:hover { color: #ef4444; }
+.lesson-content .lesson-stepper__next { display: inline-flex; align-items: center; gap: 6px; margin: 16px 0 0 44px; padding: 8px 16px; border-radius: 999px; border: none; background: #10b981; color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.lesson-content .lesson-stepper__next:hover { background: #059669; }
+.lesson-content .lesson-stepper__done { display: inline-flex; align-items: center; gap: 6px; margin: 16px 0 0 44px; color: #047857; font-size: 13px; font-weight: 600; }
+.lesson-content.dark .lesson-stepper__done { color: #6ee7b7; }
+.lesson-content .lesson-stepper__add { display: inline-flex; align-items: center; gap: 5px; margin-top: 16px; padding: 5px 10px; font-size: 12px; font-weight: 600; color: #52525b; background: transparent; border: 1px dashed #cbd5e1; border-radius: 8px; cursor: pointer; }
+.lesson-content .lesson-stepper__add:hover { background: rgba(0,0,0,0.03); }
+.lesson-content.dark .lesson-stepper__add { color: #a1a1aa; border-color: #3f3f46; }
+
+/* Glossary term (inline definition tooltip) */
+.lesson-content .lesson-term { position: relative; border-bottom: 1px dotted #10b981; cursor: help; }
+.lesson-content.dark .lesson-term { border-bottom-color: #34d399; }
+.lesson-content .lesson-term::after { content: attr(data-definition); position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); z-index: 60; width: max-content; max-width: 260px; padding: 8px 11px; border-radius: 8px; background: #18181b; color: #fff; font-size: 12.5px; font-weight: 400; line-height: 1.4; text-align: left; white-space: normal; box-shadow: 0 6px 20px rgba(0,0,0,0.28); opacity: 0; visibility: hidden; transition: opacity 0.15s; pointer-events: none; }
+.lesson-content .lesson-term::before { content: ''; position: absolute; left: 50%; bottom: calc(100% + 3px); transform: translateX(-50%); border: 5px solid transparent; border-top-color: #18181b; z-index: 60; opacity: 0; visibility: hidden; transition: opacity 0.15s; pointer-events: none; }
+.lesson-content .lesson-term:hover::after, .lesson-content .lesson-term:focus::after, .lesson-content .lesson-term:hover::before, .lesson-content .lesson-term:focus::before { opacity: 1; visibility: visible; }
+.lesson-content.dark .lesson-term::after { background: #f4f4f5; color: #18181b; }
+.lesson-content.dark .lesson-term::before { border-top-color: #f4f4f5; }
+
+/* Timeline */
+.lesson-content .lesson-timeline { margin: 0.9rem 0; }
+.lesson-content .lesson-timeline__entry { position: relative; display: flex; gap: 14px; padding-bottom: 18px; }
+.lesson-content .lesson-timeline__entry:last-child { padding-bottom: 0; }
+.lesson-content .lesson-timeline__dot { position: relative; flex-shrink: 0; width: 14px; }
+.lesson-content .lesson-timeline__dot::before { content: ''; position: absolute; left: 50%; top: 5px; transform: translateX(-50%); width: 12px; height: 12px; border-radius: 999px; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.18); z-index: 1; }
+.lesson-content .lesson-timeline__dot::after { content: ''; position: absolute; left: 50%; top: 5px; bottom: -18px; transform: translateX(-50%); width: 2px; background: #e4e4e7; }
+.lesson-content.dark .lesson-timeline__dot::after { background: #3f3f46; }
+.lesson-content .lesson-timeline__entry:last-child .lesson-timeline__dot::after { display: none; }
+.lesson-content .lesson-timeline__content { flex: 1; min-width: 0; }
+.lesson-content .lesson-timeline__meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.lesson-content .lesson-timeline__date { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; color: #10b981; }
+.lesson-content.dark .lesson-timeline__date { color: #34d399; }
+.lesson-content .lesson-timeline__title { font-size: 1.05rem; font-weight: 700; color: #18181b; }
+.lesson-content.dark .lesson-timeline__title { color: #fafafa; }
+.lesson-content .lesson-timeline__body > :last-child { margin-bottom: 0; }
+.lesson-content .lesson-timeline__date-input { width: 130px; font: inherit; font-size: 12px; font-weight: 700; color: #10b981; background: transparent; border: none; border-bottom: 1px dashed #d4d4d8; outline: none; padding: 1px 0; }
+.lesson-content.dark .lesson-timeline__date-input { border-bottom-color: #3f3f46; }
+.lesson-content .lesson-timeline__date-input::placeholder { color: #a1a1aa; font-weight: 600; }
+.lesson-content .lesson-timeline__title-input { flex: 1; min-width: 120px; font: inherit; font-size: 1.05rem; font-weight: 700; color: #18181b; background: transparent; border: none; outline: none; padding: 0; }
+.lesson-content.dark .lesson-timeline__title-input { color: #fafafa; }
+.lesson-content .lesson-timeline__title-input::placeholder { color: #a1a1aa; font-weight: 600; }
+.lesson-content .lesson-timeline__remove { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: transparent; color: #c4c4c8; cursor: pointer; border-radius: 6px; flex-shrink: 0; }
+.lesson-content .lesson-timeline__remove:hover { color: #ef4444; }
+.lesson-content .lesson-timeline__add { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600; color: #52525b; background: transparent; border: 1px dashed #cbd5e1; border-radius: 8px; cursor: pointer; }
+.lesson-content .lesson-timeline__add:hover { background: rgba(0,0,0,0.03); }
+.lesson-content.dark .lesson-timeline__add { color: #a1a1aa; border-color: #3f3f46; }
 `}</style>
   );
 }

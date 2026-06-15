@@ -19,6 +19,7 @@ import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code2, FileCode2,
   List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote,
   Image as ImageIcon, Table as TableIcon, Info, Loader2, ChevronsUpDown, LayoutGrid, HelpCircle, Terminal, GalleryHorizontal,
+  Layers, ListChecks, History, BookMarked,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { StyleMenu, MenuRow, Segmented, ColorField } from '@/components/lesson/nodes/StyleControls';
@@ -97,6 +98,25 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
     if (url) editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
   }, [editor]);
 
+  // Glossary term: attach a short definition to the selected text (shown as a tooltip
+  // in the player). When the cursor is already in a term, prompt prefilled with the
+  // current definition; clearing it removes the term.
+  const handleGlossary = useCallback(() => {
+    if (!editor) return;
+    const active = editor.isActive('glossaryTerm');
+    if (!active && editor.state.selection.empty) return; // need a selection to define
+    const current = active ? (editor.getAttributes('glossaryTerm').definition as string) || '' : '';
+    const def = typeof window !== 'undefined' ? window.prompt('Definition for this term (clear to remove):', current) : null;
+    if (def === null) return; // cancelled
+    if (active) {
+      const chain = editor.chain().focus().extendMarkRange('glossaryTerm');
+      if (def.trim() === '') chain.unsetGlossaryTerm().run();
+      else chain.setGlossaryTerm({ definition: def }).run();
+    } else if (def.trim() !== '') {
+      editor.chain().focus().setGlossaryTerm({ definition: def }).run();
+    }
+  }, [editor]);
+
   if (!editor) return null;
 
   return (
@@ -123,11 +143,15 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         <Btn dark={dark} title="Numbered list" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}><ListOrdered className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Blockquote" active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()}><Quote className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Link" active={editor.isActive('link')} onClick={handleLink}><LinkIcon className="w-3.5 h-3.5" /></Btn>
+        <Btn dark={dark} title="Define term (glossary tooltip)" active={editor.isActive('glossaryTerm')} onClick={handleGlossary}><BookMarked className="w-3.5 h-3.5" /></Btn>
         <Divider dark={dark} />
         <Btn dark={dark} title="Callout" onClick={() => editor.chain().focus().insertContent({ type: 'callout', attrs: { variant: 'note' }, content: [{ type: 'paragraph' }] }).run()}><Info className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Collapsible sections" onClick={() => editor.chain().focus().insertContent({ type: 'accordion', content: [{ type: 'accordionItem', attrs: { title: '', open: false }, content: [{ type: 'paragraph' }] }] }).run()}><ChevronsUpDown className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Tabs" onClick={() => editor.chain().focus().insertContent({ type: 'tabs', content: [{ type: 'tabPanel', attrs: { label: 'Tab 1' }, content: [{ type: 'paragraph' }] }, { type: 'tabPanel', attrs: { label: 'Tab 2' }, content: [{ type: 'paragraph' }] }] }).run()}><LayoutGrid className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Carousel (stepped slides)" onClick={() => editor.chain().focus().insertContent({ type: 'carousel', content: [{ type: 'carouselSlide', content: [{ type: 'paragraph' }] }, { type: 'carouselSlide', content: [{ type: 'paragraph' }] }] }).run()}><GalleryHorizontal className="w-3.5 h-3.5" /></Btn>
+        <Btn dark={dark} title="Flashcards (flip cards)" onClick={() => editor.chain().focus().insertContent({ type: 'flipCardDeck', content: [{ type: 'flipCard', attrs: { front: '', back: '' } }, { type: 'flipCard', attrs: { front: '', back: '' } }] }).run()}><Layers className="w-3.5 h-3.5" /></Btn>
+        <Btn dark={dark} title="Steps (vertical stepper)" onClick={() => editor.chain().focus().insertContent({ type: 'stepper', content: [{ type: 'step', attrs: { title: '' }, content: [{ type: 'paragraph' }] }, { type: 'step', attrs: { title: '' }, content: [{ type: 'paragraph' }] }] }).run()}><ListChecks className="w-3.5 h-3.5" /></Btn>
+        <Btn dark={dark} title="Timeline" onClick={() => editor.chain().focus().insertContent({ type: 'timeline', content: [{ type: 'timelineEntry', attrs: { date: '', title: '' }, content: [{ type: 'paragraph' }] }, { type: 'timelineEntry', attrs: { date: '', title: '' }, content: [{ type: 'paragraph' }] }] }).run()}><History className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Knowledge check" onClick={() => editor.chain().focus().insertContent({ type: 'knowledgeCheck', attrs: { question: '', options: ['', ''], correctIndex: 0, explanation: '' } }).run()}><HelpCircle className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Runnable code (SQL)" onClick={() => editor.chain().focus().insertContent({ type: 'runnableCode', attrs: { language: 'sql', code: '', setupSql: '' } }).run()}><Terminal className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Table" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableIcon className="w-3.5 h-3.5" /></Btn>
