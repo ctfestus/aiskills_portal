@@ -466,27 +466,29 @@ ${stepReveal}
 
 /* Timeline */
 .lesson-content .lesson-timeline { margin: 0.9rem 0; }
-.lesson-content .lesson-timeline__entry { position: relative; display: flex; gap: 14px; padding-bottom: 24px; }
+/* Layout per entry: [date column] [dot + connector] [title + body]. */
+.lesson-content .lesson-timeline__entry { position: relative; display: flex; gap: 12px; padding-bottom: 24px; }
 .lesson-content .lesson-timeline__entry:last-child { padding-bottom: 0; }
-/* Connector line is on the entry (which always has full height), not the empty dot
-   div (which would only stretch via flex and can collapse). Runs from below the dot
-   to the entry's bottom edge -- i.e. up to the next dot. Hidden on the last entry. */
-.lesson-content .lesson-timeline__entry::after { content: ''; position: absolute; left: 7px; top: 20px; bottom: 0; width: 2px; transform: translateX(-50%); background: #e4e4e7; }
+/* Connector line is on the entry (always full height) at the dot column's center
+   (date col 60 + gap 12 + dot half 7 = 79px), running from below the dot to the
+   entry's bottom edge -- i.e. up to the next dot. Hidden on the last entry. */
+.lesson-content .lesson-timeline__entry::after { content: ''; position: absolute; left: 79px; top: 22px; bottom: 0; width: 2px; transform: translateX(-50%); background: #e4e4e7; }
 .lesson-content.dark .lesson-timeline__entry::after { background: #3f3f46; }
 .lesson-content .lesson-timeline__entry:last-child::after { display: none; }
+.lesson-content .lesson-timeline__date-col { flex-shrink: 0; width: 60px; padding-top: 2px; text-align: right; }
 .lesson-content .lesson-timeline__dot { position: relative; flex-shrink: 0; width: 14px; }
-.lesson-content .lesson-timeline__dot::before { content: ''; position: absolute; left: 50%; top: 5px; transform: translateX(-50%); width: 12px; height: 12px; border-radius: 999px; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.18); z-index: 1; }
+.lesson-content .lesson-timeline__dot::before { content: ''; position: absolute; left: 50%; top: 6px; transform: translateX(-50%); width: 12px; height: 12px; border-radius: 999px; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.18); z-index: 1; }
 .lesson-content .lesson-timeline__content { flex: 1; min-width: 0; }
-.lesson-content .lesson-timeline__meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 4px; }
-.lesson-content .lesson-timeline__date { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; color: #10b981; }
+.lesson-content .lesson-timeline__meta { display: flex; align-items: baseline; gap: 8px; min-height: 22px; margin-bottom: 4px; }
+.lesson-content .lesson-timeline__date { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.5; color: #10b981; }
 .lesson-content.dark .lesson-timeline__date { color: #34d399; }
 .lesson-content .lesson-timeline__title { font-size: 1.05rem; font-weight: 700; color: #18181b; }
 .lesson-content.dark .lesson-timeline__title { color: #fafafa; }
 .lesson-content .lesson-timeline__body > :last-child { margin-bottom: 0; }
-.lesson-content .lesson-timeline__date-input { width: 130px; font: inherit; font-size: 12px; font-weight: 700; color: #10b981; background: transparent; border: none; border-bottom: 1px dashed #d4d4d8; outline: none; padding: 1px 0; }
+.lesson-content .lesson-timeline__date-input { width: 100%; text-align: right; font: inherit; font-size: 12px; font-weight: 700; color: #10b981; background: transparent; border: none; border-bottom: 1px dashed #d4d4d8; outline: none; padding: 1px 0; }
 .lesson-content.dark .lesson-timeline__date-input { border-bottom-color: #3f3f46; }
 .lesson-content .lesson-timeline__date-input::placeholder { color: #a1a1aa; font-weight: 600; }
-.lesson-content .lesson-timeline__title-input { flex: 1; min-width: 120px; font: inherit; font-size: 1.05rem; font-weight: 700; color: #18181b; background: transparent; border: none; outline: none; padding: 0; }
+.lesson-content .lesson-timeline__title-input { flex: 1; min-width: 0; font: inherit; font-size: 1.05rem; font-weight: 700; color: #18181b; background: transparent; border: none; outline: none; padding: 0; }
 .lesson-content.dark .lesson-timeline__title-input { color: #fafafa; }
 .lesson-content .lesson-timeline__title-input::placeholder { color: #a1a1aa; font-weight: 600; }
 .lesson-content .lesson-timeline__remove { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: transparent; color: #c4c4c8; cursor: pointer; border-radius: 6px; flex-shrink: 0; }

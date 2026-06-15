@@ -28,22 +28,25 @@ function TimelineEntryView({ node, getPos, editor, updateAttributes }: NodeViewP
 
   return (
     <NodeViewWrapper className="lesson-timeline__entry">
+      <div className="lesson-timeline__date-col" contentEditable={false}>
+        {editable ? (
+          <NodeTextInput className="lesson-timeline__date-input" value={date} placeholder="Date" onCommit={(v) => updateAttributes({ date: v })} />
+        ) : date ? (
+          <span className="lesson-timeline__date">{date}</span>
+        ) : null}
+      </div>
       <div className="lesson-timeline__dot" contentEditable={false} />
       <div className="lesson-timeline__content">
         <div className="lesson-timeline__meta" contentEditable={false}>
           {editable ? (
-            <>
-              <NodeTextInput className="lesson-timeline__date-input" value={date} placeholder="Date / label" onCommit={(v) => updateAttributes({ date: v })} />
-              <NodeTextInput className="lesson-timeline__title-input" value={title} placeholder="Title" onCommit={(v) => updateAttributes({ title: v })} />
-              <button type="button" className="lesson-timeline__remove" aria-label="Remove event" onMouseDown={(e) => { e.preventDefault(); removeSelf(); }}>
-                <X width={12} height={12} />
-              </button>
-            </>
-          ) : (
-            <>
-              {date && <span className="lesson-timeline__date">{date}</span>}
-              {title && <span className="lesson-timeline__title">{title}</span>}
-            </>
+            <NodeTextInput className="lesson-timeline__title-input" value={title} placeholder="Title" onCommit={(v) => updateAttributes({ title: v })} />
+          ) : title ? (
+            <span className="lesson-timeline__title">{title}</span>
+          ) : null}
+          {editable && (
+            <button type="button" className="lesson-timeline__remove" aria-label="Remove event" onMouseDown={(e) => { e.preventDefault(); removeSelf(); }}>
+              <X width={12} height={12} />
+            </button>
           )}
         </div>
         <NodeViewContent className="lesson-timeline__body" />
