@@ -16,9 +16,11 @@ export function LessonContentStyles() {
     const show = Array.from({ length: revealed }, (_, i) =>
       `.lesson-content .lesson-stepper[data-revealed="${revealed}"] .lesson-step[data-step-index="${i}"]`,
     ).join(',\n');
-    // Hide the connector below the last revealed step so it does not dangle into empty space.
-    const hideLast = `.lesson-content .lesson-stepper[data-revealed="${revealed}"] .lesson-step[data-step-index="${revealed - 1}"]::after`;
-    return `${show} { display: flex; }\n${hideLast} { display: none; }`;
+    // Only the newest revealed step (index revealed-1) animates in -- already-shown
+    // steps match a rule with no animation, so they don't re-play on each reveal. It
+    // also has no connector below it (would dangle into empty space).
+    const last = `.lesson-content .lesson-stepper[data-revealed="${revealed}"] .lesson-step[data-step-index="${revealed - 1}"]`;
+    return `${show} { display: flex; }\n${last} { animation: lesson-step-in 0.34s cubic-bezier(0.2,0.7,0.3,1); }\n${last}::after { display: none; }`;
   }).join('\n');
   return (
     <style>{`
@@ -421,13 +423,14 @@ export function LessonContentStyles() {
 .lesson-content .lesson-stepper { margin: 0.9rem 0; }
 .lesson-content .lesson-step { display: none; gap: 14px; margin-top: 22px; position: relative; }
 .lesson-content .lesson-step[data-step-index="0"] { margin-top: 0; }
-/* Dashed, downward-flowing connector from each marker to the next. It spans this
-   step's full height plus the gap, so it reaches the next marker regardless of how
-   long the body is; the generated rules above hide it on the last revealed step. */
-.lesson-content .lesson-step::after { content: ''; position: absolute; left: 15px; top: 32px; bottom: -22px; width: 2px; transform: translateX(-50%); z-index: 0; background-image: repeating-linear-gradient(to bottom, #10b981 0 5px, transparent 5px 11px); background-size: 2px 11px; background-repeat: repeat-y; animation: lesson-step-flow 0.7s linear infinite; }
+/* Static dashed connector from each marker to the next. It spans this step's full
+   height plus the gap, so it reaches the next marker regardless of body length; the
+   generated rules above hide it on the last revealed step. */
+.lesson-content .lesson-step::after { content: ''; position: absolute; left: 15px; top: 32px; bottom: -22px; width: 2px; transform: translateX(-50%); z-index: 0; background-image: repeating-linear-gradient(to bottom, #10b981 0 5px, transparent 5px 11px); background-size: 2px 11px; background-repeat: repeat-y; }
 .lesson-content.dark .lesson-step::after { background-image: repeating-linear-gradient(to bottom, #34d399 0 5px, transparent 5px 11px); }
-@keyframes lesson-step-flow { to { background-position-y: 11px; } }
-@media (prefers-reduced-motion: reduce) { .lesson-content .lesson-step::after { animation: none; } }
+/* New steps animate in as they are revealed (keyed to the newest step in the rules above). */
+@keyframes lesson-step-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .lesson-content .lesson-step { animation: none !important; } }
 ${stepReveal}
 .lesson-content .lesson-step__marker { flex-shrink: 0; position: relative; z-index: 1; }
 .lesson-content .lesson-step__num { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 999px; background: #10b981; color: #fff; font-size: 13px; font-weight: 700; }
