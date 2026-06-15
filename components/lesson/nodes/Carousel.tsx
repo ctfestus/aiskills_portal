@@ -80,8 +80,8 @@ function CarouselView({ node, editor, getPos, updateAttributes }: NodeViewProps)
 
   return (
     <NodeViewWrapper className="lesson-carousel" data-active={current} style={cardVars}>
-      {editable && (
-        <div className="lesson-block-corner">
+      <div className="lesson-carousel__controls" contentEditable={false}>
+        {editable && (
           <StyleMenu>
             <MenuRow label="Roundness"><Segmented<RadiusKey> value={radius} onChange={(v) => updateAttributes({ radius: v })} options={RADIUS_OPTIONS} /></MenuRow>
             <MenuRow label="Card border"><Segmented<BorderStyle> value={borderStyle} onChange={(v) => updateAttributes({ borderStyle: v })} options={BORDER_STYLE_OPTIONS} /></MenuRow>
@@ -89,31 +89,33 @@ function CarouselView({ node, editor, getPos, updateAttributes }: NodeViewProps)
               <MenuRow label="Color"><ColorField value={borderColor} onChange={(v) => updateAttributes({ borderColor: v })} /></MenuRow>
             )}
           </StyleMenu>
+        )}
+        <div className="lesson-carousel__arrows">
+          <button
+            type="button"
+            className="lesson-carousel__arrow"
+            aria-label="Previous slide"
+            disabled={current === 0}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => go(current - 1)}
+          >
+            <ChevronLeft width={20} height={20} />
+          </button>
+          <button
+            type="button"
+            className="lesson-carousel__arrow"
+            aria-label="Next slide"
+            disabled={current >= count - 1}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => go(current + 1)}
+          >
+            <ChevronRight width={20} height={20} />
+          </button>
         </div>
-      )}
+      </div>
 
       <div className="lesson-carousel__viewport">
-        <button
-          type="button"
-          className="lesson-carousel__arrow"
-          aria-label="Previous slide"
-          disabled={current === 0}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => go(current - 1)}
-        >
-          <ChevronLeft width={20} height={20} />
-        </button>
         <NodeViewContent className="lesson-carousel__slides" />
-        <button
-          type="button"
-          className="lesson-carousel__arrow"
-          aria-label="Next slide"
-          disabled={current >= count - 1}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => go(current + 1)}
-        >
-          <ChevronRight width={20} height={20} />
-        </button>
       </div>
 
       <div className="lesson-carousel__nav" contentEditable={false}>
