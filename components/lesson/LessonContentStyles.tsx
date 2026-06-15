@@ -13,10 +13,12 @@ export function LessonContentStyles() {
   // (rather than hand-written) so the cumulative selectors don't bloat the source.
   const stepReveal = Array.from({ length: 12 }, (_, r) => {
     const revealed = r + 1;
-    const sels = Array.from({ length: revealed }, (_, i) =>
+    const show = Array.from({ length: revealed }, (_, i) =>
       `.lesson-content .lesson-stepper[data-revealed="${revealed}"] .lesson-step[data-step-index="${i}"]`,
     ).join(',\n');
-    return `${sels} { display: flex; }`;
+    // Hide the connector below the last revealed step so it does not dangle into empty space.
+    const hideLast = `.lesson-content .lesson-stepper[data-revealed="${revealed}"] .lesson-step[data-step-index="${revealed - 1}"]::after`;
+    return `${show} { display: flex; }\n${hideLast} { display: none; }`;
   }).join('\n');
   return (
     <style>{`
@@ -383,12 +385,17 @@ export function LessonContentStyles() {
 
 /* Flip cards (flashcards) */
 .lesson-content .lesson-flip-deck { margin: 0.9rem 0; }
-.lesson-content .lesson-flip-deck__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+/* TipTap renders child node views inside an inner [data-node-view-content-react]
+   wrapper, so the grid must sit on that wrapper -- not the NodeViewContent element --
+   or the cards stack vertically (the wrapper would be the lone grid item). */
+.lesson-content .lesson-flip-deck__grid > [data-node-view-content-react] { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; align-items: start; }
 .lesson-content .lesson-flip { min-width: 0; }
 .lesson-content .lesson-flip__card { display: block; width: 100%; padding: 0; border: none; background: transparent; cursor: pointer; perspective: 1000px; font: inherit; }
-.lesson-content .lesson-flip__inner { position: relative; display: block; width: 100%; min-height: 132px; transition: transform 0.5s cubic-bezier(0.4,0.2,0.2,1); transform-style: preserve-3d; }
+/* Both faces share one grid cell so the card grows to the taller side's content
+   (instead of clipping against a fixed height) while still flipping in 3D. */
+.lesson-content .lesson-flip__inner { position: relative; display: grid; width: 100%; min-height: 120px; transition: transform 0.5s cubic-bezier(0.4,0.2,0.2,1); transform-style: preserve-3d; }
 .lesson-content .lesson-flip[data-flipped="true"] .lesson-flip__inner { transform: rotateY(180deg); }
-.lesson-content .lesson-flip__face { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; border-radius: 12px; text-align: center; backface-visibility: hidden; -webkit-backface-visibility: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 22px rgba(0,0,0,0.07); }
+.lesson-content .lesson-flip__face { grid-area: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 18px; border-radius: 12px; text-align: center; backface-visibility: hidden; -webkit-backface-visibility: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 22px rgba(0,0,0,0.07); }
 .lesson-content .lesson-flip__face--front { background: #ffffff; color: #18181b; font-weight: 600; }
 .lesson-content .lesson-flip__face--back { background: #ecfdf5; color: #065f46; transform: rotateY(180deg); }
 .lesson-content.dark .lesson-flip__face--front { background: #1a1a1e; color: #fafafa; }
@@ -412,13 +419,17 @@ export function LessonContentStyles() {
 
 /* Vertical stepper */
 .lesson-content .lesson-stepper { margin: 0.9rem 0; }
-.lesson-content .lesson-step { display: none; gap: 14px; margin-top: 18px; position: relative; }
+.lesson-content .lesson-step { display: none; gap: 14px; margin-top: 22px; position: relative; }
 .lesson-content .lesson-step[data-step-index="0"] { margin-top: 0; }
-.lesson-content .lesson-step::before { content: ''; position: absolute; left: 15px; top: -18px; height: 18px; width: 2px; background: #e4e4e7; }
-.lesson-content.dark .lesson-step::before { background: #3f3f46; }
-.lesson-content .lesson-step[data-step-index="0"]::before { display: none; }
+/* Dashed, downward-flowing connector from each marker to the next. It spans this
+   step's full height plus the gap, so it reaches the next marker regardless of how
+   long the body is; the generated rules above hide it on the last revealed step. */
+.lesson-content .lesson-step::after { content: ''; position: absolute; left: 15px; top: 32px; bottom: -22px; width: 2px; transform: translateX(-50%); z-index: 0; background-image: repeating-linear-gradient(to bottom, #10b981 0 5px, transparent 5px 11px); background-size: 2px 11px; background-repeat: repeat-y; animation: lesson-step-flow 0.7s linear infinite; }
+.lesson-content.dark .lesson-step::after { background-image: repeating-linear-gradient(to bottom, #34d399 0 5px, transparent 5px 11px); }
+@keyframes lesson-step-flow { to { background-position-y: 11px; } }
+@media (prefers-reduced-motion: reduce) { .lesson-content .lesson-step::after { animation: none; } }
 ${stepReveal}
-.lesson-content .lesson-step__marker { flex-shrink: 0; }
+.lesson-content .lesson-step__marker { flex-shrink: 0; position: relative; z-index: 1; }
 .lesson-content .lesson-step__num { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 999px; background: #10b981; color: #fff; font-size: 13px; font-weight: 700; }
 .lesson-content .lesson-step__main { flex: 1; min-width: 0; }
 .lesson-content .lesson-step__head { display: flex; align-items: center; gap: 8px; min-height: 30px; margin-bottom: 2px; }
