@@ -26,6 +26,13 @@ export function LessonContentStyles() {
     <style>{`
 .lesson-content { font-size: 15.5px; line-height: 1.6; color: #3f3f46; }
 .lesson-content.dark { color: #d4d4d8; }
+/* Brand accent for decorative interactive chrome (timeline dot, stepper marker/line/
+   button, carousel check, glossary underline). --lesson-accent-base is set from the
+   tenant primary color on the .lesson-content container (default emerald), and the
+   shades are derived from it with color-mix so they track any theme. Semantic colors
+   (correct=green, callout variants, etc.) intentionally stay fixed. */
+.lesson-content { --lesson-accent-base: #10b981; --lesson-accent: var(--lesson-accent-base); --lesson-accent-ink: color-mix(in oklab, var(--lesson-accent) 80%, #000); --lesson-accent-ring: color-mix(in oklab, var(--lesson-accent) 22%, transparent); --lesson-accent-strong: color-mix(in oklab, var(--lesson-accent) 85%, #000); }
+.lesson-content.dark { --lesson-accent: color-mix(in oklab, var(--lesson-accent-base) 85%, #fff); --lesson-accent-ink: color-mix(in oklab, var(--lesson-accent) 70%, #fff); }
 .lesson-content p { margin: 0 0 0.75rem; }
 .lesson-content p:last-child { margin-bottom: 0; }
 .lesson-content ul { list-style: disc; padding-left: 1.4rem; margin: 0.4rem 0 0.75rem; }
@@ -282,6 +289,10 @@ export function LessonContentStyles() {
 .lesson-content .lesson-code__result th { background: #f4f4f5; font-weight: 600; position: sticky; top: 0; }
 .lesson-content.dark .lesson-code__result th { background: #1a1d2e; }
 .lesson-content .lesson-code__result-note { font-size: 11.5px; color: #71717a; padding: 6px 12px; margin: 0; }
+.lesson-content .lesson-code__stdout { background: #0d1117; border-top: 1px solid #2e2e33; }
+.lesson-content.dark .lesson-code__stdout { background: #0a0c14; border-top-color: #2e2e33; }
+.lesson-content .lesson-code__stdout-pre { margin: 0; padding: 10px 14px; font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 12.5px; color: #c9d1d9; white-space: pre-wrap; word-break: break-all; }
+.lesson-content .lesson-code__stdout-pre--return { color: #79c0ff; }
 
 .lesson-content .lesson-style__seg { display: inline-flex; gap: 2px; }
 .lesson-content .lesson-style__seg button { font-size: 11px; font-weight: 600; padding: 3px 8px; border: 1px solid transparent; border-radius: 6px; background: rgba(0,0,0,0.05); color: #52525b; cursor: pointer; }
@@ -379,7 +390,7 @@ export function LessonContentStyles() {
 .lesson-content .lesson-carousel__dot[data-active="true"] { border-color: #18181b; color: #18181b; }
 .lesson-content.dark .lesson-carousel__dot[data-active="true"] { border-color: #fafafa; color: #fafafa; }
 .lesson-content .lesson-carousel__check { display: inline-flex; align-items: center; margin-left: 2px; color: #d4d4d8; }
-.lesson-content .lesson-carousel__check[data-on="true"] { color: #10b981; }
+.lesson-content .lesson-carousel__check[data-on="true"] { color: var(--lesson-accent); }
 .lesson-content .lesson-carousel__remove { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: -2px; border: none; background: transparent; color: #c4c4c8; cursor: pointer; border-radius: 999px; }
 .lesson-content .lesson-carousel__remove:hover { color: #ef4444; }
 .lesson-content .lesson-carousel__add { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px dashed #cbd5e1; background: transparent; color: #71717a; cursor: pointer; border-radius: 999px; margin-left: 4px; }
@@ -426,14 +437,13 @@ export function LessonContentStyles() {
 /* Static dashed connector from each marker to the next. It spans this step's full
    height plus the gap, so it reaches the next marker regardless of body length; the
    generated rules above hide it on the last revealed step. */
-.lesson-content .lesson-step::after { content: ''; position: absolute; left: 15px; top: 32px; bottom: -22px; width: 2px; transform: translateX(-50%); z-index: 0; background-image: repeating-linear-gradient(to bottom, #10b981 0 5px, transparent 5px 11px); background-size: 2px 11px; background-repeat: repeat-y; }
-.lesson-content.dark .lesson-step::after { background-image: repeating-linear-gradient(to bottom, #34d399 0 5px, transparent 5px 11px); }
+.lesson-content .lesson-step::after { content: ''; position: absolute; left: 15px; top: 32px; bottom: -22px; width: 2px; transform: translateX(-50%); z-index: 0; background-image: repeating-linear-gradient(to bottom, var(--lesson-accent) 0 5px, transparent 5px 11px); background-size: 2px 11px; background-repeat: repeat-y; }
 /* New steps animate in as they are revealed (keyed to the newest step in the rules above). */
 @keyframes lesson-step-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .lesson-content .lesson-step { animation: none !important; } }
 ${stepReveal}
 .lesson-content .lesson-step__marker { flex-shrink: 0; position: relative; z-index: 1; }
-.lesson-content .lesson-step__num { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 999px; background: #10b981; color: #fff; font-size: 13px; font-weight: 700; }
+.lesson-content .lesson-step__num { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 999px; background: var(--lesson-accent); color: #fff; font-size: 13px; font-weight: 700; }
 .lesson-content .lesson-step__main { flex: 1; min-width: 0; }
 .lesson-content .lesson-step__head { display: flex; align-items: center; gap: 8px; min-height: 30px; margin-bottom: 2px; }
 .lesson-content .lesson-step__title { font-size: 1.05rem; font-weight: 700; color: #18181b; margin: 0; }
@@ -444,17 +454,15 @@ ${stepReveal}
 .lesson-content .lesson-step__body > :last-child { margin-bottom: 0; }
 .lesson-content .lesson-step__remove { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: none; background: transparent; color: #c4c4c8; cursor: pointer; border-radius: 6px; flex-shrink: 0; }
 .lesson-content .lesson-step__remove:hover { color: #ef4444; }
-.lesson-content .lesson-stepper__next { display: inline-flex; align-items: center; gap: 6px; margin: 16px 0 0 44px; padding: 8px 16px; border-radius: 999px; border: none; background: #10b981; color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
-.lesson-content .lesson-stepper__next:hover { background: #059669; }
-.lesson-content .lesson-stepper__done { display: inline-flex; align-items: center; gap: 6px; margin: 16px 0 0 44px; color: #047857; font-size: 13px; font-weight: 600; }
-.lesson-content.dark .lesson-stepper__done { color: #6ee7b7; }
+.lesson-content .lesson-stepper__next { display: inline-flex; align-items: center; gap: 6px; margin: 16px 0 0 44px; padding: 8px 16px; border-radius: 999px; border: none; background: var(--lesson-accent); color: #fff; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.lesson-content .lesson-stepper__next:hover { background: var(--lesson-accent-strong); }
+.lesson-content .lesson-stepper__done { display: inline-flex; align-items: center; gap: 6px; margin: 16px 0 0 44px; color: var(--lesson-accent-ink); font-size: 13px; font-weight: 600; }
 .lesson-content .lesson-stepper__add { display: inline-flex; align-items: center; gap: 5px; margin-top: 16px; padding: 5px 10px; font-size: 12px; font-weight: 600; color: #52525b; background: transparent; border: 1px dashed #cbd5e1; border-radius: 8px; cursor: pointer; }
 .lesson-content .lesson-stepper__add:hover { background: rgba(0,0,0,0.03); }
 .lesson-content.dark .lesson-stepper__add { color: #a1a1aa; border-color: #3f3f46; }
 
 /* Glossary term (inline definition tooltip) */
-.lesson-content .lesson-term { border-bottom: 1px dotted #10b981; cursor: help; }
-.lesson-content.dark .lesson-term { border-bottom-color: #34d399; }
+.lesson-content .lesson-term { border-bottom: 1px dotted var(--lesson-accent); cursor: help; }
 /* The definition popover is rendered by GlossaryTooltip into a body portal (fixed +
    global, so the lesson card's overflow can never clip it). These rules are global,
    not scoped under .lesson-content, because the portal lives outside it. */
@@ -482,15 +490,14 @@ ${stepReveal}
    still hug the line; longer ones wrap within the column without shifting the dots. */
 .lesson-content .lesson-timeline__date-col { flex-shrink: 0; width: 120px; padding-top: 2px; text-align: right; overflow-wrap: break-word; }
 .lesson-content .lesson-timeline__dot { position: relative; flex-shrink: 0; width: 14px; }
-.lesson-content .lesson-timeline__dot::before { content: ''; position: absolute; left: 50%; top: 6px; transform: translateX(-50%); width: 12px; height: 12px; border-radius: 999px; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,0.18); z-index: 1; }
+.lesson-content .lesson-timeline__dot::before { content: ''; position: absolute; left: 50%; top: 6px; transform: translateX(-50%); width: 12px; height: 12px; border-radius: 999px; background: var(--lesson-accent); box-shadow: 0 0 0 3px var(--lesson-accent-ring); z-index: 1; }
 .lesson-content .lesson-timeline__content { flex: 1; min-width: 0; }
 .lesson-content .lesson-timeline__meta { display: flex; align-items: baseline; gap: 8px; min-height: 22px; margin-bottom: 4px; }
-.lesson-content .lesson-timeline__date { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.5; color: #10b981; }
-.lesson-content.dark .lesson-timeline__date { color: #34d399; }
+.lesson-content .lesson-timeline__date { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.5; color: var(--lesson-accent-ink); }
 .lesson-content .lesson-timeline__title { font-size: 1.05rem; font-weight: 700; color: #18181b; }
 .lesson-content.dark .lesson-timeline__title { color: #fafafa; }
 .lesson-content .lesson-timeline__body > :last-child { margin-bottom: 0; }
-.lesson-content .lesson-timeline__date-input { width: 100%; text-align: right; font: inherit; font-size: 12px; font-weight: 700; color: #10b981; background: transparent; border: none; border-bottom: 1px dashed #d4d4d8; outline: none; padding: 1px 0; }
+.lesson-content .lesson-timeline__date-input { width: 100%; text-align: right; font: inherit; font-size: 12px; font-weight: 700; color: var(--lesson-accent-ink); background: transparent; border: none; border-bottom: 1px dashed #d4d4d8; outline: none; padding: 1px 0; }
 .lesson-content.dark .lesson-timeline__date-input { border-bottom-color: #3f3f46; }
 .lesson-content .lesson-timeline__date-input::placeholder { color: #a1a1aa; font-weight: 600; }
 .lesson-content .lesson-timeline__title-input { flex: 1; min-width: 0; font: inherit; font-size: 1.05rem; font-weight: 700; color: #18181b; background: transparent; border: none; outline: none; padding: 0; }

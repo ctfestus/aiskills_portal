@@ -13,6 +13,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import { lessonExtensions } from '@/components/lesson/extensions';
 import { LessonContentStyles } from '@/components/lesson/LessonContentStyles';
 import { GlossaryTooltip } from '@/components/lesson/GlossaryTooltip';
+import { useTenant } from '@/components/TenantProvider';
 import type { LessonDoc } from '@/lib/lesson-doc';
 
 interface LessonRendererProps {
@@ -22,6 +23,7 @@ interface LessonRendererProps {
 }
 
 export function LessonRenderer({ doc, isDark = false, className = '' }: LessonRendererProps) {
+  const { primaryColor } = useTenant();
   const editor = useEditor({
     editable: false,
     content: doc as Record<string, unknown>,
@@ -38,7 +40,10 @@ export function LessonRenderer({ doc, isDark = false, className = '' }: LessonRe
   if (!editor) return null;
 
   return (
-    <div className={`lesson-content ${isDark ? 'dark' : ''} ${className}`.trim()}>
+    <div
+      className={`lesson-content ${isDark ? 'dark' : ''} ${className}`.trim()}
+      style={primaryColor ? ({ '--lesson-accent-base': primaryColor } as React.CSSProperties) : undefined}
+    >
       <LessonContentStyles />
       <EditorContent editor={editor} />
       <GlossaryTooltip />
