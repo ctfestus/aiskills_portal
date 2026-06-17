@@ -62,6 +62,19 @@ interface Props {
   isFirstTaskForLesson?: boolean;
 }
 
+function PythonPlots({ plots }: { plots: string[] }) {
+  if (!plots.length) return null;
+  return (
+    <div className="mt-4 grid gap-4">
+      {plots.map((src, idx) => (
+        <div key={`${idx}:${src.length}`} className="rounded-xl overflow-hidden bg-white p-3 max-w-full">
+          <img src={src} alt={`Python plot ${idx + 1}`} className="block max-w-full h-auto mx-auto" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function PythonExercisePlayer({
   question,
   isDark,
@@ -86,6 +99,7 @@ export default function PythonExercisePlayer({
 
   const [code, setCode]               = useState<string>(saved?.code || starterCode);
   const [output, setOutput]           = useState<string>(saved?.output ?? '');
+  const [plots, setPlots]             = useState<string[]>([]);
   const [error, setError]             = useState<string>('');
   const [running, setRunning]         = useState(false);
   const [checking, setChecking]       = useState(false);
@@ -258,6 +272,7 @@ export default function PythonExercisePlayer({
     setRunning(true);
     setError('');
     setOutput('');
+    setPlots([]);
     setFeedback(null);
     try {
       const res = await runPython(pyRuntimeRef.current, codeToRun);
@@ -266,6 +281,7 @@ export default function PythonExercisePlayer({
       } else {
         const out = res.stdout + (res.returnValue !== null && !res.stdout.trim() ? `Out: ${res.returnValue}` : '');
         setOutput(out);
+        setPlots(res.plots ?? []);
       }
     } catch (e: any) {
       setError(e?.message || 'Run failed.');
@@ -279,6 +295,7 @@ export default function PythonExercisePlayer({
     if (!pyRuntimeRef.current || !hasChecker) return;
     setChecking(true);
     setError('');
+    setPlots([]);
     setFeedbackDismissed(false);
     try {
       const res = await runPython(pyRuntimeRef.current, code);
@@ -291,6 +308,7 @@ export default function PythonExercisePlayer({
       }
       const actualOutput = res.stdout + (res.returnValue !== null && !res.stdout.trim() ? `Out: ${res.returnValue}` : '');
       setOutput(actualOutput);
+      setPlots(res.plots ?? []);
       const check = onCheckAnswer
         ? await onCheckAnswer(question.id, code, actualOutput)
         : {
@@ -343,6 +361,7 @@ export default function PythonExercisePlayer({
       setRunning(true);
       setError('');
       setOutput('');
+      setPlots([]);
       setFeedback(null);
       try {
         const res = await runPython(pyRuntimeRef.current, sol);
@@ -351,6 +370,7 @@ export default function PythonExercisePlayer({
         } else {
           const out = res.stdout + (res.returnValue !== null && !res.stdout.trim() ? `Out: ${res.returnValue}` : '');
           setOutput(out);
+          setPlots(res.plots ?? []);
         }
       } catch (e: any) {
         setError(e?.message || 'Run failed.');
@@ -521,7 +541,7 @@ export default function PythonExercisePlayer({
                   <div className="flex-1" />
                   <button type="button"
                     disabled={showingSolutionTab}
-                    onClick={() => { setCode(starterCode); setOutput(''); setError(''); setFeedback(null); }}
+                    onClick={() => { setCode(starterCode); setOutput(''); setPlots([]); setError(''); setFeedback(null); }}
                     className="w-8 h-8 grid place-items-center rounded-lg transition-opacity hover:opacity-70 disabled:opacity-40"
                     style={{ background: subtle, color: muted }} title="Reset">
                     <RotateCcw className="w-3.5 h-3.5" />
@@ -636,9 +656,15 @@ export default function PythonExercisePlayer({
                 {outputTab === 'output' && (
                   <div className="flex-1 min-h-0 overflow-auto p-4">
                     {error ? (
-                      <pre className="text-[12.5px] leading-relaxed whitespace-pre-wrap" style={{ color: '#fda4af', fontFamily: '"JetBrains Mono",ui-monospace,monospace' }}>{error}</pre>
-                    ) : output ? (
-                      <pre className="text-[12.5px] leading-relaxed whitespace-pre-wrap" style={{ color: '#c9d1d9', fontFamily: '"JetBrains Mono",ui-monospace,monospace' }}>{output}</pre>
+                      <>
+                        <pre className="text-[12.5px] leading-relaxed whitespace-pre-wrap" style={{ color: '#fda4af', fontFamily: '"JetBrains Mono",ui-monospace,monospace' }}>{error}</pre>
+                        {plots.length > 0 && <PythonPlots plots={plots} />}
+                      </>
+                    ) : output || plots.length > 0 ? (
+                      <>
+                        {output && <pre className="text-[12.5px] leading-relaxed whitespace-pre-wrap" style={{ color: '#c9d1d9', fontFamily: '"JetBrains Mono",ui-monospace,monospace' }}>{output}</pre>}
+                        {plots.length > 0 && <PythonPlots plots={plots} />}
+                      </>
                     ) : (
                       <p className="text-[12px] italic" style={{ color: '#4a5568' }}>Run your code to see output here</p>
                     )}

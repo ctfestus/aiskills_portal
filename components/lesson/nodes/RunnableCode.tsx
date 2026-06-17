@@ -183,13 +183,23 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
 function PythonOutput({ result }: { result: PythonResult }) {
   const hasStdout = result.stdout.trim().length > 0;
   const hasReturn = result.returnValue !== null && !hasStdout;
-  if (!hasStdout && !hasReturn) {
+  const hasPlots = (result.plots ?? []).length > 0;
+  if (!hasStdout && !hasReturn && !hasPlots) {
     return <p className="lesson-code__result-note">Code ran. No output.</p>;
   }
   return (
     <div className="lesson-code__stdout">
       {hasStdout && <pre className="lesson-code__stdout-pre">{result.stdout}</pre>}
       {hasReturn && <pre className="lesson-code__stdout-pre lesson-code__stdout-pre--return">Out: {result.returnValue}</pre>}
+      {hasPlots && (
+        <div className="lesson-code__plots">
+          {(result.plots ?? []).map((src, idx) => (
+            <div className="lesson-code__plot" key={`${idx}:${src.length}`}>
+              <img src={src} alt={`Python plot ${idx + 1}`} />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -293,6 +293,9 @@ export function LessonContentStyles() {
 .lesson-content.dark .lesson-code__stdout { background: #0a0c14; border-top-color: #2e2e33; }
 .lesson-content .lesson-code__stdout-pre { margin: 0; padding: 10px 14px; font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 12.5px; color: #c9d1d9; white-space: pre-wrap; word-break: break-all; }
 .lesson-content .lesson-code__stdout-pre--return { color: #79c0ff; }
+.lesson-content .lesson-code__plots { display: grid; gap: 12px; padding: 12px 14px 14px; }
+.lesson-content .lesson-code__plot { background: #fff; border-radius: 8px; padding: 10px; overflow: hidden; }
+.lesson-content .lesson-code__plot img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 
 .lesson-content .lesson-style__seg { display: inline-flex; gap: 2px; }
 .lesson-content .lesson-style__seg button { font-size: 11px; font-weight: 600; padding: 3px 8px; border: 1px solid transparent; border-radius: 6px; background: rgba(0,0,0,0.05); color: #52525b; cursor: pointer; }
