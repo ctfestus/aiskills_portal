@@ -207,6 +207,14 @@ function ResponsesTab({
             return false;
           }
         }
+        if ((q.type ?? '') === 'python_exercise') {
+          try {
+            const parsed = typeof answer === 'string' ? JSON.parse(answer) : answer;
+            return !!parsed?.passed && !!parsed?.proof && !parsed?.skipped && !parsed?.solutionViewed;
+          } catch {
+            return false;
+          }
+        }
         if (q.type === 'document_review') {
           try { const p = JSON.parse(answer); return p?.completed === true; } catch { return answer === 'completed'; }
         }
@@ -1007,19 +1015,21 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
   }, [form.id, isVE]);
 
   // Segment + cohort filter (courses and VEs only) -- must be declared before segmentCounts
-  const [blastSegment, setBlastSegment]         = useState<'all' | 'not_started' | 'in_progress' | 'completed'>('all');
+  const [blastSegment, setBlastSegment]         = useState<'all' | 'not_started' | 'in_progress' | 'completed' | 'failed'>('all');
   const [selectedCohortId, setSelectedCohortId] = useState<string>('all');
 
   const segmentCounts = (() => {
     if (isCourse) {
       const filtered     = selectedCohortId === 'all' ? cohortStudents : cohortStudents.filter((s: any) => s.cohort_id === selectedCohortId);
       const startedIds   = new Set(courseProgress.map((p: any) => String(p.student_id)));
-      const completedIds = new Set(courseProgress.filter((p: any) => p.completed).map((p: any) => String(p.student_id)));
+      const completedIds = new Set(courseProgress.filter((p: any) => p.completed && p.passed !== false).map((p: any) => String(p.student_id)));
+      const failedIds    = new Set(courseProgress.filter((p: any) => p.completed && p.passed === false).map((p: any) => String(p.student_id)));
       return {
         all:         filtered.length,
         not_started: filtered.filter((s: any) => !startedIds.has(String(s.id))).length,
-        in_progress: filtered.filter((s: any) => startedIds.has(String(s.id)) && !completedIds.has(String(s.id))).length,
+        in_progress: filtered.filter((s: any) => startedIds.has(String(s.id)) && !completedIds.has(String(s.id)) && !failedIds.has(String(s.id))).length,
         completed:   filtered.filter((s: any) => completedIds.has(String(s.id))).length,
+        failed:      filtered.filter((s: any) => failedIds.has(String(s.id))).length,
       };
     }
     if (isVE) {
@@ -1029,6 +1039,7 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
         not_started: filtered.filter((a: any) => !a.started_at && !a.completed_at).length,
         in_progress: filtered.filter((a: any) => !!a.started_at && !a.completed_at).length,
         completed:   filtered.filter((a: any) => !!a.completed_at).length,
+        failed:      0,
       };
     }
     return null;
@@ -1333,12 +1344,13 @@ function EmailTab({ form, formUrl, courseProgress = [], cohortStudents = [], for
           {(isCourse || isVE) && (
             <div>
               <label className={label}>Audience</label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                 {([
                   { value: 'all',         label: 'All Enrolled'  },
                   { value: 'not_started', label: 'Not Started'   },
                   { value: 'in_progress', label: 'In Progress'   },
                   { value: 'completed',   label: 'Completed'     },
+                  { value: 'failed',      label: 'Failed'        },
                 ] as const).map(seg => {
                   const count = segmentCounts?.[seg.value];
                   const active = blastSegment === seg.value;

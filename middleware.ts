@@ -43,7 +43,7 @@ export async function middleware(req: NextRequest) {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src https: data: blob:",
-    `connect-src 'self' ${supabaseUrl} https://*.supabase.co https://api.resend.com wss://*.supabase.co https://cdn.jsdelivr.net https://challenges.cloudflare.com`,
+    `connect-src 'self' ${supabaseUrl} https://*.supabase.co https://api.resend.com wss://*.supabase.co https://cdn.jsdelivr.net https://challenges.cloudflare.com https://raw.githubusercontent.com`,
     "worker-src 'self' blob: https://cdn.jsdelivr.net",
     "media-src 'self' blob:",
     "frame-src 'self' blob: https://www.youtube.com https://player.vimeo.com https://iframe.mediadelivery.net https://player.mediadelivery.net https://video.bunnycdn.com https://www.canva.com https://challenges.cloudflare.com",

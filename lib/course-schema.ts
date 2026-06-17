@@ -33,7 +33,8 @@ export interface FormField {
 
 export type QuestionType =
   | 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code'
-  | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise' | 'document_review';
+  | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise' | 'document_review'
+  | 'python_exercise';
 
 export interface DownloadItem {
   id: string;
@@ -91,6 +92,14 @@ export interface CourseQuestion {
   sqlResultOrdered?: boolean;
   sqlNumericTolerance?: number;
   sqlRequiredPatterns?: string[];
+  // python_exercise fields
+  pythonDatasets?: { id: string; variableName: string; fileName?: string; fileUrl?: string; csvUrl?: string }[];
+  pythonStarterCode?: string;
+  pythonSolution?: string;
+  pythonExpectedOutput?: string;
+  pythonHasExpectedOutput?: boolean;
+  pythonSetupCode?: string;
+  pythonHints?: string[];
 }
 
 export interface Speaker {
