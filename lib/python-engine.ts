@@ -7,6 +7,7 @@ export interface PythonResult {
   stdout: string;
   returnValue: string | null;
   error: string | null;
+  plots: string[];
 }
 
 export interface PythonRuntime {
@@ -110,6 +111,12 @@ export async function initPythonRuntime(setupCode?: string): Promise<PythonRunti
     for (const pkg of ['pandas', 'numpy', 'matplotlib', 'scipy', 'scikit-learn']) {
       try { await pyodide.loadPackage(pkg); } catch { /* skip unavailable packages */ }
     }
+    try {
+      await pyodide.runPythonAsync(`
+import matplotlib as _cc_matplotlib
+_cc_matplotlib.use('agg', force=True)
+`);
+    } catch { /* matplotlib is optional */ }
     _packagesLoaded = true;
   }
   if (setupCode?.trim()) {
@@ -173,13 +180,14 @@ export async function runPython(runtime: PythonRuntime, code: string): Promise<P
   // Redirect stdout + stderr into a StringIO buffer before running user code.
   await pyodide.runPythonAsync(`
 import sys as _sys, io as _io
-_cc_buf = _io.StringIO()
-_sys.stdout = _cc_buf
-_sys.stderr = _cc_buf
+_cc_stdout_buf = _io.StringIO()
+_sys.stdout = _cc_stdout_buf
+_sys.stderr = _cc_stdout_buf
 `);
 
   let returnValue: string | null = null;
   let error: string | null = null;
+  let plots: string[] = [];
 
   try {
     const result = await pyodide.runPythonAsync(code);
@@ -191,16 +199,42 @@ _sys.stderr = _cc_buf
     error = e?.message ?? String(e);
   }
 
+  try {
+    const plotProxy = await pyodide.runPythonAsync(`
+import base64 as _cc_base64, io as _cc_io
+_cc_plot_images = []
+try:
+    import matplotlib.pyplot as _cc_plt
+    for _cc_num in _cc_plt.get_fignums()[:6]:
+        _cc_fig = _cc_plt.figure(_cc_num)
+        if _cc_fig.axes:
+            _cc_plot_buf = _cc_io.BytesIO()
+            _cc_fig.savefig(_cc_plot_buf, format='png', bbox_inches='tight', dpi=144)
+            _cc_plot_images.append('data:image/png;base64,' + _cc_base64.b64encode(_cc_plot_buf.getvalue()).decode('ascii'))
+            _cc_plot_buf.close()
+    _cc_plt.close('all')
+except Exception:
+    pass
+_cc_plot_images
+`);
+    const rawPlots = plotProxy?.toJs ? plotProxy.toJs() : plotProxy;
+    plots = Array.from(rawPlots ?? []).map(String);
+    try { plotProxy?.destroy?.(); } catch {}
+  } catch {
+    plots = [];
+  }
+
   // Restore stdout/stderr and capture what was printed.
   const captured: string = await pyodide.runPythonAsync(`
 _sys.stdout = _sys.__stdout__
 _sys.stderr = _sys.__stderr__
-_cc_buf.getvalue()
+_cc_stdout_buf.getvalue()
 `);
 
   return {
     stdout: String(captured ?? ''),
     returnValue,
     error,
+    plots,
   };
 }
