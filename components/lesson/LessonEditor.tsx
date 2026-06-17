@@ -20,13 +20,14 @@ import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code2, FileCode2,
   List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote,
   Image as ImageIcon, Table as TableIcon, Info, Loader2, ChevronsUpDown, LayoutGrid, HelpCircle, Terminal, GalleryHorizontal,
-  Layers, ListChecks, History, BookMarked,
+  Layers, ListChecks, History, BookMarked, Braces,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { StyleMenu, MenuRow, Segmented, ColorField } from '@/components/lesson/nodes/StyleControls';
 import { lessonExtensions } from '@/components/lesson/extensions';
 import { LessonContentStyles } from '@/components/lesson/LessonContentStyles';
 import { GlossaryTooltip } from '@/components/lesson/GlossaryTooltip';
+import { useTenant } from '@/components/TenantProvider';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { inlineGlossaryDefinitions, type LessonDoc } from '@/lib/lesson-doc';
@@ -41,6 +42,7 @@ interface LessonEditorProps {
 
 export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write the lesson...', isDark }: LessonEditorProps) {
   const { theme } = useTheme();
+  const { primaryColor } = useTenant();
   const dark = isDark ?? theme === 'dark';
   const [uploading, setUploading] = useState(false);
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
@@ -161,7 +163,8 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         <Btn dark={dark} title="Steps (vertical stepper)" onClick={() => editor.chain().focus().insertContent({ type: 'stepper', content: [{ type: 'step', attrs: { title: '' }, content: [{ type: 'paragraph' }] }, { type: 'step', attrs: { title: '' }, content: [{ type: 'paragraph' }] }] }).run()}><ListChecks className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Timeline" onClick={() => editor.chain().focus().insertContent({ type: 'timeline', content: [{ type: 'timelineEntry', attrs: { date: '', title: '' }, content: [{ type: 'paragraph' }] }, { type: 'timelineEntry', attrs: { date: '', title: '' }, content: [{ type: 'paragraph' }] }] }).run()}><History className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Knowledge check" onClick={() => editor.chain().focus().insertContent({ type: 'knowledgeCheck', attrs: { question: '', options: ['', ''], correctIndex: 0, explanation: '' } }).run()}><HelpCircle className="w-3.5 h-3.5" /></Btn>
-        <Btn dark={dark} title="Runnable code (SQL)" onClick={() => editor.chain().focus().insertContent({ type: 'runnableCode', attrs: { language: 'sql', code: '', setupSql: '' } }).run()}><Terminal className="w-3.5 h-3.5" /></Btn>
+        <Btn dark={dark} title="Runnable code (SQL)" onClick={() => editor.chain().focus().insertContent({ type: 'runnableCode', attrs: { language: 'sql', code: '', setupSql: '', setupPython: '' } }).run()}><Terminal className="w-3.5 h-3.5" /></Btn>
+        <Btn dark={dark} title="Runnable code (Python)" onClick={() => editor.chain().focus().insertContent({ type: 'runnableCode', attrs: { language: 'python', code: '', setupSql: '', setupPython: '' } }).run()}><Braces className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Table" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableIcon className="w-3.5 h-3.5" /></Btn>
         <label title="Insert image" className="p-1.5 rounded transition-colors cursor-pointer inline-flex" style={{ color: dark ? '#666' : '#888' }}>
           {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
@@ -207,7 +210,10 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         );
       })()}
 
-      <div className={`lesson-content ${dark ? 'dark' : ''} px-3 py-2.5 min-h-[140px] max-h-[460px] overflow-y-auto`}>
+      <div
+        className={`lesson-content ${dark ? 'dark' : ''} px-3 py-2.5 min-h-[140px] max-h-[460px] overflow-y-auto`}
+        style={primaryColor ? ({ '--lesson-accent-base': primaryColor } as React.CSSProperties) : undefined}
+      >
         <EditorContent editor={editor} />
       </div>
       <GlossaryTooltip />
