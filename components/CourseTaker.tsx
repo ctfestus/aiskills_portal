@@ -48,6 +48,7 @@ import dynamic from 'next/dynamic';
 import { initSQLRuntime, SQLRuntime } from '@/lib/sql-engine';
 
 const SQLExercisePlayer = dynamic(() => import('@/components/sql-course/SQLExercisePlayer'), { ssr: false });
+const PythonExercisePlayer = dynamic(() => import('@/components/sql-course/PythonExercisePlayer'), { ssr: false });
 
 // Hamburger -- slightly tighter line spacing than lucide's Menu (lines at 7/12/17 vs 6/12/18)
 function MenuIcon({ className }: { className?: string }) {
@@ -332,14 +333,15 @@ export function CourseTaker({
   }, [questions, currentQuestionIndex]);
   const totalSections = useMemo(() => questions.filter((q: any) => q.isSection).length, [questions]);
 
-  // True when the current SQL exercise is the first task using this lesson title
+  // True when the current SQL/Python exercise is the first task using this lesson title
   const isFirstTaskForLesson = useMemo(() => {
-    if ((currentQuestion as any)?.type !== 'sql_exercise') return true;
+    const qType = (currentQuestion as any)?.type;
+    if (qType !== 'sql_exercise' && qType !== 'python_exercise') return true;
     const lessonTitle = (currentQuestion as any)?.lesson?.title;
     if (!lessonTitle) return true;
     for (let i = 0; i < currentQuestionIndex; i++) {
       const q = questions[i] as any;
-      if (q.type === 'sql_exercise' && q.lesson?.title === lessonTitle) return false;
+      if ((q.type === 'sql_exercise' || q.type === 'python_exercise') && q.lesson?.title === lessonTitle) return false;
     }
     return true;
   }, [questions, currentQuestionIndex, currentQuestion]);
@@ -457,9 +459,9 @@ export function CourseTaker({
     return () => document.removeEventListener('mousedown', handler);
   }, [showMenu]);
 
-  // Auto-collapse sidebar when entering SQL exercise questions to give the editor more space
+  // Auto-collapse sidebar when entering SQL/Python exercise questions to give the editor more space
   useEffect(() => {
-    if (questionType === 'sql_exercise') {
+    if (questionType === 'sql_exercise' || questionType === 'python_exercise') {
       setSidebarOpen(false);
     } else {
       if (typeof window !== 'undefined' && window.innerWidth >= 640) setSidebarOpen(true);
@@ -738,7 +740,7 @@ export function CourseTaker({
 
     setCheckingAttempts(false);
     setPhase('course');
-  }, [maxAttempts, formId]);
+  }, [maxAttempts, formId, questions]);
 
   // -- Start course -- get Supabase session token then run checks --
   const handleStartCourse = useCallback(async () => {
@@ -1023,8 +1025,12 @@ export function CourseTaker({
   };
 
   const isAnswered = () => {
-    if (questionType === 'sql_exercise') {
-      try { return !!JSON.parse(answers[currentQuestion.id] ?? '')?.passed; } catch { return false; }
+    if (questionType === 'sql_exercise' || questionType === 'python_exercise') {
+      try {
+        const parsed = JSON.parse(answers[currentQuestion.id] ?? '');
+        if (questionType === 'python_exercise') return !!parsed?.passed && !!parsed?.proof;
+        return !!parsed?.passed;
+      } catch { return false; }
     }
     if (REVIEW_TYPES.includes(questionType)) return reviewCompleted.has(currentQuestion.id);
     if (questionType === 'fill_blank') return fillBlankAnswer.trim().length > 0;
@@ -1042,6 +1048,12 @@ export function CourseTaker({
         return parsed?.passed ? 'SQL answer passed' : (parsed?.query || answer);
       } catch { return answer; }
     }
+    if (qType === 'python_exercise') {
+      try {
+        const parsed = JSON.parse(answer);
+        return parsed?.passed ? 'Python answer passed' : (parsed?.code || answer);
+      } catch { return answer; }
+    }
     if (qType === 'arrange') return answer.split('|||').join(' -> ');
     if (qType === 'image') {
       const idx = q.options.indexOf(answer);
@@ -1052,8 +1064,12 @@ export function CourseTaker({
 
   const isAnswerCorrect = (q: any, answer: string) => {
     const qType: QuestionType = q.type ?? 'multiple_choice';
-    if (qType === 'sql_exercise') {
-      try { return !!JSON.parse(answer)?.passed; } catch { return false; }
+    if (qType === 'sql_exercise' || qType === 'python_exercise') {
+      try {
+        const parsed = JSON.parse(answer);
+        if (qType === 'python_exercise') return !!parsed?.passed && !!parsed?.proof;
+        return !!parsed?.passed;
+      } catch { return false; }
     }
     if (REVIEW_TYPES.includes(qType)) return answer === 'completed';
     if (qType === 'fill_blank') return checkFillBlank(answer, q.correctAnswer);
@@ -1064,7 +1080,7 @@ export function CourseTaker({
   const getSlideProgressStatus = useCallback((q: any) => {
     const rawAnswer = answers[q.id] ?? '';
     const answered = !!rawAnswer;
-    if ((q.type ?? '') === 'sql_exercise') {
+    if ((q.type ?? '') === 'sql_exercise' || (q.type ?? '') === 'python_exercise') {
       if (!answered) {
         return { answered: false, completed: false, skipped: false, failed: false };
       }
@@ -2353,6 +2369,61 @@ export function CourseTaker({
     saveProgress(newAnswers, (countsAsPassed || payload.skipped) ? currentQuestionIndex + 1 : currentQuestionIndex, newScore, newPoints, newStreak, hintsUsed);
   };
 
+  const handlePythonComplete = (payload: any) => {
+    const alreadyAnswered = !!answersRef.current[currentQuestion.id];
+    const previousCorrect = alreadyAnswered ? isAnswerCorrect(currentQuestion, answersRef.current[currentQuestion.id]) : false;
+    const previousSolutionViewed = alreadyAnswered ? (() => { try { return !!JSON.parse(answersRef.current[currentQuestion.id])?.solutionViewed; } catch { return false; } })() : false;
+    const countsAsPassed = !!payload.passed && !payload.skipped && !payload.solutionViewed;
+    const answer = JSON.stringify({
+      code: payload.code,
+      output: payload.output,
+      passed: countsAsPassed,
+      skipped: !!payload.skipped,
+      attempts: Number(payload.attempts ?? 0),
+      solutionViewed: !!payload.solutionViewed,
+      proof: payload.proof,
+      checkedAt: new Date().toISOString(),
+    });
+    const newAnswers = { ...answersRef.current, [currentQuestion.id]: answer };
+    answersRef.current = newAnswers;
+    setAnswers(newAnswers);
+    const shouldAward = countsAsPassed && !previousCorrect && !reviewMode;
+    const hintWasUsed = hintsUsed.has(currentQuestion.id);
+    const newScore = shouldAward ? score + (hintWasUsed ? 0.9 : 1) : score;
+    let newPoints = totalPoints;
+    let newStreak = streak;
+    if (shouldAward) {
+      setScore(newScore);
+      if (confettiRef.current) burstConfetti(confettiRef.current, accent);
+      if (pointsEnabled) {
+        const { earned, label, isStreak } = calcPoints(hintWasUsed);
+        newPoints = totalPoints + earned;
+        newStreak = streak + 1;
+        setTotalPoints(newPoints);
+        setStreak(newStreak);
+        setFloatingPoints({ id: Date.now(), text: label, x: 50, y: 60 });
+        setTimeout(() => setFloatingPoints(null), 1200);
+        setXpNotify(true);
+        setTimeout(() => setXpNotify(false), 2500);
+        if (isStreak) {
+          setStreakToast(`${newStreak} in a row! 1.2x XP`);
+          setTimeout(() => setStreakToast(null), 2200);
+        }
+      }
+    } else if (pointsEnabled && !reviewMode) {
+      setStreak(0);
+      newStreak = 0;
+      if (payload.solutionViewed && !previousCorrect && !previousSolutionViewed) {
+        const penalty = ps?.solutionPenalty ?? 30;
+        newPoints = Math.max(0, totalPoints - penalty);
+        setTotalPoints(newPoints);
+        setFloatingPoints({ id: Date.now(), text: `-${penalty} XP`, x: 50, y: 60 });
+        setTimeout(() => setFloatingPoints(null), 1200);
+      }
+    }
+    saveProgress(newAnswers, (countsAsPassed || payload.skipped) ? currentQuestionIndex + 1 : currentQuestionIndex, newScore, newPoints, newStreak, hintsUsed);
+  };
+
   const countableSlides = questions.filter((q: any) => !q.isSection);
   const completedSlides = countableSlides.filter((q: any) => getSlideProgressStatus(q).completed).length;
   const progressPct = countableSlides.length > 0 ? (completedSlides / countableSlides.length) * 100 : 0;
@@ -2690,15 +2761,15 @@ export function CourseTaker({
 
         {/* Nav bar -- full width */}
         <div
-          className={`flex-shrink-0 flex items-center px-4 sm:px-6 ${questionType === 'sql_exercise' ? 'gap-4' : 'justify-between py-2'}`}
+          className={`flex-shrink-0 flex items-center px-4 sm:px-6 ${(questionType === 'sql_exercise' || questionType === 'python_exercise') ? 'gap-4' : 'justify-between py-2'}`}
           style={{
             background: isDark ? '#17181E' : '#F2F5FA',
             minHeight: 44,
           }}
         >
-          {questionType === 'sql_exercise' ? (
+          {(questionType === 'sql_exercise' || questionType === 'python_exercise') ? (
             <>
-              {/* SQL nav -- left: outline toggle (mobile) + logo */}
+              {/* SQL/Python nav -- left: outline toggle (mobile) + logo */}
               <div className="flex items-center gap-1.5 flex-1 min-w-0">
                 {!sidebarOpen && (
                   <button
@@ -3015,7 +3086,9 @@ export function CourseTaker({
                                   ? ((q as any).question || 'Project')
                                   : q.type === 'sql_exercise'
                                     ? ((q as any).lesson?.title || (q as any).question || 'SQL Exercise')
-                                    : 'Test Your Knowledge';
+                                    : q.type === 'python_exercise'
+                                      ? ((q as any).lesson?.title || (q as any).question || 'Python Exercise')
+                                      : 'Test Your Knowledge';
 
                             let kind = 'Quiz';
                             let KindIcon = ListChecks;
@@ -3024,7 +3097,7 @@ export function CourseTaker({
                               if ((q as any).lesson?.videoUrl) { kind = 'Video'; KindIcon = Play; }
                               else { kind = 'Reading'; KindIcon = FileText; }
                             } else if (REVIEW_TYPES.includes(q.type as QuestionType)) { kind = 'Project'; KindIcon = FlaskConical; }
-                            else if (q.type === 'sql_exercise') { kind = 'Lab'; KindIcon = FlaskConical; }
+                            else if (q.type === 'sql_exercise' || q.type === 'python_exercise') { kind = 'Lab'; KindIcon = FlaskConical; }
 
                             return (
                               <button
@@ -3121,6 +3194,58 @@ export function CourseTaker({
                     ...(sessionTokenRef.current ? { Authorization: `Bearer ${sessionTokenRef.current}` } : {}),
                   },
                   body: JSON.stringify({ action: 'get-sql-solution', course_id: formId, question_id: questionId, attempts }),
+                });
+                const d = await res.json();
+                if (!res.ok) throw new Error(d.error || 'Failed to load solution.');
+                return d.solution ?? '';
+              }}
+              onNext={handleNext}
+              isLastQuestion={currentQuestionIndex >= totalSlides - 1}
+              isFirstTaskForLesson={isFirstTaskForLesson}
+            />
+          )}
+
+          {/* Python exercise player -- same pattern as SQL: outside AnimatePresence, fixed overlay */}
+          {questionType === 'python_exercise' && (
+            <PythonExercisePlayer
+              key={currentQuestion.id}
+              question={currentQuestion}
+              isDark={isDark}
+              accentColor={accent}
+              savedAnswer={answers[currentQuestion.id]}
+              completed={isAnswerCorrect(currentQuestion, answers[currentQuestion.id] ?? '')}
+              topOffset={44}
+              leftOffset={!inlineMode && typeof window !== 'undefined' && window.innerWidth >= 640 ? (sidebarOpen ? 372 : 60) : 0}
+              sessionToken={sessionTokenRef.current ?? undefined}
+              onComplete={handlePythonComplete}
+              hintPenalty={pointsEnabled ? (ps?.hintPenalty ?? 20) : undefined}
+              solutionPenalty={pointsEnabled ? (ps?.solutionPenalty ?? 30) : undefined}
+              onHintUsed={() => setHintsUsed(prev => new Set(prev).add(currentQuestion.id))}
+              onCheckAnswer={async (questionId, code, output) => {
+                const res = await fetch('/api/course', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(sessionTokenRef.current ? { Authorization: `Bearer ${sessionTokenRef.current}` } : {}),
+                  },
+                  body: JSON.stringify({ action: 'check-python-answer', course_id: formId, question_id: questionId, code, output }),
+                });
+                const d = await res.json();
+                if (!res.ok) throw new Error(d.error || 'Failed to check answer.');
+                return {
+                  passed: !!d.passed,
+                  message: d.message || (d.passed ? 'Output matches.' : 'Output does not match the expected result.'),
+                  proof: d.proof,
+                };
+              }}
+              onRevealSolution={async (questionId, attempts) => {
+                const res = await fetch('/api/course', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(sessionTokenRef.current ? { Authorization: `Bearer ${sessionTokenRef.current}` } : {}),
+                  },
+                  body: JSON.stringify({ action: 'get-python-solution', course_id: formId, question_id: questionId, attempts }),
                 });
                 const d = await res.json();
                 if (!res.ok) throw new Error(d.error || 'Failed to load solution.');
@@ -3667,8 +3792,8 @@ export function CourseTaker({
 
                   {/* -- Card footer: action bar -- */}
                   {(() => {
-                    if (questionType === 'sql_exercise') {
-                      // Footer is handled inside SQLExercisePlayer (full-screen overlay)
+                    if (questionType === 'sql_exercise' || questionType === 'python_exercise') {
+                      // Footer handled inside the exercise player (full-screen overlay)
                       return null;
                     }
                     // Review type footer: just a Continue button enabled once the review is submitted
@@ -3839,7 +3964,9 @@ export function CourseTaker({
                                     ? ((q as any).question || 'Project')
                                     : q.type === 'sql_exercise'
                                       ? ((q as any).lesson?.title || (q as any).question || 'SQL Exercise')
-                                      : 'Test Your Knowledge'}
+                                      : q.type === 'python_exercise'
+                                        ? ((q as any).lesson?.title || (q as any).question || 'Python Exercise')
+                                        : 'Test Your Knowledge'}
                             </span>
                             {isCurrent && <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: accent }} />}
                           </button>

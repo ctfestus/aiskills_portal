@@ -46,7 +46,10 @@ export async function GET(req: NextRequest) {
     if (!ex) { map[a.course_id] = a; return map; }
     if (a.passed && a.completed_at && !ex.completed_at) { map[a.course_id] = a; return map; }
     if (ex.passed && ex.completed_at && !a.completed_at) return map;
+    if (!a.completed_at && ex.completed_at && !ex.passed) { map[a.course_id] = a; return map; }
+    if (a.completed_at && !a.passed && !ex.completed_at) return map;
     if (a.completed_at && (a.score ?? 0) > (ex.score ?? 0)) map[a.course_id] = a;
+    if (!a.completed_at && !ex.completed_at && new Date(a.updated_at ?? 0) > new Date(ex.updated_at ?? 0)) map[a.course_id] = a;
     return map;
   }, {} as Record<string, any>);
   const participantGroupSubmissions = (groupSubmissions ?? [])
@@ -58,7 +61,7 @@ export async function GET(req: NextRequest) {
     const att = attemptMap[c.id];
     return {
       id: c.id, title: c.title, slug: c.slug,
-      status: att ? (att.completed_at ? 'completed' : 'in_progress') : 'not_started',
+      status: att ? (att.completed_at ? (att.passed === false ? 'failed' : 'completed') : 'in_progress') : 'not_started',
       score: att?.score ?? null,
       passed: att?.passed ?? null,
       hasCert: certSet.has(c.id),

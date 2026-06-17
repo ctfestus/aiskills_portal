@@ -89,10 +89,16 @@ const buttonThemes: Record<ThemeColor, string> = {
   ocean:   'bg-[#3E93FF] hover:bg-[#2f7fe0] text-white',
 };
 
-function stripSqlSolutions(questions: any[] = []) {
+function stripExerciseSecrets(questions: any[] = []) {
   return questions.map(q => {
     if (!q || typeof q !== 'object') return q;
-    const { sqlSolution, ...safeQuestion } = q;
+    const { sqlSolution, pythonSolution, pythonExpectedOutput, ...safeQuestion } = q;
+    if (q.type === 'python_exercise') {
+      return {
+        ...safeQuestion,
+        pythonHasExpectedOutput: !!String(pythonExpectedOutput ?? '').trim(),
+      };
+    }
     return safeQuestion;
   });
 }
@@ -321,7 +327,7 @@ export default function PublicFormPage() {
       if (course) {
         data = { ...course, content_type: 'course', config: {
           title: course.title, description: course.description,
-          isCourse: true, questions: stripSqlSolutions(course.questions ?? []), fields: course.fields ?? [],
+          isCourse: true, questions: stripExerciseSecrets(course.questions ?? []), fields: course.fields ?? [],
           passmark: course.passmark, courseTimer: course.course_timer,
           learnOutcomes: course.learn_outcomes,
           // Partial by design: CourseTaker fills the missing fields with player defaults (time

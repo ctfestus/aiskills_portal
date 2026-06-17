@@ -5,6 +5,17 @@ import OpenAI from 'openai';
 export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
 export const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
 
+// Applied as a system instruction on every call so no individual prompt can miss it.
+// Prevents the model outputting typographic "AI slop" regardless of prompt content.
+const FORMATTING_SYSTEM_INSTRUCTION =
+  'Plain ASCII only. Never use: em dashes (--), en dashes (-), ' +
+  'curly/smart quotes, ellipsis characters, ' +
+  'or any other non-ASCII typographic character. ' +
+  'Use straight double quotes (") and straight apostrophes (\') only. ' +
+  'Use a plain hyphen (-) where a dash is needed. ' +
+  'Do not open any sentence with filler phrases such as "Certainly!", "Absolutely!", "Of course!", or "Great!". ' +
+  'Write plainly and directly.';
+
 function geminiClient() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
@@ -39,7 +50,10 @@ async function generateGeminiJSON(
   opts: { temperature?: number; geminiRetries?: number } = {},
 ) {
   const retries = Math.max(0, opts.geminiRetries ?? 1);
-  const config: any = { responseMimeType: 'application/json' };
+  const config: any = {
+    responseMimeType: 'application/json',
+    systemInstruction: FORMATTING_SYSTEM_INSTRUCTION,
+  };
   if (geminiSchema) config.responseSchema = geminiSchema;
   if (opts.temperature !== undefined) config.temperature = opts.temperature;
 
@@ -80,7 +94,10 @@ export async function generateJSON(
     const res = await client.chat.completions.create({
       model: OPENAI_MODEL,
       response_format: { type: 'json_object' },
-      messages: [{ role: 'user', content: prompt }],
+      messages: [
+        { role: 'system', content: FORMATTING_SYSTEM_INSTRUCTION },
+        { role: 'user', content: prompt },
+      ],
       ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     });
     return safeJSON(res.choices[0]?.message?.content ?? '{}');
@@ -95,7 +112,10 @@ export async function generateVisionJSON(
   opts: { temperature?: number } = {},
 ): Promise<any> {
   try {
-    const config: any = { responseMimeType: 'application/json' };
+    const config: any = {
+      responseMimeType: 'application/json',
+      systemInstruction: FORMATTING_SYSTEM_INSTRUCTION,
+    };
     if (geminiSchema) config.responseSchema = geminiSchema;
     if (opts.temperature !== undefined) config.temperature = opts.temperature;
 
@@ -115,13 +135,16 @@ export async function generateVisionJSON(
     const res = await client.chat.completions.create({
       model: OPENAI_MODEL,
       response_format: { type: 'json_object' },
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: `data:${image.mimeType};base64,${image.data}` } },
-        ],
-      }],
+      messages: [
+        { role: 'system', content: FORMATTING_SYSTEM_INSTRUCTION },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: `data:${image.mimeType};base64,${image.data}` } },
+          ],
+        },
+      ],
       ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     });
     return safeJSON(res.choices[0]?.message?.content ?? '{}');
@@ -136,7 +159,10 @@ export async function generateStream(
   const encoder = new TextEncoder();
 
   try {
-    const config: any = { responseMimeType: 'application/json' };
+    const config: any = {
+      responseMimeType: 'application/json',
+      systemInstruction: FORMATTING_SYSTEM_INSTRUCTION,
+    };
     if (geminiSchema) config.responseSchema = geminiSchema;
 
     const geminiStream = await geminiClient().models.generateContentStream({
@@ -175,7 +201,10 @@ export async function generateStream(
       model: OPENAI_MODEL,
       stream: true,
       response_format: { type: 'json_object' },
-      messages: [{ role: 'user', content: prompt }],
+      messages: [
+        { role: 'system', content: FORMATTING_SYSTEM_INSTRUCTION },
+        { role: 'user', content: prompt },
+      ],
     });
     return new ReadableStream({
       async start(controller) {

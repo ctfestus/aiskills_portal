@@ -50,14 +50,18 @@ export async function GET(req: NextRequest) {
     .in('course_id', ownedIds)
     .order('student_id').order('attempt_number', { ascending: false });
 
-  // Deduplicate: best attempt per student per course
+  // Deduplicate: current meaningful attempt per student per course.
+  // A passed completion is final, but an active retake should beat an old failed
+  // completion so dashboards/message segments do not show retaking students as failed.
   const map: Record<string, any> = {};
   for (const a of attempts ?? []) {
     const key = `${a.student_id}::${a.course_id}`;
     const existing = map[key];
     if (!existing) { map[key] = a; continue; }
-    // Prefer completed over incomplete
-    if (a.completed_at && !existing.completed_at) { map[key] = a; continue; }
+    if (a.passed && a.completed_at && !existing.completed_at) { map[key] = a; continue; }
+    if (existing.passed && existing.completed_at && !a.completed_at) continue;
+    if (!a.completed_at && existing.completed_at && !existing.passed) { map[key] = a; continue; }
+    if (a.completed_at && !a.passed && !existing.completed_at) continue;
     // Among completed, prefer higher score
     if (a.completed_at && existing.completed_at && (a.score ?? 0) > (existing.score ?? 0)) { map[key] = a; continue; }
     // Among incomplete, prefer furthest progress
@@ -74,6 +78,7 @@ export async function GET(req: NextRequest) {
     points:                 a.points,
     completed:              !!a.completed_at,
     passed:                 a.passed ?? false,
+    status:                 !a.completed_at ? 'in_progress' : a.passed === false ? 'failed' : 'completed',
     answers:                a.answers ?? {},
     attempt_number:         a.attempt_number,
     updated_at:             a.updated_at,

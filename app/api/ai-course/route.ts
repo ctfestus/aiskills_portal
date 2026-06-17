@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireRole, isAuthError } from '@/lib/api-auth';
 import { getRedis } from '@/lib/redis';
 import { pdfPageImageUrl } from '@/lib/cloudinary-pdf';
+import type { LessonDoc } from '@/lib/lesson-doc';
 
 const ALLOWED_ACTIONS = new Set([
   'generate_questions',
@@ -381,6 +382,97 @@ async function checkSqlCourseRateLimit(userId: string, role: string): Promise<Ne
   return null;
 }
 
+// Shared JSON schema shape for interactive lesson blocks (used by multiple actions).
+const blockItemSchema = {
+  type: Type.OBJECT,
+  properties: {
+    type:         { type: Type.STRING, description: 'paragraph | heading | bulletList | blockquote | callout | knowledgeCheck | runnableCode' },
+    text:         { type: Type.STRING, description: 'For paragraph, heading, blockquote, callout: main text content' },
+    level:        { type: Type.NUMBER, description: 'For heading only: always 4' },
+    items:        { type: Type.ARRAY, items: { type: Type.STRING }, description: 'For bulletList: the list items as plain strings' },
+    variant:      { type: Type.STRING, description: 'For callout: info | warning | success | danger' },
+    title:        { type: Type.STRING, description: 'For callout: short header label (3-5 words)' },
+    question:     { type: Type.STRING, description: 'For knowledgeCheck: the question text' },
+    options:      { type: Type.ARRAY, items: { type: Type.STRING }, description: 'For knowledgeCheck: exactly 4 answer options' },
+    correctIndex: { type: Type.NUMBER, description: 'For knowledgeCheck: 0-based index of the correct answer' },
+    explanation:  { type: Type.STRING, description: 'For knowledgeCheck: one sentence explaining why the answer is correct' },
+    language:     { type: Type.STRING, description: 'For runnableCode: sql | python | javascript' },
+    code:         { type: Type.STRING, description: 'For runnableCode: the main code snippet the learner sees and can edit/run' },
+    setupSql:     { type: Type.STRING, description: 'For runnableCode sql: CREATE TABLE + INSERT INTO to seed sample data (compact, 3-5 rows)' },
+    setupPython:  { type: Type.STRING, description: 'For runnableCode python: import statements and helper setup (no output)' },
+  },
+  required: ['type'],
+};
+
+// Convert AI-generated block list to a ProseMirror/TipTap doc (dependency-free, runs server-side).
+function buildLessonDoc(blocks: unknown[]): LessonDoc {
+  const makeText = (t: string): LessonDoc => ({ type: 'text', text: t });
+  const makePara = (text: string): LessonDoc => ({ type: 'paragraph', content: [makeText(text)] });
+
+  const nodes: LessonDoc[] = [];
+  for (const block of blocks) {
+    if (!block || typeof block !== 'object') continue;
+    const b = block as Record<string, unknown>;
+    switch (b.type) {
+      case 'paragraph':
+        nodes.push(makePara(String(b.text ?? '')));
+        break;
+      case 'heading':
+        nodes.push({ type: 'heading', attrs: { level: Number(b.level) || 4 }, content: [makeText(String(b.text ?? ''))] });
+        break;
+      case 'bulletList': {
+        const items = Array.isArray(b.items) ? b.items : [];
+        if (items.length) {
+          nodes.push({
+            type: 'bulletList',
+            content: items.map((item) => ({ type: 'listItem', content: [makePara(String(item))] })),
+          });
+        }
+        break;
+      }
+      case 'blockquote':
+        nodes.push({ type: 'blockquote', content: [makePara(String(b.text ?? ''))] });
+        break;
+      case 'callout':
+        nodes.push({
+          type: 'callout',
+          attrs: { variant: String(b.variant ?? 'info'), title: String(b.title ?? ''), borderStyle: 'solid', borderColor: '' },
+          content: [makePara(String(b.text ?? ''))],
+        });
+        break;
+      case 'knowledgeCheck': {
+        const opts = Array.isArray(b.options) ? b.options.map(String) : [];
+        nodes.push({
+          type: 'knowledgeCheck',
+          attrs: {
+            question:     String(b.question ?? ''),
+            options:      opts,
+            correctIndex: Number(b.correctIndex ?? 0),
+            explanation:  String(b.explanation ?? ''),
+            borderStyle:  'solid',
+            borderColor:  '',
+          },
+        });
+        break;
+      }
+      case 'runnableCode':
+        nodes.push({
+          type: 'runnableCode',
+          attrs: {
+            language:    String(b.language ?? 'sql'),
+            code:        String(b.code ?? ''),
+            setupSql:    String(b.setupSql ?? ''),
+            setupPython: String(b.setupPython ?? ''),
+          },
+        });
+        break;
+      default:
+        break;
+    }
+  }
+  return { type: 'doc', content: nodes.length ? nodes : [makePara('')] };
+}
+
 // Shared instructional-design persona for the document-to-course engine.
 const DOC_COURSE_PERSONA = `You are a world-class course creator and instructional designer with deep expertise in adult learning, backward design, and skills-based training. Your specialty is transforming documents, documentation, and product guides into JOB-READY, hands-on courses that build real, applicable workplace skills.
 
@@ -402,6 +494,7 @@ const DOC_COURSE_TYPE_GUIDE = `Choose the most fitting exercise type for each le
 - multiple_choice: a scenario-based knowledge check with 4 options. Use for conceptual understanding.
 - fill_blank: complete a key term, command, or value. Use for precise recall of syntax or terminology.
 - arrange: order the steps of a real process or workflow. Use for procedures and sequences.
+- python_exercise: the learner writes and runs real Python code in the browser (Pyodide). Use whenever the material involves Python programming, data analysis with pandas/numpy, automation, or scripting tasks.
 STRONGLY honor the creator's focus: if they ask for SQL, make SQL lessons sql_exercise; if they ask for hands-on practice, favor the applied types (sql_exercise, code_review, excel_review, dashboard_critique, document_review) over plain knowledge checks. Use multiple_choice/fill_blank/arrange for genuinely conceptual lessons or to vary pacing.`;
 
 export async function POST(req: NextRequest) {
@@ -432,9 +525,93 @@ export async function POST(req: NextRequest) {
       const count = Math.min(Math.max(Number(body.count) || 5, 1), 20);
       const type = clamp(body.type, 30) || 'multiple_choice';
       const customPrompt = clamp(body.customPrompt, 800);
-      const customInstruction = customPrompt ? ` Additional instructions: ${customPrompt}` : '';
+
+      // When the creator supplies custom instructions, they lead the prompt and are explicitly
+      // marked as mandatory so the model cannot treat them as optional flavoring.
+      const creatorBlock = customPrompt
+        ? `CREATOR INSTRUCTIONS -- these are mandatory and override any defaults below. Follow them exactly:\n${customPrompt}\n\n`
+        : '';
+
+      // sql_exercise: generate realistic SQL tasks with solutions and starter code
+      if (type === 'sql_exercise') {
+        const result = await generateJSON(
+          `${creatorBlock}Generate ${count} hands-on SQL exercise questions about: "${topic}". Each exercise is a realistic workplace task where the learner writes a SQL query to answer a business question.
+
+Format rules (apply these within the creator's requirements above):
+- question: a short, realistic business scenario (1-2 sentences) that tells the learner WHAT to retrieve and WHY. Name a stakeholder and their goal.
+- sqlSolution: a correct, readable SQL query that answers the task. Use realistic but generic table/column names that match the topic.
+- sqlStarterCode: a skeleton or comment the learner starts from, e.g. "SELECT\\n-- your query here" or a partial query with ___. Keep it short.
+- sqlHints: 2-3 progressive hints. First hint: which clause to use. Second: which table/column. Third: the full approach.
+- No em dashes, no curly quotes, plain ASCII only.`,
+          {
+            type: Type.OBJECT,
+            properties: {
+              questions: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id:             { type: Type.STRING, description: 'unique short id like q_abc123' },
+                    type:           { type: Type.STRING, description: 'always sql_exercise' },
+                    question:       { type: Type.STRING, description: 'Realistic business scenario + task (1-2 sentences)' },
+                    sqlSolution:    { type: Type.STRING, description: 'Correct SQL query' },
+                    sqlStarterCode: { type: Type.STRING, description: 'Skeleton or partial query the learner edits' },
+                    sqlHints:       { type: Type.ARRAY, items: { type: Type.STRING }, description: '2-3 progressive hints' },
+                  },
+                  required: ['id', 'question', 'sqlSolution', 'sqlStarterCode', 'sqlHints'],
+                },
+              },
+            },
+            required: ['questions'],
+          },
+        );
+        return NextResponse.json(result);
+      }
+
+      // python_exercise: generate Python coding tasks with starter code, solution, and expected output
+      if (type === 'python_exercise') {
+        const result = await generateJSON(
+          `${creatorBlock}Generate ${count} Python coding exercises about: "${topic}". Each exercise is a practical task the learner completes in the browser (Pyodide). Available packages: pandas, numpy, matplotlib, scipy, scikit-learn.
+
+Format rules (apply these within the creator's requirements above):
+- question: a clear, concise task description (1-2 sentences). State what the learner must write or produce.
+- pythonSetupCode: import statements and any helper data that runs BEFORE the learner's code. No print() statements here.
+- pythonStarterCode: skeleton code with # TODO comments where the learner fills in logic. Include the function/variable names they should define.
+- pythonSolution: a complete, correct Python solution that produces the expected output when run after pythonSetupCode.
+- pythonExpectedOutput: the exact stdout printed by running pythonSolution (newline-separated). Must match character for character.
+- pythonHints: 2-3 progressive hints.
+- Keep exercises self-contained: no file I/O, no network calls.
+- No em dashes, no curly quotes, plain ASCII only.`,
+          {
+            type: Type.OBJECT,
+            properties: {
+              questions: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id:                   { type: Type.STRING, description: 'unique short id like q_abc123' },
+                    type:                 { type: Type.STRING, description: 'always python_exercise' },
+                    question:             { type: Type.STRING, description: 'Clear task description' },
+                    pythonSetupCode:      { type: Type.STRING, description: 'Import statements and setup data (no output)' },
+                    pythonStarterCode:    { type: Type.STRING, description: 'Skeleton code with # TODO markers' },
+                    pythonSolution:       { type: Type.STRING, description: 'Complete correct Python solution' },
+                    pythonExpectedOutput: { type: Type.STRING, description: 'Exact stdout from running the solution' },
+                    pythonHints:          { type: Type.ARRAY, items: { type: Type.STRING }, description: '2-3 progressive hints' },
+                  },
+                  required: ['id', 'question', 'pythonStarterCode', 'pythonSolution', 'pythonExpectedOutput', 'pythonHints'],
+                },
+              },
+            },
+            required: ['questions'],
+          },
+        );
+        return NextResponse.json(result);
+      }
+
+      // multiple_choice / fill_blank / arrange (existing path)
       const result = await generateJSON(
-        `Generate ${count} course quiz questions about: "${topic}". Question type: ${type}. For multiple_choice, provide 4 options and mark the correct one. For fill_blank, use ___ in the question text. For arrange, provide items in the correct order.${customInstruction}`,
+        `${creatorBlock}Generate ${count} course quiz questions about: "${topic}". Question type: ${type}. For multiple_choice, provide 4 options and mark the correct one. For fill_blank, use ___ in the question text. For arrange, provide items in the correct order.`,
         {
           type: Type.OBJECT,
           properties: {
@@ -490,30 +667,42 @@ export async function POST(req: NextRequest) {
       const lesson = await generateJSON(
         `${promptText}
 
-The lesson must feel lightweight and easy to scan, not bulky.
+The lesson must be lightweight, scannable, and use interactive components where they add value.
 
-Requirements:
-- Keep it to roughly 80-140 words.
-- Use rich HTML with only these tags when useful: <p>, <strong>, <ul>, <li>, <h4>, <blockquote>.
-- Format it into short sections with spacing and visual rhythm.
-- Start with a quick hook or guiding question.
-- Include 2-4 concise bullet points or steps.
-- End with one short takeaway or "Try this" prompt.
-- Use <strong> to highlight key ideas.
-- Do not use divider lines or <hr>; create separation with short sections and spacing instead.
-- Avoid long paragraphs, fluff, or textbook-style writing.
+Produce two things:
+1. "body": a compact HTML fallback using only <p>, <strong>, <ul>, <li>, <h4>, <blockquote>. 80-140 words. No <hr> dividers.
+2. "blocks": an interactive lesson as an ordered array of block nodes for the rich lesson player. Use these types:
+   - paragraph: { "type": "paragraph", "text": "..." }
+   - heading: { "type": "heading", "level": 4, "text": "Sub-section title" }
+   - bulletList: { "type": "bulletList", "items": ["point 1", "point 2", ...] }
+   - blockquote: { "type": "blockquote", "text": "A standout rule or tip" }
+   - callout: { "type": "callout", "variant": "info"|"warning"|"success"|"danger", "title": "Label", "text": "..." }
+   - knowledgeCheck: { "type": "knowledgeCheck", "question": "...", "options": ["A","B","C","D"], "correctIndex": 0, "explanation": "..." }
+   - runnableCode: { "type": "runnableCode", "language": "sql"|"python"|"javascript", "code": "...", "setupSql": "...", "setupPython": "..." }
 
-Also provide:
-- a short lesson title (3-6 words)
-- a short YouTube search query for a high-quality educational video that would help explain the same concept.`,
+Blocks structure rules:
+- Start with a hook: a callout (info/success) or paragraph that frames WHY this matters.
+- Use a bulletList or heading + paragraphs for 2-4 key points or steps.
+- Include runnableCode ONLY when the concept involves SQL or Python -- skip it for purely conceptual topics.
+  - SQL runnableCode: always include setupSql with CREATE TABLE + INSERT (3-5 rows) so the query is actually runnable.
+  - Python runnableCode: include setupPython with imports if needed.
+- End with exactly one knowledgeCheck testing the core concept.
+- Keep total prose under 150 words across all blocks.
+
+Also provide "videoSearchQuery": a short YouTube search query for a high-quality educational explainer video.`,
         {
           type: Type.OBJECT,
           properties: {
-            title: { type: Type.STRING, description: 'Short lesson title, 3-6 words' },
-            body: { type: Type.STRING, description: 'Compact lesson content as HTML using p, strong, ul/li, h4, and blockquote when helpful; no hr dividers' },
+            title:            { type: Type.STRING, description: 'Short lesson title, 3-6 words' },
+            body:             { type: Type.STRING, description: 'Compact HTML fallback using p, strong, ul/li, h4, blockquote; no hr dividers' },
             videoSearchQuery: { type: Type.STRING, description: 'Short YouTube search query for an educational explainer video' },
+            blocks: {
+              type: Type.ARRAY,
+              description: 'Interactive lesson blocks for the rich lesson player',
+              items: blockItemSchema,
+            },
           },
-          required: ['title', 'body', 'videoSearchQuery'],
+          required: ['title', 'body', 'videoSearchQuery', 'blocks'],
         },
       );
       const query = lesson.videoSearchQuery || lesson.title || `${question} ${correctAnswer}`;
@@ -521,9 +710,13 @@ Also provide:
         console.warn('YouTube lookup failed:', err);
         return null;
       });
+      const doc = Array.isArray(lesson.blocks) && lesson.blocks.length
+        ? buildLessonDoc(lesson.blocks)
+        : undefined;
       return NextResponse.json({
         title: lesson.title,
         body: lesson.body,
+        ...(doc ? { doc } : {}),
         videoUrl,
       });
     }
@@ -1071,8 +1264,9 @@ Do NOT include the task instruction in lessonBody - that goes in questionText on
       const masterLessonSchema = {
         type: Type.OBJECT,
         properties: {
-          title: { type: Type.STRING },
-          body:  { type: Type.STRING },
+          title:  { type: Type.STRING },
+          body:   { type: Type.STRING },
+          blocks: { type: Type.ARRAY, items: blockItemSchema, description: 'Interactive lesson blocks for the rich player' },
         },
         required: ['title', 'body'],
       };
@@ -1103,7 +1297,14 @@ Requirements:
 - Total length: 250-400 words.
 - HTML tags allowed: <p> <strong> <h4> <ul> <li> <pre> <code> <blockquote>.
 - No em dashes. No curly quotes. No asterisks.
-- Return a short title (the module name) and the full HTML body.`;
+- Return a short title (the module name) and the full HTML body.
+
+Also produce a "blocks" array that builds the same lesson as interactive TipTap nodes:
+- Use heading (level 4), paragraph, callout (info/warning), and bulletList for prose structure.
+- Include 1-2 runnableCode blocks (language "sql") demonstrating the key SQL concepts for this module.
+  For each runnableCode: write a clear teaching query in "code" and include a self-contained "setupSql" with CREATE TABLE + INSERT (3-5 rows using the EXACT column names from SHARED DATASET SCHEMA).
+- End with exactly one knowledgeCheck testing the central concept of this module (4 options, correctIndex 0-3).
+- Keep block prose concise; the runnableCode examples are the main teaching tool.`;
 
         const masterResult = await generateJSON(masterPrompt, masterLessonSchema, { temperature: 0.5, geminiRetries: 2 } as any);
         if (masterResult?.body) masterLessonMap.set(mod.id, masterResult);
@@ -1196,13 +1397,16 @@ ${JSON.stringify(lessonInput, null, 2)}`;
         // Insert the master lesson as a lessonOnly slide at the top of each module
         const masterLesson = masterLessonMap.get(mod.id);
         if (masterLesson?.body) {
+          const masterDoc = Array.isArray(masterLesson.blocks) && masterLesson.blocks.length
+            ? buildLessonDoc(masterLesson.blocks)
+            : undefined;
           questions.push({
             id:            uid(),
             lessonOnly:    true,
             question:      '',
             options:       [],
             correctAnswer: '',
-            lesson:        { title: masterLesson.title || mod.title, body: masterLesson.body },
+            lesson:        { title: masterLesson.title || mod.title, body: masterLesson.body, ...(masterDoc ? { doc: masterDoc } : {}) },
           });
         }
 
@@ -1312,7 +1516,7 @@ ${JSON.stringify(lessonInput, null, 2)}`;
           id:           { type: Type.STRING, description: 'short random id like l_ab12cd' },
           title:        { type: Type.STRING },
           summary:      { type: Type.STRING, description: 'one sentence on what this lesson teaches' },
-          questionType: { type: Type.STRING, description: 'one of: sql_exercise, code_review, excel_review, dashboard_critique, document_review, multiple_choice, fill_blank, arrange' },
+          questionType: { type: Type.STRING, description: 'one of: sql_exercise, python_exercise, code_review, excel_review, dashboard_critique, document_review, multiple_choice, fill_blank, arrange' },
         },
         required: ['id', 'title', 'summary', 'questionType'],
       };
@@ -1491,6 +1695,12 @@ STRICT FORMATTING: Plain ASCII only. No em dashes, no curly quotes, no ellipsis,
           sqlSolution:   { type: Type.STRING, description: 'For sql_exercise: a correct SQL query that answers the task, using ONLY the shared dataset tables and exact column names.' },
           sqlStarterCode:{ type: Type.STRING, description: 'For sql_exercise: starter SQL the learner edits, e.g. a SELECT skeleton.' },
           sqlHints:      { type: Type.ARRAY, items: { type: Type.STRING }, description: 'For sql_exercise: 1-3 progressive hints.' },
+          // python_exercise
+          pythonStarterCode:    { type: Type.STRING, description: 'For python_exercise: skeleton code with # TODO comments where the learner fills in logic.' },
+          pythonSolution:       { type: Type.STRING, description: 'For python_exercise: complete, correct Python solution.' },
+          pythonExpectedOutput: { type: Type.STRING, description: 'For python_exercise: exact stdout produced by running the solution (newline-separated lines).' },
+          pythonSetupCode:      { type: Type.STRING, description: 'For python_exercise: optional import statements and setup code that runs before the main code (no output).' },
+          pythonHints:          { type: Type.ARRAY, items: { type: Type.STRING }, description: 'For python_exercise: 1-3 progressive hints.' },
         },
         required: ['type', 'question'],
       };
@@ -1501,6 +1711,7 @@ STRICT FORMATTING: Plain ASCII only. No em dashes, no curly quotes, no ellipsis,
           lessonId:   { type: Type.STRING },
           title:      { type: Type.STRING },
           body:       { type: Type.STRING, description: 'Practical, hands-on lesson HTML with a worked example or how-to steps where possible: <p>, <strong>, <ul>, <li>, <h4>, <blockquote>. 100-180 words. No hr dividers.' },
+          blocks:     { type: Type.ARRAY, items: blockItemSchema, description: 'Interactive lesson blocks for the rich player; mirrors body as interactive nodes.' },
           imageQuery: { type: Type.STRING, description: 'Concrete visual 2-4 word subject for a professional stock photo (real-world scene/tool/object, never text or a UI screenshot)' },
           sourcePage: { type: Type.NUMBER, description: '1-based page number ONLY if the document has a real figure/diagram/chart for this lesson worth showing; otherwise 0' },
           questions:  { type: Type.ARRAY, items: questionSchema },
@@ -1516,6 +1727,7 @@ STRICT FORMATTING: Plain ASCII only. No em dashes, no curly quotes, no ellipsis,
             properties: {
               title:      { type: Type.STRING },
               body:       { type: Type.STRING, description: 'Module intro HTML, 120-220 words, using <p>, <strong>, <ul>, <li>, <h4>, <blockquote>.' },
+              blocks:     { type: Type.ARRAY, items: blockItemSchema, description: 'Interactive lesson blocks for the rich player; mirrors body as interactive nodes.' },
               videoQuery: { type: Type.STRING, description: 'Specific educational YouTube query naming the subject and ending with "tutorial" or "explained"' },
               imageQuery: { type: Type.STRING, description: 'Concrete visual 2-4 word subject for a professional stock photo (real-world scene/tool/workplace, not abstract text)' },
             },
@@ -1634,6 +1846,16 @@ For the module, produce:
     - excel_review: question is a spreadsheet task/brief. Provide a rubric of 3-5 criteria and context describing the dataset. Leave options/correctAnswer empty.
     - dashboard_critique: question is a dashboard/visualization task/brief. Provide a rubric of 3-5 criteria and context. Leave options/correctAnswer empty.
     - document_review: question is a report/document brief. Provide a rubric of 3-5 criteria and context describing scope. Leave options/correctAnswer empty.
+    - python_exercise: question is a realistic Python task grounded in the lesson content. Provide pythonStarterCode (a skeleton with # TODO comments where learner fills in logic), pythonSolution (complete correct Python), pythonExpectedOutput (exact stdout from running the solution, newline-separated), pythonSetupCode (import statements only, no output), and 1-3 pythonHints. Note: available packages are pandas, numpy, matplotlib, scipy, scikit-learn. Do not use file I/O or network calls. Leave options/correctAnswer empty.
+
+For each lesson's "body", also produce a "blocks" array that builds the same content as interactive TipTap nodes:
+- Start with a hook: a callout (info/success) or paragraph framing WHY this concept matters on the job.
+- Use heading (level 4), paragraph, bulletList, and blockquote for structure.
+- Include runnableCode (sql or python) ONLY when the lesson content involves code or queries -- skip for conceptual/process lessons.
+  - SQL runnableCode: include setupSql with CREATE TABLE + INSERT (3-5 rows, exact column names from the shared dataset) so the example is runnable.
+  - Python runnableCode: include setupPython with import statements if needed.
+- End with exactly one knowledgeCheck testing the core concept (4 options, correctIndex 0-3, one-sentence explanation).
+For the intro "blocks": same rules; use callout for module overview, bulletList for what learners will be able to do, and runnableCode for a motivating demo if relevant.
 ${hasSqlLessons && sqlSchemaBlock ? `
 SHARED SQL DATASET (use ONLY these tables and exact column names for every sql_exercise; never invent columns):
 ${sqlSchemaBlock}
@@ -1655,28 +1877,34 @@ ${clamp(sourceText, 60_000)}`;
           ? await findLessonVideo(intro.videoQuery, preferredChannels).catch(() => null)
           : null;
         const introImage = await resolveLessonImage(intro.imageQuery ?? mod.title, 0);
+        const introDoc = Array.isArray(intro.blocks) && intro.blocks.length
+          ? buildLessonDoc(intro.blocks)
+          : undefined;
         questions.push({
           id:            uid(),
           lessonOnly:    true,
           question:      '',
           options:       [],
           correctAnswer: '',
-          lesson:        { title: intro.title || mod.title, body: intro.body || '', imageUrl: introImage, videoUrl: introVideo || '' },
+          lesson:        { title: intro.title || mod.title, body: intro.body || '', ...(introDoc ? { doc: introDoc } : {}), imageUrl: introImage, videoUrl: introVideo || '' },
         });
 
         // -- Lessons + questions --
         for (const lesson of gen.lessons ?? []) {
           const lessonImage = await resolveLessonImage(lesson.imageQuery ?? lesson.title, Number(lesson.sourcePage) || 0);
+          const lessonDoc = Array.isArray(lesson.blocks) && lesson.blocks.length
+            ? buildLessonDoc(lesson.blocks)
+            : undefined;
           questions.push({
             id:            uid(),
             lessonOnly:    true,
             question:      '',
             options:       [],
             correctAnswer: '',
-            lesson:        { title: lesson.title || '', body: lesson.body || '', imageUrl: lessonImage, videoUrl: '' },
+            lesson:        { title: lesson.title || '', body: lesson.body || '', ...(lessonDoc ? { doc: lessonDoc } : {}), imageUrl: lessonImage, videoUrl: '' },
           });
 
-          const ALL_TYPES = ['multiple_choice', 'fill_blank', 'arrange', 'code', 'sql_exercise', 'code_review', 'excel_review', 'dashboard_critique', 'document_review'];
+          const ALL_TYPES = ['multiple_choice', 'fill_blank', 'arrange', 'code', 'sql_exercise', 'python_exercise', 'code_review', 'excel_review', 'dashboard_critique', 'document_review'];
           const toStrArray = (v: any): string[] => Array.isArray(v) ? v.map((x: any) => String(x)).filter(Boolean) : [];
 
           for (const q of lesson.questions ?? []) {
@@ -1717,6 +1945,13 @@ ${clamp(sourceText, 60_000)}`;
               // Business scenario shown above the SQL editor; the task itself stays in `question`.
               base.lesson              = { title: String(lesson.title ?? ''), body: String(q.scenario ?? '') };
               isFirstSqlExercise = false;
+            } else if (type === 'python_exercise') {
+              base.pythonStarterCode    = String(q.pythonStarterCode ?? '');
+              base.pythonSolution       = String(q.pythonSolution ?? '');
+              base.pythonExpectedOutput = String(q.pythonExpectedOutput ?? '');
+              base.pythonSetupCode      = String(q.pythonSetupCode ?? '');
+              base.pythonHints          = toStrArray(q.pythonHints);
+              base.pythonDatasets       = [];
             } else {
               // AI reviewer types: code_review, excel_review, dashboard_critique, document_review
               base.rubric  = toStrArray(q.rubric);

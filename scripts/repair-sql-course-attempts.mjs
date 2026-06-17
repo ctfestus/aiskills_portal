@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
 const args       = new Set(process.argv.slice(2));
@@ -20,16 +21,55 @@ function loadEnv() {
   }
 }
 
-function sqlCourse(course) {
+function repairableCourse(course) {
   const questions = Array.isArray(course.questions) ? course.questions : [];
-  return /sql/i.test(course.title ?? '') || questions.some(q => q?.type === 'sql_exercise');
+  return /sql|python/i.test(course.title ?? '') || questions.some(q => q?.type === 'sql_exercise' || q?.type === 'python_exercise');
+}
+
+function normalizePythonOutput(value) {
+  return String(value ?? '').trim();
+}
+
+function pythonProofSecret() {
+  return process.env.COURSE_PYTHON_PROOF_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+}
+
+function signPythonProof(courseId, questionId, output) {
+  const secret = pythonProofSecret();
+  if (!secret) return '';
+  const payload = JSON.stringify({
+    v: 1,
+    courseId,
+    questionId,
+    output: normalizePythonOutput(output),
+  });
+  return `v1:${createHmac('sha256', secret).update(payload).digest('hex')}`;
+}
+
+function verifyPythonProof(courseId, questionId, output, proof) {
+  if (typeof proof !== 'string' || !proof.startsWith('v1:')) return false;
+  const expected = signPythonProof(courseId, questionId, output);
+  if (!expected) return false;
+  const a = Buffer.from(proof);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function parseAnswer(value) {
+  if (typeof value !== 'string') return value;
+  try { return JSON.parse(value); } catch { return value; }
+}
+
+function solutionViewCount(questions, answers) {
+  return questions.filter(q => !!parseAnswer(answers?.[q.id])?.solutionViewed).length;
 }
 
 // Mirrors production complete-attempt scoring exactly:
 //   - scorable excludes lessonOnly, isSection, isDownloads
 //   - SQL exercises trust stored parsed.passed (no DuckDB re-run)
+//   - Python exercises require stored parsed.passed plus a valid server proof
 //   - solutionViewed and skipped are still penalised
-function scoreAttempt(questions, attempt) {
+function scoreAttempt(course, questions, attempt) {
   const scorable = questions.filter(q => !q.lessonOnly && !q.isSection && !q.isDownloads);
   const answers  = attempt.answers && typeof attempt.answers === 'object' ? attempt.answers : {};
   let correct = 0;
@@ -45,10 +85,27 @@ function scoreAttempt(questions, attempt) {
     }
     if (type === 'sql_exercise') {
       try {
-        const parsed = typeof ua === 'string' ? JSON.parse(ua) : ua;
+        const parsed = parseAnswer(ua);
         if (parsed?.skipped || parsed?.solutionViewed) continue;
         if (!!parsed?.passed) correct++;
       } catch { /* malformed answer — score as 0 */ }
+      continue;
+    }
+    if (type === 'python_exercise') {
+      try {
+        const parsed = parseAnswer(ua);
+        if (parsed?.skipped || parsed?.solutionViewed) continue;
+        if (parsed?.passed && verifyPythonProof(course.id, q.id, parsed.output, parsed.proof)) correct++;
+      } catch { /* malformed answer — score as 0 */ }
+      continue;
+    }
+    if (type === 'document_review') {
+      try {
+        const parsed = parseAnswer(ua);
+        if (parsed?.completed === true) correct++;
+      } catch {
+        if (ua === 'completed') correct++;
+      }
       continue;
     }
     if (type === 'fill_blank') {
@@ -64,6 +121,7 @@ function scoreAttempt(questions, attempt) {
     correct,
     total: scorable.length,
     score: scorable.length === 0 ? 100 : Math.round((correct / scorable.length) * 100),
+    scorable,
   };
 }
 
@@ -106,7 +164,7 @@ if (coursesError) throw coursesError;
 
 const targetCourses = (courses ?? [])
   .filter(course => !courseIdArg || course.id === courseIdArg)
-  .filter(sqlCourse);
+  .filter(repairableCourse);
 
 const report = [];
 
@@ -124,10 +182,10 @@ for (const course of targetCourses) {
   if (attemptsError) throw attemptsError;
 
   for (const attempt of attempts ?? []) {
-    const scored  = scoreAttempt(questions, attempt);
+    const scored  = scoreAttempt(course, questions, attempt);
     const passed  = scored.score >= (course.passmark ?? 50);
     const points  = course.points_enabled
-      ? Math.max(0, scored.correct * (course.points_base ?? 100) - (attempt.hints_used ?? []).length * 20)
+      ? Math.max(0, scored.correct * (course.points_base ?? 100) - (attempt.hints_used ?? []).length * 20 - solutionViewCount(scored.scorable, attempt.answers ?? {}) * 30)
       : 0;
     const answeredCount   = countable.filter(q => attempt.answers?.[q.id] != null).length;
     const appearsSubmitted = !!attempt.completed_at

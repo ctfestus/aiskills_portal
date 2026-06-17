@@ -22,6 +22,8 @@ import { ImageCropModal } from '@/components/ImageCropModal';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { LessonEditor } from '@/components/lesson/LessonEditor';
 import { lessonHtmlToDoc } from '@/components/lesson/extensions';
+import { QuestionTypePicker, TYPE_LABELS } from '@/components/create/QuestionTypePicker';
+import type { QuestionTypeOrDownloads } from '@/components/create/QuestionTypePicker';
 import { getFontById, loadGoogleFont } from '@/lib/fonts';
 import { FontPickerModal } from '@/components/FontPickerModal';
 import { supabase } from '@/lib/supabase';
@@ -31,6 +33,7 @@ import { uploadToGithub } from '@/lib/uploadToGithub';
 import { isPdfFile } from '@/lib/cloudinary-pdf';
 import { executeQuery, initSQLRuntime } from '@/lib/sql-engine';
 import { formatSQLPreflightIssue, preflightSQLExercises } from '@/lib/sql-exercise-preflight';
+import { initPythonRuntime, loadPythonDatasets, runPython } from '@/lib/python-engine';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay,
 } from '@dnd-kit/core';
@@ -220,6 +223,16 @@ const normalizeGeneratedQuestion = (question: any): CourseQuestion => ({
   optionImages: Array.isArray(question?.optionImages) ? question.optionImages : undefined,
   codeSnippet: question?.codeSnippet || '',
   codeLanguage: question?.codeLanguage || 'javascript',
+  // SQL exercise fields
+  ...(question?.sqlSolution    !== undefined && { sqlSolution:    question.sqlSolution }),
+  ...(question?.sqlStarterCode !== undefined && { sqlStarterCode: question.sqlStarterCode }),
+  ...(question?.sqlHints       !== undefined && { sqlHints:       question.sqlHints }),
+  // Python exercise fields
+  ...(question?.pythonStarterCode    !== undefined && { pythonStarterCode:    question.pythonStarterCode }),
+  ...(question?.pythonSolution       !== undefined && { pythonSolution:       question.pythonSolution }),
+  ...(question?.pythonExpectedOutput !== undefined && { pythonExpectedOutput: question.pythonExpectedOutput }),
+  ...(question?.pythonSetupCode      !== undefined && { pythonSetupCode:      question.pythonSetupCode }),
+  ...(question?.pythonHints          !== undefined && { pythonHints:          question.pythonHints }),
 });
 
 const normalizeGeneratedField = (field: any): FormField => ({
@@ -257,7 +270,7 @@ const mergeEventFields = (existingFields: FormField[] = [], generatedFields: any
 // --- Design tokens (light / dark) ---
 const FE_LIGHT = {
   page: '#f1f3f5', card: '#ffffff', cardBorder: 'rgba(0,0,0,0.08)', cardShadow: '0 1px 4px rgba(0,0,0,0.06)',
-  input: '#f4f5f7', inputBorder: 'rgba(0,0,0,0.08)',
+  input: '#f4f5f7', inputBorder: 'rgba(0,0,0,0.10)',
   text: '#111827', muted: '#4b5563', faint: '#9ca3af',
   section: '#ffffff', sectionBorder: 'rgba(0,0,0,0.07)',
   divider: 'rgba(0,0,0,0.07)', pill: '#eef0f3',
@@ -321,7 +334,7 @@ function LockToggle({ locked, onToggle, accentColor }: { locked: boolean; onTogg
       onClick={onToggle}
       title={locked ? 'Locked until the previous lesson is completed' : 'Lock until the previous lesson is completed'}
       className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all"
-      style={locked ? { background: accentColor ?? '#10b981', color: 'white' } : { background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
+      style={locked ? { background: accentColor ?? '#10b981', color: 'white' } : { background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
     >
       {locked ? <Lock className="w-3 h-3" /> : <LockOpen className="w-3 h-3" />} Lock
     </button>
@@ -502,9 +515,15 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const [newSocialPlatforms, setNewSocialPlatforms] = useState<string[]>(['linkedin', 'twitter']);
   const [expandedFields, setExpandedFields] = useState<Set<string>>(new Set());
   const [newQuestionType, setNewQuestionType] = useState<QuestionType | 'downloads'>('multiple_choice');
+  const [pickerCtx, setPickerCtx] = useState<
+    | { mode: 'bottom' }
+    | { mode: 'insert'; afterIndex: number }
+    | { mode: 'change'; qId: string }
+    | null
+  >(null);
   const [aiTopic, setAiTopic] = useState('');
   const [aiQuestionCount, setAiQuestionCount] = useState(5);
-  const [aiQuestionType, setAiQuestionType] = useState<'multiple_choice' | 'fill_blank' | 'arrange'>('multiple_choice');
+  const [aiQuestionType, setAiQuestionType] = useState<'multiple_choice' | 'fill_blank' | 'arrange' | 'sql_exercise' | 'python_exercise'>('multiple_choice');
   const [aiPromptModalOpen, setAiPromptModalOpen] = useState(false);
   const [aiCustomPrompt, setAiCustomPrompt] = useState('');
   const [aiDescriptionStyle, setAiDescriptionStyle] = useState<'professional' | 'casual' | 'friendly'>('professional');
@@ -1085,9 +1104,10 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   };
 
   // Course management
-  const handleAddQuestion = () => {
+  const handleAddQuestion = (overrideType?: QuestionTypeOrDownloads) => {
+    const type = overrideType ?? newQuestionType;
     if (!formConfig) return;
-    if (newQuestionType === 'downloads') { handleAddDownloads(); return; }
+    if (type === 'downloads') { handleAddDownloads(); return; }
     const id = Math.random().toString(36).substring(7);
     const defaults: Record<QuestionType, Partial<CourseQuestion>> = {
       multiple_choice:     { options: ['Option A', 'Option B', 'Option C', 'Option D'], correctAnswer: 'Option A' },
@@ -1100,13 +1120,14 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
       dashboard_critique:  { options: [], correctAnswer: '', rubric: ['Visuals are appropriate', 'Insights are accurate', 'Layout is clear'], context: '', minScore: 70 },
       document_review:     { options: [], correctAnswer: '', rubric: ['Report addresses the brief', 'Analysis is evidence-based', 'Recommendations are actionable', 'Writing is clear and professional'], context: '', minScore: 70, documentReviewMode: 'ai_only' },
       sql_exercise:        { options: [], correctAnswer: '', sqlTables: [], sqlStarterCode: 'SELECT * FROM table_name LIMIT 10;', sqlSolution: '', sqlExpectedResult: undefined, sqlHints: [], sqlResultOrdered: false, sqlNumericTolerance: 0, sqlRequiredPatterns: [] },
+      python_exercise:     { options: [], correctAnswer: '', pythonDatasets: [], pythonStarterCode: '# Write your solution here\n', pythonSolution: '', pythonExpectedOutput: '', pythonSetupCode: '', pythonHints: [] },
     };
     updateConfig({
       questions: [...(formConfig.questions || []), {
         id,
-        type: newQuestionType,
+        type,
         question: 'New Question',
-        ...defaults[newQuestionType],
+        ...defaults[type],
       } as CourseQuestion],
     });
   };
@@ -1131,9 +1152,10 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     updateConfig({ questions: qs });
   };
 
-  const insertQuestionAt = (afterIndex: number) => {
+  const insertQuestionAt = (afterIndex: number, overrideType?: QuestionTypeOrDownloads) => {
+    const type = overrideType ?? newQuestionType;
     if (!formConfig) return;
-    if (newQuestionType === 'downloads') {
+    if (type === 'downloads') {
       const id = Math.random().toString(36).substring(7);
       const qs = [...(formConfig.questions || [])];
       qs.splice(afterIndex + 1, 0, { id, isDownloads: true, downloadsTitle: 'Downloads', downloadsDescription: '', downloadItems: [], question: '', options: [], correctAnswer: '' } as CourseQuestion);
@@ -1152,15 +1174,43 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
       dashboard_critique:  { options: [], correctAnswer: '', rubric: ['Visuals are appropriate', 'Insights are accurate', 'Layout is clear'], context: '', minScore: 70 },
       document_review:     { options: [], correctAnswer: '', rubric: ['Report addresses the brief', 'Analysis is evidence-based', 'Recommendations are actionable', 'Writing is clear and professional'], context: '', minScore: 70, documentReviewMode: 'ai_only' },
       sql_exercise:        { options: [], correctAnswer: '', sqlTables: [], sqlStarterCode: 'SELECT * FROM table_name LIMIT 10;', sqlSolution: '', sqlExpectedResult: undefined, sqlHints: [], sqlResultOrdered: false, sqlNumericTolerance: 0, sqlRequiredPatterns: [] },
+      python_exercise:     { options: [], correctAnswer: '', pythonDatasets: [], pythonStarterCode: '# Write your solution here\n', pythonSolution: '', pythonExpectedOutput: '', pythonSetupCode: '', pythonHints: [] },
     };
     const qs = [...(formConfig.questions || [])];
     qs.splice(afterIndex + 1, 0, {
       id,
-      type: newQuestionType,
+      type,
       question: 'New Question',
-      ...defaults[newQuestionType],
+      ...defaults[type],
     } as CourseQuestion);
     updateConfig({ questions: qs });
+  };
+
+  const handlePickerSelect = (type: QuestionTypeOrDownloads) => {
+    if (!pickerCtx) return;
+    setPickerCtx(null);
+    if (pickerCtx.mode === 'bottom') {
+      handleAddQuestion(type);
+    } else if (pickerCtx.mode === 'insert') {
+      insertQuestionAt(pickerCtx.afterIndex, type);
+    } else if (pickerCtx.mode === 'change') {
+      if (type === 'downloads') return;
+      const q = formConfig?.questions?.find(qq => qq.id === pickerCtx.qId);
+      if (!q) return;
+      const qType = q.type ?? 'multiple_choice';
+      const v = type as QuestionType;
+      const isReview = ['code_review', 'excel_review', 'dashboard_critique', 'document_review'].includes(v);
+      const isSql = v === 'sql_exercise';
+      const isPython = v === 'python_exercise';
+      handleUpdateQuestion(q.id, {
+        type: v,
+        ...(isReview || isSql || isPython ? { options: [], correctAnswer: '' } : {}),
+        ...(isSql ? { sqlTables: q.sqlTables ?? [], sqlStarterCode: q.sqlStarterCode ?? 'SELECT * FROM table_name LIMIT 10;', sqlSolution: q.sqlSolution ?? '', sqlHints: q.sqlHints ?? [], sqlResultOrdered: q.sqlResultOrdered ?? false, sqlNumericTolerance: q.sqlNumericTolerance ?? 0, sqlRequiredPatterns: q.sqlRequiredPatterns ?? [] } : {}),
+        ...(isPython ? { pythonDatasets: q.pythonDatasets ?? [], pythonStarterCode: q.pythonStarterCode ?? '# Write your solution here\n', pythonSolution: q.pythonSolution ?? '', pythonExpectedOutput: q.pythonExpectedOutput ?? '', pythonSetupCode: q.pythonSetupCode ?? '', pythonHints: q.pythonHints ?? [] } : {}),
+        ...(!isReview && !isSql && !isPython && v === 'fill_blank' ? { options: [] } : {}),
+        ...(!isReview && !isSql && !isPython && v === 'arrange' && qType !== 'arrange' ? { correctAnswer: q.options.join('|||') } : {}),
+      });
+    }
   };
 
   const handleQuestionImageUpload = async (qId: string, e: React.ChangeEvent<HTMLInputElement>, optionIdx?: number) => {
@@ -1222,6 +1272,42 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     }
   };
 
+  const handlePythonDatasetUpload = async (questionId: string, datasetId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/\.(csv|tsv)$/i.test(file.name)) {
+      showToast('Upload a CSV or TSV file for Python datasets.', 'error');
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      showToast('Dataset too large. Keep files under 25MB.', 'error');
+      return;
+    }
+    try {
+      const { url } = await uploadToGithub(file, 'python-datasets');
+      // Use functional update so we always read the latest state, not the stale closure
+      setFormConfig(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          questions: (prev.questions ?? []).map(q => {
+            if (q.id !== questionId) return q;
+            return {
+              ...q,
+              pythonDatasets: (q.pythonDatasets ?? []).map(d =>
+                d.id === datasetId ? { ...d, fileName: file.name, fileUrl: url, csvUrl: url } : d
+              ),
+            };
+          }),
+        };
+      });
+      showToast('Dataset uploaded.', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Dataset upload failed.', 'error');
+    }
+  };
+
   const computeSqlExpectedResult = async (questionId: string) => {
     const q = formConfig?.questions?.find(q => q.id === questionId);
     if (!q?.sqlSolution?.trim()) {
@@ -1249,6 +1335,26 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     } catch (err: any) {
       console.error('[sql-exercise] compute expected result failed', err);
       showToast(err?.message || 'Could not compute expected result.', 'error');
+    }
+  };
+
+  const computePythonExpectedOutput = async (questionId: string) => {
+    const q = formConfig?.questions?.find(q => q.id === questionId);
+    if (!q?.pythonSolution?.trim()) {
+      showToast('Add a solution first.', 'error');
+      return;
+    }
+    try {
+      showToast('Running Python solution...');
+      const runtime = await initPythonRuntime(q.pythonSetupCode?.trim() || undefined);
+      await loadPythonDatasets(runtime, q.pythonDatasets ?? [], 0);
+      const res = await runPython(runtime, q.pythonSolution);
+      if (res.error) throw new Error(res.error);
+      const out = res.stdout + (res.returnValue !== null && !res.stdout.trim() ? `Out: ${res.returnValue}` : '');
+      handleUpdateQuestion(questionId, { pythonExpectedOutput: out });
+      showToast('Expected output saved.', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Could not compute expected output.', 'error');
     }
   };
 
@@ -1885,7 +1991,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                           type="button"
                           onClick={() => { setSpeakerAddOpen(false); setSpeakerEditId(null); setSpeakerDraft({ name: '', title: '', bio: '', avatar_url: '', linkedin_url: '' }); }}
                           className="px-3 py-2 rounded-lg text-xs font-medium"
-                          style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
+                          style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
                         >
                           Cancel
                         </button>
@@ -1938,7 +2044,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
               <div className="space-y-5">
               <div>
                 <label className={labelCls} style={labelStyle}>Custom slug (optional)</label>
-                <div className="flex items-center rounded-lg overflow-hidden transition-colors" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
+                <div className="flex items-center rounded-lg overflow-hidden transition-colors" style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}` }}>
                   <span className="px-3 py-2 text-xs whitespace-nowrap" style={{ color: FE.faint, borderRight: `1px solid ${FE.inputBorder}` }}>/</span>
                   <input type="text" value={customSlug} onChange={e => setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} placeholder="my-form" className="w-full bg-transparent px-3 py-2 text-sm outline-none placeholder:text-zinc-400" style={{ color: FE.text }} />
                 </div>
@@ -1960,7 +2066,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
               ) : (
                 <label className="relative block cursor-pointer">
                   <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-                  <div className="w-full rounded-xl px-3 py-7 flex flex-col items-center justify-center gap-2 transition-colors hover:opacity-80" style={{ background: FE.input, border: `1.5px dashed ${FE.inputBorder}` }}>
+                  <div className="w-full rounded-xl px-3 py-7 flex flex-col items-center justify-center gap-2 transition-colors hover:opacity-80" style={{ background: FE.groupBg, border: `1.5px dashed ${FE.inputBorder}` }}>
                     <ImageIcon className="w-5 h-5" style={{ color: FE.faint }} />
                     <span className="text-xs" style={{ color: FE.faint }}>Click to upload · max 20MB</span>
                   </div>
@@ -1973,7 +2079,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
               <div className="space-y-5">
               <div>
                 <label className={labelCls} style={labelStyle}>Mode</label>
-                <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
+                <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}` }}>
                   <button onClick={() => updateConfig({ mode: 'light' })} className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1.5" style={{ background: formConfig.mode === 'light' ? FE.segmentActive : 'transparent', color: formConfig.mode === 'light' ? FE.segmentActiveText : FE.faint, boxShadow: formConfig.mode === 'light' ? '0 1px 3px rgba(0,0,0,0.10)' : undefined }}>
                     <Sun className="w-3.5 h-3.5" /> Light
                   </button>
@@ -1991,7 +2097,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                 <button
                   onClick={() => setFontPickerOpen(true)}
                   className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors"
-                  style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.text, fontFamily: getFontById(formConfig.font).cssFamily }}
+                  style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}`, color: FE.text, fontFamily: getFontById(formConfig.font).cssFamily }}
                 >
                   <span>{getFontById(formConfig.font).name}</span>
                   <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" style={{ color: FE.faint }} />
@@ -2099,11 +2205,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     <input ref={badgeInputRef} type="file" accept="image/*" className="hidden" onChange={handleBadgeImageUpload}/>
                     {formConfig.badgeImageUrl ? (
                       <div className="flex items-center gap-3">
-                        <img src={formConfig.badgeImageUrl} alt="Badge" className="w-16 h-16 rounded-xl object-contain flex-shrink-0" style={{ border: `1px solid ${FE.inputBorder}`, background: FE.input }}/>
+                        <img src={formConfig.badgeImageUrl} alt="Badge" className="w-16 h-16 rounded-xl object-contain flex-shrink-0" style={{ border: `1px solid ${FE.inputBorder}`, background: FE.groupBg }}/>
                         <div className="flex flex-col gap-1.5">
                           <button type="button" onClick={() => badgeInputRef.current?.click()} disabled={uploadingBadge}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
-                            style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}>
+                            style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}>
                             {uploadingBadge ? <Loader2 className="w-3 h-3 animate-spin"/> : <Upload className="w-3 h-3"/>}
                             {uploadingBadge ? 'Uploading...' : 'Change'}
                           </button>
@@ -2115,7 +2221,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     ) : (
                       <button type="button" onClick={() => badgeInputRef.current?.click()} disabled={uploadingBadge}
                         className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
-                        style={{ border: `1.5px dashed ${FE.inputBorder}`, color: FE.faint, background: FE.input, width: '100%', justifyContent: 'center' }}>
+                        style={{ border: `1.5px dashed ${FE.inputBorder}`, color: FE.faint, background: FE.groupBg, width: '100%', justifyContent: 'center' }}>
                         {uploadingBadge ? <Loader2 className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4"/>}
                         {uploadingBadge ? 'Uploading...' : 'Upload badge image'}
                       </button>
@@ -2125,7 +2231,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   {/* Show answers setting */}
                   <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
                     <label className={labelCls} style={labelStyle}>Show correct answers</label>
-                    <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
+                    <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}` }}>
                       {([
                         { value: 'per_question', label: 'Per question' },
                         { value: 'after_quiz', label: 'After course' },
@@ -2146,7 +2252,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   {/* Lesson timing */}
                   <div className="p-3 rounded-xl space-y-2" style={{ background: FE.groupBg, border: `1px solid ${FE.groupBorder}` }}>
                     <label className={labelCls} style={labelStyle}>Lesson timing</label>
-                    <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
+                    <div className="flex gap-1.5 p-1 rounded-lg" style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}` }}>
                       {([{ value: 'before', label: 'Before question' }, { value: 'after', label: 'After answer' }] as const).map(({ value, label }) => (
                         <button key={value} type="button" onClick={() => updateConfig({ lessonTiming: value })}
                           className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all"
@@ -2237,7 +2343,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                         onClick={generateOutcomes}
                         disabled={!!aiLoadingLabel}
                         className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
-                        style={{ background: FE.input, color: FE.text, border: `1px solid ${FE.inputBorder}` }}
+                        style={{ background: FE.pill, color: FE.text, border: `1px solid ${FE.inputBorder}` }}
                       >
                         {aiLoadingLabel === 'Generating learning outcomes...' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BookOpen className="w-3.5 h-3.5" />}
                         Generate Outcomes
@@ -2297,27 +2403,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     const insertDivider = (
                       <div key={`insert-${q.id}`} className="group relative flex items-center justify-center gap-1.5 h-5 my-0.5">
                         <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px transition-colors" style={{ background: FE.divider }} />
-                        <select
-                          value={newQuestionType}
-                          onChange={e => setNewQuestionType(e.target.value as QuestionType | 'downloads')}
-                          className="relative hidden group-hover:block text-[10px] rounded-full font-medium px-2 py-0.5 outline-none"
-                          style={{ background: FE.pill, color: FE.muted, border: `1px solid ${FE.cardBorder}`, zIndex: 1 }}
-                        >
-                          <option value="multiple_choice">Multiple Choice</option>
-                          <option value="fill_blank">Fill in the Blank</option>
-                          <option value="arrange">Arrange / Order</option>
-                          <option value="image">Image Question</option>
-                          <option value="code">Code Snippet</option>
-                          <option value="code_review">AI Code Review</option>
-                          <option value="excel_review">AI Excel Review</option>
-                          <option value="dashboard_critique">AI Dashboard Critique</option>
-                          <option value="document_review">AI Document Review</option>
-                          <option value="sql_exercise">SQL Exercise</option>
-                          <option value="downloads">Downloads</option>
-                        </select>
                         <button
                           type="button"
-                          onClick={() => insertQuestionAt(qIdx)}
+                          onClick={() => setPickerCtx({ mode: 'insert', afterIndex: qIdx })}
                           className="relative hidden group-hover:flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full font-medium transition-all hover:opacity-90"
                           style={{ background: accentColor, color: 'white', zIndex: 1 }}
                         >
@@ -2429,7 +2517,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                             {dlItems.length > 0 && (
                               <div className="space-y-2 pt-1">
                                 {dlItems.map((item) => (
-                                  <div key={item.id} className="rounded-lg p-3 space-y-2.5" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
+                                  <div key={item.id} className="rounded-lg p-3 space-y-2.5" style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}` }}>
                                     <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-1">
                                         {(['file', 'link'] as const).map(t => (
@@ -2542,34 +2630,15 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                             </span>
                           </button>
                           <div className="flex items-center gap-1.5">
-                            <select
-                              value={qType}
-                              onChange={e => {
-                                const v = e.target.value as QuestionType;
-                                const isReview = ['code_review', 'excel_review', 'dashboard_critique', 'document_review'].includes(v);
-                                const isSql = v === 'sql_exercise';
-                                handleUpdateQuestion(q.id, {
-                                  type: v,
-                                  ...(isReview || isSql ? { options: [], correctAnswer: '' } : {}),
-                                  ...(isSql ? { sqlTables: q.sqlTables ?? [], sqlStarterCode: q.sqlStarterCode ?? 'SELECT * FROM table_name LIMIT 10;', sqlSolution: q.sqlSolution ?? '', sqlHints: q.sqlHints ?? [], sqlResultOrdered: q.sqlResultOrdered ?? false, sqlNumericTolerance: q.sqlNumericTolerance ?? 0, sqlRequiredPatterns: q.sqlRequiredPatterns ?? [] } : {}),
-                                  ...(!isReview && !isSql && v === 'fill_blank' ? { options: [] } : {}),
-                                  ...(!isReview && !isSql && v === 'arrange' && qType !== 'arrange' ? { correctAnswer: q.options.join('|||') } : {}),
-                                });
-                              }}
-                              className="text-[11px] font-semibold rounded-lg px-2 py-1 outline-none cursor-pointer"
-                              style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}
+                            <button
+                              type="button"
+                              onClick={() => setPickerCtx({ mode: 'change', qId: q.id })}
+                              className="flex items-center gap-1 text-[11px] font-semibold rounded-lg px-2 py-1 transition-opacity hover:opacity-70 cursor-pointer"
+                              style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}
                             >
-                              <option value="multiple_choice">Multiple Choice</option>
-                              <option value="fill_blank">Fill in the Blank</option>
-                              <option value="arrange">Arrange / Order</option>
-                              <option value="image">Image Question</option>
-                              <option value="code">Code Snippet</option>
-                              <option value="code_review">AI Code Review</option>
-                              <option value="excel_review">AI Excel Review</option>
-                              <option value="dashboard_critique">AI Dashboard Critique</option>
-                              <option value="document_review">AI Document Review</option>
-                              <option value="sql_exercise">SQL Exercise</option>
-                                    </select>
+                              {TYPE_LABELS[qType] ?? qType}
+                              <ChevronDown className="w-3 h-3 ml-0.5 flex-shrink-0" />
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleUpdateQuestion(q.id, {
@@ -2578,7 +2647,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               })}
                               title="Lesson only (no question)"
                               className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all"
-                              style={q.lessonOnly ? { background: accentColor, color: 'white' } : { background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
+                              style={q.lessonOnly ? { background: accentColor, color: 'white' } : { background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
                             >
                               <BookOpen className="w-3 h-3" /> Lesson only
                             </button>
@@ -2604,7 +2673,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               onClick={() => generateQuestionAsset(q, 'generate_distractors')}
                               disabled={!!aiLoadingLabel}
                               className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40"
-                              style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
+                              style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
                             >
                               {busyQuestionId === q.id && aiLoadingLabel === 'Generating distractors...' ? 'Generating...' : 'AI Distractors'}
                             </button>
@@ -2614,17 +2683,17 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               onClick={() => setLessonPromptModal({ q })}
                               disabled={!!aiLoadingLabel}
                               className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40"
-                              style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
+                              style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
                             >
                               {busyQuestionId === q.id && aiLoadingLabel === 'Generating lesson...' ? 'Generating…' : 'AI Lesson'}
                             </button>
-                            {!q.lessonOnly && !(['code_review', 'excel_review', 'dashboard_critique', 'document_review', 'sql_exercise'] as const).includes(qType as any) && (<>
+                            {!q.lessonOnly && !(['code_review', 'excel_review', 'dashboard_critique', 'document_review', 'sql_exercise', 'python_exercise'] as const).includes(qType as any) && (<>
                             <button
                               type="button"
                               onClick={() => generateQuestionAsset(q, 'generate_hint')}
                               disabled={!!aiLoadingLabel}
                               className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40"
-                              style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
+                              style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
                             >
                               {busyQuestionId === q.id && aiLoadingLabel === 'Generating hint...' ? 'Generating...' : 'AI Hint'}
                             </button>
@@ -2633,7 +2702,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               onClick={() => generateQuestionAsset(q, 'generate_explanation')}
                               disabled={!!aiLoadingLabel}
                               className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40"
-                              style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
+                              style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
                             >
                               {busyQuestionId === q.id && aiLoadingLabel === 'Generating explanation...' ? 'Generating...' : 'AI Explanation'}
                             </button>
@@ -2642,7 +2711,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                           {!q.lessonOnly && (<>
 
                           {/* Question text -- hidden for review types; they use the project brief field inside the config panel */}
-                          {!(['code_review', 'excel_review', 'dashboard_critique', 'document_review', 'sql_exercise'] as const).includes(qType as any) && (
+                          {!(['code_review', 'excel_review', 'dashboard_critique', 'document_review', 'sql_exercise', 'python_exercise'] as const).includes(qType as any) && (
                           <div>
                             <label className={labelCls} style={labelStyle}>Question</label>
                             <input type="text" value={q.question} onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })} className={inputCls} style={inputStyle}
@@ -2819,7 +2888,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
 
                           {/* AI Review config */}
                           {(['code_review', 'excel_review', 'dashboard_critique', 'document_review'] as const).includes(qType as any) && (
-                            <div className="space-y-3 rounded-xl p-3" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
+                            <div className="space-y-3 rounded-xl p-3" style={{ background: FE.card, border: `1px solid ${FE.cardBorder}` }}>
                               <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentColor }}>
                                 {qType === 'code_review' ? 'Code Review' : qType === 'excel_review' ? 'Excel Review' : qType === 'dashboard_critique' ? 'Dashboard Critique' : 'Document Review'} Config
                               </p>
@@ -2969,7 +3038,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                           )}
 
                           {qType === 'sql_exercise' && (
-                            <div className="space-y-3 rounded-xl p-3" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
+                            <div className="space-y-3 rounded-xl p-3" style={{ background: FE.card, border: `1px solid ${FE.cardBorder}` }}>
                               <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentColor }}>SQL Exercise Config</p>
                               <div>
                                 <label className={labelCls} style={labelStyle}>Student task</label>
@@ -3079,8 +3148,66 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                             </div>
                           )}
 
+                          {qType === 'python_exercise' && (
+                            <div className="space-y-3 rounded-xl p-3" style={{ background: FE.card, border: `1px solid ${FE.cardBorder}` }}>
+                              <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentColor }}>Python Exercise Config</p>
+                              <div>
+                                <label className={labelCls} style={labelStyle}>Student task</label>
+                                <textarea value={q.question} onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })} className={`${inputCls} min-h-[72px] resize-y`} style={inputStyle} placeholder="Ask the student to write a Python script..." />
+                              </div>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <label className={labelCls} style={labelStyle}>Datasets</label>
+                                  <button type="button" onClick={() => handleUpdateQuestion(q.id, { pythonDatasets: [...(q.pythonDatasets ?? []), { id: Math.random().toString(36).slice(2, 9), variableName: 'df', fileName: '', fileUrl: '', csvUrl: '' }] })} className="text-xs font-semibold px-2.5 py-1 rounded-lg" style={{ background: FE.pill, color: FE.muted }}>
+                                    <Plus className="w-3 h-3 inline mr-1" /> Add dataset
+                                  </button>
+                                </div>
+                                {(q.pythonDatasets ?? []).map((ds, dsIdx) => (
+                                  <div key={ds.id} className="grid gap-2 rounded-lg p-2" style={{ background: FE.card, border: `1px solid ${FE.cardBorder}` }}>
+                                    <div className="flex gap-2">
+                                      <input value={ds.variableName} onChange={e => { const datasets = [...(q.pythonDatasets ?? [])]; datasets[dsIdx] = { ...ds, variableName: e.target.value }; handleUpdateQuestion(q.id, { pythonDatasets: datasets }); }} className={`${inputCls} flex-1 py-1.5 font-mono`} style={inputStyle} placeholder="df" />
+                                      <button type="button" onClick={() => handleUpdateQuestion(q.id, { pythonDatasets: (q.pythonDatasets ?? []).filter((_, i) => i !== dsIdx) })} className="px-2 rounded-lg hover:text-red-400" style={{ color: FE.faint }}>
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer" style={{ background: FE.pill, color: FE.muted }}>
+                                        <Upload className="w-3 h-3" /> Upload CSV
+                                        <input type="file" className="hidden" accept=".csv,.tsv" onChange={e => handlePythonDatasetUpload(q.id, ds.id, e)} />
+                                      </label>
+                                      <span className="text-xs truncate" style={{ color: FE.faint }}>{ds.fileName || ds.fileUrl || 'No file uploaded'}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              <div>
+                                <label className={labelCls} style={labelStyle}>Setup code <span style={{ color: FE.faint }}>(hidden from students)</span></label>
+                                <textarea value={q.pythonSetupCode ?? ''} onChange={e => handleUpdateQuestion(q.id, { pythonSetupCode: e.target.value, pythonExpectedOutput: '' })} className={`${inputCls} min-h-[84px] resize-y font-mono text-xs`} style={inputStyle} placeholder="# Import libraries or define helpers before student code runs" />
+                              </div>
+                              <div>
+                                <label className={labelCls} style={labelStyle}>Starter code</label>
+                                <textarea value={q.pythonStarterCode ?? ''} onChange={e => handleUpdateQuestion(q.id, { pythonStarterCode: e.target.value })} className={`${inputCls} min-h-[84px] resize-y font-mono text-xs`} style={inputStyle} />
+                              </div>
+                              <div>
+                                <label className={labelCls} style={labelStyle}>Solution <span style={{ color: FE.faint }}>(hidden from students)</span></label>
+                                <textarea value={q.pythonSolution ?? ''} onChange={e => handleUpdateQuestion(q.id, { pythonSolution: e.target.value, pythonExpectedOutput: '' })} className={`${inputCls} min-h-[96px] resize-y font-mono text-xs`} style={inputStyle} placeholder="# Reference solution" />
+                                <div className="flex flex-wrap items-center gap-2 mt-2">
+                                  <button type="button" onClick={() => computePythonExpectedOutput(q.id)} className="px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: accentColor, color: 'white' }}>Compute expected output</button>
+                                  <span className="text-xs" style={{ color: q.pythonExpectedOutput ? '#10b981' : FE.faint }}>{q.pythonExpectedOutput ? 'Expected output saved' : 'Expected output not computed'}</span>
+                                </div>
+                                {q.pythonExpectedOutput && (
+                                  <pre className="mt-2 p-2 rounded-lg text-xs font-mono whitespace-pre-wrap" style={{ background: '#1e1e2e', color: '#cdd6f4' }}>{q.pythonExpectedOutput}</pre>
+                                )}
+                              </div>
+                              <div>
+                                <label className={labelCls} style={labelStyle}>Hints</label>
+                                <textarea value={(q.pythonHints ?? []).join('\n')} onChange={e => handleUpdateQuestion(q.id, { pythonHints: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })} className={`${inputCls} min-h-[70px] resize-y`} style={inputStyle} placeholder="One hint per line" />
+                              </div>
+                            </div>
+                          )}
+
                           {/* Hint and explanation -- not shown for AI review types */}
-                          {!(['code_review', 'excel_review', 'dashboard_critique', 'document_review', 'sql_exercise'] as const).includes(qType as any) && (<>
+                          {!(['code_review', 'excel_review', 'dashboard_critique', 'document_review', 'sql_exercise', 'python_exercise'] as const).includes(qType as any) && (<>
                           <div>
                             <label className={labelCls} style={labelStyle}>Hint <span style={{ color: FE.faint }}>(optional)</span></label>
                             <input
@@ -3181,7 +3308,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                         handleUpdateQuestion(q.id, { lesson: { ...q.lesson, imageUrl: url } });
                                       }}
                                     />
-                                    <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-70" style={{ background: FE.input, color: FE.muted }}>
+                                    <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-70" style={{ background: FE.groupBg, color: FE.muted }}>
                                       <ImageIcon className="w-3.5 h-3.5" /> Upload image (optional)
                                     </div>
                                   </label>
@@ -3207,7 +3334,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                         handleUpdateQuestion(q.id, { lesson: { ...q.lesson, pdfUrl: url, pdfName: file.name, pdfPages: pages } });
                                       } catch (err: any) { showToast(err?.message || 'PDF upload failed. Please try again.'); }
                                     }} />
-                                    <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-70" style={{ background: FE.input, color: FE.muted }}>
+                                    <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-70" style={{ background: FE.groupBg, color: FE.muted }}>
                                       <FileText className="w-3.5 h-3.5" /> Upload PDF (max 20 MB)
                                     </div>
                                   </label>
@@ -3271,21 +3398,13 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   {(!formConfig.questions || formConfig.questions.length === 0) && <p className="text-xs text-center py-3" style={{ color: FE.faint }}>No questions yet.</p>}
 
                   <div className="flex items-center gap-2 pt-1">
-                    <select value={newQuestionType} onChange={e => setNewQuestionType(e.target.value as QuestionType | 'downloads')} className={`${inputCls} py-1.5 flex-1`} style={inputStyle}>
-                      <option value="multiple_choice">Multiple Choice</option>
-                      <option value="fill_blank">Fill in the Blank</option>
-                      <option value="arrange">Arrange / Order</option>
-                      <option value="image">Image Question</option>
-                      <option value="code">Code Snippet</option>
-                      <option value="code_review">AI Code Review</option>
-                      <option value="excel_review">AI Excel Review</option>
-                      <option value="dashboard_critique">AI Dashboard Critique</option>
-                      <option value="document_review">AI Document Review</option>
-                      <option value="sql_exercise">SQL Exercise</option>
-                      <option value="downloads">Downloads</option>
-                    </select>
-                    <button type="button" onClick={handleAddQuestion} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all flex-shrink-0 hover:opacity-80" style={{ background: accentColor, color: 'white' }}>
-                      <Plus className="w-3.5 h-3.5" /> Add
+                    <button
+                      type="button"
+                      onClick={() => setPickerCtx({ mode: 'bottom' })}
+                      className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all flex-1 hover:opacity-80"
+                      style={{ background: accentColor, color: 'white' }}
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Content
                     </button>
                     <button type="button" onClick={handleAddSection} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-all flex-shrink-0 hover:opacity-80" style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}>
                       <Plus className="w-3.5 h-3.5" /> Section
@@ -3744,6 +3863,16 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
           </div>
         </div>
       </div>
+      <AnimatePresence>
+        {pickerCtx && (
+          <QuestionTypePicker
+            key="qtype-picker"
+            onSelect={handlePickerSelect}
+            onClose={() => setPickerCtx(null)}
+            includeDownloads={pickerCtx.mode !== 'change'}
+          />
+        )}
+      </AnimatePresence>
       <GeneratingOverlay visible={!!aiLoadingLabel} label={aiLoadingLabel} failed={aiFailed} />
       <AnimatePresence>
         {eventAssistantOpen && formConfig?.eventDetails?.isEvent && (
@@ -3775,7 +3904,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   type="button"
                   onClick={() => setEventAssistantOpen(false)}
                   className="w-9 h-9 rounded-xl flex items-center justify-center transition-opacity hover:opacity-80"
-                  style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
+                  style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -3797,7 +3926,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     type="button"
                     onClick={() => setEventAssistantOpen(false)}
                     className="px-4 py-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-80"
-                    style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
+                    style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
                   >
                     Cancel
                   </button>
@@ -3847,7 +3976,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   type="button"
                   onClick={() => setDescriptionModalOpen(false)}
                   className="w-9 h-9 rounded-xl flex items-center justify-center transition-opacity hover:opacity-80"
-                  style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
+                  style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -3897,7 +4026,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     type="button"
                     onClick={() => setDescriptionModalOpen(false)}
                     className="px-4 py-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-80"
-                    style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
+                    style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
                   >
                     Cancel
                   </button>
@@ -3965,7 +4094,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   type="button"
                   onClick={() => setAiPromptModalOpen(false)}
                   className="w-9 h-9 rounded-xl flex items-center justify-center transition-opacity hover:opacity-80"
-                  style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
+                  style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.faint }}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -3992,13 +4121,15 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     <label className={labelCls} style={labelStyle}>Question type</label>
                     <select
                       value={aiQuestionType}
-                      onChange={e => setAiQuestionType(e.target.value as 'multiple_choice' | 'fill_blank' | 'arrange')}
+                      onChange={e => setAiQuestionType(e.target.value as 'multiple_choice' | 'fill_blank' | 'arrange' | 'sql_exercise' | 'python_exercise')}
                       className={`${inputCls} py-1.5`}
                       style={inputStyle}
                     >
                       <option value="multiple_choice">Multiple Choice</option>
                       <option value="fill_blank">Fill in the Blank</option>
                       <option value="arrange">Arrange / Order</option>
+                      <option value="sql_exercise">SQL Exercise</option>
+                      <option value="python_exercise">Python Exercise</option>
                     </select>
                   </div>
                   <div>
@@ -4039,7 +4170,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     type="button"
                     onClick={() => setAiPromptModalOpen(false)}
                     className="px-4 py-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-80"
-                    style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
+                    style={{ background: FE.pill, border: `1px solid ${FE.inputBorder}`, color: FE.text }}
                   >
                     Cancel
                   </button>
@@ -4124,7 +4255,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
               {/* Body */}
               <div className="px-5 py-4 space-y-3">
                 {!lessonPromptModal.q.lessonOnly && lessonPromptModal.q.question && (
-                  <div className="rounded-lg px-3 py-2 text-xs" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}>
+                  <div className="rounded-lg px-3 py-2 text-xs" style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}`, color: FE.muted }}>
                     <span className="font-semibold" style={{ color: FE.faint }}>Question: </span>{lessonPromptModal.q.question}
                   </div>
                 )}
@@ -4204,7 +4335,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
               </div>
               <div className="px-5 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${FE.cardBorder}` }}>
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 flex-1 px-3 py-2 rounded-xl" style={{ background: FE.input, border: `1px solid ${FE.inputBorder}` }}>
+                  <div className="flex items-center gap-2 flex-1 px-3 py-2 rounded-xl" style={{ background: FE.groupBg, border: `1px solid ${FE.inputBorder}` }}>
                     <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: FE.faint }}/>
                     <input
                       type="text"
@@ -4264,7 +4395,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                           key={v.guid}
                           onClick={() => selectBunnyVideo(v.embedUrl)}
                           className="text-left rounded-xl overflow-hidden transition-all hover:scale-[1.02] hover:shadow-lg group"
-                          style={{ border: `1px solid ${FE.cardBorder}`, background: FE.input }}
+                          style={{ border: `1px solid ${FE.cardBorder}`, background: FE.groupBg }}
                         >
                           <div className="relative aspect-video bg-black overflow-hidden">
                             {v.thumbnail

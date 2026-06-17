@@ -9,7 +9,7 @@ export const LIGHT_C = {
   card: '#ffffff', cardBorder: 'rgba(0,0,0,0.08)', cardShadow: '0 1px 4px rgba(0,0,0,0.06)',
   green: '#00bf63', lime: '#ADEE66', cta: '#00bf63', ctaText: 'white',
   text: '#111827', muted: '#4b5563', faint: '#9ca3af', toggleOff: '#d1d5db',
-  divider: 'rgba(0,0,0,0.07)', pill: '#eef0f3', input: '#f4f5f7', inputBorder: 'rgba(0,0,0,0.08)',
+  divider: 'rgba(0,0,0,0.07)', pill: '#eef0f3', input: '#f4f5f7', inputBorder: 'rgba(0,0,0,0.10)',
   segmentActive: '#ffffff', segmentActiveText: '#111827',
   groupBg: '#f4f5f7', groupBorder: 'transparent',
 };

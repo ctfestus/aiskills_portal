@@ -2,6 +2,7 @@
 import { requireUser, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
 import { getRedis, leaderboardKey, studentNameKey } from '@/lib/redis';
 import { publishActivity } from '@/lib/activity';
@@ -23,6 +24,153 @@ async function getSessionUser(req: NextRequest): Promise<{ id: string; email: st
   const auth = await requireUser(req);
   if (isAuthError(auth) || !auth.user.email) return null;
   return { id: auth.user.id, email: auth.user.email.trim().toLowerCase() };
+}
+
+function normalizePythonOutput(value: unknown): string {
+  return String(value ?? '').trim();
+}
+
+function pythonProofSecret(): string {
+  return process.env.COURSE_PYTHON_PROOF_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+}
+
+function signPythonProof(courseId: string, questionId: string, output: string): string {
+  const secret = pythonProofSecret();
+  if (!secret) throw new Error('Python proof secret not configured');
+  const payload = JSON.stringify({
+    v: 1,
+    courseId,
+    questionId,
+    output: normalizePythonOutput(output),
+  });
+  return `v1:${createHmac('sha256', secret).update(payload).digest('hex')}`;
+}
+
+function verifyPythonProof(courseId: string, questionId: string, output: string, proof: unknown): boolean {
+  if (typeof proof !== 'string' || !proof.startsWith('v1:')) return false;
+  try {
+    const expected = signPythonProof(courseId, questionId, output);
+    const a = Buffer.from(proof);
+    const b = Buffer.from(expected);
+    return a.length === b.length && timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+function parseAnswer(value: unknown): any | null {
+  if (value == null) return null;
+  if (typeof value === 'object') return value;
+  if (typeof value !== 'string') return null;
+  try { return JSON.parse(value); } catch { return null; }
+}
+
+function mergeAnswerFlag(existing: unknown, patch: Record<string, unknown>) {
+  const parsed = parseAnswer(existing);
+  return JSON.stringify({
+    ...(parsed && typeof parsed === 'object' ? parsed : {}),
+    ...patch,
+  });
+}
+
+function shouldAcceptIncomingExerciseAnswer(existing: unknown, incoming: unknown): boolean {
+  const existingParsed = parseAnswer(existing);
+  const incomingParsed = parseAnswer(incoming);
+  if (!incomingParsed || typeof incomingParsed !== 'object') return false;
+
+  // Once a solution has been viewed or an exercise was skipped, keep that penalty.
+  if (existingParsed?.skipped || existingParsed?.solutionViewed) return false;
+
+  // A later correct SQL/Python check should replace an earlier failed check when
+  // progress is saved before final submission or before a refresh/new session.
+  if (incomingParsed.passed === true && existingParsed?.passed !== true) return true;
+
+  // Persist a newly-viewed solution/skipped state unless the stored answer already passed.
+  if ((incomingParsed.skipped || incomingParsed.solutionViewed) && existingParsed?.passed !== true) return true;
+
+  return false;
+}
+
+async function loadAccessibleCourse(
+  supabase: ReturnType<typeof adminClient>,
+  courseId: string,
+  sessionUser: { id: string; email: string },
+  select = 'id, user_id, status, cohort_ids, questions',
+) {
+  const [{ data: course, error }, { data: student }] = await Promise.all([
+    supabase.from('courses').select(select).eq('id', courseId).single(),
+    supabase.from('students').select('role, cohort_id').eq('id', sessionUser.id).maybeSingle(),
+  ]);
+  if (error || !course) return { error: NextResponse.json({ error: 'Course not found' }, { status: 404 }) };
+
+  const role = String((student as any)?.role ?? '');
+  const cohortIds = Array.isArray((course as any).cohort_ids) ? (course as any).cohort_ids : [];
+  const isPrivileged = ['admin', 'instructor', 'staff'].includes(role);
+  const isOwner = (course as any).user_id === sessionUser.id;
+  const isPublished = (course as any).status === 'published';
+  const cohortAllowed = cohortIds.length === 0 || (!!(student as any)?.cohort_id && cohortIds.includes((student as any).cohort_id));
+
+  if (!isPrivileged && !isOwner && !(isPublished && cohortAllowed)) {
+    return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  }
+
+  return { course };
+}
+
+async function markPythonSolutionViewed(
+  supabase: ReturnType<typeof adminClient>,
+  courseId: string,
+  studentId: string,
+  questionId: string,
+  attempts: unknown,
+) {
+  const answerPatch = {
+    passed: false,
+    solutionViewed: true,
+    attempts: Number.isFinite(Number(attempts)) ? Number(attempts) : 0,
+    checkedAt: new Date().toISOString(),
+  };
+
+  const { data: existing } = await supabase.from('course_attempts')
+    .select('id, answers')
+    .eq('course_id', courseId).eq('student_id', studentId)
+    .is('completed_at', null)
+    .order('current_question_index', { ascending: false })
+    .order('updated_at', { ascending: false })
+    .limit(1).maybeSingle();
+
+  if (existing?.id) {
+    const answers = existing.answers && typeof existing.answers === 'object' ? existing.answers : {};
+    await supabase.from('course_attempts').update({
+      answers: { ...answers, [questionId]: mergeAnswerFlag((answers as Record<string, unknown>)[questionId], answerPatch) },
+      updated_at: new Date().toISOString(),
+    }).eq('id', existing.id);
+    return;
+  }
+
+  const { data: completedPass } = await supabase.from('course_attempts')
+    .select('id')
+    .eq('course_id', courseId).eq('student_id', studentId)
+    .eq('passed', true)
+    .not('completed_at', 'is', null)
+    .limit(1).maybeSingle();
+  if (completedPass) return;
+
+  const { data: last } = await supabase.from('course_attempts').select('attempt_number')
+    .eq('course_id', courseId).eq('student_id', studentId)
+    .order('attempt_number', { ascending: false }).limit(1).maybeSingle();
+
+  await supabase.from('course_attempts').insert({
+    student_id: studentId,
+    course_id: courseId,
+    attempt_number: (last?.attempt_number ?? 0) + 1,
+    current_question_index: 0,
+    answers: { [questionId]: JSON.stringify(answerPatch) },
+    streak: 0,
+    hints_used: [],
+    points: 0,
+    updated_at: new Date().toISOString(),
+  });
 }
 
 async function ensureCourseCertificate(
@@ -242,6 +390,78 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // -- Reveal Python solution ---
+  if (action === 'get-python-solution') {
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { course_id, question_id, attempts } = body;
+    if (!course_id) return NextResponse.json({ error: 'course_id required' }, { status: 400 });
+    if (!question_id) return NextResponse.json({ error: 'question_id required' }, { status: 400 });
+    try {
+      const supabase = adminClient();
+      const access = await loadAccessibleCourse(supabase, course_id, sessionUser);
+      if ('error' in access) return access.error;
+      const course = access.course as any;
+      const question = (Array.isArray(course?.questions) ? course.questions : [])
+        .find((q: any) => q?.id === question_id && q?.type === 'python_exercise');
+      if (!question) return NextResponse.json({ error: 'Python exercise not found.' }, { status: 404 });
+      await markPythonSolutionViewed(supabase, course_id, sessionUser.id, question_id, attempts);
+      return NextResponse.json({ solution: String(question.pythonSolution ?? '') });
+    } catch (err: any) {
+      console.error('[course/get-python-solution]', err);
+      return NextResponse.json({ error: 'Failed to load Python solution.' }, { status: 500 });
+    }
+  }
+
+  // -- Server-side Python answer check: expected output stays private ---
+  if (action === 'check-python-answer') {
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { course_id, question_id, output } = body;
+    if (!course_id) return NextResponse.json({ error: 'course_id required' }, { status: 400 });
+    if (!question_id) return NextResponse.json({ error: 'question_id required' }, { status: 400 });
+    try {
+      const supabase = adminClient();
+      const access = await loadAccessibleCourse(supabase, course_id, sessionUser);
+      if ('error' in access) return access.error;
+      const course = access.course as any;
+      const question = (Array.isArray(course?.questions) ? course.questions : [])
+        .find((q: any) => q?.id === question_id && q?.type === 'python_exercise');
+      if (!question) return NextResponse.json({ error: 'Python exercise not found.' }, { status: 404 });
+
+      const expected = normalizePythonOutput(question.pythonExpectedOutput);
+      if (!expected) {
+        return NextResponse.json({ error: 'Python expected output is not configured.' }, { status: 400 });
+      }
+
+      const { data: attempt } = await supabase.from('course_attempts')
+        .select('answers')
+        .eq('course_id', course_id).eq('student_id', sessionUser.id)
+        .is('completed_at', null)
+        .order('current_question_index', { ascending: false })
+        .order('updated_at', { ascending: false })
+        .limit(1).maybeSingle();
+      const stored = parseAnswer((attempt?.answers as Record<string, unknown> | undefined)?.[question_id]);
+      if (stored?.solutionViewed || stored?.skipped) {
+        return NextResponse.json({
+          passed: false,
+          message: 'Solution viewed or exercise skipped. This answer cannot be counted as correct.',
+        });
+      }
+
+      const actual = normalizePythonOutput(output);
+      const passed = actual === expected;
+      return NextResponse.json({
+        passed,
+        message: passed ? 'Output matches.' : 'Output does not match the expected result.',
+        proof: passed ? signPythonProof(course_id, question_id, actual) : undefined,
+      });
+    } catch (err: any) {
+      console.error('[course/check-python-answer]', err);
+      return NextResponse.json({ error: 'Failed to check Python answer.' }, { status: 500 });
+    }
+  }
+
   // -- Save in-progress attempt (create if needed) ---
   if (action === 'save-progress') {
     const sessionUser = await getSessionUser(req);
@@ -292,6 +512,12 @@ export async function POST(req: NextRequest) {
             mergedAnswers[key] = incomingAnswers[key];
             const id = key.slice('__review_'.length);
             if (Object.prototype.hasOwnProperty.call(incomingAnswers, id)) mergedAnswers[id] = incomingAnswers[id];
+          }
+        }
+        for (const key of Object.keys(incomingAnswers)) {
+          if (key.startsWith('__review_')) continue;
+          if (shouldAcceptIncomingExerciseAnswer((existingAnswers as Record<string, string>)[key], incomingAnswers[key])) {
+            mergedAnswers[key] = incomingAnswers[key];
           }
         }
 
@@ -400,8 +626,9 @@ export async function POST(req: NextRequest) {
         // Merge final_answers (sent by client) over stored answers so that the last
         // lessonOnly 'viewed' entry is always present, regardless of race timing.
         const questions: any[]              = Array.isArray(courseData.questions) ? courseData.questions : [];
+        const persistedAnswers: Record<string, string> = attempt.answers ?? {};
         const storedAnswers: Record<string, string> = {
-          ...(attempt.answers ?? {}),
+          ...persistedAnswers,
           ...(final_answers && typeof final_answers === 'object' ? final_answers : {}),
         };
         const hintsUsed: string[]           = attempt.hints_used ?? [];
@@ -415,11 +642,8 @@ export async function POST(req: NextRequest) {
           const type = q.type ?? 'multiple_choice';
           if (['code_review', 'excel_review', 'dashboard_critique', 'document_review'].includes(type)) return ua === 'completed';
           if (type === 'sql_exercise') {
-            // Trust the result the browser stored when the student ran the query.
-            // Re-running via Node DuckDB at submission time produces different
-            // results from browser WASM DuckDB for the same query+data, causing
-            // the server to silently override a correct answer with a wrong one.
-            // solutionViewed/skipped penalties still apply.
+            // Trust the browser-stored result; re-running WASM in Node produces different
+            // results, and solutionViewed/skipped penalties must still apply.
             try {
               const parsed = typeof ua === 'string' ? JSON.parse(ua) : ua;
               if (parsed?.skipped || parsed?.solutionViewed) return false;
@@ -427,6 +651,13 @@ export async function POST(req: NextRequest) {
             } catch {
               return false;
             }
+          }
+          if (type === 'python_exercise') {
+            const persisted = parseAnswer(persistedAnswers[q.id]);
+            if (persisted?.skipped || persisted?.solutionViewed) return false;
+            const parsed = parseAnswer(ua);
+            if (!parsed || parsed.skipped || parsed.solutionViewed || !parsed.passed) return false;
+            return verifyPythonProof(course_id, q.id, parsed.output, parsed.proof);
           }
           if (type === 'fill_blank') {
             const accepted = (q.correctAnswer ?? '').split('|').map((s: string) => s.trim().toLowerCase());
@@ -443,8 +674,9 @@ export async function POST(req: NextRequest) {
         const total     = scorable.length;
         const scorePct  = total === 0 ? 100 : Math.round((correct / total) * 100);
         const passed    = scorePct >= passmark;
+        const solutionViews = scorable.filter(q => !!parseAnswer(storedAnswers[q.id])?.solutionViewed).length;
         const computed_points = courseData.points_enabled
-          ? Math.max(0, correct * (courseData.points_base ?? 100) - hintsUsed.length * 20)
+          ? Math.max(0, correct * (courseData.points_base ?? 100) - hintsUsed.length * 20 - solutionViews * 30)
           : 0;
 
         const { error: updateError } = await supabase.from('course_attempts').update({
