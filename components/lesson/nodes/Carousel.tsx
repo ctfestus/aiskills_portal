@@ -15,8 +15,8 @@
 import { useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react';
-import { ChevronLeft, ChevronRight, Check, Plus, X, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import { ChevronLeft, ChevronRight, Check, Plus, X, Image as ImageIcon } from 'lucide-react';
+import { ImageLibrary } from '@/components/ImageLibrary';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { ColorField, Segmented, StyleMenu, MenuRow, BORDER_STYLE_OPTIONS, type BorderStyle } from '@/components/lesson/nodes/StyleControls';
 
@@ -167,7 +167,7 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
   const cover = (node.attrs.cover as string) || '';
   const coverAlt = (node.attrs.coverAlt as string) || '';
   const title = (node.attrs.title as string) || '';
-  const [uploading, setUploading] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
 
   let index = 0;
   if (typeof getPos === 'function') {
@@ -177,18 +177,6 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
     }
   }
 
-  const upload = async (file: File) => {
-    setUploading(true);
-    try {
-      const url = await uploadToCloudinary(file, 'lesson-images');
-      updateAttributes({ cover: url });
-    } catch {
-      if (typeof window !== 'undefined') window.alert('Image upload failed. Please try again.');
-    } finally {
-      setUploading(false);
-    }
-  };
-
   return (
     <NodeViewWrapper className="lesson-carousel__slide" data-slide-index={index}>
       <div className="lesson-carousel__body">
@@ -197,20 +185,16 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
             <img className="lesson-carousel__cover" src={cover} alt={coverAlt} draggable={false} />
             {editable && (
               <div className="lesson-carousel__cover-actions">
-                <label className="lesson-carousel__cover-btn">
-                  {uploading ? 'Uploading...' : 'Change'}
-                  <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
-                </label>
+                <button type="button" className="lesson-carousel__cover-btn" onClick={() => setShowLibrary(true)}>Change</button>
                 <button type="button" className="lesson-carousel__cover-btn" onMouseDown={(e) => { e.preventDefault(); updateAttributes({ cover: '' }); }}>Remove</button>
               </div>
             )}
           </div>
         ) : editable ? (
-          <label className="lesson-carousel__cover-add" contentEditable={false}>
-            {uploading ? <Loader2 className="lesson-carousel__spin" width={15} height={15} /> : <ImageIcon width={15} height={15} />}
-            {uploading ? 'Uploading...' : 'Add cover image'}
-            <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }} />
-          </label>
+          <button type="button" className="lesson-carousel__cover-add" contentEditable={false} onClick={() => setShowLibrary(true)}>
+            <ImageIcon width={15} height={15} />
+            Add cover image
+          </button>
         ) : null}
         {editable ? (
           <NodeTextInput className="lesson-carousel__title-input" value={title} placeholder="Card title (optional)" onCommit={(v) => updateAttributes({ title: v })} />
@@ -219,6 +203,14 @@ function CarouselSlideView({ node, getPos, editor, updateAttributes }: NodeViewP
         ) : null}
         <NodeViewContent />
       </div>
+      {showLibrary && (
+        <ImageLibrary
+          uploadFolder="lesson-images"
+          initialFolder="lesson-images"
+          onSelect={url => updateAttributes({ cover: url })}
+          onClose={() => setShowLibrary(false)}
+        />
+      )}
     </NodeViewWrapper>
   );
 }

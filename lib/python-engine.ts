@@ -42,12 +42,23 @@ const BLOCKED_PYTHON_PATTERNS: { pattern: RegExp; label: string }[] = [
   { pattern: /\b(localStorage|sessionStorage|document|window)\b/, label: 'browser globals' },
 ];
 
+const PYTHON_OUTPUT_NOISE_LINES = new Set([
+  'Matplotlib is building the font cache; this may take a moment.',
+]);
+
 function assertAllowedPythonCode(code: string) {
   for (const { pattern, label } of BLOCKED_PYTHON_PATTERNS) {
     if (pattern.test(code)) {
       throw new Error(`This Python runner blocks ${label}. Use pandas/numpy-style data analysis code only.`);
     }
   }
+}
+
+export function stripPythonRunnerNoise(output: string): string {
+  return output
+    .split(/\r?\n/)
+    .filter(line => !PYTHON_OUTPUT_NOISE_LINES.has(line.trim()))
+    .join('\n');
 }
 
 export function isValidPythonIdentifier(value: string): boolean {
@@ -232,7 +243,7 @@ _cc_stdout_buf.getvalue()
 `);
 
   return {
-    stdout: String(captured ?? ''),
+    stdout: stripPythonRunnerNoise(String(captured ?? '')),
     returnValue,
     error,
     plots,

@@ -11,7 +11,7 @@ import { sanitizeRichText } from '@/lib/sanitize';
 import {
   Plus, FileText, BarChart3, ExternalLink, Trash2, Edit2, Share2, Check, Copy, X,
   CalendarDays, AlignLeft, ChevronDown, ChevronRight, ChevronLeft, BookOpen, MapPin,
-  Download, Briefcase, Video, Database, MoreVertical, Send,
+  Download, Briefcase, Video, Database, MoreVertical, Send, Code2,
 } from 'lucide-react';
 import { LIGHT_C, useC, cardStyle } from '@/lib/theme';
 import { exportContent } from '@/lib/dashboard-export';
@@ -117,9 +117,10 @@ function ShareMenu({ form, triggerRect, onClose }: { form: any; triggerRect: DOM
 export function CreateCourseMenu({ C }: { C: any }) {
   const [open, setOpen] = useState(false);
   const options = [
-    { href: '/create?type=course',     label: 'Blank Course',      desc: 'Build from scratch',                        Icon: Plus,     color: C.cta },
-    { href: '/create?type=sql-course', label: 'SQL Course AI',     desc: 'Generate a full SQL course with exercises', Icon: Database, color: '#3b82f6' },
-    { href: '/create?type=doc-course', label: 'Document to Course', desc: 'Turn a PDF, deck, or guide into a course',  Icon: FileText, color: C.green },
+    { href: '/create?type=course',          label: 'Blank Course',        desc: 'Build from scratch',                        Icon: Plus,     color: C.cta },
+    { href: '/create?type=sql-course',      label: 'SQL Course AI',       desc: 'Generate a full SQL course with exercises', Icon: Database, color: '#3b82f6' },
+    { href: '/create?type=python-course',   label: 'Python Course AI',    desc: 'Generate a data analysis course with Python exercises', Icon: Code2, color: '#f59e0b' },
+    { href: '/create?type=doc-course',      label: 'Document to Course',  desc: 'Turn a PDF, deck, or guide into a course',  Icon: FileText, color: C.green },
   ];
   return (
     <div className="relative">

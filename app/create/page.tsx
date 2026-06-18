@@ -13,7 +13,7 @@ import {
   Share2,
   Video, BookOpen, Search, Zap, Settings, Upload,
   Download, Link2, FileText, Database, ArrowLeft, Lock, LockOpen,
-  Clock, Users, Globe, Repeat,
+  Clock, Users, Globe, Repeat, Code2, RefreshCw,
 } from 'lucide-react';
 import { ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import type {
@@ -46,11 +46,13 @@ import { FontPickerModal } from '@/components/FontPickerModal';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary, uploadToCloudinaryWithMeta } from '@/lib/uploadToCloudinary';
 import { deleteUploadedFile } from '@/lib/storage-cleanup';
+import { ImageLibrary } from '@/components/ImageLibrary';
 import { uploadToGithub } from '@/lib/uploadToGithub';
 import { isPdfFile } from '@/lib/cloudinary-pdf';
 import { executeQuery, initSQLRuntime } from '@/lib/sql-engine';
 import { initPythonRuntime, loadPythonDatasets, runPython } from '@/lib/python-engine';
 import { formatSQLPreflightIssue, preflightSQLExercises } from '@/lib/sql-exercise-preflight';
+import { formatPythonPreflightIssue, preflightPythonExercises } from '@/lib/python-exercise-preflight';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -190,6 +192,8 @@ const [isSaving, setIsSaving] = useState(false);
   };
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
   const [savedFormId, setSavedFormId] = useState<string | null>(null);
+  const [showCoverLibrary, setShowCoverLibrary] = useState(false);
+  const [lessonImageQId, setLessonImageQId] = useState<string | null>(null);
   const [customSlug, setCustomSlug] = useState('');
   const [previewKey, setPreviewKey] = useState(0);
 
@@ -230,6 +234,11 @@ const [isSaving, setIsSaving] = useState(false);
   const [sqlOutline, setSqlOutline] = useState<any | null>(null);
   const [sqlModuleLoading, setSqlModuleLoading] = useState<number | null>(null);
   const [sqlExpandedTables, setSqlExpandedTables] = useState<Set<number>>(new Set());
+  // Python Course AI Wizard
+  const [pyWizardStep, setPyWizardStep] = useState<null | 'brief' | 'outline'>(null);
+  const [pyBrief, setPyBrief] = useState({ title: '', industry: 'Finance', role: '', level: 'Beginner', focus: 'Data Analysis', promptText: '' });
+  const [pyOutline, setPyOutline] = useState<any | null>(null);
+  const [pyModuleLoading, setPyModuleLoading] = useState<number | null>(null);
   // Document -> Course AI Wizard
   const [docWizardStep, setDocWizardStep] = useState<null | 'input' | 'outline'>(null);
   const [docBrief, setDocBrief] = useState<{ title: string; audience: string; level: string; goal: string; focus: string; depth: 'primer' | 'balanced' | 'comprehensive'; practice: 'hands_on' | 'balanced' | 'knowledge'; tone: 'professional' | 'conversational' | 'academic'; imageMode: string[]; includeVideos: boolean; preferredChannels: string }>({ title: '', audience: '', level: 'Beginner', goal: '', focus: '', depth: 'balanced', practice: 'balanced', tone: 'professional', imageMode: ['source', 'stock'], includeVideos: true, preferredChannels: '' });
@@ -403,6 +412,8 @@ const [isSaving, setIsSaving] = useState(false);
       }
       if (type === 'sql-course') {
         setSqlWizardStep('brief');
+      } else if (type === 'python-course') {
+        setPyWizardStep('brief');
       } else if (type === 'doc-course') {
         setDocWizardStep('input');
       } else if (type) {
@@ -463,6 +474,34 @@ const [isSaving, setIsSaving] = useState(false);
     }
   };
 
+  const preparePythonExpectedOutputsForSave = async (config: FormConfig, requireComplete: boolean): Promise<FormConfig | null> => {
+    if (!config.isCourse) return config;
+    const questions = config.questions ?? [];
+    if (!questions.some(q => q.type === 'python_exercise')) return config;
+
+    try {
+      showToast('Checking Python exercises...', 'info');
+      const preflight = await preflightPythonExercises(questions, { requireComplete });
+      if (preflight.issues.length) {
+        showToast(`Python warning: ${formatPythonPreflightIssue(preflight.issues[0])}`, requireComplete ? 'error' : 'info', { persistent: true });
+        if (requireComplete) return null;
+      }
+
+      if (preflight.computedCount) {
+        const nextConfig = { ...config, questions: preflight.questions };
+        setFormConfig(nextConfig);
+        showToast(`Computed expected output for ${preflight.computedCount} Python exercise${preflight.computedCount === 1 ? '' : 's'}.`, 'success');
+        return nextConfig;
+      }
+
+      return config;
+    } catch (err: any) {
+      console.error('[python-exercise] save-time preflight failed', err);
+      showToast(err?.message || 'Could not validate Python exercises before saving.', requireComplete ? 'error' : 'info', { persistent: true });
+      return requireComplete ? null : config;
+    }
+  };
+
   // -- Supabase save/share --
   const handleShare = async (saveStatus: 'draft' | 'published' = 'published') => {
     if (!formConfig) return;
@@ -474,8 +513,10 @@ const [isSaving, setIsSaving] = useState(false);
     setIsSaving(true);
     setSavingAs(saveStatus);
     try {
-      const configToSave = await prepareSqlExpectedResultsForSave(formConfig, saveStatus === 'published');
-      if (!configToSave) return;
+      let configToSave = await prepareSqlExpectedResultsForSave(formConfig, saveStatus === 'published');
+      if (!configToSave) { setIsSaving(false); setSavingAs(null); return; }
+      configToSave = await preparePythonExpectedOutputsForSave(configToSave, saveStatus === 'published');
+      if (!configToSave) { setIsSaving(false); setSavingAs(null); return; }
       let formId = savedFormId;
       // Use custom slug if provided, otherwise auto-generate a 5-char alphanumeric slug
       const shortSlug = () => Math.random().toString(36).slice(2, 7);
@@ -676,6 +717,73 @@ const [isSaving, setIsSaving] = useState(false);
       setSqlWizardStep(null);
       // Keep sqlOutline so the user can return to it from the editor
       showToast('SQL course generated! Review and publish when ready.', 'success');
+    } catch (err: any) {
+      setAiFailed(true);
+      showToast(err.message || 'Failed to generate course. Please try again.', 'error');
+    } finally {
+      setAiLoadingLabel('');
+    }
+  };
+
+  // -- Python Course AI Wizard handlers --
+  const handleGeneratePythonOutline = async () => {
+    if (!pyBrief.title.trim()) { showToast('Please enter a course title.', 'error'); return; }
+    setAiLoadingLabel('Generating Python course outline...');
+    setAiFailed(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/ai-course', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ action: 'generate_python_course_outline', ...pyBrief }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate outline.');
+      setPyOutline(data);
+      setPyWizardStep('outline');
+    } catch (err: any) {
+      setAiFailed(true);
+      showToast(err.message || 'Failed. Please try again.', 'error');
+    } finally {
+      setAiLoadingLabel('');
+    }
+  };
+
+  const handleGeneratePythonFullCourse = async () => {
+    if (!pyOutline) return;
+    setAiLoadingLabel('Generating Python exercises...');
+    setAiFailed(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/ai-course', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({
+          action: 'generate_python_course_full',
+          outline: pyOutline,
+          title: pyBrief.title,
+          industry: pyBrief.industry,
+          role: pyBrief.role,
+          level: pyBrief.level,
+          focus: pyBrief.focus,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate course.');
+      setFormConfig({
+        title: data.title || pyBrief.title,
+        description: data.description || '',
+        isCourse: true,
+        coverImage: '',
+        theme: 'forest',
+        mode: 'dark',
+        font: 'google-sans-text',
+        fields: [],
+        questions: attachQuestionLessonDocs(data.questions || []),
+        learnOutcomes: data.learnOutcomes || [],
+      });
+      setPyWizardStep(null);
+      showToast('Python course generated! Review and publish when ready.', 'success');
     } catch (err: any) {
       setAiFailed(true);
       showToast(err.message || 'Failed to generate course. Please try again.', 'error');
@@ -1468,23 +1576,6 @@ const [isSaving, setIsSaving] = useState(false);
     setBunnyCollection('');
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 20 * 1024 * 1024) { alert('File size exceeds 20MB limit.'); return; }
-    e.target.value = '';
-
-    try {
-      const oldCover = formConfig?.coverImage;
-      const publicUrl = await uploadToCloudinary(file, 'covers');
-      if (oldCover && oldCover !== publicUrl) deleteUploadedFile(oldCover);
-      updateConfig({ coverImage: publicUrl });
-    } catch {
-      const reader = new FileReader();
-      reader.onload = (ev) => updateConfig({ coverImage: ev.target?.result as string });
-      reader.readAsDataURL(file);
-    }
-  };
 
   // -- Shared view --
   if (isSharedView && formConfig) {
@@ -1521,7 +1612,7 @@ const [isSaving, setIsSaving] = useState(false);
           )}
         </nav>
 
-        <div className={`relative z-10 flex-1 flex flex-col items-center ${(sqlWizardStep || docWizardStep) ? 'justify-start pt-8 sm:pt-12 pb-16' : 'justify-center py-20'} px-4 sm:px-6 ${(sqlWizardStep === 'outline' || docWizardStep === 'outline') ? 'max-w-5xl' : 'max-w-3xl'} mx-auto w-full`}>
+        <div className={`relative z-10 flex-1 flex flex-col items-center ${(sqlWizardStep || docWizardStep || pyWizardStep) ? 'justify-start pt-8 sm:pt-12 pb-16' : 'justify-center py-20'} px-4 sm:px-6 ${(sqlWizardStep === 'outline' || docWizardStep === 'outline' || pyWizardStep === 'outline') ? 'max-w-5xl' : 'max-w-3xl'} mx-auto w-full`}>
 
           {/* SQL Course Wizard -- Brief step */}
           {sqlWizardStep === 'brief' && (
@@ -1911,8 +2002,160 @@ const [isSaving, setIsSaving] = useState(false);
             </motion.div>
           )}
 
+          {/* Python Course Wizard -- Brief step */}
+          {pyWizardStep === 'brief' && (
+            <motion.div key="py-brief" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-3xl mx-auto">
+              <button type="button" onClick={() => setPyWizardStep(null)} className="flex items-center gap-1.5 text-sm mb-6 transition-opacity hover:opacity-60" style={{ color: C.muted }}>
+                <ArrowLeft className="w-4 h-4" /> Back
+              </button>
+              <div className="rounded-2xl p-6 sm:p-8" style={{ background: C.card, border: theme === 'dark' ? '1px solid transparent' : `1px solid ${C.cardBorder}`, boxShadow: 'none' }}>
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#f59e0b18' }}>
+                  <Code2 className="w-5 h-5" style={{ color: '#f59e0b' }} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold" style={{ color: C.text }}>Python Course with AI</h2>
+                  <p className="text-sm" style={{ color: C.muted }}>Describe your course and we will generate a full outline for review.</p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Course Title</label>
+                  <input type="text" value={pyBrief.title} onChange={e => setPyBrief(p => ({ ...p, title: e.target.value }))} placeholder="e.g. Python for Financial Analysts" className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Industry</label>
+                    <select value={pyBrief.industry} onChange={e => setPyBrief(p => ({ ...p, industry: e.target.value }))} className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle}>
+                      {['Finance', 'Healthcare', 'Retail', 'Marketing', 'HR', 'EdTech', 'Logistics', 'Consulting'].map(ind => <option key={ind} value={ind}>{ind}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Skill Level</label>
+                    <select value={pyBrief.level} onChange={e => setPyBrief(p => ({ ...p, level: e.target.value }))} className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle}>
+                      {['Beginner', 'Intermediate', 'Advanced'].map(lv => <option key={lv} value={lv}>{lv}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Focus Area</label>
+                  <select value={pyBrief.focus} onChange={e => setPyBrief(p => ({ ...p, focus: e.target.value }))} className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle}>
+                    {['Data Analysis', 'Data Visualization', 'Machine Learning', 'Statistics', 'Data Cleaning', 'Automation'].map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Target Role</label>
+                  <input type="text" value={pyBrief.role} onChange={e => setPyBrief(p => ({ ...p, role: e.target.value }))} placeholder="e.g. Data Analyst, Business Analyst" className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Specific Focus <span style={{ color: C.faint }}>(optional)</span></label>
+                  <textarea value={pyBrief.promptText} onChange={e => setPyBrief(p => ({ ...p, promptText: e.target.value }))} placeholder="Any specific libraries, datasets, or skills to focus on..." rows={3} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
+                </div>
+                <button type="button" onClick={handleGeneratePythonOutline} disabled={!!aiLoadingLabel || !pyBrief.title.trim()} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
+                  <Sparkles className="w-4 h-4" /> Generate Outline
+                </button>
+              </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Python Course Wizard -- Outline review step */}
+          {pyWizardStep === 'outline' && pyOutline && (
+            <motion.div key="py-outline" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full pb-12">
+              <div className="flex items-center justify-between mb-6">
+                <button type="button" onClick={() => setPyWizardStep('brief')} className="flex items-center gap-1.5 text-sm transition-opacity hover:opacity-60" style={{ color: C.muted }}>
+                  <ArrowLeft className="w-4 h-4" /> Back
+                </button>
+                <div className="text-center">
+                  <h2 className="text-base font-semibold" style={{ color: C.text }}>Review Outline</h2>
+                  <p className="text-xs" style={{ color: C.faint }}>Edit inline, then generate the full course.</p>
+                </div>
+                <button type="button" onClick={handleGeneratePythonFullCourse} disabled={!!aiLoadingLabel} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
+                  <Sparkles className="w-3.5 h-3.5" /> Generate Full Course
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                {/* Modules -- 2/3 width */}
+                <div className="lg:col-span-2 flex flex-col gap-3">
+                  {(pyOutline.modules ?? []).map((mod: any, modIdx: number) => (
+                    <div key={mod.id || modIdx} className="rounded-xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                      <div className="flex items-center gap-2 px-3.5 py-2.5" style={{ borderBottom: `1px solid ${C.divider}` }}>
+                        <button type="button"
+                          onClick={() => {
+                            setPyModuleLoading(modIdx);
+                            supabase.auth.getSession().then(({ data: { session } }) => {
+                              fetch('/api/ai-course', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+                                body: JSON.stringify({ action: 'generate_python_course_outline', ...pyBrief, moduleIndex: modIdx, existingOutline: pyOutline }),
+                              }).then(r => r.json()).then(data => {
+                                if (data.module) setPyOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, i: number) => i === modIdx ? data.module : m) }));
+                              }).finally(() => setPyModuleLoading(null));
+                            });
+                          }}
+                          disabled={pyModuleLoading !== null}
+                          className="p-1 rounded transition-opacity hover:opacity-60 disabled:opacity-30 flex-shrink-0" title="Regenerate this module" style={{ color: '#f59e0b' }}>
+                          <RefreshCw className={`w-3.5 h-3.5 ${pyModuleLoading === modIdx ? 'animate-spin' : ''}`} />
+                        </button>
+                        <input value={mod.title} onChange={e => setPyOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, i: number) => i !== modIdx ? m : { ...m, title: e.target.value }) }))} className="flex-1 text-sm font-semibold bg-transparent border-none outline-none" style={{ color: C.text }} />
+                      </div>
+                      <div className="flex flex-col gap-1.5 p-3 ml-5">
+                        {(mod.lessons ?? []).map((lesson: any, lessonIdx: number) => {
+                          const typeColors: Record<string, string> = { python_exercise: '#f59e0b', multiple_choice: '#475569' };
+                          const typeLabels: Record<string, string> = { python_exercise: 'PY', multiple_choice: 'MCQ' };
+                          const col = typeColors[lesson.questionType] ?? '#475569';
+                          return (
+                            <div key={lesson.id || lessonIdx} className="flex items-center gap-2 group">
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex-shrink-0" style={{ background: col, color: '#fff' }}>{typeLabels[lesson.questionType] ?? 'PY'}</span>
+                              <input value={lesson.title} onChange={e => setPyOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, mi: number) => mi !== modIdx ? m : { ...m, lessons: m.lessons.map((l: any, li: number) => li !== lessonIdx ? l : { ...l, title: e.target.value }) }) }))} className="flex-1 text-xs bg-transparent border-none outline-none" style={{ color: C.text }} />
+                              <button type="button" onClick={() => setPyOutline((prev: any) => ({ ...prev, modules: prev.modules.map((m: any, mi: number) => mi !== modIdx ? m : { ...m, lessons: m.lessons.filter((_: any, li: number) => li !== lessonIdx) }) }))} className="opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: C.faint }}>
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Dataset plan -- 1/3 width */}
+                <div className="flex flex-col gap-3">
+                  <div className="rounded-xl p-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                    <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#f59e0b' }}>Dataset Plan</p>
+                    <p className="text-xs mb-3" style={{ color: C.muted }}>{pyOutline.datasetPlan?.description}</p>
+                    {(pyOutline.datasetPlan?.datasets ?? []).map((ds: any, i: number) => (
+                      <div key={i} className="mb-3 last:mb-0 rounded-lg p-3" style={{ background: C.groupBg, border: `1px solid ${C.inputBorder}` }}>
+                        <p className="text-xs font-mono font-bold mb-1" style={{ color: '#f59e0b' }}>{ds.variableName}</p>
+                        <p className="text-xs mb-1.5" style={{ color: C.muted }}>{ds.description}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {(ds.columns ?? []).map((col: string) => (
+                            <span key={col} className="text-[10px] px-1.5 py-0.5 rounded font-mono" style={{ background: C.pill, color: C.muted }}>{col}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="mt-3 rounded-lg p-3" style={{ background: '#f59e0b0d', border: '1px solid #f59e0b22' }}>
+                      <p className="text-[11px] font-semibold mb-1" style={{ color: '#f59e0b' }}>After generating</p>
+                      <p className="text-[11px]" style={{ color: C.muted }}>Prepare CSV files matching these schemas and upload them to each exercise in the course editor.</p>
+                    </div>
+                  </div>
+                  <div className="rounded-xl p-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                    <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Outcomes</p>
+                    <ul className="text-xs space-y-1.5" style={{ color: C.text }}>
+                      {(pyOutline.learningOutcomes ?? []).map((o: string, i: number) => (
+                        <li key={i} className="flex items-start gap-1.5"><span style={{ color: '#f59e0b' }}>+</span>{o}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* Normal landing page */}
-          {!sqlWizardStep && !docWizardStep && (
+          {!sqlWizardStep && !docWizardStep && !pyWizardStep && (
             <>
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="text-center mb-8">
                 <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight" style={{ color: C.text }}>What would you like to create?</h1>
@@ -1948,8 +2191,20 @@ const [isSaving, setIsSaving] = useState(false);
                     <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#3b82f618', color: '#3b82f6' }}>AI</span>
                     <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>Use</span>
                   </motion.button>}
+                  {/* Python Course with AI */}
+                  {userRole !== 'staff' && <motion.button key="py-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +(TEMPLATES.length + 1) * 0.07 }} onClick={() => setPyWizardStep('brief')} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#f59e0b18' }}>
+                      <Code2 className="w-4.5 h-4.5" style={{ color: '#f59e0b', width: 18, height: 18 }} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold leading-tight" style={{ color: C.text }}>Python Course AI</p>
+                      <p className="text-xs mt-0.5 leading-snug" style={{ color: C.faint }}>Generate a data analysis course with pandas, matplotlib, and Python exercises.</p>
+                    </div>
+                    <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#f59e0b18', color: '#f59e0b' }}>AI</span>
+                    <span className="absolute bottom-3 right-3 text-[10px] font-medium transition-colors" style={{ color: C.faint }}>Use</span>
+                  </motion.button>}
                   {/* Course from a Document */}
-                  {userRole !== 'staff' && <motion.button key="doc-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +(TEMPLATES.length + 1) * 0.07 }} onClick={() => setDocWizardStep('input')} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
+                  {userRole !== 'staff' && <motion.button key="doc-course-ai" type="button" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 +(TEMPLATES.length + 2) * 0.07 }} onClick={() => setDocWizardStep('input')} className="group relative flex flex-col items-start gap-3 p-4 rounded-2xl transition-all text-left hover:shadow-md" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, boxShadow: C.cardShadow }}>
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${brandAccent}18` }}>
                       <FileText className="w-4.5 h-4.5" style={{ color: brandAccent, width: 18, height: 18 }} />
                     </div>
@@ -2488,20 +2743,30 @@ const [isSaving, setIsSaving] = useState(false);
               {formConfig.coverImage ? (
                 <div className="relative w-full h-28 rounded-xl overflow-hidden group" style={{ border: `1px solid ${C.cardBorder}` }}>
                   <img src={formConfig.coverImage} alt="Cover" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <button onClick={() => setShowCoverLibrary(true)} className="flex items-center gap-1.5 text-xs font-medium bg-white/90 px-3 py-1.5 rounded-lg hover:bg-white transition-colors" style={{ color: '#111' }}>
+                      <ImageIcon className="w-3.5 h-3.5" /> Change
+                    </button>
                     <button onClick={() => { deleteUploadedFile(formConfig.coverImage); updateConfig({ coverImage: '' }); }} className="flex items-center gap-1.5 text-red-400 text-xs font-medium bg-white/80 px-3 py-1.5 rounded-lg hover:bg-white transition-colors">
                       <Trash2 className="w-3.5 h-3.5" /> Remove
                     </button>
                   </div>
                 </div>
               ) : (
-                <label className="relative block cursor-pointer">
-                  <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                <button type="button" onClick={() => setShowCoverLibrary(true)} className="relative block w-full cursor-pointer">
                   <div className="w-full rounded-xl px-3 py-7 flex flex-col items-center justify-center gap-2 transition-colors hover:opacity-80" style={{ background: C.groupBg, border: `1.5px dashed ${C.inputBorder}` }}>
                     <ImageIcon className="w-5 h-5" style={{ color: C.faint }} />
-                    <span className="text-xs" style={{ color: C.faint }}>Click to upload · max 20MB</span>
+                    <span className="text-xs" style={{ color: C.faint }}>Select or upload cover image</span>
                   </div>
-                </label>
+                </button>
+              )}
+              {showCoverLibrary && (
+                <ImageLibrary
+                  uploadFolder="covers"
+                  initialFolder="covers"
+                  onSelect={url => { if (formConfig.coverImage && formConfig.coverImage !== url) deleteUploadedFile(formConfig.coverImage); updateConfig({ coverImage: url }); }}
+                  onClose={() => setShowCoverLibrary(false)}
+                />
               )}
               </div>
             )}
@@ -3730,13 +3995,7 @@ const [isSaving, setIsSaving] = useState(false);
 
                             <div>
                               <label className={labelCls} style={labelStyle}>Student task</label>
-                              <textarea
-                                value={q.question}
-                                onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })}
-                                className={`${inputCls} min-h-[72px] resize-y`}
-                                style={inputStyle}
-                                placeholder="Describe what the student should write..."
-                              />
+                              <RichTextEditor value={q.question} onChange={html => handleUpdateQuestion(q.id, { question: html })} placeholder="Describe what the student should write..." />
                             </div>
 
                             <div className="space-y-2">
@@ -3916,7 +4175,15 @@ const [isSaving, setIsSaving] = useState(false);
                               {q.lesson.imageUrl ? (
                                 <div className="relative group rounded-lg overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
                                   <img src={q.lesson.imageUrl} alt="" className="w-full h-28 object-cover" />
-                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => setLessonImageQId(q.id)}
+                                      className="text-[10px] font-medium flex items-center gap-1 bg-white/90 px-2 py-1 rounded-lg"
+                                      style={{ color: '#111' }}
+                                    >
+                                      <ImageIcon className="w-3 h-3" /> Change
+                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => { deleteUploadedFile(q.lesson?.imageUrl); handleUpdateQuestion(q.id, { lesson: { ...q.lesson, imageUrl: '' } }); }}
@@ -3927,28 +4194,19 @@ const [isSaving, setIsSaving] = useState(false);
                                   </div>
                                 </div>
                               ) : (
-                                <label className="block cursor-pointer">
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    className="hidden"
-                                    onChange={async e => {
-                                      const file = e.target.files?.[0];
-                                      if (!file) return;
-                                      e.target.value = '';
-                                      let url: string;
-                                      try {
-                                        url = await uploadToCloudinary(file, 'lesson-images');
-                                      } catch {
-                                        url = await new Promise<string>(res => { const r = new FileReader(); r.onload = ev => res(ev.target?.result as string); r.readAsDataURL(file); });
-                                      }
-                                      handleUpdateQuestion(q.id, { lesson: { ...q.lesson, imageUrl: url } });
-                                    }}
-                                  />
+                                <button type="button" className="block w-full" onClick={() => setLessonImageQId(q.id)}>
                                   <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-70" style={{ background: C.groupBg, color: C.muted }}>
-                                    <ImageIcon className="w-3.5 h-3.5" /> Upload image (optional)
+                                    <ImageIcon className="w-3.5 h-3.5" /> Add image (optional)
                                   </div>
-                                </label>
+                                </button>
+                              )}
+                              {lessonImageQId === q.id && (
+                                <ImageLibrary
+                                  uploadFolder="lesson-images"
+                                  initialFolder="lesson-images"
+                                  onSelect={url => { if (q.lesson?.imageUrl && q.lesson.imageUrl !== url) deleteUploadedFile(q.lesson.imageUrl); handleUpdateQuestion(q.id, { lesson: { ...q.lesson, imageUrl: url } }); }}
+                                  onClose={() => setLessonImageQId(null)}
+                                />
                               )}
                               {/* PDF: upload (shown to students as an inline page viewer) */}
                               {q.lesson.pdfUrl ? (

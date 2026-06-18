@@ -20,6 +20,8 @@ const ALLOWED_ACTIONS = new Set([
   'generate_sql_course_full',
   'generate_doc_course_outline',
   'generate_doc_course_full',
+  'generate_python_course_outline',
+  'generate_python_course_full',
 ]);
 
 async function checkRateLimit(userId: string): Promise<NextResponse | null> {
@@ -373,6 +375,26 @@ async function checkSqlCourseRateLimit(userId: string, role: string): Promise<Ne
     if (count > limit) {
       return NextResponse.json(
         { error: `AI SQL course limit reached. You can generate ${limit} courses per hour.` },
+        { status: 429 },
+      );
+    }
+  } catch {
+    return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
+  }
+  return null;
+}
+
+async function checkPythonCourseRateLimit(userId: string, role: string): Promise<NextResponse | null> {
+  const redis = getRedis();
+  if (!redis) return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
+  const limit = role === 'admin' ? 20 : 5;
+  try {
+    const key = `rate:ai-python-course:${userId}`;
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, 3600);
+    if (count > limit) {
+      return NextResponse.json(
+        { error: `AI Python course limit reached. You can generate ${limit} courses per hour.` },
         { status: 429 },
       );
     }
@@ -1962,6 +1984,466 @@ ${clamp(sourceText, 60_000)}`;
             }
 
             questions.push(base);
+          }
+        }
+      }
+
+      if (!questions.length) {
+        return NextResponse.json({ error: 'Course generation produced no content. Please try again.' }, { status: 502 });
+      }
+
+      return NextResponse.json({
+        title,
+        description:   outline.courseDescription ?? '',
+        isCourse:      true,
+        learnOutcomes: outline.learningOutcomes ?? [],
+        questions,
+      });
+    }
+
+    // -- Python Course AI Wizard: Outline (step 1 of 2) ---
+    if (action === 'generate_python_course_outline') {
+      const rateLimitErr = await checkPythonCourseRateLimit(user.id, userRole);
+      if (rateLimitErr) return rateLimitErr;
+
+      const title      = clamp(body.title, 200);
+      const industry   = clamp(body.industry, 100);
+      const role       = clamp(body.role, 100);
+      const level      = clamp(body.level, 30);
+      const focus      = clamp(body.focus, 50);
+      const promptText = clamp(body.promptText, 800);
+      const moduleIndex: number | null = typeof body.moduleIndex === 'number' ? body.moduleIndex : null;
+      const existingOutline = body.existingOutline ?? null;
+
+      const lessonItemSchema = {
+        type: Type.OBJECT,
+        properties: {
+          id:              { type: Type.STRING },
+          title:           { type: Type.STRING },
+          skillFocus:      { type: Type.STRING },
+          questionType:    { type: Type.STRING },
+          questionSummary: { type: Type.STRING },
+        },
+        required: ['id', 'title', 'skillFocus', 'questionType', 'questionSummary'],
+      };
+
+      if (moduleIndex !== null && existingOutline) {
+        const currentModule = existingOutline.modules?.[moduleIndex];
+        if (!currentModule) {
+          return NextResponse.json({ error: 'Module not found in outline.' }, { status: 400 });
+        }
+
+        const otherModules = (existingOutline.modules ?? [])
+          .filter((_: any, i: number) => i !== moduleIndex)
+          .map((m: any) => m.title)
+          .filter(Boolean)
+          .join(', ');
+        const datasetDesc = (existingOutline.datasetPlan?.datasets ?? [])
+          .map((d: any) => `- ${d.variableName}: ${d.description} | columns: ${(d.columns ?? []).join(', ')}`)
+          .join('\n');
+
+        const prompt = `You are regenerating one module for an existing job-ready Python data analysis course.
+
+Course context:
+- Title: ${title || existingOutline.courseTitle}
+- Industry: ${industry}
+- Target Role: ${role}
+- Skill Level: ${level}
+- Focus Area: ${focus || 'Data Analysis'}
+- Specific Focus: ${promptText || 'General Python data analysis for the role'}
+- Existing modules to avoid duplicating: ${otherModules || 'none'}
+
+AVAILABLE DATASETS:
+${datasetDesc || '- df: a generic DataFrame loaded for the student'}
+
+Regenerate this module:
+- Current title: ${currentModule.title}
+- Current description: ${currentModule.description ?? ''}
+
+Return exactly one replacement module with 3-5 lessons.
+- Every lesson covers exactly ONE atomic concept.
+- Question types: mostly python_exercise; multiple_choice only for pure concept-check lessons.
+- Keep lesson IDs stable when possible, but use unique IDs if changing the lesson set.
+- Lesson titles must clearly name the specific sub-topic.
+- Plain ASCII only. No em dashes, no curly quotes, no ellipsis, no asterisks.`;
+
+        const schema = {
+          type: Type.OBJECT,
+          properties: {
+            module: {
+              type: Type.OBJECT,
+              properties: {
+                id:          { type: Type.STRING },
+                title:       { type: Type.STRING },
+                description: { type: Type.STRING },
+                lessons:     { type: Type.ARRAY, items: lessonItemSchema },
+              },
+              required: ['id', 'title', 'description', 'lessons'],
+            },
+          },
+          required: ['module'],
+        };
+
+        const result = await generateJSON(prompt, schema, { temperature: 0.7, geminiRetries: 2 } as any);
+        return NextResponse.json(result);
+      }
+
+      const prompt = `You are a World-Class Data Science Instructor designing a job-ready Python data analysis course.
+
+Course parameters:
+- Title: ${title}
+- Industry: ${industry}
+- Target Role: ${role}
+- Skill Level: ${level}
+- Focus Area: ${focus || 'Data Analysis'}
+- Specific Focus: ${promptText || 'General Python data analysis for the role'}
+${promptText ? `\nSTRICT TOPIC CONSTRAINT: The course MUST cover ONLY the topics listed in the Specific Focus above.\n` : ''}
+Create a complete Python course outline:
+
+1. Business scenario: 2-3 sentences describing a data team using Python for the role.
+
+2. Course description: 2-3 sentences on what students will learn.
+
+3. Learning outcomes: 4-6 concise outcomes starting with action verbs.
+
+4. Dataset plan: Describe 1-2 CSV datasets the instructor should prepare.
+   - For each: a Python variable name (e.g. df, df_sales), a brief description, and 5-8 realistic column names.
+   - Datasets must support exercises from basic exploration to groupby, merge, and visualization.
+
+5. Course structure: 5-8 modules, each with 3-5 lessons.
+   - Every lesson covers exactly ONE atomic concept (e.g. "Filtering Rows with Boolean Indexing", not "Filtering and Sorting").
+   - Question types: mostly python_exercise; multiple_choice only for pure concept-check lessons.
+   - Lesson titles must clearly name the specific sub-topic.
+
+Strict formatting: No em dashes. No curly quotes. No ellipsis. No asterisks.`;
+
+      const schema = {
+        type: Type.OBJECT,
+        properties: {
+          courseTitle:       { type: Type.STRING },
+          courseDescription: { type: Type.STRING },
+          businessScenario:  { type: Type.STRING },
+          learningOutcomes:  { type: Type.ARRAY, items: { type: Type.STRING } },
+          datasetPlan: {
+            type: Type.OBJECT,
+            properties: {
+              description: { type: Type.STRING },
+              datasets: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    variableName: { type: Type.STRING },
+                    description:  { type: Type.STRING },
+                    columns:      { type: Type.ARRAY, items: { type: Type.STRING } },
+                  },
+                  required: ['variableName', 'description', 'columns'],
+                },
+              },
+            },
+            required: ['description', 'datasets'],
+          },
+          modules: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id:          { type: Type.STRING },
+                title:       { type: Type.STRING },
+                description: { type: Type.STRING },
+                lessons:     { type: Type.ARRAY, items: lessonItemSchema },
+              },
+              required: ['id', 'title', 'description', 'lessons'],
+            },
+          },
+        },
+        required: ['courseTitle', 'courseDescription', 'businessScenario', 'learningOutcomes', 'datasetPlan', 'modules'],
+      };
+
+      const result = await generateJSON(prompt, schema, { temperature: 0.7, geminiRetries: 2 } as any);
+      return NextResponse.json(result);
+    }
+
+    // -- Python Course AI Wizard: Full course (step 2 of 2) ---
+    if (action === 'generate_python_course_full') {
+      const rateLimitErr = await checkPythonCourseRateLimit(user.id, userRole);
+      if (rateLimitErr) return rateLimitErr;
+
+      const outline  = body.outline;
+      const title    = clamp(body.title || outline?.courseTitle || '', 200);
+      const industry = clamp(body.industry, 100);
+      const role     = clamp(body.role, 100);
+      const level    = clamp(body.level, 30);
+
+      if (!outline?.modules?.length) {
+        return NextResponse.json({ error: 'outline.modules is required' }, { status: 400 });
+      }
+
+      const uid = () => Math.random().toString(36).slice(2, 9);
+
+      // Describe the datasets for prompts
+      const datasetDesc = (outline.datasetPlan?.datasets ?? [])
+        .map((d: any) => `- ${d.variableName}: ${d.description} | columns: ${(d.columns ?? []).join(', ')}`)
+        .join('\n');
+
+      const baseCtx = `Course context:
+- Title: ${title}
+- Industry: ${industry}
+- Target Role: ${role}
+- Skill Level: ${level}
+- Business scenario: ${outline.businessScenario ?? ''}
+
+AVAILABLE DATASETS (use these exact variable names and column names in all code):
+${datasetDesc || '- df: a generic DataFrame loaded for the student'}
+
+STRICT FORMATTING: No em dashes. No curly quotes. No asterisks. Return exact lessonId values from input.`;
+
+      // One Gemini call per module generates: master intro lesson + all exercise lessons.
+      // This keeps total calls to N_modules (typically 5-7) instead of N_modules * N_lessons (~25).
+      const mcqItemSchema = {
+        type: Type.OBJECT,
+        properties: {
+          questionText:  { type: Type.STRING },
+          options:       { type: Type.ARRAY, items: { type: Type.STRING } },
+          correctAnswer: { type: Type.STRING },
+          explanation:   { type: Type.STRING },
+        },
+        required: ['questionText', 'options', 'correctAnswer', 'explanation'],
+      };
+
+      const lessonItemSchema = {
+        type: Type.OBJECT,
+        properties: {
+          lessonId:       { type: Type.STRING },
+          lessonTitle:    { type: Type.STRING },
+          lessonBody:     { type: Type.STRING },
+          lessonType:     { type: Type.STRING, description: 'python_exercise or multiple_choice' },
+          questionText:   { type: Type.STRING, description: 'For python_exercise: HTML numbered task steps using <ol><li>. Wrap function/variable/column names in <code>. Use <blockquote> for context. For mcq: empty string.' },
+          setupCode:      { type: Type.STRING, description: 'For python_exercise: imports + numpy/pandas seeded data generation (np.random.seed(42), pd.DataFrame, pd.date_range, etc). Must produce 30-80 rows. No hardcoded lists. This runs before student code.' },
+          starterCode:    { type: Type.STRING, description: 'For python_exercise: skeleton the student fills in. Dataset already created by setupCode -- do not recreate it.' },
+          solution:       { type: Type.STRING, description: 'For python_exercise: complete runnable solution. Runs after setupCode.' },
+          expectedOutput: { type: Type.STRING, description: 'For python_exercise: the exact stdout that running solution (after setupCode) produces. Must match character for character.' },
+          hints:          { type: Type.ARRAY, items: { type: Type.STRING }, description: 'For python_exercise: 3 hints.' },
+          mcqQuestions:   { type: Type.ARRAY, items: mcqItemSchema, description: 'For multiple_choice: 2 questions.' },
+        },
+        required: ['lessonId', 'lessonTitle', 'lessonBody', 'lessonType'],
+      };
+
+      const moduleSchema = {
+        type: Type.OBJECT,
+        properties: {
+          moduleIntroTitle: { type: Type.STRING },
+          moduleIntroBody:  { type: Type.STRING },
+          lessons:          { type: Type.ARRAY, items: lessonItemSchema },
+        },
+        required: ['moduleIntroTitle', 'moduleIntroBody', 'lessons'],
+      };
+
+      // Build the prompt and fire all module calls in parallel.
+      // Each call is kept small (numpy seeded setup, no giant inline lists) so Gemini
+      // returns clean structured JSON. Sequential calls were timing out at 250s+.
+      function buildModulePrompt(mod: any, modIdx: number): string {
+        const lessonList = (mod.lessons ?? [])
+          .map((l: any) => `  - id: "${l.id}" | title: "${l.title}" | type: ${l.questionType} | focus: ${l.skillFocus} | task: ${l.questionSummary}`)
+          .join('\n');
+
+        const priorModules = (outline.modules ?? []).slice(0, modIdx);
+        const priorContext = priorModules.length
+          ? `CONCEPTS ALREADY TAUGHT IN PREVIOUS MODULES (students know these -- do NOT re-teach, but may reference them):
+${priorModules.map((m: any) => `  Module "${m.title}": ${(m.lessons ?? []).map((l: any) => l.skillFocus || l.title).join(', ')}`).join('\n')}\n`
+          : 'This is the FIRST module -- students know only basic Python syntax (variables, loops, if/else). Introduce pandas and numpy from scratch.\n';
+
+        return `You are generating one complete module for a hands-on Python data analysis course.
+${baseCtx}
+
+${priorContext}
+MODULE ${modIdx + 1}: ${mod.title}
+${mod.description ? `Description: ${mod.description}` : ''}
+
+LESSONS TO GENERATE (return ALL of them in the "lessons" array with the exact lessonId values):
+${lessonList}
+
+=== PART 1: moduleIntroTitle and moduleIntroBody ===
+Write a module intro lesson as HTML. Keep it to 150-200 words.
+- <blockquote> with a 1-2 sentence job scenario (${industry} industry, ${role} role).
+- <p> explaining what this module covers and why it matters.
+- For EVERY concept or function that will be used in this module's exercises: give it its own <h4>, one <p> with the key function in <strong>, and a SHORT <pre><code class="language-python"> snippet (3-5 lines, inline # comments). Students must see it explained here before they are asked to use it.
+- <blockquote> with the single most important rule.
+- <p> listing the lessons ahead.
+Allowed tags: <p> <strong> <h4> <ul> <li> <pre> <code> <blockquote>. No em dashes. No curly quotes.
+
+=== PART 2: lessons array ===
+
+PROGRESSION RULE: Lessons within this module must build on each other in order.
+- Lesson 1 introduces the simplest concept only.
+- Each subsequent lesson adds exactly ONE new concept or function on top of what came before.
+- Never combine two unrelated pandas/numpy topics in a single lesson.
+- If a task step requires a function not yet covered in this module, add a teaching lesson for it BEFORE the exercise that uses it (reorder if needed).
+
+lessonBody (ALL lesson types, 80-120 words):
+  The lessonBody TEACHES the concept used in THIS lesson's exercise.
+  <blockquote> scenario (1-2 sentences, job context).
+  <p> concept explanation with the EXACT function/method used in the task, in <strong>.
+  <pre><code class="language-python"> annotated example showing that exact function (4-6 lines max).
+  <p> key rule with <strong>.
+  The student must be able to complete the task by following the lessonBody alone.
+  Tags: <p> <strong> <pre> <code> <blockquote> only. No headings.
+
+For lessonType = "python_exercise":
+
+  setupCode -- COMPACT numpy seeded generation, NEVER hardcode long lists:
+    import pandas as pd
+    import numpy as np
+    np.random.seed(42)
+    n = 50
+    <varName> = pd.DataFrame({
+        '<col1>': np.random.choice([...3-4 values...], n),
+        '<col2>': np.random.randint(low, high, n),
+        '<col3>': pd.date_range('2024-01-01', periods=n, freq='D'),
+        ...
+    })
+    Rules:
+    - Use AVAILABLE DATASETS variable names and column names.
+    - Use np.random functions (choice, randint, uniform, randn) -- never list 50 values manually.
+    - Include only imports + DataFrame creation. No print(). No analysis.
+    - n=50 rows minimum.
+
+  questionText: HTML. Optionally open with a <blockquote> (1-sentence job context). Then an <ol> of 3-5 steps.
+    Each <li> = ONE atomic action. Wrap all function/method/variable/column names in <code>.
+    ONLY use functions/methods that were taught in this lesson's lessonBody or in a prior lesson in this module or in the priorContext above. Never ask students to use something not yet introduced.
+    Example: "<blockquote>Your manager needs a regional breakdown of sales.</blockquote><ol><li>Filter <code>df</code> to rows where <code>region</code> equals <code>'North'</code> and assign to <code>df_north</code>.</li><li>Print <code>df_north.shape</code>.</li></ol>"
+    Bad step: "Filter the data." -- always name the exact method and variables.
+    Allowed tags: <ol> <li> <code> <blockquote> <strong>. Nothing else.
+
+  starterCode: skeleton with # ____ blanks for key operations. Dataset pre-loaded -- do NOT recreate it.
+    End with print() or .info() for visible output.
+
+  solution: complete solution running AFTER setupCode. Must print or display output.
+
+  expectedOutput:
+    The EXACT stdout the solution produces (character for character).
+    For shape/columns/dtypes checks: write the exact output (e.g. "(50, 4)" or "Index(['col1',...])").
+    For scalar results (mean, sum, count): write the exact number (e.g. "2541.36").
+    For filtered DataFrames with print(): include the full printed table.
+    For matplotlib plots: the solution must also print "[plot]" after creating the figure, and expectedOutput must be exactly "[plot]".
+    Do not leave expectedOutput blank. If exact table output is uncertain, change the task to print a deterministic scalar, shape, list, or "[plot]" marker.
+
+  hints: exactly 3 one-sentence hints (general -> function name -> exact syntax).
+
+For lessonType = "multiple_choice":
+  mcqQuestions: 2 scenario-based questions ("A colleague runs X -- what happens?"). 4 options, 1 correct, short explanation.
+  questionText: ""  setupCode: ""  starterCode: ""  solution: ""  expectedOutput: ""  hints: []
+
+STRICT RULES:
+- Return the exact lessonId from the input for every lesson -- do not change IDs.
+- Never use .iterrows() -- vectorized pandas only.
+- No em dashes. No curly quotes. No asterisks.
+- Each lesson teaches ONE concept. Do not merge two unrelated topics.
+- The task (questionText) must ONLY use what was taught in this lesson's lessonBody or prior lessons. No mystery functions.`;
+      }
+
+      // Run all modules in parallel -- wall time = slowest single module (~30-40s) not sum of all.
+      const moduleResults = await Promise.all(
+        outline.modules.map(async (mod: any, modIdx: number) => {
+          try {
+            const result = await generateJSON(buildModulePrompt(mod, modIdx), moduleSchema, { temperature: 0.5, geminiRetries: 2 } as any);
+            return { mod, result };
+          } catch {
+            return { mod, result: null };
+          }
+        })
+      );
+
+      const failedModules = moduleResults.filter(({ result }) => !result || !Array.isArray((result as any).lessons));
+      if (failedModules.length) {
+        const names = failedModules
+          .map(({ mod }) => String(mod?.title ?? '').trim())
+          .filter(Boolean)
+          .slice(0, 3)
+          .join(', ');
+        return NextResponse.json({
+          error: `Python course generation failed for ${failedModules.length} module${failedModules.length === 1 ? '' : 's'}${names ? `: ${names}` : ''}. Please regenerate the course.`,
+        }, { status: 502 });
+      }
+
+      const incompletePythonLessons: string[] = [];
+      for (const { mod, result: modResult } of moduleResults) {
+        for (const gen of (modResult as any).lessons ?? []) {
+          if (gen.lessonType === 'multiple_choice') continue;
+          const hasSolution = String(gen.solution ?? '').trim().length > 0;
+          const hasExpectedOutput = String(gen.expectedOutput ?? '').trim().length > 0;
+          if (!hasSolution || !hasExpectedOutput) {
+            incompletePythonLessons.push(String(gen.lessonTitle || gen.lessonId || mod?.title || 'Python exercise'));
+          }
+        }
+      }
+      if (incompletePythonLessons.length) {
+        return NextResponse.json({
+          error: `Python course generation produced ${incompletePythonLessons.length} exercise${incompletePythonLessons.length === 1 ? '' : 's'} without a runnable solution or expected output. Please regenerate the course.`,
+        }, { status: 502 });
+      }
+
+      const questions: any[] = [];
+
+      for (const { mod, result: modResult } of moduleResults) {
+        if (!modResult) continue;
+
+        // Module intro slide
+        if (modResult.moduleIntroBody) {
+          questions.push({
+            id:            uid(),
+            lessonOnly:    true,
+            question:      '',
+            options:       [],
+            correctAnswer: '',
+            lesson:        { title: modResult.moduleIntroTitle || mod.title, body: modResult.moduleIntroBody },
+          });
+        }
+
+        // Restore original lesson order from the outline
+        const lessonOrder = new Map<string, number>((mod.lessons ?? []).map((l: any, i: number) => [l.id as string, i]));
+        const sortedLessons = (modResult.lessons ?? []).slice().sort((a: any, b: any) => {
+          const ai: number = lessonOrder.get(a.lessonId) ?? 999;
+          const bi: number = lessonOrder.get(b.lessonId) ?? 999;
+          return ai - bi;
+        });
+
+        for (const gen of sortedLessons) {
+          const outLesson = (mod.lessons ?? []).find((l: any) => l.id === gen.lessonId);
+          const lessonTitle = gen.lessonTitle || outLesson?.title || '';
+
+          if (gen.lessonType === 'multiple_choice') {
+            if (gen.lessonBody) {
+              questions.push({
+                id: uid(), lessonOnly: true, question: '', options: [], correctAnswer: '',
+                lesson: { title: lessonTitle, body: gen.lessonBody },
+              });
+            }
+            for (const q of gen.mcqQuestions ?? []) {
+              questions.push({
+                id:            uid(),
+                type:          'multiple_choice',
+                question:      q.questionText ?? '',
+                options:       q.options ?? [],
+                correctAnswer: q.correctAnswer ?? '',
+                explanation:   q.explanation ?? '',
+              });
+            }
+          } else {
+            questions.push({
+              id:                   uid(),
+              type:                 'python_exercise',
+              question:             gen.questionText ?? '',
+              options:              [],
+              correctAnswer:        '',
+              pythonStarterCode:    gen.starterCode ?? '# Write your solution here\n',
+              pythonSolution:       gen.solution ?? '',
+              pythonExpectedOutput: gen.expectedOutput ?? '',
+              pythonSetupCode:      gen.setupCode ?? '',
+              pythonHints:          gen.hints ?? [],
+              pythonDatasets:       [],
+              lesson:               { title: lessonTitle, body: gen.lessonBody ?? '' },
+            });
           }
         }
       }

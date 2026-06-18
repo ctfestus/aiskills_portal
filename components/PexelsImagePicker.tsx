@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X, Loader2, Check, Image as ImageIcon, Upload } from 'lucide-react';
+import { Search, X, Loader2, Check, Image as ImageIcon, Upload, Images } from 'lucide-react';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { supabase } from '@/lib/supabase';
+import type { LibraryImage } from '@/components/ImageLibrary';
 
 interface Photo {
   id: number;
@@ -34,7 +35,7 @@ interface Props {
   previewMaxWidth?: number;
 }
 
-type Tab = 'pexels' | 'upload';
+type Tab = 'pexels' | 'upload' | 'library';
 
 const DEFAULT_QUERY = 'data technology africa business';
 
@@ -56,6 +57,12 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C, previ
   const [uploadError, setUploadError]   = useState('');
   const [dragOver, setDragOver]         = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  // Library tab state
+  const [libImages, setLibImages]         = useState<LibraryImage[]>([]);
+  const [libLoading, setLibLoading]       = useState(false);
+  const [libError, setLibError]           = useState('');
+  const [libNextCursor, setLibNextCursor] = useState<string | null>(null);
 
   async function fetchPhotos(q: string) {
     setLoading(true);
@@ -90,6 +97,29 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C, previ
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
+  useEffect(() => {
+    if (open && tab === 'library' && libImages.length === 0) fetchLibrary();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, tab]);
+
+  async function fetchLibrary(cursor?: string) {
+    setLibLoading(true);
+    if (!cursor) setLibError('');
+    try {
+      const params = new URLSearchParams();
+      if (cursor) params.set('cursor', cursor);
+      const res = await fetch(`/api/assets?${params}`);
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setLibImages(prev => cursor ? [...prev, ...data.images] : data.images);
+      setLibNextCursor(data.nextCursor ?? null);
+    } catch {
+      setLibError('Could not load images');
+    } finally {
+      setLibLoading(false);
+    }
+  }
+
   async function select(photo: Photo) {
     if (selectingId !== null) return;
     setSelectingId(photo.id);
@@ -118,6 +148,9 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C, previ
     setUploadPreview(null);
     setUploadError('');
     setDragOver(false);
+    setLibImages([]);
+    setLibError('');
+    setLibNextCursor(null);
     setOpen(true);
   }
 
@@ -219,6 +252,9 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C, previ
                 </button>
                 <button style={TAB_STYLE(tab === 'upload')} onClick={() => setTab('upload')}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Upload size={13} /> Upload Image</span>
+                </button>
+                <button style={TAB_STYLE(tab === 'library')} onClick={() => setTab('library')}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Images size={13} /> My Library</span>
                 </button>
               </div>
               <button
@@ -372,6 +408,57 @@ export function PexelsImagePicker({ value, altValue, onChange, onClear, C, previ
                     </button>
                   )}
                 </div>
+              )}
+
+              {/* Library tab */}
+              {tab === 'library' && (
+                <>
+                  {libError && <p style={{ fontSize: 13, color: '#ef4444', textAlign: 'center', padding: 20 }}>{libError}</p>}
+                  {libLoading && libImages.length === 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: C.faint }}>
+                      <Loader2 size={30} className="animate-spin" />
+                    </div>
+                  )}
+                  {!libLoading && !libError && libImages.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '50px 20px', color: C.faint }}>
+                      <Images size={40} style={{ opacity: 0.3, display: 'block', margin: '0 auto 12px' }} />
+                      <p style={{ fontSize: 14, fontWeight: 700, margin: '0 0 4px', color: C.muted }}>No images uploaded yet</p>
+                      <p style={{ fontSize: 13, margin: 0 }}>Switch to the Upload tab to add your first image.</p>
+                    </div>
+                  )}
+                  {libImages.length > 0 && (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                        {libImages.map(img => (
+                          <button
+                            key={img.publicId}
+                            onClick={() => { onChange(img.url, ''); setOpen(false); }}
+                            style={{ position: 'relative', padding: 0, margin: 0, border: '3px solid transparent', borderRadius: 12, overflow: 'hidden', cursor: 'pointer', background: C.input, display: 'block', width: '100%', transition: 'border-color 0.15s, transform 0.15s' }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = `${C.cta}90`; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}
+                          >
+                            <img src={img.thumbUrl} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block' }} loading="lazy" />
+                            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.62))', padding: '18px 8px 6px', color: 'white', fontSize: 11, textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {img.folder}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                      {libNextCursor && !libLoading && (
+                        <div style={{ textAlign: 'center', marginTop: 14 }}>
+                          <button onClick={() => fetchLibrary(libNextCursor)} style={{ padding: '8px 20px', borderRadius: 10, border: `1.5px solid ${C.cardBorder}`, background: 'transparent', color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                            Load more
+                          </button>
+                        </div>
+                      )}
+                      {libLoading && (
+                        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+                          <Loader2 size={18} className="animate-spin" style={{ color: C.faint }} />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
               )}
             </div>
 

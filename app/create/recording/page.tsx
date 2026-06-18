@@ -3,11 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
-import { ArrowLeft, Plus, Loader2, Save, X, Upload, Check } from 'lucide-react';
+import { ArrowLeft, Plus, Loader2, Save, X, Upload, Check, Images } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { uploadToCloudinary, deleteFromCloudinary } from '@/lib/uploadToCloudinary';
+import { ImageLibrary } from '@/components/ImageLibrary';
 
 // --- Design tokens: standard palette from lib/theme.ts ---
 
@@ -37,6 +38,7 @@ export default function CreateRecordingPage() {
   const [title, setTitle]               = useState('');
   const [description, setDescription]   = useState('');
   const [coverImage, setCoverImage]         = useState('');
+  const [showCoverLibrary, setShowCoverLibrary] = useState(false);
   const [originalCoverImage, setOriginalCoverImage] = useState('');
   const [coverUploading, setCoverUploading] = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
@@ -230,6 +232,10 @@ export default function CreateRecordingPage() {
                       fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     <Upload size={14}/>{coverUploading ? 'Uploading…' : 'Upload'}
                   </button>
+                  <button type="button" onClick={() => setShowCoverLibrary(true)} title="Select from library"
+                    style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderRadius: 10, border: 'none', background: C.pill, color: C.muted, cursor: 'pointer', flexShrink: 0 }}>
+                    <Images style={{ width: 14, height: 14 }}/>
+                  </button>
                 </div>
                 {coverImage.trim() && (
                   <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.cardBorder}`, position: 'relative' }}>
@@ -241,6 +247,14 @@ export default function CreateRecordingPage() {
                       <X size={14} color="white"/>
                     </button>
                   </div>
+                )}
+                {showCoverLibrary && (
+                  <ImageLibrary
+                    uploadFolder="covers"
+                    initialFolder="covers"
+                    onSelect={url => setCoverImage(url)}
+                    onClose={() => setShowCoverLibrary(false)}
+                  />
                 )}
               </div>
 
