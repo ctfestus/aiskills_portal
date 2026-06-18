@@ -47,7 +47,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
   const [showLibrary, setShowLibrary] = useState(false);
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
   // Set on edits made inside the editor so the external-sync effect below skips them
   // (reloading on every keystroke would reset the caret).
   const skipNextSync = useRef(false);
