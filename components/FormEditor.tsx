@@ -29,10 +29,12 @@ import { FontPickerModal } from '@/components/FontPickerModal';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary, uploadToCloudinaryWithMeta, deleteFromCloudinary } from '@/lib/uploadToCloudinary';
 import { deleteUploadedFile } from '@/lib/storage-cleanup';
+import { ImageLibrary } from '@/components/ImageLibrary';
 import { uploadToGithub } from '@/lib/uploadToGithub';
 import { isPdfFile } from '@/lib/cloudinary-pdf';
 import { executeQuery, initSQLRuntime } from '@/lib/sql-engine';
 import { formatSQLPreflightIssue, preflightSQLExercises } from '@/lib/sql-exercise-preflight';
+import { formatPythonPreflightIssue, preflightPythonExercises } from '@/lib/python-exercise-preflight';
 import { initPythonRuntime, loadPythonDatasets, runPython } from '@/lib/python-engine';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay,
@@ -499,6 +501,8 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
   const [isSaving, setIsSaving] = useState(false);
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showCoverLibrary, setShowCoverLibrary] = useState(false);
+  const [lessonImageQId, setLessonImageQId] = useState<string | null>(null);
   const [customSlug, setCustomSlug] = useState('');
   const [activeSection, setActiveSection] = useState<string>('info');
   const [secDir, setSecDir] = useState(1); // carousel slide direction: 1 = forward, -1 = back
@@ -966,13 +970,43 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     }
   };
 
+  const preparePythonExpectedOutputsForSave = async (config: FormConfig): Promise<FormConfig | null> => {
+    if (!config.isCourse) return config;
+    const questions = config.questions ?? [];
+    if (!questions.some(q => q.type === 'python_exercise')) return config;
+
+    try {
+      showToast('Checking Python exercises...', 'info');
+      const preflight = await preflightPythonExercises(questions, { requireComplete: true });
+      if (preflight.issues.length) {
+        showToast(`Python warning: ${formatPythonPreflightIssue(preflight.issues[0])}`, 'error', { persistent: true });
+        return null;
+      }
+
+      if (preflight.computedCount) {
+        const nextConfig = { ...config, questions: preflight.questions };
+        setFormConfig(nextConfig);
+        showToast(`Computed expected output for ${preflight.computedCount} Python exercise${preflight.computedCount === 1 ? '' : 's'}.`, 'success');
+        return nextConfig;
+      }
+
+      return config;
+    } catch (err: any) {
+      console.error('[python-exercise] save-time preflight failed', err);
+      showToast(err?.message || 'Could not validate Python exercises before saving.', 'error', { persistent: true });
+      return null;
+    }
+  };
+
   // Save handler
   const handleSave = async () => {
     if (!formConfig) return;
     setIsSaving(true);
     try {
-      const configToSave = await prepareSqlExpectedResultsForSave(formConfig);
-      if (!configToSave) return;
+      let configToSave = await prepareSqlExpectedResultsForSave(formConfig);
+      if (!configToSave) { setIsSaving(false); return; }
+      configToSave = await preparePythonExpectedOutputsForSave(configToSave);
+      if (!configToSave) { setIsSaving(false); return; }
       const slugValue = customSlug.trim() || undefined;
       const { data: { session: saveSession } } = await supabase.auth.getSession();
       if (!saveSession?.access_token) throw new Error('Not authenticated');
@@ -1429,22 +1463,6 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     setBunnyCollection('');
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 20 * 1024 * 1024) { showToast('File size exceeds 20MB limit.'); return; }
-    e.target.value = '';
-    try {
-      const oldCover = formConfig?.coverImage;
-      const publicUrl = await uploadToCloudinary(file, 'covers');
-      if (oldCover && oldCover !== publicUrl) deleteUploadedFile(oldCover);
-      updateConfig({ coverImage: publicUrl });
-    } catch {
-      const reader = new FileReader();
-      reader.onload = (ev) => updateConfig({ coverImage: ev.target?.result as string });
-      reader.readAsDataURL(file);
-    }
-  };
 
   const FE = useFEC();
 
@@ -2057,20 +2075,30 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
               {formConfig.coverImage ? (
                 <div className="relative w-full h-28 rounded-xl overflow-hidden group" style={{ border: `1px solid ${FE.cardBorder}` }}>
                   <img src={formConfig.coverImage} alt="Cover" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <button onClick={() => setShowCoverLibrary(true)} className="flex items-center gap-1.5 text-xs font-medium bg-white/90 px-3 py-1.5 rounded-lg hover:bg-white transition-colors" style={{ color: '#111' }}>
+                      <ImageIcon className="w-3.5 h-3.5" /> Change
+                    </button>
                     <button onClick={() => { deleteUploadedFile(formConfig?.coverImage); updateConfig({ coverImage: '' }); }} className="flex items-center gap-1.5 text-red-400 text-xs font-medium bg-white/80 px-3 py-1.5 rounded-lg hover:bg-white transition-colors">
                       <Trash2 className="w-3.5 h-3.5" /> Remove
                     </button>
                   </div>
                 </div>
               ) : (
-                <label className="relative block cursor-pointer">
-                  <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                <button type="button" onClick={() => setShowCoverLibrary(true)} className="relative block w-full cursor-pointer">
                   <div className="w-full rounded-xl px-3 py-7 flex flex-col items-center justify-center gap-2 transition-colors hover:opacity-80" style={{ background: FE.groupBg, border: `1.5px dashed ${FE.inputBorder}` }}>
                     <ImageIcon className="w-5 h-5" style={{ color: FE.faint }} />
-                    <span className="text-xs" style={{ color: FE.faint }}>Click to upload · max 20MB</span>
+                    <span className="text-xs" style={{ color: FE.faint }}>Select or upload cover image</span>
                   </div>
-                </label>
+                </button>
+              )}
+              {showCoverLibrary && (
+                <ImageLibrary
+                  uploadFolder="covers"
+                  initialFolder="covers"
+                  onSelect={url => { if (formConfig?.coverImage && formConfig.coverImage !== url) deleteUploadedFile(formConfig.coverImage); updateConfig({ coverImage: url }); }}
+                  onClose={() => setShowCoverLibrary(false)}
+                />
               )}
               </div>
             )}
@@ -3153,7 +3181,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentColor }}>Python Exercise Config</p>
                               <div>
                                 <label className={labelCls} style={labelStyle}>Student task</label>
-                                <textarea value={q.question} onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })} className={`${inputCls} min-h-[72px] resize-y`} style={inputStyle} placeholder="Ask the student to write a Python script..." />
+                                <RichTextEditor value={q.question} onChange={html => handleUpdateQuestion(q.id, { question: html })} placeholder="Ask the student to write a Python script..." />
                               </div>
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2">
@@ -3279,7 +3307,15 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                 {q.lesson.imageUrl ? (
                                   <div className="relative group rounded-lg overflow-hidden" style={{ border: `1px solid ${FE.cardBorder}` }}>
                                     <img src={q.lesson.imageUrl} alt="" className="w-full h-28 object-cover" />
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => setLessonImageQId(q.id)}
+                                        className="text-[10px] font-medium flex items-center gap-1 bg-white/90 px-2 py-1 rounded-lg"
+                                        style={{ color: '#111' }}
+                                      >
+                                        <ImageIcon className="w-3 h-3" /> Change
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={() => { deleteUploadedFile(q.lesson?.imageUrl); handleUpdateQuestion(q.id, { lesson: { ...q.lesson, imageUrl: '' } }); }}
@@ -3290,28 +3326,19 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                     </div>
                                   </div>
                                 ) : (
-                                  <label className="block cursor-pointer">
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      className="hidden"
-                                      onChange={async e => {
-                                        const file = e.target.files?.[0];
-                                        if (!file) return;
-                                        e.target.value = '';
-                                        let url: string;
-                                        try {
-                                          url = await uploadToCloudinary(file, 'lesson-images');
-                                        } catch {
-                                          url = await new Promise<string>(res => { const r = new FileReader(); r.onload = ev => res(ev.target?.result as string); r.readAsDataURL(file); });
-                                        }
-                                        handleUpdateQuestion(q.id, { lesson: { ...q.lesson, imageUrl: url } });
-                                      }}
-                                    />
+                                  <button type="button" className="block w-full" onClick={() => setLessonImageQId(q.id)}>
                                     <div className="w-full h-10 flex items-center justify-center gap-1.5 rounded-lg text-xs transition-colors hover:opacity-70" style={{ background: FE.groupBg, color: FE.muted }}>
-                                      <ImageIcon className="w-3.5 h-3.5" /> Upload image (optional)
+                                      <ImageIcon className="w-3.5 h-3.5" /> Add image (optional)
                                     </div>
-                                  </label>
+                                  </button>
+                                )}
+                                {lessonImageQId === q.id && (
+                                  <ImageLibrary
+                                    uploadFolder="lesson-images"
+                                    initialFolder="lesson-images"
+                                    onSelect={url => { if (q.lesson?.imageUrl && q.lesson.imageUrl !== url) deleteUploadedFile(q.lesson.imageUrl); handleUpdateQuestion(q.id, { lesson: { ...q.lesson, imageUrl: url } }); }}
+                                    onClose={() => setLessonImageQId(null)}
+                                  />
                                 )}
                                 {/* PDF: upload (shown to students as an inline page viewer) */}
                                 {q.lesson.pdfUrl ? (

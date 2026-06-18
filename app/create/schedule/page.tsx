@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import { ImageLibrary } from '@/components/ImageLibrary';
 import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 import { motion } from 'motion/react';
-import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Images } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -62,6 +63,7 @@ export default function CreateSchedulePage() {
   const [courseId, setCourseId]     = useState('');
   const [description, setDescription] = useState('');
   const [coverImage, setCoverImage]     = useState('');
+  const [showCoverLibrary, setShowCoverLibrary] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
   const [startDate, setStartDate]   = useState('');
@@ -345,6 +347,10 @@ export default function CreateSchedulePage() {
                     style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderRadius: 10, border: 'none', background: C.pill, color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     <Upload style={{ width: 14, height: 14 }}/>{coverUploading ? 'Uploading…' : 'Upload'}
                   </button>
+                  <button type="button" onClick={() => setShowCoverLibrary(true)} title="Select from library"
+                    style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderRadius: 10, border: 'none', background: C.pill, color: C.muted, cursor: 'pointer', flexShrink: 0 }}>
+                    <Images style={{ width: 14, height: 14 }}/>
+                  </button>
                 </div>
                 {coverImage.trim() && (
                   <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.cardBorder}`, position: 'relative' }}>
@@ -354,6 +360,14 @@ export default function CreateSchedulePage() {
                       <X style={{ width: 14, height: 14, color: 'white' }}/>
                     </button>
                   </div>
+                )}
+                {showCoverLibrary && (
+                  <ImageLibrary
+                    uploadFolder="covers"
+                    initialFolder="covers"
+                    onSelect={url => setCoverImage(url)}
+                    onClose={() => setShowCoverLibrary(false)}
+                  />
                 )}
               </div>
 

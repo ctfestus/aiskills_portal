@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   CheckCircle2,
   ChevronRight,
@@ -12,6 +12,13 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
+import { EditorState } from '@codemirror/state';
+import { EditorView, keymap, lineNumbers } from '@codemirror/view';
+import { acceptCompletion, autocompletion, completionKeymap, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
+import { defaultKeymap, indentLess, indentMore } from '@codemirror/commands';
+import { python, pythonLanguage } from '@codemirror/lang-python';
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { tags } from '@lezer/highlight';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { LessonRenderer } from '@/components/lesson/LessonRenderer';
 import {
@@ -22,6 +29,245 @@ import {
   type PythonRuntime,
 } from '@/lib/python-engine';
 import type { LessonDoc } from '@/lib/lesson-doc';
+
+// VSCode-style Python syntax highlighting
+const pyDarkHighlight = syntaxHighlighting(HighlightStyle.define([
+  { tag: tags.keyword,                                              color: '#569cd6', fontWeight: '600' },
+  { tag: tags.string,                                               color: '#ce9178' },
+  { tag: tags.special(tags.string),                                 color: '#ce9178' },
+  { tag: tags.number,                                               color: '#b5cea8' },
+  { tag: tags.comment,                                              color: '#6a9955', fontStyle: 'italic' },
+  { tag: tags.lineComment,                                          color: '#6a9955', fontStyle: 'italic' },
+  { tag: tags.bool,                                                 color: '#569cd6' },
+  { tag: tags.null,                                                 color: '#569cd6' },
+  { tag: tags.function(tags.definition(tags.variableName)),         color: '#dcdcaa' },
+  { tag: tags.definition(tags.variableName),                        color: '#dcdcaa' },
+  { tag: tags.className,                                            color: '#4ec9b0' },
+  { tag: tags.self,                                                 color: '#569cd6' },
+  { tag: tags.operator,                                             color: '#d4d4d4' },
+]));
+
+const pyLightHighlight = syntaxHighlighting(HighlightStyle.define([
+  { tag: tags.keyword,                                              color: '#af00db', fontWeight: '600' },
+  { tag: tags.string,                                               color: '#a31515' },
+  { tag: tags.special(tags.string),                                 color: '#a31515' },
+  { tag: tags.number,                                               color: '#098658' },
+  { tag: tags.comment,                                              color: '#008000', fontStyle: 'italic' },
+  { tag: tags.lineComment,                                          color: '#008000', fontStyle: 'italic' },
+  { tag: tags.bool,                                                 color: '#0000ff' },
+  { tag: tags.null,                                                 color: '#0000ff' },
+  { tag: tags.function(tags.definition(tags.variableName)),         color: '#795e26' },
+  { tag: tags.definition(tags.variableName),                        color: '#795e26' },
+  { tag: tags.className,                                            color: '#267f99' },
+  { tag: tags.self,                                                 color: '#0070c1' },
+]));
+
+// ---- Custom completions: pandas / numpy / matplotlib + loaded dataset vars ----
+
+const PANDAS_TOP = ['DataFrame','Series','Index','MultiIndex','DatetimeIndex','read_csv','read_json','read_excel','read_sql','read_parquet','read_html','concat','merge','merge_ordered','get_dummies','cut','qcut','to_datetime','to_timedelta','to_numeric','date_range','period_range','isnull','notnull','isna','notna','pivot','crosstab','melt','NA','NaT','Timestamp','Timedelta','options','set_option'].sort();
+
+const DF_MEMBERS = ['head','tail','info','describe','sample','shape','dtypes','columns','index','values','size','ndim','to_numpy','to_csv','to_dict','to_json','to_excel','to_html','to_markdown','groupby','merge','join','pivot_table','pivot','melt','stack','unstack','explode','sort_values','sort_index','rank','rename','drop','drop_duplicates','dropna','fillna','ffill','bfill','replace','interpolate','filter','where','mask','apply','map','applymap','agg','aggregate','transform','pipe','value_counts','nunique','unique','duplicated','astype','copy','reset_index','set_index','reindex','sum','mean','median','std','var','min','max','count','quantile','mode','cumsum','cumprod','cummax','cummin','diff','pct_change','shift','corr','cov','skew','kurt','isnull','notnull','isna','notna','any','all','abs','round','clip','loc','iloc','at','iat','plot','hist','boxplot','str','dt','cat','nlargest','nsmallest','T','transpose','memory_usage'].sort();
+
+const NUMPY_TOP = ['array','zeros','ones','empty','full','eye','identity','diag','arange','linspace','logspace','meshgrid','concatenate','stack','vstack','hstack','dstack','column_stack','split','reshape','ravel','flatten','squeeze','expand_dims','transpose','sum','mean','median','std','var','min','max','argmin','argmax','cumsum','cumprod','diff','dot','matmul','cross','inner','outer','sort','argsort','unique','searchsorted','where','nonzero','clip','round','floor','ceil','abs','sign','sqrt','exp','log','log2','log10','power','sin','cos','tan','arcsin','arccos','arctan','random','linalg','fft','nan','inf','pi','e','int32','int64','float32','float64','bool_','ndarray','dtype','newaxis','isinf','isnan','isfinite','maximum','minimum','percentile','quantile','count_nonzero','prod'].sort();
+
+const PLT_TOP = ['plot','scatter','bar','barh','hist','boxplot','pie','errorbar','step','stem','stackplot','fill_between','imshow','pcolor','pcolormesh','contour','contourf','quiver','show','close','clf','cla','figure','subplot','subplots','savefig','gca','gcf','title','xlabel','ylabel','suptitle','legend','colorbar','xlim','ylim','axis','xticks','yticks','tick_params','grid','axhline','axvline','axhspan','axvspan','text','annotate','arrow','tight_layout','subplots_adjust','style','rcParams','rc','get_cmap'].sort();
+
+const SCIPY_TOP = ['stats','optimize','linalg','interpolate','signal','special','integrate','sparse','fft'].sort();
+
+const SCIPY_STATS = ['norm','uniform','t','chi2','f','binom','poisson','expon','beta','gamma','weibull_min','ttest_ind','ttest_1samp','ttest_rel','mannwhitneyu','wilcoxon','kruskal','chi2_contingency','ks_2samp','pearsonr','spearmanr','kendalltau','pointbiserialr','f_oneway','shapiro','normaltest','anderson','describe','zscore','iqr','sem','skew','kurtosis','mode','gmean','hmean','percentileofscore','rankdata'].sort();
+
+const SCIPY_OPTIMIZE = ['minimize','minimize_scalar','curve_fit','linprog','fsolve','root','brentq','bisect','newton','least_squares','nnls'].sort();
+
+const SCIPY_LINALG = ['solve','inv','det','eig','eigh','eigvals','svd','norm','lstsq','qr','lu','cholesky','expm','logm','solve_triangular','pinv'].sort();
+
+// Pools reachable by multi-level prefix (e.g. sp.stats.xxx or stats.xxx after direct import)
+const NESTED_POOLS: Record<string, { pool: string[]; detail: string }> = {
+  'sp.stats':       { pool: SCIPY_STATS,    detail: 'scipy.stats' },
+  'scipy.stats':    { pool: SCIPY_STATS,    detail: 'scipy.stats' },
+  'sp.optimize':    { pool: SCIPY_OPTIMIZE, detail: 'scipy.optimize' },
+  'scipy.optimize': { pool: SCIPY_OPTIMIZE, detail: 'scipy.optimize' },
+  'sp.linalg':      { pool: SCIPY_LINALG,   detail: 'scipy.linalg' },
+  'scipy.linalg':   { pool: SCIPY_LINALG,   detail: 'scipy.linalg' },
+  // Also handle direct import: from scipy import stats stats.xxx
+  'stats':    { pool: SCIPY_STATS,    detail: 'scipy.stats' },
+  'optimize': { pool: SCIPY_OPTIMIZE, detail: 'scipy.optimize' },
+};
+
+function makePyCompletions(datasets: string[]) {
+  return (context: CompletionContext): CompletionResult | null => {
+    const word = context.matchBefore(/[\w.]+/);
+    if (!word || (word.from === word.to && !context.explicit)) return null;
+
+    const text = word.text;
+    const dot = text.lastIndexOf('.');
+
+    if (dot > 0) {
+      const obj = text.slice(0, dot);
+      const partial = text.slice(dot + 1).toLowerCase();
+      const from = word.from + dot + 1;
+
+      // Multi-level: sp.stats.xxx, stats.xxx, scipy.optimize.xxx, etc.
+      const nested = NESTED_POOLS[obj];
+      if (nested) {
+        return {
+          from,
+          options: nested.pool
+            .filter(m => !partial || m.toLowerCase().startsWith(partial))
+            .map(m => ({ label: m, type: 'function' as const, detail: nested.detail })),
+          validFor: /^\w*$/,
+        };
+      }
+
+      let pool: string[] = [];
+      let detail = '';
+      let type: 'function' | 'method' = 'function';
+
+      if (obj === 'pd' || obj === 'pandas')    { pool = PANDAS_TOP;  detail = 'pandas'; }
+      else if (obj === 'np' || obj === 'numpy') { pool = NUMPY_TOP;   detail = 'numpy'; }
+      else if (obj === 'plt')                   { pool = PLT_TOP;     detail = 'matplotlib.pyplot'; }
+      else if (obj === 'sp' || obj === 'scipy') { pool = SCIPY_TOP;   detail = 'scipy'; }
+      else if (datasets.includes(obj))          { pool = DF_MEMBERS;  detail = 'DataFrame'; type = 'method'; }
+
+      if (!pool.length) return null;
+
+      return {
+        from,
+        options: pool
+          .filter(m => !partial || m.toLowerCase().startsWith(partial))
+          .map(m => ({ label: m, type, detail })),
+        validFor: /^\w*$/,
+      };
+    }
+
+    // Top-level: dataset vars + common package aliases
+    const partial = text.toLowerCase();
+    const topLevel = [
+      ...datasets.map(d => ({ label: d, type: 'variable' as const, detail: 'DataFrame' })),
+      { label: 'pd',     type: 'variable' as const, detail: 'pandas' },
+      { label: 'np',     type: 'variable' as const, detail: 'numpy' },
+      { label: 'plt',    type: 'variable' as const, detail: 'matplotlib.pyplot' },
+      { label: 'sp',     type: 'variable' as const, detail: 'scipy' },
+      { label: 'stats',  type: 'variable' as const, detail: 'scipy.stats' },
+    ].filter(({ label }) => !partial || label.toLowerCase().startsWith(partial));
+
+    if (!topLevel.length) return null;
+    return { from: word.from, options: topLevel, validFor: /^\w*$/ };
+  };
+}
+
+function PythonCodeEditor({
+  value,
+  onChange,
+  isDark,
+  bg,
+  accentColor,
+  readOnly = false,
+  datasets = [],
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  isDark: boolean;
+  bg: string;
+  accentColor: string;
+  readOnly?: boolean;
+  datasets?: string[];
+}) {
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const reactId = useId();
+  const uid = `cm-py-${reactId.replace(/:/g, '')}`;
+
+  useEffect(() => {
+    if (!host) return;
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: value,
+        extensions: [
+          lineNumbers(),
+          python(),
+          // Register custom completions (pandas/numpy/matplotlib + dataset vars) alongside python() builtins
+          pythonLanguage.data.of({ autocomplete: makePyCompletions(datasets) }),
+          keymap.of([
+            { key: 'Tab', run: (v) => acceptCompletion(v) || indentMore(v) },
+            { key: 'Shift-Tab', run: indentLess },
+            ...completionKeymap.filter(b => b.key !== 'Tab'),
+            ...defaultKeymap,
+          ]),
+          autocompletion({ activateOnTyping: true, closeOnBlur: false, maxRenderedOptions: 12 }),
+          EditorView.lineWrapping,
+          EditorView.editable.of(!readOnly),
+          EditorView.theme({
+            '&': { fontSize: '13.5px', height: '100%', background: bg, color: isDark ? '#d4d4d4' : '#1e1e1e' },
+            '.cm-content': { padding: '14px 0 24px', caretColor: accentColor, color: isDark ? '#d4d4d4' : '#1e1e1e' },
+            '.cm-line': { padding: '0 20px', lineHeight: '1.75' },
+            '.cm-scroller': { fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace' },
+            '.cm-gutters': { borderRight: 'none', background: bg, color: isDark ? '#444b6e' : '#c8d0e4', fontSize: '11px', minWidth: '44px' },
+            '.cm-activeLine': { background: isDark ? 'rgba(255,255,255,0.018)' : 'rgba(0,0,0,0.018)' },
+            '.cm-activeLineGutter': { background: isDark ? 'rgba(255,255,255,0.018)' : 'rgba(0,0,0,0.018)' },
+            '.cm-tooltip': {
+              border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.10)'}`,
+              backgroundColor: isDark ? '#13152a' : '#ffffff',
+              color: isDark ? '#e2e8f6' : '#1a1d2e',
+              borderRadius: '10px',
+              overflow: 'hidden',
+              boxShadow: 'none',
+            },
+            '.cm-tooltip-autocomplete': { padding: '4px' },
+            '.cm-tooltip-autocomplete ul': {
+              fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
+              fontSize: '12.5px',
+              maxHeight: '220px',
+              padding: '0',
+            },
+            '.cm-tooltip-autocomplete ul li': {
+              display: 'flex', alignItems: 'center', padding: '5px 10px',
+              borderRadius: '6px', lineHeight: '1.4',
+              color: isDark ? '#c9d1e8' : '#2d3a52', transition: 'background 0.1s',
+            },
+            '.cm-tooltip-autocomplete ul li[aria-selected]': { backgroundColor: `${accentColor}22`, color: isDark ? '#ffffff' : '#0f1a2e' },
+            '.cm-completionIcon': { display: 'none' },
+            '.cm-completionLabel': { fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace', fontSize: '12.5px' },
+            '.cm-completionMatchedText': { color: accentColor, fontWeight: '700', textDecoration: 'none' },
+            '.cm-completionDetail': { marginLeft: '8px', fontSize: '11px', opacity: '0.45', fontStyle: 'normal', fontFamily: 'ui-sans-serif,system-ui,sans-serif' },
+          }),
+          EditorView.updateListener.of(u => { if (u.docChanged && !readOnly) onChange(u.state.doc.toString()); }),
+          isDark ? pyDarkHighlight : pyLightHighlight,
+        ],
+      }),
+      parent: host,
+    });
+    viewRef.current = view;
+    return () => { view.destroy(); viewRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [host]);
+
+  // Sync externally-driven value changes (e.g. reset button) into the editor
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const current = view.state.doc.toString();
+    if (current !== value) {
+      view.dispatch({ changes: { from: 0, to: current.length, insert: value } });
+    }
+  }, [value]);
+
+  return (
+    <div id={uid} className="h-full [&_.cm-editor]:h-full">
+      <style>{`
+        #${uid} .cm-cursor, #${uid} .cm-dropCursor {
+          border-left-color: ${accentColor} !important;
+          border-left-width: 2px !important;
+        }
+        #${uid} .cm-editor.cm-focused .cm-selectionBackground,
+        #${uid} .cm-selectionBackground {
+          background: ${accentColor}30 !important;
+        }
+        #${uid} .cm-editor:focus-visible { outline: none !important; }
+      `}</style>
+      <div ref={setHost} className="h-full" />
+    </div>
+  );
+}
 
 function renderRichText(html: string): string {
   return sanitizeRichText(
@@ -139,6 +385,16 @@ export default function PythonExercisePlayer({
   const hasHints = (question.pythonHints ?? []).filter(Boolean).length > 0;
   const hasChecker = !!question.pythonHasExpectedOutput || !!(question.pythonExpectedOutput?.trim());
 
+  const runnableDatasets = () => (question.pythonDatasets ?? [])
+    .filter((d: any) => d.variableName?.trim() && (d.csvUrl || d.fileUrl));
+
+  async function createPreparedRuntime(previewRows = 0): Promise<{ runtime: PythonRuntime; previews: Record<string, PythonDatasetPreview> }> {
+    const runtime = await initPythonRuntime(question.pythonSetupCode?.trim() || undefined);
+    const datasets = runnableDatasets();
+    const previews = datasets.length ? await loadPythonDatasets(runtime, datasets, previewRows) : {};
+    return { runtime, previews };
+  }
+
   // Detect mobile
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -157,42 +413,18 @@ export default function PythonExercisePlayer({
     setDatasetsLoading(false);
 
     (async () => {
-      // 1. Init Pyodide (fast if already loaded -- singleton)
-      let rt: PythonRuntime;
       try {
-        rt = await initPythonRuntime(question.pythonSetupCode?.trim() || undefined);
+        const { runtime, previews } = await createPreparedRuntime(10);
         if (cancelled) return;
-        pyRuntimeRef.current = rt;
+        pyRuntimeRef.current = runtime;
+        setDatasetPreviews(previews);
+        setDatasetsLoading(false);
+        setPreparing(false);
       } catch (err: any) {
         if (!cancelled) {
           setPrepareError(err?.message || 'Could not load Python environment.');
           setPreparing(false);
         }
-        return;
-      }
-
-      // 2. Load datasets sequentially into the shared Pyodide namespace
-      // Keep preparing=true until datasets are ready so students can't run code before df exists
-      const datasets = (question.pythonDatasets ?? [])
-        .filter((d: any) => d.variableName?.trim() && (d.csvUrl || d.fileUrl));
-
-      if (datasets.length) {
-        try {
-          const previews = await loadPythonDatasets(rt, datasets);
-          if (!cancelled) setDatasetPreviews(previews);
-        } catch (err: any) {
-          if (!cancelled) {
-            setPrepareError(err?.message || 'Failed to load dataset');
-            setPreparing(false);
-          }
-          return;
-        }
-      }
-
-      // All datasets injected -- now let the student interact
-      if (!cancelled) {
-        setDatasetsLoading(false);
-        setPreparing(false);
       }
     })();
 
@@ -254,17 +486,6 @@ export default function PythonExercisePlayer({
   const muted     = isDark ? '#A8B5C2' : '#555555';
   const subtle    = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)';
 
-  const handleTabKey = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const ta = e.currentTarget;
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      const newVal = code.substring(0, start) + '    ' + code.substring(end);
-      setCode(newVal);
-      requestAnimationFrame(() => { ta.selectionStart = ta.selectionEnd = start + 4; });
-    }
-  }, [code]);
 
   async function runCode() {
     if (!pyRuntimeRef.current) return;
@@ -275,7 +496,9 @@ export default function PythonExercisePlayer({
     setPlots([]);
     setFeedback(null);
     try {
-      const res = await runPython(pyRuntimeRef.current, codeToRun);
+      const { runtime } = await createPreparedRuntime(0);
+      pyRuntimeRef.current = runtime;
+      const res = await runPython(runtime, codeToRun);
       if (res.error) {
         setError(res.error);
       } else {
@@ -298,7 +521,9 @@ export default function PythonExercisePlayer({
     setPlots([]);
     setFeedbackDismissed(false);
     try {
-      const res = await runPython(pyRuntimeRef.current, code);
+      const { runtime } = await createPreparedRuntime(0);
+      pyRuntimeRef.current = runtime;
+      const res = await runPython(runtime, code);
       if (res.error) {
         setError(res.error);
         const attempts = failedAttempts + 1;
@@ -364,7 +589,9 @@ export default function PythonExercisePlayer({
       setPlots([]);
       setFeedback(null);
       try {
-        const res = await runPython(pyRuntimeRef.current, sol);
+        const { runtime } = await createPreparedRuntime(0);
+        pyRuntimeRef.current = runtime;
+        const res = await runPython(runtime, sol);
         if (res.error) {
           setError(res.error);
         } else {
@@ -404,6 +631,7 @@ export default function PythonExercisePlayer({
   const feedbackVisible = feedback && !feedbackDismissed;
   const canReveal = hasChecker && !completed && !revealedSolution;
   const showContinueAfterSolution = solutionRevealed && !completed && !!onNext;
+  const showContinueWithoutChecker = !hasChecker && !completed && !!onNext;
   const showingSolutionTab = codeTab === 'solution' && !!revealedSolution;
 
   return (
@@ -411,6 +639,11 @@ export default function PythonExercisePlayer({
       className="fixed bottom-0 right-0 z-40 flex flex-col overflow-hidden"
       style={{ top: topOffset, left: leftOffset, transition: 'left 300ms ease', background: canvas, color: text }}
     >
+      <style>{`
+        .task-body code { font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace !important; font-size: 0.85em; background: ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}; color: ${isDark ? '#86efac' : '#166534'}; border-radius: 4px; padding: 1px 5px; }
+        .task-body pre { font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 0.85em; background: ${isDark ? '#0f1120' : '#f1f3f8'}; color: ${isDark ? '#c9d1d9' : '#1a1d2e'}; border-radius: 6px; padding: 12px 16px; margin: 0.75rem 0; overflow-x: auto; }
+        .task-body pre code { background: none; padding: 0; border-radius: 0; color: inherit; font-size: inherit; }
+      `}</style>
       {/* MOBILE TAB BAR */}
       {isMobile && (
         <div className="flex-shrink-0 flex items-stretch gap-1.5 px-2 pt-2">
@@ -475,9 +708,10 @@ export default function PythonExercisePlayer({
                   </div>
                 )}
                 {question.question && (
-                  <div className="mt-4 rounded-xl p-4" style={{ background: subtle }}>
-                    <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>Task</p>
-                    <p className="text-[14px] leading-relaxed" style={{ color: text }}
+                  <div className="mt-5 task-body" style={{ color: text }}>
+                    <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: accentColor }}>Task</p>
+                    <div className="mb-4" style={{ borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }} />
+                    <div className="text-[15px] leading-relaxed"
                       dangerouslySetInnerHTML={{ __html: renderRichText(question.question) }} />
                   </div>
                 )}
@@ -559,22 +793,19 @@ export default function PythonExercisePlayer({
                   </div>
                 )}
 
-                {/* Textarea */}
+                {/* CodeMirror editor with Python syntax highlighting */}
                 <div className="flex-1 min-h-0 relative">
-                  <textarea
-                    value={showingSolutionTab ? revealedSolution : code}
-                    onChange={e => { if (!showingSolutionTab) setCode(e.target.value); }}
-                    onKeyDown={showingSolutionTab ? undefined : handleTabKey}
+                  <PythonCodeEditor
+                    key={showingSolutionTab ? 'solution' : 'student'}
+                    value={showingSolutionTab ? (revealedSolution ?? '') : code}
+                    onChange={setCode}
+                    isDark={isDark}
+                    bg={editorBg}
+                    accentColor={accentColor}
                     readOnly={showingSolutionTab}
-                    spellCheck={false}
-                    className="absolute inset-0 w-full h-full resize-none border-none outline-none p-4"
-                    style={{
-                      fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
-                      fontSize: 13.5,
-                      lineHeight: 1.75,
-                      background: editorBg,
-                      color: isDark ? '#d4d4d4' : '#1e1e1e',
-                    }}
+                    datasets={(question.pythonDatasets ?? [])
+                      .filter((d: any) => d.variableName?.trim())
+                      .map((d: any) => d.variableName.trim())}
                   />
                 </div>
 
@@ -604,6 +835,14 @@ export default function PythonExercisePlayer({
                     </button>
                   )}
                   {showContinueAfterSolution && (
+                    <button type="button" onClick={continueIncorrect}
+                      className="inline-flex items-center justify-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity hover:opacity-80"
+                      style={{ background: accentColor, color: '#ffffff' }}>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                      {isLastQuestion ? 'Finish Course' : 'Continue'}
+                    </button>
+                  )}
+                  {showContinueWithoutChecker && (
                     <button type="button" onClick={continueIncorrect}
                       className="inline-flex items-center justify-center gap-2 h-9 px-5 rounded-lg text-[13px] font-semibold transition-opacity hover:opacity-80"
                       style={{ background: accentColor, color: '#ffffff' }}>

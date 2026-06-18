@@ -19,7 +19,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code2, FileCode2,
   List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote,
-  Image as ImageIcon, Table as TableIcon, Info, Loader2, ChevronsUpDown, LayoutGrid, HelpCircle, Terminal, GalleryHorizontal,
+  Image as ImageIcon, Table as TableIcon, Info, ChevronsUpDown, LayoutGrid, HelpCircle, Terminal, GalleryHorizontal,
   Layers, ListChecks, History, BookMarked, Braces,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
@@ -28,7 +28,7 @@ import { lessonExtensions } from '@/components/lesson/extensions';
 import { LessonContentStyles } from '@/components/lesson/LessonContentStyles';
 import { GlossaryTooltip } from '@/components/lesson/GlossaryTooltip';
 import { useTenant } from '@/components/TenantProvider';
-import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import { ImageLibrary } from '@/components/ImageLibrary';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { inlineGlossaryDefinitions, type LessonDoc } from '@/lib/lesson-doc';
 
@@ -44,7 +44,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
   const { theme } = useTheme();
   const { primaryColor } = useTenant();
   const dark = isDark ?? theme === 'dark';
-  const [uploading, setUploading] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -86,20 +86,6 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
     if (skipNextSync.current) { skipNextSync.current = false; return; }
     editor.commands.setContent((doc ?? bodyFallback ?? '') as Record<string, unknown> | string, { emitUpdate: false });
   }, [editor, doc, bodyFallback]);
-
-  const handleImage = useCallback(async (file: File) => {
-    if (!editor) return;
-    setUploading(true);
-    try {
-      const url = await uploadToCloudinary(file, 'lesson-images');
-      editor.chain().focus().setImage({ src: url }).run();
-    } catch {
-      // surface nothing intrusive; the upload route already validates size/type
-      if (typeof window !== 'undefined') window.alert('Image upload failed. Please try again.');
-    } finally {
-      setUploading(false);
-    }
-  }, [editor]);
 
   const handleLink = useCallback(() => {
     if (!editor) return;
@@ -166,16 +152,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         <Btn dark={dark} title="Runnable code (SQL)" onClick={() => editor.chain().focus().insertContent({ type: 'runnableCode', attrs: { language: 'sql', code: '', setupSql: '', setupPython: '' } }).run()}><Terminal className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Runnable code (Python)" onClick={() => editor.chain().focus().insertContent({ type: 'runnableCode', attrs: { language: 'python', code: '', setupSql: '', setupPython: '' } }).run()}><Braces className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Table" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableIcon className="w-3.5 h-3.5" /></Btn>
-        <label title="Insert image" className="p-1.5 rounded transition-colors cursor-pointer inline-flex" style={{ color: dark ? '#666' : '#888' }}>
-          {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            disabled={uploading}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImage(f); e.target.value = ''; }}
-          />
-        </label>
+        <Btn dark={dark} title="Insert image" onClick={() => setShowLibrary(true)}><ImageIcon className="w-3.5 h-3.5" /></Btn>
       </Toolbar>
 
       {editor.isActive('table') && (() => {
@@ -217,6 +194,14 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         <EditorContent editor={editor} />
       </div>
       <GlossaryTooltip />
+      {showLibrary && (
+        <ImageLibrary
+          uploadFolder="lesson-images"
+          initialFolder="lesson-images"
+          onSelect={url => editor.chain().focus().setImage({ src: url }).run()}
+          onClose={() => setShowLibrary(false)}
+        />
+      )}
     </div>
   );
 }

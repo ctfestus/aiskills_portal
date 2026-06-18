@@ -3,12 +3,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import { ImageLibrary } from '@/components/ImageLibrary';
 import type { LessonDoc } from '@/lib/lesson-doc';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight, ChevronLeft,
   Plus, Trash2, X, Check, RefreshCw, Upload, Pencil, Star, Clock, Download,
-  Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical, Video, Search, Eye,
+  Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical, Video, Search, Eye, Images,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -347,6 +348,7 @@ function VirtualExperienceCreatePageInner() {
 
   const [deadlineDays, setDeadlineDays] = useState<string>('');
   const [coverImage,  setCoverImage]  = useState('');
+  const [showCoverLibrary, setShowCoverLibrary] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [saveError,   setSaveError]   = useState('');
@@ -1975,8 +1977,21 @@ function VirtualExperienceCreatePageInner() {
                       style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
                       {uploadingCover ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                     </button>
+                    <button type="button" onClick={() => setShowCoverLibrary(true)} title="Select from library"
+                      className="flex items-center justify-center w-10 h-10 rounded-xl flex-shrink-0 transition-all hover:opacity-70"
+                      style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card }}>
+                      <Images className="w-4 h-4" />
+                    </button>
                   </div>
                   <input ref={coverRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
+                  {showCoverLibrary && (
+                    <ImageLibrary
+                      uploadFolder="covers"
+                      initialFolder="covers"
+                      onSelect={url => setCoverImage(url)}
+                      onClose={() => setShowCoverLibrary(false)}
+                    />
+                  )}
                 </div>
 
                 {/* Completion badge card */}

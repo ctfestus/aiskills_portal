@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import { ImageLibrary } from '@/components/ImageLibrary';
 import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Code2, FileSpreadsheet, LayoutDashboard, Briefcase, ClipboardList, Eye, FileText } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Loader2, Save, Link as LinkIcon, Upload, X, Code2, FileSpreadsheet, LayoutDashboard, Briefcase, ClipboardList, Eye, FileText, Images } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const AssignmentExperiencePlayer = dynamic(() => import('@/components/AssignmentExperiencePlayer'), { ssr: false });
 import Link from 'next/link';
@@ -87,6 +88,7 @@ export default function CreateAssignmentPage() {
   const [submissionInstructions, setSubmissionInstructions] = useState('');
   const [relatedCourse, setRelatedCourse]         = useState('');
   const [coverImage, setCoverImage]               = useState('');
+  const [showCoverLibrary, setShowCoverLibrary]   = useState(false);
   const [status, setStatus]                       = useState<'draft' | 'published'>('draft');
   const [originalStatus, setOriginalStatus]       = useState<'draft' | 'published'>('draft');
   const [resources, setResources]                 = useState<Resource[]>([]);
@@ -604,6 +606,10 @@ export default function CreateAssignmentPage() {
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.pill, color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   <Upload style={{ width: 14, height: 14 }}/>{coverUploading ? 'Uploading…' : 'Upload'}
                 </button>
+                <button type="button" onClick={() => setShowCoverLibrary(true)} title="Select from library"
+                  style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', borderRadius: 10, border: 'none', background: C.pill, color: C.muted, cursor: 'pointer', flexShrink: 0 }}>
+                  <Images style={{ width: 14, height: 14 }}/>
+                </button>
               </div>
               {coverImage && (
                 <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.cardBorder}`, position: 'relative' }}>
@@ -613,6 +619,14 @@ export default function CreateAssignmentPage() {
                     <X style={{ width: 14, height: 14, color: 'white' }}/>
                   </button>
                 </div>
+              )}
+              {showCoverLibrary && (
+                <ImageLibrary
+                  uploadFolder="covers"
+                  initialFolder="covers"
+                  onSelect={url => setCoverImage(url)}
+                  onClose={() => setShowCoverLibrary(false)}
+                />
               )}
             </div>
 
