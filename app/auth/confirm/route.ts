@@ -28,6 +28,15 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.verifyOtp({ type, token_hash });
 
     if (!error) {
+      if (type === 'recovery') {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id) {
+          await supabase
+            .from('students')
+            .update({ password_setup_started_at: new Date().toISOString() })
+            .eq('id', user.id);
+        }
+      }
       return NextResponse.redirect(new URL('/auth/reset-password', request.url));
     }
   }

@@ -8,6 +8,36 @@ import { supabase } from '@/lib/supabase';
 import { reportExportCSV } from '@/lib/dashboard-export';
 import { LIGHT_C, DARK_C, cardStyle } from '@/lib/theme';
 
+function shortDate(value?: string | null) {
+  return value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'Never';
+}
+
+function fullDate(value?: string | null) {
+  return value ? new Date(value).toLocaleString() : 'Never';
+}
+
+function accessInfo(student: any, C: typeof LIGHT_C) {
+  if (student.last_login_at) {
+    return { label: 'Signed in', at: student.last_login_at, color: C.green, bg: `${C.green}18` };
+  }
+  if (student.onboarding_done) {
+    return { label: 'Onboarded', at: student.onboarding_completed_at, color: '#2563eb', bg: 'rgba(37,99,235,0.12)' };
+  }
+  if (student.password_set_at) {
+    return { label: 'Password set', at: student.password_set_at, color: '#7c3aed', bg: 'rgba(124,58,237,0.12)' };
+  }
+  if (student.password_setup_started_at) {
+    return { label: 'Link opened', at: student.password_setup_started_at, color: '#d97706', bg: 'rgba(245,158,11,0.16)' };
+  }
+  if (student.setup_email_sent_at) {
+    return { label: 'Email sent', at: student.setup_email_sent_at, color: '#0284c7', bg: 'rgba(14,165,233,0.14)' };
+  }
+  if (student.account_provisioned_at) {
+    return { label: 'Created', at: student.account_provisioned_at, color: C.muted, bg: C.pill };
+  }
+  return { label: 'Not started', at: null, color: C.faint, bg: C.pill };
+}
+
 function StudentDetailPanel({ student, cohortName, detail, loading, onClose, C }: {
   student: any; cohortName: string; detail: any; loading: boolean; onClose: () => void; C: typeof LIGHT_C;
 }) {
@@ -35,6 +65,23 @@ function StudentDetailPanel({ student, cohortName, detail, loading, onClose, C }
             <ExternalLink className="w-4 h-4"/>
             Open Student Dashboard
           </a>
+
+          <div className="rounded-xl p-3 mb-5" style={{ background: C.pill, border: `1px solid ${C.cardBorder}` }}>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.faint }}>Account setup</p>
+            {[
+              ['Account created', student.account_provisioned_at],
+              ['Setup email sent', student.setup_email_sent_at],
+              ['Setup link opened', student.password_setup_started_at],
+              ['Password set', student.password_set_at],
+              ['Onboarding complete', student.onboarding_completed_at],
+              ['Last login', student.last_login_at],
+            ].map(([label, value]) => (
+              <div key={label as string} className="flex items-center justify-between gap-3 py-1">
+                <span className="text-xs" style={{ color: C.muted }}>{label}</span>
+                <span className="text-xs font-medium text-right" style={{ color: value ? C.text : C.faint }}>{fullDate(value as string | null)}</span>
+              </div>
+            ))}
+          </div>
 
           {loading && <p className="text-sm text-center py-8" style={{ color: C.muted }}>Loading...</p>}
 
@@ -140,7 +187,11 @@ export function StudentsSection({ C }: { C: typeof LIGHT_C }) {
     const load = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       const [{ data: stu }, { data: coh }, statsRes] = await Promise.all([
-        supabase.from('students').select('id, full_name, email, cohort_id, last_login_at').eq('role', 'student').order('full_name'),
+        supabase
+          .from('students')
+          .select('id, full_name, email, cohort_id, onboarding_done, account_provisioned_at, setup_email_sent_at, password_setup_started_at, password_set_at, onboarding_completed_at, last_login_at')
+          .eq('role', 'student')
+          .order('full_name'),
         supabase.from('cohorts').select('id, name'),
         fetch('/api/admin/students-stats', { headers: { Authorization: `Bearer ${session?.access_token}` } }),
       ]);
@@ -189,15 +240,24 @@ export function StudentsSection({ C }: { C: typeof LIGHT_C }) {
           </div>
           <button
             onClick={() => reportExportCSV(
-              ['Name', 'Email', 'Cohort', 'Content in Cohort', 'Completed', 'Last Login'],
-              visible.map(s => [
-                s.full_name || '',
-                s.email || '',
-                cohortMap[s.cohort_id] || '',
-                s.cohort_id ? (courseCounts[s.cohort_id] ?? 0) : '',
-                completedCounts[s.id] ?? 0,
-                s.last_login_at ? new Date(s.last_login_at).toLocaleDateString() : 'Never',
-              ]),
+              ['Name', 'Email', 'Cohort', 'Access Status', 'Account Created', 'Setup Email Sent', 'Setup Link Opened', 'Password Set', 'Onboarding Complete', 'Last Login', 'Content in Cohort', 'Completed'],
+              visible.map(s => {
+                const access = accessInfo(s, C);
+                return [
+                  s.full_name || '',
+                  s.email || '',
+                  cohortMap[s.cohort_id] || '',
+                  access.label,
+                  fullDate(s.account_provisioned_at),
+                  fullDate(s.setup_email_sent_at),
+                  fullDate(s.password_setup_started_at),
+                  fullDate(s.password_set_at),
+                  fullDate(s.onboarding_completed_at),
+                  fullDate(s.last_login_at),
+                  s.cohort_id ? (courseCounts[s.cohort_id] ?? 0) : '',
+                  completedCounts[s.id] ?? 0,
+                ];
+              }),
               'students.csv',
             )}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold flex-shrink-0 transition-opacity hover:opacity-80"
@@ -228,10 +288,11 @@ export function StudentsSection({ C }: { C: typeof LIGHT_C }) {
 
           {/* Clean table -- borderless, header divider + row hairlines */}
           <div className="overflow-x-auto">
-            <div className="grid gap-3 px-4 py-3.5 text-[10px] font-semibold uppercase tracking-[0.07em] grid-cols-[1fr_auto] sm:grid-cols-[2fr_1.5fr_80px_90px_90px_48px]"
+            <div className="grid gap-3 px-4 py-3.5 text-[10px] font-semibold uppercase tracking-[0.07em] grid-cols-[1fr_auto] sm:grid-cols-[2fr_1.3fr_110px_80px_90px_90px_48px]"
               style={{ color: C.faint, borderBottom: `1px solid ${C.divider}` }}>
               <span>Student</span>
               <span className="hidden sm:inline">Cohort</span>
+              <span className="hidden sm:inline">Access</span>
               <span className="hidden sm:block text-center">In Cohort</span>
               <span className="hidden sm:block text-center">Completed</span>
               <span className="hidden sm:inline">Last Login</span>
@@ -242,39 +303,44 @@ export function StudentsSection({ C }: { C: typeof LIGHT_C }) {
               <div className="py-12 text-center text-sm" style={{ color: C.muted }}>Loading students...</div>
             ) : visible.length === 0 ? (
               <div className="py-12 text-center text-sm" style={{ color: C.muted }}>No students found</div>
-            ) : visible.map((s, i) => (
-              <div key={s.id} className="grid gap-3 px-4 py-3.5 items-center grid-cols-[1fr_auto] sm:grid-cols-[2fr_1.5fr_80px_90px_90px_48px]"
-                style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || 'No name'}</p>
-                  <p className="text-xs truncate" style={{ color: C.muted }}>{s.email}</p>
+            ) : visible.map((s, i) => {
+              const access = accessInfo(s, C);
+              return (
+                <div key={s.id} className="grid gap-3 px-4 py-3.5 items-center grid-cols-[1fr_auto] sm:grid-cols-[2fr_1.3fr_110px_80px_90px_90px_48px]"
+                  style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color: C.text }}>{s.full_name || 'No name'}</p>
+                    <p className="text-xs truncate" style={{ color: C.muted }}>{s.email}</p>
+                  </div>
+                  <span className="hidden sm:block text-sm truncate" style={{ color: C.muted }}>{cohortMap[s.cohort_id] || '--'}</span>
+                  <span className="hidden sm:flex flex-col items-start gap-0.5">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap" style={{ background: access.bg, color: access.color }}>{access.label}</span>
+                    <span className="text-[10px]" style={{ color: C.faint }}>{access.at ? shortDate(access.at) : ''}</span>
+                  </span>
+                  <span className="hidden sm:block text-sm tabular-nums text-center" style={{ color: C.text }}>{s.cohort_id ? (courseCounts[s.cohort_id] ?? 0) : '--'}</span>
+                  <span className="hidden sm:block text-sm tabular-nums font-semibold text-center" style={{ color: C.green }}>{completedCounts[s.id] ?? 0}</span>
+                  <span className="hidden sm:block text-xs" style={{ color: C.faint }}>{shortDate(s.last_login_at)}</span>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (menuRow?.id === s.id) { setMenuRow(null); setMenuPos(null); }
+                        else {
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          const right = Math.max(8, window.innerWidth - rect.right);
+                          if (window.innerHeight - rect.bottom >= 130) setMenuPos({ top: rect.bottom + 4, right });
+                          else setMenuPos({ bottom: window.innerHeight - rect.top + 4, right });
+                          setMenuRow(s);
+                        }
+                      }}
+                      className="p-1.5 rounded-lg transition-opacity hover:opacity-70"
+                      style={{ color: C.muted, background: menuRow?.id === s.id ? C.pill : 'transparent' }}>
+                      <MoreVertical className="w-4 h-4"/>
+                    </button>
+                  </div>
                 </div>
-                <span className="hidden sm:block text-sm truncate" style={{ color: C.muted }}>{cohortMap[s.cohort_id] || '--'}</span>
-                <span className="hidden sm:block text-sm tabular-nums text-center" style={{ color: C.text }}>{s.cohort_id ? (courseCounts[s.cohort_id] ?? 0) : '--'}</span>
-                <span className="hidden sm:block text-sm tabular-nums font-semibold text-center" style={{ color: C.green }}>{completedCounts[s.id] ?? 0}</span>
-                <span className="hidden sm:block text-xs" style={{ color: C.faint }}>
-                  {s.last_login_at ? new Date(s.last_login_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'Never'}
-                </span>
-                <div className="flex justify-end">
-                  <button
-                    onClick={e => {
-                      e.stopPropagation();
-                      if (menuRow?.id === s.id) { setMenuRow(null); setMenuPos(null); }
-                      else {
-                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                        const right = Math.max(8, window.innerWidth - rect.right);
-                        if (window.innerHeight - rect.bottom >= 130) setMenuPos({ top: rect.bottom + 4, right });
-                        else setMenuPos({ bottom: window.innerHeight - rect.top + 4, right });
-                        setMenuRow(s);
-                      }
-                    }}
-                    className="p-1.5 rounded-lg transition-opacity hover:opacity-70"
-                    style={{ color: C.muted, background: menuRow?.id === s.id ? C.pill : 'transparent' }}>
-                    <MoreVertical className="w-4 h-4"/>
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

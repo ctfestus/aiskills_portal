@@ -60,6 +60,14 @@ export default function ResetPasswordForm({ error }: { error?: string }) {
     try {
       const { error: err } = await supabase.auth.updateUser({ password });
       if (err) throw err;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) {
+        const { error: trackErr } = await supabase
+          .from('students')
+          .update({ password_set_at: new Date().toISOString() })
+          .eq('id', user.id);
+        if (trackErr) console.error('[password_set_at] update failed:', trackErr.message);
+      }
       await supabase.auth.signOut();
       setDone(true);
       setTimeout(() => { window.location.href = '/auth'; }, 2500);

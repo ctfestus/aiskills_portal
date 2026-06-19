@@ -1224,6 +1224,30 @@ export function cohortInviteEmail(data: {
   return shell(content, branding);
 }
 
+// -- Provisioned Student Account ---
+export function studentAccountCreatedEmail(data: {
+  name?: string | null;
+  cohortName: string;
+  setupUrl: string;
+  branding?: EmailBranding;
+}) {
+  const { name, cohortName, setupUrl, branding } = data;
+  const appName = branding?.appName || 'the platform';
+
+  const content = `
+    <p><b>Hi ${esc(name || 'there')},</b></p>
+    <p>Your student account for <b>${esc(cohortName)}</b> on ${esc(appName)} is ready.</p>
+    <p>You do not need to create an account. Set your password with the button below to get started.</p>
+
+    ${cta('Set Password', setupUrl)}
+
+    <p style="color:#888;font-size:13px;">If you were not expecting this account, you can safely ignore this email.</p>
+    <br><p><b>Best regards,</b></p>
+  `;
+
+  return shell(content, branding);
+}
+
 // -- 16. Assignment Submission Confirmation ---
 export function submissionConfirmEmail(data: {
   name: string;

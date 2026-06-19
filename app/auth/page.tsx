@@ -80,7 +80,7 @@ export default function AuthPage() {
       setMessage('You do not have access to this portal. Contact your Learning Advisor.');
     }
     if (params.get('mode') === 'signup') {
-      setIsLogin(false);
+      setMessage('If your Learning Advisor has added you, use the setup link in your email, then sign in here.');
     }
   }, []);
 
@@ -141,7 +141,7 @@ export default function AuthPage() {
   const t      = buildTheme(brand, accent);
 
   const isSuccess = message.includes('Check');
-  const isInfo    = message.includes('sign in instead');
+  const isInfo    = message.includes('sign in instead') || message.includes('setup link');
   const msgStyle  = isSuccess
     ? { background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }
     : isInfo
@@ -342,11 +342,8 @@ export default function AuthPage() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="my-5" style={{ height: 1, background: t.divider }} />
-
           {/* Mode toggle */}
-          <p className="text-center text-sm" style={{ color: t.toggleColor }}>
+          <p className="mt-5 text-center text-sm" style={{ color: t.toggleColor }}>
             {isForgot ? (
               <>
                 Remember your password?{' '}
@@ -358,28 +355,8 @@ export default function AuthPage() {
                   Sign in
                 </button>
               </>
-            ) : isLogin ? (
-              <>
-                Don&apos;t have an account?{' '}
-                <button
-                  onClick={() => { setIsLogin(false); setMessage(''); }}
-                  className="font-semibold transition-colors"
-                  style={{ color: t.accentText }}
-                >
-                  Sign up
-                </button>
-              </>
             ) : (
-              <>
-                Already have an account?{' '}
-                <button
-                  onClick={() => { setIsLogin(true); setMessage(''); }}
-                  className="font-semibold transition-colors"
-                  style={{ color: t.accentText }}
-                >
-                  Sign in
-                </button>
-              </>
+              <span>Need access? Contact your Learning Advisor.</span>
             )}
           </p>
 

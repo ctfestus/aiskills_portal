@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireRole, isAuthError } from '@/lib/api-auth';
-import { createAdmissionRecord } from '@/lib/db-payments';
+import { createAdmissionRecord, activateEnrollment } from '@/lib/db-payments';
 import { Resend } from 'resend';
-import { cohortInviteEmail } from '@/lib/email-templates';
+import { studentAccountCreatedEmail } from '@/lib/email-templates';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
+import { randomBytes } from 'crypto';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -15,6 +16,108 @@ function adminClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   if (!url || !key) throw new Error('Supabase service role key not configured');
   return createClient(url, key);
+}
+
+function makeTemporaryPassword() {
+  return `${randomBytes(32).toString('base64url')}Aa1!`;
+}
+
+function appUrlFrom(settings: Awaited<ReturnType<typeof getTenantSettings>>) {
+  return (process.env.APP_URL || settings.appUrl || '').replace(/\/$/, '');
+}
+
+function passwordSetupUrl(appUrl: string, tokenHash: string) {
+  return `${appUrl}/auth/confirm?token_hash=${encodeURIComponent(tokenHash)}&type=recovery`;
+}
+
+async function provisionStudentAccount(
+  db: ReturnType<typeof adminClient>,
+  input: { email: string; fullName?: string | null; cohortId: string; enrollmentId: string; appUrl: string },
+) {
+  const { email, cohortId, enrollmentId, appUrl } = input;
+  const fullName = input.fullName?.trim() || null;
+
+  const { data: existingStudent, error: existingStudentError } = await db
+    .from('students')
+    .select('id, role, full_name, account_provisioned_at')
+    .eq('email', email)
+    .maybeSingle();
+  if (existingStudentError) throw existingStudentError;
+  if (existingStudent && existingStudent.role !== 'student' && existingStudent.role !== 'staff') {
+    throw new Error('This email already belongs to a staff or admin account.');
+  }
+
+  let studentId = existingStudent?.id as string | undefined;
+  let createdUserId: string | null = null;
+
+  if (!studentId) {
+    const now = new Date().toISOString();
+    const { data: created, error: createUserError } = await db.auth.admin.createUser({
+      email,
+      password: makeTemporaryPassword(),
+      email_confirm: true,
+      user_metadata: fullName ? { full_name: fullName } : {},
+    });
+    if (createUserError || !created.user) {
+      throw createUserError ?? new Error('Could not create student account.');
+    }
+    studentId = created.user.id;
+    createdUserId = created.user.id;
+
+    const { error: profileError } = await db
+      .from('students')
+      .upsert({
+        id:          studentId,
+        email,
+        full_name:   fullName,
+        role:        'student',
+        cohort_id:   cohortId,
+        account_provisioned_at: now,
+        updated_at:  now,
+      }, { onConflict: 'id' });
+    if (profileError) throw profileError;
+  } else {
+    const profilePatch: any = { cohort_id: cohortId, updated_at: new Date().toISOString() };
+    if (fullName && !existingStudent?.full_name) profilePatch.full_name = fullName;
+    if (!existingStudent?.account_provisioned_at) profilePatch.account_provisioned_at = new Date().toISOString();
+    const { error: profileError } = await db.from('students').update(profilePatch).eq('id', studentId);
+    if (profileError) throw profileError;
+  }
+
+  try {
+    const { data: enrollment, error: enrollmentError } = await db
+      .from('bootcamp_enrollments')
+      .select('student_id')
+      .eq('id', enrollmentId)
+      .single();
+    if (enrollmentError) throw enrollmentError;
+
+    if (!enrollment.student_id) {
+      await activateEnrollment(db, email, cohortId, studentId);
+    } else if (enrollment.student_id !== studentId) {
+      throw new Error('This admission record is already linked to a different student account.');
+    }
+
+    // Clean up any stale allowlist entry from the old signup-based flow.
+    await db.from('cohort_allowed_emails').delete().eq('email', email);
+  } catch (err) {
+    if (createdUserId) await db.auth.admin.deleteUser(createdUserId).catch(() => {});
+    throw err;
+  }
+
+  const { data: link, error: linkError } = await db.auth.admin.generateLink({
+    type: 'recovery',
+    email,
+  });
+  if (linkError || !link.properties?.hashed_token) {
+    throw linkError ?? new Error('Could not generate first-access link.');
+  }
+
+  return {
+    studentId,
+    setupUrl: passwordSetupUrl(appUrl, link.properties.hashed_token),
+    isNewAccount: Boolean(createdUserId),
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -202,7 +305,12 @@ export async function POST(req: NextRequest) {
   let inserted = 0;
   let updated = 0;
   const errors: { email: string; error: string }[] = [];
-  const newEmails: string[] = [];
+  const accountEmails: { email: string; name: string; setupUrl: string; isNewAccount: boolean }[] = [];
+  const t = await getTenantSettings();
+  const appUrl = appUrlFrom(t);
+  if (!appUrl) {
+    return NextResponse.json({ error: 'APP_URL or platform App URL must be configured before creating student accounts.' }, { status: 500 });
+  }
 
   for (const row of rows) {
     const email = String(row.email ?? '').trim().toLowerCase();
@@ -213,6 +321,9 @@ export async function POST(req: NextRequest) {
       if (!total_fee || total_fee <= 0) {
         throw new Error('total_fee is required when cohort payment settings are not configured.');
       }
+      if (!cohort?.start_date) {
+        throw new Error('Cohort start date is required before student accounts can be created.');
+      }
 
       const deposit_percent  = Number(settings?.deposit_percent ?? 50);
       const deposit_required = Math.round(total_fee * deposit_percent) / 100;
@@ -220,22 +331,15 @@ export async function POST(req: NextRequest) {
       const amount_paid      = Number(row.amount_paid ?? 0);
       const currency         = settings?.currency ?? 'GHS';
 
-      // Upsert cohort_allowed_emails
-      const { error: allowlistErr } = await db
-        .from('cohort_allowed_emails')
-        .upsert({ email, cohort_id: cohortId }, { onConflict: 'email' });
-      if (allowlistErr) throw allowlistErr;
-
-      // Check if pre-signup admission record already exists
+      // Check if an admission/enrollment record already exists
       const { data: existing } = await db
         .from('bootcamp_enrollments')
         .select('id')
         .eq('email', email)
         .eq('cohort_id', cohortId)
-        .is('student_id', null)
         .maybeSingle();
 
-      await createAdmissionRecord(db, {
+      const enrollmentId = await createAdmissionRecord(db, {
         email,
         fullName:          row.full_name ?? null,
         cohortId,
@@ -256,7 +360,6 @@ export async function POST(req: NextRequest) {
         updated++;
       } else {
         inserted++;
-        newEmails.push(email);
       }
 
       // Create payment audit record if amount paid and no record exists yet
@@ -264,9 +367,7 @@ export async function POST(req: NextRequest) {
         const { data: enrollment } = await db
           .from('bootcamp_enrollments')
           .select('id')
-          .eq('email', email)
-          .eq('cohort_id', cohortId)
-          .is('student_id', null)
+          .eq('id', enrollmentId)
           .maybeSingle();
 
         if (enrollment) {
@@ -291,39 +392,65 @@ export async function POST(req: NextRequest) {
           }
         }
       }
+
+      const provisioned = await provisionStudentAccount(db, {
+        email,
+        fullName: row.full_name ?? null,
+        cohortId,
+        enrollmentId,
+        appUrl,
+      });
+      accountEmails.push({
+        email,
+        name: row.full_name || 'there',
+        setupUrl: provisioned.setupUrl,
+        isNewAccount: provisioned.isNewAccount,
+      });
     } catch (err: any) {
       errors.push({ email, error: err.message ?? 'Unknown error' });
     }
   }
 
-  // Fire-and-forget invitation emails for newly inserted students
-  if (newEmails.length > 0) {
-    (async () => {
+  let setupEmailsSent = 0;
+  if (accountEmails.length > 0) {
+    if (!process.env.RESEND_API_KEY) {
+      for (const account of accountEmails) {
+        errors.push({ email: account.email, error: 'Account created, but RESEND_API_KEY is not configured so the setup email was not sent.' });
+      }
+    } else {
       try {
-        const [{ data: cohortRow }, t] = await Promise.all([
-          db.from('cohorts').select('name').eq('id', cohortId).maybeSingle(),
-          getTenantSettings(),
-        ]);
+        const { data: cohortRow } = await db.from('cohorts').select('name').eq('id', cohortId).maybeSingle();
         const cohortName = cohortRow?.name ?? 'your cohort';
-        const signupUrl  = process.env.APP_URL || t.appUrl || '';
         const FROM       = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
-        const branding   = { appName: t.appName, appUrl: signupUrl, logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName };
+        const branding   = { appName: t.appName, appUrl, logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName };
 
         await resend.batch.send(
-          newEmails.map(email => ({
+          accountEmails.map(account => ({
             from: FROM,
-            to: email,
-            subject: `You've been invited to join ${t.appName || cohortName}`,
-            html: cohortInviteEmail({ cohortName, signupUrl, branding }),
+            to: account.email,
+            subject: `Your ${t.appName || cohortName} account is ready`,
+            html: studentAccountCreatedEmail({
+              name: account.name,
+              cohortName,
+              setupUrl: account.setupUrl,
+              branding,
+            }),
           }))
         );
-      } catch {
-        // non-blocking
+        await db
+          .from('students')
+          .update({ setup_email_sent_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .in('email', accountEmails.map(account => account.email));
+        setupEmailsSent = accountEmails.length;
+      } catch (err: any) {
+        for (const account of accountEmails) {
+          errors.push({ email: account.email, error: err?.message || 'Account created, but the setup email could not be sent.' });
+        }
       }
-    })();
+    }
   }
 
-  return NextResponse.json({ ok: true, inserted, updated, errors });
+  return NextResponse.json({ ok: true, inserted, updated, provisioned: accountEmails.length, setupEmailsSent, errors });
 }
 
 // GET /api/admissions?cohortId=xxx
@@ -339,11 +466,38 @@ export async function GET(req: NextRequest) {
     : { data: null, error: null };
   if (settingsError) return NextResponse.json({ error: settingsError.message }, { status: 500 });
 
-  // Return pre-signup admission records for this cohort
+  // Return the full admission history for this cohort, including records that
+  // have already been linked to provisioned student accounts.
   const query = db
     .from('bootcamp_enrollments')
-    .select('id, email, full_name, total_fee, currency, payment_plan, deposit_required, amount_paid_initial, paid_at, payment_method, payment_reference, notes, created_at')
-    .is('student_id', null)
+    .select(`
+      id,
+      student_id,
+      email,
+      full_name,
+      total_fee,
+      currency,
+      payment_plan,
+      deposit_required,
+      amount_paid_initial,
+      paid_at,
+      payment_method,
+      payment_reference,
+      notes,
+      created_at,
+      student:students(
+        id,
+        full_name,
+        email,
+        onboarding_done,
+        account_provisioned_at,
+        setup_email_sent_at,
+        password_setup_started_at,
+        password_set_at,
+        onboarding_completed_at,
+        last_login_at
+      )
+    `)
     .order('created_at', { ascending: false });
 
   if (cohortId) query.eq('cohort_id', cohortId);
@@ -351,5 +505,5 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ intakes: data ?? [], settings });
+  return NextResponse.json({ admissions: data ?? [], intakes: data ?? [], settings });
 }

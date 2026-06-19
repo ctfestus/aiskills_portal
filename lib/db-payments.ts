@@ -260,8 +260,9 @@ export async function getEnrollmentRows(db: SupabaseClient): Promise<{ rows: Enr
 
 // ---
 // createAdmissionRecord
-// Creates a pre-signup enrollment row (student_id = null).
-// Called by the admissions import. Upserts on (email, cohort_id).
+// Creates or updates an enrollment row for an admitted email.
+// New rows start as pre-signup (student_id = null), while existing provisioned
+// rows keep their student_id and only have admission/payment fields refreshed.
 // ---
 
 export async function createAdmissionRecord(
@@ -291,7 +292,6 @@ export async function createAdmissionRecord(
     .select('id')
     .eq('email', email)
     .eq('cohort_id', input.cohortId)
-    .is('student_id', null)
     .maybeSingle();
 
   const payload: any = {
@@ -324,8 +324,8 @@ export async function createAdmissionRecord(
       .maybeSingle();
 
     const updatePayload = existingPayment
-      ? (({ amount_paid_initial, paid_total, paid_at, payment_method, payment_reference, ...rest }) => rest)(payload)
-      : payload;
+      ? (({ amount_paid_initial, paid_total, paid_at, payment_method, payment_reference, access_status, ...rest }) => rest)(payload)
+      : (({ access_status, ...rest }) => rest)(payload);
 
     const { error } = await db
       .from('bootcamp_enrollments')

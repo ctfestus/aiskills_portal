@@ -210,6 +210,7 @@ export default function OnboardingPage() {
           avatar_url:      avatarUrl || null,
           social_links:    socialLinks,
           onboarding_done: true,
+          onboarding_completed_at: new Date().toISOString(),
         })
         .eq('id', userId);
       if (updateErr) throw updateErr;

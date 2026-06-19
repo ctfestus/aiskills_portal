@@ -10,6 +10,21 @@ import { supabase } from '@/lib/supabase';
 import { IsStaffContext } from '@/components/dashboard/context';
 import { LIGHT_C, cardStyle, modalStyle } from '@/lib/theme';
 
+function formatAdmissionDate(value?: string | null) {
+  return value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '--';
+}
+
+function admissionStatus(row: any) {
+  const student = row.student ?? {};
+  if (student.last_login_at) return { label: 'Signed in', at: student.last_login_at, color: '#16a34a', bg: 'rgba(34,197,94,0.12)' };
+  if (student.onboarding_done) return { label: 'Onboarded', at: student.onboarding_completed_at, color: '#2563eb', bg: 'rgba(37,99,235,0.12)' };
+  if (student.password_set_at) return { label: 'Password set', at: student.password_set_at, color: '#7c3aed', bg: 'rgba(124,58,237,0.12)' };
+  if (student.password_setup_started_at) return { label: 'Link opened', at: student.password_setup_started_at, color: '#d97706', bg: 'rgba(245,158,11,0.16)' };
+  if (student.setup_email_sent_at) return { label: 'Email sent', at: student.setup_email_sent_at, color: '#0284c7', bg: 'rgba(14,165,233,0.14)' };
+  if (student.account_provisioned_at) return { label: 'Created', at: student.account_provisioned_at, color: '#64748b', bg: 'rgba(100,116,139,0.14)' };
+  return { label: row.student_id ? 'Account linked' : 'Admission only', at: row.created_at, color: '#64748b', bg: 'rgba(100,116,139,0.14)' };
+}
+
 export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   const isStaff = useContext(IsStaffContext);
   const isLight = C.text === '#111';
@@ -35,8 +50,8 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   const [viewMode, setViewMode]         = useState<'list' | 'detail'>('list');
   const [activeTab, setActiveTab]       = useState<'students' | 'manage' | 'courses' | 'payment' | 'admissions'>('students');
   const [reassignId, setReassignId]     = useState<string | null>(null);
-  const [allowedEmails, setAllowedEmails]   = useState<any[]>([]);
-  const [emailLoading, setEmailLoading]     = useState(false);
+  const [admissionsList, setAdmissionsList] = useState<any[]>([]);
+  const [admissionsLoading, setAdmissionsLoading] = useState(false);
   const [menuOpenId, setMenuOpenId]     = useState<string | null>(null);
   const [editOpen, setEditOpen]         = useState(false);
   const [editForm, setEditForm]         = useState({ name: '', description: '', start_date: '', end_date: '' });
@@ -49,7 +64,7 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
   const [admissionsCsv,    setAdmissionsCsv]    = useState('');
   const [admissionsRows,   setAdmissionsRows]   = useState<any[]>([]);
   const [admissionsSaving, setAdmissionsSaving] = useState(false);
-  const [admissionsResult, setAdmissionsResult] = useState<{ inserted: number; updated: number; errors: any[] } | null>(null);
+  const [admissionsResult, setAdmissionsResult] = useState<{ inserted: number; updated: number; provisioned: number; setupEmailsSent: number; errors: any[] } | null>(null);
   const [admissionsError,  setAdmissionsError]  = useState('');
 
   const blankAdmissionForm = { email: '', full_name: '', total_fee: '', payment_plan: 'flexible', amount_paid: '', paid_at: '', payment_method: '', payment_reference: '', notes: '' };
@@ -115,9 +130,15 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
       }).then(r => r.json());
       if (res.error) { setAdmissionsError(res.error); }
       else {
-        setAdmissionsResult({ inserted: res.inserted, updated: res.updated, errors: res.errors ?? [] });
+        setAdmissionsResult({
+          inserted: res.inserted ?? 0,
+          updated: res.updated ?? 0,
+          provisioned: res.provisioned ?? 0,
+          setupEmailsSent: res.setupEmailsSent ?? 0,
+          errors: res.errors ?? [],
+        });
         setAdmissionsCsv(''); setAdmissionsRows([]);
-        loadAllowedEmails(selectedCohort.id);
+        await Promise.all([loadAdmissions(selectedCohort.id), refreshStudents()]);
       }
     } catch { setAdmissionsError('Import failed. Please try again.'); }
     setAdmissionsSaving(false);
@@ -148,11 +169,20 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
         const status = res.inserted > 0 ? 'added' : 'updated';
         setAddAdmissionLog(prev => [{ email: row.email, name: row.full_name ?? '', status }, ...prev]);
         setAddAdmissionForm(blankAdmissionForm);
-        loadAllowedEmails(selectedCohort.id);
+        await Promise.all([loadAdmissions(selectedCohort.id), refreshStudents()]);
         if (closeAfter) { setAddAdmissionOpen(false); setAddAdmissionLog([]); }
       }
     } catch { setAddAdmissionError('Failed to save. Please try again.'); }
     setAddAdmissionSaving(false);
+  };
+
+  const refreshStudents = async () => {
+    const { data } = await supabase
+      .from('students')
+      .select('id, full_name, email, cohort_id, role')
+      .eq('role', 'student')
+      .order('full_name');
+    setStudents(data ?? []);
   };
 
   const load = async () => {
@@ -180,17 +210,17 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
 
   useEffect(() => {
     if (isStaff) {
-      setAllowedEmails([]);
+      setAdmissionsList([]);
       return;
     }
-    if (selectedCohort?.id) loadAllowedEmails(selectedCohort.id);
-    else setAllowedEmails([]);
+    if (selectedCohort?.id) loadAdmissions(selectedCohort.id);
+    else setAdmissionsList([]);
   }, [isStaff, selectedCohort?.id]);
 
   useEffect(() => {
     if (isStaff) return;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session && selectedCohort?.id) loadAllowedEmails(selectedCohort.id);
+      if (session && selectedCohort?.id) loadAdmissions(selectedCohort.id);
     });
     return () => subscription.unsubscribe();
   }, [isStaff, selectedCohort?.id]);
@@ -204,23 +234,19 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
     return () => document.removeEventListener('mousedown', handler);
   }, [menuOpenId]);
 
-  const loadAllowedEmails = async (cohortId: string) => {
-    setEmailLoading(true);
+  const loadAdmissions = async (cohortId: string) => {
+    setAdmissionsLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setEmailLoading(false); return; }
-      const [allowRes, admissionsRes, cohortRes] = await Promise.all([
-        fetch(`/api/cohort-allowlist?cohortId=${cohortId}`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        }),
+      if (!session) { setAdmissionsLoading(false); return; }
+      const [admissionsRes, cohortRes] = await Promise.all([
         fetch(`/api/admissions?cohortId=${cohortId}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
         }),
         supabase.from('cohorts').select('start_date, end_date').eq('id', cohortId).single(),
       ]);
-      const json = await allowRes.json();
       const admissionsJson = await admissionsRes.json();
-      setAllowedEmails(json.emails ?? []);
+      setAdmissionsList(admissionsJson.admissions ?? admissionsJson.intakes ?? []);
       const settings = admissionsJson.settings;
       const cohortDates = cohortRes.data;
       setPaymentSettings({
@@ -237,7 +263,7 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
     } catch {
       // network error -- leave existing state, will retry on next cohort select
     } finally {
-      setEmailLoading(false);
+      setAdmissionsLoading(false);
     }
   };
 
@@ -283,16 +309,6 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
       setPaymentSettingsError('Failed to save payment settings.');
     }
     setPaymentSettingsSaving(false);
-  };
-
-  const removeEmail = async (id: string) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    await fetch('/api/cohort-allowlist', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-      body: JSON.stringify({ id }),
-    });
-    setAllowedEmails(prev => prev.filter(e => e.id !== id));
   };
 
   const openEdit = (c: any) => {
@@ -508,7 +524,7 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
     { id: 'manage',     label: `Manage (${allUnassigned.length} unassigned)` },
     { id: 'courses',    label: `Assign Courses` },
     { id: 'payment',    label: 'Payment' },
-    { id: 'admissions', label: `Admissions (${allowedEmails.length})` },
+    { id: 'admissions', label: `Admissions (${admissionsList.length})` },
   ] as const;
   const visibleTabs = isStaff ? TABS.filter(t => t.id === 'students' || t.id === 'courses') : TABS;
 
@@ -1000,7 +1016,9 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                       )}
                       {admissionsResult && (
                         <div className="rounded-xl px-4 py-3 space-y-1" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}>
-                          <p className="text-xs font-semibold" style={{ color: '#16a34a' }}>Import complete -- {admissionsResult.inserted} added, {admissionsResult.updated} updated</p>
+                          <p className="text-xs font-semibold" style={{ color: '#16a34a' }}>
+                            Import complete -- {admissionsResult.inserted} admission{admissionsResult.inserted !== 1 ? 's' : ''} added, {admissionsResult.updated} updated, {admissionsResult.provisioned} setup link{admissionsResult.provisioned !== 1 ? 's' : ''} prepared, {admissionsResult.setupEmailsSent} email{admissionsResult.setupEmailsSent !== 1 ? 's' : ''} sent
+                          </p>
                           {admissionsResult.errors.length > 0 && <p className="text-xs" style={{ color: '#dc2626' }}>{admissionsResult.errors.length} error(s): {admissionsResult.errors.map((e: any) => e.email).join(', ')}</p>}
                         </div>
                       )}
@@ -1015,32 +1033,63 @@ export function CohortsSection({ C }: { C: typeof LIGHT_C }) {
                       </div>
                     </div>
                   )}
-                  {/* Allowlist */}
+                  {/* Admissions history */}
                   <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
                     <div className="px-4 py-3 flex items-center gap-2.5 border-b" style={{ borderColor: C.divider }}>
                       <Mail className="w-4 h-4" style={{ color: C.muted }}/>
-                      <p className="text-sm font-semibold" style={{ color: C.text }}>Allowlist</p>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: C.pill, color: C.muted }}>{allowedEmails.length}</span>
+                      <p className="text-sm font-semibold" style={{ color: C.text }}>Admissions History</p>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: C.pill, color: C.muted }}>{admissionsList.length}</span>
                     </div>
-                    {emailLoading ? (
+                    {admissionsLoading ? (
                       <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" style={{ color: C.faint }}/></div>
-                    ) : allowedEmails.length === 0 ? (
+                    ) : admissionsList.length === 0 ? (
                       <div className="flex flex-col items-center py-10 gap-1.5">
                         <Mail className="w-8 h-8 opacity-20" style={{ color: C.faint }}/>
-                        <p className="text-sm" style={{ color: C.faint }}>No emails added yet</p>
-                        <p className="text-xs" style={{ color: C.faint }}>Import students via CSV Import to populate this list</p>
+                        <p className="text-sm" style={{ color: C.faint }}>No admissions yet</p>
+                        <p className="text-xs" style={{ color: C.faint }}>Add or import students to create accounts and send setup emails.</p>
                       </div>
                     ) : (
-                      <div className="max-h-[320px] overflow-y-auto">
-                        {allowedEmails.map((e, i) => (
-                          <div key={e.id} className="flex items-center gap-3 px-4 py-2.5 group"
-                            style={{ borderBottom: i < allowedEmails.length - 1 ? `1px solid ${C.divider}` : 'none' }}>
-                            <p className="flex-1 text-sm truncate" style={{ color: C.text }}>{e.email}</p>
-                            <button onClick={() => removeEmail(e.id)} className="p-1 rounded-lg transition-all hover:bg-red-500/10" style={{ color: '#ef4444' }}>
-                              <X className="w-3.5 h-3.5"/>
-                            </button>
-                          </div>
-                        ))}
+                      <div className="overflow-x-auto">
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ background: C.pill }}>
+                              {['Student', 'Payment', 'Setup Status', 'Last Login', 'Imported'].map(h => (
+                                <th key={h} style={{ padding: '10px 12px', textAlign: h === 'Payment' ? 'right' : 'left', color: C.faint, fontWeight: 700, whiteSpace: 'nowrap' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {admissionsList.map((row, i) => {
+                              const status = admissionStatus(row);
+                              const studentName = row.student?.full_name || row.full_name || 'No name';
+                              const email = row.student?.email || row.email || '';
+                              const paid = Number(row.amount_paid_initial ?? 0);
+                              const total = Number(row.total_fee ?? 0);
+                              return (
+                                <tr key={row.id} style={{ borderTop: i === 0 ? 'none' : `1px solid ${C.divider}` }}>
+                                  <td style={{ padding: '10px 12px', color: C.text, minWidth: 180 }}>
+                                    <p className="font-semibold truncate" style={{ margin: 0, color: C.text }}>{studentName}</p>
+                                    <p className="truncate" style={{ margin: '2px 0 0', color: C.muted, fontSize: 11 }}>{email}</p>
+                                  </td>
+                                  <td style={{ padding: '10px 12px', color: C.muted, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                    <p style={{ margin: 0 }}>{row.currency ?? 'GHS'} {paid.toLocaleString()} / {total.toLocaleString()}</p>
+                                    <p style={{ margin: '2px 0 0', fontSize: 11 }}>{row.payment_plan ?? 'flexible'}</p>
+                                  </td>
+                                  <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: status.bg, color: status.color }}>{status.label}</span>
+                                    <p style={{ margin: '4px 0 0', color: C.faint, fontSize: 11 }}>{formatAdmissionDate(status.at)}</p>
+                                  </td>
+                                  <td style={{ padding: '10px 12px', color: C.muted, whiteSpace: 'nowrap' }}>
+                                    {formatAdmissionDate(row.student?.last_login_at)}
+                                  </td>
+                                  <td style={{ padding: '10px 12px', color: C.muted, whiteSpace: 'nowrap' }}>
+                                    {formatAdmissionDate(row.created_at)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     )}
                   </div>
