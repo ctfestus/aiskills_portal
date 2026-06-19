@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
 import { requireRole, isAuthError } from '@/lib/api-auth';
+import { pointsSystemFromCourseRow } from '@/lib/course-schema';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,9 +43,7 @@ export async function POST(req: NextRequest) {
         passmark: c.passmark,
         courseTimer: c.course_timer,
         learnOutcomes: c.learn_outcomes,
-        // Partial by design (mirrors the page reconstructions): only enabled/basePoints are
-        // persisted, and receivers read pointsSystem first with their own fallbacks.
-        pointsSystem: { enabled: c.points_enabled ?? false, basePoints: c.points_base ?? 100 },
+        pointsSystem: pointsSystemFromCourseRow(c),
         postSubmission: c.post_submission,
         coverImage: c.cover_image,
         deadline_days: c.deadline_days,

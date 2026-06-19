@@ -16,6 +16,7 @@ import type {
   FieldType, FormField, QuestionType, DownloadItem, CourseQuestion,
   Speaker, EventDetails, PostSubmission, PointsMilestone, PointsSystem, FormConfig,
 } from '@/lib/course-schema';
+import { pointsSystemFromCourseRow } from '@/lib/course-schema';
 import dynamic from 'next/dynamic';
 import GeneratingOverlay from '@/components/GeneratingOverlay';
 import { ImageCropModal } from '@/components/ImageCropModal';
@@ -614,7 +615,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
     setIsLoading(true);
     (async () => {
       if (contentType === 'course') {
-        const { data: course } = await supabase.from('courses').select('id, title, description, slug, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, post_submission, cover_image, badge_image_url, deadline_days, theme, mode, font, custom_accent, category, show_answers, lesson_timing, max_attempts').eq('id', formId).maybeSingle();
+        const { data: course } = await supabase.from('courses').select('id, title, description, slug, cohort_ids, questions, fields, passmark, course_timer, learn_outcomes, points_enabled, points_base, points_system, post_submission, cover_image, badge_image_url, deadline_days, theme, mode, font, custom_accent, category, show_answers, lesson_timing, max_attempts').eq('id', formId).maybeSingle();
         if (course) {
           setFormConfig({
             isCourse: true,
@@ -629,7 +630,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
             lessonTiming: course.lesson_timing ?? undefined,
             maxAttempts: course.max_attempts ?? undefined,
             learnOutcomes: course.learn_outcomes ?? [],
-            pointsSystem: { ...DEFAULT_POINTS, enabled: course.points_enabled ?? false, basePoints: course.points_base ?? 100 },
+            pointsSystem: pointsSystemFromCourseRow(course),
             postSubmission: course.post_submission,
             deadline_days: course.deadline_days,
             theme: course.theme,

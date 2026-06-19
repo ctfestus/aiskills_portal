@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { adminClient } from '@/lib/admin-client';
 import { requireRole, requireUser, isAuthError } from '@/lib/api-auth';
-import { normalizeFormConfig, validateFormConfig, normalizeQuestions } from '@/lib/course-schema';
+import { normalizeFormConfig, validateFormConfig, normalizeQuestions, normalizePointsSystem, LEGACY_RUNTIME_POINTS_SYSTEM } from '@/lib/course-schema';
 import { extractDocImageUrls } from '@/lib/lesson-doc';
 import { sendAssignmentNotifications } from '@/lib/send-assignment-notification';
 import { autoRegisterEventCohorts } from '@/lib/auto-register-event-cohorts';
@@ -116,6 +116,7 @@ export async function POST(req: NextRequest) {
           learn_outcomes: config.learnOutcomes   ?? [],
           points_enabled: config.pointsSystem?.enabled   ?? true,
           points_base:    config.pointsSystem?.basePoints ?? 50,
+          points_system:  normalizePointsSystem(config.pointsSystem ?? { enabled: true, basePoints: 50 }, LEGACY_RUNTIME_POINTS_SYSTEM),
           post_submission: config.postSubmission ?? null,
           category:       config.category        ?? null,
           lesson_timing:  config.lessonTiming    ?? null,
@@ -246,6 +247,7 @@ export async function PUT(req: NextRequest) {
       learn_outcomes: config.learnOutcomes   ?? [],
       points_enabled: config.pointsSystem?.enabled   ?? true,
       points_base:    config.pointsSystem?.basePoints ?? 50,
+      points_system:  normalizePointsSystem(config.pointsSystem ?? { enabled: true, basePoints: 50 }, LEGACY_RUNTIME_POINTS_SYSTEM),
       post_submission: config.postSubmission ?? null,
       category:       config.category        ?? null,
       lesson_timing:  config.lessonTiming    ?? null,

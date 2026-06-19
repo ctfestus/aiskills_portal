@@ -19,6 +19,7 @@ import { NAV_ITEMS, STAFF_SECTION_IDS, type SectionId } from '@/components/dashb
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { SectionContent } from '@/components/dashboard/SectionContent';
 import { CreateCourseMenu, getFormType } from '@/components/dashboard/content-cards';
+import { pointsSystemFromCourseRow } from '@/lib/course-schema';
 
 // --- Cache ---
 const _cache: { forms: any[] | null; profile: any | null; user: any | null } = { forms: null, profile: null, user: null };
@@ -139,8 +140,7 @@ export default function DashboardPage() {
           passmark: c.passmark, courseTimer: c.course_timer,
           learnOutcomes: c.learn_outcomes,
           // Partial by design: see app/[id]/page.tsx -- normalizing to a full
-          // DEFAULT_POINTS_SYSTEM object would silently change XP scoring.
-          pointsSystem: { enabled: c.points_enabled ?? false, basePoints: c.points_base ?? 100 },
+          pointsSystem: pointsSystemFromCourseRow(c),
           postSubmission: c.post_submission,
           coverImage: c.cover_image, deadline_days: c.deadline_days,
           theme: c.theme, mode: c.mode, font: c.font, customAccent: c.custom_accent,

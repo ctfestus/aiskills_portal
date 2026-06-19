@@ -200,6 +200,53 @@ export const DEFAULT_POINTS_SYSTEM: PointsSystem = {
   milestones: [],
 };
 
+export const LEGACY_RUNTIME_POINTS_SYSTEM: PointsSystem = {
+  enabled: false,
+  basePoints: 100,
+  timeBonusEnabled: true,
+  timeBonusSeconds: 10,
+  timeBonusMultiplier: 1.5,
+  streakEnabled: true,
+  streakCount: 3,
+  streakBonus: 0,
+  hintPenalty: 20,
+  solutionPenalty: 30,
+  milestones: [],
+};
+
+export function normalizePointsSystem(
+  value: Partial<PointsSystem> | null | undefined,
+  fallback: PointsSystem = DEFAULT_POINTS_SYSTEM,
+): PointsSystem {
+  const raw = value && typeof value === 'object' ? value : {};
+  const num = (v: unknown, fb: number) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fb;
+  };
+  return {
+    enabled:             typeof raw.enabled === 'boolean' ? raw.enabled : fallback.enabled,
+    basePoints:          num(raw.basePoints, fallback.basePoints),
+    timeBonusEnabled:    typeof raw.timeBonusEnabled === 'boolean' ? raw.timeBonusEnabled : fallback.timeBonusEnabled,
+    timeBonusSeconds:    num(raw.timeBonusSeconds, fallback.timeBonusSeconds),
+    timeBonusMultiplier: num(raw.timeBonusMultiplier, fallback.timeBonusMultiplier),
+    streakEnabled:       typeof raw.streakEnabled === 'boolean' ? raw.streakEnabled : fallback.streakEnabled,
+    streakCount:         num(raw.streakCount, fallback.streakCount),
+    streakBonus:         num(raw.streakBonus, fallback.streakBonus),
+    hintPenalty:         num(raw.hintPenalty, fallback.hintPenalty),
+    solutionPenalty:     num(raw.solutionPenalty, fallback.solutionPenalty),
+    milestones:          Array.isArray(raw.milestones) ? raw.milestones : fallback.milestones,
+  };
+}
+
+export function pointsSystemFromCourseRow(row: any): PointsSystem {
+  const legacy = normalizePointsSystem({
+    ...LEGACY_RUNTIME_POINTS_SYSTEM,
+    enabled:    row?.points_enabled ?? LEGACY_RUNTIME_POINTS_SYSTEM.enabled,
+    basePoints: row?.points_base ?? LEGACY_RUNTIME_POINTS_SYSTEM.basePoints,
+  }, LEGACY_RUNTIME_POINTS_SYSTEM);
+  return normalizePointsSystem(row?.points_system, legacy);
+}
+
 // --- Normalize (ingest) ---
 
 function newId(): string {
@@ -234,22 +281,24 @@ export function normalizeFormConfig(raw: any): FormConfig {
   const {
     // strip legacy aliases out of the spread so the canonical shape stays clean
     timer, course_timer,
-    pointsEnabled, points_enabled, pointsBase, points_base,
+    pointsEnabled, points_enabled, pointsBase, points_base, points_system,
     ...rest
   } = raw ?? {};
 
   const courseTimer = rest.courseTimer ?? timer ?? course_timer ?? undefined;
 
-  let pointsSystem: PointsSystem | undefined = rest.pointsSystem;
-  if (!pointsSystem) {
+  let pointsSystem: PointsSystem | undefined = rest.pointsSystem ?? points_system;
+  if (pointsSystem) {
+    pointsSystem = normalizePointsSystem(pointsSystem, LEGACY_RUNTIME_POINTS_SYSTEM);
+  } else {
     const enabled = pointsEnabled ?? points_enabled;
     const basePoints = pointsBase ?? points_base;
     if (enabled != null || basePoints != null) {
-      pointsSystem = {
-        ...DEFAULT_POINTS_SYSTEM,
-        enabled: enabled ?? DEFAULT_POINTS_SYSTEM.enabled,
-        basePoints: basePoints ?? DEFAULT_POINTS_SYSTEM.basePoints,
-      };
+      pointsSystem = normalizePointsSystem({
+        ...LEGACY_RUNTIME_POINTS_SYSTEM,
+        enabled: enabled ?? LEGACY_RUNTIME_POINTS_SYSTEM.enabled,
+        basePoints: basePoints ?? LEGACY_RUNTIME_POINTS_SYSTEM.basePoints,
+      }, LEGACY_RUNTIME_POINTS_SYSTEM);
     }
   }
 

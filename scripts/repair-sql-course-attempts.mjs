@@ -60,8 +60,119 @@ function parseAnswer(value) {
   try { return JSON.parse(value); } catch { return value; }
 }
 
-function solutionViewCount(questions, answers) {
-  return questions.filter(q => !!parseAnswer(answers?.[q.id])?.solutionViewed).length;
+const LEGACY_RUNTIME_POINTS_SYSTEM = {
+  enabled: false,
+  basePoints: 100,
+  timeBonusEnabled: true,
+  timeBonusSeconds: 10,
+  timeBonusMultiplier: 1.5,
+  streakEnabled: true,
+  streakCount: 3,
+  streakBonus: 0,
+  hintPenalty: 20,
+  solutionPenalty: 30,
+  milestones: [],
+};
+
+function normalizePointsSystem(value, fallback = LEGACY_RUNTIME_POINTS_SYSTEM) {
+  const raw = value && typeof value === 'object' ? value : {};
+  const num = (v, fb) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fb;
+  };
+  return {
+    enabled:             typeof raw.enabled === 'boolean' ? raw.enabled : fallback.enabled,
+    basePoints:          num(raw.basePoints, fallback.basePoints),
+    timeBonusEnabled:    typeof raw.timeBonusEnabled === 'boolean' ? raw.timeBonusEnabled : fallback.timeBonusEnabled,
+    timeBonusSeconds:    num(raw.timeBonusSeconds, fallback.timeBonusSeconds),
+    timeBonusMultiplier: num(raw.timeBonusMultiplier, fallback.timeBonusMultiplier),
+    streakEnabled:       typeof raw.streakEnabled === 'boolean' ? raw.streakEnabled : fallback.streakEnabled,
+    streakCount:         num(raw.streakCount, fallback.streakCount),
+    streakBonus:         num(raw.streakBonus, fallback.streakBonus),
+    hintPenalty:         num(raw.hintPenalty, fallback.hintPenalty),
+    solutionPenalty:     num(raw.solutionPenalty, fallback.solutionPenalty),
+    milestones:          Array.isArray(raw.milestones) ? raw.milestones : fallback.milestones,
+  };
+}
+
+function pointsSystemFromCourse(course) {
+  const legacy = normalizePointsSystem({
+    ...LEGACY_RUNTIME_POINTS_SYSTEM,
+    enabled: course?.points_enabled ?? LEGACY_RUNTIME_POINTS_SYSTEM.enabled,
+    basePoints: course?.points_base ?? LEGACY_RUNTIME_POINTS_SYSTEM.basePoints,
+  });
+  return normalizePointsSystem(course?.points_system, legacy);
+}
+
+function repairQuestionCorrect(course, q, answers) {
+  const ua = answers?.[q.id];
+  if (ua == null) return false;
+  const type = q.type ?? 'multiple_choice';
+  if (['code_review', 'excel_review', 'dashboard_critique'].includes(type)) return ua === 'completed';
+  if (type === 'sql_exercise') {
+    const parsed = parseAnswer(ua);
+    return !(parsed?.skipped || parsed?.solutionViewed) && !!parsed?.passed;
+  }
+  if (type === 'python_exercise') {
+    const parsed = parseAnswer(ua);
+    return !(parsed?.skipped || parsed?.solutionViewed) && !!parsed?.passed && verifyPythonProof(course.id, q.id, parsed.output, parsed.proof);
+  }
+  if (type === 'document_review') {
+    const parsed = parseAnswer(ua);
+    return parsed?.completed === true || ua === 'completed';
+  }
+  if (type === 'fill_blank') {
+    const accepted = (q.correctAnswer ?? '').split('|').map(v => v.trim().toLowerCase());
+    return accepted.includes(String(ua).trim().toLowerCase());
+  }
+  if (type === 'arrange') return ua === q.correctAnswer;
+  return ua === q.correctAnswer;
+}
+
+function calculateRepairPoints(course, scorable, attempt) {
+  const pointsSystem = pointsSystemFromCourse(course);
+  if (!pointsSystem.enabled) return 0;
+  const answers = attempt.answers && typeof attempt.answers === 'object' ? attempt.answers : {};
+  const hintsUsed = Array.isArray(attempt.hints_used) ? attempt.hints_used : [];
+  const events = scorable
+    .map((q, index) => {
+      const parsed = parseAnswer(answers[q.id]) ?? {};
+      const meta = parseAnswer(answers[`__meta_${q.id}`]) ?? {};
+      const elapsed = Number(meta.elapsedSeconds ?? parsed.elapsedSeconds);
+      const answeredAtRaw = meta.answeredAt ?? parsed.answeredAt ?? parsed.checkedAt;
+      const answeredAtMs = answeredAtRaw ? Date.parse(String(answeredAtRaw)) : NaN;
+      return {
+        q,
+        index,
+        raw: answers[q.id],
+        correct: repairQuestionCorrect(course, q, answers),
+        solutionViewed: !!parsed?.solutionViewed,
+        elapsedSeconds: Number.isFinite(elapsed) && elapsed >= 0 ? elapsed : null,
+        answeredAtMs: Number.isFinite(answeredAtMs) ? answeredAtMs : null,
+      };
+    })
+    .filter(e => e.raw != null)
+    .sort((a, b) => (a.answeredAtMs ?? Number.POSITIVE_INFINITY) - (b.answeredAtMs ?? Number.POSITIVE_INFINITY) || a.index - b.index);
+
+  let points = 0;
+  let streak = 0;
+  for (const event of events) {
+    if (event.correct) {
+      streak += 1;
+      const withinTimeBonus = pointsSystem.timeBonusEnabled
+        && event.elapsedSeconds != null
+        && event.elapsedSeconds <= pointsSystem.timeBonusSeconds;
+      let earned = Math.round(pointsSystem.basePoints * (withinTimeBonus ? pointsSystem.timeBonusMultiplier : 1));
+      const isStreak = pointsSystem.streakEnabled && streak >= pointsSystem.streakCount;
+      if (isStreak) earned = pointsSystem.streakBonus > 0 ? earned + pointsSystem.streakBonus : Math.round(earned * 1.2);
+      if (hintsUsed.includes(event.q.id)) earned = Math.max(0, earned - pointsSystem.hintPenalty);
+      points += earned;
+    } else {
+      streak = 0;
+      if (event.solutionViewed) points = Math.max(0, points - pointsSystem.solutionPenalty);
+    }
+  }
+  return Math.max(0, Math.round(points));
 }
 
 // Mirrors production complete-attempt scoring exactly:
@@ -157,7 +268,7 @@ const supabase = createClient(
 
 const { data: courses, error: coursesError } = await supabase
   .from('courses')
-  .select('id, title, passmark, points_enabled, points_base, questions')
+  .select('id, title, passmark, points_enabled, points_base, points_system, questions')
   .order('created_at', { ascending: false });
 
 if (coursesError) throw coursesError;
@@ -184,9 +295,7 @@ for (const course of targetCourses) {
   for (const attempt of attempts ?? []) {
     const scored  = scoreAttempt(course, questions, attempt);
     const passed  = scored.score >= (course.passmark ?? 50);
-    const points  = course.points_enabled
-      ? Math.max(0, scored.correct * (course.points_base ?? 100) - (attempt.hints_used ?? []).length * 20 - solutionViewCount(scored.scorable, attempt.answers ?? {}) * 30)
-      : 0;
+    const points  = calculateRepairPoints(course, scored.scorable, attempt);
     const answeredCount   = countable.filter(q => attempt.answers?.[q.id] != null).length;
     const appearsSubmitted = !!attempt.completed_at
       || (attempt.current_question_index ?? 0) >= questions.length

@@ -9,6 +9,7 @@ import { publishActivity } from '@/lib/activity';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { updateLearningPathProgress } from '@/lib/learning-path-progress';
 import { courseResultEmail } from '@/lib/email-templates';
+import { pointsSystemFromCourseRow, type PointsSystem } from '@/lib/course-schema';
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -606,7 +607,7 @@ export async function POST(req: NextRequest) {
 
       const [{ data: courseData }, { data: attempt }, { data: studentRow }] = await Promise.all([
         supabase.from('courses')
-          .select('questions, passmark, points_enabled, points_base')
+          .select('questions, passmark, points_enabled, points_base, points_system')
           .eq('id', course_id).single(),
         supabase.from('course_attempts')
           .select('id, answers, hints_used')
@@ -674,10 +675,71 @@ export async function POST(req: NextRequest) {
         const total     = scorable.length;
         const scorePct  = total === 0 ? 100 : Math.round((correct / total) * 100);
         const passed    = scorePct >= passmark;
-        const solutionViews = scorable.filter(q => !!parseAnswer(storedAnswers[q.id])?.solutionViewed).length;
-        const computed_points = courseData.points_enabled
-          ? Math.max(0, correct * (courseData.points_base ?? 100) - hintsUsed.length * 20 - solutionViews * 30)
-          : 0;
+        const pointsSystem: PointsSystem = pointsSystemFromCourseRow(courseData);
+
+        const answerMetaFor = (q: any) => {
+          const raw = storedAnswers[q.id];
+          const parsed = parseAnswer(raw) ?? {};
+          const meta = parseAnswer(storedAnswers[`__meta_${q.id}`]) ?? {};
+          const elapsedRaw = meta.elapsedSeconds ?? parsed.elapsedSeconds;
+          const elapsed = Number(elapsedRaw);
+          const answeredAtRaw = meta.answeredAt ?? parsed.answeredAt ?? parsed.checkedAt;
+          const answeredAtMs = answeredAtRaw ? Date.parse(String(answeredAtRaw)) : NaN;
+          return {
+            parsed,
+            elapsedSeconds: Number.isFinite(elapsed) && elapsed >= 0 ? elapsed : null,
+            answeredAtMs: Number.isFinite(answeredAtMs) ? answeredAtMs : null,
+          };
+        };
+
+        const calculateEarned = (q: any, pointStreak: number, elapsedSeconds: number | null) => {
+          const withinTimeBonus = pointsSystem.timeBonusEnabled
+            && elapsedSeconds != null
+            && elapsedSeconds <= pointsSystem.timeBonusSeconds;
+          const timeMultiplier = withinTimeBonus ? pointsSystem.timeBonusMultiplier : 1;
+          let earned = Math.round(pointsSystem.basePoints * timeMultiplier);
+          const isStreak = pointsSystem.streakEnabled && pointStreak >= pointsSystem.streakCount;
+          if (isStreak) {
+            earned = pointsSystem.streakBonus > 0
+              ? earned + pointsSystem.streakBonus
+              : Math.round(earned * 1.2);
+          }
+          if (hintsUsed.includes(q.id)) earned = Math.max(0, earned - pointsSystem.hintPenalty);
+          return earned;
+        };
+
+        const pointEvents = scorable
+          .map((q, index) => {
+            const meta = answerMetaFor(q);
+            return {
+              q,
+              index,
+              raw: storedAnswers[q.id],
+              correct: scoreQuestion(q),
+              solutionViewed: !!meta.parsed?.solutionViewed,
+              elapsedSeconds: meta.elapsedSeconds,
+              answeredAtMs: meta.answeredAtMs,
+            };
+          })
+          .filter(e => e.raw != null)
+          .sort((a, b) => (a.answeredAtMs ?? Number.POSITIVE_INFINITY) - (b.answeredAtMs ?? Number.POSITIVE_INFINITY) || a.index - b.index);
+
+        let computed_points = 0;
+        if (pointsSystem.enabled) {
+          let pointStreak = 0;
+          for (const event of pointEvents) {
+            if (event.correct) {
+              pointStreak += 1;
+              computed_points += calculateEarned(event.q, pointStreak, event.elapsedSeconds);
+            } else {
+              pointStreak = 0;
+              if (event.solutionViewed) {
+                computed_points = Math.max(0, computed_points - pointsSystem.solutionPenalty);
+              }
+            }
+          }
+          computed_points = Math.max(0, Math.round(computed_points));
+        }
 
         const { error: updateError } = await supabase.from('course_attempts').update({
           completed_at:           new Date().toISOString(),

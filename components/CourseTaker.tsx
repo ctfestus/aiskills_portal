@@ -316,6 +316,11 @@ export function CourseTaker({
   const currentQuestion = questions[currentQuestionIndex];
   const totalQuestions = questions.filter((q: any) => !q.lessonOnly && !q.isSection && !q.isDownloads).length;
   const totalSlides = questions.length;
+  const answerMetaKey = (id: string) => `__meta_${id}`;
+  const buildAnswerMeta = () => JSON.stringify({
+    answeredAt: new Date().toISOString(),
+    elapsedSeconds: Math.max(0, (Date.now() - questionStartTime) / 1000),
+  });
   // Current section: walk back from currentQuestionIndex to find the nearest section divider
   const currentSection = useMemo(() => {
     for (let i = currentQuestionIndex; i >= 0; i--) {
@@ -2109,8 +2114,9 @@ export function CourseTaker({
     const newStreak = streak + 1;
     const streakEnabled = ps?.streakEnabled ?? true;
     const isStreak = streakEnabled && newStreak >= (ps?.streakCount ?? 3);
-    const streakMultiplier = isStreak ? 1.2 : 1;
-    let earned = Math.round(base * timeMultiplier * streakMultiplier);
+    const streakBonus = ps?.streakBonus ?? 0;
+    let earned = Math.round(base * timeMultiplier);
+    if (isStreak) earned = streakBonus > 0 ? earned + streakBonus : Math.round(earned * 1.2);
     if (hintUsed) earned = Math.max(0, earned - (ps?.hintPenalty ?? 20));
     let label = `+${earned} XP`;
     if (withinTimeBonus && isStreak) label = `🔥⚡ +${earned} XP`;
@@ -2187,7 +2193,7 @@ export function CourseTaker({
         setXpNotify(true);
         setTimeout(() => setXpNotify(false), 2500);
         if (isStreak) {
-          setStreakToast(`${newStreak} in a row! 1.2× XP`);
+          setStreakToast(`${newStreak} in a row! Streak bonus`);
           setTimeout(() => setStreakToast(null), 2200);
         }
       }
@@ -2196,7 +2202,7 @@ export function CourseTaker({
         setStreak(0);
       }
     }
-    const newAnswers = { ...answersRef.current, [currentQuestion.id]: userAnswer };
+    const newAnswers = { ...answersRef.current, [currentQuestion.id]: userAnswer, [answerMetaKey(currentQuestion.id)]: buildAnswerMeta() };
     answersRef.current = newAnswers;
     setAnswers(newAnswers);
     // Compute updated score/points for saving (state updates are async)
@@ -2272,6 +2278,8 @@ export function CourseTaker({
     setLessonOpen(false);
     let newAnswers = answersRef.current;
     let newScore   = score;
+    let newPoints  = totalPoints;
+    let newStreak  = streak;
     if (!reviewMode && isAnswered() && !answersRef.current[currentQuestion.id]) {
       if (scoringLockRef.current) return; // prevent double-fire before state settles
       scoringLockRef.current = true;
@@ -2288,14 +2296,30 @@ export function CourseTaker({
         const hintWasUsed = hintsUsed.has(currentQuestion.id);
         newScore = score + (hintWasUsed ? 0.9 : 1);
         setScore(newScore);
+        if (pointsEnabled) {
+          const { earned, label, isStreak } = calcPoints(hintWasUsed);
+          newPoints = totalPoints + earned;
+          newStreak = streak + 1;
+          setTotalPoints(newPoints);
+          setStreak(newStreak);
+          setFloatingPoints({ id: Date.now(), text: label, x: 50, y: 60 });
+          setTimeout(() => setFloatingPoints(null), 1200);
+          if (isStreak) {
+            setStreakToast(`${newStreak} in a row! Streak bonus`);
+            setTimeout(() => setStreakToast(null), 2200);
+          }
+        }
+      } else if (pointsEnabled) {
+        newStreak = 0;
+        setStreak(0);
       }
-      newAnswers = { ...answersRef.current, [currentQuestion.id]: userAnswer };
+      newAnswers = { ...answersRef.current, [currentQuestion.id]: userAnswer, [answerMetaKey(currentQuestion.id)]: buildAnswerMeta() };
       answersRef.current = newAnswers;
       setAnswers(newAnswers);
     }
     if (currentQuestionIndex < totalSlides - 1) {
       const nextIndex = currentQuestionIndex + 1;
-      saveProgress(newAnswers, nextIndex, newScore, totalPoints, streak, hintsUsed);
+      saveProgress(newAnswers, nextIndex, newScore, newPoints, newStreak, hintsUsed);
       setCurrentQuestionIndex(nextIndex);
       setSelectedOption(null);
       setFillBlankAnswer('');
@@ -2327,6 +2351,7 @@ export function CourseTaker({
       skipped: !!payload.skipped,
       attempts: Number(payload.attempts ?? 0),
       solutionViewed: !!payload.solutionViewed,
+      elapsedSeconds: Math.max(0, (Date.now() - questionStartTime) / 1000),
       checkedAt: new Date().toISOString(),
     }, (_, v) => typeof v === 'bigint' ? Number(v) : v);
     const newAnswers = { ...answersRef.current, [currentQuestion.id]: answer };
@@ -2351,7 +2376,7 @@ export function CourseTaker({
         setXpNotify(true);
         setTimeout(() => setXpNotify(false), 2500);
         if (isStreak) {
-          setStreakToast(`${newStreak} in a row! 1.2x XP`);
+          setStreakToast(`${newStreak} in a row! Streak bonus`);
           setTimeout(() => setStreakToast(null), 2200);
         }
       }
@@ -2382,6 +2407,7 @@ export function CourseTaker({
       attempts: Number(payload.attempts ?? 0),
       solutionViewed: !!payload.solutionViewed,
       proof: payload.proof,
+      elapsedSeconds: Math.max(0, (Date.now() - questionStartTime) / 1000),
       checkedAt: new Date().toISOString(),
     });
     const newAnswers = { ...answersRef.current, [currentQuestion.id]: answer };
@@ -2406,7 +2432,7 @@ export function CourseTaker({
         setXpNotify(true);
         setTimeout(() => setXpNotify(false), 2500);
         if (isStreak) {
-          setStreakToast(`${newStreak} in a row! 1.2x XP`);
+          setStreakToast(`${newStreak} in a row! Streak bonus`);
           setTimeout(() => setStreakToast(null), 2200);
         }
       }

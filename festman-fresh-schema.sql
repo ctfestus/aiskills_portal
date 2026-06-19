@@ -136,6 +136,7 @@ CREATE TABLE public.courses (
   learn_outcomes  text[]      DEFAULT '{}',
   points_enabled  boolean     NOT NULL DEFAULT false,
   points_base     integer     NOT NULL DEFAULT 100,
+  points_system   jsonb       NOT NULL DEFAULT '{"enabled":false,"basePoints":100,"timeBonusEnabled":true,"timeBonusSeconds":10,"timeBonusMultiplier":1.5,"streakEnabled":true,"streakCount":3,"streakBonus":0,"hintPenalty":20,"solutionPenalty":30,"milestones":[]}'::jsonb,
   post_submission jsonb,
   category        text,
   badge_image_url text,

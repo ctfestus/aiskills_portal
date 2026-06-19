@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { requireRole, isAuthError } from '@/lib/api-auth';
-import { normalizeFormConfig } from '@/lib/course-schema';
+import { LEGACY_RUNTIME_POINTS_SYSTEM, normalizeFormConfig, normalizePointsSystem } from '@/lib/course-schema';
 import { compareResults, SQLResult, SQLTableConfig } from '@/lib/sql-engine';
 import { computeServerSqlResult } from '@/lib/sql-engine-server';
 
@@ -211,6 +211,7 @@ export async function POST(req: NextRequest) {
           learn_outcomes:  cfg.learnOutcomes ?? [],
           points_enabled:  cfg.pointsSystem?.enabled ?? true,
           points_base:     cfg.pointsSystem?.basePoints ?? 50,
+          points_system:   normalizePointsSystem(cfg.pointsSystem ?? { enabled: true, basePoints: 50 }, LEGACY_RUNTIME_POINTS_SYSTEM),
           post_submission: cfg.postSubmission ?? null,
         }).eq('id', existing.id);
         if (upErr) {
@@ -244,6 +245,7 @@ export async function POST(req: NextRequest) {
         learn_outcomes:  cfg.learnOutcomes ?? [],
         points_enabled:  cfg.pointsSystem?.enabled ?? true,
         points_base:     cfg.pointsSystem?.basePoints ?? 50,
+        points_system:   normalizePointsSystem(cfg.pointsSystem ?? { enabled: true, basePoints: 50 }, LEGACY_RUNTIME_POINTS_SYSTEM),
         post_submission: cfg.postSubmission ?? null,
       }).select('id, slug').single();
       if (!error) return NextResponse.json({ id: data.id, slug: data.slug, type: 'course', action: 'created', sqlWarnings });

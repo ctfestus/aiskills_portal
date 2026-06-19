@@ -19,6 +19,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
 import { ReviewReportView, LegacyReviewSummary, REVIEW_TYPES, REVIEW_LABELS } from '@/components/ReviewReportView';
 import { parseReviewNotes } from '@/lib/reviewRecord';
+import { pointsSystemFromCourseRow } from '@/lib/course-schema';
 
 // -- Lazy charts ---
 const ResponsesOverTimeChart = dynamic(
@@ -2400,8 +2401,7 @@ export default function FormDetailPage() {
           passmark: courseRow.passmark, courseTimer: courseRow.course_timer,
           learnOutcomes: courseRow.learn_outcomes,
           // Partial by design: see app/[id]/page.tsx -- normalizing to a full
-          // DEFAULT_POINTS_SYSTEM object would silently change XP scoring.
-          pointsSystem: { enabled: courseRow.points_enabled ?? false, basePoints: courseRow.points_base ?? 100 },
+          pointsSystem: pointsSystemFromCourseRow(courseRow),
           postSubmission: courseRow.post_submission,
           coverImage: courseRow.cover_image, deadline_days: courseRow.deadline_days,
           theme: courseRow.theme, mode: courseRow.mode, font: courseRow.font, customAccent: courseRow.custom_accent,
