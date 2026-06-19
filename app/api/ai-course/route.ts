@@ -5,6 +5,7 @@ import { requireRole, isAuthError } from '@/lib/api-auth';
 import { getRedis } from '@/lib/redis';
 import { pdfPageImageUrl } from '@/lib/cloudinary-pdf';
 import type { LessonDoc } from '@/lib/lesson-doc';
+import { normalizePythonCodeInput } from '@/lib/python-engine';
 
 const ALLOWED_ACTIONS = new Set([
   'generate_questions',
@@ -2366,23 +2367,6 @@ STRICT RULES:
         }, { status: 502 });
       }
 
-      const incompletePythonLessons: string[] = [];
-      for (const { mod, result: modResult } of moduleResults) {
-        for (const gen of (modResult as any).lessons ?? []) {
-          if (gen.lessonType === 'multiple_choice') continue;
-          const hasSolution = String(gen.solution ?? '').trim().length > 0;
-          const hasExpectedOutput = String(gen.expectedOutput ?? '').trim().length > 0;
-          if (!hasSolution || !hasExpectedOutput) {
-            incompletePythonLessons.push(String(gen.lessonTitle || gen.lessonId || mod?.title || 'Python exercise'));
-          }
-        }
-      }
-      if (incompletePythonLessons.length) {
-        return NextResponse.json({
-          error: `Python course generation produced ${incompletePythonLessons.length} exercise${incompletePythonLessons.length === 1 ? '' : 's'} without a runnable solution or expected output. Please regenerate the course.`,
-        }, { status: 502 });
-      }
-
       const questions: any[] = [];
 
       for (const { mod, result: modResult } of moduleResults) {
@@ -2436,10 +2420,10 @@ STRICT RULES:
               question:             gen.questionText ?? '',
               options:              [],
               correctAnswer:        '',
-              pythonStarterCode:    gen.starterCode ?? '# Write your solution here\n',
-              pythonSolution:       gen.solution ?? '',
+              pythonStarterCode:    normalizePythonCodeInput(gen.starterCode ?? '# Write your solution here\n'),
+              pythonSolution:       normalizePythonCodeInput(gen.solution ?? ''),
               pythonExpectedOutput: gen.expectedOutput ?? '',
-              pythonSetupCode:      gen.setupCode ?? '',
+              pythonSetupCode:      normalizePythonCodeInput(gen.setupCode ?? ''),
               pythonHints:          gen.hints ?? [],
               pythonDatasets:       [],
               lesson:               { title: lessonTitle, body: gen.lessonBody ?? '' },

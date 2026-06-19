@@ -144,7 +144,7 @@ describe('POST /api/ai-course Python course generation', () => {
     expect(body.error).toContain('Module 2');
   });
 
-  it('rejects generated Python exercises without deterministic expected output', async () => {
+  it('allows generated Python exercises without expected output so save preflight can compute it', async () => {
     mockGenerateJSON.mockResolvedValue(generatedModule({ expectedOutput: '' }));
 
     const res = await post({
@@ -156,8 +156,10 @@ describe('POST /api/ai-course Python course generation', () => {
       outline: outline(),
     });
 
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.error).toContain('without a runnable solution or expected output');
+    const pythonExercise = body.questions.find((q: any) => q.type === 'python_exercise');
+    expect(pythonExercise).toBeTruthy();
+    expect(pythonExercise.pythonExpectedOutput).toBe('');
   });
 });

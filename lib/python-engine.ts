@@ -61,6 +61,27 @@ export function stripPythonRunnerNoise(output: string): string {
     .join('\n');
 }
 
+export function normalizePythonCodeInput(code: string): string {
+  const value = String(code ?? '');
+  if ((!value.includes('\\n') && !value.includes('\\r')) || /[\r\n]/.test(value)) return value;
+
+  const escapedBreaks = value.match(/\\r\\n|\\n|\\r/g)?.length ?? 0;
+  if (!escapedBreaks) return value;
+
+  const looksLikeEscapedMultilineCode =
+    escapedBreaks >= 2 ||
+    /^\s*(?:import\b|from\b|def\b|class\b)/.test(value) ||
+    /\\n\s*(?:import\b|from\b|def\b|class\b|for\b|while\b|if\b|elif\b|else:|try:|except\b|with\b|return\b|print\s*\(|[A-Za-z_]\w*\s*=|#)/.test(value);
+
+  if (!looksLikeEscapedMultilineCode) return value;
+
+  return value
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\n')
+    .replace(/\\t/g, '    ');
+}
+
 export function isValidPythonIdentifier(value: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_]*$/.test(value) && !PYTHON_RESERVED.has(value);
 }
@@ -131,8 +152,9 @@ _cc_matplotlib.use('agg', force=True)
     _packagesLoaded = true;
   }
   if (setupCode?.trim()) {
-    assertAllowedPythonCode(setupCode);
-    await pyodide.runPythonAsync(setupCode);
+    const normalizedSetupCode = normalizePythonCodeInput(setupCode);
+    assertAllowedPythonCode(normalizedSetupCode);
+    await pyodide.runPythonAsync(normalizedSetupCode);
   }
   return { pyodide };
 }
@@ -186,7 +208,8 @@ export async function loadPythonDatasets(
 
 export async function runPython(runtime: PythonRuntime, code: string): Promise<PythonResult> {
   const { pyodide } = runtime;
-  assertAllowedPythonCode(code);
+  const normalizedCode = normalizePythonCodeInput(code);
+  assertAllowedPythonCode(normalizedCode);
 
   // Redirect stdout + stderr into a StringIO buffer before running user code.
   await pyodide.runPythonAsync(`
@@ -201,7 +224,7 @@ _sys.stderr = _cc_stdout_buf
   let plots: string[] = [];
 
   try {
-    const result = await pyodide.runPythonAsync(code);
+    const result = await pyodide.runPythonAsync(normalizedCode);
     // runPythonAsync returns None->null for statements, or the last expression value.
     if (result !== undefined && result !== null) {
       returnValue = String(result);

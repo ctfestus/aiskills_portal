@@ -198,6 +198,81 @@ describe('POST /api/course Python exercise security', () => {
     expect(completeBody.points).toBe(70);
   });
 
+  it('honors persisted time bonus settings when finalizing XP', async () => {
+    authed(makeSupabaseStub({
+      courses: {
+        data: {
+          id: 'course1',
+          user_id: 'owner1',
+          status: 'published',
+          cohort_ids: [],
+          questions: [pythonQuestion],
+        },
+        error: null,
+      },
+      students: { data: { role: 'student', cohort_id: 'co1' }, error: null },
+      course_attempts: { data: { answers: {} }, error: null },
+    }));
+
+    const checkRes = await post({
+      action: 'check-python-answer',
+      course_id: 'course1',
+      question_id: 'py1',
+      output: '42',
+    });
+    const checkBody = await checkRes.json();
+
+    authed(makeSupabaseStub({
+      courses: {
+        data: {
+          questions: [pythonQuestion],
+          passmark: 50,
+          points_enabled: true,
+          points_base: 100,
+          points_system: {
+            enabled: true,
+            basePoints: 100,
+            timeBonusEnabled: true,
+            timeBonusSeconds: 10,
+            timeBonusMultiplier: 1.5,
+            streakEnabled: false,
+            streakCount: 3,
+            streakBonus: 0,
+            hintPenalty: 20,
+            solutionPenalty: 30,
+            milestones: [],
+          },
+        },
+        error: null,
+      },
+      course_attempts: [
+        { data: { id: 'attempt1', answers: {}, hints_used: [] }, error: null },
+        { data: null, error: null },
+      ],
+      students: { data: { full_name: 'Student One' }, error: null },
+      certificates: { data: { id: 'cert1' }, error: null },
+    }));
+
+    const completeRes = await post({
+      action: 'complete-attempt',
+      course_id: 'course1',
+      final_answers: {
+        py1: JSON.stringify({
+          passed: true,
+          output: '42',
+          proof: checkBody.proof,
+          elapsedSeconds: 5,
+          checkedAt: '2026-01-01T00:00:00.000Z',
+        }),
+      },
+    });
+
+    expect(completeRes.status).toBe(200);
+    const completeBody = await completeRes.json();
+    expect(completeBody.score).toBe(100);
+    expect(completeBody.points).toBe(150);
+  });
+
   it('does not reveal Python solutions to authenticated students without course access', async () => {
     authed(makeSupabaseStub({
       courses: {

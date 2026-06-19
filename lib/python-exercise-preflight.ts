@@ -1,5 +1,5 @@
 import type { CourseQuestion } from '@/lib/course-schema';
-import { initPythonRuntime, loadPythonDatasets, runPython } from '@/lib/python-engine';
+import { initPythonRuntime, loadPythonDatasets, normalizePythonCodeInput, runPython } from '@/lib/python-engine';
 
 export interface PythonPreflightIssue {
   questionId: string;
@@ -45,9 +45,11 @@ export async function preflightPythonExercises(
     }
 
     try {
-      const runtime = await initPythonRuntime(q.pythonSetupCode?.trim() || undefined);
+      const normalizedSetupCode = normalizePythonCodeInput(q.pythonSetupCode ?? '');
+      const normalizedSolution = normalizePythonCodeInput(q.pythonSolution);
+      const runtime = await initPythonRuntime(normalizedSetupCode.trim() || undefined);
       await loadPythonDatasets(runtime, q.pythonDatasets ?? [], 0);
-      const res = await runPython(runtime, q.pythonSolution);
+      const res = await runPython(runtime, normalizedSolution);
       if (res.error) throw new Error(res.error);
 
       const output = outputFromResult(res);
@@ -55,8 +57,17 @@ export async function preflightPythonExercises(
         issues.push({ questionId: q.id, label, message: 'The reference solution must print deterministic output.' });
       }
 
-      if (output !== (q.pythonExpectedOutput ?? '')) {
-        nextQuestions[i] = { ...q, pythonExpectedOutput: output };
+      if (
+        output !== (q.pythonExpectedOutput ?? '') ||
+        normalizedSetupCode !== (q.pythonSetupCode ?? '') ||
+        normalizedSolution !== q.pythonSolution
+      ) {
+        nextQuestions[i] = {
+          ...q,
+          pythonSetupCode: normalizedSetupCode,
+          pythonSolution: normalizedSolution,
+          pythonExpectedOutput: output,
+        };
         computedCount++;
       }
     } catch (err: any) {
