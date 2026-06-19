@@ -11,7 +11,7 @@ import { useTenant } from '@/components/TenantProvider';
 import { LIGHT_C } from '@/lib/theme';
 import { Sk, CarouselSkeleton, EmptyState } from '@/components/student/shared';
 import {
-  Award, BookOpen, ChevronLeft, ChevronRight, Download, Lock, Medal, RefreshCw, Trophy, Users, Zap,
+  Award, BookOpen, ChevronLeft, ChevronRight, Download, Lock, Medal, RefreshCw, Sparkles, Trophy, Users, Zap,
 } from 'lucide-react';
 
 const BADGE_TABS = [
@@ -480,6 +480,60 @@ function CertRow({ title, certs, C }: { title: string; certs: any[]; C: typeof L
 export function CertificatesSection({ userId, userEmail, C }: { userId: string; userEmail: string; C: typeof LIGHT_C }) {
   const [certs, setCerts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadingTranscript, setDownloadingTranscript] = useState(false);
+
+  const handleDownloadForClaude = async () => {
+    setDownloading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : {};
+
+      const res = await fetch('/api/portfolio', { headers });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = 'portfolio-builder.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.error('[Portfolio download]', err);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleDownloadTranscript = async () => {
+    setDownloadingTranscript(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : {};
+
+      const res = await fetch('/api/transcript', { headers });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = 'ai-transcript.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.error('[Transcript download]', err);
+    } finally {
+      setDownloadingTranscript(false);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -521,15 +575,63 @@ export function CertificatesSection({ userId, userEmail, C }: { userId: string; 
 
   if (loading) return <CarouselSkeleton C={C}/>;
 
+  const portfolioCard = (
+    <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-2xl"
+      style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold leading-tight" style={{ color: C.text }}>Build your data portfolio with Claude</p>
+        <p className="text-xs mt-1 leading-snug" style={{ color: C.faint }}>
+          Downloads a single .zip with your completed work data + the Claude skill bundled together. Upload to Claude.ai (Settings &gt; Capabilities &gt; Skills) or unzip and place the folder in your Claude Code skills directory, then run /portfolio-builder.
+        </p>
+      </div>
+      <button
+        onClick={handleDownloadForClaude}
+        disabled={downloading}
+        className="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
+        style={{ background: C.cta, color: C.ctaText }}>
+        {downloading
+          ? <><RefreshCw className="w-3.5 h-3.5 animate-spin"/> Downloading...</>
+          : <><Sparkles className="w-3.5 h-3.5"/> Download for Claude</>}
+      </button>
+    </div>
+  );
+
+  const transcriptCard = (
+    <div className="flex items-center justify-between gap-4 px-5 py-4 rounded-2xl"
+      style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold leading-tight" style={{ color: C.text }}>Download your AI Transcript</p>
+        <p className="text-xs mt-1 leading-snug" style={{ color: C.faint }}>
+          Your full learning record: every course, VE, assignment, certificate, and badge, turned into an official transcript, a LinkedIn update guide, and a CV section. Run /ai-transcript in Claude.
+        </p>
+      </div>
+      <button
+        onClick={handleDownloadTranscript}
+        disabled={downloadingTranscript}
+        className="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
+        style={{ background: C.cta, color: C.ctaText }}>
+        {downloadingTranscript
+          ? <><RefreshCw className="w-3.5 h-3.5 animate-spin"/> Downloading...</>
+          : <><Sparkles className="w-3.5 h-3.5"/> Download AI Transcript</>}
+      </button>
+    </div>
+  );
+
   if (!certs.length) return (
-    <EmptyState icon={Award} title="No certificates yet"
-      body="Complete a course with a passing score to earn your certificate."
-      action={<Link href="/" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold hover:opacity-80 dashboard-cta"
-        style={{ background: C.cta, color: C.ctaText }}><BookOpen className="w-4 h-4"/> Browse courses</Link>}/>
+    <div className="space-y-4">
+      {portfolioCard}
+      {transcriptCard}
+      <EmptyState icon={Award} title="No certificates yet"
+        body="Complete a course with a passing score to earn your certificate."
+        action={<Link href="/" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold hover:opacity-80 dashboard-cta"
+          style={{ background: C.cta, color: C.ctaText }}><BookOpen className="w-4 h-4"/> Browse courses</Link>}/>
+    </div>
   );
 
   return (
     <div className="space-y-6">
+      {portfolioCard}
+      {transcriptCard}
       {groupCertsByType(certs).map(([title, list]) => (
         <CertRow key={title} title={title} certs={list} C={C} />
       ))}
