@@ -962,7 +962,7 @@ export default function VirtualExperienceTaker({
                                       </div>
                                       <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-0.5"
                                         style={{ background: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)', color: isDark ? '#ccc' : '#555' }}>
-                                        {studentName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                                        You
                                       </div>
                                     </div>
                                   )}
@@ -1109,7 +1109,7 @@ export default function VirtualExperienceTaker({
                                       </div>
                                       <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-1"
                                         style={{ background: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)', color: isDark ? '#ccc' : '#555' }}>
-                                        {studentName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                                        You
                                       </div>
                                     </div>
                                     <div className="flex items-start gap-3">
@@ -1143,10 +1143,6 @@ export default function VirtualExperienceTaker({
                               </div>
                               <div className="px-4 py-4 space-y-3">
                                 <div className="grid gap-2 text-[12px]">
-                                  <div className="flex gap-2">
-                                    <span className="w-16 font-bold" style={{ color: isDark ? '#777' : '#777' }}>From</span>
-                                    <span style={{ color: isDark ? '#ddd' : '#333' }}>{studentName}</span>
-                                  </div>
                                   <div className="flex gap-2">
                                     <span className="w-16 font-bold" style={{ color: isDark ? '#777' : '#777' }}>To</span>
                                     <span style={{ color: isDark ? '#ddd' : '#333' }}>{managerName}</span>
