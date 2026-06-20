@@ -201,10 +201,10 @@ function startTypingSound(durationMs: number) {
 }
 
 function EmailCompose({
-  value, onChange, readOnly, isDark, accentColor, placeholder,
+  value, onChange, readOnly, isDark, accentColor, placeholder, noBorder = false,
 }: {
   value: string; onChange: (html: string) => void; readOnly: boolean;
-  isDark: boolean; accentColor: string; placeholder: string;
+  isDark: boolean; accentColor: string; placeholder: string; noBorder?: boolean;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isEmpty, setIsEmpty] = useState(!value);
@@ -224,7 +224,7 @@ function EmailCompose({
   const mc = isDark ? '#777' : '#bbb';
   const tb: React.CSSProperties = { width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', borderRadius: 4, cursor: 'pointer', color: tc, fontSize: 13 };
   return (
-    <div style={{ border: `1px solid ${bd}`, borderRadius: 10, overflow: 'hidden', background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' }}>
+    <div style={noBorder ? { background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' } : { border: `1px solid ${bd}`, borderRadius: 10, overflow: 'hidden', background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' }}>
       {!readOnly && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 10px', background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', borderBottom: `1px solid ${bd}` }}>
           <button onClick={() => exec('bold')} style={tb} title="Bold"><Bold size={14} /></button>
@@ -1331,6 +1331,7 @@ export default function VirtualExperienceTaker({
                                         isDark={isDark}
                                         accentColor={accentColor}
                                         placeholder="Write your reply..."
+                                        noBorder
                                       />
                                       <div style={{ padding: '10px 14px', background: isDark ? '#1a1a1a' : '#fff', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, display: 'flex', gap: 10, alignItems: 'center' }}>
                                         <button
