@@ -133,6 +133,7 @@ export default function AssignmentExperiencePlayer({
   const readOnly = graded;
   const [completeError, setCompleteError] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [typingDecisions, setTypingDecisions] = useState<Set<string>>(new Set());
   async function getAuthHeader(): Promise<Record<string, string>> {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token ?? '';
@@ -555,7 +556,13 @@ export default function AssignmentExperiencePlayer({
                                           const opts = (req.options ?? []).filter(Boolean);
                                           return (
                                             <button key={`${req.id}-decision-${oi}`} disabled={readOnly}
-                                              onClick={() => updateProgress(req.id, { selectedAnswer: opt, completed: true })}
+                                              onClick={() => {
+                                                updateProgress(req.id, { selectedAnswer: opt, completed: true });
+                                                setTypingDecisions(prev => new Set([...prev, req.id]));
+                                                setTimeout(() => {
+                                                  setTypingDecisions(prev => { const n = new Set(prev); n.delete(req.id); return n; });
+                                                }, 3000);
+                                              }}
                                               style={{ width: '100%', display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', borderBottom: oi < opts.length - 1 ? `1px solid ${slackBorder}` : 'none', background: 'transparent', textAlign: 'left', cursor: readOnly ? 'default' : 'pointer', fontSize: 13.5, color: slackText }}>
                                               <span style={{ width: 22, height: 22, borderRadius: '50%', border: `1.5px solid ${isDark ? '#666' : '#CCCCCC'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: slackMuted, flexShrink: 0, marginTop: 1 }}>{letter}</span>
                                               <span style={{ flex: 1, lineHeight: 1.4 }}>{opt}</span>
@@ -569,7 +576,10 @@ export default function AssignmentExperiencePlayer({
                               </div>
                               {isDone && selected && (
                                 <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '10px 14px 14px' }}>
-                                  <p style={{ fontSize: 11.5, color: slackMuted, fontWeight: 600, marginBottom: 10, paddingLeft: 46 }}>2 replies in thread</p>
+                                  <p style={{ fontSize: 11.5, color: slackMuted, fontWeight: 600, marginBottom: 10, paddingLeft: 46 }}>
+                                    {typingDecisions.has(req.id) ? '1 reply in thread' : '2 replies in thread'}
+                                  </p>
+                                  {/* Student reply - immediate */}
                                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 10 }}>
                                     <div style={{ width: 28, height: 28, borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: slackMuted, flexShrink: 0 }}>YOU</div>
                                     <div>
@@ -580,15 +590,30 @@ export default function AssignmentExperiencePlayer({
                                       <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.4 }}>{selected}</p>
                                     </div>
                                   </div>
+                                  {/* Typing indicator or manager response */}
                                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                                     <div style={{ width: 28, height: 28, borderRadius: 4, background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: isDark ? '#111' : '#fff', flexShrink: 0 }}>{manInit}</div>
-                                    <div>
-                                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                                        <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>{manName}</span>
-                                        <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
+                                    {typingDecisions.has(req.id) ? (
+                                      <div>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                                          <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>{manName}</span>
+                                          <span style={{ fontSize: 11, color: slackMuted }}>is typing</span>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 3, alignItems: 'center', marginTop: 6 }}>
+                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '0ms' }} />
+                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '200ms' }} />
+                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '400ms' }} />
+                                        </div>
                                       </div>
-                                      <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>{feedback || 'Decision recorded. Keep moving forward.'}</p>
-                                    </div>
+                                    ) : (
+                                      <div>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                                          <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>{manName}</span>
+                                          <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
+                                        </div>
+                                        <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>{feedback || 'Decision recorded. Keep moving forward.'}</p>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               )}

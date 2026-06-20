@@ -208,6 +208,7 @@ export default function VirtualExperienceTaker({
   const [aiFeedback,   setAiFeedback]   = useState<Record<string, { passed: boolean; feedback: string; score: number } | null>>({});
   const saveTimeout  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mainScrollRef = useRef<HTMLDivElement>(null);
+  const [typingDecisions, setTypingDecisions] = useState<Set<string>>(new Set());
 
   const currentMod = modules.find(m => m.id === currentModId);
   const currentLes = currentMod?.lessons.find(l => l.id === currentLesId);
@@ -1057,6 +1058,10 @@ export default function VirtualExperienceTaker({
                             saveProgress(next, currentModId, currentLesId);
                             return next;
                           });
+                          setTypingDecisions(prev => new Set([...prev, req.id]));
+                          setTimeout(() => {
+                            setTypingDecisions(prev => { const n = new Set(prev); n.delete(req.id); return n; });
+                          }, 3000);
                         };
                         const slackBg = isDark ? '#1A1D21' : '#FFFFFF';
                         const slackHeader = isDark ? '#19171D' : '#F8F8F8';
@@ -1103,7 +1108,10 @@ export default function VirtualExperienceTaker({
                               </div>
                               {done && selectedAnswer && (
                                 <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '10px 14px 14px' }}>
-                                  <p style={{ fontSize: 11.5, color: slackMuted, fontWeight: 600, marginBottom: 10, paddingLeft: 46 }}>2 replies in thread</p>
+                                  <p style={{ fontSize: 11.5, color: slackMuted, fontWeight: 600, marginBottom: 10, paddingLeft: 46 }}>
+                                    {typingDecisions.has(req.id) ? '1 reply in thread' : '2 replies in thread'}
+                                  </p>
+                                  {/* Student reply - immediate */}
                                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 10 }}>
                                     <div style={{ width: 28, height: 28, borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: slackMuted, flexShrink: 0 }}>YOU</div>
                                     <div>
@@ -1114,15 +1122,30 @@ export default function VirtualExperienceTaker({
                                       <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.4 }}>{selectedAnswer}</p>
                                     </div>
                                   </div>
+                                  {/* Typing indicator or manager response */}
                                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                                     <div style={{ width: 28, height: 28, borderRadius: 4, background: accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: isDark ? '#111' : '#fff', flexShrink: 0 }}>{manInit}</div>
-                                    <div>
-                                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                                        <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>{managerName}</span>
-                                        <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
+                                    {typingDecisions.has(req.id) ? (
+                                      <div>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                                          <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>{managerName}</span>
+                                          <span style={{ fontSize: 11, color: slackMuted }}>is typing</span>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 3, alignItems: 'center', marginTop: 6 }}>
+                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '0ms' }} />
+                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '200ms' }} />
+                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '400ms' }} />
+                                        </div>
                                       </div>
-                                      <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>{selectedFeedback || 'Decision recorded. Keep moving forward.'}</p>
-                                    </div>
+                                    ) : (
+                                      <div>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                                          <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>{managerName}</span>
+                                          <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
+                                        </div>
+                                        <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>{selectedFeedback || 'Decision recorded. Keep moving forward.'}</p>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               )}
