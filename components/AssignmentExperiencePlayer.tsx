@@ -230,6 +230,7 @@ export default function AssignmentExperiencePlayer({
   const [typingAcks,      setTypingAcks]      = useState<Set<string>>(new Set());
   const [openReplies,     setOpenReplies]     = useState<Set<string>>(new Set());
   const [efReviewing,     setEfReviewing]     = useState<Record<string, boolean>>({});
+  const [efTyping,        setEfTyping]        = useState<Record<string, boolean>>({});
   async function getAuthHeader(): Promise<Record<string, string>> {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token ?? '';
@@ -996,42 +997,10 @@ export default function AssignmentExperiencePlayer({
                             const replyOpen = isDone || openReplies.has(req.id) || uploaded;
                             const uploading = uploadingReq === req.id;
                             return efCard(
-                              !isDone ? (
-                                !replyOpen ? (
-                                  <div style={{ padding: '14px 22px' }}>
-                                    {!readOnly && (
-                                      <button onClick={() => setOpenReplies(prev => new Set([...prev, req.id]))}
-                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 6, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer' }}>
-                                        <Reply className="w-4 h-4" /> Reply
-                                      </button>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div style={{ padding: '14px 22px 18px' }}>
-                                    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
-                                      <div style={{ padding: '8px 14px', background: subtle, borderBottom: `1px solid ${divider}`, fontSize: 12, color: faint }}>Attach your submission</div>
-                                      <div style={{ padding: '14px 16px', background: bg, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 8, border: `1.5px dashed ${border}`, cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, color: muted }}>
-                                          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
-                                          {uploading ? 'Uploading...' : (fileUrl ? 'Replace file' : 'Attach file')}
-                                          <input type="file" className="hidden" disabled={uploading} onChange={async e => { const file = e.target.files?.[0]; if (!file) return; await handleFileUpload(req.id, file); e.target.value = ''; }} />
-                                        </label>
-                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                          <input value={linkUrl} onChange={e => updateProgress(req.id, { linkUrl: e.target.value })}
-                                            placeholder="Or paste a link..." style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${border}`, background: subtle, color: text, fontSize: 13, outline: 'none' }} />
-                                        </div>
-                                        {(fileUrl || linkUrl) && (
-                                          <button onClick={() => { if (!readOnly) updateProgress(req.id, { completed: true }); }}
-                                            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: accent, color: '#fff', fontSize: 13.5, fontWeight: 600, border: 'none', cursor: 'pointer', alignSelf: 'flex-start' }}>
-                                            <Send className="w-3.5 h-3.5" /> Send
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                )
-                              ) : (
-                                <div style={{ padding: '16px 22px 20px' }}>
+                              (() => {
+                                const isTyping = efTyping[req.id];
+                                const showReply = !isTyping && (efReviewing[req.id] || isDone);
+                                const efMeThread = (
                                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
                                     {efMeAvatar}
                                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -1043,21 +1012,83 @@ export default function AssignmentExperiencePlayer({
                                       {linkUrl && <a href={linkUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${border}`, fontSize: 12.5, color: text, textDecoration: 'none', marginLeft: fileUrl ? 8 : 0 }}><LinkIcon className="w-3 h-3" /> {linkUrl.slice(0, 40)}{linkUrl.length > 40 ? '...' : ''}</a>}
                                     </div>
                                   </div>
-                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                    <SlackAvatar name={efManager} size={42} color={efMeta.color} />
-                                    <div style={{ flex: 1 }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                        <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{efManager}</span>
-                                        <span style={{ fontSize: 12, color: faint }}>Just now</span>
+                                );
+                                if (!isDone && !isTyping && !efReviewing[req.id]) return (
+                                  !replyOpen ? (
+                                    <div style={{ padding: '14px 22px' }}>
+                                      {!readOnly && (
+                                        <button onClick={() => setOpenReplies(prev => new Set([...prev, req.id]))}
+                                          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 6, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer' }}>
+                                          <Reply className="w-4 h-4" /> Reply
+                                        </button>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div style={{ padding: '14px 22px 18px' }}>
+                                      <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
+                                        <div style={{ padding: '8px 14px', background: subtle, borderBottom: `1px solid ${divider}`, fontSize: 12, color: faint }}>Attach your submission</div>
+                                        <div style={{ padding: '14px 16px', background: bg, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 8, border: `1.5px dashed ${border}`, cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, color: muted }}>
+                                            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+                                            {uploading ? 'Uploading...' : (fileUrl ? 'Replace file' : 'Attach file')}
+                                            <input type="file" className="hidden" disabled={uploading} onChange={async e => { const file = e.target.files?.[0]; if (!file) return; await handleFileUpload(req.id, file); e.target.value = ''; }} />
+                                          </label>
+                                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                            <input value={linkUrl} onChange={e => updateProgress(req.id, { linkUrl: e.target.value })}
+                                              placeholder="Or paste a link..." style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${border}`, background: subtle, color: text, fontSize: 13, outline: 'none' }} />
+                                          </div>
+                                          {(fileUrl || linkUrl) && (
+                                            <button onClick={() => {
+                                              setEfTyping(prev => ({ ...prev, [req.id]: true }));
+                                              const delay = 2000 + Math.floor(Math.random() * 2001);
+                                              setTimeout(() => {
+                                                setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                                                setEfReviewing(prev => ({ ...prev, [req.id]: true }));
+                                                if (!readOnly) updateProgress(req.id, { completed: true });
+                                              }, delay);
+                                            }}
+                                              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: accent, color: '#fff', fontSize: 13.5, fontWeight: 600, border: 'none', cursor: 'pointer', alignSelf: 'flex-start' }}>
+                                              <Send className="w-3.5 h-3.5" /> Send
+                                            </button>
+                                          )}
+                                        </div>
                                       </div>
-                                      <p style={{ fontSize: 13.5, color: text, margin: '0 0 10px' }}>Thanks for the submission. I have received it and it is currently under review. I will get back to you shortly.</p>
-                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12.5 }}>
-                                        <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Received
+                                    </div>
+                                  )
+                                );
+                                if (isTyping) return (
+                                  <div style={{ padding: '16px 22px 20px' }}>
+                                    {efMeThread}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                      <SlackAvatar name={efManager} size={42} color={accent} />
+                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '10px 16px', borderRadius: 20, background: isDark ? '#2a2a2a' : '#f0f0f0' }}>
+                                        {[0, 1, 2].map(i => (
+                                          <div key={i} className="w-2 h-2 rounded-full animate-bounce" style={{ background: isDark ? '#888' : '#aaa', animationDelay: `${i * 160}ms` }} />
+                                        ))}
                                       </div>
                                     </div>
                                   </div>
-                                </div>
-                              )
+                                );
+                                if (showReply) return (
+                                  <div style={{ padding: '16px 22px 20px' }}>
+                                    {efMeThread}
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                      <SlackAvatar name={efManager} size={42} color={accent} />
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{efManager}</span>
+                                          <span style={{ fontSize: 12, color: faint }}>Just now</span>
+                                        </div>
+                                        <p style={{ fontSize: 13.5, color: text, margin: '0 0 10px' }}>Thanks for the submission. I have received it and it is currently under review. I will get back to you shortly.</p>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12.5 }}>
+                                          <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Received
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                                return null;
+                              })()
                             );
                           }
 
@@ -1065,15 +1096,21 @@ export default function AssignmentExperiencePlayer({
                           if (req.type === 'dashboard_critique' || req.type === 'code_review' || req.type === 'excel_review') {
                             const saved = prog;
                             const savedReport = parseReviewNotes(saved?.notes)?.report;
-                            const reviewing = efReviewing[req.id] && !isDone;
                             const typeLabel = req.type === 'dashboard_critique' ? 'dashboard' : req.type === 'code_review' ? 'code' : 'Excel file';
-                            const startReview = () => setEfReviewing(prev => ({ ...prev, [req.id]: true }));
-                            const finishReview = () => setEfReviewing(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                            const startReview = () => {
+                              setEfTyping(prev => ({ ...prev, [req.id]: true }));
+                              const delay = 2000 + Math.floor(Math.random() * 2001);
+                              setTimeout(() => {
+                                setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                                setEfReviewing(prev => ({ ...prev, [req.id]: true }));
+                              }, delay);
+                            };
+                            const finishReview = () => {};
                             return (
                               <div key={req.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: shadow }}>
                                 {efHeader}
-                                {/* Compose area */}
-                                {!isDone && !reviewing && (
+                                {/* Compose: hidden once typing/reviewing starts */}
+                                {!isDone && !efTyping[req.id] && !efReviewing[req.id] && (
                                   <div style={{ padding: '14px 22px 18px' }}>
                                     <p style={{ fontSize: 12, fontWeight: 500, color: faint, margin: '0 0 10px' }}>Reply with your submission:</p>
                                     {req.type === 'dashboard_critique' && (
@@ -1096,8 +1133,8 @@ export default function AssignmentExperiencePlayer({
                                     )}
                                   </div>
                                 )}
-                                {/* Manager reviewing auto-reply */}
-                                {reviewing && (
+                                {/* Manager typing dots */}
+                                {efTyping[req.id] && (
                                   <div style={{ padding: '16px 22px 20px', borderTop: `1px solid ${divider}` }}>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
                                       {efMeAvatar}
@@ -1109,23 +1146,18 @@ export default function AssignmentExperiencePlayer({
                                         <p style={{ fontSize: 13, color: muted, margin: 0 }}>Submitted my {typeLabel} for review.</p>
                                       </div>
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                      <SlackAvatar name={efManager} size={42} color={efMeta.color} />
-                                      <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{efManager}</span>
-                                          <span style={{ fontSize: 12, color: faint }}>Just now</span>
-                                        </div>
-                                        <p style={{ fontSize: 13.5, color: text, margin: '0 0 10px' }}>Your submission has been received and is currently under review. I will get back to you shortly.</p>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: muted, fontSize: 12.5 }}>
-                                          <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: accent }} /> AI is reviewing your {typeLabel}...
-                                        </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                      <SlackAvatar name={efManager} size={42} color={accent} />
+                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '10px 16px', borderRadius: 20, background: isDark ? '#2a2a2a' : '#f0f0f0' }}>
+                                        {[0, 1, 2].map(i => (
+                                          <div key={i} className="w-2 h-2 rounded-full animate-bounce" style={{ background: isDark ? '#888' : '#aaa', animationDelay: `${i * 160}ms` }} />
+                                        ))}
                                       </div>
                                     </div>
                                   </div>
                                 )}
-                                {/* Manager report reply when done */}
-                                {isDone && (
+                                {/* Received reply -- persists into done state so both replies stack */}
+                                {!efTyping[req.id] && (efReviewing[req.id] || isDone) && (
                                   <div style={{ padding: '16px 22px 20px', borderTop: `1px solid ${divider}` }}>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
                                       {efMeAvatar}
@@ -1138,7 +1170,32 @@ export default function AssignmentExperiencePlayer({
                                       </div>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                      <SlackAvatar name={efManager} size={42} color={efMeta.color} />
+                                      <SlackAvatar name={efManager} size={42} color={accent} />
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{efManager}</span>
+                                          <span style={{ fontSize: 12, color: faint }}>Just now</span>
+                                        </div>
+                                        <p style={{ fontSize: 13.5, color: text, margin: '0 0 10px' }}>Your submission has been received and is currently under review. I will get back to you shortly.</p>
+                                        {!isDone && (
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: muted, fontSize: 12.5 }}>
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: accent }} /> AI is reviewing your {typeLabel}...
+                                          </div>
+                                        )}
+                                        {isDone && (
+                                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12 }}>
+                                            <CheckCircle2 className="w-3 h-3" /> Review complete
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                                {/* Manager report -- separate section below, appears once AI finishes */}
+                                {isDone && (
+                                  <div style={{ padding: '16px 22px 20px', borderTop: `1px solid ${divider}` }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                      <SlackAvatar name={efManager} size={42} color={accent} />
                                       <div style={{ flex: 1 }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                                           <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{efManager}</span>

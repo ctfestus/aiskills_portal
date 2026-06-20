@@ -305,6 +305,7 @@ export default function VirtualExperienceTaker({
   const [typingAcks,      setTypingAcks]      = useState<Set<string>>(new Set());
   const [openReplies,     setOpenReplies]     = useState<Set<string>>(new Set());
   const [efReviewing,     setEfReviewing]     = useState<Record<string, boolean>>({});
+  const [efTyping,        setEfTyping]        = useState<Record<string, boolean>>({});
 
   const currentMod = modules.find(m => m.id === currentModId);
   const currentLes = currentMod?.lessons.find(l => l.id === currentLesId);
@@ -1530,10 +1531,25 @@ export default function VirtualExperienceTaker({
                           const fileUrl = progress[req.id]?.fileUrl || '';
                           const linkUrl = progress[req.id]?.linkUrl || '';
                           const uploaded = !!(fileUrl || linkUrl);
-                          const replyOpen = done || openReplies.has(req.id) || uploaded;
+                          const replyOpen = openReplies.has(req.id) || uploaded;
                           const uploading = uploadingReq === req.id;
+                          const isTyping = efTyping[req.id];
+                          const showReply = !isTyping && (efReviewing[req.id] || done);
+                          const efMeThread = (
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
+                              {efMeAvatar}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                  <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>Me</span>
+                                  <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Just now</span>
+                                </div>
+                                {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, fontSize: 12.5, color: isDark ? '#ddd' : '#334155', textDecoration: 'none' }}><Paperclip className="w-3 h-3" /> Attachment</a>}
+                                {linkUrl && <a href={linkUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, fontSize: 12.5, color: isDark ? '#ddd' : '#334155', textDecoration: 'none', marginLeft: fileUrl ? 8 : 0 }}><LinkIcon className="w-3 h-3" /> {linkUrl.slice(0, 40)}{linkUrl.length > 40 ? '...' : ''}</a>}
+                              </div>
+                            </div>
+                          );
                           return efCard(
-                            !done ? (
+                            !done && !isTyping && !efReviewing[req.id] ? (
                               !replyOpen ? (
                                 <div style={{ padding: '14px 22px' }}>
                                   {!reviewMode && (
@@ -1562,7 +1578,15 @@ export default function VirtualExperienceTaker({
                                           placeholder="Or paste a link..." style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDark ? 'rgba(255,255,255,0.04)' : '#f8f8f8', color: isDark ? '#ddd' : '#333', fontSize: 13, outline: 'none' }} />
                                       </div>
                                       {(fileUrl || linkUrl) && (
-                                        <button onClick={() => { if (!reviewMode) setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], completed: true } }; saveProgress(next, currentModId, currentLesId); return next; }); }}
+                                        <button onClick={() => {
+                                          setEfTyping(prev => ({ ...prev, [req.id]: true }));
+                                          const delay = 2000 + Math.floor(Math.random() * 2001);
+                                          setTimeout(() => {
+                                            setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                                            setEfReviewing(prev => ({ ...prev, [req.id]: true }));
+                                            if (!reviewMode) setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
+                                          }, delay);
+                                        }}
                                           style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: accentColor, color: '#fff', fontSize: 13.5, fontWeight: 600, border: 'none', cursor: 'pointer', alignSelf: 'flex-start' }}>
                                           <Send className="w-3.5 h-3.5" /> Send
                                         </button>
@@ -1571,19 +1595,21 @@ export default function VirtualExperienceTaker({
                                   </div>
                                 </div>
                               )
-                            ) : (
+                            ) : isTyping ? (
                               <div style={{ padding: '16px 22px 20px' }}>
-                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
-                                  {efMeAvatar}
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                      <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>Me</span>
-                                      <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Just now</span>
-                                    </div>
-                                    {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, fontSize: 12.5, color: isDark ? '#ddd' : '#334155', textDecoration: 'none' }}><Paperclip className="w-3 h-3" /> Attachment</a>}
-                                    {linkUrl && <a href={linkUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, fontSize: 12.5, color: isDark ? '#ddd' : '#334155', textDecoration: 'none', marginLeft: fileUrl ? 8 : 0 }}><LinkIcon className="w-3 h-3" /> {linkUrl.slice(0, 40)}{linkUrl.length > 40 ? '...' : ''}</a>}
+                                {efMeThread}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                  <SlackAvatar name={efManager} size={42} color={efMeta.color} />
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '10px 16px', borderRadius: 20, background: isDark ? '#2a2a2a' : '#f0f0f0' }}>
+                                    {[0, 1, 2].map(i => (
+                                      <div key={i} className="w-2 h-2 rounded-full animate-bounce" style={{ background: isDark ? '#888' : '#aaa', animationDelay: `${i * 160}ms` }} />
+                                    ))}
                                   </div>
                                 </div>
+                              </div>
+                            ) : showReply ? (
+                              <div style={{ padding: '16px 22px 20px' }}>
+                                {efMeThread}
                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                                   <SlackAvatar name={efManager} size={42} color={efMeta.color} />
                                   <div style={{ flex: 1 }}>
@@ -1598,7 +1624,7 @@ export default function VirtualExperienceTaker({
                                   </div>
                                 </div>
                               </div>
-                            )
+                            ) : null
                           );
                         }
 
@@ -1609,14 +1635,21 @@ export default function VirtualExperienceTaker({
                           const reviewing = efReviewing[req.id] && !done;
                           const typeLabel = req.type === 'dashboard_critique' ? 'dashboard' : req.type === 'code_review' ? 'code' : 'Excel file';
                           const markDone = (notes: string, completed: boolean) => setProgress(prev => { const next = { ...prev, [req.id]: { completed, notes } }; saveProgress(next, currentModId, currentLesId); return next; });
-                          const startReview = () => setEfReviewing(prev => ({ ...prev, [req.id]: true }));
-                          const finishReview = () => setEfReviewing(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                          const startReview = () => {
+                            setEfTyping(prev => ({ ...prev, [req.id]: true }));
+                            const delay = 2000 + Math.floor(Math.random() * 2001);
+                            setTimeout(() => {
+                              setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                              setEfReviewing(prev => ({ ...prev, [req.id]: true }));
+                            }, delay);
+                          };
+                          const finishReview = () => {};
                           return (
                             <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5">
                               <div style={{ background: isDark ? '#1a1a1a' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, borderRadius: 14 }}>
                                 {efHeader}
-                                {/* Compose area: shown until student submits */}
-                                {!done && !reviewing && (
+                                {/* Compose: hidden once typing/reviewing starts */}
+                                {!done && !efTyping[req.id] && !efReviewing[req.id] && (
                                   <div style={{ padding: '14px 22px 18px' }}>
                                     <p style={{ fontSize: 12, fontWeight: 500, color: isDark ? '#888' : '#999', margin: '0 0 10px' }}>Reply with your submission:</p>
                                     {req.type === 'dashboard_critique' && (
@@ -1639,8 +1672,8 @@ export default function VirtualExperienceTaker({
                                     )}
                                   </div>
                                 )}
-                                {/* Manager "reviewing" auto-reply while AI is running */}
-                                {reviewing && (
+                                {/* Manager typing dots -- shows for 2-4s after student submits */}
+                                {efTyping[req.id] && (
                                   <div style={{ padding: '16px 22px 20px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
                                       {efMeAvatar}
@@ -1648,6 +1681,29 @@ export default function VirtualExperienceTaker({
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                                           <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>Me</span>
                                           <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Just now</span>
+                                        </div>
+                                        <p style={{ fontSize: 13, color: isDark ? '#aaa' : '#555', margin: 0 }}>Submitted my {typeLabel} for review.</p>
+                                      </div>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                      <SlackAvatar name={efManager} size={42} color={efMeta.color} />
+                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '10px 16px', borderRadius: 20, background: isDark ? '#2a2a2a' : '#f0f0f0' }}>
+                                        {[0, 1, 2].map(i => (
+                                          <div key={i} className="w-2 h-2 rounded-full animate-bounce" style={{ background: isDark ? '#888' : '#aaa', animationDelay: `${i * 160}ms` }} />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                                {/* Manager "received + reviewing" reply -- persists when done so both replies stay in thread */}
+                                {!efTyping[req.id] && (efReviewing[req.id] || done) && (
+                                  <div style={{ padding: '16px 22px 20px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
+                                      {efMeAvatar}
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                          <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>Me</span>
+                                          <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Earlier</span>
                                         </div>
                                         <p style={{ fontSize: 13, color: isDark ? '#aaa' : '#555', margin: 0 }}>Submitted my {typeLabel} for review.</p>
                                       </div>
@@ -1660,26 +1716,23 @@ export default function VirtualExperienceTaker({
                                           <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Just now</span>
                                         </div>
                                         <p style={{ fontSize: 13.5, color: isDark ? '#e0e0e0' : '#1f1f1f', margin: '0 0 10px' }}>Your submission has been received and is currently under review. I will get back to you shortly.</p>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: isDark ? '#888' : '#999', fontSize: 12.5 }}>
-                                          <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: accentColor }} /> AI is reviewing your {typeLabel}...
-                                        </div>
+                                        {!done && (
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: isDark ? '#888' : '#999', fontSize: 12.5 }}>
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: accentColor }} /> AI is reviewing your {typeLabel}...
+                                          </div>
+                                        )}
+                                        {done && (
+                                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, background: `${accentColor}12`, color: accentColor, border: `1px solid ${accentColor}30`, fontSize: 12 }}>
+                                            <CheckCircle2 className="w-3 h-3" /> Review complete
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
                                 )}
-                                {/* Manager report reply when AI is done */}
+                                {/* Manager report -- appears below the received reply once AI finishes */}
                                 {done && (
                                   <div style={{ padding: '16px 22px 20px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
-                                      {efMeAvatar}
-                                      <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                          <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>Me</span>
-                                          <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Earlier</span>
-                                        </div>
-                                        <p style={{ fontSize: 13, color: isDark ? '#aaa' : '#555', margin: 0 }}>Submitted my {typeLabel} for review.</p>
-                                      </div>
-                                    </div>
                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                                       <SlackAvatar name={efManager} size={42} color={efMeta.color} />
                                       <div style={{ flex: 1 }}>
