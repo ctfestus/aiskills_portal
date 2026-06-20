@@ -198,6 +198,57 @@ function startTypingSound(durationMs: number) {
   (function tick() { if (Date.now() >= end) return; playTypingClick(); setTimeout(tick, 70 + Math.floor(Math.random() * 110)); })();
 }
 
+function EmailCompose({
+  value, onChange, readOnly, isDark, accentColor, placeholder,
+}: {
+  value: string; onChange: (html: string) => void; readOnly: boolean;
+  isDark: boolean; accentColor: string; placeholder: string;
+}) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [isEmpty, setIsEmpty] = useState(!value);
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    if (value) el.innerHTML = value;
+    setIsEmpty(!el.innerText?.trim());
+  }, []);
+  const exec = (cmd: string) => {
+    document.execCommand(cmd, false, undefined);
+    const el = editorRef.current;
+    if (el) { el.focus(); onChange(el.innerHTML); setIsEmpty(!el.innerText?.trim()); }
+  };
+  const bd = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.1)';
+  const tc = isDark ? '#f0f0f0' : '#111';
+  const mc = isDark ? '#777' : '#bbb';
+  const tb: React.CSSProperties = { width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', borderRadius: 4, cursor: 'pointer', color: tc, fontSize: 13 };
+  return (
+    <div style={{ border: `1px solid ${bd}`, borderRadius: 10, overflow: 'hidden', background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' }}>
+      {!readOnly && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 10px', background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', borderBottom: `1px solid ${bd}` }}>
+          <button onClick={() => exec('bold')} style={{ ...tb, fontWeight: 700 }}>B</button>
+          <button onClick={() => exec('italic')} style={{ ...tb, fontStyle: 'italic' }}>I</button>
+          <button onClick={() => exec('underline')} style={{ ...tb, textDecoration: 'underline' }}>U</button>
+          <span style={{ width: 1, height: 16, background: bd, margin: '0 4px', flexShrink: 0 }} />
+          <button onClick={() => exec('insertUnorderedList')} style={tb} title="Bullet list">&#8226;</button>
+          <button onClick={() => exec('insertOrderedList')} style={{ ...tb, fontSize: 11 }}>1.</button>
+        </div>
+      )}
+      <div style={{ position: 'relative', minHeight: 120 }}>
+        {isEmpty && !readOnly && (
+          <div style={{ position: 'absolute', top: 14, left: 16, fontSize: 14, color: mc, pointerEvents: 'none', lineHeight: 1.7 }}>{placeholder}</div>
+        )}
+        <div
+          ref={editorRef}
+          contentEditable={!readOnly}
+          suppressContentEditableWarning
+          onInput={() => { const el = editorRef.current; if (!el) return; onChange(el.innerHTML); setIsEmpty(!el.innerText?.trim()); }}
+          style={{ minHeight: 120, padding: '14px 16px', fontSize: 14, lineHeight: 1.7, color: tc, background: 'transparent', outline: 'none', wordBreak: 'break-word' }}
+        />
+      </div>
+    </div>
+  );
+}
+
 // Component
 export default function VirtualExperienceTaker({
   formId, formSlug, config, studentName, studentEmail, userId, sessionToken,
@@ -1038,61 +1089,57 @@ export default function VirtualExperienceTaker({
                           );
                         }
 
+                        // Gmail-style email reader
+                        const manEmail = `${managerName.toLowerCase().replace(/\s+/g, '.')}@${(config.company || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
                         return (
                           <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5">
-                            <div className="rounded-2xl overflow-hidden"
-                              style={{ background: isDark ? '#171717' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}` }}>
-                              <div className="px-4 py-3 flex items-center gap-2"
-                                style={{ background: isDark ? '#202020' : '#f8fafc', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'}` }}>
-                                <Inbox className="w-4 h-4" style={{ color: meta.color }} />
-                                <span className="text-[12px] font-bold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>Inbox</span>
-                                <span className="ml-auto text-[11px]" style={{ color: isDark ? '#777' : '#777' }}>Unread brief</span>
+                            <div style={{ background: isDark ? '#1a1a1a' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, borderRadius: 14 }}>
+                              {/* Subject */}
+                              <div style={{ padding: '22px 22px 0' }}>
+                                <h3 style={{ fontSize: 20, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111', lineHeight: 1.3, margin: 0 }}>{subject}</h3>
                               </div>
-                              <div className="px-4 py-4 space-y-4">
-                                <div className="flex items-start gap-3">
-                                  <div className="mt-0.5">
-                                    <CompanyAvatar name={managerName} color={meta.color} size={40} />
+                              {/* Sender row */}
+                              <div style={{ padding: '16px 22px 0', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                <SlackAvatar name={managerName} size={42} color={meta.color} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>{managerName}</span>
+                                    <span style={{ fontSize: 12, color: isDark ? '#777' : '#aaa' }}>&lt;{manEmail}&gt;</span>
                                   </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-[13px] font-bold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{managerName}</span>
-                                      <span className="text-[11px]" style={{ color: isDark ? '#777' : '#777' }}>{managerTitle}</span>
-                                    </div>
-                                    <p className="text-[11px] mt-0.5" style={{ color: isDark ? '#777' : '#777' }}>To: {studentName || 'Analyst'} - {config.company || 'Project team'}</p>
-                                  </div>
-                                  {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
+                                  <p style={{ fontSize: 12, color: isDark ? '#666' : '#bbb', marginTop: 2, margin: 0 }}>to me &bull; Earlier today</p>
                                 </div>
-                                <div>
-                                  <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: isDark ? '#777' : '#777' }}>Subject</p>
-                                  <h3 className={`text-[16px] leading-snug ${done ? 'font-semibold' : 'font-black'}`} style={{ color: isDark ? '#fff' : '#111' }}>{subject}</h3>
-                                  {req.description && <p className="text-[13.5px] mt-3 leading-relaxed" style={{ color: isDark ? '#ccc' : '#333' }}>{req.description}</p>}
-                                </div>
-                                <div className="flex flex-wrap gap-2">
+                                {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accentColor }} />}
+                              </div>
+                              {/* Email body */}
+                              <div style={{ padding: '18px 22px', color: isDark ? '#ccc' : '#444', fontSize: 14.5, lineHeight: 1.75 }}>
+                                {req.description && <p style={{ margin: 0 }}>{req.description}</p>}
+                              </div>
+                              {/* Attachments */}
+                              {(config.dataset || (config.tools && config.tools.length > 0)) && (
+                                <div style={{ padding: '0 22px 16px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                                   {config.dataset && (
-                                    <button onClick={downloadDataset}
-                                      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold"
-                                      style={{ background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', color: isDark ? '#ddd' : '#334155', border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}` }}>
-                                      <Paperclip className="w-3.5 h-3.5" /> {config.dataset.filename || 'Dataset'}
+                                    <button onClick={downloadDataset} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, fontSize: 12.5, color: isDark ? '#ddd' : '#334155', cursor: 'pointer' }}>
+                                      <Paperclip className="w-3 h-3" /> {config.dataset.filename || 'Dataset'}
                                     </button>
                                   )}
                                   {(config.tools || []).slice(0, 3).map(tool => (
-                                    <span key={tool} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold"
-                                      style={{ background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', color: isDark ? '#aaa' : '#64748b', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)'}` }}>
-                                      <Paperclip className="w-3 h-3" /> {tool}
+                                    <span key={tool} style={{ display: 'inline-flex', alignItems: 'center', padding: '6px 14px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc', border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'}`, fontSize: 12, color: isDark ? '#888' : '#64748b' }}>
+                                      {tool}
                                     </span>
                                   ))}
                                 </div>
+                              )}
+                              {/* Divider */}
+                              <div style={{ height: 1, background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', margin: '0 22px' }} />
+                              {/* Reply CTA */}
+                              <div style={{ padding: '14px 22px' }}>
                                 {!done && !reviewMode ? (
-                                  <button onClick={acknowledge}
-                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold transition-all hover:opacity-80"
-                                    style={{ background: meta.color, color: '#fff' }}>
-                                    <Mail className="w-3.5 h-3.5" /> Got it, start this task
+                                  <button onClick={acknowledge} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 20px', borderRadius: 24, background: meta.color, color: '#fff', fontSize: 13.5, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+                                    <Mail className="w-4 h-4" /> Reply: Got it, starting now
                                   </button>
                                 ) : (
-                                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg w-fit"
-                                    style={{ background: `${accentColor}10`, color: accentColor }}>
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                    <span className="text-[12.5px] font-semibold">Email brief read</span>
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: `${accentColor}12`, color: accentColor, border: `1px solid ${accentColor}30`, fontSize: 13 }}>
+                                    <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Brief acknowledged
                                   </div>
                                 )}
                               </div>
@@ -1213,63 +1260,62 @@ export default function VirtualExperienceTaker({
                       if (req.type === 'debrief') {
                         const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
                         const managerName = config.managerName || 'Your Manager';
+                        const debriefSubject = req.label || `${currentLes?.title || 'Mission'} debrief`;
+                        const hasContent = noteVal.replace(/<[^>]*>/g, '').trim().length > 0;
+                        const manChipBg = isDark ? 'rgba(255,255,255,0.1)' : '#e8f0fe';
+                        const manChipText = isDark ? '#ddd' : '#1a73e8';
                         return (
                           <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5">
-                            <div className="rounded-2xl overflow-hidden"
-                              style={{ background: isDark ? '#171717' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}` }}>
-                              <div className="px-4 py-3 flex items-center gap-2"
-                                style={{ background: isDark ? '#202020' : '#f8fafc', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'}` }}>
-                                <Send className="w-4 h-4" style={{ color: REQ_META.debrief.color }} />
-                                <span className="text-[12px] font-bold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>Compose update</span>
-                                <span className="ml-auto text-[11px]" style={{ color: isDark ? '#777' : '#777' }}>{done ? 'Sent' : 'Draft'}</span>
+                            <div style={{ borderRadius: 14, overflow: 'hidden', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, boxShadow: isDark ? '0 2px 12px rgba(0,0,0,0.4)' : '0 2px 12px rgba(0,0,0,0.09)' }}>
+                              {/* Compose header */}
+                              <div style={{ background: isDark ? '#252525' : '#f2f2f2', padding: '10px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>New message</span>
+                                <span style={{ fontSize: 11, color: isDark ? '#777' : '#999' }}>{done ? 'Sent' : 'Draft'}</span>
                               </div>
-                              <div className="px-4 py-4 space-y-3">
-                                <div className="grid gap-2 text-[12px]">
-                                  <div className="flex gap-2">
-                                    <span className="w-16 font-bold" style={{ color: isDark ? '#777' : '#777' }}>To</span>
-                                    <span style={{ color: isDark ? '#ddd' : '#333' }}>{managerName}</span>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <span className="w-16 font-bold" style={{ color: isDark ? '#777' : '#777' }}>Subject</span>
-                                    <span style={{ color: isDark ? '#ddd' : '#333' }}>{req.label || `${currentLes?.title || 'Mission'} debrief`}</span>
-                                  </div>
-                                </div>
-                                {req.description && <p className="text-[12.5px] leading-relaxed" style={{ color: isDark ? '#aaa' : '#555' }}>{req.description}</p>}
-                                <textarea value={noteVal} onChange={e => setNote(req.id, e.target.value)}
-                                  disabled={done && !reviewMode}
-                                  placeholder="2-3 sentences: what you did, what you found, and any blockers."
-                                  rows={5}
-                                  className="w-full text-[14px] rounded-xl p-3 outline-none resize-none"
-                                  style={{
-                                    background: done && !reviewMode ? `${accentColor}06` : isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc',
-                                    color: isDark ? '#f0f0f0' : '#111',
-                                    border: `1px solid ${done ? accentColor : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
-                                    lineHeight: 1.6,
-                                    opacity: 1,
-                                  }} />
+                              {/* To field */}
+                              <div style={{ background: isDark ? '#1a1a1a' : '#fff', padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
+                                <span style={{ fontSize: 13, color: isDark ? '#777' : '#aaa', width: 60, flexShrink: 0 }}>To</span>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 10px', borderRadius: 14, background: manChipBg, fontSize: 13, fontWeight: 500, color: manChipText }}>{managerName}</span>
+                              </div>
+                              {/* Subject field */}
+                              <div style={{ background: isDark ? '#1a1a1a' : '#fff', padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
+                                <span style={{ fontSize: 13, color: isDark ? '#777' : '#aaa', width: 60, flexShrink: 0 }}>Subject</span>
+                                <span style={{ fontSize: 13, color: isDark ? '#ddd' : '#333' }}>{debriefSubject}</span>
+                              </div>
+                              {/* Body */}
+                              <div style={{ background: isDark ? '#1a1a1a' : '#fff', padding: '10px 18px 6px' }}>
+                                {req.description && <p style={{ fontSize: 12.5, color: isDark ? '#888' : '#999', lineHeight: 1.6, marginBottom: 10 }}>{req.description}</p>}
+                                <EmailCompose
+                                  value={noteVal}
+                                  onChange={(html) => setNote(req.id, html)}
+                                  readOnly={done && !reviewMode}
+                                  isDark={isDark}
+                                  accentColor={accentColor}
+                                  placeholder="Write your mission debrief - what you found, what you did, and any blockers..."
+                                />
+                              </div>
+                              {/* Footer */}
+                              <div style={{ background: isDark ? '#1a1a1a' : '#fff', padding: '12px 18px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
                                 {!done && !reviewMode ? (
                                   <button
                                     onClick={() => {
-                                      if (noteVal.trim().length === 0) return;
+                                      if (!hasContent) return;
                                       setProgress(prev => {
                                         const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } };
                                         saveProgress(next, currentModId, currentLesId);
                                         return next;
                                       });
                                     }}
-                                    disabled={noteVal.trim().length === 0}
-                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                    style={{ background: REQ_META.debrief.color, color: '#fff' }}>
-                                    <Send className="w-3.5 h-3.5" /> Send update
+                                    disabled={!hasContent}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 22px', borderRadius: 24, background: hasContent ? REQ_META.debrief.color : (isDark ? '#333' : '#e0e0e0'), color: hasContent ? '#fff' : (isDark ? '#666' : '#aaa'), fontSize: 13.5, fontWeight: 600, border: 'none', cursor: hasContent ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}>
+                                    <Send className="w-3.5 h-3.5" /> Send
                                   </button>
                                 ) : (
-                                  <div className="space-y-1">
-                                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg w-fit"
-                                      style={{ background: `${accentColor}10`, color: accentColor, border: `1px solid ${accentColor}30` }}>
-                                      <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                                      <p className="text-[13px] font-semibold">Update sent.</p>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: `${accentColor}12`, color: accentColor, border: `1px solid ${accentColor}30`, fontSize: 13, fontWeight: 500 }}>
+                                      <CheckCircle2 className="w-4 h-4" style={{ display: 'inline' }} /> Message sent
                                     </div>
-                                    <p className="text-[11px] px-1" style={{ color: isDark ? '#666' : '#999' }}>Delivered to {managerName}</p>
+                                    <p style={{ fontSize: 11.5, color: isDark ? '#666' : '#aaa', paddingLeft: 2, margin: 0 }}>Delivered to {managerName}</p>
                                   </div>
                                 )}
                               </div>

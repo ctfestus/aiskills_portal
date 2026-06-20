@@ -137,6 +137,57 @@ function startTypingSound(durationMs: number) {
   (function tick() { if (Date.now() >= end) return; playTypingClick(); setTimeout(tick, 70 + Math.floor(Math.random() * 110)); })();
 }
 
+function EmailCompose({
+  value, onChange, readOnly, isDark, accentColor, placeholder,
+}: {
+  value: string; onChange: (html: string) => void; readOnly: boolean;
+  isDark: boolean; accentColor: string; placeholder: string;
+}) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [isEmpty, setIsEmpty] = useState(!value);
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    if (value) el.innerHTML = value;
+    setIsEmpty(!el.innerText?.trim());
+  }, []);
+  const exec = (cmd: string) => {
+    document.execCommand(cmd, false, undefined);
+    const el = editorRef.current;
+    if (el) { el.focus(); onChange(el.innerHTML); setIsEmpty(!el.innerText?.trim()); }
+  };
+  const bd = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.1)';
+  const tc = isDark ? '#f0f0f0' : '#111';
+  const mc = isDark ? '#777' : '#bbb';
+  const tb: React.CSSProperties = { width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', borderRadius: 4, cursor: 'pointer', color: tc, fontSize: 13 };
+  return (
+    <div style={{ border: `1px solid ${bd}`, borderRadius: 10, overflow: 'hidden', background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' }}>
+      {!readOnly && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 10px', background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', borderBottom: `1px solid ${bd}` }}>
+          <button onClick={() => exec('bold')} style={{ ...tb, fontWeight: 700 }}>B</button>
+          <button onClick={() => exec('italic')} style={{ ...tb, fontStyle: 'italic' }}>I</button>
+          <button onClick={() => exec('underline')} style={{ ...tb, textDecoration: 'underline' }}>U</button>
+          <span style={{ width: 1, height: 16, background: bd, margin: '0 4px', flexShrink: 0 }} />
+          <button onClick={() => exec('insertUnorderedList')} style={tb} title="Bullet list">&#8226;</button>
+          <button onClick={() => exec('insertOrderedList')} style={{ ...tb, fontSize: 11 }}>1.</button>
+        </div>
+      )}
+      <div style={{ position: 'relative', minHeight: 120 }}>
+        {isEmpty && !readOnly && (
+          <div style={{ position: 'absolute', top: 14, left: 16, fontSize: 14, color: mc, pointerEvents: 'none', lineHeight: 1.7 }}>{placeholder}</div>
+        )}
+        <div
+          ref={editorRef}
+          contentEditable={!readOnly}
+          suppressContentEditableWarning
+          onInput={() => { const el = editorRef.current; if (!el) return; onChange(el.innerHTML); setIsEmpty(!el.innerText?.trim()); }}
+          style={{ minHeight: 120, padding: '14px 16px', fontSize: 14, lineHeight: 1.7, color: tc, background: 'transparent', outline: 'none', wordBreak: 'break-word' }}
+        />
+      </div>
+    </div>
+  );
+}
+
 // -- Component ---
 
 export default function AssignmentExperiencePlayer({
@@ -529,48 +580,53 @@ export default function AssignmentExperiencePlayer({
                           );
                         }
 
-                        // Manager brief - email inbox style
+                        // Manager brief - Gmail-style email reader
                         if (req.type === 'briefing') {
                           const subject = req.label || `${currentLes?.title || 'Mission'} brief`;
+                          const manName = config.managerName || 'Project Manager';
+                          const manEmail = `${manName.toLowerCase().replace(/\s+/g, '.')}@${(config.company || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
                           return (
-                            <div key={req.id} className="rounded-2xl overflow-hidden" style={{ background: bg, border: `1px solid ${border}`, boxShadow: shadow }}>
-                              <div className="px-4 py-3 flex items-center gap-2" style={{ background: subtle, borderBottom: `1px solid ${divider}` }}>
-                                <Inbox className="w-4 h-4" style={{ color: accent }} />
-                                <span className="text-[12px] font-bold" style={{ color: text }}>Inbox</span>
-                                <span className="ml-auto text-[11px]" style={{ color: faint }}>Unread brief</span>
+                            <div key={req.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: shadow }}>
+                              {/* Subject */}
+                              <div style={{ padding: '22px 22px 0' }}>
+                                <h3 style={{ fontSize: 19, fontWeight: 700, color: text, lineHeight: 1.3, margin: 0 }}>{subject}</h3>
                               </div>
-                              <div className="px-4 py-4 space-y-3">
-                                <div className="flex items-start gap-3">
-                                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-black"
-                                    style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}30` }}>
-                                    {(config.managerName || 'PM').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                              {/* Sender row */}
+                              <div style={{ padding: '16px 22px 0', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                <SlackAvatar name={manName} size={42} color={accent} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{manName}</span>
+                                    <span style={{ fontSize: 12, color: faint }}>&lt;{manEmail}&gt;</span>
                                   </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-sm font-bold" style={{ color: text }}>{config.managerName || 'Project Manager'}</span>
-                                      <span className="text-[11px]" style={{ color: faint }}>{config.managerTitle || 'Project Lead'}</span>
-                                    </div>
-                                    <p className="text-[11px] mt-0.5" style={{ color: faint }}>To: {studentName || 'Analyst'}</p>
+                                  <p style={{ fontSize: 12, color: faint, marginTop: 2, margin: 0 }}>to me &bull; Earlier today</p>
+                                </div>
+                                {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accent }} />}
+                              </div>
+                              {/* Email body */}
+                              <div style={{ padding: '18px 22px', color: muted, fontSize: 14.5, lineHeight: 1.75 }}>
+                                {req.description && <p style={{ margin: 0 }}>{req.description}</p>}
+                              </div>
+                              {/* Attachments */}
+                              {config.dataset && (
+                                <div style={{ padding: '0 22px 16px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                  <button onClick={downloadDataset} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${divider}`, fontSize: 12.5, color: muted, cursor: 'pointer' }}>
+                                    <Paperclip className="w-3 h-3" /> {config.dataset.filename || 'Dataset'}
+                                  </button>
+                                </div>
+                              )}
+                              {/* Divider */}
+                              <div style={{ height: 1, background: divider, margin: '0 22px' }} />
+                              {/* Reply CTA */}
+                              <div style={{ padding: '14px 22px' }}>
+                                {!isDone && !readOnly ? (
+                                  <button onClick={() => updateProgress(req.id, { completed: true })} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 20px', borderRadius: 24, background: accent, color: '#fff', fontSize: 13.5, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+                                    <Mail className="w-4 h-4" /> Reply: Got it, starting now
+                                  </button>
+                                ) : (
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 13 }}>
+                                    <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Brief acknowledged
                                   </div>
-                                  {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
-                                </div>
-                                <div className="rounded-2xl px-4 py-3" style={{ background: subtle, border: `1px solid ${divider}` }}>
-                                  <p className="text-sm font-bold" style={{ color: text }}>{subject}</p>
-                                  {req.description && <p className="text-xs mt-1.5 leading-relaxed" style={{ color: muted }}>{req.description}</p>}
-                                </div>
-                                {config.dataset && (
-                                  <button onClick={downloadDataset}
-                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
-                                    style={{ background: subtle, color: muted, border: `1px solid ${divider}` }}>
-                                    <Paperclip className="w-3.5 h-3.5" /> {config.dataset.filename || 'Dataset'}
-                                  </button>
-                                )}
-                                {!isDone && !readOnly && (
-                                  <button onClick={() => updateProgress(req.id, { completed: true })}
-                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold"
-                                    style={{ background: accent, color: '#fff' }}>
-                                    <Mail className="w-3.5 h-3.5" /> Got it, start this task
-                                  </button>
                                 )}
                               </div>
                             </div>
@@ -679,56 +735,58 @@ export default function AssignmentExperiencePlayer({
                           );
                         }
 
-                        // Mission debrief
+                        // Mission debrief - Gmail compose window
                         if (req.type === 'debrief') {
                           const val = prog?.notes ?? '';
+                          const manName = config.managerName || 'Project Manager';
+                          const debriefSubject = req.label || `${currentLes?.title || 'Mission'} debrief`;
+                          const hasContent = val.replace(/<[^>]*>/g, '').trim().length > 0;
+                          const manChipBg = isDark ? 'rgba(255,255,255,0.1)' : '#e8f0fe';
+                          const manChipText = isDark ? '#ddd' : '#1a73e8';
                           return (
-                            <div key={req.id} className="rounded-2xl overflow-hidden" style={{ background: bg, border: `1px solid ${border}`, boxShadow: shadow }}>
-                              <div className="px-4 py-3 flex items-center gap-2" style={{ background: subtle, borderBottom: `1px solid ${divider}` }}>
-                                <Send className="w-4 h-4" style={{ color: accent }} />
-                                <span className="text-[12px] font-bold" style={{ color: text }}>Compose update</span>
-                                <span className="ml-auto text-[11px]" style={{ color: faint }}>{isDone ? 'Sent' : 'Draft'}</span>
+                            <div key={req.id} style={{ borderRadius: 14, overflow: 'hidden', boxShadow: shadow, border: `1px solid ${border}` }}>
+                              {/* Compose header */}
+                              <div style={{ background: subtle, padding: '10px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${divider}` }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: text }}>New message</span>
+                                <span style={{ fontSize: 11, color: faint }}>{isDone ? 'Sent' : 'Draft'}</span>
                               </div>
-                              <div className="px-4 py-4 space-y-3">
-                                <div className="grid gap-2 text-xs">
-                                  <div className="flex gap-2">
-                                    <span className="w-14 font-bold" style={{ color: faint }}>To</span>
-                                    <span style={{ color: text }}>{config.managerName || 'Project Manager'}</span>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <span className="w-14 font-bold" style={{ color: faint }}>Subject</span>
-                                    <span style={{ color: text }}>{req.label || `${currentLes?.title || 'Mission'} debrief`}</span>
-                                  </div>
-                                </div>
-                                {req.description && <p className="text-xs leading-relaxed" style={{ color: muted }}>{req.description}</p>}
-                                <textarea
+                              {/* To field */}
+                              <div style={{ background: bg, padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${divider}` }}>
+                                <span style={{ fontSize: 13, color: faint, width: 60, flexShrink: 0 }}>To</span>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 10px', borderRadius: 14, background: manChipBg, fontSize: 13, fontWeight: 500, color: manChipText }}>{manName}</span>
+                              </div>
+                              {/* Subject field */}
+                              <div style={{ background: bg, padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${divider}` }}>
+                                <span style={{ fontSize: 13, color: faint, width: 60, flexShrink: 0 }}>Subject</span>
+                                <span style={{ fontSize: 13, color: text }}>{debriefSubject}</span>
+                              </div>
+                              {/* Body */}
+                              <div style={{ background: bg, padding: '10px 18px 6px' }}>
+                                {req.description && <p style={{ fontSize: 12.5, color: muted, lineHeight: 1.6, marginBottom: 10 }}>{req.description}</p>}
+                                <EmailCompose
                                   value={val}
-                                  readOnly={readOnly || isDone}
-                                  onChange={e => updateProgress(req.id, { notes: e.target.value })}
-                                  placeholder="2-3 sentences: what you did, what you found, and any blockers."
-                                  rows={5}
-                                  className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
-                                  style={{ border: `1px solid ${isDone ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDone ? `${accent}06` : subtle, color: text, opacity: 1 }}
+                                  onChange={(html) => updateProgress(req.id, { notes: html })}
+                                  readOnly={isDone || readOnly}
+                                  isDark={isDark}
+                                  accentColor={accent}
+                                  placeholder="Write your mission debrief - what you found, what you did, and any blockers..."
                                 />
-                                {!isDone && !readOnly && (
+                              </div>
+                              {/* Footer */}
+                              <div style={{ background: bg, padding: '12px 18px', borderTop: `1px solid ${divider}` }}>
+                                {!isDone && !readOnly ? (
                                   <button
-                                    onClick={() => {
-                                      if (!val.trim()) return;
-                                      updateProgress(req.id, { notes: val, completed: true });
-                                    }}
-                                    disabled={!val.trim()}
-                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                                    style={{ background: accent, color: isDark ? '#111' : '#fff' }}>
-                                    <Send className="w-3.5 h-3.5" /> Send update
+                                    onClick={() => { if (!hasContent) return; updateProgress(req.id, { notes: val, completed: true }); }}
+                                    disabled={!hasContent}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 22px', borderRadius: 24, background: hasContent ? accent : (isDark ? '#333' : '#e0e0e0'), color: hasContent ? '#fff' : (isDark ? '#666' : '#aaa'), fontSize: 13.5, fontWeight: 600, border: 'none', cursor: hasContent ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}>
+                                    <Send className="w-3.5 h-3.5" /> Send
                                   </button>
-                                )}
-                                {isDone && (
-                                  <div className="space-y-1">
-                                    <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold"
-                                      style={{ background: `${accent}10`, color: accent, border: `1px solid ${accent}30` }}>
-                                      <CheckCircle2 className="w-3.5 h-3.5" /> Update sent
+                                ) : (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 13, fontWeight: 500 }}>
+                                      <CheckCircle2 className="w-4 h-4" style={{ display: 'inline' }} /> Message sent
                                     </div>
-                                    <p className="text-[11px] px-1" style={{ color: faint }}>Delivered to {config.managerName || 'Project Manager'}</p>
+                                    <p style={{ fontSize: 11.5, color: faint, paddingLeft: 2, margin: 0 }}>Delivered to {manName}</p>
                                   </div>
                                 )}
                               </div>
