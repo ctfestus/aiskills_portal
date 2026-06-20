@@ -925,7 +925,11 @@ export default function VirtualExperienceTaker({
                                 <div className="px-4 py-3 flex items-center gap-2"
                                   style={{ background: isDark ? '#202020' : '#f8fafc', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'}` }}>
                                   <MessageSquare className="w-4 h-4" style={{ color: meta.color }} />
-                                  <span className="text-[12px] font-bold" style={{ color: isDark ? '#f0f0f0' : '#111' }}># project-war-room</span>
+                                  <span className={`text-[12px] ${done ? 'font-semibold' : 'font-bold'}`} style={{ color: isDark ? '#f0f0f0' : '#111' }}># project-war-room</span>
+                                  {!done && (
+                                    <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
+                                      style={{ background: meta.color, color: '#fff' }}>1</span>
+                                  )}
                                   <span className="ml-auto text-[11px]" style={{ color: isDark ? '#777' : '#777' }}>Scenario update</span>
                                 </div>
                                 <div className="px-4 py-4 space-y-3">
@@ -935,10 +939,10 @@ export default function VirtualExperienceTaker({
                                       <div className="flex items-center gap-2 flex-wrap">
                                         <span className="text-[13px] font-bold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{managerName}</span>
                                         <span className="text-[11px]" style={{ color: isDark ? '#777' : '#777' }}>{managerTitle}</span>
-                                        <span className="text-[11px]" style={{ color: isDark ? '#666' : '#999' }}>now</span>
+                                        <span className="text-[11px]" style={{ color: isDark ? '#666' : '#999' }}>Earlier today</span>
                                       </div>
                                       <div className="mt-2 rounded-2xl rounded-tl-sm px-4 py-3"
-                                        style={{ background: isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)'}` }}>
+                                        style={{ background: isDark ? 'rgba(255,255,255,0.10)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)'}` }}>
                                         <p className="text-[14px] font-semibold leading-snug" style={{ color: isDark ? '#fff' : '#111' }}>{subject}</p>
                                         {req.description && <p className="text-[13px] mt-1.5 leading-relaxed" style={{ color: isDark ? '#ccc' : '#444' }}>{req.description}</p>}
                                       </div>
@@ -951,8 +955,15 @@ export default function VirtualExperienceTaker({
                                       <CheckCircle2 className="w-3.5 h-3.5" /> Acknowledge in chat
                                     </button>
                                   ) : (
-                                    <div className="ml-12 flex items-center gap-2 text-[12px] font-semibold" style={{ color: accentColor }}>
-                                      <CheckCircle2 className="w-3.5 h-3.5" /> Update acknowledged
+                                    <div className="flex items-start gap-2 justify-end">
+                                      <div className="rounded-2xl rounded-tr-sm px-4 py-2.5"
+                                        style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}>
+                                        <p className="text-[12.5px] font-semibold">Got it, on it.</p>
+                                      </div>
+                                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-0.5"
+                                        style={{ background: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)', color: isDark ? '#ccc' : '#555' }}>
+                                        {studentName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                                      </div>
                                     </div>
                                   )}
                                 </div>
@@ -987,7 +998,7 @@ export default function VirtualExperienceTaker({
                                 </div>
                                 <div>
                                   <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: isDark ? '#777' : '#777' }}>Subject</p>
-                                  <h3 className="text-[16px] font-black leading-snug" style={{ color: isDark ? '#fff' : '#111' }}>{subject}</h3>
+                                  <h3 className={`text-[16px] leading-snug ${done ? 'font-semibold' : 'font-black'}`} style={{ color: isDark ? '#fff' : '#111' }}>{subject}</h3>
                                   {req.description && <p className="text-[13.5px] mt-3 leading-relaxed" style={{ color: isDark ? '#ccc' : '#333' }}>{req.description}</p>}
                                 </div>
                                 <div className="flex flex-wrap gap-2">
@@ -1009,7 +1020,7 @@ export default function VirtualExperienceTaker({
                                   <button onClick={acknowledge}
                                     className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold transition-all hover:opacity-80"
                                     style={{ background: meta.color, color: '#fff' }}>
-                                    <Mail className="w-3.5 h-3.5" /> Mark email read and start
+                                    <Mail className="w-3.5 h-3.5" /> Got it, start this task
                                   </button>
                                 ) : (
                                   <div className="flex items-center gap-2 px-3 py-2 rounded-lg w-fit"
@@ -1044,20 +1055,20 @@ export default function VirtualExperienceTaker({
                               style={{ background: isDark ? '#171717' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}` }}>
                               <div className="px-4 py-3 flex items-center gap-2"
                                 style={{ background: isDark ? '#202020' : '#f8fafc', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'}` }}>
-                                <MessageSquare className="w-4 h-4" style={{ color: REQ_META.decision.color }} />
+                                <MessageSquare className="w-4 h-4" style={{ color: accentColor }} />
                                 <span className="text-[12px] font-bold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>Decision thread</span>
                                 <span className="ml-auto text-[11px]" style={{ color: isDark ? '#777' : '#777' }}># project-war-room</span>
                               </div>
                               <div className="px-4 py-4 space-y-4">
                                 <div className="flex items-start gap-3">
-                                  <CompanyAvatar name={managerName} color={REQ_META.decision.color} size={34} />
+                                  <CompanyAvatar name={managerName} color={accentColor} size={34} />
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
                                       <span className="text-[13px] font-bold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{managerName}</span>
                                       <span className="text-[11px]" style={{ color: isDark ? '#777' : '#777' }}>asks</span>
                                     </div>
                                     <div className="mt-2 rounded-2xl rounded-tl-sm px-4 py-3"
-                                      style={{ background: isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)'}` }}>
+                                      style={{ background: isDark ? 'rgba(255,255,255,0.10)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)'}` }}>
                                       <p className="text-[14px] font-semibold leading-snug" style={{ color: isDark ? '#fff' : '#111' }}>{req.label}</p>
                                       {req.description && <p className="text-[12.5px] mt-1.5 leading-relaxed" style={{ color: isDark ? '#bbb' : '#555' }}>{req.description}</p>}
                                     </div>
@@ -1073,14 +1084,15 @@ export default function VirtualExperienceTaker({
                                         <button key={`${req.id}-${oi}`}
                                           onClick={() => chooseDecision(opt)}
                                           disabled={reviewMode}
-                                          className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all disabled:cursor-default"
+                                          className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all disabled:cursor-default hover:opacity-80"
                                           style={{
-                                            background: isDark ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.06)',
-                                            border: `1px solid ${isDark ? 'rgba(139,92,246,0.22)' : 'rgba(139,92,246,0.18)'}`,
-                                            color: isDark ? '#e9d5ff' : '#4c1d95',
+                                            background: isDark ? `${accentColor}12` : `${accentColor}08`,
+                                            border: `1px solid ${isDark ? `${accentColor}33` : `${accentColor}22`}`,
+                                            color: isDark ? '#f0f0f0' : '#111',
+                                            transition: 'border-color 0.12s, background 0.12s',
                                           }}>
                                           <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5"
-                                            style={{ background: REQ_META.decision.color, color: '#fff' }}>{letter}</span>
+                                            style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}>{letter}</span>
                                           <span className="flex-1 text-[13.5px] leading-snug">{opt}</span>
                                         </button>
                                       );
@@ -1090,17 +1102,21 @@ export default function VirtualExperienceTaker({
 
                                 {done && selectedAnswer && (
                                   <div className="space-y-3">
-                                    <div className="flex items-start gap-3 justify-end">
-                                      <div className="max-w-[86%] rounded-2xl rounded-tr-sm px-4 py-3"
-                                        style={{ background: REQ_META.decision.color, color: '#fff' }}>
+                                    <div className="flex items-start gap-2 justify-end">
+                                      <div className="max-w-[75%] rounded-2xl rounded-tr-sm px-4 py-3"
+                                        style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}>
                                         <p className="text-[13.5px] leading-relaxed">{selectedAnswer}</p>
+                                      </div>
+                                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-1"
+                                        style={{ background: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)', color: isDark ? '#ccc' : '#555' }}>
+                                        {studentName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
                                       </div>
                                     </div>
                                     <div className="flex items-start gap-3">
-                                      <CompanyAvatar name={managerName} color={REQ_META.decision.color} size={30} />
+                                      <CompanyAvatar name={managerName} color={accentColor} size={30} />
                                       <div className="max-w-[86%] rounded-2xl rounded-tl-sm px-4 py-3"
-                                        style={{ background: isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9', color: isDark ? '#ddd' : '#333', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)'}` }}>
-                                        <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: REQ_META.decision.color }}>Feedback</p>
+                                        style={{ background: isDark ? 'rgba(255,255,255,0.10)' : '#f1f5f9', color: isDark ? '#ddd' : '#333', border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)'}` }}>
+                                        <p className="text-[11px] font-bold mb-1" style={{ color: accentColor }}>{managerName} responds</p>
                                         <p className="text-[13px] leading-relaxed">{selectedFeedback || 'Decision recorded. Continue with the next workplace step.'}</p>
                                       </div>
                                     </div>
@@ -1128,6 +1144,10 @@ export default function VirtualExperienceTaker({
                               <div className="px-4 py-4 space-y-3">
                                 <div className="grid gap-2 text-[12px]">
                                   <div className="flex gap-2">
+                                    <span className="w-16 font-bold" style={{ color: isDark ? '#777' : '#777' }}>From</span>
+                                    <span style={{ color: isDark ? '#ddd' : '#333' }}>{studentName}</span>
+                                  </div>
+                                  <div className="flex gap-2">
                                     <span className="w-16 font-bold" style={{ color: isDark ? '#777' : '#777' }}>To</span>
                                     <span style={{ color: isDark ? '#ddd' : '#333' }}>{managerName}</span>
                                   </div>
@@ -1139,15 +1159,15 @@ export default function VirtualExperienceTaker({
                                 {req.description && <p className="text-[12.5px] leading-relaxed" style={{ color: isDark ? '#aaa' : '#555' }}>{req.description}</p>}
                                 <textarea value={noteVal} onChange={e => setNote(req.id, e.target.value)}
                                   disabled={done && !reviewMode}
-                                  placeholder="Write the update you would send to your manager..."
+                                  placeholder="2-3 sentences: what you did, what you found, and any blockers."
                                   rows={5}
                                   className="w-full text-[14px] rounded-xl p-3 outline-none resize-none"
                                   style={{
-                                    background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc',
+                                    background: done && !reviewMode ? `${accentColor}06` : isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc',
                                     color: isDark ? '#f0f0f0' : '#111',
                                     border: `1px solid ${done ? accentColor : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
                                     lineHeight: 1.6,
-                                    opacity: done && !reviewMode ? 0.75 : 1,
+                                    opacity: 1,
                                   }} />
                                 {!done && !reviewMode ? (
                                   <button
@@ -1165,10 +1185,13 @@ export default function VirtualExperienceTaker({
                                     <Send className="w-3.5 h-3.5" /> Send update
                                   </button>
                                 ) : (
-                                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg w-fit"
-                                    style={{ background: 'rgba(16,185,129,0.08)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
-                                    <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                                    <p className="text-[13px] font-semibold">Update sent.</p>
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg w-fit"
+                                      style={{ background: `${accentColor}10`, color: accentColor, border: `1px solid ${accentColor}30` }}>
+                                      <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                                      <p className="text-[13px] font-semibold">Update sent.</p>
+                                    </div>
+                                    <p className="text-[11px] px-1" style={{ color: isDark ? '#666' : '#999' }}>Delivered to {managerName}</p>
                                   </div>
                                 )}
                               </div>

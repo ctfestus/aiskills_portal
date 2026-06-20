@@ -433,7 +433,7 @@ export default function AssignmentExperiencePlayer({
                                   </div>
                                   {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
                                 </div>
-                                <div className="rounded-2xl px-4 py-3" style={{ background: isUpdate ? (isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9') : subtle, border: `1px solid ${divider}` }}>
+                                <div className="rounded-2xl px-4 py-3" style={{ background: isUpdate ? (isDark ? 'rgba(255,255,255,0.10)' : '#f1f5f9') : subtle, border: `1px solid ${divider}` }}>
                                   <p className="text-sm font-bold" style={{ color: text }}>{subject}</p>
                                   {req.description && <p className="text-xs mt-1.5 leading-relaxed" style={{ color: muted }}>{req.description}</p>}
                                 </div>
@@ -449,7 +449,7 @@ export default function AssignmentExperiencePlayer({
                                     className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold"
                                     style={{ background: color, color: '#fff' }}>
                                     {isUpdate ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Mail className="w-3.5 h-3.5" />}
-                                    {isUpdate ? 'Acknowledge in chat' : 'Mark email read'}
+                                    {isUpdate ? 'Acknowledge in chat' : 'Got it, start this task'}
                                   </button>
                                 )}
                               </div>
@@ -472,7 +472,7 @@ export default function AssignmentExperiencePlayer({
                               <div className="px-4 py-4 space-y-4">
                                 <div className="flex items-start gap-3">
                                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-black"
-                                    style={{ background: 'rgba(139,92,246,0.16)', color: '#8b5cf6', border: '1px solid rgba(139,92,246,0.28)' }}>
+                                    style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}33` }}>
                                     {(config.managerName || 'PM').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
                                   </div>
                                   <div className="flex-1 min-w-0">
@@ -480,7 +480,7 @@ export default function AssignmentExperiencePlayer({
                                       <span className="text-sm font-bold" style={{ color: text }}>{config.managerName || 'Project Manager'}</span>
                                       <span className="text-[11px]" style={{ color: faint }}>asks</span>
                                     </div>
-                                    <div className="mt-2 rounded-2xl rounded-tl-sm px-4 py-3" style={{ background: subtle, border: `1px solid ${divider}` }}>
+                                    <div className="mt-2 rounded-2xl rounded-tl-sm px-4 py-3" style={{ background: isDark ? 'rgba(255,255,255,0.10)' : '#f1f5f9', border: `1px solid ${divider}` }}>
                                       <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
                                       {req.description && <p className="text-xs mt-1.5 leading-relaxed" style={{ color: muted }}>{req.description}</p>}
                                     </div>
@@ -490,32 +490,48 @@ export default function AssignmentExperiencePlayer({
                                 {!isDone && (
                                   <div className="space-y-2">
                                     <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: faint }}>Choose your reply</p>
-                                    {(req.options ?? []).filter(Boolean).map((opt, oi) => (
-                                      <button key={`${req.id}-decision-${oi}`} disabled={readOnly}
-                                        onClick={() => updateProgress(req.id, { selectedAnswer: opt, completed: true })}
-                                        className="w-full text-left px-4 py-3 rounded-xl text-sm transition-all"
-                                        style={{
-                                          border: '1px solid rgba(139,92,246,0.22)',
-                                          background: isDark ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.06)',
-                                          color: isDark ? '#e9d5ff' : '#4c1d95',
-                                          cursor: readOnly ? 'default' : 'pointer',
-                                        }}>
-                                        {opt}
-                                      </button>
-                                    ))}
+                                    {(req.options ?? []).filter(Boolean).map((opt, oi) => {
+                                      const letter = String.fromCharCode(65 + oi);
+                                      return (
+                                        <button key={`${req.id}-decision-${oi}`} disabled={readOnly}
+                                          onClick={() => updateProgress(req.id, { selectedAnswer: opt, completed: true })}
+                                          className="w-full text-left flex items-start gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-all hover:opacity-80"
+                                          style={{
+                                            border: `1px solid ${isDark ? `${accent}33` : `${accent}22`}`,
+                                            background: isDark ? `${accent}12` : `${accent}08`,
+                                            color: isDark ? '#f0f0f0' : '#111',
+                                            cursor: readOnly ? 'default' : 'pointer',
+                                            transition: 'border-color 0.12s, background 0.12s',
+                                          }}>
+                                          <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5"
+                                            style={{ background: accent, color: isDark ? '#111' : '#fff' }}>{letter}</span>
+                                          <span className="flex-1 leading-snug">{opt}</span>
+                                        </button>
+                                      );
+                                    })}
                                   </div>
                                 )}
 
                                 {isDone && selected && (
                                   <div className="space-y-3">
-                                    <div className="flex justify-end">
-                                      <div className="max-w-[86%] rounded-2xl rounded-tr-sm px-4 py-3" style={{ background: '#8b5cf6', color: '#fff' }}>
+                                    <div className="flex items-start gap-2 justify-end">
+                                      <div className="max-w-[75%] rounded-2xl rounded-tr-sm px-4 py-3" style={{ background: accent, color: isDark ? '#111' : '#fff' }}>
                                         <p className="text-sm leading-relaxed">{selected}</p>
                                       </div>
+                                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-1"
+                                        style={{ background: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)', color: isDark ? '#ccc' : '#555' }}>
+                                        {studentName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                                      </div>
                                     </div>
-                                    <div className="rounded-2xl rounded-tl-sm px-4 py-3" style={{ background: subtle, border: `1px solid ${divider}` }}>
-                                      <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: '#8b5cf6' }}>Feedback</p>
-                                      <p className="text-xs leading-relaxed" style={{ color: muted }}>{feedback || 'Decision recorded. Continue with the next workplace step.'}</p>
+                                    <div className="flex items-start gap-3">
+                                      <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-[10px] font-black mt-0.5"
+                                        style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}33` }}>
+                                        {(config.managerName || 'PM').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                                      </div>
+                                      <div className="flex-1 rounded-2xl rounded-tl-sm px-4 py-3" style={{ background: isDark ? 'rgba(255,255,255,0.10)' : '#f1f5f9', border: `1px solid ${divider}` }}>
+                                        <p className="text-[11px] font-bold mb-1" style={{ color: accent }}>{config.managerName || 'Project Manager'} responds</p>
+                                        <p className="text-xs leading-relaxed" style={{ color: muted }}>{feedback || 'Decision recorded. Continue with the next workplace step.'}</p>
+                                      </div>
                                     </div>
                                   </div>
                                 )}
@@ -530,12 +546,16 @@ export default function AssignmentExperiencePlayer({
                           return (
                             <div key={req.id} className="rounded-2xl overflow-hidden" style={{ background: bg, border: `1px solid ${border}`, boxShadow: shadow }}>
                               <div className="px-4 py-3 flex items-center gap-2" style={{ background: subtle, borderBottom: `1px solid ${divider}` }}>
-                                <Send className="w-4 h-4" style={{ color: '#14b8a6' }} />
+                                <Send className="w-4 h-4" style={{ color: accent }} />
                                 <span className="text-[12px] font-bold" style={{ color: text }}>Compose update</span>
                                 <span className="ml-auto text-[11px]" style={{ color: faint }}>{isDone ? 'Sent' : 'Draft'}</span>
                               </div>
                               <div className="px-4 py-4 space-y-3">
                                 <div className="grid gap-2 text-xs">
+                                  <div className="flex gap-2">
+                                    <span className="w-14 font-bold" style={{ color: faint }}>From</span>
+                                    <span style={{ color: text }}>{studentName}</span>
+                                  </div>
                                   <div className="flex gap-2">
                                     <span className="w-14 font-bold" style={{ color: faint }}>To</span>
                                     <span style={{ color: text }}>{config.managerName || 'Project Manager'}</span>
@@ -548,17 +568,32 @@ export default function AssignmentExperiencePlayer({
                                 {req.description && <p className="text-xs leading-relaxed" style={{ color: muted }}>{req.description}</p>}
                                 <textarea
                                   value={val}
-                                  readOnly={readOnly}
-                                  onChange={e => updateProgress(req.id, { notes: e.target.value, completed: !!e.target.value.trim() })}
-                                  placeholder="Write the update you would send to your manager..."
+                                  readOnly={readOnly || isDone}
+                                  onChange={e => updateProgress(req.id, { notes: e.target.value })}
+                                  placeholder="2-3 sentences: what you did, what you found, and any blockers."
                                   rows={5}
                                   className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
-                                  style={{ border: `1px solid ${isDone ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDone ? `${accent}05` : subtle, color: text }}
+                                  style={{ border: `1px solid ${isDone ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDone ? `${accent}06` : subtle, color: text, opacity: 1 }}
                                 />
+                                {!isDone && !readOnly && (
+                                  <button
+                                    onClick={() => {
+                                      if (!val.trim()) return;
+                                      updateProgress(req.id, { notes: val, completed: true });
+                                    }}
+                                    disabled={!val.trim()}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                    style={{ background: accent, color: isDark ? '#111' : '#fff' }}>
+                                    <Send className="w-3.5 h-3.5" /> Send update
+                                  </button>
+                                )}
                                 {isDone && (
-                                  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold"
-                                    style={{ background: 'rgba(16,185,129,0.08)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
-                                    <CheckCircle2 className="w-3.5 h-3.5" /> Update sent
+                                  <div className="space-y-1">
+                                    <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold"
+                                      style={{ background: `${accent}10`, color: accent, border: `1px solid ${accent}30` }}>
+                                      <CheckCircle2 className="w-3.5 h-3.5" /> Update sent
+                                    </div>
+                                    <p className="text-[11px] px-1" style={{ color: faint }}>Delivered to {config.managerName || 'Project Manager'}</p>
                                   </div>
                                 )}
                               </div>
