@@ -1595,10 +1595,10 @@ function VirtualExperienceCreatePageInner() {
                                             text:               { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6',   label: 'Short Answer'       },
                                             upload:             { bg: 'rgba(245,158,11,0.12)',   color: '#f59e0b',   label: 'File Upload'         },
                                             task:               { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6',   label: 'Deliverable (Checkbox)' },
-                                            briefing:           { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6',   label: 'Manager Brief' },
-                                            scenario_update:    { bg: 'rgba(245,158,11,0.12)',   color: '#f59e0b',   label: 'Scenario Update' },
-                                            decision:           { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6',   label: 'Decision Point' },
-                                            debrief:            { bg: 'rgba(20,184,166,0.12)',   color: '#14b8a6',   label: 'Mission Debrief' },
+                                            briefing:           { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6',   label: 'Inbox Email' },
+                                            scenario_update:    { bg: 'rgba(245,158,11,0.12)',   color: '#f59e0b',   label: 'Team Chat Update' },
+                                            decision:           { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6',   label: 'Chat Decision Thread' },
+                                            debrief:            { bg: 'rgba(20,184,166,0.12)',   color: '#14b8a6',   label: 'Email Update Composer' },
                                             dashboard_critique: { bg: 'rgba(16,185,129,0.12)',   color: '#10b981',   label: 'AI Dashboard Critique' },
                                             code_review:        { bg: 'rgba(99,102,241,0.12)',   color: '#6366f1',   label: 'AI Code Review' },
                                             excel_review:       { bg: 'rgba(34,197,94,0.12)',    color: '#22c55e',   label: 'AI Excel Review' },
@@ -1633,10 +1633,10 @@ function VirtualExperienceCreatePageInner() {
                                                   <option value="text">Short Answer</option>
                                                   <option value="upload">File Upload</option>
                                                   <option value="task">Deliverable (Checkbox)</option>
-                                                  <option value="briefing">Manager Brief</option>
-                                                  <option value="scenario_update">Scenario Update</option>
-                                                  <option value="decision">Decision Point</option>
-                                                  <option value="debrief">Mission Debrief</option>
+                                                  <option value="briefing">Inbox Email</option>
+                                                  <option value="scenario_update">Team Chat Update</option>
+                                                  <option value="decision">Chat Decision Thread</option>
+                                                  <option value="debrief">Email Update Composer</option>
                                                   <option value="dashboard_critique">AI Dashboard Critique</option>
                                                   <option value="code_review">AI Code Review</option>
                                                   <option value="excel_review">AI Excel Review</option>
@@ -1688,8 +1688,8 @@ function VirtualExperienceCreatePageInner() {
                                                     : <FileText className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />}
                                                   <span>
                                                     {req.type === 'scenario_update'
-                                                      ? 'Students acknowledge this update before continuing. Use it for client changes, new constraints, or stakeholder requests.'
-                                                      : 'Students acknowledge this manager brief before continuing. Use it to set context without AI cost.'}
+                                                      ? 'Renders as a Slack/Teams-style project-room message. Use it for client changes, new constraints, or stakeholder requests.'
+                                                      : 'Renders as an inbox email with sender, subject, body, and dataset/tool attachments.'}
                                                   </span>
                                                 </div>
                                               )}
@@ -1729,7 +1729,7 @@ function VirtualExperienceCreatePageInner() {
                                                   <div className="space-y-2">
                                                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: tc.bg, color: C.muted }}>
                                                       <PenLine className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />
-                                                      Students choose one path and immediately see your scripted stakeholder feedback.
+                                                      Renders as a team-chat thread. Students reply with one option and see scripted stakeholder feedback.
                                                     </div>
                                                     {decisionOptions.map((opt, oi) => {
                                                       const letter = String.fromCharCode(65 + oi);
@@ -1782,7 +1782,7 @@ function VirtualExperienceCreatePageInner() {
                                               {req.type === 'debrief' && (
                                                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: tc.bg, color: C.muted }}>
                                                   <FileText className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />
-                                                  Students write a mission debrief or next-step summary. It saves like any other progress item.
+                                                  Renders as an email composer addressed to the manager. Students send their update or recommendation.
                                                 </div>
                                               )}
                                               {req.type === 'upload' && (

@@ -557,9 +557,10 @@ RULES:
 - Only change what the instruction asks. Leave everything else exactly as-is (same IDs, same content).
 - If adding a new lesson or requirement, generate a new unique ID (e.g. "les-new-1", "req-new-1").
 - Requirement types can be "mcq", "task", "text", "upload", "briefing", "scenario_update", "decision", "debrief", "dashboard_critique", "code_review", or "excel_review". Only change types if the instruction asks.
-- For "decision": use options for choices and optionFeedback for scripted feedback shown after each choice. correctAnswer may mark the recommended path but the student is not blocked by choosing another path.
-- For "briefing" and "scenario_update": use label as the message title and description as the scripted manager/client update.
-- For "debrief": use label as the reflection prompt and description as the guidance.
+- For "briefing": it renders as an inbox email. Use label as the email subject and description as the email body.
+- For "scenario_update": it renders as a Slack/Teams-style project-room message. Use label as the message headline and description as the update body.
+- For "decision": it renders as a chat decision thread. Use options for reply choices and optionFeedback for scripted stakeholder replies shown after each choice. correctAnswer may mark the recommended path but the student is not blocked by choosing another path.
+- For "debrief": it renders as an email composer. Use label as the email subject and description as composer guidance.
 - For "task": no options/correctAnswer/expectedAnswer. For "text": no options/correctAnswer, may have expectedAnswer.
 - Keep lesson bodies concise (2-3 sentences, plain <p> tags).
 - Return the COMPLETE modules array with ALL existing modules and lessons included.

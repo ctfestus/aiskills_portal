@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle2, Circle, ChevronDown, ChevronUp, ChevronRight, ChevronLeft,
   Loader2, Lock, Upload as UploadIcon, Link as LinkIcon, CheckCircle, Download,
+  Mail, MessageSquare, Inbox, Paperclip, Send,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -409,24 +410,49 @@ export default function AssignmentExperiencePlayer({
                         if (req.type === 'briefing' || req.type === 'scenario_update') {
                           const isUpdate = req.type === 'scenario_update';
                           const color = isUpdate ? '#f59e0b' : accent;
+                          const subject = req.label || (isUpdate ? 'Project update' : `${currentLes?.title || 'Mission'} brief`);
                           return (
-                            <div key={req.id} className="space-y-3 rounded-xl px-4 py-3" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8', border: `1px solid ${isUpdate ? 'rgba(245,158,11,0.25)' : `${accent}30`}` }}>
-                              <div className="flex items-start gap-2">
-                                <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
-                                  style={{ background: `${color}14`, color }}>{isUpdate ? 'Update' : 'Brief'}</span>
-                                <div className="flex-1">
-                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label || (isUpdate ? 'Scenario update' : 'Manager brief')}</p>
-                                  {req.description && <p className="text-xs mt-1 leading-relaxed" style={{ color: muted }}>{req.description}</p>}
-                                </div>
-                                {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
+                            <div key={req.id} className="rounded-2xl overflow-hidden" style={{ background: bg, border: `1px solid ${border}`, boxShadow: shadow }}>
+                              <div className="px-4 py-3 flex items-center gap-2" style={{ background: subtle, borderBottom: `1px solid ${divider}` }}>
+                                {isUpdate ? <MessageSquare className="w-4 h-4" style={{ color }} /> : <Inbox className="w-4 h-4" style={{ color }} />}
+                                <span className="text-[12px] font-bold" style={{ color: text }}>{isUpdate ? '# project-war-room' : 'Inbox'}</span>
+                                <span className="ml-auto text-[11px]" style={{ color: faint }}>{isUpdate ? 'Update' : 'Unread brief'}</span>
                               </div>
-                              {!isDone && !readOnly && (
-                                <button onClick={() => updateProgress(req.id, { completed: true })}
-                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold"
-                                  style={{ background: color, color: '#fff' }}>
-                                  {isUpdate ? 'Acknowledge Update' : 'Start Mission'}
-                                </button>
-                              )}
+                              <div className="px-4 py-4 space-y-3">
+                                <div className="flex items-start gap-3">
+                                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-black"
+                                    style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>
+                                    {(config.managerName || 'PM').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-sm font-bold" style={{ color: text }}>{config.managerName || 'Project Manager'}</span>
+                                      <span className="text-[11px]" style={{ color: faint }}>{config.managerTitle || 'Project Lead'}</span>
+                                    </div>
+                                    <p className="text-[11px] mt-0.5" style={{ color: faint }}>{isUpdate ? 'posted an update' : `To: ${studentName || 'Analyst'}`}</p>
+                                  </div>
+                                  {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
+                                </div>
+                                <div className="rounded-2xl px-4 py-3" style={{ background: isUpdate ? (isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9') : subtle, border: `1px solid ${divider}` }}>
+                                  <p className="text-sm font-bold" style={{ color: text }}>{subject}</p>
+                                  {req.description && <p className="text-xs mt-1.5 leading-relaxed" style={{ color: muted }}>{req.description}</p>}
+                                </div>
+                                {!isUpdate && config.dataset && (
+                                  <button onClick={downloadDataset}
+                                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
+                                    style={{ background: subtle, color: muted, border: `1px solid ${divider}` }}>
+                                    <Paperclip className="w-3.5 h-3.5" /> {config.dataset.filename || 'Dataset'}
+                                  </button>
+                                )}
+                                {!isDone && !readOnly && (
+                                  <button onClick={() => updateProgress(req.id, { completed: true })}
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                                    style={{ background: color, color: '#fff' }}>
+                                    {isUpdate ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Mail className="w-3.5 h-3.5" />}
+                                    {isUpdate ? 'Acknowledge in chat' : 'Mark email read'}
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           );
                         }
@@ -437,40 +463,63 @@ export default function AssignmentExperiencePlayer({
                           const selectedIdx = selected ? (req.options ?? []).findIndex(opt => opt === selected) : -1;
                           const feedback = selectedIdx >= 0 ? req.optionFeedback?.[selectedIdx] : '';
                           return (
-                            <div key={req.id} className="space-y-3">
-                              <div className="flex items-start gap-2">
-                                <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
-                                  style={{ background: 'rgba(139,92,246,0.12)', color: '#8b5cf6' }}>Decision</span>
-                                <div className="flex-1">
-                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
-                                  {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
-                                </div>
-                                {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
+                            <div key={req.id} className="rounded-2xl overflow-hidden" style={{ background: bg, border: `1px solid ${border}`, boxShadow: shadow }}>
+                              <div className="px-4 py-3 flex items-center gap-2" style={{ background: subtle, borderBottom: `1px solid ${divider}` }}>
+                                <MessageSquare className="w-4 h-4" style={{ color: '#8b5cf6' }} />
+                                <span className="text-[12px] font-bold" style={{ color: text }}>Decision thread</span>
+                                <span className="ml-auto text-[11px]" style={{ color: faint }}># project-war-room</span>
                               </div>
-                              <div className="space-y-2">
-                                {(req.options ?? []).filter(Boolean).map((opt, oi) => {
-                                  const isSelected = selected === opt;
-                                  return (
-                                    <button key={`${req.id}-decision-${oi}`} disabled={isDone || readOnly}
-                                      onClick={() => updateProgress(req.id, { selectedAnswer: opt, completed: true })}
-                                      className="w-full text-left px-4 py-3 rounded-xl text-sm transition-all"
-                                      style={{
-                                        border: `1.5px solid ${isSelected ? '#8b5cf6' : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-                                        background: isSelected ? 'rgba(139,92,246,0.08)' : optionBg,
-                                        color: text,
-                                        cursor: isDone || readOnly ? 'default' : 'pointer',
-                                      }}>
-                                      {opt}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              {isDone && (
-                                <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(139,92,246,0.07)', color: text, border: '1px solid rgba(139,92,246,0.22)' }}>
-                                  <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: '#8b5cf6' }}>Stakeholder Feedback</p>
-                                  <p className="text-xs leading-relaxed" style={{ color: muted }}>{feedback || 'Decision recorded. Continue with the next workplace step.'}</p>
+                              <div className="px-4 py-4 space-y-4">
+                                <div className="flex items-start gap-3">
+                                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-black"
+                                    style={{ background: 'rgba(139,92,246,0.16)', color: '#8b5cf6', border: '1px solid rgba(139,92,246,0.28)' }}>
+                                    {(config.managerName || 'PM').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-bold" style={{ color: text }}>{config.managerName || 'Project Manager'}</span>
+                                      <span className="text-[11px]" style={{ color: faint }}>asks</span>
+                                    </div>
+                                    <div className="mt-2 rounded-2xl rounded-tl-sm px-4 py-3" style={{ background: subtle, border: `1px solid ${divider}` }}>
+                                      <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
+                                      {req.description && <p className="text-xs mt-1.5 leading-relaxed" style={{ color: muted }}>{req.description}</p>}
+                                    </div>
+                                  </div>
                                 </div>
-                              )}
+
+                                {!isDone && (
+                                  <div className="space-y-2">
+                                    <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: faint }}>Choose your reply</p>
+                                    {(req.options ?? []).filter(Boolean).map((opt, oi) => (
+                                      <button key={`${req.id}-decision-${oi}`} disabled={readOnly}
+                                        onClick={() => updateProgress(req.id, { selectedAnswer: opt, completed: true })}
+                                        className="w-full text-left px-4 py-3 rounded-xl text-sm transition-all"
+                                        style={{
+                                          border: '1px solid rgba(139,92,246,0.22)',
+                                          background: isDark ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.06)',
+                                          color: isDark ? '#e9d5ff' : '#4c1d95',
+                                          cursor: readOnly ? 'default' : 'pointer',
+                                        }}>
+                                        {opt}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {isDone && selected && (
+                                  <div className="space-y-3">
+                                    <div className="flex justify-end">
+                                      <div className="max-w-[86%] rounded-2xl rounded-tr-sm px-4 py-3" style={{ background: '#8b5cf6', color: '#fff' }}>
+                                        <p className="text-sm leading-relaxed">{selected}</p>
+                                      </div>
+                                    </div>
+                                    <div className="rounded-2xl rounded-tl-sm px-4 py-3" style={{ background: subtle, border: `1px solid ${divider}` }}>
+                                      <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: '#8b5cf6' }}>Feedback</p>
+                                      <p className="text-xs leading-relaxed" style={{ color: muted }}>{feedback || 'Decision recorded. Continue with the next workplace step.'}</p>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           );
                         }
@@ -479,25 +528,40 @@ export default function AssignmentExperiencePlayer({
                         if (req.type === 'debrief') {
                           const val = prog?.notes ?? '';
                           return (
-                            <div key={req.id} className="space-y-2">
-                              <div className="flex items-start gap-2">
-                                <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
-                                  style={{ background: 'rgba(20,184,166,0.12)', color: '#14b8a6' }}>Debrief</span>
-                                <div className="flex-1">
-                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
-                                  {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
-                                </div>
-                                {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
+                            <div key={req.id} className="rounded-2xl overflow-hidden" style={{ background: bg, border: `1px solid ${border}`, boxShadow: shadow }}>
+                              <div className="px-4 py-3 flex items-center gap-2" style={{ background: subtle, borderBottom: `1px solid ${divider}` }}>
+                                <Send className="w-4 h-4" style={{ color: '#14b8a6' }} />
+                                <span className="text-[12px] font-bold" style={{ color: text }}>Compose update</span>
+                                <span className="ml-auto text-[11px]" style={{ color: faint }}>{isDone ? 'Sent' : 'Draft'}</span>
                               </div>
-                              <textarea
-                                value={val}
-                                readOnly={readOnly}
-                                onChange={e => updateProgress(req.id, { notes: e.target.value, completed: !!e.target.value.trim() })}
-                                placeholder="Write your debrief here..."
-                                rows={4}
-                                className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
-                                style={{ border: `1px solid ${isDone ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDone ? `${accent}05` : subtle, color: text }}
-                              />
+                              <div className="px-4 py-4 space-y-3">
+                                <div className="grid gap-2 text-xs">
+                                  <div className="flex gap-2">
+                                    <span className="w-14 font-bold" style={{ color: faint }}>To</span>
+                                    <span style={{ color: text }}>{config.managerName || 'Project Manager'}</span>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <span className="w-14 font-bold" style={{ color: faint }}>Subject</span>
+                                    <span style={{ color: text }}>{req.label || `${currentLes?.title || 'Mission'} debrief`}</span>
+                                  </div>
+                                </div>
+                                {req.description && <p className="text-xs leading-relaxed" style={{ color: muted }}>{req.description}</p>}
+                                <textarea
+                                  value={val}
+                                  readOnly={readOnly}
+                                  onChange={e => updateProgress(req.id, { notes: e.target.value, completed: !!e.target.value.trim() })}
+                                  placeholder="Write the update you would send to your manager..."
+                                  rows={5}
+                                  className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
+                                  style={{ border: `1px solid ${isDone ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDone ? `${accent}05` : subtle, color: text }}
+                                />
+                                {isDone && (
+                                  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold"
+                                    style={{ background: 'rgba(16,185,129,0.08)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
+                                    <CheckCircle2 className="w-3.5 h-3.5" /> Update sent
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           );
                         }
