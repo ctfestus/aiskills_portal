@@ -9,7 +9,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight, ChevronLeft,
   Plus, Trash2, X, Check, RefreshCw, Upload, Pencil, Star, Clock, Download,
-  Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical, Video, Search, Eye, Images,
+  Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical, Video, Search, Eye, Images, Paperclip,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -122,6 +122,7 @@ const DARK_C = {
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
 // Types
+interface ReqAttachment { name: string; url: string; mimeType?: string; }
 interface Requirement {
   id: string;
   label: string;
@@ -136,6 +137,7 @@ interface Requirement {
   context?: string;
   minScore?: number;
   aiReview?: boolean;
+  attachments?: ReqAttachment[];
 }
 interface Lesson {
   id: string;
@@ -1651,11 +1653,39 @@ function VirtualExperienceCreatePageInner() {
                                                 </button>
                                               </div>
                                               {(req.type === 'briefing' || req.type === 'debrief') ? (
-                                                <RichTextEditor
-                                                  value={req.description}
-                                                  onChange={html => updateReq(mod.id, les.id, req.id, { description: html })}
-                                                  placeholder={req.type === 'briefing' ? 'Write the email body - formatting, bullet points, and images are all supported...' : 'Describe what students should write in their debrief update...'}
-                                                />
+                                                <>
+                                                  <RichTextEditor
+                                                    value={req.description}
+                                                    onChange={html => updateReq(mod.id, les.id, req.id, { description: html })}
+                                                    placeholder={req.type === 'briefing' ? 'Write the email body - formatting, bullet points, and images are all supported...' : 'Describe what students should write in their debrief update...'}
+                                                    onImageUpload={async (file) => uploadToCloudinary(file, 've-email-images')}
+                                                  />
+                                                  {req.type === 'briefing' && (
+                                                    <div className="space-y-2">
+                                                      {(req.attachments || []).map((att, ai) => (
+                                                        <div key={ai} className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                                                          <Paperclip className="w-3.5 h-3.5 flex-shrink-0" style={{ color: C.muted }} />
+                                                          <span className="flex-1 truncate" style={{ color: C.text }}>{att.name}</span>
+                                                          <button onClick={() => updateReq(mod.id, les.id, req.id, { attachments: req.attachments?.filter((_, i) => i !== ai) })} style={{ color: C.faint }} className="hover:text-red-400 flex-shrink-0">
+                                                            <X className="w-3.5 h-3.5" />
+                                                          </button>
+                                                        </div>
+                                                      ))}
+                                                      <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] cursor-pointer hover:opacity-80 transition-opacity" style={{ background: C.card, border: `1px dashed ${C.cardBorder}`, color: C.muted }}>
+                                                        <Paperclip className="w-3.5 h-3.5" /> Attach file
+                                                        <input type="file" className="hidden" onChange={async e => {
+                                                          const file = e.target.files?.[0];
+                                                          if (!file) return;
+                                                          try {
+                                                            const url = await uploadToCloudinary(file, 've-email-attachments');
+                                                            updateReq(mod.id, les.id, req.id, { attachments: [...(req.attachments || []), { name: file.name, url, mimeType: file.type }] });
+                                                          } catch { alert('Upload failed'); }
+                                                          e.target.value = '';
+                                                        }} />
+                                                      </label>
+                                                    </div>
+                                                  )}
+                                                </>
                                               ) : (
                                                 <input value={req.description}
                                                   onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}

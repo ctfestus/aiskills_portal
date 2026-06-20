@@ -31,6 +31,7 @@ interface Requirement {
   schema?: string;
   context?: string;
   minScore?: number;
+  attachments?: Array<{ name: string; url: string; mimeType?: string }>;
 }
 interface Lesson {
   id: string;
@@ -605,17 +606,24 @@ export default function AssignmentExperiencePlayer({
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accent }} />}
                               </div>
                               {/* Email body */}
-                              <div style={{ padding: '18px 22px', color: muted, fontSize: 14.5, lineHeight: 1.75 }}>
+                              <div style={{ padding: '18px 22px', color: isDark ? '#e0e0e0' : '#1f1f1f', fontSize: 14.5, lineHeight: 1.75 }}>
                                 {req.description && (
                                   <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(req.description) }} />
                                 )}
                               </div>
                               {/* Attachments */}
-                              {config.dataset && (
+                              {(req.attachments?.length || config.dataset) && (
                                 <div style={{ padding: '0 22px 16px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                  <button onClick={downloadDataset} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${divider}`, fontSize: 12.5, color: muted, cursor: 'pointer' }}>
-                                    <Paperclip className="w-3 h-3" /> {config.dataset.filename || 'Dataset'}
-                                  </button>
+                                  {(req.attachments || []).map((att, i) => (
+                                    <a key={i} href={att.url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${divider}`, fontSize: 12.5, color: muted, textDecoration: 'none' }}>
+                                      <Paperclip className="w-3 h-3" /> {att.name}
+                                    </a>
+                                  ))}
+                                  {config.dataset && (
+                                    <button onClick={downloadDataset} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${divider}`, fontSize: 12.5, color: muted, cursor: 'pointer' }}>
+                                      <Paperclip className="w-3 h-3" /> {config.dataset.filename || 'Dataset'}
+                                    </button>
+                                  )}
                                 </div>
                               )}
                               {/* Divider */}

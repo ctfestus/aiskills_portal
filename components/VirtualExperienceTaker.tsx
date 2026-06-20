@@ -44,6 +44,7 @@ interface Requirement {
   context?: string;
   minScore?: number;
   aiReview?: boolean;
+  attachments?: Array<{ name: string; url: string; mimeType?: string }>;
 }
 interface Lesson {
   id: string;
@@ -1112,14 +1113,19 @@ export default function VirtualExperienceTaker({
                                 {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accentColor }} />}
                               </div>
                               {/* Email body */}
-                              <div style={{ padding: '18px 22px', color: isDark ? '#ccc' : '#444', fontSize: 14.5, lineHeight: 1.75 }}>
+                              <div style={{ padding: '18px 22px', color: isDark ? '#e0e0e0' : '#1f1f1f', fontSize: 14.5, lineHeight: 1.75 }}>
                                 {req.description && (
                                   <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(req.description) }} />
                                 )}
                               </div>
-                              {/* Attachments */}
-                              {(config.dataset || (config.tools && config.tools.length > 0)) && (
+                              {/* Attachments - from instructor-uploaded files + course dataset */}
+                              {(req.attachments?.length || config.dataset || (config.tools && config.tools.length > 0)) && (
                                 <div style={{ padding: '0 22px 16px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                  {(req.attachments || []).map((att, i) => (
+                                    <a key={i} href={att.url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, fontSize: 12.5, color: isDark ? '#ddd' : '#334155', textDecoration: 'none' }}>
+                                      <Paperclip className="w-3 h-3" /> {att.name}
+                                    </a>
+                                  ))}
                                   {config.dataset && (
                                     <button onClick={downloadDataset} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, fontSize: 12.5, color: isDark ? '#ddd' : '#334155', cursor: 'pointer' }}>
                                       <Paperclip className="w-3 h-3" /> {config.dataset.filename || 'Dataset'}
