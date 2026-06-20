@@ -43,7 +43,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en" nonce={nonce} className={`${inter.variable} ${playfair.variable} ${jetbrainsMono.variable} ${lato.variable}`} suppressHydrationWarning>
       <body nonce={nonce} suppressHydrationWarning>
         {/* Google Sans Text is a recent Google Fonts family not exposed by next/font here, so load it via a stylesheet link (React 19 hoists this to <head>). Used by the course/lesson font picker and the certificate font option. */}
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans+Text:wght@400;500;700&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Text:wght@400;500;700&display=swap" />
         <NavigationProgress />
         <TenantProvider>
           <ThemeProvider>

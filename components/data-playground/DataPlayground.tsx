@@ -6,7 +6,7 @@ import { AnimatePresence } from 'motion/react';
 import {
   Search, X, Database, Download, Table2,
   Copy, Check, Loader2, Play, RefreshCw, ChevronDown, ChevronLeft, ChevronRight,
-  ArrowLeft, ArrowLeftToLine, ArrowRightFromLine, Clock, Star,
+  ArrowLeft, Clock, Star,
 } from 'lucide-react';
 import { acceptCompletion, autocompletion, CompletionContext, completionStatus, type Completion } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
@@ -107,7 +107,7 @@ type DataPlaygroundGridProps = {
   emptyNoMatchMessage?: string;
 };
 
-const font = "'Google Sans Text', var(--font-sans, Inter, sans-serif)";
+const font = "'Google Sans', Inter, sans-serif";
 const MAX_WORKBENCH_BYTES = 15 * 1024 * 1024;
 const MAX_WORKBENCH_TABLES = 12;
 const MAX_WORKBENCH_ROWS_PER_TABLE = 75_000;
@@ -678,6 +678,16 @@ print(f"{len(df):,} rows  x  {len(df.columns)} columns")
 display(df.head(10))`;
 }
 
+function MenuIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" className={className}>
+      <line x1="4" y1="7" x2="20" y2="7" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="17" x2="20" y2="17" />
+    </svg>
+  );
+}
+
 function DatasetDetailPane({
   dataset,
   C,
@@ -716,7 +726,7 @@ function DatasetDetailPane({
   const [tablePreviewError, setTablePreviewError] = useState('');
   const [questionsCollapsed, setQuestionsCollapsed] = useState(false);
   const [guidelinesCollapsed, setGuidelinesCollapsed] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 1024 : true));
+  const [sidebarOpen, setSidebarOpen] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 640 : true));
   const workbenchMainRef = useRef<HTMLDivElement>(null);
   const blobUrlsRef = useRef<string[]>([]);
 
@@ -725,7 +735,7 @@ function DatasetDetailPane({
     runtimeRef.current?.close().catch(() => {});
   }, []);
 
-  const accent = '#00b95c';
+  const accent = C.cta;
   const datasetFiles = getDatasetFiles(dataset);
   const prompt = buildAIPrompt(dataset);
   const activePreview = zipTables.find(t => t.name === activeTable);
@@ -739,6 +749,11 @@ function DatasetDetailPane({
     ? selectedSectionId
     : analystSections[0]?.id || '';
   const activeSection = analystSections.find(section => section.id === activeSectionId) ?? analystSections[0] ?? null;
+  const activeSectionIdx = analystSections.findIndex(s => s.id === activeSectionId);
+  const hasPrevSection = activeSectionIdx > 0;
+  const hasNextSection = activeSectionIdx < analystSections.length - 1;
+  const goPrevSection = () => { if (hasPrevSection) setSelectedSectionId(analystSections[activeSectionIdx - 1].id || ''); };
+  const goNextSection = () => { if (hasNextSection) setSelectedSectionId(analystSections[activeSectionIdx + 1].id || ''); };
   const totalTasks = analystSections.reduce((sum, section) => sum + section.tasks.length, 0);
   const totalSqlTasks = analystSections.reduce((sum, section) => sum + section.tasks.filter(task => task.type === 'sql').length, 0);
 
@@ -1100,35 +1115,53 @@ function DatasetDetailPane({
 
         {/* Mobile backdrop */}
         {sidebarOpen && (
-          <div onClick={() => setSidebarOpen(false)} className="lg:hidden"
-            style={{ position: 'absolute', inset: 0, zIndex: 30, background: 'rgba(0,0,0,0.5)' }} />
+          <div onClick={() => setSidebarOpen(false)} className="fixed inset-0 sm:hidden"
+            style={{ zIndex: 55, background: 'rgba(0,0,0,0.6)' }} />
         )}
 
-        {/* Expand tab: shown only when the sidebar is collapsed */}
-        {!sidebarOpen && analystSections.length > 0 && (
-          <button onClick={() => setSidebarOpen(true)} title="Show analysis path"
-            style={{ position: 'absolute', top: 14, left: 0, zIndex: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 36, borderRadius: '0 8px 8px 0', border: 'none', borderLeft: 'none', background: C.card, color: C.muted, cursor: 'pointer' }}>
-            <ArrowRightFromLine size={16} />
-          </button>
+        {/* Mobile open button: tab flush from left edge when sidebar is closed */}
+        {!sidebarOpen && (
+          <div className="absolute top-4 left-0 z-50 sm:hidden">
+            <button onClick={() => setSidebarOpen(true)} title="Show analysis path"
+              style={{ padding: '8px 10px', borderRadius: '0 8px 8px 0', border: 'none', background: C.card, color: C.muted, cursor: 'pointer' }}>
+              <MenuIcon className="w-5 h-5" />
+            </button>
+          </div>
         )}
 
         {/* Sidebar: analysis path */}
         <aside
-          className={`absolute inset-y-0 left-0 z-40 lg:relative lg:z-auto transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:hidden'}`}
-          style={{ width: 296, maxWidth: '86vw', flexShrink: 0, background: C.card, borderRight: `1px solid ${C.divider}`, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          className={`absolute inset-y-0 left-0 z-[56] rounded-r-2xl sm:relative sm:inset-auto sm:z-auto flex-shrink-0 flex flex-col transition-all duration-300 sm:my-3 sm:ml-3 sm:rounded-2xl ${!sidebarOpen ? '-translate-x-full sm:translate-x-0' : 'translate-x-0'}`}
+          style={{
+            width: sidebarOpen ? 'min(100vw, 296px)' : 48,
+            minWidth: sidebarOpen ? 'min(100vw, 296px)' : 48,
+            background: C.card,
+            overflow: sidebarOpen ? 'hidden' : 'visible',
+          }}>
 
-          {/* Sidebar header: title + collapse (VE style, no cover image) */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '14px 14px 12px', borderBottom: `1px solid ${C.divider}`, flexShrink: 0 }}>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              {dataset.category && <p style={{ margin: '0 0 3px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: accent }}>{dataset.category}</p>}
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: C.text, lineHeight: 1.3, overflowWrap: 'anywhere' }}>{dataset.title}</p>
-            </div>
-            <button onClick={() => setSidebarOpen(false)} title="Hide analysis path"
-              style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: 'transparent', color: C.faint, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <ArrowLeftToLine size={16} />
-            </button>
+          {/* Sidebar header: title + X (open) or hamburger (closed) */}
+          <div style={{ display: 'flex', alignItems: sidebarOpen ? 'flex-start' : 'center', justifyContent: sidebarOpen ? 'flex-start' : 'center', gap: 8, padding: sidebarOpen ? '14px 14px 12px' : '12px 0', borderBottom: sidebarOpen ? `1px solid ${C.divider}` : 'none', flexShrink: 0 }}>
+            {sidebarOpen ? (
+              <>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  {dataset.category && <p style={{ margin: '0 0 3px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: accent }}>{dataset.category}</p>}
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: C.text, lineHeight: 1.3, overflowWrap: 'anywhere' }}>{dataset.title}</p>
+                </div>
+                <button onClick={() => setSidebarOpen(false)} title="Hide analysis path"
+                  style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: 'transparent', color: C.faint, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <X size={16} strokeWidth={2.5} />
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setSidebarOpen(true)} title="Show analysis path"
+                style={{ color: C.muted, background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                className="hidden sm:flex hover:opacity-60">
+                <MenuIcon className="w-5 h-5" />
+              </button>
+            )}
           </div>
 
+          {sidebarOpen && (
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Dataset download + description */}
             {datasetFiles.length > 0 && (
@@ -1152,7 +1185,7 @@ function DatasetDetailPane({
                 const estTime = section.duration || deriveTimeEstimate(section.tasks.length);
                 return (
                   <button key={section.id || section.title}
-                    onClick={() => { setSelectedSectionId(section.id || ''); if (typeof window !== 'undefined' && window.innerWidth < 1024) setSidebarOpen(false); }}
+                    onClick={() => { setSelectedSectionId(section.id || ''); if (typeof window !== 'undefined' && window.innerWidth < 640) setSidebarOpen(false); }}
                     style={{ width: '100%', display: 'grid', gridTemplateColumns: '30px minmax(0, 1fr)', gap: 10, textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: font }}>
                     <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <span style={{ width: 30, height: 30, borderRadius: '50%', background: isFirst || isActive ? accent : C.input, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700 }}>
@@ -1182,11 +1215,12 @@ function DatasetDetailPane({
               )}
             </nav>
           </div>
+          )}
         </aside>
 
         {/* Main content */}
         <main style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto' }}>
-          <div style={{ maxWidth: 940, margin: '0 auto', padding: 'clamp(16px, 3vw, 32px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ maxWidth: 896, margin: '0 auto', padding: 'clamp(12px, 2.5vw, 24px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
             {/* Active phase (primary content, like a VE lesson) */}
             {activeSection ? (
@@ -1294,6 +1328,32 @@ function DatasetDetailPane({
                   <p style={{ fontSize: 12.5, color: C.muted, margin: 0, lineHeight: 1.45 }}>Access structured courses, cohorts, and expert-led project experiences.</p>
                 </div>
                 <a href="https://festman.io" target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', padding: '9px 18px', borderRadius: 10, background: accent, color: '#fff', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>Learn More</a>
+              </div>
+            )}
+
+            {analystSections.length > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, paddingBottom: 8, gap: 8 }}>
+                <button onClick={goPrevSection} disabled={!hasPrevSection}
+                  className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-medium transition-all hover:opacity-70 disabled:opacity-30 flex-shrink-0"
+                  style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.card, cursor: hasPrevSection ? 'pointer' : 'not-allowed', outline: 'none' }}>
+                  <ChevronLeft size={16} /> Previous
+                </button>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {analystSections.map((s, i) => {
+                    const isCurr = s.id === activeSectionId;
+                    return (
+                      <div key={s.id || i} onClick={() => setSelectedSectionId(s.id || '')}
+                        style={{ width: isCurr ? 24 : 8, height: 8, borderRadius: 999, background: isCurr ? accent : C.cardBorder, transition: 'all 0.2s', cursor: 'pointer', flexShrink: 0 }} />
+                    );
+                  })}
+                </div>
+
+                <button onClick={goNextSection} disabled={!hasNextSection}
+                  className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all hover:opacity-80 disabled:opacity-30 flex-shrink-0"
+                  style={{ background: hasNextSection ? accent : C.input, color: hasNextSection ? '#fff' : C.muted, border: 'none', cursor: hasNextSection ? 'pointer' : 'not-allowed', outline: 'none' }}>
+                  Next <ChevronRight size={16} />
+                </button>
               </div>
             )}
           </div>
@@ -1619,18 +1679,20 @@ export function DataPlaygroundGrid({
   searchMaxWidth,
   searchInputShadow = false,
   showDetailCta = false,
-  emptyNoDatasetsMessage = 'Try a different search term or category.',
-  emptyNoMatchMessage = 'Try a different search term or category.',
+  emptyNoDatasetsMessage = 'No datasets available yet.',
+  emptyNoMatchMessage = 'Try a different search term.',
 }: DataPlaygroundGridProps) {
   const [datasets, setDatasets] = useState<DCDataset[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<DCDataset | null>(null);
   const [search, setSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [hover, setHover] = useState<{ d: DCDataset; left: number; top: number; originX: number; originY: number } | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+  const catScrollRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const scrollCategory = (cat: string, dir: number) => {
+    const el = catScrollRefs.current[cat];
+    if (el) el.scrollBy({ left: dir * 260, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     if (typeof document === 'undefined' || document.getElementById('gfont-google-sans-text')) return;
@@ -1660,41 +1722,99 @@ export function DataPlaygroundGrid({
     return () => { cancelled = true; };
   }, [fetchHeaders]);
 
-  const categories = Array.from(new Set(datasets.map(d => d.category).filter(Boolean))) as string[];
-  const filtered = datasets.filter(d => {
-    const q = search.toLowerCase();
-    const matchSearch = !q
-      || d.title.toLowerCase().includes(q)
-      || d.description?.toLowerCase().includes(q)
-      || tagsFor(d).some(t => t.toLowerCase().includes(q));
-    const matchCat = !activeCategory || d.category === activeCategory;
-    return matchSearch && matchCat;
-  });
+  const orderedCategories = useMemo(
+    () => Array.from(new Set(datasets.map(d => d.category).filter(Boolean))) as string[],
+    [datasets],
+  );
 
-  const searchStyle: CSSProperties = {
-    width: '100%',
-    padding: searchInputShadow ? '12px 14px 12px 44px' : '11px 14px 11px 42px',
-    borderRadius: 12,
-    border: 'none',
-    background: C.card,
-    color: C.text,
-    fontSize: 15,
-    fontFamily: font,
-    outline: 'none',
-    boxSizing: 'border-box',
-    ...(searchInputShadow ? { boxShadow: '0 1px 4px rgba(0,0,0,0.06)' } : {}),
+  const grouped = useMemo(() => {
+    const m: Record<string, DCDataset[]> = {};
+    for (const d of datasets) {
+      const cat = d.category || '__uncategorized__';
+      m[cat] = m[cat] || [];
+      m[cat].push(d);
+    }
+    return m;
+  }, [datasets]);
+
+  const searchQuery = search.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    if (!searchQuery) return [];
+    return datasets.filter(d =>
+      d.title.toLowerCase().includes(searchQuery)
+      || d.description?.toLowerCase().includes(searchQuery)
+      || tagsFor(d).some(t => t.toLowerCase().includes(searchQuery)),
+    );
+  }, [datasets, searchQuery]);
+
+  const renderCard = (d: DCDataset, carousel: boolean) => (
+    <div key={d.id}
+      onMouseEnter={e => {
+        if (typeof window === 'undefined' || !window.matchMedia('(hover: hover)').matches) return;
+        if (hoverTimer.current) clearTimeout(hoverTimer.current);
+        const r = e.currentTarget.getBoundingClientRect();
+        const W = 320, H = 360;
+        const left = Math.max(12, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 12));
+        const top  = Math.max(12, Math.min(r.top - 20, window.innerHeight - H - 12));
+        const originX = Math.max(0, Math.min(r.left + r.width / 2 - left, W));
+        const originY = Math.max(0, Math.min(r.top + r.height / 2 - top, H));
+        setHover({ d, left, top, originX, originY });
+      }}
+      onMouseLeave={() => { hoverTimer.current = setTimeout(() => setHover(null), 120); }}
+      onClick={() => setSelected(d)}
+      style={{ ...(carousel ? { flexShrink: 0, width: 230, scrollSnapAlign: 'start' } : {}), background: 'transparent', cursor: 'pointer', fontFamily: font, display: 'flex', flexDirection: 'column' }}>
+      {d.cover_image_url ? (
+        <img src={d.cover_image_url} alt={d.cover_image_alt ?? ''} style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block', borderRadius: 12 }} />
+      ) : (
+        <div style={{ width: '100%', aspectRatio: '16/9', background: C.lime, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}>
+          <Database size={32} style={{ color: C.green }} />
+        </div>
+      )}
+      <p style={{ fontSize: 12, color: C.faint, margin: '10px 0 0', fontWeight: 600 }}>Dataset</p>
+      <p style={{ fontWeight: 700, fontSize: 15, color: C.text, margin: '2px 0 0', lineHeight: 1.35 }}>{d.title}</p>
+    </div>
+  );
+
+  const renderCategoryRow = (cat: string, label: string) => {
+    const items = grouped[cat] || [];
+    if (!items.length) return null;
+    return (
+      <section key={cat} style={{ background: C.card, borderRadius: 18, padding: '28px 22px 28px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 18 }}>
+          <h3 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0, fontFamily: font }}>{label}</h3>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button onClick={() => scrollCategory(cat, -1)} aria-label="Scroll left"
+              style={{ width: 32, height: 32, borderRadius: '50%', border: `1px solid ${C.cardBorder}`, background: 'transparent', color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <ChevronLeft size={14} />
+            </button>
+            <button onClick={() => scrollCategory(cat, 1)} aria-label="Scroll right"
+              style={{ width: 32, height: 32, borderRadius: '50%', border: `1px solid ${C.cardBorder}`, background: 'transparent', color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+        <div ref={el => { catScrollRefs.current[cat] = el; }}
+          style={{ display: 'flex', gap: 18, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none' }}>
+          {items.map(d => renderCard(d, true))}
+        </div>
+      </section>
+    );
   };
 
   if (loading) {
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 16 }}>
-        {Array.from({ length: loadingCardCount }, (_, i) => (
-          <div key={i} style={{ borderRadius: 16, overflow: 'hidden', background: C.card, border: 'none' }}>
-            <Sk C={C} h={160} r={0} />
-            <div style={{ padding: 16 }}>
-              <Sk C={C} h={14} w="60%" />
-              <div style={{ marginTop: 8 }}><Sk C={C} h={12} /></div>
-              {loadingCardCount <= 3 && <div style={{ marginTop: 4 }}><Sk C={C} h={12} w="80%" /></div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
+        {Array.from({ length: Math.max(2, Math.ceil(loadingCardCount / 4)) }, (_, i) => (
+          <div key={i}>
+            <Sk C={C} h={16} w={160} />
+            <div style={{ display: 'flex', gap: 18, marginTop: 16, overflow: 'hidden' }}>
+              {Array.from({ length: 4 }, (_, j) => (
+                <div key={j} style={{ flexShrink: 0, width: 230 }}>
+                  <Sk C={C} h={130} r={12} />
+                  <div style={{ marginTop: 10 }}><Sk C={C} h={12} w="50%" /></div>
+                  <div style={{ marginTop: 6 }}><Sk C={C} h={15} /></div>
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -1710,89 +1830,74 @@ export function DataPlaygroundGrid({
         </p>
       )}
 
-      <div style={{ position: 'relative', maxWidth: searchMaxWidth, marginBottom: searchInputShadow ? 28 : 20 }}>
+      {/* Search bar */}
+      <div style={{ position: 'relative', maxWidth: searchMaxWidth, marginBottom: 32 }}>
         <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: C.faint, pointerEvents: 'none' }} />
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search datasets..."
-          style={searchStyle}
+          style={{
+            width: '100%',
+            padding: searchInputShadow ? '12px 14px 12px 44px' : '11px 14px 11px 42px',
+            borderRadius: 12,
+            border: 'none',
+            background: C.card,
+            color: C.text,
+            fontSize: 15,
+            fontFamily: font,
+            outline: 'none',
+            boxSizing: 'border-box',
+            ...(searchInputShadow ? { boxShadow: '0 1px 4px rgba(0,0,0,0.06)' } : {}),
+          } as CSSProperties}
         />
+        {search && (
+          <button onClick={() => setSearch('')}
+            style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: C.faint, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 4 }}>
+            <X size={14} />
+          </button>
+        )}
       </div>
 
-      <section style={{ background: C.card, borderRadius: 18, padding: '34px 22px 34px' }}>
-        {/* Header: title + nav arrows */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-          <h3 style={{ fontSize: 17, fontWeight: 500, color: C.text, margin: 0, lineHeight: 1.3, fontFamily: font }}>
-            Level up your data skills with realistic datasets across multiple industries
-          </h3>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
-              style={{ width: 36, height: 36, borderRadius: '50%', border: `1px solid ${C.cardBorder}`, background: 'transparent', color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-              <ChevronLeft size={16} />
-            </button>
-            <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
-              style={{ width: 36, height: 36, borderRadius: '50%', border: `1px solid ${C.cardBorder}`, background: 'transparent', color: C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* Category tabs */}
-        {categories.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
-            <button onClick={() => setActiveCategory(null)}
-              style={{ padding: '9px 18px', borderRadius: 999, border: !activeCategory ? 'none' : `1px solid ${C.cardBorder}`, background: !activeCategory ? C.cta : 'transparent', color: !activeCategory ? C.ctaText : C.text, fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: font, transition: 'all 0.15s' }}>
-              All
-            </button>
-            {categories.map(cat => (
-              <button key={cat} onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
-                style={{ padding: '9px 18px', borderRadius: 999, border: activeCategory === cat ? 'none' : `1px solid ${C.cardBorder}`, background: activeCategory === cat ? C.cta : 'transparent', color: activeCategory === cat ? C.ctaText : C.text, fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: font, transition: 'all 0.15s' }}>
-                {cat}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Carousel row */}
-        {filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: datasets.length === 0 ? '52px 20px' : '40px 20px', color: C.faint, fontFamily: font }}>
+      {/* Search results: flat grid */}
+      {searchQuery ? (
+        datasets.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '52px 20px', color: C.faint, fontFamily: font }}>
             <Database size={40} style={{ color: C.faint, display: 'block', margin: '0 auto 12px' }} />
-            <p style={{ fontWeight: 600, fontSize: 16, color: C.text, marginBottom: 4 }}>{datasets.length === 0 ? 'No datasets available yet' : 'No datasets match your search'}</p>
-            <p style={{ fontSize: 13, color: C.faint }}>{datasets.length === 0 ? emptyNoDatasetsMessage : emptyNoMatchMessage}</p>
+            <p style={{ fontWeight: 600, fontSize: 16, color: C.text, marginBottom: 4 }}>No datasets available yet</p>
+            <p style={{ fontSize: 13, color: C.faint }}>{emptyNoDatasetsMessage}</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: C.faint, fontFamily: font }}>
+            <Database size={40} style={{ color: C.faint, display: 'block', margin: '0 auto 12px' }} />
+            <p style={{ fontWeight: 600, fontSize: 16, color: C.text, marginBottom: 4 }}>No datasets match your search</p>
+            <p style={{ fontSize: 13, color: C.faint }}>{emptyNoMatchMessage}</p>
           </div>
         ) : (
-          <div ref={scrollRef} style={{ display: 'flex', gap: 18, overflowX: 'auto', paddingBottom: 6, marginTop: 18, scrollbarWidth: 'none' }}>
-            {filtered.map(d => (
-              <div key={d.id}
-                onMouseEnter={e => {
-                  if (typeof window === 'undefined' || !window.matchMedia('(hover: hover)').matches) return;
-                  if (hoverTimer.current) clearTimeout(hoverTimer.current);
-                  const r = e.currentTarget.getBoundingClientRect();
-                  const W = 320, H = 360;
-                  const left = Math.max(12, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 12));
-                  const top  = Math.max(12, Math.min(r.top - 20, window.innerHeight - H - 12));
-                  const originX = Math.max(0, Math.min(r.left + r.width / 2 - left, W));
-                  const originY = Math.max(0, Math.min(r.top + r.height / 2 - top, H));
-                  setHover({ d, left, top, originX, originY });
-                }}
-                onMouseLeave={() => { hoverTimer.current = setTimeout(() => setHover(null), 120); }}
-                onClick={() => setSelected(d)}
-                style={{ flexShrink: 0, width: 230, scrollSnapAlign: 'start', background: 'transparent', cursor: 'pointer', fontFamily: font, display: 'flex', flexDirection: 'column' }}>
-                {d.cover_image_url ? (
-                  <img src={d.cover_image_url} alt={d.cover_image_alt ?? ''} style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block', borderRadius: 12 }} />
-                ) : (
-                  <div style={{ width: '100%', aspectRatio: '16/9', background: C.lime, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}>
-                    <Database size={32} style={{ color: C.green }} />
-                  </div>
-                )}
-                <p style={{ fontSize: 12, color: C.faint, margin: '10px 0 0', fontWeight: 600 }}>Dataset</p>
-                <p style={{ fontWeight: 700, fontSize: 15, color: C.text, margin: '2px 0 0', lineHeight: 1.35 }}>{d.title}</p>
-              </div>
-            ))}
+          <>
+            <p style={{ fontSize: 13, color: C.faint, margin: '0 0 16px', fontFamily: font, fontWeight: 600 }}>
+              {filtered.length} result{filtered.length !== 1 ? 's' : ''} for &ldquo;{search}&rdquo;
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 18 }}>
+              {filtered.map(d => renderCard(d, false))}
+            </div>
+          </>
+        )
+      ) : (
+        /* No search: one carousel row per category */
+        datasets.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '52px 20px', color: C.faint, fontFamily: font }}>
+            <Database size={40} style={{ color: C.faint, display: 'block', margin: '0 auto 12px' }} />
+            <p style={{ fontWeight: 600, fontSize: 16, color: C.text, marginBottom: 4 }}>No datasets available yet</p>
+            <p style={{ fontSize: 13, color: C.faint }}>{emptyNoDatasetsMessage}</p>
           </div>
-        )}
-      </section>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
+            {orderedCategories.map(cat => renderCategoryRow(cat, cat))}
+            {renderCategoryRow('__uncategorized__', 'More Datasets')}
+          </div>
+        )
+      )}
 
       {/* Hover preview -- full data card (portal so the scroll container doesn't clip it) */}
       {hover && createPortal(

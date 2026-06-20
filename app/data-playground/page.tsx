@@ -10,17 +10,17 @@ import { useC } from '@/lib/theme';
 export default function DataPlaygroundPage() {
   const C = useC();
   const { theme, toggle: toggleTheme } = useTheme();
-  const { logoUrl } = useTenant();
+  const { logoUrl, logoDarkUrl } = useTenant();
   const isDark = theme === 'dark';
-  const font = 'var(--font-sans, Inter, sans-serif)';
+  const font = "'Google Sans', Inter, sans-serif";
 
   return (
     <div style={{ minHeight: '100vh', background: C.page, fontFamily: font }}>
       <nav style={{ position: 'sticky', top: 0, zIndex: 100, background: C.nav, borderBottom: `1px solid ${C.navBorder}`, backdropFilter: 'blur(12px)' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-            {logoUrl
-              ? <img src={logoUrl} alt="Logo" style={{ height: 32, objectFit: 'contain' }} />
+            {(isDark ? logoDarkUrl || logoUrl : logoUrl)
+              ? <img src={(isDark ? logoDarkUrl || logoUrl : logoUrl) || undefined} alt="Logo" style={{ height: 32, objectFit: 'contain' }} />
               : <span style={{ fontWeight: 900, fontSize: 18, color: C.text }}>Data Playground</span>
             }
           </Link>

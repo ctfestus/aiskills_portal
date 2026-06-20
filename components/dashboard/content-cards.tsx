@@ -16,6 +16,7 @@ import {
 import { LIGHT_C, useC, cardStyle } from '@/lib/theme';
 import { exportContent } from '@/lib/dashboard-export';
 import { SYNC_ENABLED } from '@/lib/sync';
+import { getLastScheduledSessionDate, getNextScheduledSessionDate } from '@/lib/event-sessions';
 import { usePushStatus, PushStatusPill } from '@/components/dashboard/primitives';
 import { IsStaffContext } from '@/components/dashboard/context';
 
@@ -719,20 +720,33 @@ export function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen
   const C = useC();
   const isStaff = useContext(IsStaffContext);
   const ev = form.config?.eventDetails ?? {};
-  const dateObj = ev.date ? new Date(ev.date) : null;
+  const schedule = {
+    event_date: ev.date ?? null,
+    timezone: ev.timezone ?? null,
+    recurrence: ev.recurrence ?? 'once',
+    recurrence_end_date: ev.recurrenceEndDate ?? null,
+    recurrence_days: Array.isArray(ev.recurrenceDays) ? ev.recurrenceDays : [],
+  };
+  const nextSessionDate = getNextScheduledSessionDate(schedule);
+  const lastSessionDate = nextSessionDate ? null : getLastScheduledSessionDate(schedule);
+  const displayDate = nextSessionDate ?? lastSessionDate ?? ev.date ?? null;
+  const dateObj = displayDate ? new Date(`${displayDate}T00:00:00`) : null;
   const _today = new Date(); _today.setHours(0, 0, 0, 0);
-  const _recurrenceEnd = ev.recurrenceEndDate ? new Date(ev.recurrenceEndDate) : null;
   const isPast = dateObj
-    ? dateObj < _today && (!_recurrenceEnd || _recurrenceEnd < _today)
+    ? !nextSessionDate && dateObj < _today
     : false;
   const isPrivate = !!ev.isPrivate;
   const isVirtual = (ev.eventType || '').toLowerCase() === 'virtual';
   const [coverError, setCoverError] = useState(false);
   const showImage = !!(form.config?.coverImage && !coverError);
 
-  const dateLabel = dateObj
+  const eventRepeats = !!ev.recurrence && ev.recurrence !== 'once';
+  const displayDateLabel = dateObj
     ? dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
+  const dateLabel = displayDateLabel && eventRepeats && !isPast && nextSessionDate
+    ? `Next: ${displayDateLabel}`
+    : displayDateLabel;
 
   const providerName = isVirtual
     ? ((ev.meetingLink || '').includes('zoom') ? 'Zoom' : (ev.meetingLink || '').includes('teams') ? 'Microsoft Teams' : 'Google Meet')

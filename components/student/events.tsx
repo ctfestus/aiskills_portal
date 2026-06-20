@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { buildGoogleCalUrl, buildOutlookCalUrl, buildYahooCalUrl, downloadIcs, buildCalendarFields, isRecurring } from '@/lib/calendar-links';
+import { getLastScheduledSessionDate, getNextScheduledSessionDate } from '@/lib/event-sessions';
 import { LIGHT_C } from '@/lib/theme';
 import { Sk, EmptyState } from '@/components/student/shared';
 import {
@@ -47,12 +48,6 @@ export function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C
     load();
   }, [userId]);
 
-  const parseDate = (input?: string | null) => {
-    if (!input) return null;
-    const d = new Date(input);
-    return Number.isNaN(d.getTime()) ? null : d;
-  };
-
   const buildDateFromEventDetails = (eventDetails: any) => {
     if (!eventDetails?.date) return null;
     const timeStr = eventDetails.time ? eventDetails.time.substring(0, 5) : '00:00';
@@ -76,7 +71,17 @@ export function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C
   const regTokenMap = new Map(regs.filter((r: any) => r.event_id && r.join_token).map((r: any) => [r.event_id, r.join_token as string]));
 
   const allCohortEvents = cohortEvents.map((f: any) => {
-    const start = buildDateFromEventDetails({ date: f.event_date, time: f.event_time });
+    const schedule = {
+      event_date: f.event_date ?? null,
+      timezone: f.timezone ?? null,
+      recurrence: f.recurrence ?? 'once',
+      recurrence_end_date: f.recurrence_end_date ?? null,
+      recurrence_days: Array.isArray(f.recurrence_days) ? f.recurrence_days : [],
+    };
+    const nextSessionDate = getNextScheduledSessionDate(schedule);
+    const lastSessionDate = nextSessionDate ? null : getLastScheduledSessionDate(schedule);
+    const displayDate = nextSessionDate ?? lastSessionDate ?? f.event_date ?? null;
+    const start = buildDateFromEventDetails({ date: displayDate, time: f.event_time });
     const mode = (f.event_type || '').toLowerCase() === 'virtual' ? 'Virtual' : 'In-Person';
     const meetingUrl = sanitizeHttpUrl(f.meeting_link);
     const registered = registeredEventIds.has(f.id);
@@ -95,6 +100,8 @@ export function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C
       joinToken: regTokenMap.get(f.id) ?? null,
       imageUrl: f.cover_image || '',
       source: registered ? 'registration' : 'cohort',
+      nextSessionDate,
+      displayDate,
       eventDate: f.event_date ?? null,
       eventTime: f.event_time ?? null,
       eventTimezone: f.timezone ?? null,
@@ -110,12 +117,10 @@ export function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C
     return at - bt;
   });
 
-  const now = Date.now();
   const _todayMidnight = new Date(); _todayMidnight.setHours(0, 0, 0, 0);
   const isEventPast = (e: any) => {
-    if (!e.startsAt || e.startsAt >= _todayMidnight) return false;
-    const recEnd = e.recurrenceEndDate ? new Date(e.recurrenceEndDate) : null;
-    return !recEnd || recEnd < _todayMidnight;
+    if (e.nextSessionDate) return false;
+    return !!e.startsAt && e.startsAt < _todayMidnight;
   };
   const upcoming = allEvents.filter(e => !isEventPast(e));
   const past = allEvents.filter(e => isEventPast(e));
@@ -153,9 +158,13 @@ export function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C
     const [calToken, setCalToken] = useState<string | null>(null);
     const [calBusy, setCalBusy] = useState(false);
     const showImage = item.imageUrl && !imgErrors.has(item.id);
-    const dateLabel = item.startsAt
+    const eventRepeats = isRecurring(item.recurrence);
+    const displayDateLabel = item.startsAt
       ? item.startsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       : null;
+    const dateLabel = displayDateLabel && eventRepeats && !isPast && item.nextSessionDate
+      ? `Next: ${displayDateLabel}`
+      : displayDateLabel;
     const timeLabel = item.startsAt
       ? item.startsAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : null;
@@ -165,7 +174,7 @@ export function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C
     // Add-to-calendar links. Absolute join link so a tap from the calendar
     // reminder reaches /api/join and records attendance. Recurring events embed
     // the full series via Google + .ics (Outlook.com / Yahoo can't encode it).
-    const calRecurring = isRecurring(item.recurrence);
+    const calRecurring = eventRepeats;
     const calOrigin = typeof window !== 'undefined' ? window.location.origin : '';
     const calEffToken = item.joinToken ?? calToken; // lazily-fetched token if none was registered yet
     const calJoinUrl = calEffToken ? `${calOrigin}/api/join?token=${calEffToken}` : '';
