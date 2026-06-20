@@ -160,6 +160,25 @@ function DifficultyDots({ difficulty, color }: { difficulty: string; color: stri
   );
 }
 
+function SlackAvatar({ name, size, color }: { name: string; size: number; color: string }) {
+  const seed = encodeURIComponent(name);
+  const initials = name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+  const r = Math.floor(size * 0.17);
+  return (
+    <div style={{ width: size, height: size, borderRadius: r, overflow: 'hidden', flexShrink: 0, position: 'relative', background: color }}>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: Math.floor(size * 0.33), fontWeight: 800, color: '#fff' }}>
+        {initials}
+      </div>
+      <img
+        src={`https://api.dicebear.com/8.x/personas/svg?seed=${seed}`}
+        alt=""
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+        onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = '0'; }}
+      />
+    </div>
+  );
+}
+
 function playTypingClick() {
   try {
     const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
@@ -964,7 +983,7 @@ export default function VirtualExperienceTaker({
                                 </div>
                                 <div style={{ padding: '14px 14px 8px' }}>
                                   <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                    <div style={{ width: 36, height: 36, borderRadius: 6, background: meta.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{manInit}</div>
+                                    <SlackAvatar name={managerName} size={36} color={meta.color} />
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                                         <span style={{ fontWeight: 700, fontSize: 14.5, color: slackText }}>{managerName}</span>
@@ -1117,7 +1136,7 @@ export default function VirtualExperienceTaker({
                               </div>
                               <div style={{ padding: '14px 14px 10px' }}>
                                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                  <div style={{ width: 36, height: 36, borderRadius: 6, background: accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: isDark ? '#111' : '#fff', flexShrink: 0 }}>{manInit}</div>
+                                  <SlackAvatar name={managerName} size={36} color={accentColor} />
                                   <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                                       <span style={{ fontWeight: 700, fontSize: 14.5, color: slackText }}>{managerName}</span>
@@ -1162,7 +1181,7 @@ export default function VirtualExperienceTaker({
                                   </div>
                                   {/* Typing indicator or manager response */}
                                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                                    <div style={{ width: 28, height: 28, borderRadius: 4, background: accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: isDark ? '#111' : '#fff', flexShrink: 0 }}>{manInit}</div>
+                                    <SlackAvatar name={managerName} size={28} color={accentColor} />
                                     {typingDecisions.has(req.id) ? (
                                       <div>
                                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
