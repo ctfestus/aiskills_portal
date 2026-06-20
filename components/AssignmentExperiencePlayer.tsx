@@ -467,7 +467,7 @@ export default function AssignmentExperiencePlayer({
                               </div>
                               <div style={{ padding: '14px 14px 8px' }}>
                                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                  <SlackAvatar name={manName} size={36} color={updateColor} />
+                                  <SlackAvatar name={manName} size={28} color={updateColor} />
                                   <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                                       <span style={{ fontWeight: 700, fontSize: 14.5, color: slackText }}>{manName}</span>
@@ -598,7 +598,7 @@ export default function AssignmentExperiencePlayer({
                               </div>
                               <div style={{ padding: '14px 14px 10px' }}>
                                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                  <SlackAvatar name={manName} size={36} color={accent} />
+                                  <SlackAvatar name={manName} size={28} color={accent} />
                                   <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                                       <span style={{ fontWeight: 700, fontSize: 14.5, color: slackText }}>{manName}</span>
@@ -650,7 +650,7 @@ export default function AssignmentExperiencePlayer({
                                   </div>
                                   {/* Typing indicator or manager response */}
                                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                                    <SlackAvatar name={manName} size={28} color={accent} />
+                                    <SlackAvatar name={manName} size={22} color={accent} />
                                     {typingDecisions.has(req.id) ? (
                                       <div>
                                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>

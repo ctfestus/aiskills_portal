@@ -982,7 +982,7 @@ export default function VirtualExperienceTaker({
                                 </div>
                                 <div style={{ padding: '14px 14px 8px' }}>
                                   <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                    <SlackAvatar name={managerName} size={36} color={meta.color} />
+                                    <SlackAvatar name={managerName} size={28} color={meta.color} />
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                                         <span style={{ fontWeight: 700, fontSize: 14.5, color: slackText }}>{managerName}</span>
@@ -1135,7 +1135,7 @@ export default function VirtualExperienceTaker({
                               </div>
                               <div style={{ padding: '14px 14px 10px' }}>
                                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                  <SlackAvatar name={managerName} size={36} color={accentColor} />
+                                  <SlackAvatar name={managerName} size={28} color={accentColor} />
                                   <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                                       <span style={{ fontWeight: 700, fontSize: 14.5, color: slackText }}>{managerName}</span>
@@ -1180,7 +1180,7 @@ export default function VirtualExperienceTaker({
                                   </div>
                                   {/* Typing indicator or manager response */}
                                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                                    <SlackAvatar name={managerName} size={28} color={accentColor} />
+                                    <SlackAvatar name={managerName} size={22} color={accentColor} />
                                     {typingDecisions.has(req.id) ? (
                                       <div>
                                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
