@@ -6,6 +6,7 @@ import {
   CheckCircle2, Circle, ChevronRight, ChevronLeft,
   X, Loader2, Trophy, BookOpen, Lock, Download, Award, Star, Clock,
   Link as LinkIcon, Upload as UploadIcon, Mail, MessageSquare, Inbox, Paperclip, Send,
+  Bold, Italic, Underline, List, ListOrdered,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -225,12 +226,12 @@ function EmailCompose({
     <div style={{ border: `1px solid ${bd}`, borderRadius: 10, overflow: 'hidden', background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' }}>
       {!readOnly && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 10px', background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', borderBottom: `1px solid ${bd}` }}>
-          <button onClick={() => exec('bold')} style={{ ...tb, fontWeight: 700 }}>B</button>
-          <button onClick={() => exec('italic')} style={{ ...tb, fontStyle: 'italic' }}>I</button>
-          <button onClick={() => exec('underline')} style={{ ...tb, textDecoration: 'underline' }}>U</button>
+          <button onClick={() => exec('bold')} style={tb} title="Bold"><Bold size={14} /></button>
+          <button onClick={() => exec('italic')} style={tb} title="Italic"><Italic size={14} /></button>
+          <button onClick={() => exec('underline')} style={tb} title="Underline"><Underline size={14} /></button>
           <span style={{ width: 1, height: 16, background: bd, margin: '0 4px', flexShrink: 0 }} />
-          <button onClick={() => exec('insertUnorderedList')} style={tb} title="Bullet list">&#8226;</button>
-          <button onClick={() => exec('insertOrderedList')} style={{ ...tb, fontSize: 11 }}>1.</button>
+          <button onClick={() => exec('insertUnorderedList')} style={tb} title="Bullet list"><List size={14} /></button>
+          <button onClick={() => exec('insertOrderedList')} style={tb} title="Numbered list"><ListOrdered size={14} /></button>
         </div>
       )}
       <div style={{ position: 'relative', minHeight: 120 }}>
