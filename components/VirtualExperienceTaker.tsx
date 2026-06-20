@@ -918,54 +918,64 @@ export default function VirtualExperienceTaker({
                         };
 
                         if (isUpdate) {
+                          const slackBg = isDark ? '#1A1D21' : '#FFFFFF';
+                          const slackHeader = isDark ? '#19171D' : '#F8F8F8';
+                          const slackBorder = isDark ? '#3E4349' : '#DDDDDD';
+                          const slackText = isDark ? '#D1D2D3' : '#1D1C1D';
+                          const slackMuted = isDark ? '#ABABAD' : '#616061';
+                          const manInit = managerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
                           return (
                             <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5">
-                              <div className="rounded-2xl overflow-hidden"
-                                style={{ background: isDark ? '#171717' : '#ffffff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}` }}>
-                                <div className="px-4 py-3 flex items-center gap-2"
-                                  style={{ background: isDark ? '#202020' : '#f8fafc', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'}` }}>
-                                  <MessageSquare className="w-4 h-4" style={{ color: meta.color }} />
-                                  <span className={`text-[12px] ${done ? 'font-semibold' : 'font-bold'}`} style={{ color: isDark ? '#f0f0f0' : '#111' }}># project-war-room</span>
+                              <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${slackBorder}`, background: slackBg }}>
+                                <div style={{ background: slackHeader, borderBottom: `1px solid ${slackBorder}`, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <span style={{ fontSize: 17, fontWeight: 900, color: slackMuted, lineHeight: 1, marginRight: 2 }}>#</span>
+                                  <span style={{ fontSize: 14, fontWeight: 700, color: slackText }}>project-war-room</span>
                                   {!done && (
-                                    <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
-                                      style={{ background: meta.color, color: '#fff' }}>1</span>
+                                    <span style={{ marginLeft: 6, background: '#CD2553', color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px', lineHeight: '16px' }}>1</span>
                                   )}
-                                  <span className="ml-auto text-[11px]" style={{ color: isDark ? '#777' : '#777' }}>Scenario update</span>
+                                  <span style={{ marginLeft: 'auto', fontSize: 11, color: slackMuted }}>4 members</span>
                                 </div>
-                                <div className="px-4 py-4 space-y-3">
-                                  <div className="flex items-start gap-3">
-                                    <CompanyAvatar name={managerName} color={meta.color} size={34} />
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-[13px] font-bold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{managerName}</span>
-                                        <span className="text-[11px]" style={{ color: isDark ? '#777' : '#777' }}>{managerTitle}</span>
-                                        <span className="text-[11px]" style={{ color: isDark ? '#666' : '#999' }}>Earlier today</span>
+                                <div style={{ padding: '14px 14px 8px' }}>
+                                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                                    <div style={{ width: 36, height: 36, borderRadius: 6, background: meta.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{manInit}</div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                                        <span style={{ fontWeight: 700, fontSize: 14.5, color: slackText }}>{managerName}</span>
+                                        <span style={{ fontSize: 11, color: slackMuted }}>Earlier today</span>
                                       </div>
-                                      <div className="mt-2 rounded-2xl rounded-tl-sm px-4 py-3"
-                                        style={{ background: isDark ? 'rgba(255,255,255,0.10)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)'}` }}>
-                                        <p className="text-[14px] font-semibold leading-snug" style={{ color: isDark ? '#fff' : '#111' }}>{subject}</p>
-                                        {req.description && <p className="text-[13px] mt-1.5 leading-relaxed" style={{ color: isDark ? '#ccc' : '#444' }}>{req.description}</p>}
+                                      <p style={{ fontSize: 14.5, color: slackText, marginTop: 2, lineHeight: 1.5 }}>{subject}</p>
+                                      {req.description && <p style={{ fontSize: 13.5, marginTop: 4, color: slackMuted, lineHeight: 1.5 }}>{req.description}</p>}
+                                      {!done && !reviewMode ? (
+                                        <button onClick={acknowledge} style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 4, border: `1px solid ${slackBorder}`, background: 'transparent', fontSize: 13, color: slackMuted, cursor: 'pointer' }}>
+                                          <span style={{ fontSize: 15 }}>👍</span> Add reaction
+                                        </button>
+                                      ) : done ? (
+                                        <div style={{ marginTop: 8 }}>
+                                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px', borderRadius: 4, border: `1px solid ${accentColor}55`, background: `${accentColor}12`, fontSize: 13, color: accentColor, fontWeight: 600 }}>
+                                            <span style={{ fontSize: 15 }}>👍</span> You&nbsp;&nbsp;1
+                                          </span>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
+                                {done && (
+                                  <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '10px 14px 12px' }}>
+                                    <p style={{ fontSize: 11.5, color: slackMuted, fontWeight: 600, marginBottom: 10, paddingLeft: 46 }}>1 reply in thread</p>
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                      <div style={{ width: 28, height: 28, borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: slackMuted, flexShrink: 0 }}>YOU</div>
+                                      <div>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                                          <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>You</span>
+                                          <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
+                                        </div>
+                                        <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>Got it, on it. 👍</p>
                                       </div>
                                     </div>
                                   </div>
-                                  {!done && !reviewMode ? (
-                                    <button onClick={acknowledge}
-                                      className="ml-12 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all hover:opacity-80"
-                                      style={{ background: `${meta.color}18`, color: meta.color, border: `1px solid ${meta.color}33` }}>
-                                      <CheckCircle2 className="w-3.5 h-3.5" /> Acknowledge in chat
-                                    </button>
-                                  ) : (
-                                    <div className="flex items-start gap-2 justify-end">
-                                      <div className="rounded-2xl rounded-tr-sm px-4 py-2.5"
-                                        style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}>
-                                        <p className="text-[12.5px] font-semibold">Got it, on it.</p>
-                                      </div>
-                                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-0.5"
-                                        style={{ background: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)', color: isDark ? '#ccc' : '#555' }}>
-                                        You
-                                      </div>
-                                    </div>
-                                  )}
+                                )}
+                                <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '8px 14px' }}>
+                                  <div style={{ border: `1px solid ${slackBorder}`, borderRadius: 6, padding: '7px 12px', fontSize: 13, color: slackMuted, background: slackBg }}>Message #project-war-room</div>
                                 </div>
                               </div>
                             </div>
@@ -1048,80 +1058,76 @@ export default function VirtualExperienceTaker({
                             return next;
                           });
                         };
-
+                        const slackBg = isDark ? '#1A1D21' : '#FFFFFF';
+                        const slackHeader = isDark ? '#19171D' : '#F8F8F8';
+                        const slackBorder = isDark ? '#3E4349' : '#DDDDDD';
+                        const slackText = isDark ? '#D1D2D3' : '#1D1C1D';
+                        const slackMuted = isDark ? '#ABABAD' : '#616061';
+                        const manInit = managerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
                         return (
                           <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5">
-                            <div className="rounded-2xl overflow-hidden"
-                              style={{ background: isDark ? '#171717' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}` }}>
-                              <div className="px-4 py-3 flex items-center gap-2"
-                                style={{ background: isDark ? '#202020' : '#f8fafc', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'}` }}>
-                                <MessageSquare className="w-4 h-4" style={{ color: accentColor }} />
-                                <span className="text-[12px] font-bold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>Decision thread</span>
-                                <span className="ml-auto text-[11px]" style={{ color: isDark ? '#777' : '#777' }}># project-war-room</span>
+                            <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${slackBorder}`, background: slackBg }}>
+                              <div style={{ background: slackHeader, borderBottom: `1px solid ${slackBorder}`, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ fontSize: 17, fontWeight: 900, color: slackMuted, lineHeight: 1, marginRight: 2 }}>#</span>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: slackText }}>project-war-room</span>
+                                <span style={{ marginLeft: 'auto', fontSize: 11, color: slackMuted }}>4 members</span>
                               </div>
-                              <div className="px-4 py-4 space-y-4">
-                                <div className="flex items-start gap-3">
-                                  <CompanyAvatar name={managerName} color={accentColor} size={34} />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[13px] font-bold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{managerName}</span>
-                                      <span className="text-[11px]" style={{ color: isDark ? '#777' : '#777' }}>asks</span>
+                              <div style={{ padding: '14px 14px 10px' }}>
+                                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                                  <div style={{ width: 36, height: 36, borderRadius: 6, background: accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: isDark ? '#111' : '#fff', flexShrink: 0 }}>{manInit}</div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                      <span style={{ fontWeight: 700, fontSize: 14.5, color: slackText }}>{managerName}</span>
+                                      <span style={{ fontSize: 11, color: slackMuted }}>Earlier today</span>
                                     </div>
-                                    <div className="mt-2 rounded-2xl rounded-tl-sm px-4 py-3"
-                                      style={{ background: isDark ? 'rgba(255,255,255,0.10)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)'}` }}>
-                                      <p className="text-[14px] font-semibold leading-snug" style={{ color: isDark ? '#fff' : '#111' }}>{req.label}</p>
-                                      {req.description && <p className="text-[12.5px] mt-1.5 leading-relaxed" style={{ color: isDark ? '#bbb' : '#555' }}>{req.description}</p>}
+                                    <p style={{ fontSize: 14.5, color: slackText, marginTop: 2, lineHeight: 1.5 }}>{req.label}</p>
+                                    {req.description && <p style={{ fontSize: 13.5, marginTop: 4, color: slackMuted, lineHeight: 1.5 }}>{req.description}</p>}
+                                    {!done && (
+                                      <div style={{ marginTop: 12, border: `1px solid ${slackBorder}`, borderRadius: 6, overflow: 'hidden', maxWidth: 460 }}>
+                                        {options.map((opt, oi) => {
+                                          const letter = String.fromCharCode(65 + oi);
+                                          return (
+                                            <button key={`${req.id}-${oi}`}
+                                              onClick={() => chooseDecision(opt)}
+                                              disabled={reviewMode}
+                                              style={{ width: '100%', display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', borderBottom: oi < options.length - 1 ? `1px solid ${slackBorder}` : 'none', background: 'transparent', textAlign: 'left', cursor: reviewMode ? 'default' : 'pointer', fontSize: 13.5, color: slackText }}>
+                                              <span style={{ width: 22, height: 22, borderRadius: '50%', border: `1.5px solid ${isDark ? '#666' : '#CCCCCC'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: slackMuted, flexShrink: 0, marginTop: 1 }}>{letter}</span>
+                                              <span style={{ flex: 1, lineHeight: 1.4 }}>{opt}</span>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              {done && selectedAnswer && (
+                                <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '10px 14px 14px' }}>
+                                  <p style={{ fontSize: 11.5, color: slackMuted, fontWeight: 600, marginBottom: 10, paddingLeft: 46 }}>2 replies in thread</p>
+                                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 10 }}>
+                                    <div style={{ width: 28, height: 28, borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: slackMuted, flexShrink: 0 }}>YOU</div>
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                                        <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>You</span>
+                                        <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
+                                      </div>
+                                      <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.4 }}>{selectedAnswer}</p>
+                                    </div>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                    <div style={{ width: 28, height: 28, borderRadius: 4, background: accentColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: isDark ? '#111' : '#fff', flexShrink: 0 }}>{manInit}</div>
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                                        <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>{managerName}</span>
+                                        <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
+                                      </div>
+                                      <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>{selectedFeedback || 'Decision recorded. Keep moving forward.'}</p>
                                     </div>
                                   </div>
                                 </div>
-
-                                {!done && (
-                                  <div className="ml-0 sm:ml-12 space-y-2">
-                                    <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: isDark ? '#777' : '#777' }}>Choose your reply</p>
-                                    {options.map((opt, oi) => {
-                                      const letter = String.fromCharCode(65 + oi);
-                                      return (
-                                        <button key={`${req.id}-${oi}`}
-                                          onClick={() => chooseDecision(opt)}
-                                          disabled={reviewMode}
-                                          className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all disabled:cursor-default hover:opacity-80"
-                                          style={{
-                                            background: isDark ? `${accentColor}12` : `${accentColor}08`,
-                                            border: `1px solid ${isDark ? `${accentColor}33` : `${accentColor}22`}`,
-                                            color: isDark ? '#f0f0f0' : '#111',
-                                            transition: 'border-color 0.12s, background 0.12s',
-                                          }}>
-                                          <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5"
-                                            style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}>{letter}</span>
-                                          <span className="flex-1 text-[13.5px] leading-snug">{opt}</span>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-
-                                {done && selectedAnswer && (
-                                  <div className="space-y-3">
-                                    <div className="flex items-start gap-2 justify-end">
-                                      <div className="max-w-[75%] rounded-2xl rounded-tr-sm px-4 py-3"
-                                        style={{ background: accentColor, color: isDark ? '#111' : '#fff' }}>
-                                        <p className="text-[13.5px] leading-relaxed">{selectedAnswer}</p>
-                                      </div>
-                                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-1"
-                                        style={{ background: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)', color: isDark ? '#ccc' : '#555' }}>
-                                        You
-                                      </div>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                      <CompanyAvatar name={managerName} color={accentColor} size={30} />
-                                      <div className="max-w-[86%] rounded-2xl rounded-tl-sm px-4 py-3"
-                                        style={{ background: isDark ? 'rgba(255,255,255,0.10)' : '#f1f5f9', color: isDark ? '#ddd' : '#333', border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.05)'}` }}>
-                                        <p className="text-[11px] font-bold mb-1" style={{ color: accentColor }}>{managerName} responds</p>
-                                        <p className="text-[13px] leading-relaxed">{selectedFeedback || 'Decision recorded. Continue with the next workplace step.'}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
+                              )}
+                              <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '8px 14px' }}>
+                                <div style={{ border: `1px solid ${slackBorder}`, borderRadius: 6, padding: '7px 12px', fontSize: 13, color: slackMuted, background: slackBg }}>Message #project-war-room</div>
                               </div>
                             </div>
                           </div>

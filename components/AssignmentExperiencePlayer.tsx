@@ -406,22 +406,85 @@ export default function AssignmentExperiencePlayer({
                         const prog    = progress[req.id];
                         const isDone  = prog?.completed ?? false;
 
-                        // Scripted manager brief / scenario update
-                        if (req.type === 'briefing' || req.type === 'scenario_update') {
-                          const isUpdate = req.type === 'scenario_update';
-                          const color = isUpdate ? '#f59e0b' : accent;
-                          const subject = req.label || (isUpdate ? 'Project update' : `${currentLes?.title || 'Mission'} brief`);
+                        // Scenario update - Slack channel style
+                        if (req.type === 'scenario_update') {
+                          const updateColor = '#f59e0b';
+                          const subject = req.label || 'Project update';
+                          const manName = config.managerName || 'Project Manager';
+                          const manInit = manName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+                          const slackBg = isDark ? '#1A1D21' : '#FFFFFF';
+                          const slackHeader = isDark ? '#19171D' : '#F8F8F8';
+                          const slackBorder = isDark ? '#3E4349' : '#DDDDDD';
+                          const slackText = isDark ? '#D1D2D3' : '#1D1C1D';
+                          const slackMuted = isDark ? '#ABABAD' : '#616061';
+                          return (
+                            <div key={req.id} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${slackBorder}`, background: slackBg, boxShadow: shadow }}>
+                              <div style={{ background: slackHeader, borderBottom: `1px solid ${slackBorder}`, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ fontSize: 17, fontWeight: 900, color: slackMuted, lineHeight: 1, marginRight: 2 }}>#</span>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: slackText }}>project-war-room</span>
+                                {!isDone && <span style={{ marginLeft: 6, background: '#CD2553', color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px', lineHeight: '16px' }}>1</span>}
+                                <span style={{ marginLeft: 'auto', fontSize: 11, color: slackMuted }}>4 members</span>
+                              </div>
+                              <div style={{ padding: '14px 14px 8px' }}>
+                                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                                  <div style={{ width: 36, height: 36, borderRadius: 6, background: updateColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0 }}>{manInit}</div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                                      <span style={{ fontWeight: 700, fontSize: 14.5, color: slackText }}>{manName}</span>
+                                      <span style={{ fontSize: 11, color: slackMuted }}>Earlier today</span>
+                                    </div>
+                                    <p style={{ fontSize: 14.5, color: slackText, marginTop: 2, lineHeight: 1.5 }}>{subject}</p>
+                                    {req.description && <p style={{ fontSize: 13.5, marginTop: 4, color: slackMuted, lineHeight: 1.5 }}>{req.description}</p>}
+                                    {!isDone && !readOnly ? (
+                                      <button onClick={() => updateProgress(req.id, { completed: true })} style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 4, border: `1px solid ${slackBorder}`, background: 'transparent', fontSize: 13, color: slackMuted, cursor: 'pointer' }}>
+                                        <span style={{ fontSize: 15 }}>👍</span> Add reaction
+                                      </button>
+                                    ) : isDone ? (
+                                      <div style={{ marginTop: 8 }}>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px', borderRadius: 4, border: `1px solid ${accent}55`, background: `${accent}12`, fontSize: 13, color: accent, fontWeight: 600 }}>
+                                          <span style={{ fontSize: 15 }}>👍</span> You&nbsp;&nbsp;1
+                                        </span>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
+                              {isDone && (
+                                <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '10px 14px 12px' }}>
+                                  <p style={{ fontSize: 11.5, color: slackMuted, fontWeight: 600, marginBottom: 10, paddingLeft: 46 }}>1 reply in thread</p>
+                                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                    <div style={{ width: 28, height: 28, borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: slackMuted, flexShrink: 0 }}>YOU</div>
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                                        <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>You</span>
+                                        <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
+                                      </div>
+                                      <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>Got it, on it. 👍</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '8px 14px' }}>
+                                <div style={{ border: `1px solid ${slackBorder}`, borderRadius: 6, padding: '7px 12px', fontSize: 13, color: slackMuted, background: slackBg }}>Message #project-war-room</div>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // Manager brief - email inbox style
+                        if (req.type === 'briefing') {
+                          const subject = req.label || `${currentLes?.title || 'Mission'} brief`;
                           return (
                             <div key={req.id} className="rounded-2xl overflow-hidden" style={{ background: bg, border: `1px solid ${border}`, boxShadow: shadow }}>
                               <div className="px-4 py-3 flex items-center gap-2" style={{ background: subtle, borderBottom: `1px solid ${divider}` }}>
-                                {isUpdate ? <MessageSquare className="w-4 h-4" style={{ color }} /> : <Inbox className="w-4 h-4" style={{ color }} />}
-                                <span className="text-[12px] font-bold" style={{ color: text }}>{isUpdate ? '# project-war-room' : 'Inbox'}</span>
-                                <span className="ml-auto text-[11px]" style={{ color: faint }}>{isUpdate ? 'Update' : 'Unread brief'}</span>
+                                <Inbox className="w-4 h-4" style={{ color: accent }} />
+                                <span className="text-[12px] font-bold" style={{ color: text }}>Inbox</span>
+                                <span className="ml-auto text-[11px]" style={{ color: faint }}>Unread brief</span>
                               </div>
                               <div className="px-4 py-4 space-y-3">
                                 <div className="flex items-start gap-3">
                                   <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-black"
-                                    style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>
+                                    style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}30` }}>
                                     {(config.managerName || 'PM').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
                                   </div>
                                   <div className="flex-1 min-w-0">
@@ -429,15 +492,15 @@ export default function AssignmentExperiencePlayer({
                                       <span className="text-sm font-bold" style={{ color: text }}>{config.managerName || 'Project Manager'}</span>
                                       <span className="text-[11px]" style={{ color: faint }}>{config.managerTitle || 'Project Lead'}</span>
                                     </div>
-                                    <p className="text-[11px] mt-0.5" style={{ color: faint }}>{isUpdate ? 'posted an update' : `To: ${studentName || 'Analyst'}`}</p>
+                                    <p className="text-[11px] mt-0.5" style={{ color: faint }}>To: {studentName || 'Analyst'}</p>
                                   </div>
                                   {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
                                 </div>
-                                <div className="rounded-2xl px-4 py-3" style={{ background: isUpdate ? (isDark ? 'rgba(255,255,255,0.10)' : '#f1f5f9') : subtle, border: `1px solid ${divider}` }}>
+                                <div className="rounded-2xl px-4 py-3" style={{ background: subtle, border: `1px solid ${divider}` }}>
                                   <p className="text-sm font-bold" style={{ color: text }}>{subject}</p>
                                   {req.description && <p className="text-xs mt-1.5 leading-relaxed" style={{ color: muted }}>{req.description}</p>}
                                 </div>
-                                {!isUpdate && config.dataset && (
+                                {config.dataset && (
                                   <button onClick={downloadDataset}
                                     className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold"
                                     style={{ background: subtle, color: muted, border: `1px solid ${divider}` }}>
@@ -447,9 +510,8 @@ export default function AssignmentExperiencePlayer({
                                 {!isDone && !readOnly && (
                                   <button onClick={() => updateProgress(req.id, { completed: true })}
                                     className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold"
-                                    style={{ background: color, color: '#fff' }}>
-                                    {isUpdate ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Mail className="w-3.5 h-3.5" />}
-                                    {isUpdate ? 'Acknowledge in chat' : 'Got it, start this task'}
+                                    style={{ background: accent, color: '#fff' }}>
+                                    <Mail className="w-3.5 h-3.5" /> Got it, start this task
                                   </button>
                                 )}
                               </div>
@@ -457,84 +519,81 @@ export default function AssignmentExperiencePlayer({
                           );
                         }
 
-                        // Scripted decision point
+                        // Decision point - Slack block kit style
                         if (req.type === 'decision') {
                           const selected = prog?.selectedAnswer ?? '';
                           const selectedIdx = selected ? (req.options ?? []).findIndex(opt => opt === selected) : -1;
                           const feedback = selectedIdx >= 0 ? req.optionFeedback?.[selectedIdx] : '';
+                          const manName = config.managerName || 'Project Manager';
+                          const manInit = manName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+                          const slackBg = isDark ? '#1A1D21' : '#FFFFFF';
+                          const slackHeader = isDark ? '#19171D' : '#F8F8F8';
+                          const slackBorder = isDark ? '#3E4349' : '#DDDDDD';
+                          const slackText = isDark ? '#D1D2D3' : '#1D1C1D';
+                          const slackMuted = isDark ? '#ABABAD' : '#616061';
                           return (
-                            <div key={req.id} className="rounded-2xl overflow-hidden" style={{ background: bg, border: `1px solid ${border}`, boxShadow: shadow }}>
-                              <div className="px-4 py-3 flex items-center gap-2" style={{ background: subtle, borderBottom: `1px solid ${divider}` }}>
-                                <MessageSquare className="w-4 h-4" style={{ color: '#8b5cf6' }} />
-                                <span className="text-[12px] font-bold" style={{ color: text }}>Decision thread</span>
-                                <span className="ml-auto text-[11px]" style={{ color: faint }}># project-war-room</span>
+                            <div key={req.id} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${slackBorder}`, background: slackBg, boxShadow: shadow }}>
+                              <div style={{ background: slackHeader, borderBottom: `1px solid ${slackBorder}`, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ fontSize: 17, fontWeight: 900, color: slackMuted, lineHeight: 1, marginRight: 2 }}>#</span>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: slackText }}>project-war-room</span>
+                                <span style={{ marginLeft: 'auto', fontSize: 11, color: slackMuted }}>4 members</span>
                               </div>
-                              <div className="px-4 py-4 space-y-4">
-                                <div className="flex items-start gap-3">
-                                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[11px] font-black"
-                                    style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}33` }}>
-                                    {(config.managerName || 'PM').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-bold" style={{ color: text }}>{config.managerName || 'Project Manager'}</span>
-                                      <span className="text-[11px]" style={{ color: faint }}>asks</span>
+                              <div style={{ padding: '14px 14px 10px' }}>
+                                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                                  <div style={{ width: 36, height: 36, borderRadius: 6, background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: isDark ? '#111' : '#fff', flexShrink: 0 }}>{manInit}</div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                      <span style={{ fontWeight: 700, fontSize: 14.5, color: slackText }}>{manName}</span>
+                                      <span style={{ fontSize: 11, color: slackMuted }}>Earlier today</span>
                                     </div>
-                                    <div className="mt-2 rounded-2xl rounded-tl-sm px-4 py-3" style={{ background: isDark ? 'rgba(255,255,255,0.10)' : '#f1f5f9', border: `1px solid ${divider}` }}>
-                                      <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
-                                      {req.description && <p className="text-xs mt-1.5 leading-relaxed" style={{ color: muted }}>{req.description}</p>}
+                                    <p style={{ fontSize: 14.5, color: slackText, marginTop: 2, lineHeight: 1.5 }}>{req.label}</p>
+                                    {req.description && <p style={{ fontSize: 13.5, marginTop: 4, color: slackMuted, lineHeight: 1.5 }}>{req.description}</p>}
+                                    {!isDone && (
+                                      <div style={{ marginTop: 12, border: `1px solid ${slackBorder}`, borderRadius: 6, overflow: 'hidden', maxWidth: 460 }}>
+                                        {(req.options ?? []).filter(Boolean).map((opt, oi) => {
+                                          const letter = String.fromCharCode(65 + oi);
+                                          const opts = (req.options ?? []).filter(Boolean);
+                                          return (
+                                            <button key={`${req.id}-decision-${oi}`} disabled={readOnly}
+                                              onClick={() => updateProgress(req.id, { selectedAnswer: opt, completed: true })}
+                                              style={{ width: '100%', display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', borderBottom: oi < opts.length - 1 ? `1px solid ${slackBorder}` : 'none', background: 'transparent', textAlign: 'left', cursor: readOnly ? 'default' : 'pointer', fontSize: 13.5, color: slackText }}>
+                                              <span style={{ width: 22, height: 22, borderRadius: '50%', border: `1.5px solid ${isDark ? '#666' : '#CCCCCC'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: slackMuted, flexShrink: 0, marginTop: 1 }}>{letter}</span>
+                                              <span style={{ flex: 1, lineHeight: 1.4 }}>{opt}</span>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              {isDone && selected && (
+                                <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '10px 14px 14px' }}>
+                                  <p style={{ fontSize: 11.5, color: slackMuted, fontWeight: 600, marginBottom: 10, paddingLeft: 46 }}>2 replies in thread</p>
+                                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 10 }}>
+                                    <div style={{ width: 28, height: 28, borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: slackMuted, flexShrink: 0 }}>YOU</div>
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                                        <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>You</span>
+                                        <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
+                                      </div>
+                                      <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.4 }}>{selected}</p>
+                                    </div>
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                    <div style={{ width: 28, height: 28, borderRadius: 4, background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: isDark ? '#111' : '#fff', flexShrink: 0 }}>{manInit}</div>
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                                        <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>{manName}</span>
+                                        <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
+                                      </div>
+                                      <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>{feedback || 'Decision recorded. Keep moving forward.'}</p>
                                     </div>
                                   </div>
                                 </div>
-
-                                {!isDone && (
-                                  <div className="space-y-2">
-                                    <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: faint }}>Choose your reply</p>
-                                    {(req.options ?? []).filter(Boolean).map((opt, oi) => {
-                                      const letter = String.fromCharCode(65 + oi);
-                                      return (
-                                        <button key={`${req.id}-decision-${oi}`} disabled={readOnly}
-                                          onClick={() => updateProgress(req.id, { selectedAnswer: opt, completed: true })}
-                                          className="w-full text-left flex items-start gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-all hover:opacity-80"
-                                          style={{
-                                            border: `1px solid ${isDark ? `${accent}33` : `${accent}22`}`,
-                                            background: isDark ? `${accent}12` : `${accent}08`,
-                                            color: isDark ? '#f0f0f0' : '#111',
-                                            cursor: readOnly ? 'default' : 'pointer',
-                                            transition: 'border-color 0.12s, background 0.12s',
-                                          }}>
-                                          <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5"
-                                            style={{ background: accent, color: isDark ? '#111' : '#fff' }}>{letter}</span>
-                                          <span className="flex-1 leading-snug">{opt}</span>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-
-                                {isDone && selected && (
-                                  <div className="space-y-3">
-                                    <div className="flex items-start gap-2 justify-end">
-                                      <div className="max-w-[75%] rounded-2xl rounded-tr-sm px-4 py-3" style={{ background: accent, color: isDark ? '#111' : '#fff' }}>
-                                        <p className="text-sm leading-relaxed">{selected}</p>
-                                      </div>
-                                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold mt-1"
-                                        style={{ background: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)', color: isDark ? '#ccc' : '#555' }}>
-                                        You
-                                      </div>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                      <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-[10px] font-black mt-0.5"
-                                        style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}33` }}>
-                                        {(config.managerName || 'PM').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
-                                      </div>
-                                      <div className="flex-1 rounded-2xl rounded-tl-sm px-4 py-3" style={{ background: isDark ? 'rgba(255,255,255,0.10)' : '#f1f5f9', border: `1px solid ${divider}` }}>
-                                        <p className="text-[11px] font-bold mb-1" style={{ color: accent }}>{config.managerName || 'Project Manager'} responds</p>
-                                        <p className="text-xs leading-relaxed" style={{ color: muted }}>{feedback || 'Decision recorded. Continue with the next workplace step.'}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
+                              )}
+                              <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '8px 14px' }}>
+                                <div style={{ border: `1px solid ${slackBorder}`, borderRadius: 6, padding: '7px 12px', fontSize: 13, color: slackMuted, background: slackBg }}>Message #project-war-room</div>
                               </div>
                             </div>
                           );
