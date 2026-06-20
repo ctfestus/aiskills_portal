@@ -1093,7 +1093,7 @@ export default function VirtualExperienceTaker({
                         }
 
                         // Gmail-style email reader
-                        const manEmail = `${managerName.toLowerCase().replace(/\s+/g, '.')}@${(config.company || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+                        const manEmail = `${managerName.toLowerCase().replace(/\s+/g, '.')}@${(config.company || (config.title || '').split(' - ')[0] || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '') || 'workspace'}.com`;
                         return (
                           <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5">
                             <div style={{ background: isDark ? '#1a1a1a' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, borderRadius: 14 }}>
@@ -1272,7 +1272,7 @@ export default function VirtualExperienceTaker({
                       if (req.type === 'debrief') {
                         const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
                         const managerName = config.managerName || 'Your Manager';
-                        const manEmail = `${managerName.toLowerCase().replace(/\s+/g, '.')}@${(config.company || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+                        const manEmail = `${managerName.toLowerCase().replace(/\s+/g, '.')}@${(config.company || (config.title || '').split(' - ')[0] || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '') || 'workspace'}.com`;
                         const debriefSubject = req.label || `Re: ${currentLes?.title || 'Mission'}`;
                         const hasContent = noteVal.replace(/<[^>]*>/g, '').trim().length > 0;
                         const meta = REQ_META['debrief'];

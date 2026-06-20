@@ -587,7 +587,7 @@ export default function AssignmentExperiencePlayer({
                         if (req.type === 'briefing') {
                           const subject = req.label || `${currentLes?.title || 'Mission'} brief`;
                           const manName = config.managerName || 'Project Manager';
-                          const manEmail = `${manName.toLowerCase().replace(/\s+/g, '.')}@${(config.company || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+                          const manEmail = `${manName.toLowerCase().replace(/\s+/g, '.')}@${(config.company || (config.title || '').split(' - ')[0] || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '') || 'workspace'}.com`;
                           return (
                             <div key={req.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: shadow }}>
                               {/* Subject */}
@@ -753,7 +753,7 @@ export default function AssignmentExperiencePlayer({
                         if (req.type === 'debrief') {
                           const val = prog?.notes ?? '';
                           const manName = config.managerName || 'Project Manager';
-                          const manEmail = `${manName.toLowerCase().replace(/\s+/g, '.')}@${(config.company || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+                          const manEmail = `${manName.toLowerCase().replace(/\s+/g, '.')}@${(config.company || (config.title || '').split(' - ')[0] || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '') || 'workspace'}.com`;
                           const debriefSubject = req.label || `Re: ${currentLes?.title || 'Mission'}`;
                           const hasContent = val.replace(/<[^>]*>/g, '').trim().length > 0;
                           const replyOpen = isDone || openReplies.has(req.id) || hasContent;
