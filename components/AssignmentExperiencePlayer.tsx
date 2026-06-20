@@ -749,76 +749,106 @@ export default function AssignmentExperiencePlayer({
                           );
                         }
 
-                        // Mission debrief - Gmail compose window
+                        // Mission debrief - Gmail email thread
                         if (req.type === 'debrief') {
                           const val = prog?.notes ?? '';
                           const manName = config.managerName || 'Project Manager';
-                          const debriefSubject = req.label || `${currentLes?.title || 'Mission'} debrief`;
+                          const manEmail = `${manName.toLowerCase().replace(/\s+/g, '.')}@${(config.company || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '')}.com`;
+                          const debriefSubject = req.label || `Re: ${currentLes?.title || 'Mission'}`;
                           const hasContent = val.replace(/<[^>]*>/g, '').trim().length > 0;
-                          const manChipBg = isDark ? 'rgba(255,255,255,0.1)' : '#e8f0fe';
-                          const manChipText = isDark ? '#ddd' : '#1a73e8';
                           const replyOpen = isDone || openReplies.has(req.id) || hasContent;
                           return (
-                            <div key={req.id} style={{ borderRadius: 14, overflow: 'hidden', boxShadow: shadow, border: `1px solid ${border}` }}>
-                              {!replyOpen ? (
-                                /* Reply prompt */
-                                <div style={{ background: bg, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                                  {req.description && <p style={{ flex: 1, fontSize: 13, color: faint, margin: 0 }}>{req.description}</p>}
-                                  {!readOnly && (
-                                    <button
-                                      onClick={() => setOpenReplies(prev => new Set([...prev, req.id]))}
-                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 18px', borderRadius: 24, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer', flexShrink: 0 }}>
-                                      <Reply className="w-4 h-4" /> Reply
-                                    </button>
-                                  )}
-                                </div>
-                              ) : (<>
-                              {/* Compose header */}
-                              <div style={{ background: subtle, padding: '10px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${divider}` }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: text }}>New message</span>
-                                <span style={{ fontSize: 11, color: faint }}>{isDone ? 'Sent' : 'Draft'}</span>
+                            <div key={req.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: shadow }}>
+                              {/* Subject */}
+                              <div style={{ padding: '22px 22px 0' }}>
+                                <h3 style={{ fontSize: 19, fontWeight: 700, color: text, lineHeight: 1.3, margin: 0 }}>{debriefSubject}</h3>
                               </div>
-                              {/* To field */}
-                              <div style={{ background: bg, padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${divider}` }}>
-                                <span style={{ fontSize: 13, color: faint, width: 60, flexShrink: 0 }}>To</span>
-                                <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 10px', borderRadius: 14, background: manChipBg, fontSize: 13, fontWeight: 500, color: manChipText }}>{manName}</span>
-                              </div>
-                              {/* Subject field */}
-                              <div style={{ background: bg, padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${divider}` }}>
-                                <span style={{ fontSize: 13, color: faint, width: 60, flexShrink: 0 }}>Subject</span>
-                                <span style={{ fontSize: 13, color: text }}>{debriefSubject}</span>
-                              </div>
-                              {/* Body */}
-                              <div style={{ background: bg, padding: '10px 18px 6px' }}>
-                                {req.description && <p style={{ fontSize: 12.5, color: muted, lineHeight: 1.6, marginBottom: 10 }}>{req.description}</p>}
-                                <EmailCompose
-                                  value={val}
-                                  onChange={(html) => updateProgress(req.id, { notes: html })}
-                                  readOnly={isDone || readOnly}
-                                  isDark={isDark}
-                                  accentColor={accent}
-                                  placeholder="Write your mission debrief - what you found, what you did, and any blockers..."
-                                />
-                              </div>
-                              {/* Footer */}
-                              <div style={{ background: bg, padding: '12px 18px', borderTop: `1px solid ${divider}` }}>
-                                {!isDone && !readOnly ? (
-                                  <button
-                                    onClick={() => { if (!hasContent) return; updateProgress(req.id, { notes: val, completed: true }); }}
-                                    disabled={!hasContent}
-                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 22px', borderRadius: 24, background: hasContent ? accent : (isDark ? '#333' : '#e0e0e0'), color: hasContent ? '#fff' : (isDark ? '#666' : '#aaa'), fontSize: 13.5, fontWeight: 600, border: 'none', cursor: hasContent ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}>
-                                    <Send className="w-3.5 h-3.5" /> Send
-                                  </button>
-                                ) : (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 13, fontWeight: 500 }}>
-                                      <CheckCircle2 className="w-4 h-4" style={{ display: 'inline' }} /> Message sent
-                                    </div>
-                                    <p style={{ fontSize: 11.5, color: faint, paddingLeft: 2, margin: 0 }}>Delivered to {manName}</p>
+                              {/* Sender row */}
+                              <div style={{ padding: '16px 22px 0', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                <SlackAvatar name={manName} size={42} color={accent} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{manName}</span>
+                                    <span style={{ fontSize: 12, color: faint }}>&lt;{manEmail}&gt;</span>
                                   </div>
-                                )}
+                                  <p style={{ fontSize: 12, color: faint, marginTop: 2, margin: 0 }}>to me &bull; Earlier today</p>
+                                </div>
+                                {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accent }} />}
                               </div>
-                              </>)}
+                              {/* Email body */}
+                              {req.description && (
+                                <div
+                                  className="rich-content"
+                                  dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(req.description) }}
+                                  style={{ padding: '18px 22px', color: isDark ? '#e0e0e0' : '#1f1f1f', fontSize: 14.5, lineHeight: 1.75 }}
+                                />
+                              )}
+                              {/* Divider */}
+                              <div style={{ height: 1, background: divider, margin: '0 22px' }} />
+                              {/* Thread / reply area */}
+                              {!isDone ? (
+                                !replyOpen ? (
+                                  <div style={{ padding: '14px 22px' }}>
+                                    {!readOnly && (
+                                      <button
+                                        onClick={() => setOpenReplies(prev => new Set([...prev, req.id]))}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 6, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer' }}>
+                                        <Reply className="w-4 h-4" /> Reply
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div style={{ padding: '14px 22px 18px' }}>
+                                    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
+                                      <div style={{ padding: '8px 14px', background: subtle, borderBottom: `1px solid ${divider}`, fontSize: 12, color: faint }}>
+                                        Reply to {manName}
+                                      </div>
+                                      <EmailCompose
+                                        value={val}
+                                        onChange={(html) => updateProgress(req.id, { notes: html })}
+                                        readOnly={false}
+                                        isDark={isDark}
+                                        accentColor={accent}
+                                        placeholder="Write your reply..."
+                                      />
+                                      <div style={{ padding: '10px 14px', background: bg, borderTop: `1px solid ${divider}`, display: 'flex', gap: 10, alignItems: 'center' }}>
+                                        <button
+                                          onClick={() => { if (!hasContent) return; updateProgress(req.id, { notes: val, completed: true }); }}
+                                          disabled={!hasContent}
+                                          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: hasContent ? accent : (isDark ? '#333' : '#e0e0e0'), color: hasContent ? '#fff' : (isDark ? '#666' : '#aaa'), fontSize: 13.5, fontWeight: 600, border: 'none', cursor: hasContent ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}>
+                                          <Send className="w-3.5 h-3.5" /> Send
+                                        </button>
+                                        <button
+                                          onClick={() => setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; })}
+                                          style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: 'transparent', fontSize: 13, color: faint, cursor: 'pointer' }}>
+                                          Discard
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              ) : (
+                                /* Thread view after sending - shows student reply */
+                                <div style={{ padding: '16px 22px 20px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                    <div style={{ width: 42, height: 42, borderRadius: '50%', background: isDark ? 'rgba(255,255,255,0.12)' : '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: isDark ? '#ddd' : '#1a73e8', flexShrink: 0, letterSpacing: 1 }}>ME</div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                        <span style={{ fontSize: 14, fontWeight: 700, color: text }}>Me</span>
+                                        <span style={{ fontSize: 12, color: faint }}>Just now</span>
+                                      </div>
+                                      <div
+                                        className="rich-content"
+                                        dangerouslySetInnerHTML={{ __html: sanitizeRichText(val) }}
+                                        style={{ fontSize: 14, color: isDark ? '#e0e0e0' : '#1f1f1f', lineHeight: 1.7 }}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12.5 }}>
+                                    <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Reply sent to {manName}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           );
                         }
