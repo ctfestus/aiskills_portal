@@ -138,6 +138,7 @@ interface Requirement {
   minScore?: number;
   aiReview?: boolean;
   emailFrame?: boolean;
+  emailBody?: string;
   attachments?: ReqAttachment[];
 }
 interface Lesson {
@@ -1698,10 +1699,25 @@ function VirtualExperienceCreatePageInner() {
                                                   )}
                                                 </>
                                               ) : (
-                                                <input value={req.description}
-                                                  onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}
-                                                  style={{ ...inp, background: C.card, fontSize: 12 }}
-                                                  placeholder={req.type === 'mcq' ? 'Hint: which column(s) to analyse…' : req.type === 'upload' ? 'Instructions for the student…' : 'Prompt or context…'} />
+                                                <>
+                                                  {req.emailFrame && (
+                                                    <div style={{ borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.cardBorder}` }}>
+                                                      <div style={{ padding: '6px 12px', background: C.card, borderBottom: `1px solid ${C.cardBorder}`, fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 0.4 }}>
+                                                        EMAIL BODY
+                                                      </div>
+                                                      <RichTextEditor
+                                                        value={req.emailBody || ''}
+                                                        onChange={html => updateReq(mod.id, les.id, req.id, { emailBody: html })}
+                                                        placeholder="Write the email the manager sends to the student..."
+                                                        onImageUpload={async (file) => uploadToCloudinary(file, 've-email-images')}
+                                                      />
+                                                    </div>
+                                                  )}
+                                                  <input value={req.description}
+                                                    onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}
+                                                    style={{ ...inp, background: C.card, fontSize: 12 }}
+                                                    placeholder={req.type === 'mcq' ? 'Hint: which column(s) to analyse…' : req.type === 'upload' ? 'Instructions for the student…' : 'Prompt or context…'} />
+                                                </>
                                               )}
                                               {req.type === 'mcq' && (
                                                 <div className="space-y-1">

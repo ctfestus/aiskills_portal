@@ -32,6 +32,7 @@ interface Requirement {
   context?: string;
   minScore?: number;
   emailFrame?: boolean;
+  emailBody?: string;
   attachments?: Array<{ name: string; url: string; mimeType?: string }>;
 }
 interface Lesson {
@@ -876,8 +877,8 @@ export default function AssignmentExperiencePlayer({
                                 </div>
                                 {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accent }} />}
                               </div>
-                              {req.description && (
-                                <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(req.description) }}
+                              {(req.emailBody || req.description) && (
+                                <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(req.emailBody || req.description || '') }}
                                   style={{ padding: '18px 22px', color: isDark ? '#e0e0e0' : '#1f1f1f', fontSize: 14.5, lineHeight: 1.75 }} />
                               )}
                               <div style={{ height: 1, background: divider, margin: '0 22px' }} />
