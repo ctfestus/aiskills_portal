@@ -304,6 +304,7 @@ export default function VirtualExperienceTaker({
   const [typingDecisions, setTypingDecisions] = useState<Set<string>>(new Set());
   const [typingAcks,      setTypingAcks]      = useState<Set<string>>(new Set());
   const [openReplies,     setOpenReplies]     = useState<Set<string>>(new Set());
+  const [efReviewing,     setEfReviewing]     = useState<Record<string, boolean>>({});
 
   const currentMod = modules.find(m => m.id === currentModId);
   const currentLes = currentMod?.lessons.find(l => l.id === currentLesId);
@@ -1572,7 +1573,7 @@ export default function VirtualExperienceTaker({
                               )
                             ) : (
                               <div style={{ padding: '16px 22px 20px' }}>
-                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
                                   {efMeAvatar}
                                   <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -1583,40 +1584,131 @@ export default function VirtualExperienceTaker({
                                     {linkUrl && <a href={linkUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, fontSize: 12.5, color: isDark ? '#ddd' : '#334155', textDecoration: 'none', marginLeft: fileUrl ? 8 : 0 }}><LinkIcon className="w-3 h-3" /> {linkUrl.slice(0, 40)}{linkUrl.length > 40 ? '...' : ''}</a>}
                                   </div>
                                 </div>
-                                <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accentColor}12`, color: accentColor, border: `1px solid ${accentColor}30`, fontSize: 12.5 }}>
-                                  <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Submitted to {efManager}
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                  <SlackAvatar name={efManager} size={42} color={efMeta.color} />
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                      <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>{efManager}</span>
+                                      <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Just now</span>
+                                    </div>
+                                    <p style={{ fontSize: 13.5, color: isDark ? '#e0e0e0' : '#1f1f1f', margin: '0 0 10px' }}>Thanks for the submission. I have received it and it is currently under review. I will get back to you shortly.</p>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accentColor}12`, color: accentColor, border: `1px solid ${accentColor}30`, fontSize: 12.5 }}>
+                                      <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Received
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             )
                           );
                         }
 
-                        // AI review types: email header + existing player + manager reply with feedback
+                        // AI review types: full email thread -- compose reviewing manager report
                         if (req.type === 'dashboard_critique' || req.type === 'code_review' || req.type === 'excel_review') {
                           const saved = progress[req.id];
+                          const savedReport = parseReviewNotes(saved?.notes)?.report;
+                          const reviewing = efReviewing[req.id] && !done;
+                          const typeLabel = req.type === 'dashboard_critique' ? 'dashboard' : req.type === 'code_review' ? 'code' : 'Excel file';
+                          const markDone = (notes: string, completed: boolean) => setProgress(prev => { const next = { ...prev, [req.id]: { completed, notes } }; saveProgress(next, currentModId, currentLesId); return next; });
+                          const startReview = () => setEfReviewing(prev => ({ ...prev, [req.id]: true }));
+                          const finishReview = () => setEfReviewing(prev => { const n = { ...prev }; delete n[req.id]; return n; });
                           return (
                             <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5">
                               <div style={{ background: isDark ? '#1a1a1a' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, borderRadius: 14 }}>
                                 {efHeader}
-                                <div style={{ padding: '16px 22px 20px' }}>
-                                  {req.type === 'dashboard_critique' && (
-                                    <DashboardCritiquePlayer reqId={req.id} isDark={isDark ?? false} accentColor={accentColor} completed={done}
-                                      savedResult={parseReviewNotes(saved?.notes)?.report} savedImageUrl={undefined} rubric={(req as any).rubric}
-                                      onComplete={(result) => { setProgress(prev => { const next = { ...prev, [req.id]: { completed: true, notes: buildReviewNotes('dashboard_critique', result, prev[req.id]?.notes) } }; saveProgress(next, currentModId, currentLesId); return next; }); }} />
-                                  )}
-                                  {req.type === 'code_review' && (
-                                    <CodeReviewPlayer reqId={req.id} isDark={isDark ?? false} accentColor={accentColor} completed={done}
-                                      savedResult={(() => { const rep = parseReviewNotes(saved?.notes)?.report; return isFullReport('code_review', rep) ? rep : undefined; })()}
-                                      rubric={req.rubric} schema={req.schema} minScore={req.minScore}
-                                      onComplete={(result, passed) => { setProgress(prev => { const next = { ...prev, [req.id]: { completed: passed, notes: buildReviewNotes('code_review', result, prev[req.id]?.notes) } }; saveProgress(next, currentModId, currentLesId); return next; }); }} />
-                                  )}
-                                  {req.type === 'excel_review' && (
-                                    <ExcelReviewPlayer reqId={req.id} isDark={isDark ?? false} accentColor={accentColor} completed={done}
-                                      savedResult={(() => { const rep = parseReviewNotes(saved?.notes)?.report; return isFullReport('excel_review', rep) ? rep : undefined; })()}
-                                      context={req.context} rubric={req.rubric} minScore={req.minScore}
-                                      onComplete={(result, passed) => { setProgress(prev => { const next = { ...prev, [req.id]: { completed: passed, notes: buildReviewNotes('excel_review', result, prev[req.id]?.notes) } }; saveProgress(next, currentModId, currentLesId); return next; }); }} />
-                                  )}
-                                </div>
+                                {/* Compose area: shown until student submits */}
+                                {!done && !reviewing && (
+                                  <div style={{ padding: '14px 22px 18px' }}>
+                                    <p style={{ fontSize: 12, fontWeight: 500, color: isDark ? '#888' : '#999', margin: '0 0 10px' }}>Reply with your submission:</p>
+                                    {req.type === 'dashboard_critique' && (
+                                      <DashboardCritiquePlayer reqId={req.id} isDark={isDark ?? false} accentColor={accentColor} completed={false}
+                                        savedResult={undefined} savedImageUrl={undefined} rubric={req.rubric}
+                                        onReviewStart={startReview}
+                                        onComplete={(result) => { finishReview(); markDone(buildReviewNotes('dashboard_critique', result, saved?.notes), true); }} />
+                                    )}
+                                    {req.type === 'code_review' && (
+                                      <CodeReviewPlayer reqId={req.id} isDark={isDark ?? false} accentColor={accentColor} completed={false}
+                                        savedResult={undefined} rubric={req.rubric} schema={req.schema} minScore={req.minScore}
+                                        onReviewStart={startReview}
+                                        onComplete={(result, passed) => { finishReview(); markDone(buildReviewNotes('code_review', result, saved?.notes), passed); }} />
+                                    )}
+                                    {req.type === 'excel_review' && (
+                                      <ExcelReviewPlayer reqId={req.id} isDark={isDark ?? false} accentColor={accentColor} completed={false}
+                                        savedResult={undefined} context={req.context} rubric={req.rubric} minScore={req.minScore}
+                                        onReviewStart={startReview}
+                                        onComplete={(result, passed) => { finishReview(); markDone(buildReviewNotes('excel_review', result, saved?.notes), passed); }} />
+                                    )}
+                                  </div>
+                                )}
+                                {/* Manager "reviewing" auto-reply while AI is running */}
+                                {reviewing && (
+                                  <div style={{ padding: '16px 22px 20px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
+                                      {efMeAvatar}
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                          <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>Me</span>
+                                          <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Just now</span>
+                                        </div>
+                                        <p style={{ fontSize: 13, color: isDark ? '#aaa' : '#555', margin: 0 }}>Submitted my {typeLabel} for review.</p>
+                                      </div>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                      <SlackAvatar name={efManager} size={42} color={efMeta.color} />
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                          <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>{efManager}</span>
+                                          <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Just now</span>
+                                        </div>
+                                        <p style={{ fontSize: 13.5, color: isDark ? '#e0e0e0' : '#1f1f1f', margin: '0 0 10px' }}>Your submission has been received and is currently under review. I will get back to you shortly.</p>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: isDark ? '#888' : '#999', fontSize: 12.5 }}>
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: accentColor }} /> AI is reviewing your {typeLabel}...
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                                {/* Manager report reply when AI is done */}
+                                {done && (
+                                  <div style={{ padding: '16px 22px 20px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
+                                      {efMeAvatar}
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                          <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>Me</span>
+                                          <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Earlier</span>
+                                        </div>
+                                        <p style={{ fontSize: 13, color: isDark ? '#aaa' : '#555', margin: 0 }}>Submitted my {typeLabel} for review.</p>
+                                      </div>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                      <SlackAvatar name={efManager} size={42} color={efMeta.color} />
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                          <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>{efManager}</span>
+                                          <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Just now</span>
+                                          <CheckCircle2 className="w-4 h-4" style={{ color: accentColor }} />
+                                        </div>
+                                        <p style={{ fontSize: 13.5, color: isDark ? '#e0e0e0' : '#1f1f1f', margin: '0 0 18px' }}>Hi, here is the report from the review that has been done.</p>
+                                        <div style={{ background: isDark ? '#111' : '#f8fafc', borderRadius: 10, padding: 16, border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}` }}>
+                                          {req.type === 'dashboard_critique' && savedReport && (
+                                            <DashboardCritiquePlayer reqId={req.id} isDark={isDark ?? false} accentColor={accentColor} completed={true}
+                                              savedResult={savedReport as any} savedImageUrl={undefined} rubric={req.rubric} onComplete={() => {}} />
+                                          )}
+                                          {req.type === 'code_review' && savedReport && (
+                                            <CodeReviewPlayer reqId={req.id} isDark={isDark ?? false} accentColor={accentColor} completed={true}
+                                              savedResult={isFullReport('code_review', savedReport) ? savedReport as any : undefined}
+                                              rubric={req.rubric} schema={req.schema} minScore={req.minScore} onComplete={() => {}} />
+                                          )}
+                                          {req.type === 'excel_review' && savedReport && (
+                                            <ExcelReviewPlayer reqId={req.id} isDark={isDark ?? false} accentColor={accentColor} completed={true}
+                                              savedResult={isFullReport('excel_review', savedReport) ? savedReport as any : undefined}
+                                              context={req.context} rubric={req.rubric} minScore={req.minScore} onComplete={() => {}} />
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );

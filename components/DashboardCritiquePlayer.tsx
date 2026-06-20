@@ -50,6 +50,7 @@ interface Props {
   reviewsUsed?: number;
   maxReviews?: number;
   showAttemptCount?: boolean;
+  onReviewStart?: () => void;
   onComplete: (result: CritiqueResult, imageDataUrl: string, passed: boolean) => void;
 }
 
@@ -71,7 +72,7 @@ const TYPE_COLORS: Record<string, string> = {
   OTHER:          '#94a3b8',
 };
 
-export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, completed, savedResult, savedImageUrl, rubric, minScore, reviewsUsed = 0, maxReviews, showAttemptCount, onComplete }: Props) {
+export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, completed, savedResult, savedImageUrl, rubric, minScore, reviewsUsed = 0, maxReviews, showAttemptCount, onReviewStart, onComplete }: Props) {
   const atLimit = maxReviews !== undefined && reviewsUsed >= maxReviews;
   const shouldLock = maxReviews === undefined || atLimit || reviewsUsed === 0;
   // Offer Reset (try again) only while attempts remain. Once a submission is terminal -- completed
@@ -96,6 +97,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
     setError('');
     setResult(null);
     setAnalyzing(true);
+    onReviewStart?.();
 
     const reader = new FileReader();
     reader.onload = async (e) => {

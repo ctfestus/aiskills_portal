@@ -46,6 +46,7 @@ interface Props {
   reviewLanguage?: string;
   maxReviews?: number;
   showAttemptCount?: boolean;
+  onReviewStart?: () => void;
   onComplete: (result: ReviewResult, passed: boolean) => void;
 }
 
@@ -65,7 +66,7 @@ function scoreColor(n: number) {
   return '#ef4444';
 }
 
-export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed, savedResult, reviewsUsed = 0, rubric, schema, minScore, reviewLanguage, maxReviews, showAttemptCount, onComplete }: Props) {
+export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed, savedResult, reviewsUsed = 0, rubric, schema, minScore, reviewLanguage, maxReviews, showAttemptCount, onReviewStart, onComplete }: Props) {
   const atLimit = maxReviews !== undefined && reviewsUsed >= maxReviews;
   // Lock the "already completed" views only when: no per-question limit (VE/assignment), at limit,
   // or state was lost on page reload (no saved report and no further attempts).
@@ -104,6 +105,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
     if (!code.trim()) { setError(inputMode === 'upload' ? 'Please upload a file before submitting.' : 'Please paste your code before submitting.'); return; }
     setError('');
     setAnalyzing(true);
+    onReviewStart?.();
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/code-review', {
