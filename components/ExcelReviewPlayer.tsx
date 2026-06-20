@@ -43,6 +43,7 @@ interface Props {
   maxReviews?: number;
   showAttemptCount?: boolean;
   onReviewStart?: () => void;
+  onReviewError?: () => void;
   onComplete: (result: ReviewResult, passed: boolean) => void;
 }
 
@@ -62,7 +63,7 @@ function scoreColor(n: number) {
   return '#ef4444';
 }
 
-export default function ExcelReviewPlayer({ reqId, isDark, accentColor, completed, savedResult, reviewsUsed = 0, context, rubric, minScore, maxReviews, showAttemptCount, onReviewStart, onComplete }: Props) {
+export default function ExcelReviewPlayer({ reqId, isDark, accentColor, completed, savedResult, reviewsUsed = 0, context, rubric, minScore, maxReviews, showAttemptCount, onReviewStart, onReviewError, onComplete }: Props) {
   const atLimit = maxReviews !== undefined && reviewsUsed >= maxReviews;
   const shouldLock = maxReviews === undefined || atLimit || reviewsUsed === 0;
   // Offer Reset (try again) only while attempts remain. Once a submission is terminal -- completed
@@ -127,6 +128,7 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
       onComplete(json, passed);
     } catch (err: any) {
       setError(err.message || 'The AI review service is busy right now. Please wait a moment and try again. Your work has not been lost.');
+      onReviewError?.();
     } finally {
       setAnalyzing(false);
     }

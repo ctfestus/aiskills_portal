@@ -47,6 +47,7 @@ interface Props {
   maxReviews?: number;
   showAttemptCount?: boolean;
   onReviewStart?: () => void;
+  onReviewError?: () => void;
   onComplete: (result: ReviewResult, passed: boolean) => void;
 }
 
@@ -66,7 +67,7 @@ function scoreColor(n: number) {
   return '#ef4444';
 }
 
-export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed, savedResult, reviewsUsed = 0, rubric, schema, minScore, reviewLanguage, maxReviews, showAttemptCount, onReviewStart, onComplete }: Props) {
+export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed, savedResult, reviewsUsed = 0, rubric, schema, minScore, reviewLanguage, maxReviews, showAttemptCount, onReviewStart, onReviewError, onComplete }: Props) {
   const atLimit = maxReviews !== undefined && reviewsUsed >= maxReviews;
   // Lock the "already completed" views only when: no per-question limit (VE/assignment), at limit,
   // or state was lost on page reload (no saved report and no further attempts).
@@ -129,6 +130,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
       onComplete(json, passed);
     } catch (err: any) {
       setError(err.message || 'The AI review service is busy right now. Please wait a moment and try again. Your work has not been lost.');
+      onReviewError?.();
     } finally {
       setAnalyzing(false);
     }

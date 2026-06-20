@@ -184,7 +184,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
       }
     };
     load();
-  }, [assignment.id, userId, isVeType, assignment.config?.ve_form_id]);
+  }, [assignment.id, userId, isVeType, isGroupAssignment, assignment.config?.ve_form_id]);
 
   const ALLOWED_TYPES = new Set([
     'application/pdf',

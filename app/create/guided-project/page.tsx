@@ -328,6 +328,7 @@ function VirtualExperienceCreatePageInner() {
   const [focusTopic,   setFocusTopic]   = useState('');
   const [toolsInput,   setToolsInput]   = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
+  const [emailStyle,   setEmailStyle]   = useState(false);
   const [generating,  setGenerating]  = useState(false);
   const [genError,    setGenError]    = useState('');
   // Dataset state (shared across all modes)
@@ -598,8 +599,8 @@ function VirtualExperienceCreatePageInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify(useDataMode
-          ? { action: 'generate-from-data', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }
-          : { action: 'generate', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt }
+          ? { action: 'generate-from-data', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, emailStyle: emailStyle ? 'frame' : undefined, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }
+          : { action: 'generate', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, emailStyle: emailStyle ? 'frame' : undefined }
         ),
       });
       const json = await res.json();
@@ -635,7 +636,7 @@ function VirtualExperienceCreatePageInner() {
       const res = await fetch('/api/ai-guided-project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ action: 'generate-from-data', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }),
+        body: JSON.stringify({ action: 'generate-from-data', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, emailStyle: emailStyle ? 'frame' : undefined, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
@@ -1121,6 +1122,20 @@ function VirtualExperienceCreatePageInner() {
                           placeholder="e.g. Make questions harder than usual. Use a conversational tone in lesson bodies."
                         />
                       </div>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '10px 0 2px' }}>
+                        <input
+                          type="checkbox"
+                          checked={emailStyle}
+                          onChange={e => setEmailStyle(e.target.checked)}
+                          style={{ marginTop: 2, accentColor: C.cta, flexShrink: 0 }}
+                        />
+                        <div>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Present tasks as workplace emails</span>
+                          <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+                            Wraps every task, upload, and AI review in an email thread from the manager. The AI will also write the email body for each one.
+                          </p>
+                        </div>
+                      </label>
                     </div>
                   )}
 

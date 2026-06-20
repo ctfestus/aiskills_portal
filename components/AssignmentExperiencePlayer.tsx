@@ -148,12 +148,12 @@ function EmailCompose({
   isDark: boolean; accentColor: string; placeholder: string; noBorder?: boolean;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
-  const [isEmpty, setIsEmpty] = useState(!value);
+  const [isEmpty, setIsEmpty] = useState(() => !value?.replace(/<[^>]*>/g, '').trim());
   useEffect(() => {
     const el = editorRef.current;
-    if (!el) return;
-    if (value) el.innerHTML = value;
-    setIsEmpty(!el.innerText?.trim());
+    if (!el || !value) return;
+    el.innerHTML = value;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const exec = (cmd: string) => {
     document.execCommand(cmd, false, undefined);
@@ -904,7 +904,7 @@ export default function AssignmentExperiencePlayer({
                             return efCard(
                               !isDone ? (
                                 <div style={{ padding: '16px 22px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                  <p style={{ fontSize: 12, color: faint, margin: '0 0 4px', fontWeight: 500 }}>Reply with your answer:</p>
+                                  <p style={{ fontSize: 12, color: faint, margin: '0 0 4px', fontWeight: 500 }}>Select your answer:</p>
                                   {(req.options || []).map((opt, oi) => {
                                     const letter = String.fromCharCode(65 + oi);
                                     const isSelected = selected === opt;
@@ -996,6 +996,13 @@ export default function AssignmentExperiencePlayer({
                             const uploaded = !!(fileUrl || linkUrl);
                             const replyOpen = isDone || openReplies.has(req.id) || uploaded;
                             const uploading = uploadingReq === req.id;
+                            const isTask = req.type === 'task';
+                            const isDeliverable = req.type === 'deliverable';
+                            const efManagerReply = isTask
+                              ? 'Got it, noted. I have recorded that you have completed this task.'
+                              : isDeliverable
+                              ? 'Thanks for your deliverable. I will review it and get back to you shortly.'
+                              : 'Thanks for the submission. I have received it and it is currently under review. I will get back to you shortly.';
                             return efCard(
                               (() => {
                                 const isTyping = efTyping[req.id];
@@ -1008,25 +1015,53 @@ export default function AssignmentExperiencePlayer({
                                         <span style={{ fontSize: 14, fontWeight: 700, color: text }}>Me</span>
                                         <span style={{ fontSize: 12, color: faint }}>Just now</span>
                                       </div>
-                                      {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${border}`, fontSize: 12.5, color: text, textDecoration: 'none' }}><Paperclip className="w-3 h-3" /> Attachment</a>}
-                                      {linkUrl && <a href={linkUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${border}`, fontSize: 12.5, color: text, textDecoration: 'none', marginLeft: fileUrl ? 8 : 0 }}><LinkIcon className="w-3 h-3" /> {linkUrl.slice(0, 40)}{linkUrl.length > 40 ? '...' : ''}</a>}
+                                      {isTask
+                                        ? <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: subtle, border: `1px solid ${border}`, fontSize: 12.5, color: text }}><CheckCircle2 className="w-3 h-3" /> Task marked as done</div>
+                                        : <>
+                                          {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${border}`, fontSize: 12.5, color: text, textDecoration: 'none' }}><Paperclip className="w-3 h-3" /> {isDeliverable ? 'Deliverable' : 'Attachment'}</a>}
+                                          {linkUrl && <a href={linkUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${border}`, fontSize: 12.5, color: text, textDecoration: 'none', marginLeft: fileUrl ? 8 : 0 }}><LinkIcon className="w-3 h-3" /> {linkUrl.slice(0, 40)}{linkUrl.length > 40 ? '...' : ''}</a>}
+                                        </>
+                                      }
                                     </div>
                                   </div>
                                 );
+                                const handleEfSend = () => {
+                                  setEfTyping(prev => ({ ...prev, [req.id]: true }));
+                                  const delay = 2000 + Math.floor(Math.random() * 2001);
+                                  setTimeout(() => {
+                                    setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                                    setEfReviewing(prev => ({ ...prev, [req.id]: true }));
+                                    if (!readOnly) updateProgress(req.id, { completed: true });
+                                  }, delay);
+                                };
                                 if (!isDone && !isTyping && !efReviewing[req.id]) return (
-                                  !replyOpen ? (
+                                  isTask ? (
+                                    // Task: single "I am done" button, no file upload
+                                    <div style={{ padding: '14px 22px' }}>
+                                      {!readOnly && (
+                                        <button onClick={handleEfSend}
+                                          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 20px', borderRadius: 6, border: `1px solid ${accent}`, background: `${accent}12`, fontSize: 13.5, fontWeight: 600, color: accent, cursor: 'pointer' }}>
+                                          <CheckCircle2 className="w-4 h-4" /> I am done with this task
+                                        </button>
+                                      )}
+                                    </div>
+                                  ) : !replyOpen ? (
+                                    // Upload / Deliverable: open-compose button
                                     <div style={{ padding: '14px 22px' }}>
                                       {!readOnly && (
                                         <button onClick={() => setOpenReplies(prev => new Set([...prev, req.id]))}
                                           style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 6, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer' }}>
-                                          <Reply className="w-4 h-4" /> Reply
+                                          <Paperclip className="w-4 h-4" /> {isDeliverable ? 'Submit deliverable' : 'Attach your work'}
                                         </button>
                                       )}
                                     </div>
                                   ) : (
+                                    // Compose: attach file / paste link
                                     <div style={{ padding: '14px 22px 18px' }}>
                                       <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
-                                        <div style={{ padding: '8px 14px', background: subtle, borderBottom: `1px solid ${divider}`, fontSize: 12, color: faint }}>Attach your submission</div>
+                                        <div style={{ padding: '8px 14px', background: subtle, borderBottom: `1px solid ${divider}`, fontSize: 12, color: faint }}>
+                                          {isDeliverable ? 'Attach your deliverable' : 'Attach your file'}
+                                        </div>
                                         <div style={{ padding: '14px 16px', background: bg, display: 'flex', flexDirection: 'column', gap: 10 }}>
                                           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 8, border: `1.5px dashed ${border}`, cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, color: muted }}>
                                             {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
@@ -1038,17 +1073,9 @@ export default function AssignmentExperiencePlayer({
                                               placeholder="Or paste a link..." style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${border}`, background: subtle, color: text, fontSize: 13, outline: 'none' }} />
                                           </div>
                                           {(fileUrl || linkUrl) && (
-                                            <button onClick={() => {
-                                              setEfTyping(prev => ({ ...prev, [req.id]: true }));
-                                              const delay = 2000 + Math.floor(Math.random() * 2001);
-                                              setTimeout(() => {
-                                                setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
-                                                setEfReviewing(prev => ({ ...prev, [req.id]: true }));
-                                                if (!readOnly) updateProgress(req.id, { completed: true });
-                                              }, delay);
-                                            }}
+                                            <button onClick={handleEfSend}
                                               style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: accent, color: '#fff', fontSize: 13.5, fontWeight: 600, border: 'none', cursor: 'pointer', alignSelf: 'flex-start' }}>
-                                              <Send className="w-3.5 h-3.5" /> Send
+                                              <Send className="w-3.5 h-3.5" /> {isDeliverable ? 'Submit deliverable' : 'Submit'}
                                             </button>
                                           )}
                                         </div>
@@ -1079,9 +1106,9 @@ export default function AssignmentExperiencePlayer({
                                           <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{efManager}</span>
                                           <span style={{ fontSize: 12, color: faint }}>Just now</span>
                                         </div>
-                                        <p style={{ fontSize: 13.5, color: text, margin: '0 0 10px' }}>Thanks for the submission. I have received it and it is currently under review. I will get back to you shortly.</p>
+                                        <p style={{ fontSize: 13.5, color: text, margin: '0 0 10px' }}>{efManagerReply}</p>
                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12.5 }}>
-                                          <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Received
+                                          <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> {isTask ? 'Noted' : 'Received'}
                                         </div>
                                       </div>
                                     </div>
@@ -1106,29 +1133,35 @@ export default function AssignmentExperiencePlayer({
                               }, delay);
                             };
                             const finishReview = () => {};
+                            const onReviewError = () => {
+                              setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                              setEfReviewing(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                            };
                             return (
                               <div key={req.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: shadow }}>
                                 {efHeader}
                                 {/* Compose: hidden once typing/reviewing starts */}
                                 {!isDone && !efTyping[req.id] && !efReviewing[req.id] && (
                                   <div style={{ padding: '14px 22px 18px' }}>
-                                    <p style={{ fontSize: 12, fontWeight: 500, color: faint, margin: '0 0 10px' }}>Reply with your submission:</p>
+                                    <p style={{ fontSize: 12, fontWeight: 500, color: faint, margin: '0 0 10px' }}>
+                                      {req.type === 'dashboard_critique' ? 'Attach your dashboard for review:' : req.type === 'code_review' ? 'Paste or upload your code:' : 'Upload your Excel file:'}
+                                    </p>
                                     {req.type === 'dashboard_critique' && (
                                       <DashboardCritiquePlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={false}
                                         savedResult={undefined} savedImageUrl={undefined} rubric={(req as any).rubric}
-                                        onReviewStart={startReview}
+                                        onReviewStart={startReview} onReviewError={onReviewError}
                                         onComplete={(result) => { finishReview(); updateProgress(req.id, { completed: true, notes: buildReviewNotes('dashboard_critique', result, saved?.notes) }); }} />
                                     )}
                                     {req.type === 'code_review' && (
                                       <CodeReviewPlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={false}
                                         savedResult={undefined} rubric={req.rubric} schema={req.schema} minScore={req.minScore}
-                                        onReviewStart={startReview}
+                                        onReviewStart={startReview} onReviewError={onReviewError}
                                         onComplete={(result, passed) => { finishReview(); updateProgress(req.id, { completed: passed, notes: buildReviewNotes('code_review', result, saved?.notes) }); }} />
                                     )}
                                     {req.type === 'excel_review' && (
                                       <ExcelReviewPlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={false}
                                         savedResult={undefined} context={req.context} rubric={req.rubric} minScore={req.minScore}
-                                        onReviewStart={startReview}
+                                        onReviewStart={startReview} onReviewError={onReviewError}
                                         onComplete={(result, passed) => { finishReview(); updateProgress(req.id, { completed: passed, notes: buildReviewNotes('excel_review', result, saved?.notes) }); }} />
                                     )}
                                   </div>

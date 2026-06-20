@@ -70,6 +70,8 @@ const requirementSchema = {
     context:       { type: Type.STRING },
     minScore:      { type: Type.NUMBER },
     aiReview:      { type: Type.BOOLEAN },
+    emailFrame:    { type: Type.BOOLEAN },
+    emailBody:     { type: Type.STRING },
   },
   required: ['id', 'label', 'description', 'type'],
 };
@@ -123,6 +125,7 @@ export async function POST(req: NextRequest) {
       const companyName   = clamp(body.companyName, 100);
       const scenario      = clamp(body.scenario, 1000);
       const customPrompt  = clamp(body.customPrompt, 500);
+      const emailStyle    = body.emailStyle === 'frame';
       const context       = INDUSTRY_CONTEXT[industry] || industry;
 
       const specifiedTools = toolsRaw
@@ -144,6 +147,12 @@ ${scenario ? `SCENARIO: ${scenario}` : ''}
 These details are fixed. Build the entire project around this company and scenario.`
         : '';
       const extraInstructions = customPrompt ? `\n\nADDITIONAL INSTRUCTIONS: ${customPrompt}` : '';
+      const emailFrameBlock = emailStyle ? `
+
+== EMAIL FRAME MODE (INSTRUCTOR-ENABLED) ==
+Set emailFrame: true on EVERY task, upload, deliverable, and AI reviewer requirement. Do NOT set it on MCQ or short-answer (text) requirements.
+For each requirement with emailFrame: true, write an emailBody field: a short professional email (2-4 sentences) from the manager to the student, describing the specific work they must do. Plain text only, no HTML tags or bullet lists inside emailBody.
+Example emailBody: "Hi, please find the dataset attached. Your task for this module is to build a pivot table grouping transactions by region and summing the Amount column. Looking forward to your submission."` : '';
 
       const prompt = `
 You are designing a hands-on virtual work experience project (like Forage) for a ${difficulty}-level ${rolePhrase} in the ${industry} industry.
@@ -219,6 +228,7 @@ Generate:
 - 5 learning outcomes (action-verb led, tools-specific)
 - role, company, duration, tools (must match: ${toolsList})
 - dataset (filename, description, csvContent)
+${emailFrameBlock}
 `;
 
       // -- Pass 1: company + dataset ---
@@ -341,6 +351,7 @@ Choose type based on tools: SQL or Python present  "code_review". Excel present 
 - NO options, NO correctAnswer, NO expectedAnswer.
 
 IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", 4th requirement = "req-1-1-4").
+${emailFrameBlock}
 `;
 
       const pass2 = await generateJSON(pass2Prompt, {
@@ -370,6 +381,7 @@ IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", 4th requirement = "req
       const companyName   = clamp(body.companyName, 100);
       const scenario      = clamp(body.scenario, 1000);
       const customPrompt  = clamp(body.customPrompt, 500);
+      const emailStyle    = body.emailStyle === 'frame';
       const csvContent    = String(body.csvContent || '').slice(0, 40000);
       const filename      = clamp(body.filename, 100) || 'dataset.csv';
       const context       = INDUSTRY_CONTEXT[industry] || industry;
@@ -393,6 +405,12 @@ ${scenario ? `SCENARIO: ${scenario}` : ''}
 These details are fixed. Build the entire project around this company and scenario.`
         : '';
       const extraInstructions = customPrompt ? `\n\nADDITIONAL INSTRUCTIONS: ${customPrompt}` : '';
+      const emailFrameBlock = emailStyle ? `
+
+== EMAIL FRAME MODE (INSTRUCTOR-ENABLED) ==
+Set emailFrame: true on EVERY task, upload, deliverable, and AI reviewer requirement. Do NOT set it on MCQ or short-answer (text) requirements.
+For each requirement with emailFrame: true, write an emailBody field: a short professional email (2-4 sentences) from the manager to the student, describing the specific work they must do. Plain text only, no HTML tags or bullet lists inside emailBody.
+Example emailBody: "Hi, please find the dataset attached. Your task for this module is to build a pivot table grouping transactions by region and summing the Amount column. Looking forward to your submission."` : '';
 
       // Pass 1: company metadata only (no dataset generation -- use the provided one)
       const pass1Prompt = `
@@ -488,6 +506,7 @@ SHORT ANSWER (type "text"):
 - NO options, NO correctAnswer.
 
 IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", short answer = "req-1-1-4").
+${emailFrameBlock}
 `;
 
       const pass2 = await generateJSON(pass2Prompt, {
@@ -540,6 +559,8 @@ IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", short answer = "req-1-
               context: r.context,
               minScore: r.minScore,
               aiReview: r.aiReview,
+              emailFrame: r.emailFrame,
+              emailBody: r.emailBody,
             })),
           })),
         })),

@@ -209,12 +209,12 @@ function EmailCompose({
   isDark: boolean; accentColor: string; placeholder: string; noBorder?: boolean;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
-  const [isEmpty, setIsEmpty] = useState(!value);
+  const [isEmpty, setIsEmpty] = useState(() => !value?.replace(/<[^>]*>/g, '').trim());
   useEffect(() => {
     const el = editorRef.current;
-    if (!el) return;
-    if (value) el.innerHTML = value;
-    setIsEmpty(!el.innerText?.trim());
+    if (!el || !value) return;
+    el.innerHTML = value;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const exec = (cmd: string) => {
     document.execCommand(cmd, false, undefined);
@@ -363,7 +363,7 @@ export default function VirtualExperienceTaker({
         setSaving(false);
       }
     }, 800);
-  }, [formId, studentEmail, studentName, authHeader, reviewMode]);
+  }, [formId, studentEmail, studentName, authHeader, reviewMode, previewMode]);
 
   const toggleReq = (reqId: string) => {
     setProgress(prev => {
@@ -1433,7 +1433,7 @@ export default function VirtualExperienceTaker({
                           return efCard(
                             !done ? (
                               <div style={{ padding: '16px 22px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                <p style={{ fontSize: 12, color: isDark ? '#888' : '#999', margin: '0 0 4px', fontWeight: 500 }}>Reply with your answer:</p>
+                                <p style={{ fontSize: 12, color: isDark ? '#888' : '#999', margin: '0 0 4px', fontWeight: 500 }}>Select your answer:</p>
                                 {(req.options || []).map((opt, oi) => {
                                   const letter = String.fromCharCode(65 + oi);
                                   const isSelected = selectedAnswer === opt;
@@ -1535,6 +1535,13 @@ export default function VirtualExperienceTaker({
                           const uploading = uploadingReq === req.id;
                           const isTyping = efTyping[req.id];
                           const showReply = !isTyping && (efReviewing[req.id] || done);
+                          const isTask = req.type === 'task';
+                          const isDeliverable = req.type === 'deliverable';
+                          const efManagerReply = isTask
+                            ? 'Got it, noted. I have recorded that you have completed this task.'
+                            : isDeliverable
+                            ? 'Thanks for your deliverable. I will review it and get back to you shortly.'
+                            : 'Thanks for the submission. I have received it and it is currently under review. I will get back to you shortly.';
                           const efMeThread = (
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
                               {efMeAvatar}
@@ -1543,26 +1550,54 @@ export default function VirtualExperienceTaker({
                                   <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>Me</span>
                                   <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Just now</span>
                                 </div>
-                                {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, fontSize: 12.5, color: isDark ? '#ddd' : '#334155', textDecoration: 'none' }}><Paperclip className="w-3 h-3" /> Attachment</a>}
-                                {linkUrl && <a href={linkUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, fontSize: 12.5, color: isDark ? '#ddd' : '#334155', textDecoration: 'none', marginLeft: fileUrl ? 8 : 0 }}><LinkIcon className="w-3 h-3" /> {linkUrl.slice(0, 40)}{linkUrl.length > 40 ? '...' : ''}</a>}
+                                {isTask
+                                  ? <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, fontSize: 12.5, color: isDark ? '#ddd' : '#334155' }}><CheckCircle2 className="w-3 h-3" /> Task marked as done</div>
+                                  : <>
+                                    {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, fontSize: 12.5, color: isDark ? '#ddd' : '#334155', textDecoration: 'none' }}><Paperclip className="w-3 h-3" /> {isDeliverable ? 'Deliverable' : 'Attachment'}</a>}
+                                    {linkUrl && <a href={linkUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, fontSize: 12.5, color: isDark ? '#ddd' : '#334155', textDecoration: 'none', marginLeft: fileUrl ? 8 : 0 }}><LinkIcon className="w-3 h-3" /> {linkUrl.slice(0, 40)}{linkUrl.length > 40 ? '...' : ''}</a>}
+                                  </>
+                                }
                               </div>
                             </div>
                           );
+                          const handleEfSend = () => {
+                            setEfTyping(prev => ({ ...prev, [req.id]: true }));
+                            const delay = 2000 + Math.floor(Math.random() * 2001);
+                            setTimeout(() => {
+                              setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                              setEfReviewing(prev => ({ ...prev, [req.id]: true }));
+                              if (!reviewMode) setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
+                            }, delay);
+                          };
                           return efCard(
                             !done && !isTyping && !efReviewing[req.id] ? (
-                              !replyOpen ? (
+                              // Task: single "I am done" button -- no attachment needed
+                              isTask ? (
+                                <div style={{ padding: '14px 22px' }}>
+                                  {!reviewMode && (
+                                    <button onClick={handleEfSend}
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 20px', borderRadius: 6, border: `1px solid ${accentColor}`, background: `${accentColor}12`, fontSize: 13.5, fontWeight: 600, color: accentColor, cursor: 'pointer' }}>
+                                      <CheckCircle2 className="w-4 h-4" /> I am done with this task
+                                    </button>
+                                  )}
+                                </div>
+                              ) : !replyOpen ? (
+                                // Upload / Deliverable: show open-compose button
                                 <div style={{ padding: '14px 22px' }}>
                                   {!reviewMode && (
                                     <button onClick={() => setOpenReplies(prev => new Set([...prev, req.id]))}
                                       style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 6, border: `1px solid ${isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)'}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: isDark ? '#ddd' : '#444', cursor: 'pointer' }}>
-                                      <Reply className="w-4 h-4" /> Reply
+                                      <Paperclip className="w-4 h-4" /> {isDeliverable ? 'Submit deliverable' : 'Attach your work'}
                                     </button>
                                   )}
                                 </div>
                               ) : (
+                                // Compose: attach file / paste link
                                 <div style={{ padding: '14px 22px 18px' }}>
                                   <div style={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, borderRadius: 10, overflow: 'hidden' }}>
-                                    <div style={{ padding: '8px 14px', background: isDark ? '#222' : '#f8f8f8', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, fontSize: 12, color: isDark ? '#888' : '#999' }}>Attach your submission</div>
+                                    <div style={{ padding: '8px 14px', background: isDark ? '#222' : '#f8f8f8', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, fontSize: 12, color: isDark ? '#888' : '#999' }}>
+                                      {isDeliverable ? 'Attach your deliverable' : 'Attach your file'}
+                                    </div>
                                     <div style={{ padding: '14px 16px', background: isDark ? '#1a1a1a' : '#fff', display: 'flex', flexDirection: 'column', gap: 10 }}>
                                       <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 8, border: `1.5px dashed ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'}`, cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, color: isDark ? '#aaa' : '#666' }}>
                                         {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
@@ -1578,17 +1613,9 @@ export default function VirtualExperienceTaker({
                                           placeholder="Or paste a link..." style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDark ? 'rgba(255,255,255,0.04)' : '#f8f8f8', color: isDark ? '#ddd' : '#333', fontSize: 13, outline: 'none' }} />
                                       </div>
                                       {(fileUrl || linkUrl) && (
-                                        <button onClick={() => {
-                                          setEfTyping(prev => ({ ...prev, [req.id]: true }));
-                                          const delay = 2000 + Math.floor(Math.random() * 2001);
-                                          setTimeout(() => {
-                                            setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
-                                            setEfReviewing(prev => ({ ...prev, [req.id]: true }));
-                                            if (!reviewMode) setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
-                                          }, delay);
-                                        }}
+                                        <button onClick={handleEfSend}
                                           style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: accentColor, color: '#fff', fontSize: 13.5, fontWeight: 600, border: 'none', cursor: 'pointer', alignSelf: 'flex-start' }}>
-                                          <Send className="w-3.5 h-3.5" /> Send
+                                          <Send className="w-3.5 h-3.5" /> {isDeliverable ? 'Submit deliverable' : 'Submit'}
                                         </button>
                                       )}
                                     </div>
@@ -1617,9 +1644,9 @@ export default function VirtualExperienceTaker({
                                       <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>{efManager}</span>
                                       <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Just now</span>
                                     </div>
-                                    <p style={{ fontSize: 13.5, color: isDark ? '#e0e0e0' : '#1f1f1f', margin: '0 0 10px' }}>Thanks for the submission. I have received it and it is currently under review. I will get back to you shortly.</p>
+                                    <p style={{ fontSize: 13.5, color: isDark ? '#e0e0e0' : '#1f1f1f', margin: '0 0 10px' }}>{efManagerReply}</p>
                                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accentColor}12`, color: accentColor, border: `1px solid ${accentColor}30`, fontSize: 12.5 }}>
-                                      <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Received
+                                      <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> {isTask ? 'Noted' : 'Received'}
                                     </div>
                                   </div>
                                 </div>
@@ -1644,6 +1671,10 @@ export default function VirtualExperienceTaker({
                             }, delay);
                           };
                           const finishReview = () => {};
+                          const onReviewError = () => {
+                            setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                            setEfReviewing(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                          };
                           return (
                             <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5">
                               <div style={{ background: isDark ? '#1a1a1a' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, borderRadius: 14 }}>
@@ -1651,23 +1682,25 @@ export default function VirtualExperienceTaker({
                                 {/* Compose: hidden once typing/reviewing starts */}
                                 {!done && !efTyping[req.id] && !efReviewing[req.id] && (
                                   <div style={{ padding: '14px 22px 18px' }}>
-                                    <p style={{ fontSize: 12, fontWeight: 500, color: isDark ? '#888' : '#999', margin: '0 0 10px' }}>Reply with your submission:</p>
+                                    <p style={{ fontSize: 12, fontWeight: 500, color: isDark ? '#888' : '#999', margin: '0 0 10px' }}>
+                                      {req.type === 'dashboard_critique' ? 'Attach your dashboard for review:' : req.type === 'code_review' ? 'Paste or upload your code:' : 'Upload your Excel file:'}
+                                    </p>
                                     {req.type === 'dashboard_critique' && (
                                       <DashboardCritiquePlayer reqId={req.id} isDark={isDark ?? false} accentColor={accentColor} completed={false}
                                         savedResult={undefined} savedImageUrl={undefined} rubric={req.rubric}
-                                        onReviewStart={startReview}
+                                        onReviewStart={startReview} onReviewError={onReviewError}
                                         onComplete={(result) => { finishReview(); markDone(buildReviewNotes('dashboard_critique', result, saved?.notes), true); }} />
                                     )}
                                     {req.type === 'code_review' && (
                                       <CodeReviewPlayer reqId={req.id} isDark={isDark ?? false} accentColor={accentColor} completed={false}
                                         savedResult={undefined} rubric={req.rubric} schema={req.schema} minScore={req.minScore}
-                                        onReviewStart={startReview}
+                                        onReviewStart={startReview} onReviewError={onReviewError}
                                         onComplete={(result, passed) => { finishReview(); markDone(buildReviewNotes('code_review', result, saved?.notes), passed); }} />
                                     )}
                                     {req.type === 'excel_review' && (
                                       <ExcelReviewPlayer reqId={req.id} isDark={isDark ?? false} accentColor={accentColor} completed={false}
                                         savedResult={undefined} context={req.context} rubric={req.rubric} minScore={req.minScore}
-                                        onReviewStart={startReview}
+                                        onReviewStart={startReview} onReviewError={onReviewError}
                                         onComplete={(result, passed) => { finishReview(); markDone(buildReviewNotes('excel_review', result, saved?.notes), passed); }} />
                                     )}
                                   </div>

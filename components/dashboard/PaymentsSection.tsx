@@ -640,7 +640,6 @@ export function PaymentsSection({ C }: { C: typeof LIGHT_C }) {
     finally { setLoading(false); }
   }, []);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [load]);
 
   const handleToggleExempt = async (r: any, exempt: boolean) => {
