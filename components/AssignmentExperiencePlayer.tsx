@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle2, Circle, ChevronDown, ChevronUp, ChevronRight, ChevronLeft,
   Loader2, Lock, Upload as UploadIcon, Link as LinkIcon, CheckCircle, Download,
-  Mail, MessageSquare, Inbox, Paperclip, Send,
+  Mail, MessageSquare, Inbox, Paperclip, Send, Reply,
   Bold, Italic, Underline, List, ListOrdered,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -226,6 +226,7 @@ export default function AssignmentExperiencePlayer({
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [typingDecisions, setTypingDecisions] = useState<Set<string>>(new Set());
   const [typingAcks,      setTypingAcks]      = useState<Set<string>>(new Set());
+  const [openReplies,     setOpenReplies]     = useState<Set<string>>(new Set());
   async function getAuthHeader(): Promise<Record<string, string>> {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token ?? '';
@@ -756,8 +757,22 @@ export default function AssignmentExperiencePlayer({
                           const hasContent = val.replace(/<[^>]*>/g, '').trim().length > 0;
                           const manChipBg = isDark ? 'rgba(255,255,255,0.1)' : '#e8f0fe';
                           const manChipText = isDark ? '#ddd' : '#1a73e8';
+                          const replyOpen = isDone || openReplies.has(req.id) || hasContent;
                           return (
                             <div key={req.id} style={{ borderRadius: 14, overflow: 'hidden', boxShadow: shadow, border: `1px solid ${border}` }}>
+                              {!replyOpen ? (
+                                /* Reply prompt */
+                                <div style={{ background: bg, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                  {req.description && <p style={{ flex: 1, fontSize: 13, color: faint, margin: 0 }}>{req.description}</p>}
+                                  {!readOnly && (
+                                    <button
+                                      onClick={() => setOpenReplies(prev => new Set([...prev, req.id]))}
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 18px', borderRadius: 24, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer', flexShrink: 0 }}>
+                                      <Reply className="w-4 h-4" /> Reply
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (<>
                               {/* Compose header */}
                               <div style={{ background: subtle, padding: '10px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${divider}` }}>
                                 <span style={{ fontSize: 13, fontWeight: 700, color: text }}>New message</span>
@@ -803,6 +818,7 @@ export default function AssignmentExperiencePlayer({
                                   </div>
                                 )}
                               </div>
+                              </>)}
                             </div>
                           );
                         }

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   CheckCircle2, Circle, ChevronRight, ChevronLeft,
   X, Loader2, Trophy, BookOpen, Lock, Download, Award, Star, Clock,
-  Link as LinkIcon, Upload as UploadIcon, Mail, MessageSquare, Inbox, Paperclip, Send,
+  Link as LinkIcon, Upload as UploadIcon, Mail, MessageSquare, Inbox, Paperclip, Send, Reply,
   Bold, Italic, Underline, List, ListOrdered,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -301,6 +301,7 @@ export default function VirtualExperienceTaker({
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const [typingDecisions, setTypingDecisions] = useState<Set<string>>(new Set());
   const [typingAcks,      setTypingAcks]      = useState<Set<string>>(new Set());
+  const [openReplies,     setOpenReplies]     = useState<Set<string>>(new Set());
 
   const currentMod = modules.find(m => m.id === currentModId);
   const currentLes = currentMod?.lessons.find(l => l.id === currentLesId);
@@ -1275,10 +1276,24 @@ export default function VirtualExperienceTaker({
                         const hasContent = noteVal.replace(/<[^>]*>/g, '').trim().length > 0;
                         const manChipBg = isDark ? 'rgba(255,255,255,0.1)' : '#e8f0fe';
                         const manChipText = isDark ? '#ddd' : '#1a73e8';
+                        const replyOpen = done || openReplies.has(req.id) || hasContent;
                         return (
                           <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5">
                             <div style={{ borderRadius: 14, overflow: 'hidden', border: `1px solid ${isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`, boxShadow: isDark ? '0 2px 12px rgba(0,0,0,0.4)' : '0 2px 12px rgba(0,0,0,0.09)' }}>
-                              {/* Compose header */}
+                              {!replyOpen ? (
+                                /* Reply prompt - shown before student opens compose */
+                                <div style={{ background: isDark ? '#1a1a1a' : '#fff', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                  {req.description && <p style={{ flex: 1, fontSize: 13, color: isDark ? '#888' : '#999', margin: 0 }}>{req.description}</p>}
+                                  {!reviewMode && (
+                                    <button
+                                      onClick={() => setOpenReplies(prev => new Set([...prev, req.id]))}
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 18px', borderRadius: 24, border: `1px solid ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)'}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: isDark ? '#ddd' : '#333', cursor: 'pointer', flexShrink: 0 }}>
+                                      <Reply className="w-4 h-4" /> Reply
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                              <>{/* Compose header */}
                               <div style={{ background: isDark ? '#252525' : '#f2f2f2', padding: '10px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <span style={{ fontSize: 13, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>New message</span>
                                 <span style={{ fontSize: 11, color: isDark ? '#777' : '#999' }}>{done ? 'Sent' : 'Draft'}</span>
@@ -1330,6 +1345,7 @@ export default function VirtualExperienceTaker({
                                   </div>
                                 )}
                               </div>
+                              </>)}
                             </div>
                           </div>
                         );
