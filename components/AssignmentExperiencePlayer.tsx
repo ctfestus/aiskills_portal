@@ -99,6 +99,26 @@ import { safeEmbedUrl as getEmbedUrl } from '@/lib/safe-embed-url';
 
 function normalize(s: string) { return s.toLowerCase().replace(/\s+/g, ' ').trim(); }
 
+function playTypingClick() {
+  try {
+    const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    const ctx = new Ctx() as AudioContext;
+    const n = Math.floor(ctx.sampleRate * 0.025);
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) * 0.18;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain(); g.gain.value = 0.14;
+    src.connect(g); g.connect(ctx.destination);
+    src.start(); src.onended = () => ctx.close();
+  } catch { /* no AudioContext */ }
+}
+function startTypingSound(durationMs: number) {
+  const end = Date.now() + durationMs;
+  (function tick() { if (Date.now() >= end) return; playTypingClick(); setTimeout(tick, 70 + Math.floor(Math.random() * 110)); })();
+}
+
 // -- Component ---
 
 export default function AssignmentExperiencePlayer({
@@ -134,6 +154,7 @@ export default function AssignmentExperiencePlayer({
   const [completeError, setCompleteError] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [typingDecisions, setTypingDecisions] = useState<Set<string>>(new Set());
+  const [typingAcks,      setTypingAcks]      = useState<Set<string>>(new Set());
   async function getAuthHeader(): Promise<Record<string, string>> {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token ?? '';
@@ -437,7 +458,14 @@ export default function AssignmentExperiencePlayer({
                                     <p style={{ fontSize: 14.5, color: slackText, marginTop: 2, lineHeight: 1.5 }}>{subject}</p>
                                     {req.description && <p style={{ fontSize: 13.5, marginTop: 4, color: slackMuted, lineHeight: 1.5 }}>{req.description}</p>}
                                     {!isDone && !readOnly ? (
-                                      <button onClick={() => updateProgress(req.id, { completed: true })} style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 4, border: `1px solid ${slackBorder}`, background: 'transparent', fontSize: 13, color: slackMuted, cursor: 'pointer' }}>
+                                      <button onClick={() => {
+                                        updateProgress(req.id, { completed: true });
+                                        setTypingAcks(prev => new Set([...prev, req.id]));
+                                        startTypingSound(2200);
+                                        setTimeout(() => {
+                                          setTypingAcks(prev => { const n = new Set(prev); n.delete(req.id); return n; });
+                                        }, 2500);
+                                      }} style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 4, border: `1px solid ${slackBorder}`, background: 'transparent', fontSize: 13, color: slackMuted, cursor: 'pointer' }}>
                                         <span style={{ fontSize: 15 }}>👍</span> Add reaction
                                       </button>
                                     ) : isDone ? (
@@ -451,23 +479,34 @@ export default function AssignmentExperiencePlayer({
                                 </div>
                               </div>
                               {isDone && (
-                                <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '10px 14px 12px' }}>
+                                <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '10px 14px 14px' }}>
                                   <p style={{ fontSize: 11.5, color: slackMuted, fontWeight: 600, marginBottom: 10, paddingLeft: 46 }}>1 reply in thread</p>
                                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                                     <div style={{ width: 28, height: 28, borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: slackMuted, flexShrink: 0 }}>YOU</div>
-                                    <div>
-                                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                                        <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>You</span>
-                                        <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
+                                    {typingAcks.has(req.id) ? (
+                                      <div>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                                          <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>You</span>
+                                          <span style={{ fontSize: 11, color: slackMuted }}>is typing</span>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 3, alignItems: 'center', marginTop: 6 }}>
+                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '0ms' }} />
+                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '200ms' }} />
+                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '400ms' }} />
+                                        </div>
                                       </div>
-                                      <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>Got it, on it. 👍</p>
-                                    </div>
+                                    ) : (
+                                      <div>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                                          <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>You</span>
+                                          <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
+                                        </div>
+                                        <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>Got it, on it. 👍</p>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               )}
-                              <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '8px 14px' }}>
-                                <div style={{ border: `1px solid ${slackBorder}`, borderRadius: 6, padding: '7px 12px', fontSize: 13, color: slackMuted, background: slackBg }}>Message #project-war-room</div>
-                              </div>
                             </div>
                           );
                         }
@@ -559,6 +598,7 @@ export default function AssignmentExperiencePlayer({
                                               onClick={() => {
                                                 updateProgress(req.id, { selectedAnswer: opt, completed: true });
                                                 setTypingDecisions(prev => new Set([...prev, req.id]));
+                                                startTypingSound(2800);
                                                 setTimeout(() => {
                                                   setTypingDecisions(prev => { const n = new Set(prev); n.delete(req.id); return n; });
                                                 }, 3000);
@@ -617,9 +657,6 @@ export default function AssignmentExperiencePlayer({
                                   </div>
                                 </div>
                               )}
-                              <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '8px 14px' }}>
-                                <div style={{ border: `1px solid ${slackBorder}`, borderRadius: 6, padding: '7px 12px', fontSize: 13, color: slackMuted, background: slackBg }}>Message #project-war-room</div>
-                              </div>
                             </div>
                           );
                         }
