@@ -163,9 +163,8 @@ function DifficultyDots({ difficulty, color }: { difficulty: string; color: stri
 function SlackAvatar({ name, size, color }: { name: string; size: number; color: string }) {
   const seed = encodeURIComponent(name);
   const initials = name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
-  const r = Math.floor(size * 0.17);
   return (
-    <div style={{ width: size, height: size, borderRadius: r, overflow: 'hidden', flexShrink: 0, position: 'relative', background: color }}>
+    <div style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, position: 'relative', background: color }}>
       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: Math.floor(size * 0.33), fontWeight: 800, color: '#fff' }}>
         {initials}
       </div>
