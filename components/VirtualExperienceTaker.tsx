@@ -9,7 +9,7 @@ import {
   Bold, Italic, Underline, List, ListOrdered,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { sanitizeRichText } from '@/lib/sanitize';
+import { sanitizeRichText, sanitizeEmailContent } from '@/lib/sanitize';
 import { LessonRenderer } from '@/components/lesson/LessonRenderer';
 import type { LessonDoc } from '@/lib/lesson-doc';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
@@ -1113,11 +1113,13 @@ export default function VirtualExperienceTaker({
                                 {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accentColor }} />}
                               </div>
                               {/* Email body */}
-                              <div style={{ padding: '18px 22px', color: isDark ? '#e0e0e0' : '#1f1f1f', fontSize: 14.5, lineHeight: 1.75 }}>
-                                {req.description && (
-                                  <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(req.description) }} />
-                                )}
-                              </div>
+                              {req.description && (
+                                <div
+                                  className="rich-content"
+                                  dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(req.description) }}
+                                  style={{ padding: '18px 22px', color: isDark ? '#e0e0e0' : '#1f1f1f', fontSize: 14.5, lineHeight: 1.75 }}
+                                />
+                              )}
                               {/* Attachments - from instructor-uploaded files + course dataset */}
                               {(req.attachments?.length || config.dataset || (config.tools && config.tools.length > 0)) && (
                                 <div style={{ padding: '0 22px 16px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
