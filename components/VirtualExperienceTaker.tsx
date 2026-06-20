@@ -33,8 +33,9 @@ interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'dashboard_critique' | 'code_review' | 'excel_review';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review';
   options?: string[];
+  optionFeedback?: string[];
   correctAnswer?: string;
   expectedAnswer?: string;
   rubric?: string[];
@@ -110,6 +111,10 @@ const REQ_META: Record<string, { label: string; color: string; bg: string }> = {
   task:        { label: 'Deliverable', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
   deliverable: { label: 'Deliverable', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
   reflection:  { label: 'Reflection',  color: '#00b95c', bg: 'rgba(0,185,92,0.12)' },
+  briefing:    { label: 'Manager Brief', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
+  scenario_update: { label: 'Scenario Update', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+  decision:    { label: 'Decision', color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
+  debrief:     { label: 'Debrief', color: '#14b8a6', bg: 'rgba(20,184,166,0.12)' },
 };
 
 import { safeEmbedUrl as getVideoEmbedUrl } from '@/lib/safe-embed-url';
@@ -896,6 +901,185 @@ export default function VirtualExperienceTaker({
                         background: done ? (isDark ? `${accentColor}08` : `${accentColor}05`) : 'transparent',
                         transition: 'background 0.2s, border-left-color 0.2s',
                       };
+
+                      if (req.type === 'briefing' || req.type === 'scenario_update') {
+                        const isUpdate = req.type === 'scenario_update';
+                        const meta = REQ_META[req.type];
+                        const managerName = config.managerName || 'Your Manager';
+                        const managerTitle = config.managerTitle || 'Project Lead';
+                        const acknowledge = () => {
+                          if (reviewMode || done) return;
+                          setProgress(prev => {
+                            const next = { ...prev, [req.id]: { ...prev[req.id], completed: true } };
+                            saveProgress(next, currentModId, currentLesId);
+                            return next;
+                          });
+                        };
+
+                        return (
+                          <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-3">
+                            <div className="flex items-start gap-3">
+                              <div className="mt-0.5">
+                                <CompanyAvatar name={managerName} color={meta.color} size={36} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap mb-1">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                                    style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
+                                  <span className="text-[12px]" style={{ color: isDark ? '#777' : '#777' }}>
+                                    {managerName} {managerTitle ? `- ${managerTitle}` : ''}
+                                  </span>
+                                </div>
+                                <p className="text-[14.5px] font-semibold leading-snug" style={{ color: isDark ? '#f0f0f0' : '#111' }}>
+                                  {req.label || (isUpdate ? 'New scenario update' : 'Manager brief')}
+                                </p>
+                                {req.description && (
+                                  <p className="text-[13px] mt-1.5 leading-relaxed" style={{ color: isDark ? '#bbb' : '#444' }}>{req.description}</p>
+                                )}
+                              </div>
+                              {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
+                            </div>
+                            {!done && !reviewMode && (
+                              <button onClick={acknowledge}
+                                className="ml-0 sm:ml-12 px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all hover:opacity-80"
+                                style={{ background: meta.color, color: '#fff' }}>
+                                {isUpdate ? 'Acknowledge Update' : 'Start Mission'}
+                              </button>
+                            )}
+                            {done && (
+                              <div className="ml-0 sm:ml-12 flex items-center gap-2 px-3 py-2 rounded-lg w-fit"
+                                style={{ background: `${accentColor}10`, color: accentColor }}>
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span className="text-[12.5px] font-semibold">{isUpdate ? 'Update acknowledged' : 'Brief reviewed'}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      if (req.type === 'decision') {
+                        const options = (req.options || []).filter(Boolean);
+                        const selectedIdx = selectedAnswer ? (req.options || []).findIndex(opt => opt === selectedAnswer) : -1;
+                        const selectedFeedback = selectedIdx >= 0 ? req.optionFeedback?.[selectedIdx] : '';
+                        const chooseDecision = (opt: string) => {
+                          if (reviewMode || done) return;
+                          setProgress(prev => {
+                            const next = { ...prev, [req.id]: { ...prev[req.id], selectedAnswer: opt, completed: true } };
+                            saveProgress(next, currentModId, currentLesId);
+                            return next;
+                          });
+                        };
+
+                        return (
+                          <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-3">
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
+                                style={{ background: REQ_META.decision.bg, color: REQ_META.decision.color }}>Decision</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[14.5px] font-semibold leading-snug" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
+                                {req.description && <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
+                              </div>
+                              {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
+                            </div>
+
+                            <div className="space-y-1.5">
+                              {options.map((opt, oi) => {
+                                const letter = String.fromCharCode(65 + oi);
+                                const isSelected = selectedAnswer === opt;
+                                const isRecommended = !!req.correctAnswer && req.correctAnswer === opt;
+                                return (
+                                  <button key={`${req.id}-${oi}`}
+                                    onClick={() => chooseDecision(opt)}
+                                    disabled={done || reviewMode}
+                                    className="w-full flex items-start gap-2.5 px-3 py-2.5 rounded-lg text-left transition-all disabled:cursor-default"
+                                    style={{
+                                      background: isSelected ? `${REQ_META.decision.color}12` : isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
+                                      border: `1.5px solid ${isSelected ? `${REQ_META.decision.color}70` : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                      color: isDark ? '#e0e0e0' : '#222',
+                                    }}>
+                                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5"
+                                      style={{
+                                        background: isSelected ? REQ_META.decision.color : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)',
+                                        color: isSelected ? '#fff' : isDark ? '#aaa' : '#555',
+                                      }}>
+                                      {letter}
+                                    </span>
+                                    <span className="flex-1 text-[14.5px] leading-snug">{opt}</span>
+                                    {isSelected && isRecommended && (
+                                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                                        style={{ background: `${accentColor}12`, color: accentColor }}>
+                                        Recommended
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {done && (
+                              <div className="rounded-xl p-3 space-y-1.5"
+                                style={{ background: `${REQ_META.decision.color}0f`, border: `1px solid ${REQ_META.decision.color}33` }}>
+                                <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: REQ_META.decision.color }}>Stakeholder Feedback</p>
+                                <p className="text-[13px] leading-relaxed" style={{ color: isDark ? '#ccc' : '#444' }}>
+                                  {selectedFeedback || 'Decision recorded. Continue with the next workplace step.'}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      if (req.type === 'debrief') {
+                        const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
+                        return (
+                          <div key={req.id} style={rowStyle} className="px-4 sm:px-8 py-5 space-y-2.5">
+                            <div className="flex items-start gap-2">
+                              <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
+                                style={{ background: REQ_META.debrief.bg, color: REQ_META.debrief.color }}>Debrief</span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[14.5px] font-semibold" style={{ color: isDark ? '#f0f0f0' : '#111' }}>{req.label}</p>
+                                {req.description && <p className="text-[12.5px] mt-0.5 leading-snug" style={{ color: isDark ? '#888' : '#666' }}>{req.description}</p>}
+                              </div>
+                              {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />}
+                            </div>
+                            <textarea value={noteVal} onChange={e => setNote(req.id, e.target.value)}
+                              disabled={done && !reviewMode}
+                              placeholder="Write your debrief or next-step summary..."
+                              rows={3}
+                              className="w-full text-[14.5px] rounded-lg p-3 outline-none resize-none"
+                              style={{
+                                background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
+                                color: isDark ? '#f0f0f0' : '#111',
+                                border: `1px solid ${done ? accentColor : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                lineHeight: 1.6,
+                                opacity: done && !reviewMode ? 0.7 : 1,
+                              }} />
+                            {!done && !reviewMode && (
+                              <button
+                                onClick={() => {
+                                  if (noteVal.trim().length === 0) return;
+                                  setProgress(prev => {
+                                    const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } };
+                                    saveProgress(next, currentModId, currentLesId);
+                                    return next;
+                                  });
+                                }}
+                                disabled={noteVal.trim().length === 0}
+                                className="px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                style={{ background: REQ_META.debrief.color, color: '#fff' }}>
+                                Submit Debrief
+                              </button>
+                            )}
+                            {done && (
+                              <div className="rounded-lg p-3 flex items-center gap-2"
+                                style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' }}>
+                                <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: '#10b981' }} />
+                                <p className="text-[13px] font-semibold" style={{ color: '#10b981' }}>Debrief saved.</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
 
                       if (isMcq) {
                         return (

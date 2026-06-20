@@ -20,8 +20,9 @@ interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'dashboard_critique' | 'code_review' | 'excel_review';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review';
   options?: string[];
+  optionFeedback?: string[];
   correctAnswer?: string;
   expectedAnswer?: string;
   rubric?: string[];
@@ -403,6 +404,103 @@ export default function AssignmentExperiencePlayer({
                       {currentLes.requirements.map(req => {
                         const prog    = progress[req.id];
                         const isDone  = prog?.completed ?? false;
+
+                        // Scripted manager brief / scenario update
+                        if (req.type === 'briefing' || req.type === 'scenario_update') {
+                          const isUpdate = req.type === 'scenario_update';
+                          const color = isUpdate ? '#f59e0b' : accent;
+                          return (
+                            <div key={req.id} className="space-y-3 rounded-xl px-4 py-3" style={{ background: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8', border: `1px solid ${isUpdate ? 'rgba(245,158,11,0.25)' : `${accent}30`}` }}>
+                              <div className="flex items-start gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
+                                  style={{ background: `${color}14`, color }}>{isUpdate ? 'Update' : 'Brief'}</span>
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label || (isUpdate ? 'Scenario update' : 'Manager brief')}</p>
+                                  {req.description && <p className="text-xs mt-1 leading-relaxed" style={{ color: muted }}>{req.description}</p>}
+                                </div>
+                                {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
+                              </div>
+                              {!isDone && !readOnly && (
+                                <button onClick={() => updateProgress(req.id, { completed: true })}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                                  style={{ background: color, color: '#fff' }}>
+                                  {isUpdate ? 'Acknowledge Update' : 'Start Mission'}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        // Scripted decision point
+                        if (req.type === 'decision') {
+                          const selected = prog?.selectedAnswer ?? '';
+                          const selectedIdx = selected ? (req.options ?? []).findIndex(opt => opt === selected) : -1;
+                          const feedback = selectedIdx >= 0 ? req.optionFeedback?.[selectedIdx] : '';
+                          return (
+                            <div key={req.id} className="space-y-3">
+                              <div className="flex items-start gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
+                                  style={{ background: 'rgba(139,92,246,0.12)', color: '#8b5cf6' }}>Decision</span>
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
+                                  {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
+                                </div>
+                                {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
+                              </div>
+                              <div className="space-y-2">
+                                {(req.options ?? []).filter(Boolean).map((opt, oi) => {
+                                  const isSelected = selected === opt;
+                                  return (
+                                    <button key={`${req.id}-decision-${oi}`} disabled={isDone || readOnly}
+                                      onClick={() => updateProgress(req.id, { selectedAnswer: opt, completed: true })}
+                                      className="w-full text-left px-4 py-3 rounded-xl text-sm transition-all"
+                                      style={{
+                                        border: `1.5px solid ${isSelected ? '#8b5cf6' : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                                        background: isSelected ? 'rgba(139,92,246,0.08)' : optionBg,
+                                        color: text,
+                                        cursor: isDone || readOnly ? 'default' : 'pointer',
+                                      }}>
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {isDone && (
+                                <div className="rounded-xl px-4 py-3 text-sm" style={{ background: 'rgba(139,92,246,0.07)', color: text, border: '1px solid rgba(139,92,246,0.22)' }}>
+                                  <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: '#8b5cf6' }}>Stakeholder Feedback</p>
+                                  <p className="text-xs leading-relaxed" style={{ color: muted }}>{feedback || 'Decision recorded. Continue with the next workplace step.'}</p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        // Mission debrief
+                        if (req.type === 'debrief') {
+                          const val = prog?.notes ?? '';
+                          return (
+                            <div key={req.id} className="space-y-2">
+                              <div className="flex items-start gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded mt-0.5 flex-shrink-0"
+                                  style={{ background: 'rgba(20,184,166,0.12)', color: '#14b8a6' }}>Debrief</span>
+                                <div className="flex-1">
+                                  <p className="text-sm font-semibold" style={{ color: text }}>{req.label}</p>
+                                  {req.description && <p className="text-xs mt-0.5" style={{ color: muted }}>{req.description}</p>}
+                                </div>
+                                {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accent }}/>}
+                              </div>
+                              <textarea
+                                value={val}
+                                readOnly={readOnly}
+                                onChange={e => updateProgress(req.id, { notes: e.target.value, completed: !!e.target.value.trim() })}
+                                placeholder="Write your debrief here..."
+                                rows={4}
+                                className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
+                                style={{ border: `1px solid ${isDone ? `${accent}40` : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, background: isDone ? `${accent}05` : subtle, color: text }}
+                              />
+                            </div>
+                          );
+                        }
 
                         // MCQ
                         if (req.type === 'mcq') {

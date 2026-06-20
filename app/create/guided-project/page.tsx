@@ -125,8 +125,9 @@ interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'dashboard_critique' | 'code_review' | 'excel_review';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review';
   options?: string[];
+  optionFeedback?: string[];
   correctAnswer?: string;
   expectedAnswer?: string;
   rubric?: string[];
@@ -1594,6 +1595,10 @@ function VirtualExperienceCreatePageInner() {
                                             text:               { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6',   label: 'Short Answer'       },
                                             upload:             { bg: 'rgba(245,158,11,0.12)',   color: '#f59e0b',   label: 'File Upload'         },
                                             task:               { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6',   label: 'Deliverable (Checkbox)' },
+                                            briefing:           { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6',   label: 'Manager Brief' },
+                                            scenario_update:    { bg: 'rgba(245,158,11,0.12)',   color: '#f59e0b',   label: 'Scenario Update' },
+                                            decision:           { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6',   label: 'Decision Point' },
+                                            debrief:            { bg: 'rgba(20,184,166,0.12)',   color: '#14b8a6',   label: 'Mission Debrief' },
                                             dashboard_critique: { bg: 'rgba(16,185,129,0.12)',   color: '#10b981',   label: 'AI Dashboard Critique' },
                                             code_review:        { bg: 'rgba(99,102,241,0.12)',   color: '#6366f1',   label: 'AI Code Review' },
                                             excel_review:       { bg: 'rgba(34,197,94,0.12)',    color: '#22c55e',   label: 'AI Excel Review' },
@@ -1608,17 +1613,30 @@ function VirtualExperienceCreatePageInner() {
                                                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
                                                   style={{ background: C.card, color: C.muted }}>Deliverable {qi + 1}</span>
                                                 <select value={req.type}
-                                                  onChange={e => updateReq(mod.id, les.id, req.id, {
-                                                    type: e.target.value as Requirement['type'],
-                                                    options: e.target.value === 'mcq' ? ['', '', '', ''] : undefined,
-                                                    correctAnswer: e.target.value === 'mcq' ? '' : undefined,
-                                                    expectedAnswer: undefined,
-                                                  })}
+                                                  onChange={e => {
+                                                    const type = e.target.value as Requirement['type'];
+                                                    updateReq(mod.id, les.id, req.id, {
+                                                      type,
+                                                      options: type === 'mcq'
+                                                        ? ['', '', '', '']
+                                                        : type === 'decision'
+                                                          ? ['', '', '']
+                                                          : undefined,
+                                                      optionFeedback: type === 'decision' ? ['', '', ''] : undefined,
+                                                      correctAnswer: type === 'mcq' || type === 'decision' ? '' : undefined,
+                                                      expectedAnswer: undefined,
+                                                      aiReview: type === 'text' ? req.aiReview : undefined,
+                                                    });
+                                                  }}
                                                   style={{ padding: '2px 6px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.text, fontSize: 11, fontWeight: 700 }}>
                                                   <option value="mcq">Multiple Choice</option>
                                                   <option value="text">Short Answer</option>
                                                   <option value="upload">File Upload</option>
                                                   <option value="task">Deliverable (Checkbox)</option>
+                                                  <option value="briefing">Manager Brief</option>
+                                                  <option value="scenario_update">Scenario Update</option>
+                                                  <option value="decision">Decision Point</option>
+                                                  <option value="debrief">Mission Debrief</option>
                                                   <option value="dashboard_critique">AI Dashboard Critique</option>
                                                   <option value="code_review">AI Code Review</option>
                                                   <option value="excel_review">AI Excel Review</option>
@@ -1661,6 +1679,110 @@ function VirtualExperienceCreatePageInner() {
                                                     );
                                                   })}
                                                   {req.correctAnswer && <p className="text-[12px] pt-1" style={{ color: C.muted }}>✓ Correct: {req.correctAnswer}</p>}
+                                                </div>
+                                              )}
+                                              {(req.type === 'briefing' || req.type === 'scenario_update') && (
+                                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: tc.bg, color: C.muted }}>
+                                                  {req.type === 'scenario_update'
+                                                    ? <Clock className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />
+                                                    : <FileText className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />}
+                                                  <span>
+                                                    {req.type === 'scenario_update'
+                                                      ? 'Students acknowledge this update before continuing. Use it for client changes, new constraints, or stakeholder requests.'
+                                                      : 'Students acknowledge this manager brief before continuing. Use it to set context without AI cost.'}
+                                                  </span>
+                                                </div>
+                                              )}
+                                              {req.type === 'decision' && (() => {
+                                                const decisionOptions = req.options?.length ? req.options : ['', '', ''];
+                                                const decisionFeedback = decisionOptions.map((_, i) => req.optionFeedback?.[i] ?? '');
+                                                const updateDecisionOption = (index: number, value: string) => {
+                                                  const nextOptions = [...decisionOptions];
+                                                  nextOptions[index] = value;
+                                                  updateReq(mod.id, les.id, req.id, {
+                                                    options: nextOptions,
+                                                    optionFeedback: decisionFeedback,
+                                                    correctAnswer: req.correctAnswer === decisionOptions[index] ? value : req.correctAnswer,
+                                                  });
+                                                };
+                                                const updateDecisionFeedback = (index: number, value: string) => {
+                                                  const nextFeedback = [...decisionFeedback];
+                                                  nextFeedback[index] = value;
+                                                  updateReq(mod.id, les.id, req.id, { optionFeedback: nextFeedback });
+                                                };
+                                                const addDecisionOption = () => {
+                                                  updateReq(mod.id, les.id, req.id, {
+                                                    options: [...decisionOptions, ''],
+                                                    optionFeedback: [...decisionFeedback, ''],
+                                                  });
+                                                };
+                                                const removeDecisionOption = (index: number) => {
+                                                  const removed = decisionOptions[index];
+                                                  updateReq(mod.id, les.id, req.id, {
+                                                    options: decisionOptions.filter((_, i) => i !== index),
+                                                    optionFeedback: decisionFeedback.filter((_, i) => i !== index),
+                                                    correctAnswer: req.correctAnswer === removed ? '' : req.correctAnswer,
+                                                  });
+                                                };
+
+                                                return (
+                                                  <div className="space-y-2">
+                                                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: tc.bg, color: C.muted }}>
+                                                      <PenLine className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />
+                                                      Students choose one path and immediately see your scripted stakeholder feedback.
+                                                    </div>
+                                                    {decisionOptions.map((opt, oi) => {
+                                                      const letter = String.fromCharCode(65 + oi);
+                                                      const recommended = req.correctAnswer === opt && opt !== '';
+                                                      return (
+                                                        <div key={oi} className="rounded-lg p-2 space-y-1.5" style={{ background: C.card, border: `1px solid ${recommended ? tc.color : C.cardBorder}` }}>
+                                                          <div className="flex items-center gap-2">
+                                                            <button
+                                                              type="button"
+                                                              onClick={() => opt && updateReq(mod.id, les.id, req.id, { correctAnswer: opt })}
+                                                              title={opt ? `Mark option ${letter} as the recommended path` : 'Fill in this option first'}
+                                                              className="w-5 h-5 rounded-full flex items-center justify-center text-[12px] font-bold flex-shrink-0 transition-all"
+                                                              style={{ background: recommended ? tc.color : C.input, border: `1.5px solid ${recommended ? tc.color : C.cardBorder}`, color: recommended ? 'white' : C.muted }}>
+                                                              {letter}
+                                                            </button>
+                                                            <input
+                                                              value={opt}
+                                                              onChange={e => updateDecisionOption(oi, e.target.value)}
+                                                              className="flex-1 bg-transparent text-[13px] outline-none"
+                                                              style={{ ...inp, background: C.input, padding: '4px 8px', fontSize: 12, color: C.text }}
+                                                              placeholder={`Decision option ${letter}...`}
+                                                            />
+                                                            {decisionOptions.length > 2 && (
+                                                              <button type="button" onClick={() => removeDecisionOption(oi)} className="hover:text-red-400 flex-shrink-0" style={{ color: C.faint }}>
+                                                                <X className="w-3.5 h-3.5" />
+                                                              </button>
+                                                            )}
+                                                          </div>
+                                                          <input
+                                                            value={decisionFeedback[oi] || ''}
+                                                            onChange={e => updateDecisionFeedback(oi, e.target.value)}
+                                                            style={{ ...inp, background: C.input, fontSize: 12 }}
+                                                            placeholder="Scripted feedback shown after this choice..."
+                                                          />
+                                                        </div>
+                                                      );
+                                                    })}
+                                                    <div className="flex items-center justify-between gap-2">
+                                                      {req.correctAnswer && <p className="text-[12px]" style={{ color: C.muted }}>Recommended path: {req.correctAnswer}</p>}
+                                                      {decisionOptions.length < 5 && (
+                                                        <button type="button" onClick={addDecisionOption}
+                                                          className="ml-auto text-[12px] flex items-center gap-1 hover:opacity-70 font-medium" style={{ color: C.muted }}>
+                                                          <Plus className="w-3 h-3" /> Add option
+                                                        </button>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })()}
+                                              {req.type === 'debrief' && (
+                                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: tc.bg, color: C.muted }}>
+                                                  <FileText className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />
+                                                  Students write a mission debrief or next-step summary. It saves like any other progress item.
                                                 </div>
                                               )}
                                               {req.type === 'upload' && (

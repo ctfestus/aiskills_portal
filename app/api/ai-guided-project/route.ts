@@ -60,14 +60,16 @@ const requirementSchema = {
     id:            { type: Type.STRING },
     label:         { type: Type.STRING },
     description:   { type: Type.STRING },
-    type:          { type: Type.STRING }, // 'mcq' | 'task' | 'text' | 'code_review' | 'excel_review' | 'dashboard_critique'
+    type:          { type: Type.STRING }, // includes mcq/task/text plus deterministic simulation and AI reviewer types
     options:       { type: Type.ARRAY, items: { type: Type.STRING } },
+    optionFeedback: { type: Type.ARRAY, items: { type: Type.STRING } },
     correctAnswer:  { type: Type.STRING },
     expectedAnswer: { type: Type.STRING },
     rubric:        { type: Type.ARRAY, items: { type: Type.STRING } },
     schema:        { type: Type.STRING },
     context:       { type: Type.STRING },
     minScore:      { type: Type.NUMBER },
+    aiReview:      { type: Type.BOOLEAN },
   },
   required: ['id', 'label', 'description', 'type'],
 };
@@ -531,6 +533,13 @@ IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", short answer = "req-1-
             requirements: (l.requirements || []).map((r: any) => ({
               id: r.id, label: r.label, description: r.description,
               type: r.type, options: r.options, correctAnswer: r.correctAnswer,
+              optionFeedback: r.optionFeedback,
+              expectedAnswer: r.expectedAnswer,
+              rubric: r.rubric,
+              schema: r.schema,
+              context: r.context,
+              minScore: r.minScore,
+              aiReview: r.aiReview,
             })),
           })),
         })),
@@ -547,7 +556,11 @@ INSTRUCTOR INSTRUCTION: "${instruction}"
 RULES:
 - Only change what the instruction asks. Leave everything else exactly as-is (same IDs, same content).
 - If adding a new lesson or requirement, generate a new unique ID (e.g. "les-new-1", "req-new-1").
-- Requirement types can be "mcq", "task", or "text". Only change types if the instruction asks. For "task": no options/correctAnswer/expectedAnswer. For "text": no options/correctAnswer, may have expectedAnswer.
+- Requirement types can be "mcq", "task", "text", "upload", "briefing", "scenario_update", "decision", "debrief", "dashboard_critique", "code_review", or "excel_review". Only change types if the instruction asks.
+- For "decision": use options for choices and optionFeedback for scripted feedback shown after each choice. correctAnswer may mark the recommended path but the student is not blocked by choosing another path.
+- For "briefing" and "scenario_update": use label as the message title and description as the scripted manager/client update.
+- For "debrief": use label as the reflection prompt and description as the guidance.
+- For "task": no options/correctAnswer/expectedAnswer. For "text": no options/correctAnswer, may have expectedAnswer.
 - Keep lesson bodies concise (2-3 sentences, plain <p> tags).
 - Return the COMPLETE modules array with ALL existing modules and lessons included.
 `;
