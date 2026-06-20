@@ -31,6 +31,7 @@ interface Requirement {
   schema?: string;
   context?: string;
   minScore?: number;
+  emailFrame?: boolean;
   attachments?: Array<{ name: string; url: string; mimeType?: string }>;
 }
 interface Lesson {
@@ -852,6 +853,226 @@ export default function AssignmentExperiencePlayer({
                               )}
                             </div>
                           );
+                        }
+
+                        // Email frame wrapper for assessment types
+                        if (req.emailFrame) {
+                          const efManager = config.managerName || 'Project Manager';
+                          const efEmail = `${efManager.toLowerCase().replace(/\s+/g, '.')}@${(config.company || (config.title || '').split(' - ')[0] || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '') || 'workspace'}.com`;
+                          const efSubject = req.label || 'Task Assignment';
+                          const efHeader = (
+                            <>
+                              <div style={{ padding: '22px 22px 0' }}>
+                                <h3 style={{ fontSize: 19, fontWeight: 700, color: text, lineHeight: 1.3, margin: 0 }}>{efSubject}</h3>
+                              </div>
+                              <div style={{ padding: '16px 22px 0', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                <SlackAvatar name={efManager} size={42} color={accent} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{efManager}</span>
+                                    <span style={{ fontSize: 12, color: faint }}>&lt;{efEmail}&gt;</span>
+                                  </div>
+                                  <p style={{ fontSize: 12, color: faint, marginTop: 2, margin: 0 }}>to me &bull; Earlier today</p>
+                                </div>
+                                {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accent }} />}
+                              </div>
+                              {req.description && (
+                                <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(req.description) }}
+                                  style={{ padding: '18px 22px', color: isDark ? '#e0e0e0' : '#1f1f1f', fontSize: 14.5, lineHeight: 1.75 }} />
+                              )}
+                              <div style={{ height: 1, background: divider, margin: '0 22px' }} />
+                            </>
+                          );
+                          const efCard = (children: React.ReactNode) => (
+                            <div key={req.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: shadow }}>
+                              {efHeader}
+                              {children}
+                            </div>
+                          );
+                          const efMeAvatar = (
+                            <div style={{ width: 42, height: 42, borderRadius: '50%', background: isDark ? 'rgba(255,255,255,0.12)' : '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: isDark ? '#ddd' : '#1a73e8', flexShrink: 0, letterSpacing: 1 }}>ME</div>
+                          );
+
+                          // MCQ: options as reply choices
+                          if (req.type === 'mcq') {
+                            const selected = prog?.selectedAnswer ?? '';
+                            const answered = !!selected;
+                            const correct = answered && req.correctAnswer ? normalize(selected) === normalize(req.correctAnswer) : false;
+                            return efCard(
+                              !isDone ? (
+                                <div style={{ padding: '16px 22px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                  <p style={{ fontSize: 12, color: faint, margin: '0 0 4px', fontWeight: 500 }}>Reply with your answer:</p>
+                                  {(req.options || []).map((opt, oi) => {
+                                    const letter = String.fromCharCode(65 + oi);
+                                    const isSelected = selected === opt;
+                                    return (
+                                      <button key={oi}
+                                        onClick={() => { if (readOnly || isDone) return; const c = opt === req.correctAnswer; updateProgress(req.id, { selectedAnswer: opt, completed: c }); }}
+                                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `1.5px solid ${isSelected ? accent + '80' : border}`, background: isSelected ? `${accent}08` : 'transparent', textAlign: 'left', cursor: 'pointer', fontSize: 14, color: text, transition: 'all 0.15s', width: '100%' }}>
+                                        <span style={{ width: 22, height: 22, borderRadius: '50%', background: isSelected ? accent : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: isSelected ? '#fff' : muted, flexShrink: 0 }}>{letter}</span>
+                                        {opt}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div style={{ padding: '16px 22px 20px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                    {efMeAvatar}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                        <span style={{ fontSize: 14, fontWeight: 700, color: text }}>Me</span>
+                                        <span style={{ fontSize: 12, color: faint }}>Just now</span>
+                                      </div>
+                                      <p style={{ fontSize: 14, color: text, margin: 0, lineHeight: 1.6 }}>{selected}</p>
+                                    </div>
+                                  </div>
+                                  <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12.5 }}>
+                                    <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> {correct ? 'Correct' : 'Answered'}
+                                  </div>
+                                </div>
+                              )
+                            );
+                          }
+
+                          // Text / Reflection: Reply EmailCompose thread
+                          if (req.type === 'text' || req.type === 'reflection') {
+                            const val = prog?.notes ?? '';
+                            const hasContent = val.replace(/<[^>]*>/g, '').trim().length > 0;
+                            const replyOpen = isDone || openReplies.has(req.id) || hasContent;
+                            return efCard(
+                              !isDone ? (
+                                !replyOpen ? (
+                                  <div style={{ padding: '14px 22px' }}>
+                                    {!readOnly && (
+                                      <button onClick={() => setOpenReplies(prev => new Set([...prev, req.id]))}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 6, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer' }}>
+                                        <Reply className="w-4 h-4" /> Reply
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div style={{ padding: '14px 22px 18px' }}>
+                                    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
+                                      <div style={{ padding: '8px 14px', background: subtle, borderBottom: `1px solid ${divider}`, fontSize: 12, color: faint }}>Reply to {efManager}</div>
+                                      <EmailCompose value={val} onChange={(html) => updateProgress(req.id, { notes: html })} readOnly={false} isDark={isDark} accentColor={accent} placeholder="Write your reply..." noBorder />
+                                      <div style={{ padding: '10px 14px', background: bg, borderTop: `1px solid ${divider}`, display: 'flex', gap: 10, alignItems: 'center' }}>
+                                        <button onClick={() => { if (!hasContent) return; updateProgress(req.id, { notes: val, completed: true }); }} disabled={!hasContent}
+                                          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: hasContent ? accent : (isDark ? '#333' : '#e0e0e0'), color: hasContent ? '#fff' : (isDark ? '#666' : '#aaa'), fontSize: 13.5, fontWeight: 600, border: 'none', cursor: hasContent ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}>
+                                          <Send className="w-3.5 h-3.5" /> Send
+                                        </button>
+                                        <button onClick={() => setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; })} style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: 'transparent', fontSize: 13, color: faint, cursor: 'pointer' }}>Discard</button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              ) : (
+                                <div style={{ padding: '16px 22px 20px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                    {efMeAvatar}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                        <span style={{ fontSize: 14, fontWeight: 700, color: text }}>Me</span>
+                                        <span style={{ fontSize: 12, color: faint }}>Just now</span>
+                                      </div>
+                                      <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(prog?.notes ?? '') }} style={{ fontSize: 14, color: isDark ? '#e0e0e0' : '#1f1f1f', lineHeight: 1.7 }} />
+                                    </div>
+                                  </div>
+                                  <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12.5 }}>
+                                    <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Reply sent to {efManager}
+                                  </div>
+                                </div>
+                              )
+                            );
+                          }
+
+                          // Upload / Task / Deliverable: Reply attachment thread
+                          if (req.type === 'upload' || req.type === 'task' || req.type === 'deliverable') {
+                            const fileUrl = prog?.fileUrl ?? '';
+                            const linkUrl = prog?.linkUrl ?? '';
+                            const uploaded = !!(fileUrl || linkUrl);
+                            const replyOpen = isDone || openReplies.has(req.id) || uploaded;
+                            const uploading = uploadingReq === req.id;
+                            return efCard(
+                              !isDone ? (
+                                !replyOpen ? (
+                                  <div style={{ padding: '14px 22px' }}>
+                                    {!readOnly && (
+                                      <button onClick={() => setOpenReplies(prev => new Set([...prev, req.id]))}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 6, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer' }}>
+                                        <Reply className="w-4 h-4" /> Reply
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div style={{ padding: '14px 22px 18px' }}>
+                                    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
+                                      <div style={{ padding: '8px 14px', background: subtle, borderBottom: `1px solid ${divider}`, fontSize: 12, color: faint }}>Attach your submission</div>
+                                      <div style={{ padding: '14px 16px', background: bg, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 8, border: `1.5px dashed ${border}`, cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, color: muted }}>
+                                          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+                                          {uploading ? 'Uploading...' : (fileUrl ? 'Replace file' : 'Attach file')}
+                                          <input type="file" className="hidden" disabled={uploading} onChange={async e => { const file = e.target.files?.[0]; if (!file) return; await handleFileUpload(req.id, file); e.target.value = ''; }} />
+                                        </label>
+                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                          <input value={linkUrl} onChange={e => updateProgress(req.id, { linkUrl: e.target.value })}
+                                            placeholder="Or paste a link..." style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${border}`, background: subtle, color: text, fontSize: 13, outline: 'none' }} />
+                                        </div>
+                                        {(fileUrl || linkUrl) && (
+                                          <button onClick={() => { if (!readOnly) updateProgress(req.id, { completed: true }); }}
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: accent, color: '#fff', fontSize: 13.5, fontWeight: 600, border: 'none', cursor: 'pointer', alignSelf: 'flex-start' }}>
+                                            <Send className="w-3.5 h-3.5" /> Send
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              ) : (
+                                <div style={{ padding: '16px 22px 20px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                                    {efMeAvatar}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                                        <span style={{ fontSize: 14, fontWeight: 700, color: text }}>Me</span>
+                                        <span style={{ fontSize: 12, color: faint }}>Just now</span>
+                                      </div>
+                                      {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${border}`, fontSize: 12.5, color: text, textDecoration: 'none' }}><Paperclip className="w-3 h-3" /> Attachment</a>}
+                                      {linkUrl && <a href={linkUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${border}`, fontSize: 12.5, color: text, textDecoration: 'none', marginLeft: fileUrl ? 8 : 0 }}><LinkIcon className="w-3 h-3" /> {linkUrl.slice(0, 40)}{linkUrl.length > 40 ? '...' : ''}</a>}
+                                    </div>
+                                  </div>
+                                  <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12.5 }}>
+                                    <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Submitted to {efManager}
+                                  </div>
+                                </div>
+                              )
+                            );
+                          }
+
+                          // AI review types: email header + existing player
+                          if (req.type === 'dashboard_critique' || req.type === 'code_review' || req.type === 'excel_review') {
+                            const saved = prog;
+                            return (
+                              <div key={req.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: shadow }}>
+                                {efHeader}
+                                <div style={{ padding: '16px 22px 20px' }}>
+                                  {req.type === 'dashboard_critique' && (
+                                    <DashboardCritiquePlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={isDone}
+                                      savedResult={parseReviewNotes(saved?.notes)?.report} savedImageUrl={undefined} rubric={(req as any).rubric}
+                                      onComplete={(result) => updateProgress(req.id, { completed: true, notes: buildReviewNotes('dashboard_critique', result, saved?.notes) })} />
+                                  )}
+                                  {req.type === 'code_review' && (() => { const savedReport = parseReviewNotes(saved?.notes)?.report; const savedResult = isFullReport('code_review', savedReport) ? savedReport : undefined; return (
+                                    <CodeReviewPlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={isDone} savedResult={savedResult} rubric={req.rubric} schema={req.schema} minScore={req.minScore}
+                                      onComplete={(result, passed) => updateProgress(req.id, { completed: passed, notes: buildReviewNotes('code_review', result, saved?.notes) })} />
+                                  ); })()}
+                                  {req.type === 'excel_review' && (() => { const savedReport = parseReviewNotes(saved?.notes)?.report; const savedResult = isFullReport('excel_review', savedReport) ? savedReport : undefined; return (
+                                    <ExcelReviewPlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={isDone} savedResult={savedResult} context={req.context} rubric={req.rubric} minScore={req.minScore}
+                                      onComplete={(result, passed) => updateProgress(req.id, { completed: passed, notes: buildReviewNotes('excel_review', result, saved?.notes) })} />
+                                  ); })()}
+                                </div>
+                              </div>
+                            );
+                          }
                         }
 
                         // MCQ

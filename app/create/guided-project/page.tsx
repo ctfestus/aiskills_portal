@@ -9,7 +9,7 @@ import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight, ChevronLeft,
   Plus, Trash2, X, Check, RefreshCw, Upload, Pencil, Star, Clock, Download,
-  Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical, Video, Search, Eye, Images, Paperclip,
+  Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical, Video, Search, Eye, Images, Paperclip, Mail,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -137,6 +137,7 @@ interface Requirement {
   context?: string;
   minScore?: number;
   aiReview?: boolean;
+  emailFrame?: boolean;
   attachments?: ReqAttachment[];
 }
 interface Lesson {
@@ -1644,6 +1645,16 @@ function VirtualExperienceCreatePageInner() {
                                                   <option value="code_review">AI Code Review</option>
                                                   <option value="excel_review">AI Excel Review</option>
                                                 </select>
+                                                {!['briefing','scenario_update','decision','debrief'].includes(req.type) && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => updateReq(mod.id, les.id, req.id, { emailFrame: !req.emailFrame })}
+                                                    title={req.emailFrame ? 'Remove email frame' : 'Deliver via email thread'}
+                                                    className="flex-shrink-0 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold transition-all"
+                                                    style={{ background: req.emailFrame ? 'rgba(59,130,246,0.15)' : C.card, color: req.emailFrame ? '#3b82f6' : C.muted, border: `1px solid ${req.emailFrame ? '#3b82f6' : C.cardBorder}` }}>
+                                                    <Mail className="w-3 h-3" /> {req.emailFrame ? 'Email' : 'Email'}
+                                                  </button>
+                                                )}
                                                 <input value={req.label}
                                                   onChange={e => updateReq(mod.id, les.id, req.id, { label: e.target.value })}
                                                   className="flex-1 bg-transparent text-[13px] font-semibold outline-none"
