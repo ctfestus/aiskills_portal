@@ -606,7 +606,9 @@ export default function AssignmentExperiencePlayer({
                               </div>
                               {/* Email body */}
                               <div style={{ padding: '18px 22px', color: muted, fontSize: 14.5, lineHeight: 1.75 }}>
-                                {req.description && <p style={{ margin: 0 }}>{req.description}</p>}
+                                {req.description && (
+                                  <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(req.description) }} />
+                                )}
                               </div>
                               {/* Attachments */}
                               {config.dataset && (

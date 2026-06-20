@@ -12,6 +12,7 @@ import {
   Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical, Video, Search, Eye, Images,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { RichTextEditor } from '@/components/RichTextEditor';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent,
 } from '@dnd-kit/core';
@@ -1649,10 +1650,18 @@ function VirtualExperienceCreatePageInner() {
                                                   <X className="w-3.5 h-3.5" />
                                                 </button>
                                               </div>
-                                              <input value={req.description}
-                                                onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}
-                                                style={{ ...inp, background: C.card, fontSize: 12 }}
-                                                placeholder={req.type === 'mcq' ? 'Hint: which column(s) to analyse…' : req.type === 'upload' ? 'Instructions for the student…' : 'Prompt or context…'} />
+                                              {(req.type === 'briefing' || req.type === 'debrief') ? (
+                                                <RichTextEditor
+                                                  value={req.description}
+                                                  onChange={html => updateReq(mod.id, les.id, req.id, { description: html })}
+                                                  placeholder={req.type === 'briefing' ? 'Write the email body - formatting, bullet points, and images are all supported...' : 'Describe what students should write in their debrief update...'}
+                                                />
+                                              ) : (
+                                                <input value={req.description}
+                                                  onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}
+                                                  style={{ ...inp, background: C.card, fontSize: 12 }}
+                                                  placeholder={req.type === 'mcq' ? 'Hint: which column(s) to analyse…' : req.type === 'upload' ? 'Instructions for the student…' : 'Prompt or context…'} />
+                                              )}
                                               {req.type === 'mcq' && (
                                                 <div className="space-y-1">
                                                   {opts.map((opt, oi) => {
@@ -1681,16 +1690,10 @@ function VirtualExperienceCreatePageInner() {
                                                   {req.correctAnswer && <p className="text-[12px] pt-1" style={{ color: C.muted }}>✓ Correct: {req.correctAnswer}</p>}
                                                 </div>
                                               )}
-                                              {(req.type === 'briefing' || req.type === 'scenario_update') && (
+                                              {req.type === 'scenario_update' && (
                                                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: tc.bg, color: C.muted }}>
-                                                  {req.type === 'scenario_update'
-                                                    ? <Clock className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />
-                                                    : <FileText className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />}
-                                                  <span>
-                                                    {req.type === 'scenario_update'
-                                                      ? 'Renders as a Slack/Teams-style project-room message. Use it for client changes, new constraints, or stakeholder requests.'
-                                                      : 'Renders as an inbox email with sender, subject, body, and dataset/tool attachments.'}
-                                                  </span>
+                                                  <Clock className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />
+                                                  <span>Renders as a Slack/Teams-style project-room message. Use it for client changes, new constraints, or stakeholder requests.</span>
                                                 </div>
                                               )}
                                               {req.type === 'decision' && (() => {
