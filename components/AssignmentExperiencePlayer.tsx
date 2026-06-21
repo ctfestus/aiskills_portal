@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle2, Circle, ChevronDown, ChevronUp, ChevronRight, ChevronLeft,
   Loader2, Lock, Upload as UploadIcon, Link as LinkIcon, CheckCircle, Download,
-  Mail, MessageSquare, Inbox, Paperclip, Send, Reply,
+  Mail, MessageSquare, Inbox, Paperclip, Send, Reply, X,
   Bold, Italic, Underline, List, ListOrdered,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -914,6 +914,7 @@ export default function AssignmentExperiencePlayer({
                             const selected = prog?.selectedAnswer ?? '';
                             const answered = !!selected;
                             const correct = answered && req.correctAnswer ? normalize(selected) === normalize(req.correctAnswer) : false;
+                            const isWrong = answered && !correct;
                             return efCard(
                               !isDone ? (
                                 <div style={{ padding: '16px 22px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -921,15 +922,25 @@ export default function AssignmentExperiencePlayer({
                                   {(req.options || []).map((opt, oi) => {
                                     const letter = String.fromCharCode(65 + oi);
                                     const isSelected = selected === opt;
+                                    const isThisWrong = isSelected && isWrong;
+                                    const borderCol = isThisWrong ? 'rgba(239,68,68,0.5)' : isSelected ? accent + '80' : border;
+                                    const bgCol = isThisWrong ? 'rgba(239,68,68,0.06)' : isSelected ? `${accent}08` : 'transparent';
+                                    const dotBg = isThisWrong ? 'rgba(239,68,68,0.15)' : isSelected ? accent : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)');
+                                    const dotColor = isThisWrong ? '#ef4444' : isSelected ? '#fff' : muted;
                                     return (
                                       <button key={oi}
                                         onClick={() => { if (readOnly || isDone) return; const c = opt === req.correctAnswer; updateProgress(req.id, { selectedAnswer: opt, completed: c }); }}
-                                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `1.5px solid ${isSelected ? accent + '80' : border}`, background: isSelected ? `${accent}08` : 'transparent', textAlign: 'left', cursor: 'pointer', fontSize: 14, color: text, transition: 'all 0.15s', width: '100%' }}>
-                                        <span style={{ width: 22, height: 22, borderRadius: '50%', background: isSelected ? accent : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: isSelected ? '#fff' : muted, flexShrink: 0 }}>{letter}</span>
+                                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `1.5px solid ${borderCol}`, background: bgCol, textAlign: 'left', cursor: 'pointer', fontSize: 14, color: text, transition: 'all 0.15s', width: '100%' }}>
+                                        <span style={{ width: 22, height: 22, borderRadius: '50%', background: dotBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: dotColor, flexShrink: 0 }}>{letter}</span>
                                         {opt}
                                       </button>
                                     );
                                   })}
+                                  {isWrong && (
+                                    <p style={{ fontSize: 12.5, color: '#ef4444', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 5 }}>
+                                      <X className="w-3.5 h-3.5" /> That is not the right answer. Try again.
+                                    </p>
+                                  )}
                                 </div>
                               ) : (
                                 <div style={{ padding: '16px 22px 20px' }}>
@@ -944,7 +955,7 @@ export default function AssignmentExperiencePlayer({
                                     </div>
                                   </div>
                                   <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12.5 }}>
-                                    <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> {correct ? 'Correct' : 'Answered'}
+                                    <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Correct
                                   </div>
                                 </div>
                               )
@@ -956,7 +967,7 @@ export default function AssignmentExperiencePlayer({
                             const val = prog?.notes ?? '';
                             const hasContent = val.replace(/<[^>]*>/g, '').trim().length > 0;
                             const replyOpen = isDone || openReplies.has(req.id) || hasContent;
-                            const needsEval = !!(req.aiReview || req.expectedAnswer);
+                            const needsEval = !!req.aiReview;
                             const isTyping = efTyping[req.id];
                             const isReviewing = efReviewing[req.id];
                             const feedback = aiFeedback[req.id];

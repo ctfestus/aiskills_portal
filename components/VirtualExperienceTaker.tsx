@@ -1442,6 +1442,7 @@ export default function VirtualExperienceTaker({
 
                         // MCQ: options as reply choices
                         if (isMcq) {
+                          const isWrong = !!selectedAnswer && selectedAnswer !== req.correctAnswer;
                           return efCard(
                             !done ? (
                               <div style={{ padding: '16px 22px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1449,6 +1450,11 @@ export default function VirtualExperienceTaker({
                                 {(req.options || []).map((opt, oi) => {
                                   const letter = String.fromCharCode(65 + oi);
                                   const isSelected = selectedAnswer === opt;
+                                  const isThisWrong = isSelected && isWrong;
+                                  const borderCol = isThisWrong ? 'rgba(239,68,68,0.5)' : isSelected ? accentColor + '80' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)');
+                                  const bgCol = isThisWrong ? 'rgba(239,68,68,0.06)' : isSelected ? `${accentColor}08` : 'transparent';
+                                  const dotBg = isThisWrong ? 'rgba(239,68,68,0.15)' : isSelected ? accentColor : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)');
+                                  const dotColor = isThisWrong ? '#ef4444' : isSelected ? '#fff' : (isDark ? '#aaa' : '#555');
                                   return (
                                     <button key={oi}
                                       onClick={() => {
@@ -1460,12 +1466,17 @@ export default function VirtualExperienceTaker({
                                           return next;
                                         });
                                       }}
-                                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `1.5px solid ${isSelected ? accentColor + '80' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)')}`, background: isSelected ? `${accentColor}08` : 'transparent', textAlign: 'left', cursor: 'pointer', fontSize: 14, color: isDark ? '#e0e0e0' : '#1f1f1f', transition: 'all 0.15s', width: '100%' }}>
-                                      <span style={{ width: 22, height: 22, borderRadius: '50%', background: isSelected ? accentColor : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: isSelected ? '#fff' : (isDark ? '#aaa' : '#555'), flexShrink: 0 }}>{letter}</span>
+                                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `1.5px solid ${borderCol}`, background: bgCol, textAlign: 'left', cursor: 'pointer', fontSize: 14, color: isDark ? '#e0e0e0' : '#1f1f1f', transition: 'all 0.15s', width: '100%' }}>
+                                      <span style={{ width: 22, height: 22, borderRadius: '50%', background: dotBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: dotColor, flexShrink: 0 }}>{letter}</span>
                                       {opt}
                                     </button>
                                   );
                                 })}
+                                {isWrong && (
+                                  <p style={{ fontSize: 12.5, color: '#ef4444', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 5 }}>
+                                    <X className="w-3.5 h-3.5" /> That is not the right answer. Try again.
+                                  </p>
+                                )}
                               </div>
                             ) : (
                               <div style={{ padding: '16px 22px 20px' }}>
@@ -1492,7 +1503,7 @@ export default function VirtualExperienceTaker({
                           const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
                           const hasContent = noteVal.replace(/<[^>]*>/g, '').trim().length > 0;
                           const replyOpen = done || openReplies.has(req.id) || hasContent;
-                          const needsEval = !!(req.aiReview || req.expectedAnswer);
+                          const needsEval = !!req.aiReview;
                           const isTyping = efTyping[req.id];
                           const isReviewing = efReviewing[req.id];
                           const feedback = aiFeedback[req.id];
