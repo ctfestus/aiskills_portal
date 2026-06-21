@@ -745,6 +745,7 @@ function DatasetDetailPane({
   const analystSections = analystSectionsFor(dataset);
   const sqlTaskSections = analystSectionsByTaskType(dataset, 'sql');
   const [selectedSectionId, setSelectedSectionId] = useState('');
+  const [hoveredSectionId, setHoveredSectionId] = useState<string | null>(null);
   const activeSectionId = analystSections.some(section => section.id === selectedSectionId)
     ? selectedSectionId
     : analystSections[0]?.id || '';
@@ -1088,7 +1089,7 @@ function DatasetDetailPane({
     <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: isDark ? '#141414' : '#F2F5FA', fontFamily: font, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* Top nav bar */}
-      <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '0 14px', height: 56, background: C.card, borderBottom: `1px solid ${C.divider}` }}>
+      <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '0 14px', height: 56 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
           <button onClick={onClose} title="Back to datasets"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 36, padding: '0 13px 0 10px', borderRadius: 10, border: 'none', background: C.input, color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: font, flexShrink: 0 }}>
@@ -1135,7 +1136,6 @@ function DatasetDetailPane({
           style={{
             width: sidebarOpen ? 'min(100vw, 296px)' : 48,
             minWidth: sidebarOpen ? 'min(100vw, 296px)' : 48,
-            background: C.card,
             overflow: sidebarOpen ? 'hidden' : 'visible',
           }}>
 
@@ -1186,6 +1186,8 @@ function DatasetDetailPane({
                 return (
                   <button key={section.id || section.title}
                     onClick={() => { setSelectedSectionId(section.id || ''); if (typeof window !== 'undefined' && window.innerWidth < 640) setSidebarOpen(false); }}
+                    onMouseEnter={() => setHoveredSectionId(section.id || section.title)}
+                    onMouseLeave={() => setHoveredSectionId(null)}
                     style={{ width: '100%', display: 'grid', gridTemplateColumns: '30px minmax(0, 1fr)', gap: 10, textAlign: 'left', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontFamily: font }}>
                     <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <span style={{ width: 30, height: 30, borderRadius: '50%', background: isFirst || isActive ? accent : C.input, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700 }}>
@@ -1195,18 +1197,8 @@ function DatasetDetailPane({
                       </span>
                       {index < analystSections.length - 1 && <span style={{ flex: 1, minHeight: 30, width: 0, borderLeft: `2px dashed ${C.cardBorder}`, margin: '4px 0' }} />}
                     </span>
-                    <span style={{ minWidth: 0, paddingTop: 5, paddingBottom: index < analystSections.length - 1 ? 18 : 0 }}>
+                    <span style={{ minWidth: 0, paddingTop: 5, paddingBottom: index < analystSections.length - 1 ? 18 : 10, paddingLeft: 8, paddingRight: 8, borderRadius: 8, background: hoveredSectionId === (section.id || section.title) ? (isDark ? C.input : 'rgba(0,0,0,0.07)') : 'transparent', transition: 'background 0.15s' }}>
                       <span style={{ display: 'block', color: isActive ? accent : C.text, fontSize: 13, fontWeight: isActive ? 700 : 600, lineHeight: 1.3, overflowWrap: 'anywhere' }}>{section.title}</span>
-                      {(section.tasks.length > 0 || section.difficulty || section.duration) && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
-                          <DifficultyDots level={DIFF_LEVEL[diff] ?? 1} color={isActive ? accent : C.muted} faint={C.cardBorder} />
-                          <span style={{ fontSize: 11, color: C.faint, fontWeight: 600 }}>{diff}</span>
-                          <span style={{ fontSize: 11, color: C.faint }}>&middot;</span>
-                          <Clock size={11} style={{ color: C.faint }} />
-                          <span style={{ fontSize: 11, color: C.faint }}>{estTime}</span>
-                          {sqlCount > 0 && <span style={{ borderRadius: 999, padding: '2px 7px', background: 'rgba(8,145,178,0.12)', color: '#0891b2', fontSize: 10, fontWeight: 700 }}>{sqlCount} SQL</span>}
-                        </span>
-                      )}
                     </span>
                   </button>
                 );
@@ -1224,8 +1216,8 @@ function DatasetDetailPane({
 
             {/* Active phase (primary content, like a VE lesson) */}
             {activeSection ? (
-              <section style={{ background: C.card, border: 'none', borderRadius: 16, overflow: 'hidden' }}>
-                <div style={{ padding: '22px 24px 18px', borderBottom: activeSection.tasks.length > 0 ? `1px solid ${C.divider}` : 'none' }}>
+              <section style={{ background: C.card, boxShadow: isDark ? 'none' : '0 0 0 1px rgba(0,0,0,0.06), 0 2px 12px rgba(0,0,0,0.05)', borderRadius: 16, overflow: 'hidden' }}>
+                <div style={{ padding: '22px 24px 18px' }}>
                   <p style={{ margin: '0 0 7px', color: accent, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>Phase {analystSections.findIndex(section => section.id === activeSection.id) + 1} of {analystSections.length}</p>
                   <h3 style={{ margin: 0, color: C.text, fontSize: 22, lineHeight: 1.25, fontWeight: 700 }}>{activeSection.title}</h3>
                   {(activeSection.tasks.length > 0 || activeSection.difficulty || activeSection.duration) && (
@@ -1242,13 +1234,14 @@ function DatasetDetailPane({
                       dangerouslySetInnerHTML={{ __html: sanitizeRichText(activeSection.brief) }} />
                   )}
                 </div>
+                {activeSection.tasks.length > 0 && <div style={{ margin: '0 24px', height: 1, background: C.divider }} />}
 
                 {(() => {
                   const embed = activeSection.videoUrl ? safeEmbedUrl(activeSection.videoUrl) : null;
                   if (!embed) return null;
                   const isCanva = embed.includes('canva.com');
                   return (
-                    <div style={{ padding: '18px 24px', borderBottom: activeSection.tasks.length > 0 ? `1px solid ${C.divider}` : 'none' }}>
+                    <div style={{ padding: '18px 24px' }}>
                       <div style={{ borderRadius: 12, overflow: 'hidden', ...(isCanva ? { height: '88vh' } : { aspectRatio: '16 / 9' }) }}>
                         <iframe src={embed} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
                           allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
@@ -1256,6 +1249,7 @@ function DatasetDetailPane({
                     </div>
                   );
                 })()}
+                {activeSection.videoUrl && activeSection.tasks.length > 0 && <div style={{ margin: '0 24px', height: 1, background: C.divider }} />}
 
                 {activeSection.tasks.length > 0 && (
                   <div style={{ padding: '16px 24px 6px' }}>
@@ -1268,7 +1262,7 @@ function DatasetDetailPane({
                   {activeSection.tasks.map((task, index) => {
                     const isSQL = task.type === 'sql';
                     return (
-                      <div key={task.id || `${activeSection.id}-${index}`} style={{ display: 'grid', gridTemplateColumns: '32px minmax(0, 1fr) auto', gap: 12, alignItems: 'center', padding: '16px 24px', borderTop: `1px solid ${C.divider}` }}>
+                      <div key={task.id || `${activeSection.id}-${index}`} style={{ display: 'grid', gridTemplateColumns: '32px minmax(0, 1fr) auto', gap: 12, alignItems: 'center', padding: '16px 24px' }}>
                         <span style={{ width: 28, height: 28, borderRadius: '50%', background: isSQL ? 'rgba(8,145,178,0.13)' : `${accent}1f`, color: isSQL ? '#0891b2' : accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700 }}>{index + 1}</span>
                         <span style={{ minWidth: 0 }}>
                           {isSQL && <span style={{ display: 'inline-block', marginBottom: 4, color: '#0891b2', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>SQL Task</span>}
@@ -1284,6 +1278,28 @@ function DatasetDetailPane({
                     );
                   })}
                 </div>
+
+                {/* Work with AI & tools -- merged into the same card */}
+                <div style={{ margin: '0 24px', height: 1, background: C.divider }} />
+                <div style={{ padding: '14px 18px 18px' }}>
+                  <p style={{ margin: '0 0 12px', color: C.faint, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6 }}>Work with AI &amp; Tools</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+                    <a href={`https://chatgpt.com/?q=${encodeURIComponent(prompt)}`} target="_blank" rel="noreferrer"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 10px', borderRadius: 10, background: C.input, color: C.text, fontSize: 13, fontWeight: 700, textDecoration: 'none', fontFamily: font }}>
+                      <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/openai-chatgpt-logo-icon-free-png.webp" alt="ChatGPT" style={{ width: 19, height: 19, objectFit: 'contain', flexShrink: 0 }} /> ChatGPT
+                    </a>
+                    <button onClick={copyPrompt}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '11px 10px', borderRadius: 10, border: 'none', background: C.input, color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: font }}>
+                      {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy Prompt'}
+                    </button>
+                    {datasetFiles.length > 0 && (
+                      <button onClick={openPreview}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 10px', borderRadius: 10, border: 'none', background: C.input, color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: font }}>
+                        <Table2 size={14} /> Preview Data
+                      </button>
+                    )}
+                  </div>
+                </div>
               </section>
             ) : (
               <section style={{ background: C.card, border: 'none', borderRadius: 16, padding: '22px 24px' }}>
@@ -1292,27 +1308,6 @@ function DatasetDetailPane({
                   : <p style={{ margin: 0, color: C.faint, textAlign: 'center' }}>No analysis phases have been added yet.</p>}
               </section>
             )}
-
-            {/* Work with AI & tools */}
-            <section style={{ background: C.card, border: 'none', borderRadius: 16, padding: '16px 18px' }}>
-              <p style={{ margin: '0 0 12px', color: C.faint, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6 }}>Work with AI &amp; Tools</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
-                <a href={`https://chatgpt.com/?q=${encodeURIComponent(prompt)}`} target="_blank" rel="noreferrer"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 10px', borderRadius: 10, background: C.input, color: C.text, fontSize: 13, fontWeight: 700, textDecoration: 'none', fontFamily: font }}>
-                  <img src="https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/openai-chatgpt-logo-icon-free-png.webp" alt="ChatGPT" style={{ width: 19, height: 19, objectFit: 'contain', flexShrink: 0 }} /> ChatGPT
-                </a>
-                <button onClick={copyPrompt}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '11px 10px', borderRadius: 10, border: 'none', background: C.input, color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: font }}>
-                  {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy Prompt'}
-                </button>
-                {datasetFiles.length > 0 && (
-                  <button onClick={openPreview}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '11px 10px', borderRadius: 10, border: 'none', background: C.input, color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: font }}>
-                    <Table2 size={14} /> Preview Data
-                  </button>
-                )}
-              </div>
-            </section>
 
             {dataset.disclaimer && (
               <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(245,158,11,0.08)', border: 'none', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
