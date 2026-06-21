@@ -1500,6 +1500,8 @@ export default function VirtualExperienceTaker({
                           const isReviewing = efReviewing[req.id];
                           const feedback = aiFeedback[req.id];
                           const evaluating = !!aiReviewing[req.id];
+                          // Use saved notes for the thread (what was sent), not the live compose value
+                          const sentText = progress[req.id]?.notes || noteValues[req.id] || '';
                           const efMeReply = (
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
                               {efMeAvatar}
@@ -1508,7 +1510,7 @@ export default function VirtualExperienceTaker({
                                   <span style={{ fontSize: 14, fontWeight: 700, color: isDark ? '#f0f0f0' : '#111' }}>Me</span>
                                   <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Just now</span>
                                 </div>
-                                <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(noteValues[req.id] ?? (progress[req.id]?.notes || '')) }} style={{ fontSize: 13.5, color: isDark ? '#e0e0e0' : '#1f1f1f', lineHeight: 1.7 }} />
+                                <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(sentText) }} style={{ fontSize: 13.5, color: isDark ? '#e0e0e0' : '#1f1f1f', lineHeight: 1.7 }} />
                               </div>
                             </div>
                           );
@@ -1520,8 +1522,10 @@ export default function VirtualExperienceTaker({
                             }
                             const delay = 2000 + Math.floor(Math.random() * 2001);
                             setEfTyping(prev => ({ ...prev, [req.id]: true }));
+                            // Save note immediately so efMeReply shows the sent text during delay
+                            setProgress(prev => ({ ...prev, [req.id]: { ...prev[req.id], notes: noteVal } }));
                             if (req.aiReview) {
-                              // AI evaluation path
+                              // AI evaluation path: always marks done (informational feedback)
                               setAiReviewing(prev => ({ ...prev, [req.id]: true }));
                               setAiFeedback(prev => ({ ...prev, [req.id]: null }));
                               fetch('/api/ve-answer-review', {
@@ -1548,7 +1552,7 @@ export default function VirtualExperienceTaker({
                                 setEfReviewing(prev => ({ ...prev, [req.id]: true }));
                               }, delay);
                             } else {
-                              // Manual comparison path: compare against expectedAnswer locally
+                              // Manual comparison: compare against expectedAnswer locally, no answer revealed
                               const normalize = (s: string) => s.replace(/<[^>]*>/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
                               const studentNorm = normalize(noteVal);
                               const expectedNorm = normalize(req.expectedAnswer || '');
@@ -1556,11 +1560,25 @@ export default function VirtualExperienceTaker({
                               setTimeout(() => {
                                 setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
                                 setEfReviewing(prev => ({ ...prev, [req.id]: true }));
-                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed, score: passed ? 100 : 0, feedback: passed ? 'That is correct. Well done.' : `Not quite right. The expected answer is: ${req.expectedAnswer}` } }));
-                                setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
+                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed, score: passed ? 100 : 0, feedback: passed ? 'That is correct. Well done.' : 'That is not quite right. Please review the question and try again.' } }));
+                                if (passed) setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
                               }, delay);
                             }
                           };
+                          const efReplyCompose = (
+                            <div style={{ borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, padding: '14px 22px 18px' }}>
+                              <div style={{ border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, borderRadius: 10, overflow: 'hidden' }}>
+                                <div style={{ padding: '8px 14px', background: isDark ? '#222' : '#f8f8f8', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, fontSize: 12, color: isDark ? '#888' : '#999' }}>Reply to {efManager}</div>
+                                <EmailCompose value={noteVal} onChange={(html) => setNote(req.id, html)} readOnly={false} isDark={isDark} accentColor={accentColor} placeholder="Write your reply..." noBorder />
+                                <div style={{ padding: '10px 14px', background: isDark ? '#1a1a1a' : '#fff', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, display: 'flex', gap: 10, alignItems: 'center' }}>
+                                  <button onClick={handleSend} disabled={!hasContent}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: hasContent ? accentColor : (isDark ? '#333' : '#e0e0e0'), color: hasContent ? '#fff' : (isDark ? '#666' : '#aaa'), fontSize: 13.5, fontWeight: 600, border: 'none', cursor: hasContent ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}>
+                                    <Send className="w-3.5 h-3.5" /> Send
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
                           return efCard(
                             isTyping ? (
                               <div style={{ padding: '16px 22px 20px' }}>
@@ -1592,7 +1610,7 @@ export default function VirtualExperienceTaker({
                                 </div>
                                 {/* Manager: feedback reply */}
                                 {feedback && (
-                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, paddingTop: 18 }}>
+                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`, paddingTop: 18, marginBottom: (!feedback.passed && !done && !req.aiReview) ? 0 : undefined }}>
                                     <SlackAvatar name={efManager} size={42} color={efMeta.color} />
                                     <div style={{ flex: 1 }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -1600,19 +1618,18 @@ export default function VirtualExperienceTaker({
                                         <span style={{ fontSize: 12, color: isDark ? '#666' : '#aaa' }}>Just now</span>
                                       </div>
                                       <p style={{ fontSize: 13.5, color: isDark ? '#e0e0e0' : '#1f1f1f', margin: '0 0 12px' }}>Hi, here is my feedback on your response:</p>
-                                      <div style={{ borderRadius: 10, padding: '12px 16px', background: feedback.passed ? (isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.06)'), border: `1px solid ${feedback.passed ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}`, marginBottom: 10 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: feedback.passed ? '#10b981' : '#f59e0b' }}>
-                                            {feedback.passed ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
-                                            {feedback.passed ? 'Good work' : 'Needs improvement'}
-                                          </div>
-                                          <span style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: feedback.passed ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: feedback.passed ? '#10b981' : '#f59e0b' }}>{feedback.score}/100</span>
+                                      <div style={{ borderRadius: 10, padding: '12px 16px', background: feedback.passed ? (isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.06)'), border: `1px solid ${feedback.passed ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}` }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: feedback.passed ? '#10b981' : '#f59e0b', marginBottom: 8 }}>
+                                          {feedback.passed ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                                          {feedback.passed ? 'Correct' : 'Incorrect'}
                                         </div>
                                         <p style={{ fontSize: 13.5, color: isDark ? '#ddd' : '#333', margin: 0, lineHeight: 1.6 }}>{feedback.feedback}</p>
                                       </div>
                                     </div>
                                   </div>
                                 )}
+                                {/* Retry compose for manual wrong answers */}
+                                {feedback && !feedback.passed && !done && !req.aiReview && !reviewMode && efReplyCompose}
                               </div>
                             ) : done ? (
                               // Simple done (no evaluation)

@@ -993,7 +993,7 @@ export default function AssignmentExperiencePlayer({
                               const delay = 2000 + Math.floor(Math.random() * 2001);
                               setEfTyping(prev => ({ ...prev, [req.id]: true }));
                               if (req.aiReview) {
-                                // AI evaluation path
+                                // AI evaluation path: always marks done (informational feedback)
                                 setAiReviewing(prev => ({ ...prev, [req.id]: true }));
                                 setAiFeedback(prev => ({ ...prev, [req.id]: null }));
                                 const authH = await getAuthHeader();
@@ -1021,7 +1021,7 @@ export default function AssignmentExperiencePlayer({
                                   setEfReviewing(prev => ({ ...prev, [req.id]: true }));
                                 }, delay);
                               } else {
-                                // Manual comparison path: compare against expectedAnswer locally
+                                // Manual comparison: no answer revealed, retry allowed on wrong
                                 const normalizeText = (s: string) => s.replace(/<[^>]*>/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
                                 const studentNorm = normalizeText(val);
                                 const expectedNorm = normalizeText(req.expectedAnswer || '');
@@ -1029,11 +1029,25 @@ export default function AssignmentExperiencePlayer({
                                 setTimeout(() => {
                                   setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
                                   setEfReviewing(prev => ({ ...prev, [req.id]: true }));
-                                  setAiFeedback(prev => ({ ...prev, [req.id]: { passed, score: passed ? 100 : 0, feedback: passed ? 'That is correct. Well done.' : `Not quite right. The expected answer is: ${req.expectedAnswer}` } }));
-                                  updateProgress(req.id, { notes: val, completed: true });
+                                  setAiFeedback(prev => ({ ...prev, [req.id]: { passed, score: passed ? 100 : 0, feedback: passed ? 'That is correct. Well done.' : 'That is not quite right. Please review the question and try again.' } }));
+                                  if (passed) updateProgress(req.id, { notes: val, completed: true });
                                 }, delay);
                               }
                             };
+                            const efRetryCompose = (
+                              <div style={{ borderTop: `1px solid ${divider}`, padding: '14px 22px 18px' }}>
+                                <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
+                                  <div style={{ padding: '8px 14px', background: subtle, borderBottom: `1px solid ${divider}`, fontSize: 12, color: faint }}>Reply to {efManager}</div>
+                                  <EmailCompose value={val} onChange={(html) => updateProgress(req.id, { notes: html })} readOnly={false} isDark={isDark} accentColor={accent} placeholder="Write your reply..." noBorder />
+                                  <div style={{ padding: '10px 14px', background: bg, borderTop: `1px solid ${divider}`, display: 'flex', gap: 10, alignItems: 'center' }}>
+                                    <button onClick={handleSend} disabled={!hasContent}
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: hasContent ? accent : (isDark ? '#333' : '#e0e0e0'), color: hasContent ? '#fff' : (isDark ? '#666' : '#aaa'), fontSize: 13.5, fontWeight: 600, border: 'none', cursor: hasContent ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}>
+                                      <Send className="w-3.5 h-3.5" /> Send
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
                             return efCard(
                               isTyping ? (
                                 <div style={{ padding: '16px 22px 20px' }}>
@@ -1071,19 +1085,18 @@ export default function AssignmentExperiencePlayer({
                                           <span style={{ fontSize: 12, color: faint }}>Just now</span>
                                         </div>
                                         <p style={{ fontSize: 13.5, color: isDark ? '#e0e0e0' : '#1f1f1f', margin: '0 0 12px' }}>Hi, here is my feedback on your response:</p>
-                                        <div style={{ borderRadius: 10, padding: '12px 16px', background: feedback.passed ? (isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.06)'), border: `1px solid ${feedback.passed ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}`, marginBottom: 10 }}>
-                                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: feedback.passed ? '#10b981' : '#f59e0b' }}>
-                                              {feedback.passed ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
-                                              {feedback.passed ? 'Good work' : 'Needs improvement'}
-                                            </div>
-                                            <span style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: feedback.passed ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: feedback.passed ? '#10b981' : '#f59e0b' }}>{feedback.score}/100</span>
+                                        <div style={{ borderRadius: 10, padding: '12px 16px', background: feedback.passed ? (isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.06)'), border: `1px solid ${feedback.passed ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}` }}>
+                                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: feedback.passed ? '#10b981' : '#f59e0b', marginBottom: 8 }}>
+                                            {feedback.passed ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                                            {feedback.passed ? 'Correct' : 'Incorrect'}
                                           </div>
                                           <p style={{ fontSize: 13.5, color: isDark ? '#ddd' : '#333', margin: 0, lineHeight: 1.6 }}>{feedback.feedback}</p>
                                         </div>
                                       </div>
                                     </div>
                                   )}
+                                  {/* Retry compose for manual wrong answers */}
+                                  {feedback && !feedback.passed && !isDone && !req.aiReview && !readOnly && efRetryCompose}
                                 </div>
                               ) : isDone ? (
                                 <div style={{ padding: '16px 22px 20px' }}>
