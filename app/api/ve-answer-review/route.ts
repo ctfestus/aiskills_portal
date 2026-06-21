@@ -61,12 +61,15 @@ export async function POST(req: NextRequest) {
   if (rateLimitError) return rateLimitError;
 
   const body = await req.json();
-  const { question, description, studentAnswer, context, rubric, expectedAnswer, projectContext } = body;
+  const { question, description, studentAnswer: rawAnswer, context, rubric, expectedAnswer, projectContext } = body;
 
-  if (!studentAnswer?.trim()) {
+  // Strip HTML tags so the AI evaluates the actual text, not markup
+  const studentAnswer = typeof rawAnswer === 'string' ? rawAnswer.replace(/<[^>]*>/g, '').trim() : '';
+
+  if (!studentAnswer) {
     return NextResponse.json({ error: 'No answer submitted.' }, { status: 400 });
   }
-  if (typeof studentAnswer !== 'string' || studentAnswer.length > 500) {
+  if (studentAnswer.length > 500) {
     return NextResponse.json({ error: 'Answer must be 500 characters or fewer.' }, { status: 400 });
   }
 

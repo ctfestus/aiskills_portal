@@ -60,14 +60,18 @@ const requirementSchema = {
     id:            { type: Type.STRING },
     label:         { type: Type.STRING },
     description:   { type: Type.STRING },
-    type:          { type: Type.STRING }, // 'mcq' | 'task' | 'text' | 'code_review' | 'excel_review' | 'dashboard_critique'
+    type:          { type: Type.STRING }, // includes mcq/task/text plus deterministic simulation and AI reviewer types
     options:       { type: Type.ARRAY, items: { type: Type.STRING } },
+    optionFeedback: { type: Type.ARRAY, items: { type: Type.STRING } },
     correctAnswer:  { type: Type.STRING },
     expectedAnswer: { type: Type.STRING },
     rubric:        { type: Type.ARRAY, items: { type: Type.STRING } },
     schema:        { type: Type.STRING },
     context:       { type: Type.STRING },
     minScore:      { type: Type.NUMBER },
+    aiReview:      { type: Type.BOOLEAN },
+    emailFrame:    { type: Type.BOOLEAN },
+    emailBody:     { type: Type.STRING },
   },
   required: ['id', 'label', 'description', 'type'],
 };
@@ -121,6 +125,7 @@ export async function POST(req: NextRequest) {
       const companyName   = clamp(body.companyName, 100);
       const scenario      = clamp(body.scenario, 1000);
       const customPrompt  = clamp(body.customPrompt, 500);
+      const emailStyle    = body.emailStyle === 'frame';
       const context       = INDUSTRY_CONTEXT[industry] || industry;
 
       const specifiedTools = toolsRaw
@@ -142,6 +147,12 @@ ${scenario ? `SCENARIO: ${scenario}` : ''}
 These details are fixed. Build the entire project around this company and scenario.`
         : '';
       const extraInstructions = customPrompt ? `\n\nADDITIONAL INSTRUCTIONS: ${customPrompt}` : '';
+      const emailFrameBlock = emailStyle ? `
+
+== EMAIL FRAME MODE (INSTRUCTOR-ENABLED) ==
+Set emailFrame: true on EVERY requirement: tasks, uploads, deliverables, AI reviewer, MCQ, and short-answer/text requirements.
+For each requirement with emailFrame: true, write an emailBody field: a short professional email (2-4 sentences) from the manager to the student, describing the specific work they must do. Plain text only, no HTML tags or bullet lists inside emailBody.
+Example emailBody: "Hi, please find the dataset attached. Your task for this module is to build a pivot table grouping transactions by region and summing the Amount column. Looking forward to your submission."` : '';
 
       const prompt = `
 You are designing a hands-on virtual work experience project (like Forage) for a ${difficulty}-level ${rolePhrase} in the ${industry} industry.
@@ -217,6 +228,7 @@ Generate:
 - 5 learning outcomes (action-verb led, tools-specific)
 - role, company, duration, tools (must match: ${toolsList})
 - dataset (filename, description, csvContent)
+${emailFrameBlock}
 `;
 
       // -- Pass 1: company + dataset ---
@@ -339,6 +351,7 @@ Choose type based on tools: SQL or Python present  "code_review". Excel present 
 - NO options, NO correctAnswer, NO expectedAnswer.
 
 IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", 4th requirement = "req-1-1-4").
+${emailFrameBlock}
 `;
 
       const pass2 = await generateJSON(pass2Prompt, {
@@ -368,6 +381,7 @@ IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", 4th requirement = "req
       const companyName   = clamp(body.companyName, 100);
       const scenario      = clamp(body.scenario, 1000);
       const customPrompt  = clamp(body.customPrompt, 500);
+      const emailStyle    = body.emailStyle === 'frame';
       const csvContent    = String(body.csvContent || '').slice(0, 40000);
       const filename      = clamp(body.filename, 100) || 'dataset.csv';
       const context       = INDUSTRY_CONTEXT[industry] || industry;
@@ -391,6 +405,12 @@ ${scenario ? `SCENARIO: ${scenario}` : ''}
 These details are fixed. Build the entire project around this company and scenario.`
         : '';
       const extraInstructions = customPrompt ? `\n\nADDITIONAL INSTRUCTIONS: ${customPrompt}` : '';
+      const emailFrameBlock = emailStyle ? `
+
+== EMAIL FRAME MODE (INSTRUCTOR-ENABLED) ==
+Set emailFrame: true on EVERY requirement: tasks, uploads, deliverables, AI reviewer, MCQ, and short-answer/text requirements.
+For each requirement with emailFrame: true, write an emailBody field: a short professional email (2-4 sentences) from the manager to the student, describing the specific work they must do. Plain text only, no HTML tags or bullet lists inside emailBody.
+Example emailBody: "Hi, please find the dataset attached. Your task for this module is to build a pivot table grouping transactions by region and summing the Amount column. Looking forward to your submission."` : '';
 
       // Pass 1: company metadata only (no dataset generation -- use the provided one)
       const pass1Prompt = `
@@ -486,6 +506,7 @@ SHORT ANSWER (type "text"):
 - NO options, NO correctAnswer.
 
 IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", short answer = "req-1-1-4").
+${emailFrameBlock}
 `;
 
       const pass2 = await generateJSON(pass2Prompt, {
@@ -531,6 +552,15 @@ IDs: "mod-1", "les-1-1", "req-1-1-1" (task = "req-1-1-3", short answer = "req-1-
             requirements: (l.requirements || []).map((r: any) => ({
               id: r.id, label: r.label, description: r.description,
               type: r.type, options: r.options, correctAnswer: r.correctAnswer,
+              optionFeedback: r.optionFeedback,
+              expectedAnswer: r.expectedAnswer,
+              rubric: r.rubric,
+              schema: r.schema,
+              context: r.context,
+              minScore: r.minScore,
+              aiReview: r.aiReview,
+              emailFrame: r.emailFrame,
+              emailBody: r.emailBody,
             })),
           })),
         })),
@@ -547,7 +577,12 @@ INSTRUCTOR INSTRUCTION: "${instruction}"
 RULES:
 - Only change what the instruction asks. Leave everything else exactly as-is (same IDs, same content).
 - If adding a new lesson or requirement, generate a new unique ID (e.g. "les-new-1", "req-new-1").
-- Requirement types can be "mcq", "task", or "text". Only change types if the instruction asks. For "task": no options/correctAnswer/expectedAnswer. For "text": no options/correctAnswer, may have expectedAnswer.
+- Requirement types can be "mcq", "task", "text", "upload", "briefing", "scenario_update", "decision", "debrief", "dashboard_critique", "code_review", or "excel_review". Only change types if the instruction asks.
+- For "briefing": it renders as an inbox email. Use label as the email subject and description as the email body.
+- For "scenario_update": it renders as a Slack/Teams-style project-room message. Use label as the message headline and description as the update body.
+- For "decision": it renders as a chat decision thread. Use options for reply choices and optionFeedback for scripted stakeholder replies shown after each choice. correctAnswer may mark the recommended path but the student is not blocked by choosing another path.
+- For "debrief": it renders as an email composer. Use label as the email subject and description as composer guidance.
+- For "task": no options/correctAnswer/expectedAnswer. For "text": no options/correctAnswer, may have expectedAnswer.
 - Keep lesson bodies concise (2-3 sentences, plain <p> tags).
 - Return the COMPLETE modules array with ALL existing modules and lessons included.
 `;

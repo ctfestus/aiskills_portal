@@ -814,7 +814,7 @@ export function CoursesSection({ userEmail, userId: userIdProp, C, isOutstanding
       setLoading(false);
     };
     load();
-  }, [userEmail]);
+  }, [userEmail, userIdProp]);
 
 
   const searchResults = useMemo(() => {

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
-import { Bold, Code2, FileCode2, Italic, RemoveFormatting, Underline, List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote, Youtube } from 'lucide-react';
+import { useEffect, useRef, useCallback, useState } from 'react';
+import { Bold, Code2, FileCode2, Italic, RemoveFormatting, Underline, List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote, Youtube, ImageIcon, Loader2 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
 interface RichTextEditorProps {
@@ -11,9 +11,10 @@ interface RichTextEditorProps {
   className?: string;
   bgOverride?: string;
   fontFamily?: string;
+  onImageUpload?: (file: File) => Promise<string>;
 }
 
-export function RichTextEditor({ value, onChange, placeholder = 'Add a description...', className = '', bgOverride, fontFamily }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, placeholder = 'Add a description...', className = '', bgOverride, fontFamily, onImageUpload }: RichTextEditorProps) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const bg        = bgOverride ?? (dark ? 'rgba(255,255,255,0.05)' : '#f4f5f7');
@@ -22,7 +23,9 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
   const textColor = dark ? '#f0f0f0' : '#111';
   const phColor   = dark ? '#555' : '#bbb';
   const linkColor = dark ? '#ADEE66' : '#00bf63';
-  const editorRef = useRef<HTMLDivElement>(null);
+  const editorRef    = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   // Track whether the change came from inside the editor (to avoid caret reset)
   const isInternalChange = useRef(false);
 
@@ -289,6 +292,41 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
     }
   }, [exec, handleInlineCode, onChange]);
 
+  const handleInsertImage = useCallback(async (file: File) => {
+    if (!onImageUpload || !editorRef.current) return;
+    setUploadingImage(true);
+    try {
+      const url = await onImageUpload(file);
+      editorRef.current.focus();
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = file.name.replace(/\.[^.]+$/, '');
+      img.style.cssText = 'max-width:100%;border-radius:6px;margin:6px 0;display:block;';
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        if (editorRef.current.contains(range.commonAncestorContainer)) {
+          range.collapse(false);
+          range.insertNode(img);
+          range.setStartAfter(img);
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        } else {
+          editorRef.current.appendChild(img);
+        }
+      } else {
+        editorRef.current.appendChild(img);
+      }
+      isInternalChange.current = true;
+      onChange(editorRef.current.innerHTML);
+    } catch {
+      alert('Image upload failed. Please try again.');
+    } finally {
+      setUploadingImage(false);
+    }
+  }, [onImageUpload, onChange]);
+
   return (
     <div
       className={`rounded-lg overflow-hidden transition-colors ${className}`}
@@ -339,6 +377,30 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         <ToolbarButton onClick={handleInsertVideo} title="Embed YouTube video" dark={dark}>
           <Youtube className="w-3.5 h-3.5" />
         </ToolbarButton>
+        {onImageUpload && (
+          <>
+            <ToolbarButton
+              onClick={() => imageInputRef.current?.click()}
+              title="Insert image"
+              dark={dark}
+            >
+              {uploadingImage
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <ImageIcon className="w-3.5 h-3.5" />}
+            </ToolbarButton>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (file) handleInsertImage(file);
+                e.target.value = '';
+              }}
+            />
+          </>
+        )}
       </div>
 
       {/* Editable area */}

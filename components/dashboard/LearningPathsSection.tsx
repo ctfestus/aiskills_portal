@@ -43,7 +43,6 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
     setLoading(false);
   };
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, []);
 
   const uploadCover = async (file: File) => {

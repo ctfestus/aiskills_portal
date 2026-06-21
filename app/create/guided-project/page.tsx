@@ -9,9 +9,10 @@ import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight, ChevronLeft,
   Plus, Trash2, X, Check, RefreshCw, Upload, Pencil, Star, Clock, Download,
-  Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical, Video, Search, Eye, Images,
+  Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical, Video, Search, Eye, Images, Paperclip, Mail,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { RichTextEditor } from '@/components/RichTextEditor';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent,
 } from '@dnd-kit/core';
@@ -121,12 +122,14 @@ const DARK_C = {
 function useC() { const { theme } = useTheme(); return theme === 'dark' ? DARK_C : LIGHT_C; }
 
 // Types
+interface ReqAttachment { name: string; url: string; mimeType?: string; }
 interface Requirement {
   id: string;
   label: string;
   description: string;
-  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'dashboard_critique' | 'code_review' | 'excel_review';
+  type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review';
   options?: string[];
+  optionFeedback?: string[];
   correctAnswer?: string;
   expectedAnswer?: string;
   rubric?: string[];
@@ -134,6 +137,9 @@ interface Requirement {
   context?: string;
   minScore?: number;
   aiReview?: boolean;
+  emailFrame?: boolean;
+  emailBody?: string;
+  attachments?: ReqAttachment[];
 }
 interface Lesson {
   id: string;
@@ -322,6 +328,7 @@ function VirtualExperienceCreatePageInner() {
   const [focusTopic,   setFocusTopic]   = useState('');
   const [toolsInput,   setToolsInput]   = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
+  const [emailStyle,   setEmailStyle]   = useState(false);
   const [generating,  setGenerating]  = useState(false);
   const [genError,    setGenError]    = useState('');
   // Dataset state (shared across all modes)
@@ -592,8 +599,8 @@ function VirtualExperienceCreatePageInner() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify(useDataMode
-          ? { action: 'generate-from-data', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }
-          : { action: 'generate', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt }
+          ? { action: 'generate-from-data', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, emailStyle: emailStyle ? 'frame' : undefined, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }
+          : { action: 'generate', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, emailStyle: emailStyle ? 'frame' : undefined }
         ),
       });
       const json = await res.json();
@@ -629,7 +636,7 @@ function VirtualExperienceCreatePageInner() {
       const res = await fetch('/api/ai-guided-project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ action: 'generate-from-data', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }),
+        body: JSON.stringify({ action: 'generate-from-data', industry: effectiveIndustry, difficulty, role: roleHint, focusTopic, tools: toolsInput, companyName, scenario, customPrompt, emailStyle: emailStyle ? 'frame' : undefined, csvContent: datasetCsv, filename: datasetFilename || 'dataset.csv' }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
@@ -1115,6 +1122,20 @@ function VirtualExperienceCreatePageInner() {
                           placeholder="e.g. Make questions harder than usual. Use a conversational tone in lesson bodies."
                         />
                       </div>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '10px 0 2px' }}>
+                        <input
+                          type="checkbox"
+                          checked={emailStyle}
+                          onChange={e => setEmailStyle(e.target.checked)}
+                          style={{ marginTop: 2, accentColor: C.cta, flexShrink: 0 }}
+                        />
+                        <div>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Present tasks as workplace emails</span>
+                          <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+                            Wraps every task, upload, and AI review in an email thread from the manager. The AI will also write the email body for each one.
+                          </p>
+                        </div>
+                      </label>
                     </div>
                   )}
 
@@ -1594,6 +1615,10 @@ function VirtualExperienceCreatePageInner() {
                                             text:               { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6',   label: 'Short Answer'       },
                                             upload:             { bg: 'rgba(245,158,11,0.12)',   color: '#f59e0b',   label: 'File Upload'         },
                                             task:               { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6',   label: 'Deliverable (Checkbox)' },
+                                            briefing:           { bg: 'rgba(59,130,246,0.12)',   color: '#3b82f6',   label: 'Inbox Email' },
+                                            scenario_update:    { bg: 'rgba(245,158,11,0.12)',   color: '#f59e0b',   label: 'Team Chat Update' },
+                                            decision:           { bg: 'rgba(139,92,246,0.12)',   color: '#8b5cf6',   label: 'Chat Decision Thread' },
+                                            debrief:            { bg: 'rgba(20,184,166,0.12)',   color: '#14b8a6',   label: 'Email Update Composer' },
                                             dashboard_critique: { bg: 'rgba(16,185,129,0.12)',   color: '#10b981',   label: 'AI Dashboard Critique' },
                                             code_review:        { bg: 'rgba(99,102,241,0.12)',   color: '#6366f1',   label: 'AI Code Review' },
                                             excel_review:       { bg: 'rgba(34,197,94,0.12)',    color: '#22c55e',   label: 'AI Excel Review' },
@@ -1608,21 +1633,44 @@ function VirtualExperienceCreatePageInner() {
                                                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
                                                   style={{ background: C.card, color: C.muted }}>Deliverable {qi + 1}</span>
                                                 <select value={req.type}
-                                                  onChange={e => updateReq(mod.id, les.id, req.id, {
-                                                    type: e.target.value as Requirement['type'],
-                                                    options: e.target.value === 'mcq' ? ['', '', '', ''] : undefined,
-                                                    correctAnswer: e.target.value === 'mcq' ? '' : undefined,
-                                                    expectedAnswer: undefined,
-                                                  })}
+                                                  onChange={e => {
+                                                    const type = e.target.value as Requirement['type'];
+                                                    updateReq(mod.id, les.id, req.id, {
+                                                      type,
+                                                      options: type === 'mcq'
+                                                        ? ['', '', '', '']
+                                                        : type === 'decision'
+                                                          ? ['', '', '']
+                                                          : undefined,
+                                                      optionFeedback: type === 'decision' ? ['', '', ''] : undefined,
+                                                      correctAnswer: type === 'mcq' || type === 'decision' ? '' : undefined,
+                                                      expectedAnswer: undefined,
+                                                      aiReview: type === 'text' ? req.aiReview : undefined,
+                                                    });
+                                                  }}
                                                   style={{ padding: '2px 6px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.text, fontSize: 11, fontWeight: 700 }}>
                                                   <option value="mcq">Multiple Choice</option>
                                                   <option value="text">Short Answer</option>
                                                   <option value="upload">File Upload</option>
                                                   <option value="task">Deliverable (Checkbox)</option>
+                                                  <option value="briefing">Inbox Email</option>
+                                                  <option value="scenario_update">Team Chat Update</option>
+                                                  <option value="decision">Chat Decision Thread</option>
+                                                  <option value="debrief">Email Update Composer</option>
                                                   <option value="dashboard_critique">AI Dashboard Critique</option>
                                                   <option value="code_review">AI Code Review</option>
                                                   <option value="excel_review">AI Excel Review</option>
                                                 </select>
+                                                {!['briefing','scenario_update','decision','debrief'].includes(req.type) && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => updateReq(mod.id, les.id, req.id, { emailFrame: !req.emailFrame })}
+                                                    title={req.emailFrame ? 'Remove email frame' : 'Deliver via email thread'}
+                                                    className="flex-shrink-0 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold transition-all"
+                                                    style={{ background: req.emailFrame ? 'rgba(59,130,246,0.15)' : C.card, color: req.emailFrame ? '#3b82f6' : C.muted, border: `1px solid ${req.emailFrame ? '#3b82f6' : C.cardBorder}` }}>
+                                                    <Mail className="w-3 h-3" /> {req.emailFrame ? 'Email' : 'Email'}
+                                                  </button>
+                                                )}
                                                 <input value={req.label}
                                                   onChange={e => updateReq(mod.id, les.id, req.id, { label: e.target.value })}
                                                   className="flex-1 bg-transparent text-[13px] font-semibold outline-none"
@@ -1631,10 +1679,61 @@ function VirtualExperienceCreatePageInner() {
                                                   <X className="w-3.5 h-3.5" />
                                                 </button>
                                               </div>
-                                              <input value={req.description}
-                                                onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}
-                                                style={{ ...inp, background: C.card, fontSize: 12 }}
-                                                placeholder={req.type === 'mcq' ? 'Hint: which column(s) to analyse…' : req.type === 'upload' ? 'Instructions for the student…' : 'Prompt or context…'} />
+                                              {(req.type === 'briefing' || req.type === 'debrief') ? (
+                                                <>
+                                                  <RichTextEditor
+                                                    value={req.description}
+                                                    onChange={html => updateReq(mod.id, les.id, req.id, { description: html })}
+                                                    placeholder={req.type === 'briefing' ? 'Write the email body - formatting, bullet points, and images are all supported...' : 'Describe what students should write in their debrief update...'}
+                                                    onImageUpload={async (file) => uploadToCloudinary(file, 've-email-images')}
+                                                  />
+                                                  {req.type === 'briefing' && (
+                                                    <div className="space-y-2">
+                                                      {(req.attachments || []).map((att, ai) => (
+                                                        <div key={ai} className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+                                                          <Paperclip className="w-3.5 h-3.5 flex-shrink-0" style={{ color: C.muted }} />
+                                                          <span className="flex-1 truncate" style={{ color: C.text }}>{att.name}</span>
+                                                          <button onClick={() => updateReq(mod.id, les.id, req.id, { attachments: req.attachments?.filter((_, i) => i !== ai) })} style={{ color: C.faint }} className="hover:text-red-400 flex-shrink-0">
+                                                            <X className="w-3.5 h-3.5" />
+                                                          </button>
+                                                        </div>
+                                                      ))}
+                                                      <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] cursor-pointer hover:opacity-80 transition-opacity" style={{ background: C.card, border: `1px dashed ${C.cardBorder}`, color: C.muted }}>
+                                                        <Paperclip className="w-3.5 h-3.5" /> Attach file
+                                                        <input type="file" className="hidden" onChange={async e => {
+                                                          const file = e.target.files?.[0];
+                                                          if (!file) return;
+                                                          try {
+                                                            const url = await uploadToCloudinary(file, 've-email-attachments');
+                                                            updateReq(mod.id, les.id, req.id, { attachments: [...(req.attachments || []), { name: file.name, url, mimeType: file.type }] });
+                                                          } catch { alert('Upload failed'); }
+                                                          e.target.value = '';
+                                                        }} />
+                                                      </label>
+                                                    </div>
+                                                  )}
+                                                </>
+                                              ) : (
+                                                <>
+                                                  {req.emailFrame && (
+                                                    <div style={{ borderRadius: 8, overflow: 'hidden', border: `1px solid ${C.cardBorder}` }}>
+                                                      <div style={{ padding: '6px 12px', background: C.card, borderBottom: `1px solid ${C.cardBorder}`, fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 0.4 }}>
+                                                        EMAIL BODY
+                                                      </div>
+                                                      <RichTextEditor
+                                                        value={req.emailBody || ''}
+                                                        onChange={html => updateReq(mod.id, les.id, req.id, { emailBody: html })}
+                                                        placeholder="Write the email the manager sends to the student..."
+                                                        onImageUpload={async (file) => uploadToCloudinary(file, 've-email-images')}
+                                                      />
+                                                    </div>
+                                                  )}
+                                                  <input value={req.description}
+                                                    onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}
+                                                    style={{ ...inp, background: C.card, fontSize: 12 }}
+                                                    placeholder={req.type === 'mcq' ? 'Hint: which column(s) to analyse…' : req.type === 'upload' ? 'Instructions for the student…' : 'Prompt or context…'} />
+                                                </>
+                                              )}
                                               {req.type === 'mcq' && (
                                                 <div className="space-y-1">
                                                   {opts.map((opt, oi) => {
@@ -1661,6 +1760,104 @@ function VirtualExperienceCreatePageInner() {
                                                     );
                                                   })}
                                                   {req.correctAnswer && <p className="text-[12px] pt-1" style={{ color: C.muted }}>✓ Correct: {req.correctAnswer}</p>}
+                                                </div>
+                                              )}
+                                              {req.type === 'scenario_update' && (
+                                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: tc.bg, color: C.muted }}>
+                                                  <Clock className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />
+                                                  <span>Renders as a Slack/Teams-style project-room message. Use it for client changes, new constraints, or stakeholder requests.</span>
+                                                </div>
+                                              )}
+                                              {req.type === 'decision' && (() => {
+                                                const decisionOptions = req.options?.length ? req.options : ['', '', ''];
+                                                const decisionFeedback = decisionOptions.map((_, i) => req.optionFeedback?.[i] ?? '');
+                                                const updateDecisionOption = (index: number, value: string) => {
+                                                  const nextOptions = [...decisionOptions];
+                                                  nextOptions[index] = value;
+                                                  updateReq(mod.id, les.id, req.id, {
+                                                    options: nextOptions,
+                                                    optionFeedback: decisionFeedback,
+                                                    correctAnswer: req.correctAnswer === decisionOptions[index] ? value : req.correctAnswer,
+                                                  });
+                                                };
+                                                const updateDecisionFeedback = (index: number, value: string) => {
+                                                  const nextFeedback = [...decisionFeedback];
+                                                  nextFeedback[index] = value;
+                                                  updateReq(mod.id, les.id, req.id, { optionFeedback: nextFeedback });
+                                                };
+                                                const addDecisionOption = () => {
+                                                  updateReq(mod.id, les.id, req.id, {
+                                                    options: [...decisionOptions, ''],
+                                                    optionFeedback: [...decisionFeedback, ''],
+                                                  });
+                                                };
+                                                const removeDecisionOption = (index: number) => {
+                                                  const removed = decisionOptions[index];
+                                                  updateReq(mod.id, les.id, req.id, {
+                                                    options: decisionOptions.filter((_, i) => i !== index),
+                                                    optionFeedback: decisionFeedback.filter((_, i) => i !== index),
+                                                    correctAnswer: req.correctAnswer === removed ? '' : req.correctAnswer,
+                                                  });
+                                                };
+
+                                                return (
+                                                  <div className="space-y-2">
+                                                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: tc.bg, color: C.muted }}>
+                                                      <PenLine className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />
+                                                      Renders as a team-chat thread. Students reply with one option and see scripted stakeholder feedback.
+                                                    </div>
+                                                    {decisionOptions.map((opt, oi) => {
+                                                      const letter = String.fromCharCode(65 + oi);
+                                                      const recommended = req.correctAnswer === opt && opt !== '';
+                                                      return (
+                                                        <div key={oi} className="rounded-lg p-2 space-y-1.5" style={{ background: C.card, border: `1px solid ${recommended ? tc.color : C.cardBorder}` }}>
+                                                          <div className="flex items-center gap-2">
+                                                            <button
+                                                              type="button"
+                                                              onClick={() => opt && updateReq(mod.id, les.id, req.id, { correctAnswer: opt })}
+                                                              title={opt ? `Mark option ${letter} as the recommended path` : 'Fill in this option first'}
+                                                              className="w-5 h-5 rounded-full flex items-center justify-center text-[12px] font-bold flex-shrink-0 transition-all"
+                                                              style={{ background: recommended ? tc.color : C.input, border: `1.5px solid ${recommended ? tc.color : C.cardBorder}`, color: recommended ? 'white' : C.muted }}>
+                                                              {letter}
+                                                            </button>
+                                                            <input
+                                                              value={opt}
+                                                              onChange={e => updateDecisionOption(oi, e.target.value)}
+                                                              className="flex-1 bg-transparent text-[13px] outline-none"
+                                                              style={{ ...inp, background: C.input, padding: '4px 8px', fontSize: 12, color: C.text }}
+                                                              placeholder={`Decision option ${letter}...`}
+                                                            />
+                                                            {decisionOptions.length > 2 && (
+                                                              <button type="button" onClick={() => removeDecisionOption(oi)} className="hover:text-red-400 flex-shrink-0" style={{ color: C.faint }}>
+                                                                <X className="w-3.5 h-3.5" />
+                                                              </button>
+                                                            )}
+                                                          </div>
+                                                          <input
+                                                            value={decisionFeedback[oi] || ''}
+                                                            onChange={e => updateDecisionFeedback(oi, e.target.value)}
+                                                            style={{ ...inp, background: C.input, fontSize: 12 }}
+                                                            placeholder="Scripted feedback shown after this choice..."
+                                                          />
+                                                        </div>
+                                                      );
+                                                    })}
+                                                    <div className="flex items-center justify-between gap-2">
+                                                      {req.correctAnswer && <p className="text-[12px]" style={{ color: C.muted }}>Recommended path: {req.correctAnswer}</p>}
+                                                      {decisionOptions.length < 5 && (
+                                                        <button type="button" onClick={addDecisionOption}
+                                                          className="ml-auto text-[12px] flex items-center gap-1 hover:opacity-70 font-medium" style={{ color: C.muted }}>
+                                                          <Plus className="w-3 h-3" /> Add option
+                                                        </button>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })()}
+                                              {req.type === 'debrief' && (
+                                                <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: tc.bg, color: C.muted }}>
+                                                  <FileText className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />
+                                                  Renders as an email composer addressed to the manager. Students send their update or recommendation.
                                                 </div>
                                               )}
                                               {req.type === 'upload' && (

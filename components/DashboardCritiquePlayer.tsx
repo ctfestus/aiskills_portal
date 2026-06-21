@@ -50,6 +50,8 @@ interface Props {
   reviewsUsed?: number;
   maxReviews?: number;
   showAttemptCount?: boolean;
+  onReviewStart?: () => void;
+  onReviewError?: () => void;
   onComplete: (result: CritiqueResult, imageDataUrl: string, passed: boolean) => void;
 }
 
@@ -71,7 +73,7 @@ const TYPE_COLORS: Record<string, string> = {
   OTHER:          '#94a3b8',
 };
 
-export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, completed, savedResult, savedImageUrl, rubric, minScore, reviewsUsed = 0, maxReviews, showAttemptCount, onComplete }: Props) {
+export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, completed, savedResult, savedImageUrl, rubric, minScore, reviewsUsed = 0, maxReviews, showAttemptCount, onReviewStart, onReviewError, onComplete }: Props) {
   const atLimit = maxReviews !== undefined && reviewsUsed >= maxReviews;
   const shouldLock = maxReviews === undefined || atLimit || reviewsUsed === 0;
   // Offer Reset (try again) only while attempts remain. Once a submission is terminal -- completed
@@ -96,6 +98,7 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
     setError('');
     setResult(null);
     setAnalyzing(true);
+    onReviewStart?.();
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -124,12 +127,13 @@ export default function DashboardCritiquePlayer({ reqId, isDark, accentColor, co
         onComplete(json, dataUrl, passed);
       } catch (err: any) {
         setError(err.message || 'The AI review service is busy right now. Please wait a moment and try again. Your work has not been lost.');
+        onReviewError?.();
       } finally {
         setAnalyzing(false);
       }
     };
     reader.readAsDataURL(file);
-  }, [onComplete, rubric, minScore]);
+  }, [onComplete, onReviewStart, onReviewError, rubric, minScore]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
