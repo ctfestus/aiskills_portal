@@ -16,6 +16,7 @@ import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { tags as highlightTags } from '@lezer/highlight';
+import { useTenant } from '@/components/TenantProvider';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { safeEmbedUrl } from '@/lib/safe-embed-url';
 import {
@@ -735,6 +736,8 @@ function DatasetDetailPane({
     runtimeRef.current?.close().catch(() => {});
   }, []);
 
+  const { logoUrl, logoDarkUrl } = useTenant();
+  const logoSrc = (isDark ? logoDarkUrl || logoUrl : logoUrl) || null;
   const accent = C.cta;
   const datasetFiles = getDatasetFiles(dataset);
   const prompt = buildAIPrompt(dataset);
@@ -1087,27 +1090,38 @@ function DatasetDetailPane({
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: isDark ? '#141414' : '#F2F5FA', fontFamily: font, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <style>{`
+        .dp-sidebar { background: white; }
+        [data-theme="dark"] .dp-sidebar { background: #1E1F26; }
+        @media (min-width: 640px) { .dp-sidebar { background: transparent !important; } }
+      `}</style>
 
       {/* Top nav bar */}
       <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '0 14px', height: 56 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+        {/* Left: hamburger (mobile, only when sidebar closed) + logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          {!sidebarOpen && (
+            <button onClick={() => setSidebarOpen(true)}
+              className={`sm:hidden p-1.5 rounded-lg transition-colors flex-shrink-0 ${isDark ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'}`}
+              title="Open analysis path">
+              <MenuIcon className="w-5 h-5" />
+            </button>
+          )}
+          {logoSrc && <img src={logoSrc} alt="Logo" style={{ height: 28, width: 'auto', objectFit: 'contain', flexShrink: 0 }} />}
+        </div>
+        {/* Right: SQL Workbench + back button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {canOpenSQLWorkbench && (
+            <button onClick={openWorkbench}
+              className="hidden sm:inline-flex"
+              style={{ alignItems: 'center', gap: 7, height: 36, padding: '0 15px', borderRadius: 10, border: 'none', background: accent, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: font }}>
+              <Database size={14} /> SQL Workbench
+            </button>
+          )}
           <button onClick={onClose} title="Back to datasets"
             style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 36, padding: '0 13px 0 10px', borderRadius: 10, border: 'none', background: C.input, color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: font, flexShrink: 0 }}>
             <ArrowLeft size={16} /> Datasets
           </button>
-          <span className="hidden sm:block" style={{ width: 1, height: 24, background: C.divider, flexShrink: 0 }} />
-          <div className="hidden sm:block" style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dataset.title}</p>
-            {dataset.category && <p style={{ margin: 0, fontSize: 11.5, color: C.faint, fontWeight: 600 }}>{dataset.category}</p>}
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {canOpenSQLWorkbench && (
-            <button onClick={openWorkbench}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 36, padding: '0 15px', borderRadius: 10, border: 'none', background: accent, color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: font }}>
-              <Database size={14} /> SQL Workbench
-            </button>
-          )}
         </div>
       </header>
 
@@ -1120,23 +1134,15 @@ function DatasetDetailPane({
             style={{ zIndex: 55, background: 'rgba(0,0,0,0.6)' }} />
         )}
 
-        {/* Mobile open button: tab flush from left edge when sidebar is closed */}
-        {!sidebarOpen && (
-          <div className="absolute top-4 left-0 z-50 sm:hidden">
-            <button onClick={() => setSidebarOpen(true)} title="Show analysis path"
-              style={{ padding: '8px 10px', borderRadius: '0 8px 8px 0', border: 'none', background: C.card, color: C.muted, cursor: 'pointer' }}>
-              <MenuIcon className="w-5 h-5" />
-            </button>
-          </div>
-        )}
 
         {/* Sidebar: analysis path */}
         <aside
-          className={`absolute inset-y-0 left-0 z-[56] rounded-r-2xl sm:relative sm:inset-auto sm:z-auto flex-shrink-0 flex flex-col transition-all duration-300 sm:my-3 sm:ml-3 sm:rounded-2xl ${!sidebarOpen ? '-translate-x-full sm:translate-x-0' : 'translate-x-0'}`}
+          className={`dp-sidebar absolute inset-y-0 left-0 z-[56] rounded-r-2xl sm:relative sm:inset-auto sm:z-auto flex-shrink-0 flex flex-col transition-all duration-300 sm:my-3 sm:ml-3 sm:rounded-2xl ${!sidebarOpen ? '-translate-x-full sm:translate-x-0' : 'translate-x-0'}`}
           style={{
             width: sidebarOpen ? 'min(100vw, 296px)' : 48,
             minWidth: sidebarOpen ? 'min(100vw, 296px)' : 48,
             overflow: sidebarOpen ? 'hidden' : 'visible',
+            background: !sidebarOpen ? C.card : undefined,
           }}>
 
           {/* Sidebar header: title + X (open) or hamburger (closed) */}
@@ -1216,7 +1222,7 @@ function DatasetDetailPane({
 
             {/* Active phase (primary content, like a VE lesson) */}
             {activeSection ? (
-              <section style={{ background: C.card, boxShadow: isDark ? 'none' : '0 0 0 1px rgba(0,0,0,0.06), 0 2px 12px rgba(0,0,0,0.05)', borderRadius: 16, overflow: 'hidden' }}>
+              <section style={{ background: C.card, border: `1px solid ${C.divider}`, borderRadius: 16, overflow: 'hidden' }}>
                 <div style={{ padding: '22px 24px 18px' }}>
                   <p style={{ margin: '0 0 7px', color: accent, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>Phase {analystSections.findIndex(section => section.id === activeSection.id) + 1} of {analystSections.length}</p>
                   <h3 style={{ margin: 0, color: C.text, fontSize: 22, lineHeight: 1.25, fontWeight: 700 }}>{activeSection.title}</h3>

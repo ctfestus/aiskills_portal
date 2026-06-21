@@ -703,8 +703,15 @@ export default function VirtualExperienceTaker({
       {/* Full-width nav bar -- same background as the body, no divider (matches course) */}
       <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 py-2"
         style={{ background: isDark ? '#141414' : '#F2F5FA', minHeight: 44 }}>
-        {/* Left: logo */}
-        <div className="flex items-center flex-shrink-0">
+        {/* Left: hamburger (mobile, only when sidebar closed) + logo */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {!sidebarOpen && (
+            <button onClick={() => setSidebarOpen(true)}
+              className={`sm:hidden p-1.5 rounded-lg transition-colors flex-shrink-0 ${isDark ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800' : 'text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100'}`}
+              title="Open course outline">
+              <MenuIcon className="w-5 h-5" />
+            </button>
+          )}
           {(isDark ? (logoDarkUrl || logoUrl) : logoUrl) && (
             <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center' }}>
               <img src={(isDark ? (logoDarkUrl || logoUrl) : logoUrl) || undefined} alt="" style={{ height: 24, width: 'auto', objectFit: 'contain' }} />
@@ -734,21 +741,6 @@ export default function VirtualExperienceTaker({
         <div className="fixed inset-0 bg-black/60 z-[55] sm:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Mobile open button -- tab flush from left edge of content when sidebar is closed */}
-      {!sidebarOpen && (
-        <div className="absolute top-4 left-0 z-50 sm:hidden group">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="px-2.5 py-2 rounded-r-lg hover:opacity-80 transition-opacity"
-            style={{ color: muted, background: surface, ...(isDark ? {} : { border: `1px solid ${border}`, borderLeft: 'none' }) }}
-          >
-            <MenuIcon className="w-5 h-5" />
-          </button>
-          <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white">
-            Open course outline
-          </span>
-        </div>
-      )}
 
       {/* Sidebar: absolute overlay on mobile, in-flow on sm+ -- rounded card to match the course player */}
       <aside className={`absolute inset-y-0 left-0 z-[56] rounded-r-2xl sm:relative sm:inset-auto sm:z-40 flex-shrink-0 flex flex-col transition-all duration-300 sm:my-3 sm:ml-3 sm:rounded-2xl ${!sidebarOpen ? '-translate-x-full sm:translate-x-0' : 'translate-x-0'}`}
