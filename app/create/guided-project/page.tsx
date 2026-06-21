@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import type { LessonDoc } from '@/lib/lesson-doc';
-import { SIMULATION_IMPACT_OPTIONS, type SimulationImpactPreset } from '@/lib/ve-simulation';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight, ChevronLeft,
@@ -131,7 +130,6 @@ interface Requirement {
   type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review';
   options?: string[];
   optionFeedback?: string[];
-  optionImpacts?: SimulationImpactPreset[];
   correctAnswer?: string;
   expectedAnswer?: string;
   rubric?: string[];
@@ -1645,7 +1643,6 @@ function VirtualExperienceCreatePageInner() {
                                                           ? ['', '', '']
                                                           : undefined,
                                                       optionFeedback: type === 'decision' ? ['', '', ''] : undefined,
-                                                      optionImpacts: type === 'decision' ? ['strong', 'risky', 'poor'] : undefined,
                                                       correctAnswer: type === 'mcq' || type === 'decision' ? '' : undefined,
                                                       expectedAnswer: undefined,
                                                       aiReview: type === 'text' ? req.aiReview : undefined,
@@ -1774,14 +1771,12 @@ function VirtualExperienceCreatePageInner() {
                                               {req.type === 'decision' && (() => {
                                                 const decisionOptions = req.options?.length ? req.options : ['', '', ''];
                                                 const decisionFeedback = decisionOptions.map((_, i) => req.optionFeedback?.[i] ?? '');
-                                                const decisionImpacts = decisionOptions.map((_, i) => req.optionImpacts?.[i] ?? (i === 0 ? 'strong' : i === 1 ? 'risky' : 'poor'));
                                                 const updateDecisionOption = (index: number, value: string) => {
                                                   const nextOptions = [...decisionOptions];
                                                   nextOptions[index] = value;
                                                   updateReq(mod.id, les.id, req.id, {
                                                     options: nextOptions,
                                                     optionFeedback: decisionFeedback,
-                                                    optionImpacts: decisionImpacts,
                                                     correctAnswer: req.correctAnswer === decisionOptions[index] ? value : req.correctAnswer,
                                                   });
                                                 };
@@ -1790,16 +1785,10 @@ function VirtualExperienceCreatePageInner() {
                                                   nextFeedback[index] = value;
                                                   updateReq(mod.id, les.id, req.id, { optionFeedback: nextFeedback });
                                                 };
-                                                const updateDecisionImpact = (index: number, value: SimulationImpactPreset) => {
-                                                  const nextImpacts = [...decisionImpacts];
-                                                  nextImpacts[index] = value;
-                                                  updateReq(mod.id, les.id, req.id, { optionImpacts: nextImpacts });
-                                                };
                                                 const addDecisionOption = () => {
                                                   updateReq(mod.id, les.id, req.id, {
                                                     options: [...decisionOptions, ''],
                                                     optionFeedback: [...decisionFeedback, ''],
-                                                    optionImpacts: [...decisionImpacts, 'neutral'],
                                                   });
                                                 };
                                                 const removeDecisionOption = (index: number) => {
@@ -1807,7 +1796,6 @@ function VirtualExperienceCreatePageInner() {
                                                   updateReq(mod.id, les.id, req.id, {
                                                     options: decisionOptions.filter((_, i) => i !== index),
                                                     optionFeedback: decisionFeedback.filter((_, i) => i !== index),
-                                                    optionImpacts: decisionImpacts.filter((_, i) => i !== index),
                                                     correctAnswer: req.correctAnswer === removed ? '' : req.correctAnswer,
                                                   });
                                                 };
@@ -1816,7 +1804,7 @@ function VirtualExperienceCreatePageInner() {
                                                   <div className="space-y-2">
                                                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px]" style={{ background: tc.bg, color: C.muted }}>
                                                       <PenLine className="w-3 h-3 flex-shrink-0" style={{ color: tc.color }} />
-                                                      Students choose a reply. Pick a simple impact preset so the final report can reflect workplace judgement automatically.
+                                                      Renders as a team-chat thread. Students reply with one option and see scripted stakeholder feedback.
                                                     </div>
                                                     {decisionOptions.map((opt, oi) => {
                                                       const letter = String.fromCharCode(65 + oi);
@@ -1851,20 +1839,6 @@ function VirtualExperienceCreatePageInner() {
                                                             style={{ ...inp, background: C.input, fontSize: 12 }}
                                                             placeholder="Scripted feedback shown after this choice..."
                                                           />
-                                                          <div className="flex items-start gap-2">
-                                                            <select
-                                                              value={decisionImpacts[oi]}
-                                                              onChange={e => updateDecisionImpact(oi, e.target.value as SimulationImpactPreset)}
-                                                              style={{ padding: '6px 8px', borderRadius: 8, border: `1px solid ${C.cardBorder}`, background: C.input, color: C.text, fontSize: 12, fontWeight: 600 }}
-                                                            >
-                                                              {SIMULATION_IMPACT_OPTIONS.map(optMeta => (
-                                                                <option key={optMeta.value} value={optMeta.value}>{optMeta.label}</option>
-                                                              ))}
-                                                            </select>
-                                                            <p className="text-[11px] leading-snug flex-1 pt-1" style={{ color: C.muted }}>
-                                                              {SIMULATION_IMPACT_OPTIONS.find(optMeta => optMeta.value === decisionImpacts[oi])?.description}
-                                                            </p>
-                                                          </div>
                                                         </div>
                                                       );
                                                     })}
