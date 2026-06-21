@@ -63,7 +63,6 @@ const requirementSchema = {
     type:          { type: Type.STRING }, // includes mcq/task/text plus deterministic simulation and AI reviewer types
     options:       { type: Type.ARRAY, items: { type: Type.STRING } },
     optionFeedback: { type: Type.ARRAY, items: { type: Type.STRING } },
-    optionImpacts: { type: Type.ARRAY, items: { type: Type.STRING } },
     correctAnswer:  { type: Type.STRING },
     expectedAnswer: { type: Type.STRING },
     rubric:        { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -179,7 +178,7 @@ DATASET:
 - filename reflects the company (e.g. "narapay_transactions.csv").
 
 REQUIREMENTS (MIXED QUESTION TYPES):
-Most lessons: exactly 4 requirements -- 2 MCQ + 1 Task + 1 Short Answer. In 1-2 non-capstone lessons across the project, replace the Short Answer with a Workplace Decision when a judgement moment would make the experience more realistic.
+Most lessons: exactly 4 requirements -- 2 MCQ + 1 Task + 1 Short Answer.
 
 - MCQ (type "mcq"): data analysis or tool/formula questions tied to the dataset.
   - label: specific question referencing column names or metrics.
@@ -195,12 +194,6 @@ Most lessons: exactly 4 requirements -- 2 MCQ + 1 Task + 1 Short Answer. In 1-2 
   - description: one sentence guiding their thinking.
   - expectedAnswer: a model answer (1-2 sentences).
   - NO options, NO correctAnswer.
-
-- Workplace Decision (type "decision"): one realistic team-chat choice where the student must decide how to proceed.
-  - options: 3-4 plausible replies.
-  - optionFeedback: one concise stakeholder response per option.
-  - optionImpacts: one preset per option. Use only "strong", "good", "risky", "poor", "recovery", or "neutral".
-  - correctAnswer: recommended option, matching one option exactly.
 
 CAPSTONE LESSON (last lesson of each module): replace the short answer with one AI Reviewer step.
 Choose the reviewer type based on the tools used in this module:
@@ -218,7 +211,7 @@ AI Reviewer step fields:
 - minScore: 6 for all AI reviewer steps.
 - NO options, NO correctAnswer, NO expectedAnswer.
 
-Order within regular lessons: mcq, mcq, task, text OR mcq, mcq, task, decision.
+Order within regular lessons: mcq, mcq, task, text.
 Order within capstone lessons: mcq, mcq, task, ai_reviewer.
 Questions must progress in difficulty across modules.
 
@@ -227,7 +220,7 @@ IDs: use "mod-1", "les-1-1", "req-1-1-1" format.
 Generate:
 - 3-4 modules (each a project phase: data exploration  analysis  visualisation  insights)
 - 2-3 lessons per module
-- 4 requirements per lesson: regular lessons get 2 mcq + 1 task + 1 text, except 1-2 lessons across the whole project may use 2 mcq + 1 task + 1 decision; capstone lessons (last lesson of each module) get 2 mcq + 1 task + 1 AI reviewer step (code_review, excel_review, or dashboard_critique) with rubric, schema/context, and minScore: 6
+- 4 requirements per lesson: regular lessons get 2 mcq + 1 task + 1 text; capstone lessons (last lesson of each module) get 2 mcq + 1 task + 1 AI reviewer step (code_review, excel_review, or dashboard_critique) with rubric, schema/context, and minScore: 6
 - tagline: one punchy sentence
 - background: 2-3 direct sentences (HTML <p>)
 - description: 1 sentence summary (HTML <p>)
@@ -307,7 +300,7 @@ ${csvContent}
 
 Generate 3-4 modules progressing through: data exploration, analysis, visualisation, insights.
 Each module: 2-3 lessons. Each lesson: exactly 4 requirements.
-Regular lessons: 2 mcq + 1 task + 1 text. In 1-2 non-capstone lessons across the project, replace the text requirement with a decision requirement if a workplace judgement moment fits.
+Regular lessons: 2 mcq + 1 task + 1 text.
 Capstone lesson (LAST lesson of each module): 2 mcq + 1 task + 1 AI reviewer step.
 
 LESSON BODY RULES:
@@ -346,12 +339,6 @@ SHORT ANSWER (type "text") -- regular lessons only:
 - description: one guiding sentence.
 - expectedAnswer: model answer (1-2 sentences).
 - NO options, NO correctAnswer.
-
-- Workplace Decision (type "decision"): use sparingly for one or two high-value judgement moments.
-  - options: 3-4 plausible workplace replies.
-  - optionFeedback: one short stakeholder response per option.
-  - optionImpacts: one preset per option. Use only "strong", "good", "risky", "poor", "recovery", or "neutral".
-  - correctAnswer: the recommended option, matching one option exactly.
 
 AI REVIEWER STEP -- capstone lessons only (last lesson of each module):
 Choose type based on tools: SQL or Python present  "code_review". Excel present (no SQL/Python focus)  "excel_review". Power BI, Tableau, or dashboard tools  "dashboard_critique". If multiple apply, pick the most relevant to this module's focus.
@@ -566,7 +553,6 @@ ${emailFrameBlock}
               id: r.id, label: r.label, description: r.description,
               type: r.type, options: r.options, correctAnswer: r.correctAnswer,
               optionFeedback: r.optionFeedback,
-              optionImpacts: r.optionImpacts,
               expectedAnswer: r.expectedAnswer,
               rubric: r.rubric,
               schema: r.schema,
@@ -594,7 +580,7 @@ RULES:
 - Requirement types can be "mcq", "task", "text", "upload", "briefing", "scenario_update", "decision", "debrief", "dashboard_critique", "code_review", or "excel_review". Only change types if the instruction asks.
 - For "briefing": it renders as an inbox email. Use label as the email subject and description as the email body.
 - For "scenario_update": it renders as a Slack/Teams-style project-room message. Use label as the message headline and description as the update body.
-- For "decision": it renders as a chat decision thread. Use options for reply choices, optionFeedback for scripted stakeholder replies, and optionImpacts for simple outcome presets. optionImpacts must align with options and use only "strong", "good", "risky", "poor", "recovery", or "neutral". correctAnswer may mark the recommended path but the student is not blocked by choosing another path.
+- For "decision": it renders as a chat decision thread. Use options for reply choices and optionFeedback for scripted stakeholder replies shown after each choice. correctAnswer may mark the recommended path but the student is not blocked by choosing another path.
 - For "debrief": it renders as an email composer. Use label as the email subject and description as composer guidance.
 - For "task": no options/correctAnswer/expectedAnswer. For "text": no options/correctAnswer, may have expectedAnswer.
 - Keep lesson bodies concise (2-3 sentences, plain <p> tags).
