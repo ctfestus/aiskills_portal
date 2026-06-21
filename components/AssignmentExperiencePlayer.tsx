@@ -967,7 +967,7 @@ export default function AssignmentExperiencePlayer({
                             const val = prog?.notes ?? '';
                             const hasContent = val.replace(/<[^>]*>/g, '').trim().length > 0;
                             const replyOpen = isDone || openReplies.has(req.id) || hasContent;
-                            const needsEval = !!req.aiReview;
+                            const needsEval = !!(req.aiReview || req.expectedAnswer);
                             const isTyping = efTyping[req.id];
                             const isReviewing = efReviewing[req.id];
                             const feedback = aiFeedback[req.id];

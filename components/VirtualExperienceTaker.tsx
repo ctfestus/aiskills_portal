@@ -1495,7 +1495,7 @@ export default function VirtualExperienceTaker({
                           const noteVal = noteValues[req.id] ?? (progress[req.id]?.notes || '');
                           const hasContent = noteVal.replace(/<[^>]*>/g, '').trim().length > 0;
                           const replyOpen = done || openReplies.has(req.id) || hasContent;
-                          const needsEval = !!req.aiReview;
+                          const needsEval = !!(req.aiReview || req.expectedAnswer);
                           const isTyping = efTyping[req.id];
                           const isReviewing = efReviewing[req.id];
                           const feedback = aiFeedback[req.id];
