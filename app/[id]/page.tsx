@@ -276,6 +276,7 @@ export default function PublicFormPage() {
   const [projectProgress,     setProjectProgress]     = useState<Record<string,any>>({});
   const [projectInitModId,    setProjectInitModId]    = useState('');
   const [projectInitLesId,    setProjectInitLesId]    = useState('');
+  const [projectPreviewMode,  setProjectPreviewMode]  = useState(false);
   // Course sign-up flow
   const [courseStarted, setCourseStarted] = useState(true);
   const [retakeKey, setRetakeKey] = useState(0);
@@ -402,26 +403,32 @@ export default function PublicFormPage() {
         // Auto-resume VE: only skip cover page if the user already has saved progress
         if (user && (data.config?.isVirtualExperience || data.config?.isGuidedProject)) {
           const { data: { session } } = await supabase.auth.getSession();
-          const { data: student } = await supabase.from('students').select('full_name, email').eq('id', user.id).single();
+          const { data: student } = await supabase.from('students').select('full_name, email, role').eq('id', user.id).single();
           const name  = student?.full_name || user.user_metadata?.full_name || '';
           const email = student?.email || user.email || '';
+          const isPreviewUser = student?.role !== 'student';
           let hasProgress = false;
-          try {
-            const r = await fetch(`/api/guided-project-progress?formId=${data.id}&studentId=${user.id}`, {
-              headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
-            });
-            const { attempt } = await r.json();
-            if (attempt) {
-              setProjectProgress(attempt.progress || {});
-              setProjectInitModId(attempt.current_module_id || '');
-              setProjectInitLesId(attempt.current_lesson_id || '');
-              hasProgress = true;
-            }
-          } catch {}
+          if (!isPreviewUser) {
+            try {
+              const r = await fetch(`/api/guided-project-progress?formId=${data.id}&studentId=${user.id}`, {
+                headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+              });
+              if (r.ok) {
+                const { attempt } = await r.json();
+                if (attempt) {
+                  setProjectProgress(attempt.progress || {});
+                  setProjectInitModId(attempt.current_module_id || '');
+                  setProjectInitLesId(attempt.current_lesson_id || '');
+                  hasProgress = true;
+                }
+              }
+            } catch {}
+          }
           setProjectStudentName(name);
           setProjectStudentEmail(email);
           setProjectUserId(user.id);
           setProjectSessionToken(session?.access_token ?? '');
+          setProjectPreviewMode(isPreviewUser);
           if (hasProgress) setProjectStarted(true);
         }
 
@@ -690,25 +697,31 @@ export default function PublicFormPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data: { session } } = await supabase.auth.getSession();
-      const { data: student } = await supabase.from('students').select('full_name, email').eq('id', user.id).single();
+      const { data: student } = await supabase.from('students').select('full_name, email, role').eq('id', user.id).single();
       const name  = student?.full_name || user.user_metadata?.full_name || '';
       const email = student?.email || user.email || '';
+      const isPreviewUser = student?.role !== 'student';
       // Restore any saved progress
-      try {
-        const r = await fetch(`/api/guided-project-progress?formId=${form.id}&studentId=${user.id}`, {
-          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
-        });
-        const { attempt } = await r.json();
-        if (attempt) {
-          setProjectProgress(attempt.progress || {});
-          setProjectInitModId(attempt.current_module_id || '');
-          setProjectInitLesId(attempt.current_lesson_id || '');
-        }
-      } catch {}
+      if (!isPreviewUser) {
+        try {
+          const r = await fetch(`/api/guided-project-progress?formId=${form.id}&studentId=${user.id}`, {
+            headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+          });
+          if (r.ok) {
+            const { attempt } = await r.json();
+            if (attempt) {
+              setProjectProgress(attempt.progress || {});
+              setProjectInitModId(attempt.current_module_id || '');
+              setProjectInitLesId(attempt.current_lesson_id || '');
+            }
+          }
+        } catch {}
+      }
       setProjectStudentName(name);
       setProjectStudentEmail(email);
       setProjectUserId(user.id);
       setProjectSessionToken(session?.access_token ?? '');
+      setProjectPreviewMode(isPreviewUser);
       setProjectStarted(true);
     };
 
@@ -730,6 +743,7 @@ export default function PublicFormPage() {
           shortCourse={!!form.is_short_course}
           logoUrl={logoUrl}
           logoDarkUrl={logoDarkUrl}
+          previewMode={projectPreviewMode}
         />
       );
     }

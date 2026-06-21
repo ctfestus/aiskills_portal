@@ -299,6 +299,7 @@ export default function VirtualExperienceTaker({
   const [uploadingReq, setUploadingReq] = useState<string | null>(null);
   const [aiReviewing,  setAiReviewing]  = useState<Record<string, boolean>>({});
   const [aiFeedback,   setAiFeedback]   = useState<Record<string, { passed: boolean; feedback: string; score: number } | null>>({});
+  const [saveError,    setSaveError]    = useState<string | null>(null);
   const saveTimeout  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mainScrollRef = useRef<HTMLDivElement>(null);
   const [typingDecisions, setTypingDecisions] = useState<Set<string>>(new Set());
@@ -328,27 +329,30 @@ export default function VirtualExperienceTaker({
   const currentLesPct  = currentLes ? lessonProgress(currentLes, progress) : 0;
   const allCurrentDone = currentLesPct === 100;
   const remainingCount = currentLes ? currentLes.requirements.filter(r => !progress[r.id]?.completed).length : 0;
+  const canPersistProgress = !previewMode && !reviewMode && !!formId && formId !== 'preview' && !!userId && userId !== 'preview';
 
   // Load existing review / completion state
   useEffect(() => {
-    if (previewMode) return;
+    if (!canPersistProgress) return;
     fetch(`/api/guided-project-progress?formId=${formId}&studentId=${userId}`, { headers: authHeader })
-      .then(r => r.json())
-      .then(({ attempt }) => {
+      .then(r => r.ok ? r.json() : null)
+      .then((data) => {
+        const attempt = data?.attempt;
         if (attempt?.review) setReview(attempt.review);
         if (attempt?.completed_at) setCompleted(true);
       })
       .catch(() => {});
-  }, [formId, studentEmail, authHeader, userId, previewMode]);
+  }, [formId, authHeader, userId, canPersistProgress]);
 
   // Save progress (debounced 800ms): skipped in review mode and preview mode
   const saveProgress = useCallback((prog: Progress, modId: string, lesId: string, completedAt?: string) => {
-    if (reviewMode || previewMode) return;
+    if (!canPersistProgress) return;
     clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(async () => {
       setSaving(true);
+      setSaveError(null);
       try {
-        await fetch('/api/guided-project-progress', {
+        const res = await fetch('/api/guided-project-progress', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeader },
           body: JSON.stringify({
@@ -359,11 +363,19 @@ export default function VirtualExperienceTaker({
             completedAt: completedAt || null,
           }),
         });
+        if (!res.ok) {
+          let message = 'Progress was not saved. Please refresh and try again.';
+          try {
+            const json = await res.json();
+            if (json?.error) message = json.error;
+          } catch {}
+          setSaveError(message);
+        }
       } finally {
         setSaving(false);
       }
     }, 800);
-  }, [formId, studentEmail, studentName, authHeader, reviewMode, previewMode]);
+  }, [formId, studentEmail, studentName, authHeader, canPersistProgress]);
 
   const toggleReq = (reqId: string) => {
     setProgress(prev => {
@@ -434,7 +446,7 @@ export default function VirtualExperienceTaker({
   };
 
   const handleComplete = async () => {
-    if (previewMode) { setCompleted(true); return; }
+    if (!canPersistProgress) { setCompleted(true); return; }
     const now = new Date().toISOString();
     setSaving(true);
     try {
@@ -458,7 +470,7 @@ export default function VirtualExperienceTaker({
   };
 
   const handleGetCertificate = async () => {
-    if (previewMode) return;
+    if (!canPersistProgress) return;
     setCertLoading(true);
     setCertError(null);
     try {
@@ -2437,6 +2449,12 @@ export default function VirtualExperienceTaker({
                   <p className="text-[12.5px] font-semibold" style={{ color: accentColor }}>
                     {remainingCount === 1 ? '1 item remaining.' : `${remainingCount} items remaining.`} Complete {remainingCount === 1 ? 'it' : 'them'} to move forward.
                   </p>
+                </div>
+              )}
+              {saveError && (
+                <div className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl"
+                  style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
+                  <p className="text-[12.5px] font-semibold" style={{ color: '#f59e0b' }}>{saveError}</p>
                 </div>
               )}
               <div className="flex items-center justify-between pt-2 pb-16 gap-2">
