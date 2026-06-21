@@ -225,6 +225,7 @@ export default function AssignmentExperiencePlayer({
   // Review is read-only and exists only after grading. Pre-grading behaviour is unchanged.
   const readOnly = graded;
   const [completeError, setCompleteError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [typingDecisions, setTypingDecisions] = useState<Set<string>>(new Set());
   const [typingAcks,      setTypingAcks]      = useState<Set<string>>(new Set());
@@ -259,20 +260,29 @@ export default function AssignmentExperiencePlayer({
   };
 
   const saveProgress = useCallback(async (prog: Progress) => {
-    if (previewMode || readOnly) return;
+    if (previewMode || readOnly || !formId || formId === 'preview' || !userId || userId === 'preview') return;
     clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(async () => {
       setSaving(true);
+      setSaveError(null);
       try {
-        await fetch('/api/guided-project-progress', {
+        const res = await fetch('/api/guided-project-progress', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...await getAuthHeader() },
           body: JSON.stringify({ formId, userId, progress: prog, currentModuleId: activeModule, currentLessonId: activeLesson, assignmentId: assignmentId || undefined }),
         });
+        if (!res.ok) {
+          let message = 'Progress was not saved. Please refresh and try again.';
+          try {
+            const json = await res.json();
+            if (json?.error) message = json.error;
+          } catch {}
+          setSaveError(message);
+        }
       } finally { setSaving(false); }
     }, 800);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formId, userId, activeModule, activeLesson, sessionToken, readOnly]);
+  }, [formId, userId, activeModule, activeLesson, sessionToken, readOnly, previewMode]);
 
   const updateProgress = useCallback((reqId: string, patch: Partial<Progress[string]>) => {
     setProgress(prev => {
@@ -1495,6 +1505,11 @@ export default function AssignmentExperiencePlayer({
               )}
 
               {/* Prev / Next navigation */}
+              {saveError && (
+                <div className="mx-6 mb-0 mt-0 px-4 py-3 rounded-xl text-xs" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: '#f59e0b' }}>
+                  {saveError}
+                </div>
+              )}
               {completeError && (
                 <div className="mx-6 mb-0 mt-0 px-4 py-3 rounded-xl text-xs" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}>
                   {completeError}
