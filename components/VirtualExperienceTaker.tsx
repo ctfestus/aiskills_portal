@@ -1518,33 +1518,48 @@ export default function VirtualExperienceTaker({
                               setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
                               return;
                             }
-                            setEfTyping(prev => ({ ...prev, [req.id]: true }));
-                            setAiReviewing(prev => ({ ...prev, [req.id]: true }));
-                            setAiFeedback(prev => ({ ...prev, [req.id]: null }));
-                            fetch('/api/ve-answer-review', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json', ...authHeader },
-                              body: JSON.stringify({
-                                question: req.label, description: req.description, studentAnswer: noteVal,
-                                context: req.context, rubric: req.rubric, expectedAnswer: req.expectedAnswer,
-                                projectContext: { company: config.company || null, role: config.role || null, industry: config.industry || null, moduleTitle: currentMod?.title || null, lessonTitle: currentLes?.title || null },
-                              }),
-                            })
-                            .then(r => r.json())
-                            .then(json => {
-                              setAiFeedback(prev => ({ ...prev, [req.id]: { passed: json.passed ?? false, feedback: json.feedback || '', score: json.score ?? 0 } }));
-                              setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
-                            })
-                            .catch(() => {
-                              setAiFeedback(prev => ({ ...prev, [req.id]: { passed: true, feedback: 'Your response has been noted. Well done for engaging with this question.', score: 70 } }));
-                              setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
-                            })
-                            .finally(() => setAiReviewing(prev => ({ ...prev, [req.id]: false })));
                             const delay = 2000 + Math.floor(Math.random() * 2001);
-                            setTimeout(() => {
-                              setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
-                              setEfReviewing(prev => ({ ...prev, [req.id]: true }));
-                            }, delay);
+                            setEfTyping(prev => ({ ...prev, [req.id]: true }));
+                            if (req.aiReview) {
+                              // AI evaluation path
+                              setAiReviewing(prev => ({ ...prev, [req.id]: true }));
+                              setAiFeedback(prev => ({ ...prev, [req.id]: null }));
+                              fetch('/api/ve-answer-review', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', ...authHeader },
+                                body: JSON.stringify({
+                                  question: req.label, description: req.description, studentAnswer: noteVal,
+                                  context: req.context, rubric: req.rubric, expectedAnswer: req.expectedAnswer,
+                                  projectContext: { company: config.company || null, role: config.role || null, industry: config.industry || null, moduleTitle: currentMod?.title || null, lessonTitle: currentLes?.title || null },
+                                }),
+                              })
+                              .then(r => r.json())
+                              .then(json => {
+                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed: json.passed ?? false, feedback: json.feedback || '', score: json.score ?? 0 } }));
+                                setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
+                              })
+                              .catch(() => {
+                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed: true, feedback: 'Your response has been noted. Well done for engaging with this question.', score: 70 } }));
+                                setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
+                              })
+                              .finally(() => setAiReviewing(prev => ({ ...prev, [req.id]: false })));
+                              setTimeout(() => {
+                                setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                                setEfReviewing(prev => ({ ...prev, [req.id]: true }));
+                              }, delay);
+                            } else {
+                              // Manual comparison path: compare against expectedAnswer locally
+                              const normalize = (s: string) => s.replace(/<[^>]*>/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+                              const studentNorm = normalize(noteVal);
+                              const expectedNorm = normalize(req.expectedAnswer || '');
+                              const passed = studentNorm === expectedNorm || studentNorm.includes(expectedNorm) || expectedNorm.includes(studentNorm);
+                              setTimeout(() => {
+                                setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                                setEfReviewing(prev => ({ ...prev, [req.id]: true }));
+                                setAiFeedback(prev => ({ ...prev, [req.id]: { passed, score: passed ? 100 : 0, feedback: passed ? 'That is correct. Well done.' : `Not quite right. The expected answer is: ${req.expectedAnswer}` } }));
+                                setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: noteVal, completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
+                              }, delay);
+                            }
                           };
                           return efCard(
                             isTyping ? (
