@@ -150,7 +150,7 @@ These details are fixed. Build the entire project around this company and scenar
       const emailFrameBlock = emailStyle ? `
 
 == EMAIL FRAME MODE (INSTRUCTOR-ENABLED) ==
-Set emailFrame: true on EVERY task, upload, deliverable, and AI reviewer requirement. Do NOT set it on MCQ or short-answer (text) requirements.
+Set emailFrame: true on EVERY requirement: tasks, uploads, deliverables, AI reviewer, MCQ, and short-answer/text requirements.
 For each requirement with emailFrame: true, write an emailBody field: a short professional email (2-4 sentences) from the manager to the student, describing the specific work they must do. Plain text only, no HTML tags or bullet lists inside emailBody.
 Example emailBody: "Hi, please find the dataset attached. Your task for this module is to build a pivot table grouping transactions by region and summing the Amount column. Looking forward to your submission."` : '';
 
@@ -408,7 +408,7 @@ These details are fixed. Build the entire project around this company and scenar
       const emailFrameBlock = emailStyle ? `
 
 == EMAIL FRAME MODE (INSTRUCTOR-ENABLED) ==
-Set emailFrame: true on EVERY task, upload, deliverable, and AI reviewer requirement. Do NOT set it on MCQ or short-answer (text) requirements.
+Set emailFrame: true on EVERY requirement: tasks, uploads, deliverables, AI reviewer, MCQ, and short-answer/text requirements.
 For each requirement with emailFrame: true, write an emailBody field: a short professional email (2-4 sentences) from the manager to the student, describing the specific work they must do. Plain text only, no HTML tags or bullet lists inside emailBody.
 Example emailBody: "Hi, please find the dataset attached. Your task for this module is to build a pivot table grouping transactions by region and summing the Amount column. Looking forward to your submission."` : '';
 

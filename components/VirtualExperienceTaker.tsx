@@ -394,7 +394,7 @@ export default function VirtualExperienceTaker({
     });
   };
 
-  const handleFileUpload = async (reqId: string, file: File) => {
+  const handleFileUpload = async (reqId: string, file: File, noComplete?: boolean) => {
     setUploadingReq(reqId);
     try {
       const ext  = file.name.split('.').pop();
@@ -403,7 +403,7 @@ export default function VirtualExperienceTaker({
       if (error) throw error;
       const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
       setProgress(prev => {
-        const next = { ...prev, [reqId]: { ...prev[reqId], fileUrl: publicUrl, completed: true } };
+        const next = { ...prev, [reqId]: { ...prev[reqId], fileUrl: publicUrl, ...(noComplete ? {} : { completed: true }) } };
         saveProgress(next, currentModId, currentLesId);
         return next;
       });
@@ -1054,12 +1054,12 @@ export default function VirtualExperienceTaker({
                                       {req.description && <p style={{ fontSize: 13.5, marginTop: 4, color: slackMuted, lineHeight: 1.5 }}>{req.description}</p>}
                                       {!done && !reviewMode ? (
                                         <button onClick={acknowledge} style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 4, border: `1px solid ${slackBorder}`, background: 'transparent', fontSize: 13, color: slackMuted, cursor: 'pointer' }}>
-                                          <span style={{ fontSize: 15 }}>👍</span> Add reaction
+                                          <span style={{ fontSize: 15 }}>{'👍'}</span> Add reaction
                                         </button>
                                       ) : done ? (
                                         <div style={{ marginTop: 8 }}>
                                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px', borderRadius: 4, border: `1px solid ${accentColor}55`, background: `${accentColor}12`, fontSize: 13, color: accentColor, fontWeight: 600 }}>
-                                            <span style={{ fontSize: 15 }}>👍</span> You&nbsp;&nbsp;1
+                                            <span style={{ fontSize: 15 }}>{'👍'}</span> You&nbsp;&nbsp;1
                                           </span>
                                         </div>
                                       ) : null}
@@ -1089,7 +1089,7 @@ export default function VirtualExperienceTaker({
                                             <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>You</span>
                                             <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
                                           </div>
-                                          <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>Got it, on it. 👍</p>
+                                          <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>{'Got it, on it. 👍'}</p>
                                         </div>
                                       )}
                                     </div>
@@ -1356,7 +1356,7 @@ export default function VirtualExperienceTaker({
                                           <Send className="w-3.5 h-3.5" /> Send
                                         </button>
                                         <button
-                                          onClick={() => setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; })}
+                                          onClick={() => { setNote(req.id, ''); setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; }); }}
                                           style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: 'transparent', fontSize: 13, color: isDark ? '#666' : '#aaa', cursor: 'pointer' }}>
                                           Discard
                                         </button>
@@ -1658,7 +1658,7 @@ export default function VirtualExperienceTaker({
                                       style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: hasContent ? accentColor : (isDark ? '#333' : '#e0e0e0'), color: hasContent ? '#fff' : (isDark ? '#666' : '#aaa'), fontSize: 13.5, fontWeight: 600, border: 'none', cursor: hasContent ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}>
                                       <Send className="w-3.5 h-3.5" /> Send
                                     </button>
-                                    <button onClick={() => setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; })} style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: 'transparent', fontSize: 13, color: isDark ? '#666' : '#aaa', cursor: 'pointer' }}>Discard</button>
+                                    <button onClick={() => { setNote(req.id, ''); setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; }); }} style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: 'transparent', fontSize: 13, color: isDark ? '#666' : '#aaa', cursor: 'pointer' }}>Discard</button>
                                   </div>
                                 </div>
                               </div>
@@ -1744,7 +1744,7 @@ export default function VirtualExperienceTaker({
                                         {uploading ? 'Uploading...' : (fileUrl ? 'Replace file' : 'Attach file')}
                                         <input type="file" className="hidden" disabled={uploading} onChange={async e => {
                                           const file = e.target.files?.[0]; if (!file) return;
-                                          await handleFileUpload(req.id, file);
+                                          await handleFileUpload(req.id, file, true);
                                           e.target.value = '';
                                         }} />
                                       </label>

@@ -296,14 +296,14 @@ export default function AssignmentExperiencePlayer({
   }, [saveProgress]);
 
   // File upload for upload requirements
-  async function handleFileUpload(reqId: string, file: File) {
+  async function handleFileUpload(reqId: string, file: File, noComplete?: boolean) {
     setUploadingReq(reqId);
     try {
       const path = `ve-submissions/${formId}/${userId}/${reqId}/${Date.now()}-${file.name}`;
       const { error } = await supabase.storage.from('form-assets').upload(path, file, { upsert: true });
       if (error) throw error;
       const { data: { publicUrl } } = supabase.storage.from('form-assets').getPublicUrl(path);
-      updateProgress(reqId, { fileUrl: publicUrl, completed: true });
+      updateProgress(reqId, { fileUrl: publicUrl, ...(noComplete ? {} : { completed: true }) });
     } finally { setUploadingReq(null); }
   }
 
@@ -555,12 +555,12 @@ export default function AssignmentExperiencePlayer({
                                           setTypingAcks(prev => { const n = new Set(prev); n.delete(req.id); return n; });
                                         }, 2500);
                                       }} style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 4, border: `1px solid ${slackBorder}`, background: 'transparent', fontSize: 13, color: slackMuted, cursor: 'pointer' }}>
-                                        <span style={{ fontSize: 15 }}>👍</span> Add reaction
+                                        <span style={{ fontSize: 15 }}>{'👍'}</span> Add reaction
                                       </button>
                                     ) : isDone ? (
                                       <div style={{ marginTop: 8 }}>
                                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px', borderRadius: 4, border: `1px solid ${accent}55`, background: `${accent}12`, fontSize: 13, color: accent, fontWeight: 600 }}>
-                                          <span style={{ fontSize: 15 }}>👍</span> You&nbsp;&nbsp;1
+                                          <span style={{ fontSize: 15 }}>{'👍'}</span> You&nbsp;&nbsp;1
                                         </span>
                                       </div>
                                     ) : null}
@@ -590,7 +590,7 @@ export default function AssignmentExperiencePlayer({
                                           <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>You</span>
                                           <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
                                         </div>
-                                        <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>Got it, on it. 👍</p>
+                                        <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>{'Got it, on it. 👍'}</p>
                                       </div>
                                     )}
                                   </div>
@@ -837,7 +837,7 @@ export default function AssignmentExperiencePlayer({
                                           <Send className="w-3.5 h-3.5" /> Send
                                         </button>
                                         <button
-                                          onClick={() => setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; })}
+                                          onClick={() => { updateProgress(req.id, { notes: '' }); setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; }); }}
                                           style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: 'transparent', fontSize: 13, color: faint, cursor: 'pointer' }}>
                                           Discard
                                         </button>
@@ -1124,7 +1124,7 @@ export default function AssignmentExperiencePlayer({
                                         style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: hasContent ? accent : (isDark ? '#333' : '#e0e0e0'), color: hasContent ? '#fff' : (isDark ? '#666' : '#aaa'), fontSize: 13.5, fontWeight: 600, border: 'none', cursor: hasContent ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}>
                                         <Send className="w-3.5 h-3.5" /> Send
                                       </button>
-                                      <button onClick={() => setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; })} style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: 'transparent', fontSize: 13, color: faint, cursor: 'pointer' }}>Discard</button>
+                                      <button onClick={() => { updateProgress(req.id, { notes: '' }); setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; }); }} style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: 'transparent', fontSize: 13, color: faint, cursor: 'pointer' }}>Discard</button>
                                     </div>
                                   </div>
                                 </div>
@@ -1209,7 +1209,7 @@ export default function AssignmentExperiencePlayer({
                                           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 8, border: `1.5px dashed ${border}`, cursor: uploading ? 'not-allowed' : 'pointer', fontSize: 13, color: muted }}>
                                             {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                                             {uploading ? 'Uploading...' : (fileUrl ? 'Replace file' : 'Attach file')}
-                                            <input type="file" className="hidden" disabled={uploading} onChange={async e => { const file = e.target.files?.[0]; if (!file) return; await handleFileUpload(req.id, file); e.target.value = ''; }} />
+                                            <input type="file" className="hidden" disabled={uploading} onChange={async e => { const file = e.target.files?.[0]; if (!file) return; await handleFileUpload(req.id, file, true); e.target.value = ''; }} />
                                           </label>
                                           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                             <input value={linkUrl} onChange={e => updateProgress(req.id, { linkUrl: e.target.value })}
