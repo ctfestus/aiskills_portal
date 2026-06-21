@@ -15,6 +15,7 @@ import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
 import CodeReviewPlayer from '@/components/CodeReviewPlayer';
 import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
 import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
+import { buildSimulationReport, describeDecisionImpact, type SimulationImpactPreset } from '@/lib/ve-simulation';
 
 // -- Types ---
 
@@ -25,6 +26,7 @@ interface Requirement {
   type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review';
   options?: string[];
   optionFeedback?: string[];
+  optionImpacts?: SimulationImpactPreset[];
   correctAnswer?: string;
   expectedAnswer?: string;
   rubric?: string[];
@@ -352,11 +354,37 @@ export default function AssignmentExperiencePlayer({
 
   // Pre-grading behaviour -- unchanged.
   if (!graded && done) {
+    const simulationReport = buildSimulationReport(modules, progress);
     return (
-      <div className="rounded-2xl p-8 text-center" style={{ background: 'rgba(14,9,221,0.06)' }}>
-        <CheckCircle className="w-10 h-10 mx-auto mb-3" style={{ color: accent }}/>
-        <p className="text-base font-bold mb-1" style={{ color: accent }}>Experience Complete!</p>
-        <p className="text-sm" style={{ color: muted }}>All missions finished. Your assignment has been submitted.</p>
+      <div className="rounded-2xl p-8 text-center space-y-5" style={{ background: 'rgba(14,9,221,0.06)' }}>
+        <div>
+          <CheckCircle className="w-10 h-10 mx-auto mb-3" style={{ color: accent }}/>
+          <p className="text-base font-bold mb-1" style={{ color: accent }}>Experience Complete!</p>
+          <p className="text-sm" style={{ color: muted }}>All missions finished. Your assignment has been submitted.</p>
+        </div>
+        <div className="rounded-2xl p-4 text-left" style={{ background: isDark ? 'rgba(255,255,255,0.05)' : '#fff', border: `1px solid ${border}` }}>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <p className="text-sm font-bold" style={{ color: text }}>Workplace Performance</p>
+              <p className="text-xs mt-0.5" style={{ color: muted }}>{simulationReport.outcome}</p>
+            </div>
+            <p className="text-2xl font-black" style={{ color: accent }}>{simulationReport.overall}%</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              { label: 'Trust', value: simulationReport.scores.trust },
+              { label: 'Quality', value: simulationReport.scores.quality },
+              { label: 'Risk Control', value: 100 - simulationReport.scores.risk },
+              { label: 'Communication', value: simulationReport.scores.communication },
+            ].map(metric => (
+              <div key={metric.label} className="rounded-xl px-3 py-2" style={{ background: subtle }}>
+                <p className="text-[11px]" style={{ color: muted }}>{metric.label}</p>
+                <p className="text-lg font-black" style={{ color: accent }}>{metric.value}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs leading-relaxed mt-3" style={{ color: muted }}>{simulationReport.growthAreas[0]}</p>
+        </div>
       </div>
     );
   }
@@ -669,6 +697,7 @@ export default function AssignmentExperiencePlayer({
                           const selected = prog?.selectedAnswer ?? '';
                           const selectedIdx = selected ? (req.options ?? []).findIndex(opt => opt === selected) : -1;
                           const feedback = selectedIdx >= 0 ? req.optionFeedback?.[selectedIdx] : '';
+                          const impactInfo = describeDecisionImpact(req, selected);
                           const manName = config.managerName || 'Project Manager';
                           const manInit = manName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
                           const slackBg = isDark ? '#1A1D21' : '#FFFFFF';
@@ -757,6 +786,9 @@ export default function AssignmentExperiencePlayer({
                                           <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
                                         </div>
                                         <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>{feedback || 'Decision recorded. Keep moving forward.'}</p>
+                                        <p style={{ fontSize: 12, color: slackMuted, marginTop: 6, lineHeight: 1.45 }}>
+                                          {impactInfo.label}: {impactInfo.coachMessage}
+                                        </p>
                                       </div>
                                     )}
                                   </div>
