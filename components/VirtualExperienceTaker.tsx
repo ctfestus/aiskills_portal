@@ -17,6 +17,7 @@ import CodeReviewPlayer from '@/components/CodeReviewPlayer';
 import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
 import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
 import AiReviewDisclaimer from '@/components/AiReviewDisclaimer';
+import { buildSimulationReport, describeDecisionImpact, type SimulationImpactPreset } from '@/lib/ve-simulation';
 
 // Hamburger -- matches the course player (tighter line spacing than lucide's Menu).
 function MenuIcon({ className }: { className?: string }) {
@@ -37,6 +38,7 @@ interface Requirement {
   type: 'task' | 'deliverable' | 'reflection' | 'mcq' | 'text' | 'upload' | 'briefing' | 'scenario_update' | 'decision' | 'debrief' | 'dashboard_critique' | 'code_review' | 'excel_review';
   options?: string[];
   optionFeedback?: string[];
+  optionImpacts?: SimulationImpactPreset[];
   correctAnswer?: string;
   expectedAnswer?: string;
   rubric?: string[];
@@ -518,6 +520,7 @@ export default function VirtualExperienceTaker({
   if (completed && !reviewMode) {
     const totalLessons  = modules.reduce((a, m) => a + m.lessons.length, 0);
     const totalModules  = modules.length;
+    const simulationReport = buildSimulationReport(modules, progress);
 
     const buildLinkedInUrl = (name: string, id: string, orgName?: string, issuedAt?: string | null) => {
       const issueDate = issuedAt ? new Date(issuedAt) : new Date();
@@ -582,7 +585,7 @@ export default function VirtualExperienceTaker({
             {[
               { label: 'Milestones', value: totalModules },
               { label: 'Missions',   value: totalLessons },
-              { label: 'Score',      value: '100%' },
+              { label: 'Judgement',  value: `${simulationReport.overall}%` },
             ].map(s => (
               <div key={s.label} className="rounded-2xl p-4 text-center"
                 style={{ background: isDark ? '#1c1c1c' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'}` }}>
@@ -591,6 +594,54 @@ export default function VirtualExperienceTaker({
               </div>
             ))}
           </div>
+
+          {/* Simulation report */}
+          {!shortCourse && (
+            <div className="rounded-2xl overflow-hidden"
+              style={{ background: isDark ? '#1c1c1c' : '#fff', border: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'}` }}>
+              <div className="px-5 py-4 border-b flex items-center justify-between gap-3"
+                style={{ borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}>
+                <div>
+                  <p className="text-[13px] font-bold" style={{ color: text }}>Workplace Performance</p>
+                  <p className="text-[12px] mt-0.5" style={{ color: muted }}>{simulationReport.outcome}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-black" style={{ color: accentColor }}>{simulationReport.overall}%</p>
+                  <p className="text-[11px]" style={{ color: muted }}>overall</p>
+                </div>
+              </div>
+              <div className="px-5 py-4 space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { label: 'Trust', value: simulationReport.scores.trust },
+                    { label: 'Quality', value: simulationReport.scores.quality },
+                    { label: 'Risk Control', value: 100 - simulationReport.scores.risk },
+                    { label: 'Communication', value: simulationReport.scores.communication },
+                  ].map(metric => (
+                    <div key={metric.label} className="rounded-xl px-3 py-2"
+                      style={{ background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}` }}>
+                      <p className="text-[11px]" style={{ color: muted }}>{metric.label}</p>
+                      <p className="text-lg font-black" style={{ color: accentColor }}>{metric.value}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: muted }}>Strength</p>
+                    {simulationReport.strengths.slice(0, 2).map((item, i) => (
+                      <p key={i} className="text-[13px] leading-relaxed" style={{ color: isDark ? '#ccc' : '#444' }}>{item}</p>
+                    ))}
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: muted }}>Next Growth Area</p>
+                    {simulationReport.growthAreas.slice(0, 2).map((item, i) => (
+                      <p key={i} className="text-[13px] leading-relaxed" style={{ color: isDark ? '#ccc' : '#444' }}>{item}</p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Skills demonstrated */}
           {(config.learnOutcomes || []).length > 0 && (
@@ -1173,6 +1224,7 @@ export default function VirtualExperienceTaker({
                         const options = (req.options || []).filter(Boolean);
                         const selectedIdx = selectedAnswer ? (req.options || []).findIndex(opt => opt === selectedAnswer) : -1;
                         const selectedFeedback = selectedIdx >= 0 ? req.optionFeedback?.[selectedIdx] : '';
+                        const impactInfo = describeDecisionImpact(req, selectedAnswer);
                         const chooseDecision = (opt: string) => {
                           if (reviewMode || done) return;
                           setProgress(prev => {
@@ -1267,6 +1319,9 @@ export default function VirtualExperienceTaker({
                                           <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
                                         </div>
                                         <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>{selectedFeedback || 'Decision recorded. Keep moving forward.'}</p>
+                                        <p style={{ fontSize: 12, color: slackMuted, marginTop: 6, lineHeight: 1.45 }}>
+                                          {impactInfo.label}: {impactInfo.coachMessage}
+                                        </p>
                                       </div>
                                     )}
                                   </div>
