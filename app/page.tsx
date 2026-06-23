@@ -921,6 +921,7 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
   const [idx, setIdx] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
   const clipRef  = useRef<HTMLDivElement>(null);
+  const touchX   = useRef<number | null>(null);
   const [containerW, setContainerW] = useState(0);
   const GAP = fullWidth ? 0 : 16;
   const max = Math.max(0, cards.length - 1);
@@ -949,6 +950,16 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
 
   const goTo = (next: number) => setIdx(Math.max(0, Math.min(next, max)));
 
+  // Touch swipe (mobile) -- the prev/next arrows are hidden on small screens
+  const onTouchStart = (e: React.TouchEvent) => { touchX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchX.current;
+    touchX.current = null;
+    if (dx <= -40) goTo(idx + 1);
+    else if (dx >= 40) goTo(idx - 1);
+  };
+
   if (!cards.length) return null;
 
   return (
@@ -963,7 +974,7 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
           </button>
         )}
 
-        <div ref={clipRef} style={{ overflow: 'hidden' }}>
+        <div ref={clipRef} style={{ overflow: 'hidden', touchAction: 'pan-y' }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         <div ref={trackRef} style={{ display: 'flex', gap: GAP, transform: `translateX(-${getTranslate(idx)}px)`, transition: 'transform 0.45s cubic-bezier(0.25,1,0.5,1)' }}>
           {cards.map((ad, i) => {
             if (fullWidth) {
