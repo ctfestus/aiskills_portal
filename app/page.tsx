@@ -921,6 +921,7 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
   const [idx, setIdx] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
   const clipRef  = useRef<HTMLDivElement>(null);
+  const touchX   = useRef<number | null>(null);
   const [containerW, setContainerW] = useState(0);
   const GAP = fullWidth ? 0 : 16;
   const max = Math.max(0, cards.length - 1);
@@ -933,18 +934,31 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
   }, []);
 
   const isMobile = containerW > 0 && containerW < 640;
+  const hasSideImage = cards.some(c => c.imageLayout === 'side' && !!c.bgImage);
   const CARD_W = fullWidth
     ? (containerW > 0 ? containerW : 1280)
     : (containerW > 0 ? Math.min(646, containerW - 40) : 646);
   const CARD_H = fullWidth
     ? (isMobile ? 380 : Math.max(320, Math.min(460, Math.round((containerW || 1280) * 0.30))))
-    : Math.max(220, Math.round(297 * Math.min(1, CARD_W / 646)));
+    : (isMobile && hasSideImage)
+      ? 360
+      : Math.max(220, Math.round(297 * Math.min(1, CARD_W / 646)));
 
   const totalW = cards.length * CARD_W + (cards.length - 1) * GAP;
   const maxTranslate = containerW > 0 ? Math.max(0, totalW - containerW) : (max * (CARD_W + GAP));
   const getTranslate = (i: number) => i === max ? maxTranslate : i * (CARD_W + GAP);
 
   const goTo = (next: number) => setIdx(Math.max(0, Math.min(next, max)));
+
+  // Touch swipe (mobile) -- the prev/next arrows are hidden on small screens
+  const onTouchStart = (e: React.TouchEvent) => { touchX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchX.current;
+    touchX.current = null;
+    if (dx <= -40) goTo(idx + 1);
+    else if (dx >= 40) goTo(idx - 1);
+  };
 
   if (!cards.length) return null;
 
@@ -960,7 +974,7 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
           </button>
         )}
 
-        <div ref={clipRef} style={{ overflow: 'hidden' }}>
+        <div ref={clipRef} style={{ overflow: 'hidden', touchAction: 'pan-y' }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         <div ref={trackRef} style={{ display: 'flex', gap: GAP, transform: `translateX(-${getTranslate(idx)}px)`, transition: 'transform 0.45s cubic-bezier(0.25,1,0.5,1)' }}>
           {cards.map((ad, i) => {
             if (fullWidth) {
@@ -1063,7 +1077,7 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
                     <div className="flex flex-col justify-between" style={{ flex: 1, minWidth: 0, padding }}>
                       {body}
                     </div>
-                    <div style={{ flex: isMobile ? '0 0 40%' : '0 0 44%', overflow: 'hidden' }}>
+                    <div style={{ flex: isMobile ? '0 0 46%' : '0 0 44%', overflow: 'hidden' }}>
                       <img src={ad.bgImage} alt="" className="w-full h-full object-cover" />
                     </div>
                   </div>
