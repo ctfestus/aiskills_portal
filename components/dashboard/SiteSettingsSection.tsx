@@ -618,6 +618,18 @@ export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
           <></>,
           <>
             {Vis('hideAdBanner')}
+            <div className="flex items-center justify-between pb-3 mb-1 border-b" style={{ borderColor: C.cardBorder }}>
+              <div className="pr-3">
+                <p className="text-xs font-semibold" style={{ color: C.text }}>Full-width banner</p>
+                <p className="text-[11px] mt-0.5" style={{ color: C.faint }}>Edge-to-edge image banner with a white text panel on the left. Off = contained cards.</p>
+              </div>
+              <button onClick={() => set('adBannerFullWidth', config.adBannerFullWidth === '1' ? '' : '1')}
+                className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0"
+                style={{ background: config.adBannerFullWidth === '1' ? (config.primaryColor || '#0056D2') : C.cardBorder }}>
+                <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all"
+                  style={{ left: config.adBannerFullWidth === '1' ? 22 : 2 }} />
+              </button>
+            </div>
             {(['1','2','3'] as const).map(n => (
               <div key={n} className="border rounded-lg p-4 space-y-2" style={{ borderColor: C.cardBorder }}>
                 <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Card {n}</p>

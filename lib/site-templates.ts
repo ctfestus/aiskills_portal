@@ -145,6 +145,8 @@ export type SiteConfig = {
   // Ad card image layout ('' = full-cover background, 'side' = image beside bg colour: right on desktop, bottom on mobile)
   ad1ImageLayout: string; ad2ImageLayout: string; ad3ImageLayout: string;
   midAd1ImageLayout: string; midAd2ImageLayout: string;
+  // Top ad banner full-width hero mode ('1' = edge-to-edge image banner with white text panel)
+  adBannerFullWidth: string;
   // Dark mode (Modern template -- '1' = dark, '' = light)
   siteDarkMode: string;
 };
@@ -189,7 +191,7 @@ const ELEVATE_EMPTY = {
   midAd1Label: '', midAd1Title: '', midAd1Description: '', midAd1CtaText: '', midAd1CtaUrl: '', midAd1BgColor: '', midAd1BgImage: '',
   midAd2Label: '', midAd2Title: '', midAd2Description: '', midAd2CtaText: '', midAd2CtaUrl: '', midAd2BgColor: '', midAd2BgImage: '',
   hideMidAdBanner: '',
-  ad1ImageLayout: '', ad2ImageLayout: '', ad3ImageLayout: '', midAd1ImageLayout: '', midAd2ImageLayout: '',
+  ad1ImageLayout: '', ad2ImageLayout: '', ad3ImageLayout: '', midAd1ImageLayout: '', midAd2ImageLayout: '', adBannerFullWidth: '',
   siteDarkMode: '',
 };
 
@@ -213,7 +215,7 @@ const MOMENTUM_EMPTY = {
   midAd1Label: '', midAd1Title: '', midAd1Description: '', midAd1CtaText: '', midAd1CtaUrl: '', midAd1BgColor: '', midAd1BgImage: '',
   midAd2Label: '', midAd2Title: '', midAd2Description: '', midAd2CtaText: '', midAd2CtaUrl: '', midAd2BgColor: '', midAd2BgImage: '',
   hideMidAdBanner: '',
-  ad1ImageLayout: '', ad2ImageLayout: '', ad3ImageLayout: '', midAd1ImageLayout: '', midAd2ImageLayout: '',
+  ad1ImageLayout: '', ad2ImageLayout: '', ad3ImageLayout: '', midAd1ImageLayout: '', midAd2ImageLayout: '', adBannerFullWidth: '',
   siteDarkMode: '',
 };
 
@@ -394,7 +396,7 @@ export const TEMPLATES: Template[] = [
       midAd1Label: 'Trending', midAd1Title: 'Enrol in a guided learning path', midAd1Description: 'Follow a curated sequence of courses and projects designed to take you from beginner to job-ready.', midAd1CtaText: 'Browse paths', midAd1CtaUrl: '/auth', midAd1BgColor: '#0056D2', midAd1BgImage: '',
       midAd2Label: 'Free', midAd2Title: 'Start your first course today', midAd2Description: 'No credit card required. Access your first course free and experience the platform before you commit.', midAd2CtaText: 'Get started free', midAd2CtaUrl: '/auth?mode=signup', midAd2BgColor: '#064E3B', midAd2BgImage: '',
       hideMidAdBanner: '',
-      ad1ImageLayout: '', ad2ImageLayout: '', ad3ImageLayout: '', midAd1ImageLayout: '', midAd2ImageLayout: '',
+      ad1ImageLayout: '', ad2ImageLayout: '', ad3ImageLayout: '', midAd1ImageLayout: '', midAd2ImageLayout: '', adBannerFullWidth: '',
       siteDarkMode: '',
     },
   },

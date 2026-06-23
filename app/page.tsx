@@ -331,7 +331,7 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
   ].filter(p => p.name);
 
   return (
-    <main className="min-h-screen overflow-x-hidden font-sans antialiased" style={{ background: light_bg, fontFamily: bFont }}>
+    <main className="landing-scope min-h-screen overflow-x-hidden font-sans antialiased" style={{ background: light_bg, fontFamily: bFont }}>
 
       {/* NAV */}
       <motion.nav
@@ -916,13 +916,13 @@ const LAND_C = { card: 'white', text: '#1C1D1F', muted: '#6E7383', faint: '#9CA3
 // --- Ad banner carousel ---
 type AdCard = { label: string; title: string; description: string; ctaText: string; ctaUrl: string; bgColor: string; bgImage: string; imageLayout?: string; };
 
-function LandingAdBanner({ ads, hFont, bFont }: { ads: AdCard[]; hFont?: string; bFont?: string }) {
+function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFont?: string; bFont?: string; fullWidth?: boolean }) {
   const cards = ads.filter(a => a.title);
   const [idx, setIdx] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
   const clipRef  = useRef<HTMLDivElement>(null);
   const [containerW, setContainerW] = useState(0);
-  const GAP = 16;
+  const GAP = fullWidth ? 0 : 16;
   const max = Math.max(0, cards.length - 1);
 
   useEffect(() => {
@@ -932,9 +932,13 @@ function LandingAdBanner({ ads, hFont, bFont }: { ads: AdCard[]; hFont?: string;
     return () => obs.disconnect();
   }, []);
 
-  const CARD_W = containerW > 0 ? Math.min(646, containerW - 40) : 646;
-  const CARD_H = Math.max(220, Math.round(297 * Math.min(1, CARD_W / 646)));
   const isMobile = containerW > 0 && containerW < 640;
+  const CARD_W = fullWidth
+    ? (containerW > 0 ? containerW : 1280)
+    : (containerW > 0 ? Math.min(646, containerW - 40) : 646);
+  const CARD_H = fullWidth
+    ? (isMobile ? 380 : Math.max(320, Math.min(460, Math.round((containerW || 1280) * 0.30))))
+    : Math.max(220, Math.round(297 * Math.min(1, CARD_W / 646)));
 
   const totalW = cards.length * CARD_W + (cards.length - 1) * GAP;
   const maxTranslate = containerW > 0 ? Math.max(0, totalW - containerW) : (max * (CARD_W + GAP));
@@ -950,7 +954,7 @@ function LandingAdBanner({ ads, hFont, bFont }: { ads: AdCard[]; hFont?: string;
         {/* Left arrow - hidden on mobile, vertically centered on desktop */}
         {max > 0 && !isMobile && (
           <button onClick={() => goTo(idx - 1)} disabled={idx === 0}
-            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full grid place-items-center transition-all disabled:opacity-20 outline-none focus:outline-none hover:bg-white hover:shadow-md"
+            className={`absolute top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full grid place-items-center transition-all disabled:opacity-20 outline-none focus:outline-none ${fullWidth ? 'left-3 sm:left-6 bg-white shadow-md hover:shadow-lg' : 'left-0 -translate-x-1/2 hover:bg-white hover:shadow-md'}`}
             style={{ color: LAND_C.text }}>
             <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
           </button>
@@ -959,6 +963,56 @@ function LandingAdBanner({ ads, hFont, bFont }: { ads: AdCard[]; hFont?: string;
         <div ref={clipRef} style={{ overflow: 'hidden' }}>
         <div ref={trackRef} style={{ display: 'flex', gap: GAP, transform: `translateX(-${getTranslate(idx)}px)`, transition: 'transform 0.45s cubic-bezier(0.25,1,0.5,1)' }}>
           {cards.map((ad, i) => {
+            if (fullWidth) {
+              const sideImage = ad.imageLayout === 'side' && !!ad.bgImage;
+              const baseColor = ad.bgColor || '#0056D2';
+              return (
+                <div key={i} className="flex-shrink-0 relative overflow-hidden" style={{ width: CARD_W, height: CARD_H }}>
+                  {sideImage ? (
+                    <>
+                      <div className="absolute inset-0" style={{ background: baseColor }} />
+                      <div className="absolute top-0 right-0 h-full" style={{ width: isMobile ? '52%' : '54%' }}>
+                        <img src={ad.bgImage} alt="" className="w-full h-full object-contain object-right" />
+                        <div className="absolute inset-y-0 left-0 pointer-events-none" style={{ width: '35%', background: `linear-gradient(to right, ${baseColor}, transparent)` }} />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="absolute inset-0" style={{ background: ad.bgImage ? `url(${ad.bgImage}) center/cover no-repeat` : baseColor }} />
+                  )}
+                  <div className="relative h-full flex items-center max-w-[1240px] mx-auto px-4 sm:px-8 md:px-14">
+                    <div className="rounded-2xl bg-white"
+                      style={{ maxWidth: isMobile ? (sideImage ? '64%' : '88%') : 460, padding: isMobile ? '22px 22px' : '36px 40px', boxShadow: '0 6px 30px rgba(0,0,0,0.12)' }}>
+                      {ad.label && (
+                        <span className="inline-block text-[10px] font-bold uppercase tracking-widest mb-3"
+                          style={{ color: ad.bgColor || '#0056D2', letterSpacing: '0.12em' }}>
+                          {ad.label}
+                        </span>
+                      )}
+                      <h3 className="font-black leading-[1.08]"
+                        style={{ color: LAND_C.text, fontFamily: hFont, letterSpacing: '-0.02em', fontSize: isMobile ? 'clamp(24px,7vw,30px)' : 'clamp(30px,2.8vw,42px)' }}>
+                        {ad.title}
+                      </h3>
+                      {ad.description && (
+                        <p className="leading-relaxed mt-3"
+                          style={{ color: LAND_C.muted, fontFamily: bFont ?? hFont, fontSize: isMobile ? 15 : 16 }}>
+                          {ad.description}
+                        </p>
+                      )}
+                      {ad.ctaText && (
+                        <div className="mt-5">
+                          <Link href={ad.ctaUrl || '/auth'}
+                            className="inline-flex items-center gap-2 font-bold rounded-xl transition-opacity hover:opacity-90"
+                            style={{ background: ad.bgColor || '#0056D2', color: '#fff', fontFamily: hFont, fontSize: isMobile ? 14 : 15, padding: isMobile ? '11px 20px' : '13px 26px' }}>
+                            {ad.ctaText}
+                            <ArrowRight className="w-4 h-4" />
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
             const sideImage = ad.imageLayout === 'side' && !!ad.bgImage;
             const bg = sideImage
               ? (ad.bgColor || '#0056D2')
@@ -990,7 +1044,7 @@ function LandingAdBanner({ ads, hFont, bFont }: { ads: AdCard[]; hFont?: string;
                   <div className="mt-4">
                     <Link href={ad.ctaUrl || '/auth'}
                       className="inline-flex items-center gap-2 self-start font-bold rounded-xl transition-opacity hover:opacity-90"
-                      style={{ background: 'white', color: ad.bgColor || '#0056D2', fontSize: isMobile ? 13 : 14, padding: isMobile ? '10px 18px' : '12px 24px' }}>
+                      style={{ background: 'white', color: ad.bgColor || '#0056D2', fontFamily: hFont, fontSize: isMobile ? 13 : 14, padding: isMobile ? '10px 18px' : '12px 24px' }}>
                       {ad.ctaText}
                       <ArrowRight className="w-4 h-4" />
                     </Link>
@@ -1028,7 +1082,7 @@ function LandingAdBanner({ ads, hFont, bFont }: { ads: AdCard[]; hFont?: string;
         {/* Right arrow - hidden on mobile, vertically centered on desktop */}
         {max > 0 && !isMobile && (
           <button onClick={() => goTo(idx + 1)} disabled={idx >= max}
-            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-20 w-10 h-10 rounded-full grid place-items-center transition-all disabled:opacity-20 outline-none focus:outline-none hover:bg-white hover:shadow-md"
+            className={`absolute top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full grid place-items-center transition-all disabled:opacity-20 outline-none focus:outline-none ${fullWidth ? 'right-3 sm:right-6 bg-white shadow-md hover:shadow-lg' : 'right-0 translate-x-1/2 hover:bg-white hover:shadow-md'}`}
             style={{ color: LAND_C.text }}>
             <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
           </button>
@@ -1082,7 +1136,7 @@ function LandingMidAdBanner({ ads, hFont, bFont, isDark }: { ads: AdCard[]; hFon
                   <div className="mt-1">
                     <Link href={ad.ctaUrl || '/auth'}
                       className="inline-flex items-center gap-2 self-start font-bold rounded-xl transition-opacity hover:opacity-90"
-                      style={{ background: 'white', color: ad.bgColor || '#0056D2', fontSize: 13, padding: '10px 20px' }}>
+                      style={{ background: 'white', color: ad.bgColor || '#0056D2', fontFamily: hFont, fontSize: 13, padding: '10px 20px' }}>
                       {ad.ctaText}
                       <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
@@ -1341,6 +1395,7 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
     midAd1Label, midAd1Title, midAd1Description, midAd1CtaText, midAd1CtaUrl, midAd1BgColor, midAd1BgImage, midAd1ImageLayout,
     midAd2Label, midAd2Title, midAd2Description, midAd2CtaText, midAd2CtaUrl, midAd2BgColor, midAd2BgImage, midAd2ImageLayout,
     hideMidAdBanner,
+    adBannerFullWidth,
     siteDarkMode,
   } = siteConfig;
   const isPageDark = siteDarkMode === '1';
@@ -1387,7 +1442,7 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
     <>
       {headingFontUrl && <link rel="stylesheet" href={headingFontUrl} />}
       {bodyFontUrl    && <link rel="stylesheet" href={bodyFontUrl} />}
-    <main className="min-h-screen overflow-x-hidden antialiased" style={{ background: isPageDark ? '#0d1117' : 'white', fontFamily: bFont }}>
+    <main className="landing-scope min-h-screen overflow-x-hidden antialiased" style={{ background: isPageDark ? '#0d1117' : 'white', fontFamily: bFont }}>
 
       {/* NAV */}
       <nav className="fixed top-0 left-0 right-0 z-50 transition-shadow duration-300"
@@ -1432,11 +1487,6 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                   Log in
                 </Link>
-                <Link href="/auth?mode=signup"
-                  className="px-4 py-2 text-sm font-bold rounded-md text-white transition-opacity hover:opacity-90"
-                  style={{ background: BLUE }}>
-                  Get started free
-                </Link>
               </>
             )}
           </div>
@@ -1445,9 +1495,15 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
 
       {/* AD BANNER */}
       {hideAdBanner !== '1' && (
-        <div className="max-w-[1240px] mx-auto px-4 sm:px-6 md:px-10 pb-2 pt-20 md:pt-24">
-          <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} />
-        </div>
+        adBannerFullWidth === '1' ? (
+          <div className="pt-16 md:pt-20">
+            <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} fullWidth />
+          </div>
+        ) : (
+          <div className="max-w-[1240px] mx-auto px-4 sm:px-6 md:px-10 pb-2 pt-20 md:pt-24">
+            <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} />
+          </div>
+        )
       )}
 
       <div id="browse" />
