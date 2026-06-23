@@ -933,12 +933,15 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
   }, []);
 
   const isMobile = containerW > 0 && containerW < 640;
+  const hasSideImage = cards.some(c => c.imageLayout === 'side' && !!c.bgImage);
   const CARD_W = fullWidth
     ? (containerW > 0 ? containerW : 1280)
     : (containerW > 0 ? Math.min(646, containerW - 40) : 646);
   const CARD_H = fullWidth
     ? (isMobile ? 380 : Math.max(320, Math.min(460, Math.round((containerW || 1280) * 0.30))))
-    : Math.max(220, Math.round(297 * Math.min(1, CARD_W / 646)));
+    : (isMobile && hasSideImage)
+      ? 360
+      : Math.max(220, Math.round(297 * Math.min(1, CARD_W / 646)));
 
   const totalW = cards.length * CARD_W + (cards.length - 1) * GAP;
   const maxTranslate = containerW > 0 ? Math.max(0, totalW - containerW) : (max * (CARD_W + GAP));
@@ -1063,7 +1066,7 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
                     <div className="flex flex-col justify-between" style={{ flex: 1, minWidth: 0, padding }}>
                       {body}
                     </div>
-                    <div style={{ flex: isMobile ? '0 0 40%' : '0 0 44%', overflow: 'hidden' }}>
+                    <div style={{ flex: isMobile ? '0 0 46%' : '0 0 44%', overflow: 'hidden' }}>
                       <img src={ad.bgImage} alt="" className="w-full h-full object-cover" />
                     </div>
                   </div>
