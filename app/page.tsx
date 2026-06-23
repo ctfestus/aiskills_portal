@@ -941,7 +941,7 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
   const CARD_H = fullWidth
     ? (isMobile ? 380 : Math.max(320, Math.min(460, Math.round((containerW || 1280) * 0.30))))
     : (isMobile && hasSideImage)
-      ? 360
+      ? 430
       : Math.max(220, Math.round(297 * Math.min(1, CARD_W / 646)));
 
   const totalW = cards.length * CARD_W + (cards.length - 1) * GAP;
@@ -978,14 +978,14 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
         <div ref={trackRef} style={{ display: 'flex', gap: GAP, transform: `translateX(-${getTranslate(idx)}px)`, transition: 'transform 0.45s cubic-bezier(0.25,1,0.5,1)' }}>
           {cards.map((ad, i) => {
             if (fullWidth) {
-              const sideImage = ad.imageLayout === 'side' && !!ad.bgImage;
+              const isSide = ad.imageLayout === 'side' && !!ad.bgImage;
               const baseColor = ad.bgColor || '#0056D2';
               return (
                 <div key={i} className="flex-shrink-0 relative overflow-hidden" style={{ width: CARD_W, height: CARD_H }}>
-                  {sideImage ? (
+                  {isSide ? (
                     <>
                       <div className="absolute inset-0" style={{ background: baseColor }} />
-                      <div className="absolute top-0 right-0 h-full" style={{ width: isMobile ? '52%' : '54%' }}>
+                      <div className="absolute top-0 right-0 h-full" style={{ width: isMobile ? '46%' : '54%' }}>
                         <img src={ad.bgImage} alt="" className="w-full h-full object-contain object-right" />
                         <div className="absolute inset-y-0 left-0 pointer-events-none" style={{ width: '35%', background: `linear-gradient(to right, ${baseColor}, transparent)` }} />
                       </div>
@@ -995,7 +995,7 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
                   )}
                   <div className="relative h-full flex items-center max-w-[1240px] mx-auto px-4 sm:px-8 md:px-14">
                     <div className="rounded-2xl bg-white"
-                      style={{ maxWidth: isMobile ? (sideImage ? '64%' : '88%') : 460, padding: isMobile ? '22px 22px' : '36px 40px', boxShadow: '0 6px 30px rgba(0,0,0,0.12)' }}>
+                      style={{ maxWidth: isMobile ? (isSide ? '52%' : '88%') : 460, padding: isMobile ? '22px 22px' : '36px 40px', boxShadow: '0 6px 30px rgba(0,0,0,0.12)' }}>
                       {ad.label && (
                         <span className="inline-block text-[10px] font-bold uppercase tracking-widest mb-3"
                           style={{ color: ad.bgColor || '#0056D2', letterSpacing: '0.12em' }}>
@@ -1027,8 +1027,8 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
                 </div>
               );
             }
-            const sideImage = ad.imageLayout === 'side' && !!ad.bgImage;
-            const bg = sideImage
+            const isSide = ad.imageLayout === 'side' && !!ad.bgImage;
+            const bg = isSide
               ? (ad.bgColor || '#0056D2')
               : ad.bgImage
                 ? `url(${ad.bgImage}) center/cover no-repeat`
@@ -1044,12 +1044,12 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
                     </span>
                   )}
                   <h3 className="font-black leading-tight mb-2"
-                    style={{ color: 'white', fontFamily: hFont, letterSpacing: '-0.025em', fontSize: isMobile ? 'clamp(18px,5vw,24px)' : 'clamp(22px,2.2vw,34px)', maxWidth: sideImage ? 'none' : 380 }}>
+                    style={{ color: 'white', fontFamily: hFont, letterSpacing: '-0.025em', fontSize: isMobile ? 'clamp(18px,5vw,24px)' : 'clamp(22px,2.2vw,34px)', maxWidth: isSide ? 'none' : 380 }}>
                     {ad.title}
                   </h3>
                   {!isMobile && (
                     <p className="leading-relaxed"
-                      style={{ color: 'rgba(255,255,255,0.80)', fontFamily: bFont ?? hFont, fontSize: 15, maxWidth: sideImage ? 'none' : 380 }}>
+                      style={{ color: 'rgba(255,255,255,0.80)', fontFamily: bFont ?? hFont, fontSize: 15, maxWidth: isSide ? 'none' : 380 }}>
                       {ad.description}
                     </p>
                   )}
@@ -1071,14 +1071,14 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
                 style={{ width: CARD_W, height: CARD_H }}>
                 <div className="relative w-full h-full transition-transform duration-200 hover:scale-[1.03]"
                   style={{ background: bg }}>
-                {!sideImage && ad.bgImage && <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.48)' }} />}
-                {sideImage ? (
+                {!isSide && ad.bgImage && <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.48)' }} />}
+                {isSide ? (
                   <div className="relative z-10 flex h-full" style={{ height: CARD_H, flexDirection: isMobile ? 'column' : 'row' }}>
                     <div className="flex flex-col justify-between" style={{ flex: 1, minWidth: 0, padding }}>
                       {body}
                     </div>
-                    <div style={{ flex: isMobile ? '0 0 46%' : '0 0 44%', overflow: 'hidden' }}>
-                      <img src={ad.bgImage} alt="" className="w-full h-full object-cover" />
+                    <div style={{ flex: isMobile ? '0 0 50%' : '0 0 44%', position: 'relative', overflow: 'hidden' }}>
+                      <img src={ad.bgImage} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: isMobile ? 'contain' : 'cover' }} />
                     </div>
                   </div>
                 ) : (
@@ -1166,8 +1166,8 @@ function LandingMidAdBanner({ ads, hFont, bFont, isDark }: { ads: AdCard[]; hFon
                   {sideImage ? (
                     <div className="relative z-10 flex flex-col sm:flex-row sm:items-stretch" style={{ minHeight: 220 }}>
                       <div className="flex-1 min-w-0">{body}</div>
-                      <div className="relative w-full h-32 sm:h-auto sm:w-[44%] flex-shrink-0 overflow-hidden">
-                        <img src={ad.bgImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                      <div className="relative w-full h-44 sm:h-auto sm:w-[44%] flex-shrink-0 overflow-hidden">
+                        <img src={ad.bgImage} alt="" className="absolute inset-0 w-full h-full object-contain sm:object-cover" />
                       </div>
                     </div>
                   ) : body}
