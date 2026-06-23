@@ -1150,10 +1150,10 @@ function LandingMidAdBanner({ ads, hFont, bFont, isDark }: { ads: AdCard[]; hFon
                   style={{ background: bg, minHeight: 220 }}>
                   {!sideImage && ad.bgImage && <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.48)' }} />}
                   {sideImage ? (
-                    <div className="relative z-10 flex flex-col sm:flex-row" style={{ minHeight: 220 }}>
+                    <div className="relative z-10 flex flex-col sm:flex-row sm:items-stretch" style={{ minHeight: 220 }}>
                       <div className="flex-1 min-w-0">{body}</div>
-                      <div className="w-full h-28 sm:h-auto sm:w-[42%] flex-shrink-0 overflow-hidden">
-                        <img src={ad.bgImage} alt="" className="w-full h-full object-cover" />
+                      <div className="relative w-full h-32 sm:h-auto sm:w-[44%] flex-shrink-0 overflow-hidden">
+                        <img src={ad.bgImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
                       </div>
                     </div>
                   ) : body}
