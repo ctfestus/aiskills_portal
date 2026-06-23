@@ -105,6 +105,9 @@ h1, h2, h3, h4 {
 
 /* Text — mapped to neutral zinc palette (no blue undertones) */
 [data-theme="light"] .text-white     { color: #18181b !important; }
+/* Public landing page opts out: its text-white sits on dark/coloured backgrounds
+   and must stay white regardless of the dashboard app theme. Higher specificity wins. */
+html .landing-scope .text-white { color: #fff !important; }
 [data-theme="light"] .text-zinc-100  { color: #27272a !important; }
 [data-theme="light"] .text-zinc-200  { color: #3f3f46 !important; }
 [data-theme="light"] .text-zinc-300  { color: #52525b !important; }

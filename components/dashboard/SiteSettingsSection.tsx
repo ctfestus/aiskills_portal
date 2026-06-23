@@ -91,7 +91,7 @@ function SitePreview({ config, template, C }: { config: Record<string, string>; 
 
 // --- Site Settings Section ---
 export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
-  const [template, setTemplate] = useState('momentum');
+  const [template, setTemplate] = useState('modern');
   const [config, setConfig]     = useState<Record<string, string>>({});
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
@@ -108,7 +108,7 @@ export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         if (json?.data) {
-          setTemplate(json.data.template ?? 'momentum');
+          setTemplate(json.data.template ?? 'modern');
           setConfig(json.data.config ?? {});
           // Pre-load saved fonts
           loadFont(json.data.config?.headingFont);
@@ -268,6 +268,28 @@ export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
     );
   };
 
+  // Ad-card image layout toggle -- only shown once an image is uploaded
+  const imgLayout = (key: string) => {
+    return (
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold" style={{ color: C.muted }}>Image layout</label>
+        <div className="flex gap-1.5">
+          {([['', 'Full background'], ['side', 'Beside text']] as const).map(([val, lbl]) => {
+            const active = (config[key] || '') === val;
+            return (
+              <button key={val || 'cover'} onClick={() => set(key, val)}
+                className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition-all"
+                style={{ background: active ? C.cta : C.pill, color: active ? C.ctaText : C.text }}>
+                {lbl}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px]" style={{ color: C.faint }}>Beside text: image sits on the right (desktop) or bottom (mobile) with the background colour showing.</p>
+      </div>
+    );
+  };
+
   // Accordion section wrapper
   const Sec = (id: string, label: string, preview: React.ReactNode, children: React.ReactNode) => (
     <div className="rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
@@ -349,8 +371,8 @@ export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
           </>
         )}
 
-        {/* Hero */}
-        {Sec('hero', 'Hero',
+        {/* Hero -- not rendered in Modern */}
+        {template !== 'modern' && Sec('hero', 'Hero',
           <>{Dot('primaryColor','#0e09dd')}</>,
           <>
             {imgUpload('heroImageUrl', 'Background Image', 'Leave blank to use a colour gradient.')}
@@ -372,7 +394,7 @@ export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
             </>}
             {tf('heroTitle',        'Headline',        'Build the skills Africa')}
             {tf('heroTitleAccent',  'Headline Accent', 'needs right now.', 'Shown in accent colour.')}
-            {taf('heroSubheadline', 'Subheadline',     'Enrol in courses…', undefined, 3)}
+            {taf('heroSubheadline', 'Subheadline',     'Enrol in courses...', undefined, 3)}
             {tf('heroPrimaryCta',   'CTA Button Text', 'Start learning free')}
             <div className="space-y-1">
               <div className="flex items-center justify-between">
@@ -386,146 +408,8 @@ export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
               />
               <p className="text-[11px]" style={{ color: C.faint }}>Desktop headline size -- mobile scales proportionally.</p>
             </div>
-            {template === 'momentum' && (<>
-              {Sub('Stats Bar')}
-              <div className="grid grid-cols-2 gap-3">
-                {tf('statsEnrolled', 'Enrolled count', '10,000+')}
-                {tf('statsRating',   'Rating',         '4.9')}
-              </div>
-            </>)}
           </>
         )}
-
-        {/* -- MOMENTUM SECTIONS -- */}
-        {template === 'momentum' && (<>
-
-        {Sec('offerings', 'Offerings',
-          undefined,
-          <>
-            {Vis('hideOfferings')}
-            {tf('offeringsLabel',         'Section label',  'What you get')}
-            {tf('offeringsHeading',       'Heading',        'Everything you need to grow')}
-            {tf('offeringsHeadingAccent', 'Heading accent', 'your career.', 'Shown in accent colour.')}
-            {taf('offeringsSubtext',      'Subtext',        'From beginner courses to advanced projects.', undefined, 2)}
-            {['1','2','3','4'].map(n => (
-              <div key={n}>
-                {Sub(`Card ${n}`)}
-                {tf(`offering${n}Title`, 'Title', n==='1'?'Courses':n==='2'?'Live Events':n==='3'?'Guided Projects':'Certificates')}
-                {taf(`offering${n}Description`, 'Description', '', undefined, 2)}
-                {tf(`offering${n}Badge`, 'Badge', n==='1'?'Courses':n==='2'?'Events':n==='3'?'Projects':'Certificates')}
-              </div>
-            ))}
-          </>
-        )}
-
-        {Sec('steps', 'How It Works',
-          undefined,
-          <>
-            {Vis('hideSteps')}
-            {tf('stepsLabel',         'Section label',  'Your journey')}
-            {tf('stepsHeading',       'Heading',        'From zero to job-ready')}
-            {tf('stepsHeadingAccent', 'Heading accent', 'in 3 steps.', 'Shown in accent colour.')}
-            {['1','2','3'].map(n => (
-              <div key={n}>
-                {Sub(`Step ${n}`)}
-                {tf(`step${n}Title`, 'Title', n==='1'?'Enrol in a course':n==='2'?'Learn and practise':'Earn and get hired')}
-                {taf(`step${n}Body`, 'Body',  '', undefined, 2)}
-              </div>
-            ))}
-          </>
-        )}
-
-        {Sec('features', 'Features',
-          undefined,
-          <>
-            {Vis('hideFeatures')}
-            {tf('featuresLabel',         'Section label',  'Platform features')}
-            {tf('featuresHeading',       'Heading',        'Built for the serious')}
-            {tf('featuresHeadingAccent', 'Heading accent', 'learner.', 'Shown in accent colour.')}
-            {taf('featuresSubtext', 'Subtext', 'Every feature is designed to help you learn faster…', undefined, 2)}
-            {tf('featuresCta', 'CTA button text', 'Start for free')}
-            {Sub('Feature Chips')}
-            {['1','2','3','4','5','6','7','8'].map(n => tf(`highlight${n}`, `Chip ${n}`, ''))}
-          </>
-        )}
-
-        {Sec('m-testimonials', 'Testimonials',
-          undefined,
-          <>
-            {Vis('hideTestimonials')}
-            {tf('testimonialsLabel',   'Section label', 'What learners say')}
-            {tf('testimonialsHeading', 'Heading',       'Real results from real people.')}
-            {['1','2','3'].map(n => (
-              <div key={n}>
-                {Sub(`Testimonial ${n}`)}
-                <div className="grid grid-cols-2 gap-2">
-                  {tf(`testimonial${n}Name`, 'Name', n==='1'?'Amina Osei':n==='2'?'Chukwuemeka Nwosu':'Fatima Al-Hassan')}
-                  {tf(`testimonial${n}Role`, 'Role', n==='1'?'Data Analyst, Accra':n==='2'?'BI Lead, Lagos':'HR Analytics Specialist')}
-                </div>
-                {taf(`testimonial${n}Text`, 'Quote', '', undefined, 3)}
-              </div>
-            ))}
-          </>
-        )}
-
-        {Sec('m-cta', 'CTA Banner',
-          <>{Dot('primaryColor','#0e09dd')}</>,
-          <>
-            {Vis('hideCta')}
-            {tf('ctaHeading',       'Heading',        'Join 10,000+ professionals')}
-            {tf('ctaHeadingAccent', 'Heading accent', 'building the future.', 'Shown in accent colour.')}
-            {taf('ctaSubtext', 'Subtext', 'Start learning today. No credit card required.', undefined, 2)}
-            {tf('ctaButton', 'Button text', 'Start learning free')}
-          </>
-        )}
-
-        {Sec('m-sticky', 'Sticky CTA Bar',
-          <>{Dot('primaryColor','#0e09dd')}</>,
-          <>
-            {Vis('hideStickyBar')}
-            {tf('stickyCtaText',   'Bar text',    'Join 10,000+ learners building Africa\'s future.')}
-            {tf('stickyCtaButton', 'Button label', 'Start for free')}
-          </>
-        )}
-
-        {Sec('m-footer', 'Footer',
-          <>{Dot('primaryColor','#0e09dd')}</>,
-          <>
-            {taf('footerTagline', 'Tagline', 'The learning platform built for professionals.', undefined, 2)}
-            {Sub('Background Image')}
-            {imgUpload('footerBgImageUrl', 'Background image', 'Optional -- replaces the solid colour background.')}
-            {config.footerBgImageUrl && <>
-              {Sub('Image Overlay')}
-              <div className="grid grid-cols-2 gap-3 mb-2">
-                {cf('footerOverlayColor', 'Overlay colour', '#000000')}
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs" style={{ color: C.muted }}>Opacity</span>
-                <input type="range" min="0" max="100" step="5"
-                  value={config.footerOverlayOpacity ?? '70'}
-                  onChange={e => set('footerOverlayOpacity', e.target.value)}
-                  className="flex-1"
-                  style={{ accentColor: config.primaryColor || '#0e09dd' }}
-                />
-                <span className="text-xs font-mono w-10 text-right" style={{ color: C.muted }}>{config.footerOverlayOpacity ?? '70'}%</span>
-              </div>
-            </>}
-            {Sub('Custom Links Column')}
-            {tf('footerLinksHeading', 'Column heading', 'Learn')}
-            <div className="grid grid-cols-2 gap-2">
-              {tf('footerLink1Label', 'Link 1 label', 'Courses')}
-              {tf('footerLink1Url',   'Link 1 URL',   '/auth')}
-              {tf('footerLink2Label', 'Link 2 label', 'Guided Projects')}
-              {tf('footerLink2Url',   'Link 2 URL',   '/auth')}
-              {tf('footerLink3Label', 'Link 3 label', 'Live Events')}
-              {tf('footerLink3Url',   'Link 3 URL',   '/auth')}
-              {tf('footerLink4Label', 'Link 4 label', 'Certificates')}
-              {tf('footerLink4Url',   'Link 4 URL',   '/auth')}
-            </div>
-          </>
-        )}
-
-        </>)} {/* end Momentum-only */}
 
         {/* -- ELEVATE SECTIONS -- */}
         {template === 'elevate' && (<>
@@ -656,7 +540,7 @@ export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
             {Vis('hideCta')}
             {tf('newsletterHeading',  'Heading',        'Ready to transform')}
             {tf('ctaHeadingAccent',   'Heading accent', 'your career?', 'Shown in accent colour.')}
-            {taf('newsletterSubtext', 'Subtext',        'Join thousands of professionals…', undefined, 2)}
+            {taf('newsletterSubtext', 'Subtext',        'Join thousands of professionals...', undefined, 2)}
             {tf('newsletterButton',   'Button text',    'Start your journey')}
           </>
         )}
@@ -709,13 +593,112 @@ export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
 
         </>)} {/* end Elevate-only */}
 
+        {/* -- modern SECTIONS -- */}
+        {template === 'modern' && (<>
+
+        {Sec('c-darkmode', 'Dark Mode',
+          <></>,
+          <>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold" style={{ color: C.text }}>Enable dark mode</p>
+                <p className="text-[11px] mt-0.5" style={{ color: C.faint }}>Switches the landing page to a dark background.</p>
+              </div>
+              <button onClick={() => set('siteDarkMode', config.siteDarkMode === '1' ? '' : '1')}
+                className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0"
+                style={{ background: config.siteDarkMode === '1' ? (config.primaryColor || '#0056D2') : C.cardBorder }}>
+                <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all"
+                  style={{ left: config.siteDarkMode === '1' ? 22 : 2 }} />
+              </button>
+            </div>
+          </>
+        )}
+
+        {Sec('c-ads', 'Ad Banner Cards',
+          <></>,
+          <>
+            {Vis('hideAdBanner')}
+            <div className="flex items-center justify-between pb-3 mb-1 border-b" style={{ borderColor: C.cardBorder }}>
+              <div className="pr-3">
+                <p className="text-xs font-semibold" style={{ color: C.text }}>Full-width banner</p>
+                <p className="text-[11px] mt-0.5" style={{ color: C.faint }}>Edge-to-edge image banner with a white text panel on the left. Off = contained cards.</p>
+              </div>
+              <button onClick={() => set('adBannerFullWidth', config.adBannerFullWidth === '1' ? '' : '1')}
+                className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0"
+                style={{ background: config.adBannerFullWidth === '1' ? (config.primaryColor || '#0056D2') : C.cardBorder }}>
+                <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all"
+                  style={{ left: config.adBannerFullWidth === '1' ? 22 : 2 }} />
+              </button>
+            </div>
+            {(['1','2','3'] as const).map(n => (
+              <div key={n} className="border rounded-lg p-4 space-y-2" style={{ borderColor: C.cardBorder }}>
+                <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Card {n}</p>
+                {tf(`ad${n}Label`,       'Badge label',       n === '1' ? 'New' : n === '2' ? 'Featured' : 'Popular')}
+                {tf(`ad${n}Title`,       'Headline',          'Start your learning journey today')}
+                {taf(`ad${n}Description`,'Description',       'Short description text', undefined, 2)}
+                {tf(`ad${n}CtaText`,     'Button text',       'Get started free')}
+                {tf(`ad${n}CtaUrl`,      'Button URL',        '/auth?mode=signup')}
+                <div className="grid grid-cols-2 gap-2">
+                  {cf(`ad${n}BgColor`,   'Background colour', '#0056D2')}
+                </div>
+                {imgUpload(`ad${n}BgImage`, 'Image', 'Optional. Choose how it displays below.')}
+                {config[`ad${n}BgImage`] && imgLayout(`ad${n}ImageLayout`)}
+              </div>
+            ))}
+          </>
+        )}
+
+        {Sec('c-mid-ads', 'Mid-Page Ad Banner',
+          <></>,
+          <>
+            {Vis('hideMidAdBanner')}
+            <p className="text-[11px]" style={{ color: C.faint }}>Two cards shown between Learning Paths and Virtual Experiences.</p>
+            {(['1','2'] as const).map(n => (
+              <div key={n} className="border rounded-lg p-4 space-y-2" style={{ borderColor: C.cardBorder }}>
+                <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Card {n}</p>
+                {tf(`midAd${n}Label`,       'Badge label',       n === '1' ? 'Trending' : 'Free')}
+                {tf(`midAd${n}Title`,       'Headline',          'Start your learning journey today')}
+                {taf(`midAd${n}Description`,'Description',       'Short description text', undefined, 2)}
+                {tf(`midAd${n}CtaText`,     'Button text',       'Get started free')}
+                {tf(`midAd${n}CtaUrl`,      'Button URL',        '/auth?mode=signup')}
+                <div className="grid grid-cols-2 gap-2">
+                  {cf(`midAd${n}BgColor`,   'Background colour', '#0056D2')}
+                </div>
+                {imgUpload(`midAd${n}BgImage`, 'Image', 'Optional. Choose how it displays below.')}
+                {config[`midAd${n}BgImage`] && imgLayout(`midAd${n}ImageLayout`)}
+              </div>
+            ))}
+          </>
+        )}
+
+        {Sec('c-footer', 'Footer',
+          <></>,
+          <>
+            {tf('footerTagline', 'Tagline', 'The AI and data skills platform built for African professionals.')}
+            {Sub('Custom Links Column')}
+            {tf('footerLinksHeading', 'Column heading', 'Learn')}
+            <div className="grid grid-cols-2 gap-2">
+              {tf('footerLink1Label', 'Link 1 label', 'Courses')}
+              {tf('footerLink1Url',   'Link 1 URL',   '/auth')}
+              {tf('footerLink2Label', 'Link 2 label', 'Learning Paths')}
+              {tf('footerLink2Url',   'Link 2 URL',   '/auth')}
+              {tf('footerLink3Label', 'Link 3 label', 'Virtual Experiences')}
+              {tf('footerLink3Url',   'Link 3 URL',   '/auth')}
+              {tf('footerLink4Label', 'Link 4 label', 'Certificates')}
+              {tf('footerLink4Url',   'Link 4 URL',   '/auth')}
+            </div>
+          </>
+        )}
+
+        </>)} {/* end modern-only */}
+
         </div>
       </div>
 
       {/* ---- Preview pane ---- */}
-      <div className="flex-1 min-w-0 sticky top-4 space-y-3">
+      <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
         {/* Toolbar */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <button
             onClick={() => setPanelOpen(v => !v)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-all hover:opacity-80"
@@ -741,13 +724,15 @@ export function SiteSettingsSection({ C }: { C: typeof LIGHT_C }) {
           </button>
         </div>
         {msg && (
-          <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${msg.ok ? 'text-emerald-600' : 'text-red-500'}`}
+          <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg flex-shrink-0 ${msg.ok ? 'text-emerald-600' : 'text-red-500'}`}
             style={{ background: msg.ok ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)' }}>
             {msg.ok ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" /> : <XCircle className="w-3.5 h-3.5 flex-shrink-0" />}
             {msg.text}
           </div>
         )}
-        <SitePreview config={config} template={template} C={C} />
+        <div className="flex-1 min-h-0">
+          <SitePreview config={config} template={template} C={C} />
+        </div>
       </div>
 
     </div>

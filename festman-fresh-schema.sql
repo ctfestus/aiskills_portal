@@ -2961,6 +2961,69 @@ CREATE POLICY "open_certificates: instructor delete"
   ON public.open_certificates FOR DELETE
   USING  ((SELECT public.is_instructor_or_admin()) AND issued_by = (SELECT auth.uid()));
 
+-- ── Public landing page views (migration 121) ─────────────────────────────
+-- Expose a safe subset of published content to anon and authenticated roles.
+-- Base-table RLS policies are unchanged; views are the security boundary.
+
+DROP VIEW IF EXISTS public.published_path_items;
+DROP VIEW IF EXISTS public.published_path_courses;
+DROP VIEW IF EXISTS public.published_courses;
+DROP VIEW IF EXISTS public.published_virtual_experiences;
+DROP VIEW IF EXISTS public.published_learning_paths;
+
+CREATE VIEW public.published_courses
+WITH (security_barrier = true)
+AS
+  SELECT id, title, description, cover_image, slug, category
+  FROM   public.courses
+  WHERE  status = 'published';
+
+GRANT SELECT ON public.published_courses TO anon, authenticated;
+
+CREATE VIEW public.published_virtual_experiences
+WITH (security_barrier = true)
+AS
+  SELECT id, title, tagline, cover_image, slug, industry, difficulty
+  FROM   public.virtual_experiences
+  WHERE  status = 'published';
+
+GRANT SELECT ON public.published_virtual_experiences TO anon, authenticated;
+
+CREATE VIEW public.published_learning_paths
+WITH (security_barrier = true)
+AS
+  SELECT id, title, description, cover_image
+  FROM   public.learning_paths
+  WHERE  status = 'published';
+
+GRANT SELECT ON public.published_learning_paths TO anon, authenticated;
+
+CREATE VIEW public.published_path_items
+WITH (security_barrier = true)
+AS
+  WITH published_items AS (
+    SELECT id, title, cover_image, slug, 'course'::text AS type
+    FROM   public.courses
+    WHERE  status = 'published'
+    UNION ALL
+    SELECT id, title, cover_image, slug, 've'::text AS type
+    FROM   public.virtual_experiences
+    WHERE  status = 'published'
+  )
+  SELECT lp.id           AS path_id,
+         pi.id,
+         pi.title,
+         pi.cover_image,
+         pi.slug,
+         pi.type,
+         u.pos            AS position
+  FROM   public.learning_paths lp
+  CROSS JOIN LATERAL unnest(lp.item_ids) WITH ORDINALITY AS u(item_id, pos)
+  JOIN   published_items pi ON pi.id = u.item_id
+  WHERE  lp.status = 'published';
+
+GRANT SELECT ON public.published_path_items TO anon, authenticated;
+
 -- ─────────────────────────────────────────────────────────────
 --  After running this script:
 --  1. Auth → Settings: set Site URL + redirect URL to your app domain

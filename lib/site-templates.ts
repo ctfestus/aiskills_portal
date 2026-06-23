@@ -133,6 +133,22 @@ export type SiteConfig = {
   floatingCtaImageUrl: string;
   floatingCtaBgColor:  string;
   hideFloatingCta:     string;
+  // Ad banner cards (Modern template)
+  ad1Label: string; ad1Title: string; ad1Description: string; ad1CtaText: string; ad1CtaUrl: string; ad1BgColor: string; ad1BgImage: string;
+  ad2Label: string; ad2Title: string; ad2Description: string; ad2CtaText: string; ad2CtaUrl: string; ad2BgColor: string; ad2BgImage: string;
+  ad3Label: string; ad3Title: string; ad3Description: string; ad3CtaText: string; ad3CtaUrl: string; ad3BgColor: string; ad3BgImage: string;
+  hideAdBanner: string;
+  // Mid-page ad banner cards (Modern template -- between Learning Paths and Virtual Experiences)
+  midAd1Label: string; midAd1Title: string; midAd1Description: string; midAd1CtaText: string; midAd1CtaUrl: string; midAd1BgColor: string; midAd1BgImage: string;
+  midAd2Label: string; midAd2Title: string; midAd2Description: string; midAd2CtaText: string; midAd2CtaUrl: string; midAd2BgColor: string; midAd2BgImage: string;
+  hideMidAdBanner: string;
+  // Ad card image layout ('' = full-cover background, 'side' = image beside bg colour: right on desktop, bottom on mobile)
+  ad1ImageLayout: string; ad2ImageLayout: string; ad3ImageLayout: string;
+  midAd1ImageLayout: string; midAd2ImageLayout: string;
+  // Top ad banner full-width hero mode ('1' = edge-to-edge image banner with white text panel)
+  adBannerFullWidth: string;
+  // Dark mode (Modern template -- '1' = dark, '' = light)
+  siteDarkMode: string;
 };
 
 export type Template = {
@@ -168,6 +184,15 @@ const ELEVATE_EMPTY = {
   cardOverlayColor: '', cardOverlayOpacity: '',
   hideOfferings: '', hideSteps: '', hideFeatures: '',
   hideTestimonials: '', hideCta: '', hidePartners: '', hideStats: '',
+  ad1Label: '', ad1Title: '', ad1Description: '', ad1CtaText: '', ad1CtaUrl: '', ad1BgColor: '', ad1BgImage: '',
+  ad2Label: '', ad2Title: '', ad2Description: '', ad2CtaText: '', ad2CtaUrl: '', ad2BgColor: '', ad2BgImage: '',
+  ad3Label: '', ad3Title: '', ad3Description: '', ad3CtaText: '', ad3CtaUrl: '', ad3BgColor: '', ad3BgImage: '',
+  hideAdBanner: '',
+  midAd1Label: '', midAd1Title: '', midAd1Description: '', midAd1CtaText: '', midAd1CtaUrl: '', midAd1BgColor: '', midAd1BgImage: '',
+  midAd2Label: '', midAd2Title: '', midAd2Description: '', midAd2CtaText: '', midAd2CtaUrl: '', midAd2BgColor: '', midAd2BgImage: '',
+  hideMidAdBanner: '',
+  ad1ImageLayout: '', ad2ImageLayout: '', ad3ImageLayout: '', midAd1ImageLayout: '', midAd2ImageLayout: '', adBannerFullWidth: '',
+  siteDarkMode: '',
 };
 
 const MOMENTUM_EMPTY = {
@@ -183,79 +208,18 @@ const MOMENTUM_EMPTY = {
   highlight5: '', highlight6: '', highlight7: '', highlight8: '',
   hideOfferings: '', hideSteps: '', hideFeatures: '',
   hideTestimonials: '', hideCta: '', hidePartners: '', hideStats: '',
+  ad1Label: '', ad1Title: '', ad1Description: '', ad1CtaText: '', ad1CtaUrl: '', ad1BgColor: '', ad1BgImage: '',
+  ad2Label: '', ad2Title: '', ad2Description: '', ad2CtaText: '', ad2CtaUrl: '', ad2BgColor: '', ad2BgImage: '',
+  ad3Label: '', ad3Title: '', ad3Description: '', ad3CtaText: '', ad3CtaUrl: '', ad3BgColor: '', ad3BgImage: '',
+  hideAdBanner: '',
+  midAd1Label: '', midAd1Title: '', midAd1Description: '', midAd1CtaText: '', midAd1CtaUrl: '', midAd1BgColor: '', midAd1BgImage: '',
+  midAd2Label: '', midAd2Title: '', midAd2Description: '', midAd2CtaText: '', midAd2CtaUrl: '', midAd2BgColor: '', midAd2BgImage: '',
+  hideMidAdBanner: '',
+  ad1ImageLayout: '', ad2ImageLayout: '', ad3ImageLayout: '', midAd1ImageLayout: '', midAd2ImageLayout: '', adBannerFullWidth: '',
+  siteDarkMode: '',
 };
 
 export const TEMPLATES: Template[] = [
-  {
-    id:    'momentum',
-    label: 'Momentum',
-    defaults: {
-      primaryColor:   '#0e09dd',
-      accentColor:    '#ff9933',
-      headingFont:    'Inter',
-      bodyFont:       'Inter',
-      heroTitle:          'Build the skills Africa',
-      heroTitleAccent:    'needs right now.',
-      heroSubheadline:    'Enrol in AI and data courses, attend live workshops, work through real industry projects, and earn certificates that employers in Africa and beyond recognise.',
-      heroPrimaryCta:     'Start learning free',
-      heroImageUrl:       '',
-      heroFontSize:       '56',
-      heroOverlayColor:   '#000000',
-      heroOverlayOpacity: '58',
-      statsEnrolled:      '10,000+',
-      statsRating:        '4.9',
-      offeringsLabel:         'What you get',
-      offeringsHeading:       'Everything you need to grow',
-      offeringsHeadingAccent: 'your career.',
-      offeringsSubtext:       'From beginner courses to advanced guided projects -- built for the modern professional.',
-      offering1Title: 'Courses',         offering1Description: 'Structured, hands-on courses covering data analysis, machine learning, Python, SQL, and more.',             offering1Badge: 'Courses',
-      offering2Title: 'Live Events',     offering2Description: 'Join live training sessions, webinars, and expert-led workshops. Interact in real time and build your network.', offering2Badge: 'Events',
-      offering3Title: 'Guided Projects', offering3Description: 'Work through realistic industry scenarios. Apply your skills to real business problems across multiple sectors.',  offering3Badge: 'Projects',
-      offering4Title: 'Certificates',   offering4Description: 'Earn verified certificates for every course and project. Share your achievements with a public profile built for career growth.', offering4Badge: 'Certificates',
-      stepsLabel:         'Your journey',
-      stepsHeading:       'From zero to job-ready',
-      stepsHeadingAccent: 'in 3 steps.',
-      step1Title: 'Enrol in a course or project', step1Body: 'Browse courses and guided projects built for professionals. Pick what matches your goals and start immediately.',
-      step2Title: 'Learn and practise',           step2Body: 'Work through lessons, hands-on exercises, and real datasets. Apply skills directly to problems you face at work.',
-      step3Title: 'Earn, grow, and get hired',    step3Body: 'Pass assessments, earn verified certificates, and share your profile with employers. Proof your skills are real.',
-      featuresLabel:         'Platform features',
-      featuresHeading:       'Built for the serious',
-      featuresHeadingAccent: 'learner.',
-      featuresSubtext:       'Every feature is designed to help you learn faster, prove your skills, and advance your career.',
-      featuresCta:           'Start for free',
-      highlight1: 'Courses built for professionals',     highlight2: 'Verified certificates for every course',
-      highlight3: 'Live events and community workshops', highlight4: 'Guided projects in real industry scenarios',
-      highlight5: 'Leaderboard and peer competition',    highlight6: 'Public learning profile with your URL',
-      highlight7: 'Anti-cheat assessments with retakes', highlight8: 'Light and dark mode dashboard',
-      testimonialsLabel:   'What learners say',
-      testimonialsHeading: 'Real results from real people.',
-      testimonial1Name: 'Amina Osei',        testimonial1Role: 'Data Analyst, Accra',              testimonial1Text: 'This platform gave me the practical skills I needed to move from Excel to Python and SQL. Within three months I landed a data analyst role at a fintech company.',
-      testimonial2Name: 'Chukwuemeka Nwosu', testimonial2Role: 'BI Lead, Lagos',                   testimonial2Text: 'The guided projects are exactly what I needed. Real business scenarios, not textbook exercises. My team now relies on dashboards I built from what I learned here.',
-      testimonial3Name: 'Fatima Al-Hassan',  testimonial3Role: 'HR Analytics Specialist, Nairobi', testimonial3Text: 'The live workshops gave me direct access to industry experts. The certificate I earned opened doors that years of self-study could not. Highly recommended.',
-      testimonialVideoUrl: '',
-      ctaHeading:       'Join {statsEnrolled} professionals',
-      ctaHeadingAccent: 'building the future.',
-      ctaSubtext:       'Start learning today. No credit card required. Access your first course for free and see the difference real, practical skills make.',
-      ctaButton:        'Start learning free',
-      footerTagline:    'The AI and data skills platform built for African professionals. Learn, practise, and prove your skills.',
-      stickyCtaText:   'Join 10,000+ professionals building Africa\'s future.',
-      stickyCtaButton: 'Start for free',
-      hideStickyBar:   '',
-      footerLinksHeading: 'Learn',
-      footerLink1Label: 'Courses',        footerLink1Url: '/auth',
-      footerLink2Label: 'Guided Projects', footerLink2Url: '/auth',
-      footerLink3Label: 'Live Events',    footerLink3Url: '/auth',
-      footerLink4Label: 'Certificates',   footerLink4Url: '/auth',
-      footerBgImageUrl: '', footerOverlayColor: '#000000', footerOverlayOpacity: '70',
-      floatingCtaHeading:  'Stay ahead of the curve.',
-      floatingCtaSubtext:  'Get updates on new courses, live events, and opportunities delivered to you.',
-      floatingCtaButton:   'Subscribe Now',
-      floatingCtaImageUrl: '',
-      floatingCtaBgColor:  '',
-      hideFloatingCta:     '',
-      ...ELEVATE_EMPTY,
-    },
-  },
   {
     id:    'elevate',
     label: 'Elevate',
@@ -339,11 +303,111 @@ export const TEMPLATES: Template[] = [
       ...MOMENTUM_EMPTY,
     },
   },
+  {
+    id:    'modern',
+    label: 'Modern',
+    defaults: {
+      primaryColor:   '#0056D2',
+      accentColor:    '#FF9933',
+      headingFont:    'Inter',
+      bodyFont:       'Inter',
+      heroTitle:          'Learn the skills',
+      heroTitleAccent:    'Africa needs most.',
+      heroSubheadline:    'Master AI, data, and digital skills through courses, guided learning paths, and virtual experiences built for African professionals.',
+      heroPrimaryCta:     'Start learning free',
+      heroImageUrl:       '',
+      heroFontSize:       '56',
+      heroOverlayColor:   '#000000',
+      heroOverlayOpacity: '0',
+      statsEnrolled:      '10,000+',
+      statsRating:        '4.9',
+      // Offerings (unused by this template)
+      offeringsLabel: '', offeringsHeading: '', offeringsHeadingAccent: '', offeringsSubtext: '',
+      offering1Title: '', offering1Description: '', offering1Badge: '',
+      offering2Title: '', offering2Description: '', offering2Badge: '',
+      offering3Title: '', offering3Description: '', offering3Badge: '',
+      offering4Title: '', offering4Description: '', offering4Badge: '',
+      // Steps (unused)
+      stepsLabel: '', stepsHeading: '', stepsHeadingAccent: '',
+      step1Title: '', step1Body: '', step2Title: '', step2Body: '', step3Title: '', step3Body: '',
+      // Features (unused)
+      featuresLabel: '', featuresHeading: '', featuresHeadingAccent: '', featuresSubtext: '', featuresCta: '',
+      highlight1: '', highlight2: '', highlight3: '', highlight4: '',
+      highlight5: '', highlight6: '', highlight7: '', highlight8: '',
+      // Testimonials
+      testimonialsLabel:   'Learner stories',
+      testimonialsHeading: 'Real results from real people',
+      testimonial1Name: 'Amina Osei',        testimonial1Role: 'Data Analyst, Accra',              testimonial1Text: 'This platform gave me the practical skills I needed to move from Excel to Python and SQL. Within three months I landed a data analyst role at a fintech company.',
+      testimonial2Name: 'Chukwuemeka Nwosu', testimonial2Role: 'BI Lead, Lagos',                   testimonial2Text: 'The guided projects are exactly what I needed. Real business scenarios, not textbook exercises. My team now relies on dashboards I built from what I learned here.',
+      testimonial3Name: 'Fatima Al-Hassan',  testimonial3Role: 'HR Analytics Specialist, Nairobi', testimonial3Text: 'The live workshops gave me direct access to industry experts. The certificate I earned opened doors that years of self-study could not. Highly recommended.',
+      testimonialVideoUrl: '',
+      // CTA
+      ctaHeading:       'Join 10,000+ professionals',
+      ctaHeadingAccent: "building Africa's future.",
+      ctaSubtext:       'Start learning today. No credit card required. Access your first course free and see the difference real, practical skills make.',
+      ctaButton:        'Start learning free',
+      // Footer
+      footerTagline:    'The AI and data skills platform built for African professionals. Learn, practise, and prove your skills.',
+      // Sticky
+      stickyCtaText:   "Join 10,000+ professionals building Africa's future.",
+      stickyCtaButton: 'Start for free',
+      hideStickyBar:   '',
+      // Footer links
+      footerLinksHeading: 'Learn',
+      footerLink1Label: 'Courses',               footerLink1Url: '/auth',
+      footerLink2Label: 'Learning Paths',        footerLink2Url: '/auth',
+      footerLink3Label: 'Virtual Experiences',   footerLink3Url: '/auth',
+      footerLink4Label: 'Certificates',          footerLink4Url: '/auth',
+      footerBgImageUrl: '', footerOverlayColor: '#000000', footerOverlayOpacity: '70',
+      floatingCtaHeading: '', floatingCtaSubtext: '', floatingCtaButton: '',
+      floatingCtaImageUrl: '', floatingCtaBgColor: '', hideFloatingCta: '1',
+      // Elevate fields (stats, partners, tracks re-used)
+      tracksLabel: '', tracksHeading: '', tracksHeadingAccent: '',
+      track1Title: '', track1Description: '', track1ImageUrl: '', track1Badge: '',
+      track2Title: '', track2Description: '', track2ImageUrl: '', track2Badge: '',
+      track3Title: '', track3Description: '', track3ImageUrl: '', track3Badge: '',
+      impactLabel: '',
+      stat1Value: '10,000+', stat1Label: 'Learners across Africa',
+      stat2Value: '91%',     stat2Label: 'Report career advancement',
+      stat3Value: '50+',     stat3Label: 'Courses and experiences',
+      stat4Value: '4.9',     stat4Label: 'Average learner rating',
+      stat1ImageUrl: '', stat2ImageUrl: '', stat3ImageUrl: '', stat4ImageUrl: '',
+      statImgOverlay: '',
+      partnersLabel: "Trusted by Africa's leading organisations",
+      partner1Name: 'Google',     partner1LogoUrl: '',
+      partner2Name: 'Microsoft',  partner2LogoUrl: '',
+      partner3Name: 'MTN',        partner3LogoUrl: '',
+      partner4Name: 'Ecobank',    partner4LogoUrl: '',
+      partner5Name: 'Mastercard', partner5LogoUrl: '',
+      partner6Name: 'UNICEF',     partner6LogoUrl: '',
+      newsletterHeading: '', newsletterSubtext: '', newsletterButton: '',
+      navBgColor: '#ffffff', navTextColor: '#111111',
+      sectionDarkBg: '#003262', sectionLightBg: '#ffffff', sectionAltBg: '#F7F9FC',
+      textHeadingColor: '#003262', textBodyColor: '#6E7383', textMutedColor: '#9ca3af',
+      textOnDarkColor: '#ffffff', textOnAltColor: '#111111',
+      cardBadgeBg: 'rgba(255,255,255,0.22)', cardBadgeText: '#ffffff',
+      cardOverlayColor: '#0a0a1a', cardOverlayOpacity: '55',
+      hideOfferings: '1', hideSteps: '1', hideFeatures: '1',
+      hideTestimonials: '', hideCta: '', hidePartners: '', hideStats: '',
+      ad1Label: 'New', ad1Title: 'Start your learning journey today', ad1Description: 'Access courses, learning paths and virtual experiences built for African professionals.', ad1CtaText: 'Get started free', ad1CtaUrl: '/auth?mode=signup', ad1BgColor: '#0056D2', ad1BgImage: '',
+      ad2Label: 'Featured', ad2Title: 'Build job-ready skills with virtual internships', ad2Description: 'Gain real-world experience and add portfolio projects that employers recognise.', ad2CtaText: 'Explore experiences', ad2CtaUrl: '/auth', ad2BgColor: '#003262', ad2BgImage: '',
+      ad3Label: 'Popular', ad3Title: 'Guided learning paths for your career goals', ad3Description: 'Curated courses and projects that take you from beginner to job-ready.', ad3CtaText: 'View learning paths', ad3CtaUrl: '/auth', ad3BgColor: '#064E3B', ad3BgImage: '',
+      hideAdBanner: '',
+      midAd1Label: 'Trending', midAd1Title: 'Enrol in a guided learning path', midAd1Description: 'Follow a curated sequence of courses and projects designed to take you from beginner to job-ready.', midAd1CtaText: 'Browse paths', midAd1CtaUrl: '/auth', midAd1BgColor: '#0056D2', midAd1BgImage: '',
+      midAd2Label: 'Free', midAd2Title: 'Start your first course today', midAd2Description: 'No credit card required. Access your first course free and experience the platform before you commit.', midAd2CtaText: 'Get started free', midAd2CtaUrl: '/auth?mode=signup', midAd2BgColor: '#064E3B', midAd2BgImage: '',
+      hideMidAdBanner: '',
+      ad1ImageLayout: '', ad2ImageLayout: '', ad3ImageLayout: '', midAd1ImageLayout: '', midAd2ImageLayout: '', adBannerFullWidth: '',
+      siteDarkMode: '',
+    },
+  },
   // Add new templates here -- the dashboard picks them up automatically.
 ];
 
+const LEGACY_ID_MAP: Record<string, string> = { coursera: 'modern', momentum: 'modern' };
+
 export function getTemplate(id: string): Template {
-  return TEMPLATES.find(t => t.id === id) ?? TEMPLATES[0];
+  const resolved = LEGACY_ID_MAP[id] ?? id;
+  return TEMPLATES.find(t => t.id === resolved) ?? TEMPLATES[0];
 }
 
 /** Merge saved config over template defaults so missing keys always have a value. */

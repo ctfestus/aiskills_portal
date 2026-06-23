@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, useInView, AnimatePresence } from 'motion/react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/components/TenantProvider';
 import { useTheme } from '@/components/ThemeProvider';
 import { resolveConfig, type SiteConfig } from '@/lib/site-templates';
-import { ArrowRight, Check, LayoutDashboard, ChevronDown, ChevronLeft, ChevronRight, User, Settings, LogOut, BookOpen, Calendar, Briefcase, Award, TrendingUp, Users, Zap, BarChart3, GraduationCap } from 'lucide-react';
+import { ArrowRight, Check, LayoutDashboard, ChevronDown, ChevronLeft, ChevronRight, User, Settings, LogOut, BookOpen, Calendar, Briefcase, Award, TrendingUp, Users, Zap, BarChart3, GraduationCap, Play } from 'lucide-react';
+import { HoverPreviewCard } from '@/components/student/shared';
+import { getToolIcon } from '@/lib/tool-icons';
 
 // --- FadeIn on scroll ---
 function FadeIn({ children, delay = 0, className = '' }: { children: React.ReactNode; delay?: number; className?: string }) {
@@ -35,9 +38,9 @@ function Orb({ x, y, size, color, delay }: { x: string; y: string; size: number;
 }
 
 // --- Nav profile menu ---
-function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
+function NavProfileMenu({ user, profile, pageDark }: { user: any; profile: any; pageDark?: boolean }) {
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  const isDark = pageDark ?? (theme === 'dark');
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -86,16 +89,20 @@ function NavProfileMenu({ user, profile }: { user: any; profile: any }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 px-2 py-1 rounded-full border border-white/25 bg-white/15 hover:bg-white/25 transition-all"
+        className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-all hover:shadow-sm"
+        style={{
+          background: isDark ? '#1E1F26' : 'white',
+          borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.07)',
+        }}
       >
-        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden flex-shrink-0"
+        <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold overflow-hidden flex-shrink-0"
           style={{ background: lime, color: green }}>
           {avatar ? <img src={avatar} alt={name} className="w-full h-full object-cover"/> : <span>{initials}</span>}
         </div>
-        <span className="text-sm font-medium hidden sm:block pr-1" style={{ color: 'white' }}>
+        <span className="text-sm font-medium hidden sm:block pr-1" style={{ color: isDark ? 'white' : '#1C1D1F' }}>
           {name}
         </span>
-        <ChevronDown className={`w-3.5 h-3.5 transition-transform mr-1 ${open ? 'rotate-180' : ''}`} style={{ color: 'rgba(255,255,255,0.7)' }} />
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform mr-1 ${open ? 'rotate-180' : ''}`} style={{ color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.45)' }} />
       </button>
 
       <AnimatePresence>
@@ -162,32 +169,56 @@ const OFFERING_ICONS = [BookOpen, Calendar, Briefcase, Award];
 // Icon map for highlights (fixed set, text comes from config)
 const HIGHLIGHT_ICONS = [BookOpen, Award, Calendar, Briefcase, TrendingUp, User, Check, Zap];
 
+type PathCourse = { id: string; title: string; imageUrl: string; slug: string; type?: 'course' | 've' };
+
 type ProgrammeItem = {
   id: string; title: string; description: string;
   imageUrl: string; badge: string; difficulty?: string; type: 'course' | 've' | 'path'; slug: string;
+  category?: string;
+  pathCourses?: PathCourse[];
 };
 
 function useProgrammes() {
   const [items, setItems] = useState<ProgrammeItem[]>([]);
   useEffect(() => {
     Promise.all([
-      supabase.from('courses').select('id,title,cover_image,slug').eq('status', 'published').limit(12),
-      supabase.from('virtual_experiences').select('id,title,cover_image,slug,tagline,difficulty,industry').eq('status', 'published').limit(12),
-      supabase.from('learning_paths').select('id,title,description,cover_image').eq('status', 'published').limit(8),
-    ]).then(([c, v, lp]) => {
+      supabase.from('published_courses').select('id,title,cover_image,slug,category,description').limit(20),
+      supabase.from('published_virtual_experiences').select('id,title,cover_image,slug,tagline,difficulty,industry').limit(12),
+      supabase.from('published_learning_paths').select('id,title,description,cover_image').limit(8),
+    ]).then(async ([c, v, lp]) => {
       const courses: ProgrammeItem[] = (c.data ?? []).map((r: any) => ({
-        id: r.id, title: r.title, description: r.learn_outcomes?.[0] ?? '',
+        id: r.id, title: r.title, description: r.description ?? '',
         imageUrl: r.cover_image ?? '', badge: 'Course', type: 'course', slug: r.slug,
+        category: r.category ?? '',
       }));
       const ves: ProgrammeItem[] = (v.data ?? []).map((r: any) => ({
         id: r.id, title: r.title, description: r.tagline ?? r.industry ?? '',
         imageUrl: r.cover_image ?? '', badge: 'Guided Project',
         difficulty: r.difficulty ? r.difficulty.charAt(0).toUpperCase() + r.difficulty.slice(1) : undefined,
-        type: 've', slug: r.slug,
+        type: 've', slug: r.slug, category: r.industry ? r.industry.charAt(0).toUpperCase() + r.industry.slice(1) : '',
       }));
-      const paths: ProgrammeItem[] = (lp.data ?? []).map((r: any) => ({
+
+      const lpData = lp.data ?? [];
+      const pathIds = lpData.map((r: any) => r.id);
+      let pathCourseMap: Record<string, PathCourse[]> = {};
+      if (pathIds.length > 0) {
+        const { data: piData } = await supabase
+          .from('published_path_items')
+          .select('path_id,id,title,cover_image,slug,type,position')
+          .in('path_id', pathIds)
+          .order('position');
+        const byPath: Record<string, PathCourse[]> = {};
+        (piData ?? []).forEach((r: any) => {
+          if (!byPath[r.path_id]) byPath[r.path_id] = [];
+          byPath[r.path_id].push({ id: r.id, title: r.title, imageUrl: r.cover_image ?? '', slug: r.slug, type: r.type });
+        });
+        pathCourseMap = byPath;
+      }
+
+      const paths: ProgrammeItem[] = lpData.map((r: any) => ({
         id: r.id, title: r.title, description: r.description ?? '',
-        imageUrl: r.cover_image ?? '', badge: 'Learning Path', type: 'path', slug: '',
+        imageUrl: r.cover_image ?? '', badge: 'Learning Path', type: 'path', slug: '', category: '',
+        pathCourses: pathCourseMap[r.id] ?? [],
       }));
       const merged = [...courses, ...ves, ...paths];
       if (merged.length > 0) setItems(merged);
@@ -300,7 +331,7 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
   ].filter(p => p.name);
 
   return (
-    <main className="min-h-screen overflow-x-hidden font-sans antialiased" style={{ background: light_bg, fontFamily: bFont }}>
+    <main className="landing-scope min-h-screen overflow-x-hidden font-sans antialiased" style={{ background: light_bg, fontFamily: bFont }}>
 
       {/* NAV */}
       <motion.nav
@@ -859,6 +890,782 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
   );
 }
 
+// --- Modern template helpers ---
+function groupByField(items: ProgrammeItem[], field: 'category'): [string, ProgrammeItem[]][] {
+  const map = new Map<string, ProgrammeItem[]>();
+  for (const item of items) {
+    const key = (item[field] || '').trim() || 'General';
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(item);
+  }
+  return [...map.entries()].sort((a, b) => {
+    if (a[0] === 'General') return 1;
+    if (b[0] === 'General') return -1;
+    return a[0].localeCompare(b[0]);
+  });
+}
+
+const LAND_TYPE_LABEL = { course: 'Course', path: 'Learning Path', ve: 'Virtual Experience' } as const;
+const LAND_TYPE_GRAD  = {
+  course: 'linear-gradient(135deg,#1E3A8A 0%,#3B82F6 100%)',
+  path:   'linear-gradient(135deg,#92400E 0%,#F59E0B 100%)',
+  ve:     'linear-gradient(135deg,#064E3B 0%,#10B981 100%)',
+} as const;
+const LAND_C = { card: 'white', text: '#1C1D1F', muted: '#6E7383', faint: '#9CA3AF', cardBorder: '#E8EBEF' };
+
+// --- Ad banner carousel ---
+type AdCard = { label: string; title: string; description: string; ctaText: string; ctaUrl: string; bgColor: string; bgImage: string; imageLayout?: string; };
+
+function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFont?: string; bFont?: string; fullWidth?: boolean }) {
+  const cards = ads.filter(a => a.title);
+  const [idx, setIdx] = useState(0);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const clipRef  = useRef<HTMLDivElement>(null);
+  const [containerW, setContainerW] = useState(0);
+  const GAP = fullWidth ? 0 : 16;
+  const max = Math.max(0, cards.length - 1);
+
+  useEffect(() => {
+    if (!clipRef.current) return;
+    const obs = new ResizeObserver(e => setContainerW(e[0].contentRect.width));
+    obs.observe(clipRef.current);
+    return () => obs.disconnect();
+  }, []);
+
+  const isMobile = containerW > 0 && containerW < 640;
+  const CARD_W = fullWidth
+    ? (containerW > 0 ? containerW : 1280)
+    : (containerW > 0 ? Math.min(646, containerW - 40) : 646);
+  const CARD_H = fullWidth
+    ? (isMobile ? 380 : Math.max(320, Math.min(460, Math.round((containerW || 1280) * 0.30))))
+    : Math.max(220, Math.round(297 * Math.min(1, CARD_W / 646)));
+
+  const totalW = cards.length * CARD_W + (cards.length - 1) * GAP;
+  const maxTranslate = containerW > 0 ? Math.max(0, totalW - containerW) : (max * (CARD_W + GAP));
+  const getTranslate = (i: number) => i === max ? maxTranslate : i * (CARD_W + GAP);
+
+  const goTo = (next: number) => setIdx(Math.max(0, Math.min(next, max)));
+
+  if (!cards.length) return null;
+
+  return (
+    <div>
+      <div className="relative">
+        {/* Left arrow - hidden on mobile, vertically centered on desktop */}
+        {max > 0 && !isMobile && (
+          <button onClick={() => goTo(idx - 1)} disabled={idx === 0}
+            className={`absolute top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full grid place-items-center transition-all disabled:opacity-20 outline-none focus:outline-none ${fullWidth ? 'left-3 sm:left-6 bg-white shadow-md hover:shadow-lg' : 'left-0 -translate-x-1/2 hover:bg-white hover:shadow-md'}`}
+            style={{ color: LAND_C.text }}>
+            <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
+          </button>
+        )}
+
+        <div ref={clipRef} style={{ overflow: 'hidden' }}>
+        <div ref={trackRef} style={{ display: 'flex', gap: GAP, transform: `translateX(-${getTranslate(idx)}px)`, transition: 'transform 0.45s cubic-bezier(0.25,1,0.5,1)' }}>
+          {cards.map((ad, i) => {
+            if (fullWidth) {
+              const sideImage = ad.imageLayout === 'side' && !!ad.bgImage;
+              const baseColor = ad.bgColor || '#0056D2';
+              return (
+                <div key={i} className="flex-shrink-0 relative overflow-hidden" style={{ width: CARD_W, height: CARD_H }}>
+                  {sideImage ? (
+                    <>
+                      <div className="absolute inset-0" style={{ background: baseColor }} />
+                      <div className="absolute top-0 right-0 h-full" style={{ width: isMobile ? '52%' : '54%' }}>
+                        <img src={ad.bgImage} alt="" className="w-full h-full object-contain object-right" />
+                        <div className="absolute inset-y-0 left-0 pointer-events-none" style={{ width: '35%', background: `linear-gradient(to right, ${baseColor}, transparent)` }} />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="absolute inset-0" style={{ background: ad.bgImage ? `url(${ad.bgImage}) center/cover no-repeat` : baseColor }} />
+                  )}
+                  <div className="relative h-full flex items-center max-w-[1240px] mx-auto px-4 sm:px-8 md:px-14">
+                    <div className="rounded-2xl bg-white"
+                      style={{ maxWidth: isMobile ? (sideImage ? '64%' : '88%') : 460, padding: isMobile ? '22px 22px' : '36px 40px', boxShadow: '0 6px 30px rgba(0,0,0,0.12)' }}>
+                      {ad.label && (
+                        <span className="inline-block text-[10px] font-bold uppercase tracking-widest mb-3"
+                          style={{ color: ad.bgColor || '#0056D2', letterSpacing: '0.12em' }}>
+                          {ad.label}
+                        </span>
+                      )}
+                      <h3 className="font-black leading-[1.08]"
+                        style={{ color: LAND_C.text, fontFamily: hFont, letterSpacing: '-0.02em', fontSize: isMobile ? 'clamp(24px,7vw,30px)' : 'clamp(30px,2.8vw,42px)' }}>
+                        {ad.title}
+                      </h3>
+                      {ad.description && (
+                        <p className="leading-relaxed mt-3"
+                          style={{ color: LAND_C.muted, fontFamily: bFont ?? hFont, fontSize: isMobile ? 15 : 16 }}>
+                          {ad.description}
+                        </p>
+                      )}
+                      {ad.ctaText && (
+                        <div className="mt-5">
+                          <Link href={ad.ctaUrl || '/auth'}
+                            className="inline-flex items-center gap-2 font-bold rounded-xl transition-opacity hover:opacity-90"
+                            style={{ background: ad.bgColor || '#0056D2', color: '#fff', fontFamily: hFont, fontSize: isMobile ? 14 : 15, padding: isMobile ? '11px 20px' : '13px 26px' }}>
+                            {ad.ctaText}
+                            <ArrowRight className="w-4 h-4" />
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            const sideImage = ad.imageLayout === 'side' && !!ad.bgImage;
+            const bg = sideImage
+              ? (ad.bgColor || '#0056D2')
+              : ad.bgImage
+                ? `url(${ad.bgImage}) center/cover no-repeat`
+                : ad.bgColor || '#0056D2';
+            const padding = isMobile ? '28px 24px' : '36px';
+            const body = (
+              <>
+                <div>
+                  {ad.label && (
+                    <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-md mb-3"
+                      style={{ background: 'rgba(255,255,255,0.22)', color: 'white', letterSpacing: '0.1em' }}>
+                      {ad.label}
+                    </span>
+                  )}
+                  <h3 className="font-black leading-tight mb-2"
+                    style={{ color: 'white', fontFamily: hFont, letterSpacing: '-0.025em', fontSize: isMobile ? 'clamp(18px,5vw,24px)' : 'clamp(22px,2.2vw,34px)', maxWidth: sideImage ? 'none' : 380 }}>
+                    {ad.title}
+                  </h3>
+                  {!isMobile && (
+                    <p className="leading-relaxed"
+                      style={{ color: 'rgba(255,255,255,0.80)', fontFamily: bFont ?? hFont, fontSize: 15, maxWidth: sideImage ? 'none' : 380 }}>
+                      {ad.description}
+                    </p>
+                  )}
+                </div>
+                {ad.ctaText && (
+                  <div className="mt-4">
+                    <Link href={ad.ctaUrl || '/auth'}
+                      className="inline-flex items-center gap-2 self-start font-bold rounded-xl transition-opacity hover:opacity-90"
+                      style={{ background: 'white', color: ad.bgColor || '#0056D2', fontFamily: hFont, fontSize: isMobile ? 13 : 14, padding: isMobile ? '10px 18px' : '12px 24px' }}>
+                      {ad.ctaText}
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </div>
+                )}
+              </>
+            );
+            return (
+              <div key={i} className="flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer"
+                style={{ width: CARD_W, height: CARD_H }}>
+                <div className="relative w-full h-full transition-transform duration-200 hover:scale-[1.03]"
+                  style={{ background: bg }}>
+                {!sideImage && ad.bgImage && <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.48)' }} />}
+                {sideImage ? (
+                  <div className="relative z-10 flex h-full" style={{ height: CARD_H, flexDirection: isMobile ? 'column' : 'row' }}>
+                    <div className="flex flex-col justify-between" style={{ flex: 1, minWidth: 0, padding }}>
+                      {body}
+                    </div>
+                    <div style={{ flex: isMobile ? '0 0 40%' : '0 0 44%', overflow: 'hidden' }}>
+                      <img src={ad.bgImage} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative z-10 flex flex-col justify-between h-full" style={{ height: CARD_H, padding }}>
+                    {body}
+                  </div>
+                )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        </div>
+
+        {/* Right arrow - hidden on mobile, vertically centered on desktop */}
+        {max > 0 && !isMobile && (
+          <button onClick={() => goTo(idx + 1)} disabled={idx >= max}
+            className={`absolute top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full grid place-items-center transition-all disabled:opacity-20 outline-none focus:outline-none ${fullWidth ? 'right-3 sm:right-6 bg-white shadow-md hover:shadow-lg' : 'right-0 translate-x-1/2 hover:bg-white hover:shadow-md'}`}
+            style={{ color: LAND_C.text }}>
+            <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
+          </button>
+        )}
+      </div>
+
+      {/* Dots centered below */}
+      {max > 0 && (
+        <div className="flex justify-center gap-2 mt-4">
+          {Array.from({ length: max + 1 }, (_, i) => (
+            <button key={i} onClick={() => goTo(i)}
+              className="rounded-full transition-all"
+              style={{ width: i === idx ? 20 : 7, height: 7, background: i === idx ? LAND_C.text : LAND_C.faint }} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Fixed 2-card grid banner (mid-page, no carousel/dots)
+function LandingMidAdBanner({ ads, hFont, bFont, isDark }: { ads: AdCard[]; hFont?: string; bFont?: string; isDark?: boolean }) {
+  const cards = ads.filter(a => a.title);
+  if (!cards.length) return null;
+  return (
+    <div style={{ background: isDark ? '#0d1117' : 'white' }}>
+      <div className="max-w-[1240px] mx-auto px-4 sm:px-6 md:px-10 py-8 md:py-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {cards.map((ad, i) => {
+            const sideImage = ad.imageLayout === 'side' && !!ad.bgImage;
+            const bg = sideImage
+              ? (ad.bgColor || '#0056D2')
+              : ad.bgImage
+                ? `url(${ad.bgImage}) center/cover no-repeat`
+                : ad.bgColor || '#0056D2';
+            const body = (
+              <div className="relative z-10 flex flex-col gap-3" style={{ padding: '28px 32px', minHeight: sideImage ? undefined : 164 }}>
+                <div>
+                  {ad.label && (
+                    <span className="inline-block text-[9px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded mb-2.5"
+                      style={{ background: 'rgba(255,255,255,0.22)', color: 'white', letterSpacing: '0.1em' }}>
+                      {ad.label}
+                    </span>
+                  )}
+                  <h3 className="font-extrabold leading-tight mb-1.5"
+                    style={{ color: 'white', fontFamily: hFont, letterSpacing: '-0.02em', fontSize: 'clamp(15px,1.4vw,19px)', maxWidth: sideImage ? 'none' : 240 }}>
+                    {ad.title}
+                  </h3>
+                </div>
+                {ad.ctaText && (
+                  <div className="mt-1">
+                    <Link href={ad.ctaUrl || '/auth'}
+                      className="inline-flex items-center gap-2 self-start font-bold rounded-xl transition-opacity hover:opacity-90"
+                      style={{ background: 'white', color: ad.bgColor || '#0056D2', fontFamily: hFont, fontSize: 13, padding: '10px 20px' }}>
+                      {ad.ctaText}
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                )}
+              </div>
+            );
+            return (
+              <div key={i} className="rounded-2xl overflow-hidden" style={{ minHeight: 220 }}>
+                <div className="relative w-full h-full transition-transform duration-200 hover:scale-[1.03]"
+                  style={{ background: bg, minHeight: 220 }}>
+                  {!sideImage && ad.bgImage && <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.48)' }} />}
+                  {sideImage ? (
+                    <div className="relative z-10 flex flex-col sm:flex-row" style={{ minHeight: 220 }}>
+                      <div className="flex-1 min-w-0">{body}</div>
+                      <div className="w-full h-28 sm:h-auto sm:w-[42%] flex-shrink-0 overflow-hidden">
+                        <img src={ad.bgImage} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    </div>
+                  ) : body}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Hover popup content for landing page items
+function LandingCoursePreview({ item, typeColor, user, hFont, bFont, isDark }: { item: ProgrammeItem; typeColor: string; user: any; hFont?: string; bFont?: string; isDark?: boolean }) {
+  const href = (item.type === 've' || item.type === 'course')
+    ? `/${item.slug}`
+    : user ? '/student' : '/auth';
+  const desc = item.description.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+
+  if (item.type === 'path') {
+    const courses = item.pathCourses ?? [];
+    const popupW = Math.min(640, Math.max(360, courses.length * 120 + 32));
+    return (
+      <div className="rounded-2xl overflow-hidden" style={{ width: popupW, background: isDark ? '#22242d' : 'white', boxShadow: isDark ? '0 4px 28px rgba(0,0,0,0.50)' : '0 4px 24px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.05)' }}>
+        {/* Path header */}
+        <div className="p-4 pb-0">
+          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md mb-2" style={{ background: typeColor, color: 'white' }}>Learning Path</span>
+          <h3 className="text-base font-bold leading-snug line-clamp-2 mb-1.5" style={{ color: isDark ? 'white' : '#111', fontFamily: hFont }}>{item.title}</h3>
+          {desc && <p className="text-sm leading-relaxed line-clamp-2 mb-0" style={{ color: isDark ? 'rgba(255,255,255,0.65)' : '#555', fontFamily: bFont }}>{desc}</p>}
+        </div>
+        {/* Course list */}
+        <div className="p-4">
+          {courses.length > 0 ? (
+            <>
+              <p className="text-[11px] font-semibold uppercase tracking-wider mb-3" style={{ color: isDark ? 'rgba(255,255,255,0.45)' : '#888' }}>
+                {courses.length} item{courses.length !== 1 ? 's' : ''} in this path
+              </p>
+              <div className="flex flex-wrap gap-2.5">
+                {courses.map(c => (
+                  <div key={c.id} className="flex-shrink-0" style={{ width: 110 }}>
+                    <div className="rounded-lg overflow-hidden mb-1.5" style={{ aspectRatio: '16/9', background: c.imageUrl ? '#0b0b0d' : (isDark ? '#2c303a' : '#F0F6FF') }}>
+                      {c.imageUrl
+                        ? <img src={c.imageUrl} alt={c.title} loading="lazy" className="w-full h-full object-cover" />
+                        : <div className="w-full h-full flex items-center justify-center"><BookOpen className="w-5 h-5" style={{ color: '#9CA3AF' }} /></div>
+                      }
+                    </div>
+                    <p className="text-[11px] font-medium leading-snug line-clamp-2" style={{ color: isDark ? 'rgba(255,255,255,0.85)' : '#333', fontFamily: hFont }}>{c.title}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            desc && <p className="text-sm leading-relaxed line-clamp-3 mb-1" style={{ color: isDark ? 'rgba(255,255,255,0.65)' : '#555', fontFamily: bFont }}>{desc}</p>
+          )}
+          <Link href={user ? href : '/auth'}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl transition-opacity hover:opacity-90 mt-4"
+            style={{ background: '#00bf63', color: 'white' }}>
+            <Play className="w-3.5 h-3.5" />
+            {user ? 'Start path' : 'Log in to access'}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl overflow-hidden"
+      style={{ background: isDark ? '#22242d' : 'white', boxShadow: isDark ? '0 4px 28px rgba(0,0,0,0.50)' : '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
+      <div className="relative w-full aspect-video" style={{ background: item.imageUrl ? '#0b0b0d' : 'transparent' }}>
+        {item.imageUrl
+          ? <img src={item.imageUrl} alt={item.title} loading="lazy" className="w-full h-full object-cover"/>
+          : <div className="w-full h-full flex items-center justify-center" style={{ background: LAND_TYPE_GRAD[item.type] }}>
+              <BookOpen className="w-10 h-10" style={{ color: 'rgba(255,255,255,0.7)' }}/>
+            </div>
+        }
+        <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
+          style={{ background: typeColor, color: 'white' }}>
+          {LAND_TYPE_LABEL[item.type]}
+        </span>
+      </div>
+      <div className="p-5">
+        <p className="text-xs mb-1" style={{ color: isDark ? 'rgba(255,255,255,0.45)' : '#888' }}>{LAND_TYPE_LABEL[item.type]}</p>
+        <h3 className="text-lg font-bold leading-snug mb-2 line-clamp-2" style={{ color: isDark ? 'white' : '#111', fontFamily: hFont }}>{item.title}</h3>
+        {desc && <p className="text-sm leading-relaxed line-clamp-3 mb-3" style={{ color: isDark ? 'rgba(255,255,255,0.65)' : '#555', fontFamily: bFont }}>{desc}</p>}
+        {item.difficulty && <p className="text-xs mb-3" style={{ color: isDark ? 'rgba(255,255,255,0.45)' : '#888' }}>{item.difficulty}</p>}
+        <Link href={user ? href : '/auth'}
+          className="inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl transition-opacity hover:opacity-90"
+          style={{ background: '#00bf63', color: 'white' }}>
+          <Play className="w-3.5 h-3.5"/>
+          {user ? 'Start learning' : 'Log in to access'}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function LandingCarouselRow({ title, items, type, typeColor, user, hFont, bFont, isDark, hideTitle, transparentBg, popupDark }: {
+  title: string; items: ProgrammeItem[]; type: 'course' | 've' | 'path'; typeColor: string; user: any; hFont?: string; bFont?: string; isDark?: boolean; hideTitle?: boolean; transparentBg?: boolean; popupDark?: boolean;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 380, behavior: 'smooth' });
+
+  const [hover, setHover] = useState<{ item: ProgrammeItem; left: number; top: number; originX: number; originY: number } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
+  const scheduleClose = () => { cancelClose(); closeTimer.current = setTimeout(() => setHover(null), 120); };
+  const openHover = (item: ProgrammeItem, el: HTMLElement) => {
+    if (typeof window === 'undefined' || !window.matchMedia('(hover: hover)').matches) return;
+    cancelClose();
+    const r = el.getBoundingClientRect();
+    const pathW = item.type === 'path' ? Math.min(640, Math.max(360, (item.pathCourses?.length ?? 0) * 120 + 32)) : 320;
+    const W = pathW, H = 500;
+    const left = Math.max(12, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 12));
+    const top  = Math.max(12, Math.min(r.top - 20, window.innerHeight - H - 12));
+    const originX = Math.max(0, Math.min(r.left + r.width / 2 - left, W));
+    const originY = Math.max(0, Math.min(r.top + r.height / 2 - top, H));
+    setHover({ item, left, top, originX, originY });
+  };
+  useEffect(() => () => cancelClose(), []);
+
+  const rowBg    = transparentBg ? 'transparent' : (isDark ? '#1E1F26' : '#F0F6FF');
+  const rowText  = isDark ? 'white' : LAND_C.text;
+  const rowMuted = isDark ? 'rgba(255,255,255,0.65)' : LAND_C.muted;
+  const rowBorder = isDark ? 'rgba(255,255,255,0.25)' : LAND_C.cardBorder;
+
+  return (
+    <section className="rounded-2xl p-5 sm:p-6" style={{ background: rowBg }}>
+      {!hideTitle && (
+        <div className="flex items-center justify-between gap-4 mb-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {(() => { const icon = getToolIcon(title); return icon
+              ? <img src={icon} alt="" className="w-6 h-6 object-contain flex-shrink-0" />
+              : <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: isDark ? 'white' : typeColor }} />;
+            })()}
+            <h3 className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: rowText, fontFamily: hFont }}>{title}</h3>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+              style={{ border: `1px solid ${rowBorder}`, color: rowMuted }}>
+              <ChevronLeft className="w-4 h-4"/>
+            </button>
+            <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+              style={{ border: `1px solid ${rowBorder}`, color: rowMuted }}>
+              <ChevronRight className="w-4 h-4"/>
+            </button>
+          </div>
+        </div>
+      )}
+      {hideTitle && (
+        <div className="flex justify-end mb-0">
+          <div className="flex items-center gap-2">
+            <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
+              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+              style={{ border: `1px solid ${rowBorder}`, color: rowMuted }}>
+              <ChevronLeft className="w-4 h-4"/>
+            </button>
+            <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
+              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
+              style={{ border: `1px solid ${rowBorder}`, color: rowMuted }}>
+              <ChevronRight className="w-4 h-4"/>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div ref={scrollRef} className="flex flex-nowrap gap-4 overflow-x-auto pb-1 mt-4 snap-x"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {items.map(item => (
+          <div key={item.id} className="flex-shrink-0 w-[220px] sm:w-[260px] snap-start"
+            onMouseEnter={e => openHover(item, e.currentTarget)}
+            onMouseLeave={scheduleClose}>
+            <div className="transition-transform hover:-translate-y-0.5">
+              <div className="relative rounded-xl overflow-hidden w-full aspect-video"
+                style={{ background: item.imageUrl ? '#0b0b0d' : 'transparent' }}>
+                {item.imageUrl
+                  ? <img src={item.imageUrl} alt={item.title} loading="lazy" className="w-full h-full object-cover"/>
+                  : <div className="w-full h-full flex items-center justify-center" style={{ background: LAND_TYPE_GRAD[type] }}>
+                      <BookOpen className="w-8 h-8" style={{ color: 'rgba(255,255,255,0.7)' }}/>
+                    </div>
+                }
+              </div>
+              <p className="text-xs mt-2" style={{ color: rowMuted }}>{LAND_TYPE_LABEL[type]}</p>
+              <p className="text-[15px] font-bold leading-snug mt-0.5 line-clamp-2" style={{ color: rowText, fontFamily: hFont }}>{item.title}</p>
+              {item.difficulty && <p className="text-[11px] mt-1" style={{ color: rowMuted }}>{item.difficulty}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {typeof document !== 'undefined' && hover && createPortal(
+        <HoverPreviewCard
+          key={hover.item.id}
+          left={hover.left}
+          top={hover.top}
+          originX={hover.originX}
+          originY={hover.originY}
+          onEnter={cancelClose}
+          onLeave={scheduleClose}
+        >
+          <LandingCoursePreview item={hover.item} typeColor={typeColor} user={user} hFont={hFont} bFont={bFont} isDark={popupDark !== undefined ? popupDark : isDark} />
+        </HoverPreviewCard>,
+        document.body,
+      )}
+    </section>
+  );
+}
+
+// --- Modern template ---
+function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl, logoDarkUrl, appName }: {
+  user: any; profile: any; scrolled: boolean; pastHero: boolean; siteConfig: SiteConfig; logoUrl: string; logoDarkUrl: string; appName: string;
+}) {
+  const programmes = useProgrammes();
+
+  const {
+    primaryColor, accentColor, headingFont, bodyFont,
+    heroTitle, heroTitleAccent, heroSubheadline, heroPrimaryCta,
+    statsEnrolled, statsRating,
+    stat1Value, stat1Label, stat2Value, stat2Label, stat3Value, stat3Label, stat4Value, stat4Label,
+    partnersLabel, partner1Name, partner1LogoUrl, partner2Name, partner2LogoUrl,
+    partner3Name, partner3LogoUrl, partner4Name, partner4LogoUrl,
+    partner5Name, partner5LogoUrl, partner6Name, partner6LogoUrl,
+    testimonialsLabel, testimonialsHeading,
+    testimonial1Name, testimonial1Role, testimonial1Text,
+    testimonial2Name, testimonial2Role, testimonial2Text,
+    testimonial3Name, testimonial3Role, testimonial3Text,
+    ctaHeading, ctaHeadingAccent, ctaSubtext, ctaButton,
+    footerTagline, footerLinksHeading,
+    footerLink1Label, footerLink1Url, footerLink2Label, footerLink2Url,
+    footerLink3Label, footerLink3Url, footerLink4Label, footerLink4Url,
+    hideStickyBar, stickyCtaText, stickyCtaButton,
+    hideTestimonials, hideCta, hidePartners, hideStats,
+    ad1Label, ad1Title, ad1Description, ad1CtaText, ad1CtaUrl, ad1BgColor, ad1BgImage, ad1ImageLayout,
+    ad2Label, ad2Title, ad2Description, ad2CtaText, ad2CtaUrl, ad2BgColor, ad2BgImage, ad2ImageLayout,
+    ad3Label, ad3Title, ad3Description, ad3CtaText, ad3CtaUrl, ad3BgColor, ad3BgImage, ad3ImageLayout,
+    hideAdBanner,
+    midAd1Label, midAd1Title, midAd1Description, midAd1CtaText, midAd1CtaUrl, midAd1BgColor, midAd1BgImage, midAd1ImageLayout,
+    midAd2Label, midAd2Title, midAd2Description, midAd2CtaText, midAd2CtaUrl, midAd2BgColor, midAd2BgImage, midAd2ImageLayout,
+    hideMidAdBanner,
+    adBannerFullWidth,
+    siteDarkMode,
+  } = siteConfig;
+  const isPageDark = siteDarkMode === '1';
+
+  const hFont = headingFont ? `'${headingFont}', sans-serif` : undefined;
+  const bFont = bodyFont    ? `'${bodyFont}', sans-serif`    : undefined;
+
+  const headingFontUrl = headingFont && headingFont !== 'Inter'
+    ? `https://fonts.googleapis.com/css2?family=${headingFont.replace(/\s+/g, '+')}:wght@400;500;600;700;800;900&display=swap`
+    : null;
+  const bodyFontUrl = bodyFont && bodyFont !== 'Inter' && bodyFont !== headingFont
+    ? `https://fonts.googleapis.com/css2?family=${bodyFont.replace(/\s+/g, '+')}:wght@400;500;600;700;800;900&display=swap`
+    : null;
+
+  const NAVY  = '#003262';
+  const BLUE  = primaryColor || '#0056D2';
+  const AMBER = accentColor  || '#FF9933';
+  const GREEN = '#00BF63';
+
+  const courses   = programmes.filter(p => p.type === 'course');
+  const paths     = programmes.filter(p => p.type === 'path');
+  const ves       = programmes.filter(p => p.type === 've');
+
+  const courseGroups = groupByField(courses, 'category');
+  const adCards: AdCard[] = [
+    { label: ad1Label, title: ad1Title, description: ad1Description, ctaText: ad1CtaText, ctaUrl: ad1CtaUrl, bgColor: ad1BgColor, bgImage: ad1BgImage, imageLayout: ad1ImageLayout },
+    { label: ad2Label, title: ad2Title, description: ad2Description, ctaText: ad2CtaText, ctaUrl: ad2CtaUrl, bgColor: ad2BgColor, bgImage: ad2BgImage, imageLayout: ad2ImageLayout },
+    { label: ad3Label, title: ad3Title, description: ad3Description, ctaText: ad3CtaText, ctaUrl: ad3CtaUrl, bgColor: ad3BgColor, bgImage: ad3BgImage, imageLayout: ad3ImageLayout },
+  ];
+  const midAdCards: AdCard[] = [
+    { label: midAd1Label, title: midAd1Title, description: midAd1Description, ctaText: midAd1CtaText, ctaUrl: midAd1CtaUrl, bgColor: midAd1BgColor, bgImage: midAd1BgImage, imageLayout: midAd1ImageLayout },
+    { label: midAd2Label, title: midAd2Title, description: midAd2Description, ctaText: midAd2CtaText, ctaUrl: midAd2CtaUrl, bgColor: midAd2BgColor, bgImage: midAd2BgImage, imageLayout: midAd2ImageLayout },
+  ];
+  const veGroups     = groupByField(ves,     'category');
+
+
+  const NAV_LINKS: Array<{ label: string; anchor: string }> = [
+    { label: 'Courses',              anchor: 'section-courses' },
+    { label: 'Learning Paths',       anchor: 'section-paths' },
+    { label: 'Virtual Experiences',  anchor: 'section-ves' },
+  ];
+
+  return (
+    <>
+      {headingFontUrl && <link rel="stylesheet" href={headingFontUrl} />}
+      {bodyFontUrl    && <link rel="stylesheet" href={bodyFontUrl} />}
+    <main className="landing-scope min-h-screen overflow-x-hidden antialiased" style={{ background: isPageDark ? '#0d1117' : 'white', fontFamily: bFont }}>
+
+      {/* NAV */}
+      <nav className="fixed top-0 left-0 right-0 z-50 transition-shadow duration-300"
+        style={{
+          background: isPageDark ? '#0d1117' : 'white',
+          boxShadow: scrolled ? `0 2px 20px rgba(0,0,0,${isPageDark ? '0.4' : '0.09'})` : `0 1px 10px rgba(0,0,0,${isPageDark ? '0.25' : '0.06'})`,
+        }}>
+        <div className="max-w-[1240px] mx-auto px-6 md:px-10 h-16 flex items-center">
+          <div className="flex items-center gap-2.5 mr-8 flex-shrink-0">
+            {logoUrl || logoDarkUrl
+              ? <img src={isPageDark ? (logoDarkUrl || logoUrl) : (logoUrl || logoDarkUrl) || undefined} alt={appName} className="h-8 w-auto" />
+              : <>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-black flex-shrink-0"
+                    style={{ background: BLUE }}>
+                    {(appName || 'AI').slice(0, 2).toUpperCase()}
+                  </div>
+                  <span className="text-sm font-extrabold hidden sm:block" style={{ color: isPageDark ? 'white' : NAVY, letterSpacing: '-0.02em' }}>
+                    {appName}
+                  </span>
+                </>
+            }
+          </div>
+          <div className="hidden md:flex items-center gap-1 flex-1">
+            {NAV_LINKS.map(nl => (
+              <button key={nl.anchor}
+                onClick={() => document.getElementById(nl.anchor)?.scrollIntoView({ behavior: 'smooth' })}
+                className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+                style={{ color: isPageDark ? 'rgba(255,255,255,0.80)' : '#1C1D1F' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = isPageDark ? 'rgba(255,255,255,0.08)' : '#F7F9FC'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                {nl.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+            {user ? <NavProfileMenu user={user} profile={profile} pageDark={isPageDark} /> : (
+              <>
+                <Link href="/auth"
+                  className="px-4 py-2 text-sm font-semibold rounded-md transition-colors hidden sm:block"
+                  style={{ color: isPageDark ? 'rgba(255,255,255,0.80)' : '#1C1D1F' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = isPageDark ? 'rgba(255,255,255,0.08)' : '#F7F9FC'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                  Log in
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      {/* AD BANNER */}
+      {hideAdBanner !== '1' && (
+        adBannerFullWidth === '1' ? (
+          <div className="pt-16 md:pt-20">
+            <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} fullWidth />
+          </div>
+        ) : (
+          <div className="max-w-[1240px] mx-auto px-4 sm:px-6 md:px-10 pb-2 pt-20 md:pt-24">
+            <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} />
+          </div>
+        )
+      )}
+
+      <div id="browse" />
+
+      {/* COURSES */}
+      {courses.length > 0 && (
+        <section id="section-courses" className="py-10 md:py-14">
+          <div className="max-w-[1240px] mx-auto px-6 md:px-10">
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-1">
+                <h2 style={{ fontFamily: hFont, fontWeight: 900, fontSize: 'clamp(22px,2.5vw,34px)', color: isPageDark ? 'white' : NAVY, letterSpacing: '-0.025em', lineHeight: 1.1 }}>Courses</h2>
+              </div>
+              <p style={{ color: isPageDark ? 'rgba(255,255,255,0.55)' : LAND_C.muted, fontSize: 15, lineHeight: 1.6, fontFamily: bFont ?? hFont }}>Level up your skills with interactive and project-based courses.</p>
+            </div>
+            <div className="space-y-4">
+              {courseGroups.map(([cat, items]) => (
+                <LandingCarouselRow key={cat} title={cat} items={items} type="course" typeColor={BLUE} user={user} hFont={hFont} bFont={bFont} isDark={isPageDark} hideTitle={courseGroups.length === 1} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* LEARNING PATHS */}
+      {paths.length > 0 && (
+        <section id="section-paths" className="py-10 md:py-14" style={{ background: isPageDark ? undefined : BLUE }}>
+          <div className="max-w-[1240px] mx-auto px-6 md:px-10">
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-1">
+                <h2 style={{ fontFamily: hFont, fontWeight: 900, fontSize: 'clamp(22px,2.5vw,34px)', color: 'white', letterSpacing: '-0.025em', lineHeight: 1.1 }}>Learning Paths</h2>
+              </div>
+              <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 15, lineHeight: 1.6, fontFamily: bFont ?? hFont }}>Launch your career in tech with curated courses, virtual experiences and guided projects.</p>
+            </div>
+            <LandingCarouselRow title="Learning Paths" items={paths} type="path" typeColor={AMBER} user={user} hFont={hFont} bFont={bFont} isDark transparentBg={!isPageDark} popupDark={isPageDark} hideTitle />
+          </div>
+        </section>
+      )}
+
+      {/* MID-PAGE AD BANNER */}
+      {hideMidAdBanner !== '1' && midAdCards.some(a => a.title) && (
+        <LandingMidAdBanner ads={midAdCards} hFont={hFont} bFont={bFont} isDark={isPageDark} />
+      )}
+
+      {/* VIRTUAL EXPERIENCES */}
+      {ves.length > 0 && (
+        <section id="section-ves" className="py-10 md:py-14">
+          <div className="max-w-[1240px] mx-auto px-6 md:px-10">
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-1">
+                <h2 style={{ fontFamily: hFont, fontWeight: 900, fontSize: 'clamp(22px,2.5vw,34px)', color: isPageDark ? 'white' : NAVY, letterSpacing: '-0.025em', lineHeight: 1.1 }}>Virtual Experiences</h2>
+              </div>
+              <p style={{ color: isPageDark ? 'rgba(255,255,255,0.55)' : LAND_C.muted, fontSize: 15, lineHeight: 1.6, fontFamily: bFont ?? hFont }}>Gain job-ready skills with virtual internship programs and projects to build your portfolio.</p>
+            </div>
+            <div className="space-y-4">
+              {veGroups.map(([ind, items]) => (
+                <LandingCarouselRow key={ind} title={ind} items={items} type="ve" typeColor={GREEN} user={user} hFont={hFont} bFont={bFont} isDark={isPageDark} hideTitle={veGroups.length === 1} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {programmes.length === 0 && (
+        <div className="min-h-[40vh] flex items-center justify-center text-sm" style={{ color: isPageDark ? 'rgba(255,255,255,0.40)' : '#6E7383' }}>
+          No programmes yet. Check back soon.
+        </div>
+      )}
+
+      {/* CTA SECTION */}
+      {hideCta !== '1' && (
+        <section className="py-16 md:py-20 text-center"
+          style={{ background: `linear-gradient(140deg,#002050 0%,${BLUE} 100%)` }}>
+          <FadeIn>
+            <div className="max-w-[1240px] mx-auto px-6 md:px-10">
+              <h2 className="mb-3" style={{ fontFamily: hFont, fontWeight: 900, fontSize: 'clamp(28px,4vw,46px)', color: 'white', letterSpacing: '-0.025em' }}>
+                {ctaHeading || `Join ${statsEnrolled || '10,000+'} professionals`}<br />
+                <span style={{ color: AMBER }}>{ctaHeadingAccent || "building Africa's future."}</span>
+              </h2>
+              <p className="mx-auto mb-8 text-base" style={{ color: 'rgba(255,255,255,0.70)', maxWidth: 480, lineHeight: 1.65 }}>
+                {ctaSubtext || 'Start learning today. No credit card required. Access your first course free.'}
+              </p>
+              <div className="flex items-center justify-center gap-3 flex-wrap">
+                <Link href={user ? '/student' : '/auth?mode=signup'}
+                  className="inline-flex items-center gap-2 font-bold rounded-lg transition-all hover:opacity-90"
+                  style={{ background: 'white', color: BLUE, padding: '13px 30px', fontSize: 15 }}>
+                  {user ? 'Go to my learning' : (ctaButton || 'Start learning free')}
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+                <a href="#browse"
+                  className="inline-flex items-center font-bold rounded-lg transition-all"
+                  style={{ padding: '13px 30px', fontSize: 15, color: 'white', border: '2px solid rgba(255,255,255,0.32)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'white'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.32)'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                  Explore programmes
+                </a>
+              </div>
+            </div>
+          </FadeIn>
+        </section>
+      )}
+
+      {/* FOOTER */}
+      <footer style={{ background: isPageDark ? '#0D1117' : (primaryColor || '#0056D2') }}>
+        <div className="max-w-[1240px] mx-auto px-6 md:px-10 pt-12 pb-9">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-8 mb-10">
+            <div className="col-span-2 md:col-span-1">
+              <div className="text-sm font-extrabold mb-2.5" style={{ color: 'white', letterSpacing: '-0.02em' }}>{appName}</div>
+              <p className="text-sm leading-relaxed max-w-[240px]" style={{ color: 'rgba(255,255,255,0.38)' }}>{footerTagline}</p>
+            </div>
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-widest mb-3.5" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                {footerLinksHeading || 'Learn'}
+              </div>
+              <div className="flex flex-col gap-2.5">
+                {[
+                  [footerLink1Label || 'Courses',               footerLink1Url || '/auth'],
+                  [footerLink2Label || 'Learning Paths',        footerLink2Url || '/auth'],
+                  [footerLink3Label || 'Virtual Experiences',   footerLink3Url || '/auth'],
+                  [footerLink4Label || 'Certificates',          footerLink4Url || '/auth'],
+                ].filter(([l]) => l).map(([label, href]) => (
+                  <Link key={label} href={href} className="text-sm transition-colors"
+                    style={{ color: 'rgba(255,255,255,0.40)' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'white'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.40)'; }}>
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-widest mb-3.5" style={{ color: 'rgba(255,255,255,0.45)' }}>Account</div>
+              <div className="flex flex-col gap-2.5">
+                {([
+                  ['Log in',      '/auth'],
+                  ['Sign up',     '/auth?mode=signup'],
+                  ['Dashboard',   user ? '/student' : '/auth'],
+                  ['Leaderboard', user ? '/student' : '/auth'],
+                ] as const).map(([label, href]) => (
+                  <Link key={label} href={href} className="text-sm transition-colors"
+                    style={{ color: 'rgba(255,255,255,0.40)' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'white'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.40)'; }}>
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between pt-6 flex-wrap gap-3" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.24)' }}>
+              &copy; {new Date().getFullYear()} {appName}. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
+
+
+    </main>
+    </>
+  );
+}
+
 // --- Landing page skeleton ---
 function LandingPageSkeleton() {
   return (
@@ -899,8 +1706,8 @@ export default function LandingPage() {
   const [loading, setLoading]   = useState(true);
   const [activeTestimonial, setActiveTestimonial] = useState(0);
   const [hoveredCard, setHoveredCard] = useState<number | null>(null);
-  const [siteConfig, setSiteConfig] = useState<SiteConfig>(resolveConfig('momentum', {}));
-  const [templateId, setTemplateId] = useState('momentum');
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>(resolveConfig('modern', {}));
+  const [templateId, setTemplateId] = useState('modern');
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -911,7 +1718,7 @@ export default function LandingPage() {
         const raw = localStorage.getItem('_site_preview');
         if (raw) {
           const { template, config } = JSON.parse(raw);
-          const t = template ?? 'momentum';
+          const t = template ?? 'modern';
           setTemplateId(t);
           setSiteConfig(resolveConfig(t, config ?? {}));
         }
@@ -923,7 +1730,7 @@ export default function LandingPage() {
       .then(r => r.ok ? r.json() : null)
       .then(json => {
         if (json?.data) {
-          const t = json.data.template ?? 'momentum';
+          const t = json.data.template ?? 'modern';
           setTemplateId(t);
           setSiteConfig(resolveConfig(t, json.data.config ?? {}));
         }
@@ -938,7 +1745,7 @@ export default function LandingPage() {
     const handler = (e: MessageEvent) => {
       if (e.origin !== window.location.origin) return;
       if (e.data?.type === 'preview-config') {
-        const t = e.data.template ?? 'momentum';
+        const t = e.data.template ?? 'modern';
         setTemplateId(t);
         setSiteConfig(resolveConfig(t, e.data.config ?? {}));
       }
@@ -1041,444 +1848,6 @@ export default function LandingPage() {
     return <ElevateTemplate user={user} profile={profile} scrolled={scrolled} pastHero={pastHero} siteConfig={siteConfig} logoUrl={logoUrl} logoDarkUrl={logoDarkUrl} appName={appName} />;
   }
 
-  return (
-    <main className="min-h-screen overflow-x-hidden font-sans antialiased" style={{ background: 'white' }}>
+  return <ModernTemplate user={user} profile={profile} scrolled={scrolled} pastHero={pastHero} siteConfig={siteConfig} logoUrl={logoUrl} logoDarkUrl={logoDarkUrl} appName={appName} />;
 
-      {/* -- Nav -- */}
-      <motion.nav
-        initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 py-4 transition-all duration-300"
-        style={{ background: primaryColor, boxShadow: scrolled ? `0 2px 20px ${primaryColor}4d` : 'none' }}
-      >
-        <div className="flex items-center">
-          <img src={logoDarkUrl || logoUrl || undefined} alt="" className="h-9 w-auto" />
-        </div>
-
-
-        <div className="flex items-center gap-3">
-          {user ? (
-            <NavProfileMenu user={user} profile={profile} />
-          ) : (
-            <>
-              {/* Mobile: Sign In button only */}
-              <Link href="/auth"
-                className="flex items-center px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:opacity-90 bg-white sm:hidden"
-                style={{ color: primaryColor }}
-              >
-                Sign In
-              </Link>
-              {/* Desktop: Sign in link + Get started button */}
-              <Link href="/auth" className="text-sm font-medium text-white/75 hover:text-white transition-colors hidden sm:block">
-                Sign in
-              </Link>
-              <Link href="/auth?mode=signup"
-                className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:opacity-90 bg-white"
-                style={{ color: primaryColor }}
-              >
-                Get started <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </>
-          )}
-        </div>
-      </motion.nav>
-
-      {/* -- Hero -- */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-24 md:pt-28 pb-14 md:pb-20 overflow-hidden text-white"
-        style={{ background: primaryColor }}>
-        <Orb x="-8%"  y="5%"  size={480} color={`${primaryColor}cc`} delay={0} />
-        <Orb x="62%"  y="-6%" size={400} color={`${primaryColor}aa`} delay={2} />
-        <Orb x="18%"  y="62%" size={360} color={`${primaryColor}bb`} delay={4} />
-
-        <div className="absolute inset-0 pointer-events-none" style={{
-          backgroundImage: 'linear-gradient(rgba(255,255,255,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.05) 1px,transparent 1px)',
-          backgroundSize: '64px 64px',
-        }} />
-        <div className="absolute inset-0 pointer-events-none" style={{
-          background: `radial-gradient(ellipse 75% 65% at 50% 50%, transparent 40%, ${primaryColor} 100%)`,
-        }} />
-
-        <div className="relative z-10 max-w-5xl mx-auto text-center space-y-6 md:space-y-8">
-          <motion.h1
-            initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.65, delay: 0.2, ease: [0.23, 1, 0.32, 1] }}
-            className="leading-[1.2] md:leading-[1.05]"
-            style={{ letterSpacing: '-0.02em', fontFamily: hFont ?? 'var(--font-sans)', fontWeight: 900, fontSize: `clamp(${Math.round(parseInt(heroFontSize||'56')*0.39)}px, ${(parseInt(heroFontSize||'56')/1200*100).toFixed(2)}vw, ${heroFontSize||'56'}px)` }}
-          >
-            <span style={{ color: 'white' }}>{heroTitle}</span><br />
-            <span style={{ color: accentColor }}>{heroTitleAccent}</span>
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.35 }}
-            className="text-base md:text-[18px] max-w-2xl mx-auto text-white/70" style={{ lineHeight: 1.7, fontFamily: bFont }}
-          >
-            {heroSubheadline}
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.48 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4"
-          >
-            <Link href={user ? '/student' : '/auth'}
-              className="group flex items-center gap-2 px-8 py-4 rounded-2xl text-base font-bold text-white transition-all hover:scale-105 shadow-xl"
-              style={{ background: accentColor }}
-            >
-              {user ? 'Go to my learning' : heroPrimaryCta}
-              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-            </Link>
-            <Link href={user ? '/student' : '/auth'}
-              className="flex items-center gap-2 px-7 py-4 rounded-2xl text-base font-semibold border-2 border-white/30 hover:border-white/60 transition-all"
-              style={{ color: 'white' }}
-            >
-              Browse courses <ChevronDown className="w-4 h-4 -rotate-90" style={{ color: 'white' }} />
-            </Link>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.6 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-2"
-          >
-            <div className="text-sm" style={{ color: 'white' }}>
-              <span className="font-bold">{statsEnrolled}</span> professionals enrolled
-            </div>
-            <div className="w-px h-4 bg-white/25 hidden sm:block" />
-            <div className="flex items-center gap-1.5">
-              <div className="flex">
-                {[0, 1, 2, 3, 4].map(i => (
-                  <svg key={i} className="w-4 h-4 fill-yellow-400" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                ))}
-              </div>
-              <span className="text-sm font-bold">{statsRating}</span>
-              <span className="text-sm text-white/70">from 2,000+ reviews</span>
-            </div>
-          </motion.div>
-        </div>
-
-        <motion.div className="absolute bottom-10 left-1/2 -translate-x-1/2"
-          animate={{ y: [0, 8, 0] }} transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}>
-          <ChevronDown className="w-5 h-5 text-white/30" />
-        </motion.div>
-      </section>
-
-      {/* -- What we offer -- */}
-      {hideOfferings !== '1' && <section className="py-14 md:py-24 px-6 max-w-6xl mx-auto">
-        <FadeIn className="text-center mb-10 md:mb-16 space-y-4">
-          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: accentColor }}>{offeringsLabel}</p>
-          <h2 className="text-[28px] md:text-[44px] font-semibold leading-[1.15]" style={{ color: '#111', letterSpacing: '-0.01em', fontFamily: hFont }}>
-            {offeringsHeading}<br />
-            <span style={{ color: accentColor }}>{offeringsHeadingAccent}</span>
-          </h2>
-          <p className="text-[18px] max-w-xl mx-auto text-gray-500" style={{ lineHeight: 1.7 }}>
-            {offeringsSubtext}
-          </p>
-        </FadeIn>
-
-        <div className="grid md:grid-cols-2 gap-5">
-          {[
-            { title: offering1Title, description: offering1Description, badge: offering1Badge },
-            { title: offering2Title, description: offering2Description, badge: offering2Badge },
-            { title: offering3Title, description: offering3Description, badge: offering3Badge },
-            { title: offering4Title, description: offering4Description, badge: offering4Badge },
-          ].map((o, i) => {
-            const Icon = OFFERING_ICONS[i];
-            const hovered = hoveredCard === i;
-            return (
-              <FadeIn key={o.title} delay={i * 0.08}>
-                <div
-                  className="relative rounded-3xl p-8 overflow-hidden transition-all duration-300 cursor-default border"
-                  style={{
-                    background: hovered ? primaryColor : 'white',
-                    borderColor: hovered ? primaryColor : '#e5e7eb',
-                    transform: hovered ? 'translateY(-4px)' : 'none',
-                    boxShadow: hovered ? `0 20px 40px ${primaryColor}40` : 'none',
-                  }}
-                  onMouseEnter={() => setHoveredCard(i)}
-                  onMouseLeave={() => setHoveredCard(null)}
-                >
-                  <div className="flex items-start gap-5">
-                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors duration-300"
-                      style={{ background: hovered ? 'rgba(255,255,255,0.15)' : `${primaryColor}1a` }}>
-                      <Icon className="w-5 h-5 transition-colors duration-300" style={{ color: hovered ? 'white' : primaryColor }} />
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full transition-colors duration-300"
-                        style={{
-                          background: hovered ? 'rgba(255,255,255,0.15)' : `${primaryColor}1a`,
-                          color: hovered ? 'white' : primaryColor,
-                        }}>
-                        {o.badge}
-                      </span>
-                      <h3 className="text-[20px] font-semibold leading-[1.3] transition-colors duration-300" style={{ color: hovered ? 'white' : '#111' }}>{o.title}</h3>
-                      <p className="text-sm leading-relaxed transition-colors duration-300" style={{ color: hovered ? 'rgba(255,255,255,0.75)' : '#6b7280' }}>{o.description}</p>
-                      <Link href={user ? '/student' : '/auth'}
-                        className="inline-flex items-center gap-1.5 text-sm font-semibold transition-colors duration-300 mt-1"
-                        style={{ color: hovered ? accentColor : primaryColor }}
-                      >
-                        Explore {o.badge.toLowerCase()} <ArrowRight className="w-3.5 h-3.5" />
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </FadeIn>
-            );
-          })}
-        </div>
-      </section>}
-
-      {/* -- How it works -- */}
-      {hideSteps !== '1' && <section className="py-14 md:py-24 px-6" style={{ background: primaryColor }}>
-        <div className="max-w-4xl mx-auto">
-          <FadeIn className="text-center mb-16 space-y-4">
-            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: accentColor }}>{stepsLabel}</p>
-            <h2 className="text-[28px] md:text-[44px] font-semibold leading-[1.15]" style={{ color: 'white', letterSpacing: '-0.01em', fontFamily: hFont }}>
-              {stepsHeading}<br />
-              <span style={{ color: accentColor }}>{stepsHeadingAccent}</span>
-            </h2>
-          </FadeIn>
-          <div className="space-y-4">
-            {[
-              { n: 1, title: step1Title, body: step1Body },
-              { n: 2, title: step2Title, body: step2Body },
-              { n: 3, title: step3Title, body: step3Body },
-            ].map((s, i) => (
-              <FadeIn key={s.n} delay={i * 0.1}>
-                <div className="flex gap-6 items-start p-7 rounded-3xl border transition-shadow hover:shadow-xl"
-                  style={{ background: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.15)' }}>
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-semibold flex-shrink-0"
-                    style={{ background: `${accentColor}33`, color: accentColor }}>
-                    {s.n}
-                  </div>
-                  <div className="space-y-1.5">
-                    <h3 className="text-[20px] font-semibold leading-[1.3]" style={{ color: 'white' }}>{s.title}</h3>
-                    <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.65)' }}>{s.body}</p>
-                  </div>
-                </div>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>}
-
-      {/* -- Highlights grid -- */}
-      {hideFeatures !== '1' && <section className="py-14 md:py-24 px-6 max-w-5xl mx-auto">
-        <div className="grid md:grid-cols-2 gap-10 md:gap-12 items-center">
-          <FadeIn className="space-y-5">
-            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: accentColor }}>{featuresLabel}</p>
-            <h2 className="text-[28px] md:text-[44px] font-bold leading-[1.15]" style={{ color: '#333', letterSpacing: '-0.01em', fontFamily: hFont }}>
-              {featuresHeading}<br />
-              <span style={{ color: accentColor }}>{featuresHeadingAccent}</span>
-            </h2>
-            <p className="text-[16px]" style={{ lineHeight: 1.7, color: '#666' }}>
-              {featuresSubtext}
-            </p>
-            <Link href={user ? '/student' : '/auth'}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold transition-all hover:scale-105 shadow-lg"
-              style={{ background: primaryColor, color: 'white' }}
-            >
-              {user ? 'Go to my learning' : featuresCta} <ArrowRight className="w-4 h-4" />
-            </Link>
-          </FadeIn>
-          <FadeIn delay={0.15}>
-            <div className="grid grid-cols-2 gap-3">
-              {[highlight1, highlight2, highlight3, highlight4, highlight5, highlight6, highlight7, highlight8].map((text, i) => {
-                const Icon = HIGHLIGHT_ICONS[i];
-                return (
-                  <motion.div key={text}
-                    initial={{ opacity: 0, x: 12 }} whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true }} transition={{ delay: i * 0.05, duration: 0.4 }}
-                    className="flex items-start gap-2.5 p-3.5 rounded-2xl border bg-white"
-                    style={{ borderColor: '#e5e7eb' }}
-                  >
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                      style={{ background: `${primaryColor}1a` }}>
-                      <Icon className="w-3 h-3" style={{ color: primaryColor }} />
-                    </div>
-                    <span className="text-sm leading-snug text-gray-600">{text}</span>
-                  </motion.div>
-                );
-              })}
-            </div>
-          </FadeIn>
-        </div>
-      </section>}
-
-      {/* -- Testimonials -- */}
-      {hideTestimonials !== '1' && <section className="py-14 md:py-24 px-6" style={{ background: '#f9fafb' }}>
-        <div className="max-w-3xl mx-auto">
-          <FadeIn className="text-center mb-12 space-y-3">
-            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: accentColor }}>{testimonialsLabel}</p>
-            <h2 className="text-[28px] md:text-[40px] font-semibold leading-[1.2]" style={{ color: '#111', letterSpacing: '-0.01em', fontFamily: hFont }}>
-              {testimonialsHeading}
-            </h2>
-          </FadeIn>
-          <div className="relative overflow-hidden">
-            <AnimatePresence mode="wait">
-              {[
-                { name: testimonial1Name, role: testimonial1Role, text: testimonial1Text },
-                { name: testimonial2Name, role: testimonial2Role, text: testimonial2Text },
-                { name: testimonial3Name, role: testimonial3Role, text: testimonial3Text },
-              ].map((t, i) =>
-                i === activeTestimonial ? (
-                  <motion.div key={i}
-                    initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
-                    transition={{ duration: 0.4 }}
-                    className="bg-white rounded-3xl p-8 md:p-10 border shadow-sm"
-                    style={{ borderColor: '#e5e7eb' }}
-                  >
-                    <p className="text-[18px] leading-relaxed mb-8" style={{ color: '#374151' }}>&ldquo;{t.text}&rdquo;</p>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
-                        style={{ background: primaryColor }}>
-                        {t.name.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold" style={{ color: '#111' }}>{t.name}</p>
-                        <p className="text-xs" style={{ color: '#6b7280' }}>{t.role}</p>
-                      </div>
-                    </div>
-                  </motion.div>
-                ) : null
-              )}
-            </AnimatePresence>
-            <div className="flex items-center justify-center gap-2 mt-6">
-              {[0, 1, 2].map((_, i) => (
-                <button key={i} onClick={() => setActiveTestimonial(i)}
-                  className="rounded-full transition-all"
-                  style={{
-                    width: i === activeTestimonial ? 20 : 6,
-                    height: 6,
-                    background: i === activeTestimonial ? primaryColor : '#d1d5db',
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>}
-
-      {/* -- CTA Banner -- */}
-      {hideCta !== '1' && <section className="py-14 md:py-24 px-6" style={{ background: primaryColor }}>
-        <FadeIn>
-          <div className="relative max-w-4xl mx-auto rounded-3xl p-12 md:p-16 text-center overflow-hidden border border-white/15">
-            <div className="absolute inset-0 pointer-events-none rounded-3xl" style={{
-              backgroundImage: 'linear-gradient(rgba(255,255,255,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.05) 1px,transparent 1px)',
-              backgroundSize: '40px 40px',
-            }} />
-            <div className="absolute inset-0 pointer-events-none rounded-3xl" style={{
-              background: 'radial-gradient(ellipse 70% 60% at 50% 50%, rgba(255,255,255,0.07), transparent)',
-            }} />
-            <div className="relative z-10 space-y-6">
-              <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center bg-white shadow-xl">
-                <Users className="w-7 h-7" style={{ color: primaryColor }} />
-              </div>
-              <h2 className="text-[28px] md:text-[44px] font-semibold leading-[1.15]" style={{ letterSpacing: '-0.01em', color: 'white', fontFamily: hFont }}>
-                <span>{ctaHeading}</span><br />
-                <span style={{ color: accentColor }}>{ctaHeadingAccent}</span>
-              </h2>
-              <p className="text-[18px] max-w-lg mx-auto text-white/70" style={{ lineHeight: 1.7 }}>
-                {ctaSubtext}
-              </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link href={user ? '/student' : '/auth'}
-                  className="group inline-flex items-center gap-2 px-8 py-4 rounded-2xl text-base font-bold bg-white transition-all hover:scale-105 shadow-xl"
-                  style={{ color: primaryColor }}
-                >
-                  {user ? 'Go to my learning' : ctaButton}
-                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                </Link>
-                <span className="text-sm text-white/45">No credit card required</span>
-              </div>
-            </div>
-          </div>
-        </FadeIn>
-      </section>}
-
-      {/* -- Sticky CTA bar -- */}
-      {hideStickyBar !== '1' && (
-        <AnimatePresence>
-          {pastHero && (
-            <motion.div
-              initial={{ y: 80, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 80, opacity: 0 }}
-              transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-              className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-between gap-4 px-6 py-4"
-              style={{ background: primaryColor, borderTop: 'rgba(255,255,255,0.1)' }}
-            >
-              <p className="text-sm font-medium hidden sm:block text-white/75">
-                {stickyCtaText}
-              </p>
-              <Link href={user ? '/student' : '/auth'}
-                className="group flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-bold transition-all hover:scale-105 flex-shrink-0 ml-auto bg-white"
-                style={{ color: primaryColor }}>
-                {user ? 'Go to dashboard' : stickyCtaButton}
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </Link>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      )}
-
-      {/* -- Footer -- */}
-      <footer className="relative px-6"
-        style={{ paddingTop: '80px', paddingBottom: '48px', background: footerBgImageUrl ? 'transparent' : primaryColor }}>
-        {footerBgImageUrl && <>
-          <div className="absolute inset-0 z-0" style={{ background: `url(${footerBgImageUrl}) center/cover no-repeat` }} />
-          <div className="absolute inset-0 z-0" style={{ background: `rgba(${footerOvRgb},${footerOvAlpha})` }} />
-        </>}
-        {!footerBgImageUrl && <div className="absolute inset-0 z-0" style={{ background: primaryColor }} />}
-        <div className="relative z-10 max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
-            <div className="md:col-span-2 space-y-4">
-              <div className="flex items-center">
-                <img src={logoDarkUrl || logoUrl || undefined} alt="" className="h-9 w-auto" />
-              </div>
-              <p className="text-sm leading-relaxed max-w-xs" style={{ color: 'rgba(255,255,255,0.65)' }}>
-                {footerTagline}
-              </p>
-              <div className="flex items-center gap-3">
-                {['Twitter', 'LinkedIn', 'Instagram'].map(s => (
-                  <span key={s} className="text-xs px-3 py-1 rounded-full border cursor-default"
-                    style={{ borderColor: 'rgba(255,255,255,0.25)', color: 'rgba(255,255,255,0.6)' }}>
-                    {s}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.45)' }}>Account</p>
-              {[
-                { label: 'Sign in',     href: '/auth' },
-                { label: 'My learning', href: user ? '/student' : '/auth' },
-                { label: 'My profile',  href: user && profile?.username ? `/u/${profile.username}` : '/auth' },
-                { label: 'Leaderboard', href: user ? '/student' : '/auth' },
-              ].map(l => (
-                <Link key={l.label} href={l.href}
-                  className="block text-sm transition-colors hover:text-white"
-                  style={{ color: 'rgba(255,255,255,0.65)' }}>
-                  {l.label}
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <div className="pt-6 border-t flex flex-col md:flex-row items-center justify-between gap-3" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>
-              &copy; {new Date().getFullYear()} {appName}. All rights reserved.
-            </p>
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>Platform operational</span>
-            </div>
-          </div>
-        </div>
-      </footer>
-    </main>
-  );
 }
