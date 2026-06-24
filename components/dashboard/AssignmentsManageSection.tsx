@@ -41,6 +41,8 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   const [veAttemptProgress, setVeAttemptProgress] = useState<Record<string, any> | null>(null);
   const [veProgressMap, setVeProgressMap]   = useState<Record<string, { pct: number; completedAt: string | null }>>({});
   const [statusFilter, setStatusFilter]     = useState<string>('all');
+  const [cohortFilter, setCohortFilter]     = useState<string>('all');
+  const [cohorts, setCohorts]               = useState<{ id: string; name: string }[]>([]);
   const openToken = useRef(0);
 
   useEffect(() => {
@@ -53,12 +55,13 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     // only the latest call's fetched data is applied.
     const token = ++openToken.current;
     setSelected(a); setViewingSub(null); setSubFiles([]); setActiveTab('details'); setLoadingSubs(true);
-    setExpandedGroups(new Set()); setVeProgressMap({}); setStatusFilter('all');
+    setExpandedGroups(new Set()); setVeProgressMap({}); setStatusFilter('all'); setCohortFilter('all'); setCohorts([]);
     const groupIds: string[] = Array.isArray(a.group_ids) && a.group_ids.length > 0 ? a.group_ids : [];
-    const [{ data: subs }, { data: cohortStudents }, { data: groupMemberRows }] = await Promise.all([
+    const [{ data: subs }, { data: cohortStudents }, { data: groupMemberRows }, { data: cohortRows }] = await Promise.all([
       supabase.from('assignment_submissions').select('*, student:students!student_id(id, full_name, email), submitted_by_student:students!submitted_by(full_name)').eq('assignment_id', a.id).order('updated_at', { ascending: false }),
-      a.cohort_ids?.length ? supabase.from('students').select('id, full_name, email').in('cohort_id', a.cohort_ids) : Promise.resolve({ data: [] }),
+      a.cohort_ids?.length ? supabase.from('students').select('id, full_name, email, cohort_id').in('cohort_id', a.cohort_ids) : Promise.resolve({ data: [] }),
       groupIds.length ? supabase.from('group_members').select('group_id, is_leader, groups(id, name), students(id, full_name, email)').in('group_id', groupIds) : Promise.resolve({ data: [] }),
+      a.cohort_ids?.length ? supabase.from('cohorts').select('id, name').in('id', a.cohort_ids) : Promise.resolve({ data: [] }),
     ]);
 
     // For VE assignments, the submission row is only written when the student hits "Complete".
@@ -88,7 +91,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       seen.add(s.id); return true;
     });
     if (openToken.current !== token) return;
-    setSubmissions(subs ?? []); setAssignedStudents(allStudents); setLoadingSubs(false);
+    setSubmissions(subs ?? []); setAssignedStudents(allStudents); setCohorts(cohortRows ?? []); setLoadingSubs(false);
   }
 
   function toggleExpandedGroup(groupId: string) {
@@ -385,7 +388,12 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
     const STATUS_LABELS: Record<string, string> = { submitted: 'Submitted', graded: 'Graded', done_unsubmitted: 'Done, not submitted', in_progress: 'In Progress', draft: 'Draft', not_started: 'Not Started' };
     const STATUS_ORDER = ['submitted', 'graded', 'done_unsubmitted', 'in_progress', 'draft', 'not_started'];
     const presentStatuses = STATUS_ORDER.filter(s => responseRows.some((r: any) => r._status === s));
-    const visibleRows = statusFilter === 'all' ? responseRows : responseRows.filter((r: any) => r._status === statusFilter);
+    // Cohort filter only applies to the individual (cohort-based) view, and only when the
+    // assignment spans more than one cohort. Group view is grouped by group, not cohort.
+    const showCohortFilter = !isGroupAssignment && cohorts.length > 1;
+    const visibleRows = responseRows.filter((r: any) =>
+      (statusFilter === 'all' || r._status === statusFilter) &&
+      (cohortFilter === 'all' || r.cohort_id === cohortFilter));
     const responded = isGroupAssignment
       ? groupRows.filter((row: any) => row.sub != null).length
       : submissions.length;
@@ -487,12 +495,22 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
             {/* Filter + export */}
             {responseRows.length > 0 && (
               <div className="flex items-center justify-between gap-3 mb-3">
-                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer"
-                  style={{ background: C.pill, color: C.muted, border: `1px solid ${C.divider}` }}>
-                  <option value="all">All statuses</option>
-                  {presentStatuses.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-                </select>
+                <div className="flex items-center gap-2">
+                  {showCohortFilter && (
+                    <select value={cohortFilter} onChange={e => setCohortFilter(e.target.value)}
+                      className="px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer"
+                      style={{ background: C.pill, color: C.muted, border: `1px solid ${C.divider}` }}>
+                      <option value="all">All cohorts</option>
+                      {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  )}
+                  <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+                    className="px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer"
+                    style={{ background: C.pill, color: C.muted, border: `1px solid ${C.divider}` }}>
+                    <option value="all">All statuses</option>
+                    {presentStatuses.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                  </select>
+                </div>
                 <button onClick={() => isGroupAssignment ? exportGroupCSV(visibleRows, selected.title) : exportCSV(visibleRows, selected.title)}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-80 transition-opacity"
                   style={{ background: C.pill, color: C.muted, border: `1px solid ${C.divider}` }}>
@@ -510,8 +528,8 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
               </div>
             ) : visibleRows.length === 0 ? (
               <div className="text-center py-16 rounded-2xl" style={{ ...cardStyle(C) }}>
-                <p className="text-sm font-medium mb-1" style={{ color: C.text }}>No {isGroupAssignment ? 'groups' : 'students'} match this filter</p>
-                <p className="text-xs" style={{ color: C.faint }}>Showing {STATUS_LABELS[statusFilter] ?? statusFilter}. <button onClick={() => setStatusFilter('all')} className="font-semibold hover:opacity-70" style={{ color: C.green, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear filter</button></p>
+                <p className="text-sm font-medium mb-1" style={{ color: C.text }}>No {isGroupAssignment ? 'groups' : 'students'} match the current filter</p>
+                <p className="text-xs" style={{ color: C.faint }}><button onClick={() => { setStatusFilter('all'); setCohortFilter('all'); }} className="font-semibold hover:opacity-70" style={{ color: C.green, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear filters</button></p>
               </div>
             ) : isGroupAssignment ? (
               <div className="rounded-2xl overflow-hidden">
