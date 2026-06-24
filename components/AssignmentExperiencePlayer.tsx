@@ -84,6 +84,7 @@ interface Props {
   participants?: string[];
   canSubmit?: boolean;
   graded?: boolean;
+  submitted?: boolean;
 }
 
 // -- Helpers ---
@@ -92,12 +93,6 @@ function lessonPct(lesson: Lesson, progress: Progress): number {
   if (!lesson.requirements.length) return 100;
   const done = lesson.requirements.filter(r => progress[r.id]?.completed).length;
   return Math.round((done / lesson.requirements.length) * 100);
-}
-
-function allComplete(config: ProjectConfig, progress: Progress): boolean {
-  return (config.modules || []).every(m =>
-    m.lessons.every(l => lessonPct(l, progress) === 100)
-  );
 }
 
 import { safeEmbedUrl as getEmbedUrl } from '@/lib/safe-embed-url';
@@ -196,7 +191,7 @@ function EmailCompose({
 // -- Component ---
 
 export default function AssignmentExperiencePlayer({
-  formId, config, userId, studentName, studentEmail, sessionToken, assignmentId = '', initialProgress = {}, isDark = false, onComplete, previewMode = false, groupId, participants, canSubmit = true, graded = false,
+  formId, config, userId, studentName, studentEmail, sessionToken, assignmentId = '', initialProgress = {}, isDark = false, onComplete, previewMode = false, groupId, participants, canSubmit = true, graded = false, submitted = false,
 }: Props) {
   const accent = '#00b95c';
   const modules = config.modules || [];
@@ -220,7 +215,11 @@ export default function AssignmentExperiencePlayer({
   const [activeLesson,  setActiveLesson]  = useState(modules[0]?.lessons[0]?.id ?? '');
   const [saving,        setSaving]        = useState(false);
   const [uploadingReq,  setUploadingReq]  = useState<string | null>(null);
-  const [done,          setDone]          = useState(() => canSubmit && allComplete(config, initialProgress ?? {}));
+  // "done" means the assignment was actually SUBMITTED, not merely that all requirements are
+  // locally complete. Deriving it from progress used to show a false "submitted" screen (and hide
+  // the submit button) for students who finished the work but never clicked Complete.
+  const [done,          setDone]          = useState(() => submitted);
+  const [reviewBeforeSubmit, setReviewBeforeSubmit] = useState(false);
   const [reviewMode,    setReviewMode]    = useState(false);
   const [expandedMods,  setExpandedMods]  = useState<Set<string>>(new Set([modules[0]?.id]));
   // Review is read-only and exists only after grading. Pre-grading behaviour is unchanged.
@@ -327,6 +326,35 @@ export default function AssignmentExperiencePlayer({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  // The one place an assignment_submissions row gets created. Shared by the last-mission
+  // "Complete" button and the all-missions-complete submit screen.
+  async function submitAssignment() {
+    if (previewMode) { setDone(true); onComplete(); return; }
+    if (overallPct < 100) return;
+    setCompleteError(null);
+    clearTimeout(saveTimeout.current);
+    setSaving(true);
+    try {
+      const res = await fetch('/api/assignments/complete-ve-assignment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...await getAuthHeader() },
+        body: JSON.stringify({ assignmentId, progress, currentModuleId: activeModule, currentLessonId: activeLesson, groupId: groupId || undefined, participants: participants?.length ? participants : undefined }),
+      });
+      let json: any = {};
+      try { json = await res.json(); } catch (_) {}
+      if (!res.ok) {
+        setCompleteError(json?.error || 'Failed to submit. Please try again.');
+        return;
+      }
+      setDone(true);
+      onComplete(json.submission);
+    } catch (_) {
+      setCompleteError('Failed to submit. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   // After grading: read-only review only. The landing card offers a Review button;
   // entering review falls through to render the lessons read-only below.
   if (graded && !reviewMode) {
@@ -367,6 +395,31 @@ export default function AssignmentExperiencePlayer({
         <CheckCircle className="w-10 h-10 mx-auto mb-3" style={{ color: accent }}/>
         <p className="text-base font-bold mb-1" style={{ color: accent }}>Ready for Group Submission</p>
         <p className="text-sm" style={{ color: muted }}>You have completed your preparation. Your group leader will submit the final work.</p>
+      </div>
+    );
+  }
+
+  // All missions complete but not yet submitted (solo). Surface an explicit submit action so the
+  // student can't get stuck thinking they are done -- group leaders keep the in-flow Complete button.
+  if (!graded && canSubmit && !groupId && overallPct >= 100 && !reviewBeforeSubmit) {
+    return (
+      <div className="rounded-2xl p-8 text-center" style={{ background: bg, border: `1px solid ${border}` }}>
+        <CheckCircle className="w-10 h-10 mx-auto mb-3" style={{ color: accent }}/>
+        <p className="text-base font-bold mb-1" style={{ color: text }}>All missions complete</p>
+        <p className="text-sm mb-5" style={{ color: muted }}>Submit your assignment to send it to your instructor for grading.</p>
+        {completeError && <p className="text-sm mb-3" style={{ color: '#ef4444' }}>{completeError}</p>}
+        <div className="flex items-center justify-center gap-2">
+          <button onClick={submitAssignment} disabled={saving}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+            style={{ background: '#10b981', color: 'white', border: 'none', cursor: saving ? 'not-allowed' : 'pointer' }}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>} Submit assignment
+          </button>
+          <button onClick={() => setReviewBeforeSubmit(true)} disabled={saving}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all hover:opacity-80 disabled:opacity-50"
+            style={{ background: `${accent}12`, color: accent, border: 'none', cursor: saving ? 'not-allowed' : 'pointer' }}>
+            Review my missions
+          </button>
+        </div>
       </div>
     );
   }
@@ -1677,32 +1730,7 @@ export default function AssignmentExperiencePlayer({
                 ) : (
                   <button
                     disabled={overallPct < 100 || saving}
-                    onClick={async () => {
-                      if (previewMode) { setDone(true); onComplete(); return; }
-                      if (overallPct < 100) return;
-                      setCompleteError(null);
-                      clearTimeout(saveTimeout.current);
-                      setSaving(true);
-                      try {
-                        const res = await fetch('/api/assignments/complete-ve-assignment', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json', ...await getAuthHeader() },
-                          body: JSON.stringify({ assignmentId, progress, currentModuleId: activeModule, currentLessonId: activeLesson, groupId: groupId || undefined, participants: participants?.length ? participants : undefined }),
-                        });
-                        let json: any = {};
-                        try { json = await res.json(); } catch (_) {}
-                        if (!res.ok) {
-                          setCompleteError(json?.error || 'Failed to submit. Please try again.');
-                          return;
-                        }
-                        setDone(true);
-                        onComplete(json.submission);
-                      } catch (_) {
-                        setCompleteError('Failed to submit. Please try again.');
-                      } finally {
-                        setSaving(false);
-                      }
-                    }}
+                    onClick={submitAssignment}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
                     style={{ background: '#10b981', color: 'white', border: 'none', cursor: overallPct < 100 || saving ? 'not-allowed' : 'pointer' }}>
                     {saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>} Complete
