@@ -256,6 +256,13 @@ export function LessonContentStyles() {
 .lesson-content.dark .lesson-code__lang { color: #c9d1d9; background: #0f1120; border-color: rgba(255,255,255,0.12); }
 .lesson-content .lesson-code__hint { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #047857; }
 .lesson-content.dark .lesson-code__hint { color: #6ee7b7; }
+.lesson-content .lesson-code__bar-right { display: inline-flex; align-items: center; gap: 10px; }
+.lesson-content .lesson-code__scope { display: inline-flex; gap: 2px; padding: 2px; border-radius: 7px; background: rgba(0,0,0,0.06); }
+.lesson-content.dark .lesson-code__scope { background: rgba(255,255,255,0.08); }
+.lesson-content .lesson-code__scope button { font: inherit; font-size: 11px; font-weight: 600; padding: 2px 8px; border: none; border-radius: 5px; background: transparent; color: #57606a; cursor: pointer; }
+.lesson-content.dark .lesson-code__scope button { color: #8b93a7; }
+.lesson-content .lesson-code__scope button[data-active="true"] { background: #ffffff; color: #1f2328; box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+.lesson-content.dark .lesson-code__scope button[data-active="true"] { background: #0f1120; color: #c9d1d9; box-shadow: none; }
 .lesson-content .lesson-code__hint[data-on="false"] { color: #6e7781; font-weight: 600; text-transform: none; letter-spacing: 0; }
 .lesson-content.dark .lesson-code__hint[data-on="false"] { color: #8b93a7; }
 .lesson-content .lesson-code__actions { display: inline-flex; gap: 6px; }

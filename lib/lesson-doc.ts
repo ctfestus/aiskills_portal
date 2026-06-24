@@ -88,3 +88,29 @@ export function inlineGlossaryDefinitions<T extends LessonDoc | null | undefined
   };
   return visit(doc as LessonDoc) as T;
 }
+
+/**
+ * Collect the SQL and Python setup scripts from every SHARED runnable-code block in a
+ * lesson, so all shared blocks can run against one combined per-lesson runtime (define a
+ * dataset once -> every shared block can query it, notebook-style). Blocks marked
+ * `dataScope: 'own'` are excluded -- they keep their own isolated setup. Identical
+ * scripts are de-duplicated (lessons often repeat the same CREATE TABLE in each block)
+ * and joined in document order. Pure JSON traversal -- DOM-free / server-safe.
+ */
+export function collectRunnableSetup(doc: LessonDoc | null | undefined): { setupSql: string; setupPython: string } {
+  const sql: string[] = [];
+  const py: string[] = [];
+  const visit = (node: unknown) => {
+    if (Array.isArray(node)) { node.forEach(visit); return; }
+    if (!isObject(node)) return;
+    if (node.type === 'runnableCode' && isObject(node.attrs) && node.attrs.dataScope !== 'own') {
+      const s = node.attrs.setupSql;
+      const p = node.attrs.setupPython;
+      if (typeof s === 'string' && s.trim() && !sql.includes(s)) sql.push(s);
+      if (typeof p === 'string' && p.trim() && !py.includes(p)) py.push(p);
+    }
+    if (Array.isArray(node.content)) node.content.forEach(visit);
+  };
+  visit(doc as unknown);
+  return { setupSql: sql.join('\n\n'), setupPython: py.join('\n\n') };
+}

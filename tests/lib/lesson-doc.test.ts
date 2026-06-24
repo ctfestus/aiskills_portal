@@ -5,7 +5,9 @@ import { describe, it, expect } from 'vitest';
 // inlineGlossaryDefinitions bakes it into the text as "term (definition)" first.
 // These are pure-JSON assertions (no DOM), matching the node test environment.
 
-import { inlineGlossaryDefinitions, type LessonDoc } from '@/lib/lesson-doc';
+import { collectRunnableSetup, inlineGlossaryDefinitions, type LessonDoc } from '@/lib/lesson-doc';
+
+const runnable = (attrs: Record<string, unknown>): LessonDoc => ({ type: 'runnableCode', attrs });
 
 const para = (...content: LessonDoc[]): LessonDoc => ({ type: 'doc', content: [{ type: 'paragraph', content }] });
 
@@ -57,5 +59,63 @@ describe('inlineGlossaryDefinitions', () => {
   it('passes through null and undefined', () => {
     expect(inlineGlossaryDefinitions(null)).toBeNull();
     expect(inlineGlossaryDefinitions(undefined)).toBeUndefined();
+  });
+});
+
+describe('collectRunnableSetup', () => {
+  it('collects setup from shared blocks and joins it', () => {
+    const doc: LessonDoc = {
+      type: 'doc',
+      content: [
+        runnable({ dataScope: 'shared', setupSql: 'CREATE TABLE a(x int);' }),
+        runnable({ dataScope: 'shared', setupSql: 'CREATE TABLE b(y int);' }),
+      ],
+    };
+    expect(collectRunnableSetup(doc).setupSql).toBe('CREATE TABLE a(x int);\n\nCREATE TABLE b(y int);');
+  });
+
+  it('de-duplicates identical setup scripts (repeated across blocks)', () => {
+    const doc: LessonDoc = {
+      type: 'doc',
+      content: [
+        runnable({ setupSql: 'CREATE TABLE a(x int);' }),
+        runnable({ setupSql: 'CREATE TABLE a(x int);' }),
+        runnable({ setupSql: 'CREATE TABLE a(x int);' }),
+      ],
+    };
+    expect(collectRunnableSetup(doc).setupSql).toBe('CREATE TABLE a(x int);');
+  });
+
+  it('treats a missing dataScope as shared (default)', () => {
+    const doc: LessonDoc = { type: 'doc', content: [runnable({ setupSql: 'CREATE TABLE a(x int);' })] };
+    expect(collectRunnableSetup(doc).setupSql).toBe('CREATE TABLE a(x int);');
+  });
+
+  it('excludes blocks marked dataScope: own', () => {
+    const doc: LessonDoc = {
+      type: 'doc',
+      content: [
+        runnable({ dataScope: 'shared', setupSql: 'CREATE TABLE shared(x int);' }),
+        runnable({ dataScope: 'own', setupSql: 'CREATE TABLE private(y int);' }),
+      ],
+    };
+    expect(collectRunnableSetup(doc).setupSql).toBe('CREATE TABLE shared(x int);');
+  });
+
+  it('collects python setup separately and ignores empty/whitespace', () => {
+    const doc: LessonDoc = {
+      type: 'doc',
+      content: [
+        runnable({ language: 'python', setupPython: 'import pandas as pd' }),
+        runnable({ language: 'python', setupPython: '   ' }),
+      ],
+    };
+    const out = collectRunnableSetup(doc);
+    expect(out.setupPython).toBe('import pandas as pd');
+    expect(out.setupSql).toBe('');
+  });
+
+  it('returns empty strings for a doc with no runnable blocks', () => {
+    expect(collectRunnableSetup(para({ type: 'text', text: 'hi' }))).toEqual({ setupSql: '', setupPython: '' });
   });
 });

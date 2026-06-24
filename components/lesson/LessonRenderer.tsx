@@ -8,13 +8,14 @@
 // authored. This component replaces the legacy `dangerouslySetInnerHTML` lesson
 // body path on every player surface when `lesson.doc` is present.
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { lessonExtensions } from '@/components/lesson/extensions';
 import { LessonContentStyles } from '@/components/lesson/LessonContentStyles';
 import { GlossaryTooltip } from '@/components/lesson/GlossaryTooltip';
+import { LessonRuntimeProvider } from '@/components/lesson/LessonRuntimeContext';
 import { useTenant } from '@/components/TenantProvider';
-import type { LessonDoc } from '@/lib/lesson-doc';
+import { collectRunnableSetup, type LessonDoc } from '@/lib/lesson-doc';
 
 interface LessonRendererProps {
   doc: LessonDoc;
@@ -24,6 +25,8 @@ interface LessonRendererProps {
 
 export function LessonRenderer({ doc, isDark = false, className = '' }: LessonRendererProps) {
   const { primaryColor } = useTenant();
+  // Combined setup from the lesson's shared runnable blocks seeds one shared runtime.
+  const { setupSql, setupPython } = useMemo(() => collectRunnableSetup(doc), [doc]);
   const editor = useEditor({
     editable: false,
     content: doc as Record<string, unknown>,
@@ -45,7 +48,9 @@ export function LessonRenderer({ doc, isDark = false, className = '' }: LessonRe
       style={primaryColor ? ({ '--lesson-accent-base': primaryColor } as React.CSSProperties) : undefined}
     >
       <LessonContentStyles />
-      <EditorContent editor={editor} />
+      <LessonRuntimeProvider setupSql={setupSql} setupPython={setupPython}>
+        <EditorContent editor={editor} />
+      </LessonRuntimeProvider>
       <GlossaryTooltip />
     </div>
   );

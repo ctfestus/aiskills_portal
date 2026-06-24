@@ -27,10 +27,11 @@ import { StyleMenu, MenuRow, Segmented, ColorField } from '@/components/lesson/n
 import { lessonExtensions } from '@/components/lesson/extensions';
 import { LessonContentStyles } from '@/components/lesson/LessonContentStyles';
 import { GlossaryTooltip } from '@/components/lesson/GlossaryTooltip';
+import { LessonRuntimeProvider } from '@/components/lesson/LessonRuntimeContext';
 import { useTenant } from '@/components/TenantProvider';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import { sanitizeRichText } from '@/lib/sanitize';
-import { inlineGlossaryDefinitions, type LessonDoc } from '@/lib/lesson-doc';
+import { collectRunnableSetup, inlineGlossaryDefinitions, type LessonDoc } from '@/lib/lesson-doc';
 
 interface LessonEditorProps {
   doc?: LessonDoc;
@@ -115,6 +116,10 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
 
   if (!editor) return null;
 
+  // Combined shared setup, recomputed each render (the toolbar already re-renders on
+  // every transaction) so a block's "Runnable" hint reflects the lesson's shared data.
+  const { setupSql: sharedSetupSql, setupPython: sharedSetupPython } = collectRunnableSetup(editor.getJSON() as LessonDoc);
+
   return (
     <div
       className="rounded-lg overflow-hidden"
@@ -191,7 +196,9 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         className={`lesson-content ${dark ? 'dark' : ''} px-3 py-2.5 min-h-[140px] max-h-[460px] overflow-y-auto`}
         style={primaryColor ? ({ '--lesson-accent-base': primaryColor } as React.CSSProperties) : undefined}
       >
-        <EditorContent editor={editor} />
+        <LessonRuntimeProvider setupSql={sharedSetupSql} setupPython={sharedSetupPython}>
+          <EditorContent editor={editor} />
+        </LessonRuntimeProvider>
       </div>
       <GlossaryTooltip />
       {showLibrary && (

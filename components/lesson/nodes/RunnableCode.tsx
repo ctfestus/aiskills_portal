@@ -14,6 +14,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { Play, Copy, Check, Loader2 } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { useLessonRuntime } from '@/components/lesson/LessonRuntimeContext';
 import { initSQLRuntime, executeQuery, type SQLResult, type SQLRuntime } from '@/lib/sql-engine';
 import { initPythonRuntime, runPython, type PythonResult, type PythonRuntime } from '@/lib/python-engine';
 
@@ -25,11 +26,16 @@ function RunnableCodeView({ node, updateAttributes, editor }: NodeViewProps) {
   const code = (node.attrs.code as string) || '';
   const setupSql = (node.attrs.setupSql as string) || '';
   const setupPython = (node.attrs.setupPython as string) || '';
+  const dataScope = (node.attrs.dataScope as string) === 'own' ? 'own' : 'shared';
   const isSql = language === 'sql';
   const isPython = language === 'python';
+  const lessonRuntime = useLessonRuntime();
 
   if (editor.isEditable) {
-    const runnable = (isSql && setupSql.trim().length > 0) || isPython;
+    // Runnable when Python, or SQL that has data: its own setup, or (when shared) the
+    // lesson's shared data defined by some other block.
+    const sharedSql = dataScope === 'shared' && (lessonRuntime?.hasSharedSql ?? false);
+    const runnable = isPython || (isSql && (setupSql.trim().length > 0 || sharedSql));
     return (
       <NodeViewWrapper className="lesson-code" contentEditable={false}>
         <div className="lesson-code__bar">
@@ -41,8 +47,14 @@ function RunnableCodeView({ node, updateAttributes, editor }: NodeViewProps) {
             {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
           {(isSql || isPython) && (
-            <span className="lesson-code__hint" data-on={runnable ? 'true' : 'false'}>
-              {runnable ? 'Runnable' : 'Copyable snippet'}
+            <span className="lesson-code__bar-right">
+              <span className="lesson-code__hint" data-on={runnable ? 'true' : 'false'}>
+                {runnable ? 'Runnable' : 'Copyable snippet'}
+              </span>
+              <span className="lesson-code__scope" title="Where this block's data comes from">
+                <button type="button" data-active={dataScope === 'shared' ? 'true' : 'false'} onMouseDown={(e) => { e.preventDefault(); updateAttributes({ dataScope: 'shared' }); }}>Shared data</button>
+                <button type="button" data-active={dataScope === 'own' ? 'true' : 'false'} onMouseDown={(e) => { e.preventDefault(); updateAttributes({ dataScope: 'own' }); }}>This block only</button>
+              </span>
             </span>
           )}
         </div>
@@ -55,7 +67,11 @@ function RunnableCodeView({ node, updateAttributes, editor }: NodeViewProps) {
         />
         {isSql && (
           <div className="lesson-code__setup">
-            <label className="lesson-code__setup-label">Setup SQL (optional) - creates sample tables before the query runs</label>
+            <label className="lesson-code__setup-label">
+              {dataScope === 'shared'
+                ? 'Setup SQL (optional) - shared with the whole lesson; every shared block can query these tables'
+                : 'Setup SQL (optional) - this block only; creates sample tables before the query runs'}
+            </label>
             <NodeTextInput
               multiline
               className="lesson-code__editor"
@@ -67,7 +83,11 @@ function RunnableCodeView({ node, updateAttributes, editor }: NodeViewProps) {
         )}
         {isPython && (
           <div className="lesson-code__setup">
-            <label className="lesson-code__setup-label">Setup Python (optional) - runs once before the main code block</label>
+            <label className="lesson-code__setup-label">
+              {dataScope === 'shared'
+                ? 'Setup Python (optional) - shared with the whole lesson; runs once before the shared blocks'
+                : 'Setup Python (optional) - this block only; runs before the main code block'}
+            </label>
             <NodeTextInput
               multiline
               className="lesson-code__editor"
@@ -81,17 +101,23 @@ function RunnableCodeView({ node, updateAttributes, editor }: NodeViewProps) {
     );
   }
 
-  return <RunnableCodePlayer language={language} initialCode={code} setupSql={setupSql} setupPython={setupPython} isSql={isSql} isPython={isPython} />;
+  return <RunnableCodePlayer language={language} initialCode={code} setupSql={setupSql} setupPython={setupPython} isSql={isSql} isPython={isPython} dataScope={dataScope} />;
 }
 
-function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSql, isPython }: {
+function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSql, isPython, dataScope }: {
   language: string;
   initialCode: string;
   setupSql: string;
   setupPython: string;
   isSql: boolean;
   isPython: boolean;
+  dataScope: 'shared' | 'own';
 }) {
+  const lessonRuntime = useLessonRuntime();
+  // Use the lesson's shared runtime unless this block opts out ('own') or there is no
+  // provider (block used outside a lesson) -- then fall back to its own runtime.
+  const shared = dataScope === 'shared' ? lessonRuntime : null;
+
   const [code, setCode] = useState(initialCode);
   const [copied, setCopied] = useState(false);
   const [running, setRunning] = useState(false);
@@ -101,11 +127,11 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
   const sqlRuntimeRef = useRef<SQLRuntime | null>(null);
   const pyRuntimeRef = useRef<PythonRuntime | null>(null);
 
-  // SQL blocks are only runnable when a setup script seeds sample tables.
-  // Python blocks are always runnable.
-  const canRun = (isSql && setupSql.trim().length > 0) || isPython;
+  // Python is always runnable. SQL needs data: its own setup, or (shared) the lesson's.
+  const canRun = isPython || (isSql && (shared ? shared.hasSharedSql : setupSql.trim().length > 0));
 
-  // Tear the DuckDB runtime down when the block unmounts (Pyodide is a singleton, no teardown needed).
+  // Tear down only this block's OWN DuckDB runtime; the shared one is owned by the
+  // provider. (Pyodide is a process singleton, no teardown.)
   useEffect(() => () => { sqlRuntimeRef.current?.close().catch(() => {}); }, []);
 
   const copy = useCallback(() => {
@@ -122,15 +148,27 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
     setPyResult(null);
     try {
       if (isSql) {
-        if (!sqlRuntimeRef.current) {
-          sqlRuntimeRef.current = await initSQLRuntime(setupSql.trim() ? [{ tableName: 'setup', seedSql: setupSql }] : []);
+        let rt: SQLRuntime;
+        if (shared) {
+          rt = await shared.getSql();
+        } else {
+          if (!sqlRuntimeRef.current) {
+            sqlRuntimeRef.current = await initSQLRuntime(setupSql.trim() ? [{ tableName: 'setup', seedSql: setupSql }] : []);
+          }
+          rt = sqlRuntimeRef.current;
         }
-        setResult(await executeQuery(sqlRuntimeRef.current.conn, code));
+        setResult(await executeQuery(rt.conn, code));
       } else if (isPython) {
-        if (!pyRuntimeRef.current) {
-          pyRuntimeRef.current = await initPythonRuntime(setupPython.trim() || undefined);
+        let rt: PythonRuntime;
+        if (shared) {
+          rt = await shared.getPython();
+        } else {
+          if (!pyRuntimeRef.current) {
+            pyRuntimeRef.current = await initPythonRuntime(setupPython.trim() || undefined);
+          }
+          rt = pyRuntimeRef.current;
         }
-        const out = await runPython(pyRuntimeRef.current, code);
+        const out = await runPython(rt, code);
         if (out.error) {
           setError(out.error);
         } else {
@@ -142,7 +180,7 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
     } finally {
       setRunning(false);
     }
-  }, [code, setupSql, setupPython, isSql, isPython]);
+  }, [code, setupSql, setupPython, isSql, isPython, shared]);
 
   return (
     <NodeViewWrapper className="lesson-code" contentEditable={false}>
@@ -246,6 +284,10 @@ export const RunnableCode = Node.create({
       code: { default: '' },
       setupSql: { default: '' },
       setupPython: { default: '' },
+      // 'shared' (default): runs against the lesson's shared runtime, so this block's
+      // setup is pooled with the other shared blocks and any of them can query it.
+      // 'own': isolated -- this block runs only its own setup in its own runtime.
+      dataScope: { default: 'shared' },
     };
   },
 
