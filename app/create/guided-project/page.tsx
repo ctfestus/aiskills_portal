@@ -372,6 +372,10 @@ function VirtualExperienceCreatePageInner() {
   const [uploadingToolLogo, setUploadingToolLogo] = useState<string | null>(null); // tool name being uploaded
 
   const [veSlug, setVeSlug] = useState('');
+  // After the first save of a brand-new experience the API returns its id. Keep it so further
+  // saves update the same record (editId comes from the URL and stays null for a new VE).
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Bunny video picker
   const [bunnyPickerOpen,    setBunnyPickerOpen]    = useState(false);
@@ -813,9 +817,11 @@ function VirtualExperienceCreatePageInner() {
   };
 
   // Save
+  const effectiveId = editId ?? savedId;
+
   const handleSave = async (status: 'draft' | 'published') => {
     if (!config || !title.trim()) { setSaveError('Title is required'); return; }
-    setSaving(true); setSaveError('');
+    setSaving(true); setSaveError(''); setSaveSuccess(false);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
@@ -827,7 +833,7 @@ function VirtualExperienceCreatePageInner() {
           'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          editId,
+          editId: effectiveId,
           title: title.trim(),
           config,
           coverImage,
@@ -842,7 +848,15 @@ function VirtualExperienceCreatePageInner() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to save');
 
-      router.push('/dashboard#virtual_experiences');
+      // Stay in the editor so the user can keep editing. Remember the new id (and reflect it in
+      // the URL without a reload) so repeat saves update this record instead of creating new ones.
+      if (!effectiveId && json.id) {
+        setSavedId(json.id);
+        window.history.replaceState(null, '', `/create/guided-project?id=${json.id}`);
+      }
+      if (json.slug) setVeSlug(json.slug);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
     } catch (e: any) {
       setSaveError(e.message);
     } finally {
@@ -878,7 +892,7 @@ function VirtualExperienceCreatePageInner() {
           <ArrowLeft className="w-4 h-4" />
         </Link>
         <span className="font-semibold text-[15px]" style={{ color: C.text }}>
-          {editId ? 'Edit Virtual Experience' : 'Create Virtual Experience'}
+          {effectiveId ? 'Edit Virtual Experience' : 'Create Virtual Experience'}
         </span>
         {step === 2 && (
           <div className="ml-auto flex items-center gap-2">
@@ -904,8 +918,13 @@ function VirtualExperienceCreatePageInner() {
             <button onClick={() => handleSave('published')} disabled={saving}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[13px] font-semibold transition-all hover:opacity-80"
               style={{ background: C.cta, color: C.ctaText }}>
-              {editId ? 'Update' : 'Publish'}
+              {effectiveId ? 'Update' : 'Publish'}
             </button>
+            {saveSuccess && (
+              <span className="flex items-center gap-1 text-[13px] font-medium" style={{ color: '#16a34a' }}>
+                <Check className="w-3.5 h-3.5" /> Saved
+              </span>
+            )}
           </div>
         )}
       </header>
@@ -2266,11 +2285,16 @@ function VirtualExperienceCreatePageInner() {
                       {saveError}
                     </div>
                   )}
+                  {saveSuccess && (
+                    <div className="px-4 py-3 rounded-xl text-[13px] flex items-center gap-2" style={{ background: 'rgba(22,163,74,0.08)', color: '#16a34a', border: '1px solid rgba(22,163,74,0.2)' }}>
+                      <Check className="w-4 h-4" /> Saved. Your changes are kept and you can continue editing.
+                    </div>
+                  )}
                   <button onClick={() => handleSave('published')} disabled={saving}
                     className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-[15px] transition-all hover:opacity-90 disabled:opacity-60"
                     style={{ background: C.cta, color: C.ctaText, boxShadow: `0 4px 16px ${C.cta}30` }}>
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    {editId ? 'Update Program' : 'Publish Program'}
+                    {effectiveId ? 'Update Program' : 'Publish Program'}
                   </button>
                   <button onClick={() => handleSave('draft')} disabled={saving}
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-medium text-[15px] border transition-all hover:opacity-70 disabled:opacity-60"
