@@ -37,6 +37,11 @@ select:focus-visible,
 [data-theme="dark"] [contenteditable="true"]:focus-visible {
   outline-color: #00bf63 !important;
 }
+/* CodeMirror editors (SQL workbench, etc.) show focus via their own active-line
+   tint, and their editable surface is a [contenteditable] that the rule above
+   would ring in green -- a 2px outline the scroller clips into a stray green bar
+   at the cursor. Suppress the ring there; keep it for real inputs/rich-text. */
+.cm-editor .cm-content:focus-visible { outline: none !important; }
 
 body {
   background-color: var(--color-background);

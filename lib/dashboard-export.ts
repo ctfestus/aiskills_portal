@@ -95,11 +95,20 @@ export async function exportAllAssignments(assignments: any[], label: string) {
   downloadJSON({ exportVersion: 1, bulkExport: true, exportedAt: new Date().toISOString(), items }, label);
 }
 
+// Status shown in exports. A submission wins; otherwise fall back to in-progress VE work
+// so students who started but have not submitted are not reported as Not Started.
+function statusLabel(row: any): string {
+  if (row.sub?.status) return row.sub.status;
+  if (row._status === 'done_unsubmitted') return 'Done, not submitted';
+  if (row._status === 'in_progress') return row._pct != null ? `In Progress ${row._pct}%` : 'In Progress';
+  return 'Not Started';
+}
+
 export function exportCSV(rows: any[], title: string) {
   const headers = ['Name', 'Email', 'Status', 'Score', 'Result', 'Submitted At'];
   const csvRows = rows.map(row => {
     const sub = row.sub;
-    const status = sub?.status ?? 'Not Started';
+    const status = statusLabel(row);
     const score  = sub?.score != null ? sub.score : '';
     const result = sub?.score != null ? (sub.score >= 85 ? 'Passed' : 'Failed') : '';
     const date   = sub?.updated_at ? new Date(sub.updated_at).toLocaleDateString() : '';
@@ -118,7 +127,7 @@ export function exportGroupCSV(rows: any[], title: string) {
   const headers = ['Group', 'Leader', 'Members', 'Participants', 'Status', 'Score', 'Result', 'Submitted By', 'Submitted At'];
   const csvRows = rows.map(row => {
     const sub = row.sub;
-    const status = sub?.status ?? 'Not Started';
+    const status = statusLabel(row);
     const score  = sub?.score != null ? sub.score : '';
     const result = sub?.score != null ? (sub.score >= 85 ? 'Passed' : 'Failed') : '';
     const date   = sub?.updated_at ? new Date(sub.updated_at).toLocaleDateString() : '';

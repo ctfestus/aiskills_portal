@@ -964,6 +964,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
                 groupId={isGroupAssignment && isLeader ? myGroupId ?? undefined : undefined}
                 participants={isGroupAssignment && isLeader ? selectedParticipants : undefined}
                 canSubmit={!isGroupAssignment || isLeader}
+                submitted={isSubmitted}
                 onComplete={isGroupAssignment && !isLeader ? () => {} : (submission) => { if (submission) setSubmission(submission); }}
               />
             </>

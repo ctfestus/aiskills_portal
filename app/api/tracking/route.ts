@@ -114,6 +114,9 @@ export async function GET(req: NextRequest) {
   const courseIds        = allContent.filter(f => f.content_type === 'course').map(f => f.id);
   const veIds            = allContent.filter(f => f.content_type === 'virtual_experience').map(f => f.id);
   const regularAssignIds = regularAssignments.map((a: any) => a.id);
+  // VE-type assignments are "completed" only once the student submits, so they need their
+  // submission rows too -- the VE attempt alone (completed via any path) is not a submission.
+  const submissionAssignIds = [...regularAssignIds, ...veTypeAssignments.map((a: any) => a.id)];
   const allContentIds    = allContent.map(f => f.id);
   // guided_project_attempts covers both standalone VEs and VE-type assignment ve_form_ids
   const allGpVeIds       = [...new Set([...veIds, ...veFormIds])];
@@ -125,8 +128,8 @@ export async function GET(req: NextRequest) {
     allGpVeIds.length
       ? supabase.from('guided_project_attempts').select('student_id, ve_id, completed_at, updated_at, progress').in('ve_id', allGpVeIds)
       : Promise.resolve({ data: [] as any[] }),
-    regularAssignIds.length
-      ? supabase.from('assignment_submissions').select('student_id, assignment_id, status, score, updated_at, submitted_at, graded_at').in('assignment_id', regularAssignIds)
+    submissionAssignIds.length
+      ? supabase.from('assignment_submissions').select('student_id, assignment_id, status, score, updated_at, submitted_at, graded_at').in('assignment_id', submissionAssignIds)
       : Promise.resolve({ data: [] as any[] }),
     supabase.from('cohort_assignments').select('content_id, cohort_id, assigned_at').in('content_id', allContentIds).in('cohort_id', activeCohortIds),
     // Fetch modules for VE-type assignments so we can calculate requirement-based progress
@@ -215,21 +218,25 @@ export async function GET(req: NextRequest) {
       let passed: boolean | null = null;
 
       if (isVeAssignment) {
-        // Progress lives in guided_project_attempts keyed by the underlying VE id
+        // Completion requires a submission (the explicit "Complete" step). The VE attempt --
+        // keyed by the underlying VE id and completable via standalone/learning-path paths too --
+        // only drives in-progress status, never "completed".
+        const sub = submissionMap.get(key);
         const attempt = gpAttemptMap.get(`${student.id}|${item.ve_form_id}`);
-        if (!attempt) {
-          status = 'not_started';
-        } else if (attempt.completed_at) {
+        if (sub && sub.status !== 'draft') {
           status = 'completed';
           progressPct = 100;
-          lastActive = attempt.updated_at ?? attempt.completed_at;
-        } else {
+          lastActive = sub.graded_at ?? sub.submitted_at ?? sub.updated_at ?? null;
+          score = sub.score ?? null;
+        } else if (attempt) {
           lastActive = attempt.updated_at ?? null;
           const days = daysSince(lastActive);
           status = days !== null && days >= STALL_DAYS ? 'stalled' : 'in_progress';
           if (total > 0) {
             progressPct = Math.round((completedRequirements(attempt.progress) / total) * 100);
           }
+        } else {
+          status = 'not_started';
         }
       } else if (isAssignment) {
         const sub = submissionMap.get(key);
