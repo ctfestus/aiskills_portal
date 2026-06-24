@@ -2,7 +2,7 @@
 
 // Extracted verbatim from app/dashboard/page.tsx -- no behavior or styling changes.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import { ArrowLeft, CheckCircle2, ChevronDown, ClipboardList, Copy, Download, Edit2, ExternalLink, FileText, Loader2, Plus, Trash2, Users, TrendingUp } from 'lucide-react';
@@ -39,6 +39,9 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   const [gradeError, setGradeError]         = useState('');
   const [gradeSuccess, setGradeSuccess]     = useState(false);
   const [veAttemptProgress, setVeAttemptProgress] = useState<Record<string, any> | null>(null);
+  const [veProgressMap, setVeProgressMap]   = useState<Record<string, { pct: number; completedAt: string | null }>>({});
+  const [statusFilter, setStatusFilter]     = useState<string>('all');
+  const openToken = useRef(0);
 
   useEffect(() => {
     supabase.from('assignments').select('*').order('created_at', { ascending: false })
@@ -46,14 +49,37 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   }, []);
 
   async function openAssignment(a: any) {
+    // Guard against out-of-order responses when assignments are clicked in quick succession:
+    // only the latest call's fetched data is applied.
+    const token = ++openToken.current;
     setSelected(a); setViewingSub(null); setSubFiles([]); setActiveTab('details'); setLoadingSubs(true);
-    setExpandedGroups(new Set());
+    setExpandedGroups(new Set()); setVeProgressMap({}); setStatusFilter('all');
     const groupIds: string[] = Array.isArray(a.group_ids) && a.group_ids.length > 0 ? a.group_ids : [];
     const [{ data: subs }, { data: cohortStudents }, { data: groupMemberRows }] = await Promise.all([
       supabase.from('assignment_submissions').select('*, student:students!student_id(id, full_name, email), submitted_by_student:students!submitted_by(full_name)').eq('assignment_id', a.id).order('updated_at', { ascending: false }),
       a.cohort_ids?.length ? supabase.from('students').select('id, full_name, email').in('cohort_id', a.cohort_ids) : Promise.resolve({ data: [] }),
       groupIds.length ? supabase.from('group_members').select('group_id, is_leader, groups(id, name), students(id, full_name, email)').in('group_id', groupIds) : Promise.resolve({ data: [] }),
     ]);
+
+    // For VE assignments, the submission row is only written when the student hits "Complete".
+    // Pull the underlying VE attempts so students who are mid-experience (or finished the work
+    // without submitting) show as In Progress instead of Not Started.
+    const veFormId = a.type === 'virtual_experience' ? a.config?.ve_form_id : null;
+    if (veFormId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        const res = await fetch(`/api/ve-attempt?veId=${veFormId}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const map: Record<string, { pct: number; completedAt: string | null }> = {};
+          for (const att of json.attempts ?? []) map[att.studentId] = { pct: att.progressPct ?? 0, completedAt: att.completedAt ?? null };
+          if (openToken.current !== token) return;
+          setVeProgressMap(map);
+        }
+      }
+    }
     const groupStudents = (groupMemberRows ?? []).map((r: any) => ({ ...(r.students ?? {}), group_id: r.group_id, group_name: (r.groups as any)?.name ?? null, is_leader: !!r.is_leader })).filter((s: any) => s?.id);
     const seen = new Set<string>();
     const sourceStudents = groupIds.length > 0 ? [...groupStudents, ...(cohortStudents ?? [])] : [...(cohortStudents ?? []), ...groupStudents];
@@ -61,6 +87,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       if (!s?.id || seen.has(s.id)) return false;
       seen.add(s.id); return true;
     });
+    if (openToken.current !== token) return;
     setSubmissions(subs ?? []); setAssignedStudents(allStudents); setLoadingSubs(false);
   }
 
@@ -314,8 +341,22 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
   // -- Assignment detail with tabs ---
   if (selected) {
     const isGroupAssignment = (selected.group_ids?.length ?? 0) > 0;
+    // Resolve the status shown in the report. A submission wins (graded/submitted/draft); otherwise
+    // fall back to the VE attempt so in-progress work isn't reported as Not Started.
+    const statusCfg = (status: string, pct?: number) =>
+        status === 'graded'           ? { label: 'Graded',      bg: 'rgba(22,163,74,0.12)', color: '#16a34a' }
+      : status === 'submitted'        ? { label: 'Submitted',   bg: 'rgba(37,99,235,0.12)', color: '#2563eb' }
+      : status === 'done_unsubmitted' ? { label: 'Done, not submitted', bg: 'rgba(217,119,6,0.12)', color: '#d97706' }
+      : status === 'in_progress'      ? { label: pct != null ? `In Progress ${pct}%` : 'In Progress', bg: 'rgba(217,119,6,0.12)', color: '#d97706' }
+      : status === 'draft'            ? { label: 'Draft',       bg: C.pill, color: C.muted }
+      :                                 { label: 'Not Started', bg: C.pill, color: C.faint };
     const subMap: Record<string, any> = Object.fromEntries(submissions.map((s: any) => [s.student_id, s]));
-    const rows = assignedStudents.map((st: any) => ({ ...st, sub: subMap[st.id] ?? null }));
+    const rows = assignedStudents.map((st: any) => {
+      const sub = subMap[st.id] ?? null;
+      const ve = veProgressMap[st.id];
+      const status = sub?.status ?? (ve ? (ve.completedAt ? 'done_unsubmitted' : 'in_progress') : 'not_started');
+      return { ...st, sub, _status: status, _pct: ve?.pct };
+    });
     const groupSubByGroup = Object.fromEntries(submissions.filter((s: any) => s.group_id).map((s: any) => [s.group_id, s]));
     const groupMap = new Map<string, { id: string; name: string; members: any[] }>();
     if (isGroupAssignment) {
@@ -333,9 +374,18 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
       const participants = sub ? group.members.filter(member => participantIds.has(member.id)) : [];
       const nonParticipants = sub ? group.members.filter(member => !participantIds.has(member.id)) : [];
       const leader = group.members.find(member => member.is_leader) ?? group.members[0] ?? null;
-      return { ...group, sub, participants, nonParticipants, leader };
+      const memberVe = group.members.map((m: any) => veProgressMap[m.id]).filter(Boolean);
+      const anyCompleted = memberVe.some((v: any) => v.completedAt);
+      const status = sub?.status ?? (memberVe.length ? (anyCompleted ? 'done_unsubmitted' : 'in_progress') : 'not_started');
+      const pct = memberVe.length ? Math.max(...memberVe.map((v: any) => v.pct)) : undefined;
+      return { ...group, sub, participants, nonParticipants, leader, _status: status, _pct: pct };
     });
     const responseRows = isGroupAssignment ? groupRows : rows;
+    // Status filter (Submitted, Graded, etc.). Only offer statuses actually present in this list.
+    const STATUS_LABELS: Record<string, string> = { submitted: 'Submitted', graded: 'Graded', done_unsubmitted: 'Done, not submitted', in_progress: 'In Progress', draft: 'Draft', not_started: 'Not Started' };
+    const STATUS_ORDER = ['submitted', 'graded', 'done_unsubmitted', 'in_progress', 'draft', 'not_started'];
+    const presentStatuses = STATUS_ORDER.filter(s => responseRows.some((r: any) => r._status === s));
+    const visibleRows = statusFilter === 'all' ? responseRows : responseRows.filter((r: any) => r._status === statusFilter);
     const responded = isGroupAssignment
       ? groupRows.filter((row: any) => row.sub != null).length
       : submissions.length;
@@ -434,10 +484,16 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
               ))}
             </div>
 
-            {/* Export button */}
+            {/* Filter + export */}
             {responseRows.length > 0 && (
-              <div className="flex justify-end mb-3">
-                <button onClick={() => isGroupAssignment ? exportGroupCSV(groupRows, selected.title) : exportCSV(rows, selected.title)}
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer"
+                  style={{ background: C.pill, color: C.muted, border: `1px solid ${C.divider}` }}>
+                  <option value="all">All statuses</option>
+                  {presentStatuses.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                </select>
+                <button onClick={() => isGroupAssignment ? exportGroupCSV(visibleRows, selected.title) : exportCSV(visibleRows, selected.title)}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-80 transition-opacity"
                   style={{ background: C.pill, color: C.muted, border: `1px solid ${C.divider}` }}>
                   <Download className="w-3.5 h-3.5"/> Export CSV
@@ -452,6 +508,11 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                 <p className="text-sm font-medium mb-1" style={{ color: C.text }}>{isGroupAssignment ? 'No groups assigned' : 'No students assigned'}</p>
                 <p className="text-xs" style={{ color: C.faint }}>{(selected.group_ids?.length ?? 0) > 0 ? 'No group members found for this assignment.' : 'Assign a cohort to this assignment first.'}</p>
               </div>
+            ) : visibleRows.length === 0 ? (
+              <div className="text-center py-16 rounded-2xl" style={{ ...cardStyle(C) }}>
+                <p className="text-sm font-medium mb-1" style={{ color: C.text }}>No {isGroupAssignment ? 'groups' : 'students'} match this filter</p>
+                <p className="text-xs" style={{ color: C.faint }}>Showing {STATUS_LABELS[statusFilter] ?? statusFilter}. <button onClick={() => setStatusFilter('all')} className="font-semibold hover:opacity-70" style={{ color: C.green, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear filter</button></p>
+              </div>
             ) : isGroupAssignment ? (
               <div className="rounded-2xl overflow-hidden">
                 <div className="grid px-5 py-3 text-xs font-bold uppercase tracking-wider" style={{ background: C.pill, color: C.faint, gridTemplateColumns: '1.35fr 1fr 90px 120px 110px 70px 80px 80px' }}>
@@ -464,16 +525,12 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                   <span className="text-center">Result</span>
                   <span></span>
                 </div>
-                {groupRows.map((row: any, i: number) => {
+                {visibleRows.map((row: any, i: number) => {
                   const sub = row.sub;
-                  const status = sub?.status ?? 'not_started';
                   const sc = sub?.score ?? null;
                   const isPassed = sc != null && sc >= 85;
                   const isExpanded = expandedGroups.has(row.id);
-                  const statusCfg = status === 'graded'    ? { label: 'Graded',      bg: 'rgba(22,163,74,0.12)', color: '#16a34a' }
-                                  : status === 'submitted' ? { label: 'Submitted',   bg: 'rgba(37,99,235,0.12)', color: '#2563eb' }
-                                  : status === 'draft'     ? { label: 'Draft',       bg: C.pill,    color: C.muted   }
-                                  :                          { label: 'Not Started', bg: C.pill,    color: C.faint   };
+                  const statusInfo = statusCfg(row._status, row._pct);
                   return (
                     <div key={row.id} style={{ background: i % 2 === 0 ? C.card : C.page, borderTop: `1px solid ${C.divider}` }}>
                       <div className="grid px-5 py-3.5 items-center" style={{ gridTemplateColumns: '1.35fr 1fr 90px 120px 110px 70px 80px 80px' }}>
@@ -491,8 +548,8 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                         </div>
                         <span className="text-sm font-bold text-center" style={{ color: C.text }}>{row.members.length}</span>
                         <span className="text-sm font-bold text-center" style={{ color: sub ? C.text : C.faint }}>{sub ? `${row.participants.length}/${row.members.length}` : '--'}</span>
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full text-center w-fit" style={{ background: statusCfg.bg, color: statusCfg.color }}>
-                          {statusCfg.label}
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full text-center w-fit" style={{ background: statusInfo.bg, color: statusInfo.color }}>
+                          {statusInfo.label}
                         </span>
                         <span className="text-sm font-bold text-center" style={{ color: sc != null ? (isPassed ? '#10b981' : '#ef4444') : C.faint }}>
                           {sc != null ? sc : '--'}
@@ -568,15 +625,11 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                   <span className="text-center">Result</span>
                   <span></span>
                 </div>
-                {rows.map((row, i) => {
+                {visibleRows.map((row: any, i: number) => {
                   const sub     = row.sub;
-                  const status  = sub?.status ?? 'not_started';
                   const sc      = sub?.score ?? null;
                   const isPassed = sc != null && sc >= 85;
-                  const statusCfg = status === 'graded'    ? { label: 'Graded',      bg: 'rgba(22,163,74,0.12)', color: '#16a34a' }
-                                  : status === 'submitted' ? { label: 'Submitted',   bg: 'rgba(37,99,235,0.12)', color: '#2563eb' }
-                                  : status === 'draft'     ? { label: 'Draft',       bg: C.pill,    color: C.muted   }
-                                  :                          { label: 'Not Started', bg: C.pill,    color: C.faint   };
+                  const statusInfo = statusCfg(row._status, row._pct);
                   return (
                     <div key={row.id} className="grid px-5 py-3.5 items-center" style={{ gridTemplateColumns: '1fr 110px 70px 80px 80px', background: i % 2 === 0 ? C.card : C.page, borderTop: `1px solid ${C.divider}` }}>
                       <div className="flex items-center gap-3 min-w-0">
@@ -590,8 +643,8 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
                         </div>
                       </div>
                       <div className="flex flex-col items-center gap-0.5">
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full text-center" style={{ background: statusCfg.bg, color: statusCfg.color }}>
-                          {statusCfg.label}
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full text-center" style={{ background: statusInfo.bg, color: statusInfo.color }}>
+                          {statusInfo.label}
                         </span>
                         {isGroupAssignment && sub?.submitted_by_student?.full_name && (
                           <span className="text-xs" style={{ color: C.faint }}>by {(sub.submitted_by_student as any).full_name}</span>
