@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { Bold, Code2, FileCode2, Italic, RemoveFormatting, Underline, List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote, Youtube, ImageIcon, Loader2 } from 'lucide-react';
+import { Bold, Code2, FileCode2, Italic, RemoveFormatting, Underline, List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote, Youtube, ImageIcon, Loader2, UserRound } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { RichTextAiMenu } from '@/components/RichTextAiMenu';
 
@@ -16,9 +16,12 @@ interface RichTextEditorProps {
   /** Show the inline "Ask AI" selection assistant. Instructor-authoring surfaces only --
    *  the AI route is instructor/admin, so never enable on student-facing editors. */
   enableAiAssist?: boolean;
+  /** Show an "Insert name" button that drops a {{first_name}} merge tag. For VE
+   *  workplace-email editors only -- the tag is resolved by the VE players at render time. */
+  enableNameTag?: boolean;
 }
 
-export function RichTextEditor({ value, onChange, placeholder = 'Add a description...', className = '', bgOverride, fontFamily, onImageUpload, enableAiAssist = false }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, placeholder = 'Add a description...', className = '', bgOverride, fontFamily, onImageUpload, enableAiAssist = false, enableNameTag = false }: RichTextEditorProps) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const bg        = bgOverride ?? (dark ? 'rgba(255,255,255,0.05)' : '#f4f5f7');
@@ -296,6 +299,17 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
     }
   }, [exec, handleInlineCode, onChange]);
 
+  const handleInsertNameTag = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    // Insert the merge tag as plain text at the caret; VE players swap in the
+    // student's first name at render time.
+    document.execCommand('insertText', false, '{{first_name}}');
+    isInternalChange.current = true;
+    onChange(editor.innerHTML);
+  }, [onChange]);
+
   const handleInsertImage = useCallback(async (file: File) => {
     if (!onImageUpload || !editorRef.current) return;
     setUploadingImage(true);
@@ -377,6 +391,14 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         <ToolbarButton onClick={handleClearFormat} title="Clear formatting" dark={dark}>
           <RemoveFormatting className="w-3.5 h-3.5" />
         </ToolbarButton>
+        {enableNameTag && (
+          <>
+            <div className="w-px h-4 mx-1" style={{ background: toolDiv }} />
+            <ToolbarButton onClick={handleInsertNameTag} title="Insert student's name ({{first_name}})" dark={dark}>
+              <UserRound className="w-3.5 h-3.5" />
+            </ToolbarButton>
+          </>
+        )}
         <div className="w-px h-4 mx-1" style={{ background: toolDiv }} />
         <ToolbarButton onClick={handleInsertVideo} title="Embed YouTube video" dark={dark}>
           <Youtube className="w-3.5 h-3.5" />

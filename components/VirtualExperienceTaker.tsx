@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText, sanitizeEmailContent } from '@/lib/sanitize';
+import { applyNameTags } from '@/lib/merge-tags';
 import { LessonRenderer } from '@/components/lesson/LessonRenderer';
 import type { LessonDoc } from '@/lib/lesson-doc';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
@@ -1125,7 +1126,7 @@ export default function VirtualExperienceTaker({
                               {req.description && (
                                 <div
                                   className="rich-content"
-                                  dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(req.description) }}
+                                  dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(applyNameTags(req.description, studentName)) }}
                                   style={{ padding: '18px 22px', color: isDark ? '#e0e0e0' : '#1f1f1f', fontSize: 14.5, lineHeight: 1.75 }}
                                 />
                               )}
@@ -1308,7 +1309,7 @@ export default function VirtualExperienceTaker({
                               {req.description && (
                                 <div
                                   className="rich-content"
-                                  dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(req.description) }}
+                                  dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(applyNameTags(req.description, studentName)) }}
                                   style={{ padding: '18px 22px', color: isDark ? '#e0e0e0' : '#1f1f1f', fontSize: 14.5, lineHeight: 1.75 }}
                                 />
                               )}
@@ -1414,7 +1415,7 @@ export default function VirtualExperienceTaker({
                               {done && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accentColor }} />}
                             </div>
                             {(req.emailBody || req.description) && (
-                              <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(req.emailBody || req.description || '') }}
+                              <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(applyNameTags(req.emailBody || req.description || '', studentName)) }}
                                 style={{ padding: '18px 22px', color: isDark ? '#e0e0e0' : '#1f1f1f', fontSize: 14.5, lineHeight: 1.75 }} />
                             )}
                             <div style={{ height: 1, background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', margin: '0 22px' }} />

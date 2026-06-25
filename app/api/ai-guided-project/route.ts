@@ -151,8 +151,8 @@ These details are fixed. Build the entire project around this company and scenar
 
 == EMAIL FRAME MODE (INSTRUCTOR-ENABLED) ==
 Set emailFrame: true on EVERY requirement: tasks, uploads, deliverables, AI reviewer, MCQ, and short-answer/text requirements.
-For each requirement with emailFrame: true, write an emailBody field: a short professional email (2-4 sentences) from the manager to the student, describing the specific work they must do. Plain text only, no HTML tags or bullet lists inside emailBody.
-Example emailBody: "Hi, please find the dataset attached. Your task for this module is to build a pivot table grouping transactions by region and summing the Amount column. Looking forward to your submission."` : '';
+For each requirement with emailFrame: true, write an emailBody field: a short professional email (2-4 sentences) from the manager to the student, describing the specific work they must do. Open with a greeting that addresses the student by name using the literal merge tag {{first_name}} -- keep the double curly braces exactly as written; it is replaced with the student's real first name at runtime, so never invent a name. Plain text only, no HTML tags or bullet lists inside emailBody.
+Example emailBody: "Hi {{first_name}}, please find the dataset attached. Your task for this module is to build a pivot table grouping transactions by region and summing the Amount column. Looking forward to your submission."` : '';
 
       const prompt = `
 You are designing a hands-on virtual work experience project (like Forage) for a ${difficulty}-level ${rolePhrase} in the ${industry} industry.
@@ -409,8 +409,8 @@ These details are fixed. Build the entire project around this company and scenar
 
 == EMAIL FRAME MODE (INSTRUCTOR-ENABLED) ==
 Set emailFrame: true on EVERY requirement: tasks, uploads, deliverables, AI reviewer, MCQ, and short-answer/text requirements.
-For each requirement with emailFrame: true, write an emailBody field: a short professional email (2-4 sentences) from the manager to the student, describing the specific work they must do. Plain text only, no HTML tags or bullet lists inside emailBody.
-Example emailBody: "Hi, please find the dataset attached. Your task for this module is to build a pivot table grouping transactions by region and summing the Amount column. Looking forward to your submission."` : '';
+For each requirement with emailFrame: true, write an emailBody field: a short professional email (2-4 sentences) from the manager to the student, describing the specific work they must do. Open with a greeting that addresses the student by name using the literal merge tag {{first_name}} -- keep the double curly braces exactly as written; it is replaced with the student's real first name at runtime, so never invent a name. Plain text only, no HTML tags or bullet lists inside emailBody.
+Example emailBody: "Hi {{first_name}}, please find the dataset attached. Your task for this module is to build a pivot table grouping transactions by region and summing the Amount column. Looking forward to your submission."` : '';
 
       // Pass 1: company metadata only (no dataset generation -- use the provided one)
       const pass1Prompt = `

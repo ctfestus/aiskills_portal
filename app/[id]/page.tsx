@@ -404,7 +404,7 @@ export default function PublicFormPage() {
         if (user && (data.config?.isVirtualExperience || data.config?.isGuidedProject)) {
           const { data: { session } } = await supabase.auth.getSession();
           const { data: student } = await supabase.from('students').select('full_name, email, role').eq('id', user.id).single();
-          const name  = student?.full_name || user.user_metadata?.full_name || '';
+          const name  = student?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || '';
           const email = student?.email || user.email || '';
           const isPreviewUser = student?.role !== 'student';
           let hasProgress = false;
@@ -698,7 +698,7 @@ export default function PublicFormPage() {
       if (!user) return;
       const { data: { session } } = await supabase.auth.getSession();
       const { data: student } = await supabase.from('students').select('full_name, email, role').eq('id', user.id).single();
-      const name  = student?.full_name || user.user_metadata?.full_name || '';
+      const name  = student?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || '';
       const email = student?.email || user.email || '';
       const isPreviewUser = student?.role !== 'student';
       // Restore any saved progress
