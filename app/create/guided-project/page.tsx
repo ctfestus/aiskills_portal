@@ -1706,7 +1706,11 @@ function VirtualExperienceCreatePageInner() {
                                                     placeholder={req.type === 'briefing' ? 'Write the email body - formatting, bullet points, and images are all supported...' : 'Describe what students should write in their debrief update...'}
                                                     onImageUpload={async (file) => uploadToCloudinary(file, 've-email-images')}
                                                     enableAiAssist
+                                                    enableNameTag
                                                   />
+                                                  <p className="text-[11px]" style={{ color: C.faint }}>
+                                                    {'Tip: insert {{first_name}} (or type {{name}} for the full name) to greet each student by name.'}
+                                                  </p>
                                                   {req.type === 'briefing' && (
                                                     <div className="space-y-2">
                                                       {(req.attachments || []).map((att, ai) => (
@@ -1746,8 +1750,14 @@ function VirtualExperienceCreatePageInner() {
                                                         placeholder="Write the email the manager sends to the student..."
                                                         onImageUpload={async (file) => uploadToCloudinary(file, 've-email-images')}
                                                         enableAiAssist
+                                                        enableNameTag
                                                       />
                                                     </div>
+                                                  )}
+                                                  {req.emailFrame && (
+                                                    <p className="text-[11px]" style={{ color: C.faint }}>
+                                                      {'Tip: insert {{first_name}} (or type {{name}} for the full name) to greet each student by name.'}
+                                                    </p>
                                                   )}
                                                   <input value={req.description}
                                                     onChange={e => updateReq(mod.id, les.id, req.id, { description: e.target.value })}
