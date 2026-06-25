@@ -658,7 +658,7 @@ export default function CreateAssignmentPage() {
               ].map(({ label, value, setter, placeholder }) => (
                 <div key={label} style={{ marginBottom: 16 }}>
                   <label style={labelStyle(C)}>{label}</label>
-                  <RichTextEditor value={value} onChange={setter} placeholder={placeholder} />
+                  <RichTextEditor value={value} onChange={setter} placeholder={placeholder} enableAiAssist />
                 </div>
               ))}
             </section>
@@ -754,7 +754,7 @@ export default function CreateAssignmentPage() {
             {assignmentType === 'standard' && (
               <div>
                 <label style={labelStyle(C)}>Submission Instructions</label>
-                <RichTextEditor value={submissionInstructions} onChange={setSubmissionInstructions} placeholder="How should students submit their work?" />
+                <RichTextEditor value={submissionInstructions} onChange={setSubmissionInstructions} placeholder="How should students submit their work?" enableAiAssist />
               </div>
             )}
           </section>

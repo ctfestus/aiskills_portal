@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { Bold, Code2, FileCode2, Italic, RemoveFormatting, Underline, List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote, Youtube, ImageIcon, Loader2 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
+import { RichTextAiMenu } from '@/components/RichTextAiMenu';
 
 interface RichTextEditorProps {
   value: string;
@@ -12,9 +13,12 @@ interface RichTextEditorProps {
   bgOverride?: string;
   fontFamily?: string;
   onImageUpload?: (file: File) => Promise<string>;
+  /** Show the inline "Ask AI" selection assistant. Instructor-authoring surfaces only --
+   *  the AI route is instructor/admin, so never enable on student-facing editors. */
+  enableAiAssist?: boolean;
 }
 
-export function RichTextEditor({ value, onChange, placeholder = 'Add a description...', className = '', bgOverride, fontFamily, onImageUpload }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, placeholder = 'Add a description...', className = '', bgOverride, fontFamily, onImageUpload, enableAiAssist = false }: RichTextEditorProps) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const bg        = bgOverride ?? (dark ? 'rgba(255,255,255,0.05)' : '#f4f5f7');
@@ -414,6 +418,18 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         className={`px-3 py-2.5 outline-none min-h-[100px] max-h-[300px] overflow-y-auto rich-editor${dark ? ' dark' : ''}`}
         style={{ color: textColor, ...(fontFamily ? { fontFamily } : {}) }}
       />
+
+      {enableAiAssist && (
+        <RichTextAiMenu
+          editorRef={editorRef}
+          dark={dark}
+          commit={() => {
+            if (!editorRef.current) return;
+            isInternalChange.current = true;
+            onChange(editorRef.current.innerHTML);
+          }}
+        />
+      )}
 
       <style>{`
         .rich-editor:empty:before {
