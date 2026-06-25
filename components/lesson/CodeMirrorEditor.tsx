@@ -93,9 +93,11 @@ export function CodeMirrorEditor({ value, language, dark, readOnly = false, onCh
           EditorView.theme({
             '&': { fontSize: '13px', background: dark ? '#0f1120' : '#f6f8fa', color: dark ? '#c9d1d9' : '#1f2328' },
             '&.cm-focused': { outline: 'none' },
-            '.cm-scroller': { fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace', maxHeight: '340px', lineHeight: '1.55' },
-            '.cm-content': { padding: '10px 0' },
-            '.cm-line': { padding: '0 12px' },
+            // Pin the same line-height on the content + line so the caret height matches
+            // the rendered line (otherwise it inherits .lesson-content's 1.6 and looks taller).
+            '.cm-scroller': { fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace', maxHeight: '340px', lineHeight: '1.5' },
+            '.cm-content': { padding: '10px 0', lineHeight: '1.5' },
+            '.cm-line': { padding: '0 12px', lineHeight: '1.5' },
             '.cm-gutters': { background: dark ? '#0f1120' : '#f6f8fa', border: 'none', color: dark ? '#475066' : '#b8c0cc', fontSize: '11px', minWidth: '38px' },
             '.cm-activeLine': { background: dark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.025)' },
             '.cm-activeLineGutter': { background: 'transparent' },
