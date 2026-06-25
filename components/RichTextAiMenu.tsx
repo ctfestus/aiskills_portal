@@ -13,7 +13,26 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Wand2 } from 'lucide-react';
 import { AiAssistPanel, type ApplyMode } from '@/components/AiAssistPanel';
-import { askAi, textToHtml, TEXT_ACTIONS, type AiAction, type AiResult } from '@/lib/ai-assist';
+import { askAi, textToHtml, textToInlineHtml, TEXT_ACTIONS, type AiAction, type AiResult } from '@/lib/ai-assist';
+
+// Block-level tags we treat as a "paragraph" boundary for Insert below.
+const BLOCK_TAGS = new Set(['P', 'DIV', 'LI', 'BLOCKQUOTE', 'PRE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+
+// Walk up from a node to the block element that directly holds it within the editor.
+function containingBlock(node: Node | null, editor: HTMLElement): HTMLElement | null {
+  let n: Node | null = node;
+  while (n && n !== editor) {
+    if (n.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.has((n as HTMLElement).tagName)) return n as HTMLElement;
+    n = n.parentNode;
+  }
+  return null;
+}
+
+function fragmentFromHtml(html: string): DocumentFragment {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  return tpl.content;
+}
 
 interface RichTextAiMenuProps {
   editorRef: React.RefObject<HTMLDivElement | null>;
@@ -82,15 +101,20 @@ export function RichTextAiMenu({ editorRef, dark, commit }: RichTextAiMenuProps)
     const c = captured.current;
     const editor = editorRef.current;
     if (!c || !editor || result.kind !== 'text') return;
-    const tpl = document.createElement('template');
-    tpl.innerHTML = textToHtml(result.text);
     const range = c.range.cloneRange();
     if (mode === 'replace') {
+      // Replace the selected text in place with INLINE content (text + <br>), so we never
+      // nest a <p> inside the paragraph / span / list item the selection lives in.
       range.deleteContents();
+      range.insertNode(fragmentFromHtml(textToInlineHtml(result.text)));
     } else {
-      range.collapse(false); // to end of the original selection
+      // Insert below: add new block paragraph(s) AFTER the block that holds the selection,
+      // rather than splitting inline markup with a stray <p>.
+      const block = containingBlock(range.endContainer, editor);
+      const frag = fragmentFromHtml(textToHtml(result.text));
+      if (block && block.parentNode) block.after(frag);
+      else editor.appendChild(frag);
     }
-    range.insertNode(tpl.content);
     commit();
     setOpen(false);
     setTrigger(null);

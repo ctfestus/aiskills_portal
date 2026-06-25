@@ -122,11 +122,20 @@ export function textToParagraphNodes(text: string): JSONContent[] {
 const escapeHtml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/** Plain text -> sanitized HTML paragraphs. For DOM insertion in RichTextEditor. */
+/** Plain text -> sanitized HTML paragraphs (block). For inserting a new block in RichTextEditor. */
 export function textToHtml(text: string): string {
   return text
     .replace(/\r\n/g, '\n')
     .split(/\n{2,}/)
     .map((block) => `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`)
     .join('');
+}
+
+/**
+ * Plain text -> inline HTML (text + <br>, no block <p>). Use when replacing an INLINE
+ * selection inside an existing block, so we never nest a <p> inside a paragraph / span /
+ * list item and split the markup.
+ */
+export function textToInlineHtml(text: string): string {
+  return escapeHtml(text.replace(/\r\n/g, '\n')).replace(/\n/g, '<br>');
 }
