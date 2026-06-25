@@ -43,10 +43,29 @@ export function LessonRuntimeProvider({ setupSql, setupPython, dark, children }:
   // The shared SQL runtime holds a DuckDB connection for the lesson's lifetime.
   useEffect(() => () => { sqlInstance.current?.close().catch(() => {}); }, []);
 
+  useEffect(() => {
+    const oldSql = sqlInstance.current;
+    sqlPromise.current = null;
+    sqlInstance.current = null;
+    oldSql?.close().catch(() => {});
+  }, [setupSql]);
+
+  useEffect(() => {
+    pyPromise.current = null;
+  }, [setupPython]);
+
   const getSql = useCallback(() => {
     if (!sqlPromise.current) {
-      sqlPromise.current = initSQLRuntime(setupSql.trim() ? [{ tableName: 'lesson_setup', seedSql: setupSql }] : [])
-        .then((rt) => { sqlInstance.current = rt; return rt; });
+      const promise = initSQLRuntime(setupSql.trim() ? [{ tableName: 'lesson_setup', seedSql: setupSql }] : [])
+        .then((rt) => {
+          if (sqlPromise.current === promise) {
+            sqlInstance.current = rt;
+          } else {
+            rt.close().catch(() => {});
+          }
+          return rt;
+        });
+      sqlPromise.current = promise;
     }
     return sqlPromise.current;
   }, [setupSql]);

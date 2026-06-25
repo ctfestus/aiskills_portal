@@ -4,8 +4,8 @@
 // highlighting, line numbers, light/dark theme, keyword autocomplete, and Mod-Enter to
 // run. Reuses the CodeMirror packages the exercise players already depend on.
 //
-// Uncontrolled: the document is seeded once from `value` (so the caret never resets on
-// re-render); edits are reported via onChange. The view rebuilds only when structural
+// Uncontrolled: the document is seeded from `value` without resetting the caret on normal
+// re-render; edits are reported via onChange. The view rebuilds only when structural
 // props (language / theme / readOnly) change, never on value. Palette intentionally
 // avoids purple/indigo per the project's UI guardrails.
 
@@ -62,8 +62,10 @@ export function CodeMirrorEditor({ value, language, dark, readOnly = false, onCh
   // Keep the latest callbacks in refs (updated in an effect, not during render) so the
   // editor's listeners always call the current handlers without rebuilding the view.
   useEffect(() => { onChangeRef.current = onChange; onRunRef.current = onRun; });
-  // The initial document is captured once; later `value` changes do not rebuild the view.
-  const initialDocRef = useRef(value);
+  // Keep the latest document for structural rebuilds (theme/language/readOnly) without
+  // making `value` itself rebuild the editor on every keystroke.
+  const docRef = useRef(value);
+  useEffect(() => { docRef.current = value; }, [value]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -72,7 +74,7 @@ export function CodeMirrorEditor({ value, language, dark, readOnly = false, onCh
     const view = new EditorView({
       parent: host,
       state: EditorState.create({
-        doc: initialDocRef.current,
+        doc: docRef.current,
         extensions: [
           lineNumbers(),
           history(),
@@ -107,12 +109,17 @@ export function CodeMirrorEditor({ value, language, dark, readOnly = false, onCh
             '.cm-tooltip-autocomplete ul li[aria-selected]': { background: 'rgba(16,185,129,0.18)', color: dark ? '#fff' : '#0f1a2e' },
             '.cm-completionIcon': { display: 'none' },
           }, { dark }),
-          EditorView.updateListener.of((u) => { if (u.docChanged) onChangeRef.current?.(u.state.doc.toString()); }),
+          EditorView.updateListener.of((u) => {
+            if (!u.docChanged) return;
+            const next = u.state.doc.toString();
+            docRef.current = next;
+            onChangeRef.current?.(next);
+          }),
         ],
       }),
     });
     return () => view.destroy();
-    // value is intentionally excluded -- the editor is uncontrolled (seeded once).
+    // value is intentionally excluded -- the editor is uncontrolled between structural rebuilds.
   }, [language, dark, readOnly, placeholder]);
 
   return <div ref={hostRef} className="lesson-cm" />;

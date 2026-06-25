@@ -23,9 +23,9 @@ function completedCount(progress: any): number {
 // GET /api/ve-attempt?veId=xxx
 // Returns every attempt for the VE with a computed progress percentage, so the
 // assignment report can show students who are mid-experience but have not yet submitted.
-// Service-role read so RLS never blocks. Requires instructor or admin role.
+// Service-role read so RLS never blocks. Requires instructor, staff, or admin role.
 export async function GET(req: NextRequest) {
-  const auth = await requireRole(req, ['instructor', 'admin']);
+  const auth = await requireRole(req, ['instructor', 'staff', 'admin']);
   if (isAuthError(auth)) return auth.error;
   const { supabase } = auth;
 
