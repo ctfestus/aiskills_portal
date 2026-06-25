@@ -272,3 +272,56 @@ _cc_stdout_buf.getvalue()
     plots,
   };
 }
+
+export interface DataFramePreview {
+  name: string;
+  columns: string[];
+  rows: string[][];
+  rowCount: number;
+}
+
+/**
+ * A compact preview of the top-level pandas DataFrames currently defined in the runtime:
+ * shape + columns + a few head rows. Powers the runnable-code "Available data" panel.
+ * Introspects the global namespace (ignores private _-prefixed names); returns [] if
+ * pandas is unavailable or none are defined.
+ */
+export async function previewDataFrames(runtime: PythonRuntime): Promise<DataFramePreview[]> {
+  const snippet = `
+import json as _cc_json
+def _cc_preview_dataframes():
+    try:
+        import pandas as _cc_pd
+    except Exception:
+        return '[]'
+    _cc_out = []
+    for _cc_n, _cc_v in list(globals().items()):
+        if _cc_n.startswith('_'):
+            continue
+        if isinstance(_cc_v, _cc_pd.DataFrame):
+            try:
+                _cc_out.append({
+                    'name': _cc_n,
+                    'rowCount': int(_cc_v.shape[0]),
+                    'columns': [str(_cc_c) for _cc_c in list(_cc_v.columns)[:12]],
+                    'rows': _cc_v.head(3).astype(str).values.tolist(),
+                })
+            except Exception:
+                pass
+    return _cc_json.dumps(_cc_out)
+_cc_preview_dataframes()
+`;
+  try {
+    const raw = await runtime.pyodide.runPythonAsync(snippet);
+    const parsed = JSON.parse(String(raw ?? '[]'));
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((d: any) => ({
+      name: String(d?.name ?? ''),
+      columns: Array.isArray(d?.columns) ? d.columns.map(String) : [],
+      rows: Array.isArray(d?.rows) ? d.rows.map((r: unknown[]) => (Array.isArray(r) ? r.map(String) : [])) : [],
+      rowCount: Number(d?.rowCount ?? 0),
+    }));
+  } catch {
+    return [];
+  }
+}

@@ -271,6 +271,18 @@ export function LessonContentStyles() {
 .lesson-content .lesson-code__btn:hover:not(:disabled) { background: rgba(0,0,0,0.09); }
 .lesson-content.dark .lesson-code__btn:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
 .lesson-content .lesson-code__btn:disabled { opacity: 0.6; cursor: default; }
+.lesson-content .lesson-code__btn[data-active="true"] { background: rgba(16,185,129,0.14); color: #047857; }
+.lesson-content.dark .lesson-code__btn[data-active="true"] { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+/* Dataset preview ("Available data") panel */
+.lesson-content .lesson-code__data { border-top: 1px solid #e4e4e7; background: #eef1f5; padding: 10px 12px; display: flex; flex-direction: column; gap: 12px; }
+.lesson-content.dark .lesson-code__data { border-top-color: rgba(255,255,255,0.08); background: #14172a; }
+.lesson-content .lesson-code__data-head { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #57606a; margin-bottom: 5px; }
+.lesson-content.dark .lesson-code__data-head { color: #8b93a7; }
+.lesson-content .lesson-code__data-head strong { font-family: "JetBrains Mono",ui-monospace,monospace; font-size: 12px; color: #1f2328; }
+.lesson-content.dark .lesson-code__data-head strong { color: #c9d1d9; }
+.lesson-content .lesson-code__data-head span { margin-left: auto; opacity: 0.75; }
+.lesson-content .lesson-code__data .lesson-code__result { border: 1px solid #e4e4e7; border-radius: 6px; overflow: hidden; }
+.lesson-content.dark .lesson-code__data .lesson-code__result { border-color: #2e2e33; }
 .lesson-content .lesson-code__spin { animation: lesson-code-spin 0.8s linear infinite; }
 @keyframes lesson-code-spin { to { transform: rotate(360deg); } }
 .lesson-content .lesson-code__editor { display: block; width: 100%; box-sizing: border-box; font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 13px; line-height: 1.5; color: #1f2328; background: #f6f8fa; border: none; outline: none; padding: 12px 14px; resize: vertical; min-height: 64px; }
@@ -295,6 +307,12 @@ export function LessonContentStyles() {
 .lesson-content.dark .lesson-code__result th, .lesson-content.dark .lesson-code__result td { border-color: #2e2e33; color: #d4d4d8; }
 .lesson-content .lesson-code__result th { background: #f4f4f5; font-weight: 600; position: sticky; top: 0; }
 .lesson-content.dark .lesson-code__result th { background: #1a1d2e; }
+/* Drop the table's perimeter borders so they don't double up against the block's own
+   container border -- keep only the internal gridlines. */
+.lesson-content .lesson-code__result table tr > :first-child { border-left: none; }
+.lesson-content .lesson-code__result table tr > :last-child { border-right: none; }
+.lesson-content .lesson-code__result thead tr:first-child > * { border-top: none; }
+.lesson-content .lesson-code__result tbody tr:last-child > * { border-bottom: none; }
 .lesson-content .lesson-code__result-note { font-size: 11.5px; color: #71717a; padding: 6px 12px; margin: 0; }
 .lesson-content .lesson-code__stdout { background: #0d1117; border-top: 1px solid #2e2e33; }
 .lesson-content.dark .lesson-code__stdout { background: #0a0c14; border-top-color: #2e2e33; }

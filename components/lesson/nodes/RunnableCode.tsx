@@ -12,11 +12,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
-import { Play, Copy, Check, Loader2 } from 'lucide-react';
+import { Play, Copy, Check, Loader2, Database } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
+import { CodeMirrorEditor } from '@/components/lesson/CodeMirrorEditor';
 import { useLessonRuntime } from '@/components/lesson/LessonRuntimeContext';
-import { initSQLRuntime, executeQuery, type SQLResult, type SQLRuntime } from '@/lib/sql-engine';
-import { initPythonRuntime, runPython, type PythonResult, type PythonRuntime } from '@/lib/python-engine';
+import { useTheme } from '@/components/ThemeProvider';
+import { initSQLRuntime, executeQuery, previewSqlTables, type SQLResult, type SQLRuntime } from '@/lib/sql-engine';
+import { initPythonRuntime, runPython, previewDataFrames, type PythonResult, type PythonRuntime } from '@/lib/python-engine';
+
+interface DatasetInfo { name: string; columns: string[]; rows: string[][]; rowCount: number }
 
 const LANGUAGES = ['sql', 'javascript', 'python', 'bash', 'json', 'plaintext'];
 const MAX_VISIBLE_ROWS = 50;
@@ -114,6 +118,8 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
   dataScope: 'shared' | 'own';
 }) {
   const lessonRuntime = useLessonRuntime();
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
   // Use the lesson's shared runtime unless this block opts out ('own') or there is no
   // provider (block used outside a lesson) -- then fall back to its own runtime.
   const shared = dataScope === 'shared' ? lessonRuntime : null;
@@ -127,12 +133,32 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
   const sqlRuntimeRef = useRef<SQLRuntime | null>(null);
   const pyRuntimeRef = useRef<PythonRuntime | null>(null);
 
+  const [showData, setShowData] = useState(false);
+  const [dataState, setDataState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [datasets, setDatasets] = useState<DatasetInfo[]>([]);
+
   // Python is always runnable. SQL needs data: its own setup, or (shared) the lesson's.
   const canRun = isPython || (isSql && (shared ? shared.hasSharedSql : setupSql.trim().length > 0));
+  // Whether there is any data to preview (drives the "Data" toggle).
+  const hasData = isPython
+    ? (shared ? shared.hasSharedPython : setupPython.trim().length > 0)
+    : (shared ? shared.hasSharedSql : setupSql.trim().length > 0);
 
   // Tear down only this block's OWN DuckDB runtime; the shared one is owned by the
   // provider. (Pyodide is a process singleton, no teardown.)
   useEffect(() => () => { sqlRuntimeRef.current?.close().catch(() => {}); }, []);
+
+  // Resolve the runtime to use: the lesson's shared one, or this block's own (lazy).
+  const resolveSql = useCallback(async (): Promise<SQLRuntime> => {
+    if (shared) return shared.getSql();
+    if (!sqlRuntimeRef.current) sqlRuntimeRef.current = await initSQLRuntime(setupSql.trim() ? [{ tableName: 'setup', seedSql: setupSql }] : []);
+    return sqlRuntimeRef.current;
+  }, [shared, setupSql]);
+  const resolvePython = useCallback(async (): Promise<PythonRuntime> => {
+    if (shared) return shared.getPython();
+    if (!pyRuntimeRef.current) pyRuntimeRef.current = await initPythonRuntime(setupPython.trim() || undefined);
+    return pyRuntimeRef.current;
+  }, [shared, setupPython]);
 
   const copy = useCallback(() => {
     navigator.clipboard?.writeText(code).then(
@@ -148,39 +174,29 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
     setPyResult(null);
     try {
       if (isSql) {
-        let rt: SQLRuntime;
-        if (shared) {
-          rt = await shared.getSql();
-        } else {
-          if (!sqlRuntimeRef.current) {
-            sqlRuntimeRef.current = await initSQLRuntime(setupSql.trim() ? [{ tableName: 'setup', seedSql: setupSql }] : []);
-          }
-          rt = sqlRuntimeRef.current;
-        }
-        setResult(await executeQuery(rt.conn, code));
+        setResult(await executeQuery((await resolveSql()).conn, code));
       } else if (isPython) {
-        let rt: PythonRuntime;
-        if (shared) {
-          rt = await shared.getPython();
-        } else {
-          if (!pyRuntimeRef.current) {
-            pyRuntimeRef.current = await initPythonRuntime(setupPython.trim() || undefined);
-          }
-          rt = pyRuntimeRef.current;
-        }
-        const out = await runPython(rt, code);
-        if (out.error) {
-          setError(out.error);
-        } else {
-          setPyResult(out);
-        }
+        const out = await runPython(await resolvePython(), code);
+        if (out.error) setError(out.error); else setPyResult(out);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Run failed');
     } finally {
       setRunning(false);
     }
-  }, [code, setupSql, setupPython, isSql, isPython, shared]);
+  }, [code, isSql, isPython, resolveSql, resolvePython]);
+
+  const toggleData = useCallback(async () => {
+    if (showData) { setShowData(false); return; }
+    setShowData(true);
+    if (dataState === 'idle' || dataState === 'error') {
+      setDataState('loading');
+      try {
+        setDatasets(isSql ? await previewSqlTables(await resolveSql()) : await previewDataFrames(await resolvePython()));
+        setDataState('done');
+      } catch { setDataState('error'); }
+    }
+  }, [showData, dataState, isSql, resolveSql, resolvePython]);
 
   return (
     <NodeViewWrapper className="lesson-code" contentEditable={false}>
@@ -193,6 +209,11 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
               {running ? 'Running' : 'Run'}
             </button>
           )}
+          {hasData && (
+            <button type="button" className="lesson-code__btn" data-active={showData ? 'true' : 'false'} onClick={toggleData}>
+              <Database width={13} height={13} /> Data
+            </button>
+          )}
           <button type="button" className="lesson-code__btn" onClick={copy}>
             {copied ? <Check width={13} height={13} /> : <Copy width={13} height={13} />}
             {copied ? 'Copied' : 'Copy'}
@@ -200,12 +221,41 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
         </div>
       </div>
 
+      {showData && (
+        <div className="lesson-code__data">
+          {dataState === 'loading' && <p className="lesson-code__result-note">Loading data...</p>}
+          {dataState === 'error' && <p className="lesson-code__result-note">Could not load the data preview.</p>}
+          {dataState === 'done' && datasets.length === 0 && (
+            <p className="lesson-code__result-note">No {isSql ? 'tables' : 'dataframes'} available yet.</p>
+          )}
+          {dataState === 'done' && datasets.map((ds) => (
+            <div className="lesson-code__data-item" key={ds.name}>
+              <div className="lesson-code__data-head">
+                <Database width={12} height={12} />
+                <strong>{ds.name}</strong>
+                <span>{ds.rowCount.toLocaleString()} row{ds.rowCount === 1 ? '' : 's'}, {ds.columns.length} col{ds.columns.length === 1 ? '' : 's'}</span>
+              </div>
+              <div className="lesson-code__result">
+                <div className="lesson-code__result-scroll">
+                  <table>
+                    <thead><tr>{ds.columns.map((c, i) => <th key={i}>{c}</th>)}</tr></thead>
+                    <tbody>{ds.rows.map((r, ri) => <tr key={ri}>{r.map((cell, ci) => <td key={ci}>{cell}</td>)}</tr>)}</tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {canRun ? (
-        <textarea
-          className="lesson-code__editor lesson-code__editor--run"
+        <CodeMirrorEditor
           value={code}
-          spellCheck={false}
-          onChange={(e) => setCode(e.target.value)}
+          language={language}
+          dark={dark}
+          onChange={setCode}
+          onRun={run}
+          placeholder={isSql ? 'SELECT ...' : isPython ? 'print("Hello, world!")' : ''}
         />
       ) : (
         <pre className="lesson-code__pre"><code>{code}</code></pre>

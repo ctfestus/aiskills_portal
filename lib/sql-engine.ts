@@ -582,3 +582,32 @@ export function checkRequiredSqlPatterns(sqlText: string, patterns?: string[]): 
     message: missing.length ? `Missing required SQL: ${missing.join(', ')}` : 'All required SQL patterns are present.',
   };
 }
+
+export interface DatasetTablePreview {
+  name: string;
+  columns: string[];
+  rows: string[][];
+  rowCount: number;
+}
+
+/**
+ * A compact preview of the tables in a SQL runtime: column list + a few sample rows per
+ * table. Powers the runnable-code "Available data" panel. Uses the runtime's discovered
+ * table metadata and trusted SELECT ... LIMIT queries (read-only).
+ */
+export async function previewSqlTables(runtime: SQLRuntime, opts: { maxTables?: number; sampleRows?: number } = {}): Promise<DatasetTablePreview[]> {
+  const maxTables = opts.maxTables ?? 8;
+  const sampleRows = opts.sampleRows ?? 3;
+  const out: DatasetTablePreview[] = [];
+  for (const table of runtime.tables.slice(0, maxTables)) {
+    let columns = table.columns.map(c => c.name);
+    let rows: string[][] = [];
+    try {
+      const res = await executeQuery(runtime.conn, `SELECT * FROM ${quoteIdent(table.tableName)} LIMIT ${sampleRows}`, true);
+      if (res.columns.length) columns = res.columns;
+      rows = res.rows.map(r => r.map(cell => (cell == null ? 'NULL' : String(cell))));
+    } catch { /* fall back to column metadata with no sample rows */ }
+    out.push({ name: table.tableName, columns, rows, rowCount: table.rowCount });
+  }
+  return out;
+}
