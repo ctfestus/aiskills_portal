@@ -91,7 +91,7 @@ export function CodeMirrorEditor({ value, language, dark, readOnly = false, onCh
           ...(placeholder ? [cmPlaceholder(placeholder)] : []),
           syntaxHighlighting(dark ? darkHighlight : lightHighlight),
           EditorView.theme({
-            '&': { fontSize: '13px', background: dark ? '#0f1120' : '#f6f8fa', color: dark ? '#c9d1d9' : '#1f2328' },
+            '&': { fontSize: '13px', lineHeight: '1.5', background: dark ? '#0f1120' : '#f6f8fa', color: dark ? '#c9d1d9' : '#1f2328' },
             '&.cm-focused': { outline: 'none' },
             // Pin the same line-height on the content + line so the caret height matches
             // the rendered line (otherwise it inherits .lesson-content's 1.6 and looks taller).
