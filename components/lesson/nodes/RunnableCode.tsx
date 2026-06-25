@@ -9,10 +9,11 @@
 // depends on an ambient runtime, so it works the same in courses, VE, and assignment
 // players. SQL queries run read-only (validated); Python runs unrestricted.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
-import { Play, Copy, Check, Loader2, Database } from 'lucide-react';
+import { Play, Copy, Check, Loader2, Database, X } from 'lucide-react';
 import { NodeTextInput } from '@/components/lesson/nodes/NodeTextInput';
 import { CodeMirrorEditor } from '@/components/lesson/CodeMirrorEditor';
 import { useLessonRuntime } from '@/components/lesson/LessonRuntimeContext';
@@ -132,10 +133,13 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
   const [error, setError] = useState<string | null>(null);
   const sqlRuntimeRef = useRef<SQLRuntime | null>(null);
   const pyRuntimeRef = useRef<PythonRuntime | null>(null);
+  const dataBtnRef = useRef<HTMLButtonElement | null>(null);
 
   const [showData, setShowData] = useState(false);
   const [dataState, setDataState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [datasets, setDatasets] = useState<DatasetInfo[]>([]);
+  const [dataTotal, setDataTotal] = useState(0);
+  const [dataPos, setDataPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   // Python is always runnable. SQL needs data: its own setup, or (shared) the lesson's.
   const canRun = isPython || (isSql && (shared ? shared.hasSharedSql : setupSql.trim().length > 0));
@@ -188,11 +192,24 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
 
   const toggleData = useCallback(async () => {
     if (showData) { setShowData(false); return; }
+    const r = dataBtnRef.current?.getBoundingClientRect();
+    if (r) {
+      const width = Math.min(520, window.innerWidth - 24);
+      setDataPos({ top: r.bottom + 6, left: Math.max(12, Math.min(r.right - width, window.innerWidth - width - 12)), width });
+    }
     setShowData(true);
     if (dataState === 'idle' || dataState === 'error') {
       setDataState('loading');
       try {
-        setDatasets(isSql ? await previewSqlTables(await resolveSql()) : await previewDataFrames(await resolvePython()));
+        if (isSql) {
+          const rt = await resolveSql();
+          setDatasets(await previewSqlTables(rt, { maxTables: 12 }));
+          setDataTotal(rt.tables.length);
+        } else {
+          const ds = await previewDataFrames(await resolvePython());
+          setDatasets(ds);
+          setDataTotal(ds.length);
+        }
         setDataState('done');
       } catch { setDataState('error'); }
     }
@@ -210,7 +227,7 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
             </button>
           )}
           {hasData && (
-            <button type="button" className="lesson-code__btn" data-active={showData ? 'true' : 'false'} onClick={toggleData}>
+            <button ref={dataBtnRef} type="button" className="lesson-code__btn" data-active={showData ? 'true' : 'false'} onClick={toggleData}>
               <Database width={13} height={13} /> Data
             </button>
           )}
@@ -222,30 +239,16 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
       </div>
 
       {showData && (
-        <div className="lesson-code__data">
-          {dataState === 'loading' && <p className="lesson-code__result-note">Loading data...</p>}
-          {dataState === 'error' && <p className="lesson-code__result-note">Could not load the data preview.</p>}
-          {dataState === 'done' && datasets.length === 0 && (
-            <p className="lesson-code__result-note">No {isSql ? 'tables' : 'dataframes'} available yet.</p>
-          )}
-          {dataState === 'done' && datasets.map((ds) => (
-            <div className="lesson-code__data-item" key={ds.name}>
-              <div className="lesson-code__data-head">
-                <Database width={12} height={12} />
-                <strong>{ds.name}</strong>
-                <span>{ds.rowCount.toLocaleString()} row{ds.rowCount === 1 ? '' : 's'}, {ds.columns.length} col{ds.columns.length === 1 ? '' : 's'}</span>
-              </div>
-              <div className="lesson-code__result">
-                <div className="lesson-code__result-scroll">
-                  <table>
-                    <thead><tr>{ds.columns.map((c, i) => <th key={i}>{c}</th>)}</tr></thead>
-                    <tbody>{ds.rows.map((r, ri) => <tr key={ri}>{r.map((cell, ci) => <td key={ci}>{cell}</td>)}</tr>)}</tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <DatasetPopover
+          datasets={datasets}
+          state={dataState}
+          total={dataTotal}
+          isSql={isSql}
+          dark={dark}
+          pos={dataPos}
+          anchorRef={dataBtnRef}
+          onClose={() => setShowData(false)}
+        />
       )}
 
       {canRun ? (
@@ -265,6 +268,91 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
       {result && <ResultTable result={result} />}
       {pyResult && <PythonOutput result={pyResult} />}
     </NodeViewWrapper>
+  );
+}
+
+// The "Available data" preview, portaled to <body> so it floats over the lesson instead
+// of pushing content down, and is never clipped by the lesson card's overflow. Anchored
+// under the Data button; one tab per table/DataFrame; closes on outside-click/Escape/scroll.
+function DatasetPopover({ datasets, state, total, isSql, dark, pos, anchorRef, onClose }: {
+  datasets: DatasetInfo[];
+  state: 'idle' | 'loading' | 'done' | 'error';
+  total: number;
+  isSql: boolean;
+  dark: boolean;
+  pos: { top: number; left: number; width: number } | null;
+  anchorRef: RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as globalThis.Node;
+      if (panelRef.current?.contains(t) || anchorRef.current?.contains(t)) return;
+      onClose();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onScroll = () => onClose();
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [anchorRef, onClose]);
+
+  if (!pos || typeof document === 'undefined') return null;
+  const ds = datasets[Math.min(active, Math.max(0, datasets.length - 1))];
+
+  return createPortal(
+    <div
+      ref={panelRef}
+      className={`lesson-content lesson-data-pop ${dark ? 'dark' : ''}`}
+      style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width }}
+    >
+      <div className="lesson-data-pop__head">
+        <span>Available data</span>
+        <button type="button" onClick={onClose} aria-label="Close data preview"><X width={14} height={14} /></button>
+      </div>
+      {state === 'loading' && <p className="lesson-data-pop__note">Loading data...</p>}
+      {state === 'error' && <p className="lesson-data-pop__note">Could not load the data preview.</p>}
+      {state === 'done' && datasets.length === 0 && (
+        <p className="lesson-data-pop__note">No {isSql ? 'tables' : 'dataframes'} available yet.</p>
+      )}
+      {state === 'done' && datasets.length > 0 && ds && (
+        <>
+          {datasets.length > 1 && (
+            <div className="lesson-data-pop__tabs">
+              {datasets.map((d, i) => (
+                <button key={d.name} type="button" data-active={i === active ? 'true' : 'false'} onClick={() => setActive(i)}>{d.name}</button>
+              ))}
+            </div>
+          )}
+          <div className="lesson-data-pop__meta">
+            <strong>{ds.name}</strong>
+            <span>{ds.rowCount.toLocaleString()} row{ds.rowCount === 1 ? '' : 's'}, {ds.columns.length} col{ds.columns.length === 1 ? '' : 's'}</span>
+          </div>
+          <div className="lesson-code__result">
+            <div className="lesson-code__result-scroll">
+              <table>
+                <thead><tr>{ds.columns.map((c, i) => <th key={i}>{c}</th>)}</tr></thead>
+                <tbody>{ds.rows.map((r, ri) => <tr key={ri}>{r.map((cell, ci) => <td key={ci}>{cell}</td>)}</tr>)}</tbody>
+              </table>
+            </div>
+          </div>
+          {total > datasets.length && (
+            <p className="lesson-data-pop__note">Showing {datasets.length} of {total} tables.</p>
+          )}
+        </>
+      )}
+    </div>,
+    document.body,
   );
 }
 

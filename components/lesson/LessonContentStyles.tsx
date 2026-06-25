@@ -273,16 +273,25 @@ export function LessonContentStyles() {
 .lesson-content .lesson-code__btn:disabled { opacity: 0.6; cursor: default; }
 .lesson-content .lesson-code__btn[data-active="true"] { background: rgba(16,185,129,0.14); color: #047857; }
 .lesson-content.dark .lesson-code__btn[data-active="true"] { background: rgba(16,185,129,0.2); color: #6ee7b7; }
-/* Dataset preview ("Available data") panel */
-.lesson-content .lesson-code__data { border-top: 1px solid #e4e4e7; background: #eef1f5; padding: 10px 12px; display: flex; flex-direction: column; gap: 12px; }
-.lesson-content.dark .lesson-code__data { border-top-color: rgba(255,255,255,0.08); background: #14172a; }
-.lesson-content .lesson-code__data-head { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #57606a; margin-bottom: 5px; }
-.lesson-content.dark .lesson-code__data-head { color: #8b93a7; }
-.lesson-content .lesson-code__data-head strong { font-family: "JetBrains Mono",ui-monospace,monospace; font-size: 12px; color: #1f2328; }
-.lesson-content.dark .lesson-code__data-head strong { color: #c9d1d9; }
-.lesson-content .lesson-code__data-head span { margin-left: auto; opacity: 0.75; }
-.lesson-content .lesson-code__data .lesson-code__result { border: 1px solid #e4e4e7; border-radius: 6px; overflow: hidden; }
-.lesson-content.dark .lesson-code__data .lesson-code__result { border-color: #2e2e33; }
+/* Dataset preview popover ("Available data") -- portaled to <body>, so it floats over
+   the lesson and is never clipped. Carries the lesson-content class so the scoped result
+   table styles (incl. the perimeter-border fix) apply inside it. */
+.lesson-data-pop { z-index: 1000; max-height: 62vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 11px; border-radius: 12px; background: #ffffff; border: 1px solid #e4e4e7; box-shadow: 0 12px 32px rgba(0,0,0,0.18); font-size: 13px; color: #3f3f46; }
+.lesson-data-pop.dark { background: #1c1c20; border-color: #2e2e33; color: #d4d4d8; box-shadow: 0 12px 32px rgba(0,0,0,0.5); }
+.lesson-data-pop__head { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #71717a; }
+.lesson-data-pop__head button { display: inline-flex; padding: 2px; border: none; background: transparent; color: #a1a1aa; cursor: pointer; border-radius: 5px; }
+.lesson-data-pop__head button:hover { background: rgba(0,0,0,0.06); color: #52525b; }
+.lesson-data-pop.dark .lesson-data-pop__head button:hover { background: rgba(255,255,255,0.08); color: #d4d4d8; }
+.lesson-data-pop__tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.lesson-data-pop__tabs button { font: inherit; font-family: "JetBrains Mono",ui-monospace,monospace; font-size: 11.5px; font-weight: 600; padding: 3px 9px; border: none; border-radius: 999px; background: rgba(0,0,0,0.05); color: #52525b; cursor: pointer; }
+.lesson-data-pop.dark .lesson-data-pop__tabs button { background: rgba(255,255,255,0.08); color: #a1a1aa; }
+.lesson-data-pop__tabs button[data-active="true"] { background: #10b981; color: #fff; }
+.lesson-data-pop__meta { display: flex; align-items: baseline; gap: 8px; font-size: 11px; color: #71717a; }
+.lesson-data-pop__meta strong { font-family: "JetBrains Mono",ui-monospace,monospace; font-size: 12px; color: #18181b; }
+.lesson-data-pop.dark .lesson-data-pop__meta strong { color: #fafafa; }
+.lesson-data-pop__note { font-size: 12px; color: #71717a; margin: 2px 0; }
+.lesson-data-pop .lesson-code__result { border: 1px solid #e4e4e7; border-radius: 6px; overflow: hidden; }
+.lesson-data-pop.dark .lesson-code__result { border-color: #2e2e33; }
 .lesson-content .lesson-code__spin { animation: lesson-code-spin 0.8s linear infinite; }
 @keyframes lesson-code-spin { to { transform: rotate(360deg); } }
 .lesson-content .lesson-code__editor { display: block; width: 100%; box-sizing: border-box; font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 13px; line-height: 1.5; color: #1f2328; background: #f6f8fa; border: none; outline: none; padding: 12px 14px; resize: vertical; min-height: 64px; }
