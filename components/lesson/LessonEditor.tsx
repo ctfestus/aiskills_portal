@@ -196,7 +196,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         className={`lesson-content ${dark ? 'dark' : ''} px-3 py-2.5 min-h-[140px] max-h-[460px] overflow-y-auto`}
         style={primaryColor ? ({ '--lesson-accent-base': primaryColor } as React.CSSProperties) : undefined}
       >
-        <LessonRuntimeProvider setupSql={sharedSetupSql} setupPython={sharedSetupPython}>
+        <LessonRuntimeProvider setupSql={sharedSetupSql} setupPython={sharedSetupPython} dark={dark}>
           <EditorContent editor={editor} />
         </LessonRuntimeProvider>
       </div>

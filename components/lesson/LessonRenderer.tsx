@@ -48,7 +48,7 @@ export function LessonRenderer({ doc, isDark = false, className = '' }: LessonRe
       style={primaryColor ? ({ '--lesson-accent-base': primaryColor } as React.CSSProperties) : undefined}
     >
       <LessonContentStyles />
-      <LessonRuntimeProvider setupSql={setupSql} setupPython={setupPython}>
+      <LessonRuntimeProvider setupSql={setupSql} setupPython={setupPython} dark={isDark}>
         <EditorContent editor={editor} />
       </LessonRuntimeProvider>
       <GlossaryTooltip />

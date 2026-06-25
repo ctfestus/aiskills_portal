@@ -17,6 +17,10 @@ import { initPythonRuntime, type PythonRuntime } from '@/lib/python-engine';
 interface LessonRuntime {
   hasSharedSql: boolean;
   hasSharedPython: boolean;
+  // The lesson's own dark state (the player surface sets it; may differ from the app
+  // theme), so JS-themed bits like the CodeMirror editor and the portaled data popover
+  // match the lesson instead of useTheme().
+  dark: boolean;
   getSql: () => Promise<SQLRuntime>;
   getPython: () => Promise<PythonRuntime>;
 }
@@ -25,9 +29,10 @@ const LessonRuntimeContext = createContext<LessonRuntime | null>(null);
 
 export const useLessonRuntime = () => useContext(LessonRuntimeContext);
 
-export function LessonRuntimeProvider({ setupSql, setupPython, children }: {
+export function LessonRuntimeProvider({ setupSql, setupPython, dark, children }: {
   setupSql: string;
   setupPython: string;
+  dark: boolean;
   children: ReactNode;
 }) {
   // Promises are cached so concurrent Run clicks across blocks share one init.
@@ -54,9 +59,10 @@ export function LessonRuntimeProvider({ setupSql, setupPython, children }: {
   const value = useMemo<LessonRuntime>(() => ({
     hasSharedSql: setupSql.trim().length > 0,
     hasSharedPython: setupPython.trim().length > 0,
+    dark,
     getSql,
     getPython,
-  }), [setupSql, setupPython, getSql, getPython]);
+  }), [setupSql, setupPython, dark, getSql, getPython]);
 
   return <LessonRuntimeContext.Provider value={value}>{children}</LessonRuntimeContext.Provider>;
 }

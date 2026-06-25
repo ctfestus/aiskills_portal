@@ -120,7 +120,9 @@ function RunnableCodePlayer({ language, initialCode, setupSql, setupPython, isSq
 }) {
   const lessonRuntime = useLessonRuntime();
   const { theme } = useTheme();
-  const dark = theme === 'dark';
+  // Prefer the lesson's own dark state (set by the player surface) so the editor and the
+  // portaled data popover match the lesson, not the app theme; fall back to the app theme.
+  const dark = lessonRuntime?.dark ?? theme === 'dark';
   // Use the lesson's shared runtime unless this block opts out ('own') or there is no
   // provider (block used outside a lesson) -- then fall back to its own runtime.
   const shared = dataScope === 'shared' ? lessonRuntime : null;
