@@ -326,7 +326,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
 
           <div className="mb-5">
             <label className="block text-xs font-semibold mb-1.5" style={{ color: C.faint }}>Feedback to student</label>
-            <RichTextEditor value={feedback} onChange={setFeedback} placeholder="Write feedback for the student…" bgOverride={C.input} fontFamily="var(--font-mono)"/>
+            <RichTextEditor value={feedback} onChange={setFeedback} placeholder="Write feedback for the student…" bgOverride={C.input} fontFamily="var(--font-mono)" enableAiAssist/>
           </div>
 
           {gradeError && <p className="text-xs mb-3" style={{ color: '#ef4444' }}>{gradeError}</p>}

@@ -245,7 +245,7 @@ export default function CreateAnnouncementPage() {
 
               <div style={{ marginBottom: 16 }}>
                 <label style={labelStyle(C)}>Content <span style={{ color: C.errorText }}>*</span></label>
-                <RichTextEditor value={content} onChange={setContent} placeholder="Write your announcement here…" />
+                <RichTextEditor value={content} onChange={setContent} placeholder="Write your announcement here…" enableAiAssist />
               </div>
 
               <div style={{ marginBottom: 16 }}>

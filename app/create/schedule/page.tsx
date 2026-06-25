@@ -326,7 +326,7 @@ export default function CreateSchedulePage() {
 
               <div style={{ marginBottom: 16 }}>
                 <label style={labelStyle(C)}>Description</label>
-                <RichTextEditor value={description} onChange={setDescription} placeholder="Briefly describe what this schedule covers…" />
+                <RichTextEditor value={description} onChange={setDescription} placeholder="Briefly describe what this schedule covers…" enableAiAssist />
               </div>
 
               <div style={{ marginBottom: 16 }}>

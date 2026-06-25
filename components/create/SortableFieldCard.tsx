@@ -91,6 +91,7 @@ export function SortableFieldCard({ f, isExpanded, toggleExpand, onRemove, onUpd
                     value={f.description ?? ''}
                     onChange={html => onUpdate({ description: html })}
                     placeholder="Write your description here..."
+                    enableAiAssist
                   />
                 </div>
               ) : (
@@ -101,6 +102,7 @@ export function SortableFieldCard({ f, isExpanded, toggleExpand, onRemove, onUpd
                       value={f.description ?? ''}
                       onChange={html => onUpdate({ description: html || undefined })}
                       placeholder="Add helper text below the label..."
+                      enableAiAssist
                     />
                   </div>
                   <div className="flex items-center justify-between pt-1">
