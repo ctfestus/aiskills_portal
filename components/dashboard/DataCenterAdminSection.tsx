@@ -609,6 +609,7 @@ export function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                     onChange={html => updateAnalystSection(sectionId, { brief: html })}
                     placeholder="Briefly describe what this phase asks the learner to investigate."
                     bgOverride={C.card}
+                    enableAiAssist
                   />
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 150px', gap: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.card, borderRadius: 10, padding: '0 12px', border: `1px solid ${C.cardBorder}` }}>

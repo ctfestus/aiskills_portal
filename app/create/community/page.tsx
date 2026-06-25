@@ -166,7 +166,7 @@ export default function CreateCommunityPage() {
 
               <div>
                 <label style={labelStyle(C)}>Description</label>
-                <RichTextEditor value={description} onChange={setDescription} placeholder="What is this community about?" />
+                <RichTextEditor value={description} onChange={setDescription} placeholder="What is this community about?" enableAiAssist />
               </div>
             </div>
 

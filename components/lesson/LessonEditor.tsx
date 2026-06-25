@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { StyleMenu, MenuRow, Segmented, ColorField } from '@/components/lesson/nodes/StyleControls';
+import { LessonAiMenu } from '@/components/lesson/LessonAiMenu';
 import { lessonExtensions } from '@/components/lesson/extensions';
 import { LessonContentStyles } from '@/components/lesson/LessonContentStyles';
 import { GlossaryTooltip } from '@/components/lesson/GlossaryTooltip';
@@ -200,6 +201,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
           <EditorContent editor={editor} />
         </LessonRuntimeProvider>
       </div>
+      <LessonAiMenu editor={editor} dark={dark} />
       <GlossaryTooltip />
       {showLibrary && (
         <ImageLibrary

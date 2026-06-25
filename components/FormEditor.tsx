@@ -441,6 +441,7 @@ function SortableFieldCard({ f, isExpanded, toggleExpand, onRemove, onUpdate, in
                     value={f.description ?? ''}
                     onChange={html => onUpdate({ description: html })}
                     placeholder="Write your description here..."
+                    enableAiAssist
                   />
                 </div>
               ) : (
@@ -451,6 +452,7 @@ function SortableFieldCard({ f, isExpanded, toggleExpand, onRemove, onUpdate, in
                       value={f.description ?? ''}
                       onChange={html => onUpdate({ description: html || undefined })}
                       placeholder="Add helper text below the label..."
+                      enableAiAssist
                     />
                   </div>
                   <div className="flex items-center justify-between pt-1">
@@ -1582,7 +1584,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     </button>
                   )}
                 </div>
-                <RichTextEditor value={formConfig.description} onChange={html => updateConfig({ description: html })} />
+                <RichTextEditor value={formConfig.description} onChange={html => updateConfig({ description: html })} enableAiAssist />
                 {formConfig.isCourse && (
                   <p className="mt-1.5 text-[11px]" style={{ color: FE.faint }}>
                     Recommended: keep your description under 250 characters for best display on your profile page.
@@ -2542,6 +2544,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               value={q.downloadsDescription || ''}
                               onChange={html => updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, downloadsDescription: html } : qq) })}
                               placeholder="Describe what students will find here..."
+                              enableAiAssist
                             />
                             {dlItems.length > 0 && (
                               <div className="space-y-2 pt-1">
@@ -2574,6 +2577,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                       value={item.description || ''}
                                       onChange={html => updateItems(dlItems.map(it => it.id === item.id ? { ...it, description: html } : it))}
                                       placeholder="Short description (optional)..."
+                                      enableAiAssist
                                     />
                                     {item.type === 'file' ? (
                                       item.fileUrl ? (
@@ -3182,7 +3186,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentColor }}>Python Exercise Config</p>
                               <div>
                                 <label className={labelCls} style={labelStyle}>Student task</label>
-                                <RichTextEditor value={q.question} onChange={html => handleUpdateQuestion(q.id, { question: html })} placeholder="Ask the student to write a Python script..." />
+                                <RichTextEditor value={q.question} onChange={html => handleUpdateQuestion(q.id, { question: html })} placeholder="Ask the student to write a Python script..." enableAiAssist />
                               </div>
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2">

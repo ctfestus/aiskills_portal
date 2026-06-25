@@ -46,6 +46,7 @@ function SortableVEShell({ id, children }: {
   return <div ref={setNodeRef} style={style}>{children({ dragHandle, isDragging })}</div>;
 }
 import { LessonEditor } from '@/components/lesson/LessonEditor';
+import { AiTextarea } from '@/components/AiTextarea';
 import { lessonHtmlToDoc } from '@/components/lesson/extensions';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -1463,10 +1464,10 @@ function VirtualExperienceCreatePageInner() {
                   {/* Scenario / background */}
                   <div className="px-5 pb-4">
                     <label className="block text-[12px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.faint }}>Scenario / Background</label>
-                    <textarea
+                    <AiTextarea
                       value={(config.background || '').replace(/<\/p>\s*<p>/gi, '\n\n').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')}
-                      onChange={e => {
-                        const html = e.target.value
+                      onValueChange={text => {
+                        const html = text
                           .split(/\n\n+/)
                           .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
                           .join('');
@@ -1704,6 +1705,7 @@ function VirtualExperienceCreatePageInner() {
                                                     onChange={html => updateReq(mod.id, les.id, req.id, { description: html })}
                                                     placeholder={req.type === 'briefing' ? 'Write the email body - formatting, bullet points, and images are all supported...' : 'Describe what students should write in their debrief update...'}
                                                     onImageUpload={async (file) => uploadToCloudinary(file, 've-email-images')}
+                                                    enableAiAssist
                                                   />
                                                   {req.type === 'briefing' && (
                                                     <div className="space-y-2">
@@ -1743,6 +1745,7 @@ function VirtualExperienceCreatePageInner() {
                                                         onChange={html => updateReq(mod.id, les.id, req.id, { emailBody: html })}
                                                         placeholder="Write the email the manager sends to the student..."
                                                         onImageUpload={async (file) => uploadToCloudinary(file, 've-email-images')}
+                                                        enableAiAssist
                                                       />
                                                     </div>
                                                   )}
