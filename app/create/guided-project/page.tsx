@@ -881,8 +881,7 @@ function VirtualExperienceCreatePageInner() {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: C.page, color: C.text, fontFamily: "'Inter', sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');`}</style>
+    <div className="min-h-screen" style={{ background: C.page, color: C.text, fontFamily: "'Google Sans', 'Inter', sans-serif" }}>
       {/* Header */}
       <header className="sticky top-0 z-20 backdrop-blur-md px-4 sm:px-8 py-3 flex items-center gap-3"
         style={{ background: C.nav, borderBottom: `1px solid ${C.navBorder}` }}>

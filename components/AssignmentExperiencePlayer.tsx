@@ -973,19 +973,16 @@ export default function AssignmentExperiencePlayer({
                                 <div style={{ padding: '16px 22px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                                   <p style={{ fontSize: 12, color: faint, margin: '0 0 4px', fontWeight: 500 }}>Select your answer:</p>
                                   {(req.options || []).map((opt, oi) => {
-                                    const letter = String.fromCharCode(65 + oi);
+                                    const letter = oi + 1;
                                     const isSelected = selected === opt;
                                     const isThisWrong = isSelected && isWrong;
-                                    const borderCol = isThisWrong ? 'rgba(239,68,68,0.5)' : isSelected ? accent + '80' : border;
-                                    const bgCol = isThisWrong ? 'rgba(239,68,68,0.06)' : isSelected ? `${accent}08` : 'transparent';
-                                    const dotBg = isThisWrong ? 'rgba(239,68,68,0.15)' : isSelected ? accent : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)');
-                                    const dotColor = isThisWrong ? '#ef4444' : isSelected ? '#fff' : muted;
+                                    const bgCol = isThisWrong ? 'rgba(239,68,68,0.06)' : isSelected ? `${accent}08` : (isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)');
                                     return (
                                       <button key={oi}
                                         onClick={() => { if (readOnly || isDone) return; const c = opt === req.correctAnswer; updateProgress(req.id, { selectedAnswer: opt, completed: c }); }}
-                                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `1.5px solid ${borderCol}`, background: bgCol, textAlign: 'left', cursor: 'pointer', fontSize: 14, color: text, transition: 'all 0.15s', width: '100%' }}>
-                                        <span style={{ width: 22, height: 22, borderRadius: '50%', background: dotBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: dotColor, flexShrink: 0 }}>{letter}</span>
-                                        {opt}
+                                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: 'none', background: bgCol, textAlign: 'left', cursor: 'pointer', fontSize: 14, color: text, transition: 'all 0.15s', width: '100%' }}>
+                                        <span style={{ flex: 1 }}>{opt}</span>
+                                        <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0, fontVariantNumeric: 'tabular-nums', color: isThisWrong ? '#ef4444' : isSelected ? accent : faint }}>{letter}</span>
                                       </button>
                                     );
                                   })}
@@ -1478,10 +1475,10 @@ export default function AssignmentExperiencePlayer({
                                   const showResult = answered;
                                   return (
                                     <button key={`${req.id}-opt-${oi}`} disabled={isDone || readOnly}
-                                      className="w-full text-left px-4 py-3 rounded-xl text-sm transition-all"
+                                      className="w-full text-left px-4 py-3 rounded-xl text-sm transition-all flex items-center gap-3"
                                       style={{
-                                        border: `1.5px solid ${showResult && isSelected ? (isCorrect ? '#10b981' : '#ef4444') : isSelected ? accent : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-                                        background: showResult && isSelected ? (isCorrect ? 'rgba(16,185,129,0.07)' : 'rgba(239,68,68,0.06)') : isSelected ? `${accent}08` : optionBg,
+                                        border: 'none',
+                                        background: showResult && isSelected ? (isCorrect ? 'rgba(16,185,129,0.07)' : 'rgba(239,68,68,0.06)') : isSelected ? `${accent}08` : (isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)'),
                                         color: showResult && isSelected ? (isCorrect ? '#10b981' : '#ef4444') : text,
                                         cursor: isDone || readOnly ? 'default' : 'pointer',
                                       }}
@@ -1490,7 +1487,10 @@ export default function AssignmentExperiencePlayer({
                                         const isC = req.correctAnswer ? normalize(opt) === normalize(req.correctAnswer) : false;
                                         updateProgress(req.id, { selectedAnswer: opt, completed: isC });
                                       }}
-                                    >{opt}</button>
+                                    >
+                                      <span className="flex-1">{opt}</span>
+                                      <span className="text-[13px] font-bold flex-shrink-0 tabular-nums" style={{ color: showResult && isSelected ? (isCorrect ? '#10b981' : '#ef4444') : isSelected ? accent : faint }}>{oi + 1}</span>
+                                    </button>
                                   );
                                 })}
                               </div>

@@ -541,7 +541,7 @@ export default function VirtualExperienceTaker({
     );
 
     return (
-      <div className="min-h-screen flex flex-col font-sans" style={{ background: isDark ? '#0e0e0e' : '#F3F4F2', color: text }}>
+      <div className="min-h-screen flex flex-col font-sans" style={{ background: isDark ? '#0e0e0e' : '#F3F4F2', color: text, fontFamily: "'Google Sans', 'Inter', sans-serif" }}>
 
         {/* Hero banner */}
         <div className="relative overflow-hidden flex-shrink-0" style={{ minHeight: 300 }}>
@@ -1440,13 +1440,10 @@ export default function VirtualExperienceTaker({
                               <div style={{ padding: '16px 22px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 <p style={{ fontSize: 12, color: isDark ? '#888' : '#999', margin: '0 0 4px', fontWeight: 500 }}>Select your answer:</p>
                                 {(req.options || []).map((opt, oi) => {
-                                  const letter = String.fromCharCode(65 + oi);
+                                  const letter = oi + 1;
                                   const isSelected = selectedAnswer === opt;
                                   const isThisWrong = isSelected && isWrong;
-                                  const borderCol = isThisWrong ? 'rgba(239,68,68,0.5)' : isSelected ? accentColor + '80' : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)');
-                                  const bgCol = isThisWrong ? 'rgba(239,68,68,0.06)' : isSelected ? `${accentColor}08` : 'transparent';
-                                  const dotBg = isThisWrong ? 'rgba(239,68,68,0.15)' : isSelected ? accentColor : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)');
-                                  const dotColor = isThisWrong ? '#ef4444' : isSelected ? '#fff' : (isDark ? '#aaa' : '#555');
+                                  const bgCol = isThisWrong ? 'rgba(239,68,68,0.06)' : isSelected ? `${accentColor}08` : (isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)');
                                   return (
                                     <button key={oi}
                                       onClick={() => {
@@ -1458,9 +1455,9 @@ export default function VirtualExperienceTaker({
                                           return next;
                                         });
                                       }}
-                                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: `1.5px solid ${borderCol}`, background: bgCol, textAlign: 'left', cursor: 'pointer', fontSize: 14, color: isDark ? '#e0e0e0' : '#1f1f1f', transition: 'all 0.15s', width: '100%' }}>
-                                      <span style={{ width: 22, height: 22, borderRadius: '50%', background: dotBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: dotColor, flexShrink: 0 }}>{letter}</span>
-                                      {opt}
+                                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: 'none', background: bgCol, textAlign: 'left', cursor: 'pointer', fontSize: 14, color: isDark ? '#e0e0e0' : '#1f1f1f', transition: 'all 0.15s', width: '100%' }}>
+                                      <span style={{ flex: 1 }}>{opt}</span>
+                                      <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0, fontVariantNumeric: 'tabular-nums', color: isThisWrong ? '#ef4444' : isSelected ? accentColor : (isDark ? '#888' : '#999') }}>{letter}</span>
                                     </button>
                                   );
                                 })}
@@ -1962,7 +1959,7 @@ export default function VirtualExperienceTaker({
                             {/* Options */}
                             <div className="space-y-1.5">
                               {(req.options || []).map((opt, oi) => {
-                                const letter      = String.fromCharCode(65 + oi);
+                                const letter      = oi + 1;
                                 const isSelected  = selectedAnswer === opt;
                                 const isCorrect   = opt === req.correctAnswer;
                                 const showCorrect = done && isCorrect;
@@ -1988,26 +1985,14 @@ export default function VirtualExperienceTaker({
                                           ? 'rgba(239,68,68,0.07)'
                                           : isSelected
                                             ? `${accentColor}08`
-                                            : isDark ? 'rgba(255,255,255,0.04)' : '#F8F8F8',
-                                      border: `1.5px solid ${showCorrect
-                                        ? accentColor
-                                        : showWrong
-                                          ? '#ef4444'
-                                          : isSelected
-                                            ? `${accentColor}50`
-                                            : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'}`,
+                                            : isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
+                                      border: 'none',
                                       color: showCorrect ? accentColor : showWrong ? '#ef4444' : isDark ? '#e0e0e0' : '#222',
                                     }}>
-                                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
-                                      style={{
-                                        background: showCorrect ? accentColor : showWrong ? '#ef4444' : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)',
-                                        color: (showCorrect || showWrong) ? 'white' : isDark ? '#aaa' : '#555',
-                                      }}>
-                                      {letter}
-                                    </span>
                                     <span className="flex-1 text-[14.5px]">{opt}</span>
                                     {showCorrect && <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentColor }} />}
                                     {showWrong && <span className="text-[12.5px] flex-shrink-0" style={{ color: '#ef4444' }}>Try again</span>}
+                                    <span className="text-[13px] font-bold flex-shrink-0 tabular-nums" style={{ color: showCorrect ? accentColor : showWrong ? '#ef4444' : isSelected ? accentColor : (isDark ? '#888' : '#999') }}>{letter}</span>
                                   </button>
                                 );
                               })}

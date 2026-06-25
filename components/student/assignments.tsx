@@ -926,7 +926,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
 
       {/* VE player */}
       {!loadingSub && isVeType && (
-        <div className="mb-4">
+        <div className="mb-4" style={{ fontFamily: "'Google Sans', 'Inter', sans-serif" }}>
           {isGraded && (
             <div className="rounded-2xl p-5 mb-4" style={{ background: C.card }}>
               <div className="flex items-center gap-3">
