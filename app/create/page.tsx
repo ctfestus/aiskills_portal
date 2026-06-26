@@ -27,6 +27,7 @@ import { SortableFieldCard } from '@/components/create/SortableFieldCard';
 import { FormPreview } from '@/components/create/FormPreview';
 import GeneratingOverlay from '@/components/GeneratingOverlay';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { AiTextarea } from '@/components/AiTextarea';
 import { LessonEditor } from '@/components/lesson/LessonEditor';
 import { lessonHtmlToDoc } from '@/components/lesson/extensions';
 import { QuestionTypePicker, TYPE_LABELS } from '@/components/create/QuestionTypePicker';
@@ -1655,7 +1656,7 @@ const [isSaving, setIsSaving] = useState(false);
                 </div>
                 <div>
                   <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Specific Focus <span style={{ color: C.faint }}>(optional)</span></label>
-                  <textarea value={sqlBrief.promptText} onChange={e => setSqlBrief(p => ({ ...p, promptText: e.target.value }))} placeholder="Any specific topics, datasets, or skills to focus on..." rows={3} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
+                  <AiTextarea value={sqlBrief.promptText} onValueChange={value => setSqlBrief(p => ({ ...p, promptText: value }))} placeholder="Any specific topics, datasets, or skills to focus on..." rows={3} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
                 </div>
                 <button type="button" onClick={handleGenerateSqlOutline} disabled={!!aiLoadingLabel || !sqlBrief.title.trim()} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
                   <Sparkles className="w-4 h-4" /> Generate Outline
@@ -1749,7 +1750,7 @@ const [isSaving, setIsSaving] = useState(false);
                             </button>
                           </div>
                           {sqlExpandedTables.has(tableIdx) && (
-                            <textarea value={table.seedSql} onChange={e => setSqlOutline((prev: any) => ({ ...prev, sharedDataset: { ...prev.sharedDataset, tables: prev.sharedDataset.tables.map((t: any, i: number) => i === tableIdx ? { ...t, seedSql: e.target.value } : t) } }))} rows={8} className="w-full text-[11px] font-mono px-3 py-2 resize-none border-t outline-none" style={{ background: C.input, borderColor: C.cardBorder, color: C.text }} />
+                            <AiTextarea value={table.seedSql} onValueChange={value => setSqlOutline((prev: any) => ({ ...prev, sharedDataset: { ...prev.sharedDataset, tables: prev.sharedDataset.tables.map((t: any, i: number) => i === tableIdx ? { ...t, seedSql: value } : t) } }))} rows={8} className="w-full text-[11px] font-mono px-3 py-2 resize-none border-t outline-none" style={{ background: C.input, borderColor: C.cardBorder, color: C.text }} />
                           )}
                         </div>
                       ))}
@@ -1807,7 +1808,7 @@ const [isSaving, setIsSaving] = useState(false);
                   </label>
                 )}
                 {docSourceMethod === 'text' && (
-                  <textarea value={docText} onChange={e => setDocText(e.target.value)} placeholder="Paste your documentation, product guide, or notes here..." rows={8} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
+                  <AiTextarea value={docText} onValueChange={setDocText} placeholder="Paste your documentation, product guide, or notes here..." rows={8} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
                 )}
                 {docSourceMethod === 'url' && (
                   <input type="url" value={docUrl} onChange={e => setDocUrl(e.target.value)} placeholder="https://docs.example.com/guide" className="w-full rounded-lg px-3 py-2 text-sm" style={inputStyle} />
@@ -1831,11 +1832,11 @@ const [isSaving, setIsSaving] = useState(false);
                 </div>
                 <div>
                   <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Course Goal <span style={{ color: C.faint }}>(what should learners be able to DO?)</span></label>
-                  <textarea value={docBrief.goal} onChange={e => setDocBrief(p => ({ ...p, goal: e.target.value }))} placeholder="e.g. Confidently write SQL queries to answer real business questions" rows={2} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
+                  <AiTextarea value={docBrief.goal} onValueChange={value => setDocBrief(p => ({ ...p, goal: value }))} placeholder="e.g. Confidently write SQL queries to answer real business questions" rows={2} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
                 </div>
                 <div>
                   <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Specific Focus <span style={{ color: C.faint }}>(optional)</span></label>
-                  <textarea value={docBrief.focus} onChange={e => setDocBrief(p => ({ ...p, focus: e.target.value }))} placeholder="Any sections, topics, or angles to emphasize or skip..." rows={2} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
+                  <AiTextarea value={docBrief.focus} onValueChange={value => setDocBrief(p => ({ ...p, focus: value }))} placeholder="Any sections, topics, or angles to emphasize or skip..." rows={2} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
                 </div>
                 <div>
                   <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Depth</label>
@@ -2049,7 +2050,7 @@ const [isSaving, setIsSaving] = useState(false);
                 </div>
                 <div>
                   <label className="text-xs font-medium mb-1.5 block" style={labelStyle}>Specific Focus <span style={{ color: C.faint }}>(optional)</span></label>
-                  <textarea value={pyBrief.promptText} onChange={e => setPyBrief(p => ({ ...p, promptText: e.target.value }))} placeholder="Any specific libraries, datasets, or skills to focus on..." rows={3} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
+                  <AiTextarea value={pyBrief.promptText} onValueChange={value => setPyBrief(p => ({ ...p, promptText: value }))} placeholder="Any specific libraries, datasets, or skills to focus on..." rows={3} className="w-full rounded-lg px-3 py-2 text-sm resize-none" style={inputStyle} />
                 </div>
                 <button type="button" onClick={handleGeneratePythonOutline} disabled={!!aiLoadingLabel || !pyBrief.title.trim()} className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40" style={{ background: ctaBg, color: ctaFg, border: ctaBorder }}>
                   <Sparkles className="w-4 h-4" /> Generate Outline
@@ -2405,7 +2406,7 @@ const [isSaving, setIsSaving] = useState(false);
                     </button>
                   )}
                 </div>
-                <RichTextEditor value={formConfig.description} onChange={html => updateConfig({ description: html })} />
+                <RichTextEditor value={formConfig.description} onChange={html => updateConfig({ description: html })} enableAiAssist />
               </div>
 
               {/* Learning outcomes -- course only */}
@@ -3122,9 +3123,9 @@ const [isSaving, setIsSaving] = useState(false);
                       <label className={labelCls} style={labelStyle}>
                         Custom instructions <span style={{ color: C.faint, fontWeight: 400 }}>(optional)</span>
                       </label>
-                      <textarea
+                      <AiTextarea
                         value={aiCustomPrompt}
-                        onChange={e => setAiCustomPrompt(e.target.value.slice(0, 800))}
+                        onValueChange={value => setAiCustomPrompt(value.slice(0, 800))}
                         className={`${inputCls} min-h-[60px] resize-y`}
                         style={inputStyle}
                         placeholder="e.g. Focus on real-world scenarios, use beginner-friendly language, avoid theory-heavy questions."
@@ -3270,6 +3271,7 @@ const [isSaving, setIsSaving] = useState(false);
                               value={q.downloadsDescription || ''}
                               onChange={html => updateConfig({ questions: formConfig.questions?.map(qq => qq.id === q.id ? { ...qq, downloadsDescription: html } : qq) })}
                               placeholder="Describe what students will find here..."
+                              enableAiAssist
                             />
 
                             {/* Download items */}
@@ -3315,6 +3317,7 @@ const [isSaving, setIsSaving] = useState(false);
                                       value={item.description || ''}
                                       onChange={html => updateItems(dlItems.map(it => it.id === item.id ? { ...it, description: html } : it))}
                                       placeholder="Short description (optional)..."
+                                      enableAiAssist
                                     />
 
                                     {/* File upload or URL */}
@@ -3522,9 +3525,9 @@ const [isSaving, setIsSaving] = useState(false);
                                 <option key={lang} value={lang}>{lang}</option>
                               ))}
                             </select>
-                            <textarea
+                            <AiTextarea
                               value={q.codeSnippet || ''}
-                              onChange={e => handleUpdateQuestion(q.id, { codeSnippet: e.target.value })}
+                              onValueChange={value => handleUpdateQuestion(q.id, { codeSnippet: value })}
                               className={`${inputCls} min-h-[120px] resize-y font-mono text-xs`}
                               style={inputStyle}
                               placeholder="Paste your code snippet here..."
@@ -3689,9 +3692,9 @@ const [isSaving, setIsSaving] = useState(false);
                             {/* Project prompt / brief */}
                             <div>
                               <label className={labelCls} style={labelStyle}>Project brief / prompt</label>
-                              <textarea
+                              <AiTextarea
                                 value={q.question}
-                                onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })}
+                                onValueChange={value => handleUpdateQuestion(q.id, { question: value })}
                                 className={`${inputCls} min-h-[72px] resize-y`}
                                 style={inputStyle}
                                 placeholder={qType === 'document_review' ? 'Describe the report the student must write...' : 'Describe the project the student must complete...'}
@@ -3719,9 +3722,9 @@ const [isSaving, setIsSaving] = useState(false);
                             {qType === 'code_review' && (
                               <div>
                                 <label className={labelCls} style={labelStyle}>Expected output / schema <span style={{ color: C.faint }}>(optional)</span></label>
-                                <textarea
+                                <AiTextarea
                                   value={q.schema || ''}
-                                  onChange={e => handleUpdateQuestion(q.id, { schema: e.target.value })}
+                                  onValueChange={value => handleUpdateQuestion(q.id, { schema: value })}
                                   className={`${inputCls} min-h-[60px] resize-y font-mono text-xs`}
                                   style={inputStyle}
                                   placeholder="Describe or paste the expected output..."
@@ -3735,9 +3738,9 @@ const [isSaving, setIsSaving] = useState(false);
                                 <label className={labelCls} style={labelStyle}>
                                   {qType === 'document_review' ? 'Report scope / context' : 'Dataset / context'} <span style={{ color: C.faint }}>(optional)</span>
                                 </label>
-                                <textarea
+                                <AiTextarea
                                   value={q.context || ''}
-                                  onChange={e => handleUpdateQuestion(q.id, { context: e.target.value })}
+                                  onValueChange={value => handleUpdateQuestion(q.id, { context: value })}
                                   className={`${inputCls} min-h-[60px] resize-y`}
                                   style={inputStyle}
                                   placeholder={qType === 'document_review' ? 'Describe what the report should cover, the market, industry, or company context...' : 'Describe the dataset or context the student works with...'}
@@ -3845,9 +3848,9 @@ const [isSaving, setIsSaving] = useState(false);
 
                             <div>
                               <label className={labelCls} style={labelStyle}>Student task</label>
-                              <textarea
+                              <AiTextarea
                                 value={q.question}
-                                onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })}
+                                onValueChange={value => handleUpdateQuestion(q.id, { question: value })}
                                 className={`${inputCls} min-h-[72px] resize-y`}
                                 style={inputStyle}
                                 placeholder="Ask the student to write a query..."
@@ -3921,11 +3924,11 @@ const [isSaving, setIsSaving] = useState(false);
                                   {table.seedSql?.trim() || (!table.fileUrl && !table.csvUrl && !table.fileName) ? (
                                     <div>
                                       <label className={labelCls} style={labelStyle}>CREATE TABLE / INSERT seed SQL</label>
-                                      <textarea
+                                      <AiTextarea
                                         value={table.seedSql ?? ''}
-                                        onChange={e => {
+                                        onValueChange={value => {
                                           const tables = [...(q.sqlTables ?? [])];
-                                          tables[tableIdx] = { ...table, seedSql: e.target.value, fileName: '', fileUrl: '', csvUrl: '' };
+                                          tables[tableIdx] = { ...table, seedSql: value, fileName: '', fileUrl: '', csvUrl: '' };
                                           handleUpdateQuestion(q.id, { sqlTables: tables, sqlExpectedResult: undefined });
                                         }}
                                         className={`${inputCls} min-h-[120px] resize-y font-mono text-xs`}
@@ -3940,12 +3943,12 @@ const [isSaving, setIsSaving] = useState(false);
 
                             <div>
                               <label className={labelCls} style={labelStyle}>Starter SQL</label>
-                              <textarea value={q.sqlStarterCode ?? ''} onChange={e => handleUpdateQuestion(q.id, { sqlStarterCode: e.target.value })} className={`${inputCls} min-h-[84px] resize-y font-mono text-xs`} style={inputStyle} />
+                              <AiTextarea value={q.sqlStarterCode ?? ''} onValueChange={value => handleUpdateQuestion(q.id, { sqlStarterCode: value })} className={`${inputCls} min-h-[84px] resize-y font-mono text-xs`} style={inputStyle} />
                             </div>
 
                             <div>
                               <label className={labelCls} style={labelStyle}>Solution SQL <span style={{ color: C.faint }}>(hidden from students)</span></label>
-                              <textarea value={q.sqlSolution ?? ''} onChange={e => handleUpdateQuestion(q.id, { sqlSolution: e.target.value, sqlExpectedResult: undefined })} className={`${inputCls} min-h-[96px] resize-y font-mono text-xs`} style={inputStyle} placeholder="SELECT ..." />
+                              <AiTextarea value={q.sqlSolution ?? ''} onValueChange={value => handleUpdateQuestion(q.id, { sqlSolution: value, sqlExpectedResult: undefined })} className={`${inputCls} min-h-[96px] resize-y font-mono text-xs`} style={inputStyle} placeholder="SELECT ..." />
                               <div className="flex flex-wrap items-center gap-2 mt-2">
                                 <button type="button" onClick={() => computeSqlExpectedResult(q.id)} className="px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: accentColor, color: C.ctaText }}>
                                   Compute expected result
@@ -3966,9 +3969,9 @@ const [isSaving, setIsSaving] = useState(false);
 
                             <div>
                               <label className={labelCls} style={labelStyle}>Required SQL patterns <span style={{ color: C.faint }}>(optional)</span></label>
-                              <textarea
+                              <AiTextarea
                                 value={(q.sqlRequiredPatterns ?? []).join('\n')}
-                                onChange={e => handleUpdateQuestion(q.id, { sqlRequiredPatterns: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
+                                onValueChange={value => handleUpdateQuestion(q.id, { sqlRequiredPatterns: value.split('\n').map(s => s.trim()).filter(Boolean) })}
                                 className={`${inputCls} min-h-[64px] resize-y font-mono text-xs`}
                                 style={inputStyle}
                                 placeholder={`LIMIT\nORDER BY\n/^SELECT\\s+\\*\\s+FROM\\s+employees\\s+LIMIT\\s+10\\s*;?$/i`}
@@ -3978,9 +3981,9 @@ const [isSaving, setIsSaving] = useState(false);
 
                             <div>
                               <label className={labelCls} style={labelStyle}>Hints</label>
-                              <textarea
+                              <AiTextarea
                                 value={(q.sqlHints ?? []).join('\n')}
-                                onChange={e => handleUpdateQuestion(q.id, { sqlHints: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
+                                onValueChange={value => handleUpdateQuestion(q.id, { sqlHints: value.split('\n').map(s => s.trim()).filter(Boolean) })}
                                 className={`${inputCls} min-h-[70px] resize-y`}
                                 style={inputStyle}
                                 placeholder="One hint per line"
@@ -3995,7 +3998,7 @@ const [isSaving, setIsSaving] = useState(false);
 
                             <div>
                               <label className={labelCls} style={labelStyle}>Student task</label>
-                              <RichTextEditor value={q.question} onChange={html => handleUpdateQuestion(q.id, { question: html })} placeholder="Describe what the student should write..." />
+                              <RichTextEditor value={q.question} onChange={html => handleUpdateQuestion(q.id, { question: html })} placeholder="Describe what the student should write..." enableAiAssist />
                             </div>
 
                             <div className="space-y-2">
@@ -4046,9 +4049,9 @@ const [isSaving, setIsSaving] = useState(false);
 
                             <div>
                               <label className={labelCls} style={labelStyle}>Setup code <span style={{ color: C.faint }}>(optional, runs before student code)</span></label>
-                              <textarea
+                              <AiTextarea
                                 value={q.pythonSetupCode ?? ''}
-                                onChange={e => handleUpdateQuestion(q.id, { pythonSetupCode: e.target.value, pythonExpectedOutput: '' })}
+                                onValueChange={value => handleUpdateQuestion(q.id, { pythonSetupCode: value, pythonExpectedOutput: '' })}
                                 className={`${inputCls} min-h-[84px] resize-y font-mono text-xs`}
                                 style={inputStyle}
                                 placeholder="# import libraries or define helper data here"
@@ -4057,9 +4060,9 @@ const [isSaving, setIsSaving] = useState(false);
 
                             <div>
                               <label className={labelCls} style={labelStyle}>Starter code</label>
-                              <textarea
+                              <AiTextarea
                                 value={q.pythonStarterCode ?? ''}
-                                onChange={e => handleUpdateQuestion(q.id, { pythonStarterCode: e.target.value })}
+                                onValueChange={value => handleUpdateQuestion(q.id, { pythonStarterCode: value })}
                                 className={`${inputCls} min-h-[84px] resize-y font-mono text-xs`}
                                 style={inputStyle}
                                 placeholder="# Write your solution here"
@@ -4068,9 +4071,9 @@ const [isSaving, setIsSaving] = useState(false);
 
                             <div>
                               <label className={labelCls} style={labelStyle}>Solution <span style={{ color: C.faint }}>(hidden from students)</span></label>
-                              <textarea
+                              <AiTextarea
                                 value={q.pythonSolution ?? ''}
-                                onChange={e => handleUpdateQuestion(q.id, { pythonSolution: e.target.value, pythonExpectedOutput: '' })}
+                                onValueChange={value => handleUpdateQuestion(q.id, { pythonSolution: value, pythonExpectedOutput: '' })}
                                 className={`${inputCls} min-h-[96px] resize-y font-mono text-xs`}
                                 style={inputStyle}
                                 placeholder="# Correct solution"
@@ -4092,9 +4095,9 @@ const [isSaving, setIsSaving] = useState(false);
 
                             <div>
                               <label className={labelCls} style={labelStyle}>Hints</label>
-                              <textarea
+                              <AiTextarea
                                 value={(q.pythonHints ?? []).join('\n')}
-                                onChange={e => handleUpdateQuestion(q.id, { pythonHints: e.target.value.split('\n').map((s: string) => s.trim()).filter(Boolean) })}
+                                onValueChange={value => handleUpdateQuestion(q.id, { pythonHints: value.split('\n').map((s: string) => s.trim()).filter(Boolean) })}
                                 className={`${inputCls} min-h-[70px] resize-y`}
                                 style={inputStyle}
                                 placeholder="One hint per line"
@@ -4119,9 +4122,9 @@ const [isSaving, setIsSaving] = useState(false);
 
                         <div>
                           <label className={labelCls} style={labelStyle}>Explanation <span style={{ color: C.faint }}>(shown after answering)</span></label>
-                          <textarea
+                          <AiTextarea
                             value={q.explanation || ''}
-                            onChange={e => handleUpdateQuestion(q.id, { explanation: e.target.value })}
+                            onValueChange={value => handleUpdateQuestion(q.id, { explanation: value })}
                             className={`${inputCls} min-h-[84px] resize-y`}
                             style={inputStyle}
                             placeholder="Explain why this answer is correct..."
@@ -4721,9 +4724,9 @@ const [isSaving, setIsSaving] = useState(false);
                     </div>
                     <div>
                       <label className={labelCls} style={labelStyle}>Notice message</label>
-                      <textarea
+                      <AiTextarea
                         value={formConfig.postSubmission?.noticeBody || ''}
-                        onChange={e => updateConfig({ postSubmission: { ...formConfig.postSubmission, type: 'notice', noticeBody: e.target.value } })}
+                        onValueChange={value => updateConfig({ postSubmission: { ...formConfig.postSubmission, type: 'notice', noticeBody: value } })}
                         className={`${inputCls} min-h-[80px] resize-y`}
                         style={inputStyle}
                         placeholder="e.g. We'll review your submission and get back to you within 48 hours."
@@ -4819,9 +4822,9 @@ const [isSaving, setIsSaving] = useState(false);
                 </div>
                 <div>
                   <label className={labelCls} style={labelStyle}>Extra instructions</label>
-                  <textarea
+                  <AiTextarea
                     value={aiDescriptionPrompt}
-                    onChange={e => setAiDescriptionPrompt(e.target.value)}
+                    onValueChange={setAiDescriptionPrompt}
                     className={`${inputCls} min-h-[96px] resize-y`}
                     style={inputStyle}
                     placeholder="Optional: mention the audience, outcomes to emphasize, or the exact vibe you want."
@@ -4891,9 +4894,9 @@ const [isSaving, setIsSaving] = useState(false);
               <div className="space-y-3">
                 <div>
                   <label className={labelCls} style={labelStyle}>Event brief</label>
-                  <textarea
+                  <AiTextarea
                     value={eventAssistantPrompt}
-                    onChange={e => setEventAssistantPrompt(e.target.value)}
+                    onValueChange={setEventAssistantPrompt}
                     className={`${inputCls} min-h-[140px] resize-y`}
                     style={inputStyle}
                     placeholder="Example: Create a virtual workshop for beginner creators on how to pitch brands next Thursday at 6pm WAT. Keep it friendly, collect name, email, niche, and Instagram handle, and write a strong confirmation message."
@@ -4995,11 +4998,11 @@ const [isSaving, setIsSaving] = useState(false);
                   <label className={labelCls} style={labelStyle}>
                     {lessonPromptModal.q.lessonOnly ? 'Topic / Instructions' : 'Custom Instructions'} <span style={{ color: C.faint, fontWeight: 400, textTransform: 'none' }}>{lessonPromptModal.q.lessonOnly ? '' : '(optional)'}</span>
                   </label>
-                  <textarea
+                  <AiTextarea
                     autoFocus
                     rows={5}
                     value={lessonPrompts[lessonPromptModal.q.id] ?? ''}
-                    onChange={e => setLessonPrompts(prev => ({ ...prev, [lessonPromptModal!.q.id]: e.target.value }))}
+                    onValueChange={value => setLessonPrompts(prev => ({ ...prev, [lessonPromptModal!.q.id]: value }))}
                     placeholder={lessonPromptModal.q.lessonOnly
                       ? 'e.g. Explain the water cycle for secondary school students, include real-world examples…'
                       : 'e.g. Focus on common misconceptions, use analogies, keep it beginner-friendly…'}

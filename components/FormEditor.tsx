@@ -21,6 +21,7 @@ import dynamic from 'next/dynamic';
 import GeneratingOverlay from '@/components/GeneratingOverlay';
 import { ImageCropModal } from '@/components/ImageCropModal';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { AiTextarea } from '@/components/AiTextarea';
 import { LessonEditor } from '@/components/lesson/LessonEditor';
 import { lessonHtmlToDoc } from '@/components/lesson/extensions';
 import { QuestionTypePicker, TYPE_LABELS } from '@/components/create/QuestionTypePicker';
@@ -1959,9 +1960,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                       {/* Bio */}
                       <div>
                         <label className={labelCls} style={labelStyle}>Short bio</label>
-                        <textarea
+                        <AiTextarea
                           value={speakerDraft.bio}
-                          onChange={e => setSpeakerDraft(d => ({ ...d, bio: e.target.value }))}
+                          onValueChange={value => setSpeakerDraft(d => ({ ...d, bio: value }))}
                           placeholder="A sentence or two about this speaker…"
                           rows={2}
                           className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
@@ -2766,9 +2767,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                   <option key={lang} value={lang}>{lang}</option>
                                 ))}
                               </select>
-                              <textarea
+                              <AiTextarea
                                 value={q.codeSnippet || ''}
-                                onChange={e => handleUpdateQuestion(q.id, { codeSnippet: e.target.value })}
+                                onValueChange={value => handleUpdateQuestion(q.id, { codeSnippet: value })}
                                 className={`${inputCls} min-h-[120px] resize-y font-mono text-xs`}
                                 style={inputStyle}
                                 placeholder="Paste your code snippet here..."
@@ -2928,9 +2929,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
 
                               <div>
                                 <label className={labelCls} style={labelStyle}>Project brief / prompt</label>
-                                <textarea
+                                <AiTextarea
                                   value={q.question}
-                                  onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })}
+                                  onValueChange={value => handleUpdateQuestion(q.id, { question: value })}
                                   className={`${inputCls} min-h-[72px] resize-y`}
                                   style={inputStyle}
                                   placeholder={qType === 'document_review' ? 'Describe the report the student must write...' : 'Describe the project the student must complete...'}
@@ -2956,9 +2957,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               {qType === 'code_review' && (
                                 <div>
                                   <label className={labelCls} style={labelStyle}>Expected output / schema <span style={{ color: FE.faint }}>(optional)</span></label>
-                                  <textarea
+                                  <AiTextarea
                                     value={q.schema || ''}
-                                    onChange={e => handleUpdateQuestion(q.id, { schema: e.target.value })}
+                                    onValueChange={value => handleUpdateQuestion(q.id, { schema: value })}
                                     className={`${inputCls} min-h-[60px] resize-y font-mono text-xs`}
                                     style={inputStyle}
                                     placeholder="Describe or paste the expected output..."
@@ -2971,9 +2972,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                   <label className={labelCls} style={labelStyle}>
                                     {qType === 'document_review' ? 'Report scope / context' : 'Dataset / context'} <span style={{ color: FE.faint }}>(optional)</span>
                                   </label>
-                                  <textarea
+                                  <AiTextarea
                                     value={q.context || ''}
-                                    onChange={e => handleUpdateQuestion(q.id, { context: e.target.value })}
+                                    onValueChange={value => handleUpdateQuestion(q.id, { context: value })}
                                     className={`${inputCls} min-h-[60px] resize-y`}
                                     style={inputStyle}
                                     placeholder={qType === 'document_review' ? 'Describe what the report should cover, the market, industry, or company context...' : 'Describe the dataset or context the student works with...'}
@@ -3075,7 +3076,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: accentColor }}>SQL Exercise Config</p>
                               <div>
                                 <label className={labelCls} style={labelStyle}>Student task</label>
-                                <textarea value={q.question} onChange={e => handleUpdateQuestion(q.id, { question: e.target.value })} className={`${inputCls} min-h-[72px] resize-y`} style={inputStyle} placeholder="Ask the student to write a query..." />
+                                <AiTextarea value={q.question} onValueChange={value => handleUpdateQuestion(q.id, { question: value })} className={`${inputCls} min-h-[72px] resize-y`} style={inputStyle} placeholder="Ask the student to write a query..." />
                               </div>
                               <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2">
@@ -3128,11 +3129,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                     {table.seedSql?.trim() || (!table.fileUrl && !table.csvUrl && !table.fileName) ? (
                                       <div>
                                         <label className={labelCls} style={labelStyle}>CREATE TABLE / INSERT seed SQL</label>
-                                        <textarea
+                                        <AiTextarea
                                           value={table.seedSql ?? ''}
-                                          onChange={e => {
+                                          onValueChange={value => {
                                             const tables = [...(q.sqlTables ?? [])];
-                                            tables[tableIdx] = { ...table, seedSql: e.target.value, fileName: '', fileUrl: '', csvUrl: '' };
+                                            tables[tableIdx] = { ...table, seedSql: value, fileName: '', fileUrl: '', csvUrl: '' };
                                             handleUpdateQuestion(q.id, { sqlTables: tables, sqlExpectedResult: undefined });
                                           }}
                                           className={`${inputCls} min-h-[120px] resize-y font-mono text-xs`}
@@ -3146,11 +3147,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               </div>
                               <div>
                                 <label className={labelCls} style={labelStyle}>Starter SQL</label>
-                                <textarea value={q.sqlStarterCode ?? ''} onChange={e => handleUpdateQuestion(q.id, { sqlStarterCode: e.target.value })} className={`${inputCls} min-h-[84px] resize-y font-mono text-xs`} style={inputStyle} />
+                                <AiTextarea value={q.sqlStarterCode ?? ''} onValueChange={value => handleUpdateQuestion(q.id, { sqlStarterCode: value })} className={`${inputCls} min-h-[84px] resize-y font-mono text-xs`} style={inputStyle} />
                               </div>
                               <div>
                                 <label className={labelCls} style={labelStyle}>Solution SQL <span style={{ color: FE.faint }}>(hidden from students)</span></label>
-                                <textarea value={q.sqlSolution ?? ''} onChange={e => handleUpdateQuestion(q.id, { sqlSolution: e.target.value, sqlExpectedResult: undefined })} className={`${inputCls} min-h-[96px] resize-y font-mono text-xs`} style={inputStyle} placeholder="SELECT ..." />
+                                <AiTextarea value={q.sqlSolution ?? ''} onValueChange={value => handleUpdateQuestion(q.id, { sqlSolution: value, sqlExpectedResult: undefined })} className={`${inputCls} min-h-[96px] resize-y font-mono text-xs`} style={inputStyle} placeholder="SELECT ..." />
                                 <div className="flex flex-wrap items-center gap-2 mt-2">
                                   <button type="button" onClick={() => computeSqlExpectedResult(q.id)} className="px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: accentColor, color: 'white' }}>Compute expected result</button>
                                   <span className="text-xs" style={{ color: q.sqlExpectedResult ? '#10b981' : FE.faint }}>{q.sqlExpectedResult ? `${q.sqlExpectedResult.rows.length} expected row(s) saved` : 'Expected result not computed'}</span>
@@ -3165,9 +3166,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               </div>
                               <div>
                                 <label className={labelCls} style={labelStyle}>Required SQL patterns <span style={{ color: FE.faint }}>(optional)</span></label>
-                                <textarea
+                                <AiTextarea
                                   value={(q.sqlRequiredPatterns ?? []).join('\n')}
-                                  onChange={e => handleUpdateQuestion(q.id, { sqlRequiredPatterns: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
+                                  onValueChange={value => handleUpdateQuestion(q.id, { sqlRequiredPatterns: value.split('\n').map(s => s.trim()).filter(Boolean) })}
                                   className={`${inputCls} min-h-[64px] resize-y font-mono text-xs`}
                                   style={inputStyle}
                                   placeholder={`LIMIT\nORDER BY\n/^SELECT\\s+\\*\\s+FROM\\s+employees\\s+LIMIT\\s+10\\s*;?$/i`}
@@ -3176,7 +3177,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               </div>
                               <div>
                                 <label className={labelCls} style={labelStyle}>Hints</label>
-                                <textarea value={(q.sqlHints ?? []).join('\n')} onChange={e => handleUpdateQuestion(q.id, { sqlHints: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })} className={`${inputCls} min-h-[70px] resize-y`} style={inputStyle} placeholder="One hint per line" />
+                                <AiTextarea value={(q.sqlHints ?? []).join('\n')} onValueChange={value => handleUpdateQuestion(q.id, { sqlHints: value.split('\n').map(s => s.trim()).filter(Boolean) })} className={`${inputCls} min-h-[70px] resize-y`} style={inputStyle} placeholder="One hint per line" />
                               </div>
                             </div>
                           )}
@@ -3215,15 +3216,15 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               </div>
                               <div>
                                 <label className={labelCls} style={labelStyle}>Setup code <span style={{ color: FE.faint }}>(hidden from students)</span></label>
-                                <textarea value={q.pythonSetupCode ?? ''} onChange={e => handleUpdateQuestion(q.id, { pythonSetupCode: e.target.value, pythonExpectedOutput: '' })} className={`${inputCls} min-h-[84px] resize-y font-mono text-xs`} style={inputStyle} placeholder="# Import libraries or define helpers before student code runs" />
+                                <AiTextarea value={q.pythonSetupCode ?? ''} onValueChange={value => handleUpdateQuestion(q.id, { pythonSetupCode: value, pythonExpectedOutput: '' })} className={`${inputCls} min-h-[84px] resize-y font-mono text-xs`} style={inputStyle} placeholder="# Import libraries or define helpers before student code runs" />
                               </div>
                               <div>
                                 <label className={labelCls} style={labelStyle}>Starter code</label>
-                                <textarea value={q.pythonStarterCode ?? ''} onChange={e => handleUpdateQuestion(q.id, { pythonStarterCode: e.target.value })} className={`${inputCls} min-h-[84px] resize-y font-mono text-xs`} style={inputStyle} />
+                                <AiTextarea value={q.pythonStarterCode ?? ''} onValueChange={value => handleUpdateQuestion(q.id, { pythonStarterCode: value })} className={`${inputCls} min-h-[84px] resize-y font-mono text-xs`} style={inputStyle} />
                               </div>
                               <div>
                                 <label className={labelCls} style={labelStyle}>Solution <span style={{ color: FE.faint }}>(hidden from students)</span></label>
-                                <textarea value={q.pythonSolution ?? ''} onChange={e => handleUpdateQuestion(q.id, { pythonSolution: e.target.value, pythonExpectedOutput: '' })} className={`${inputCls} min-h-[96px] resize-y font-mono text-xs`} style={inputStyle} placeholder="# Reference solution" />
+                                <AiTextarea value={q.pythonSolution ?? ''} onValueChange={value => handleUpdateQuestion(q.id, { pythonSolution: value, pythonExpectedOutput: '' })} className={`${inputCls} min-h-[96px] resize-y font-mono text-xs`} style={inputStyle} placeholder="# Reference solution" />
                                 <div className="flex flex-wrap items-center gap-2 mt-2">
                                   <button type="button" onClick={() => computePythonExpectedOutput(q.id)} className="px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: accentColor, color: 'white' }}>Compute expected output</button>
                                   <span className="text-xs" style={{ color: q.pythonExpectedOutput ? '#10b981' : FE.faint }}>{q.pythonExpectedOutput ? 'Expected output saved' : 'Expected output not computed'}</span>
@@ -3234,7 +3235,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                               </div>
                               <div>
                                 <label className={labelCls} style={labelStyle}>Hints</label>
-                                <textarea value={(q.pythonHints ?? []).join('\n')} onChange={e => handleUpdateQuestion(q.id, { pythonHints: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })} className={`${inputCls} min-h-[70px] resize-y`} style={inputStyle} placeholder="One hint per line" />
+                                <AiTextarea value={(q.pythonHints ?? []).join('\n')} onValueChange={value => handleUpdateQuestion(q.id, { pythonHints: value.split('\n').map(s => s.trim()).filter(Boolean) })} className={`${inputCls} min-h-[70px] resize-y`} style={inputStyle} placeholder="One hint per line" />
                               </div>
                             </div>
                           )}
@@ -3255,9 +3256,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
 
                           <div>
                             <label className={labelCls} style={labelStyle}>Explanation <span style={{ color: FE.faint }}>(shown after answering)</span></label>
-                            <textarea
+                            <AiTextarea
                               value={q.explanation || ''}
-                              onChange={e => handleUpdateQuestion(q.id, { explanation: e.target.value })}
+                              onValueChange={value => handleUpdateQuestion(q.id, { explanation: value })}
                               className={`${inputCls} min-h-[84px] resize-y`}
                               style={inputStyle}
                               placeholder="Explain why this answer is correct..."
@@ -3876,9 +3877,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     </div>
                     <div>
                       <label className={labelCls} style={labelStyle}>Notice message</label>
-                      <textarea
+                      <AiTextarea
                         value={formConfig.postSubmission?.noticeBody || ''}
-                        onChange={e => updateConfig({ postSubmission: { ...formConfig.postSubmission, type: 'notice', noticeBody: e.target.value } })}
+                        onValueChange={value => updateConfig({ postSubmission: { ...formConfig.postSubmission, type: 'notice', noticeBody: value } })}
                         className={`${inputCls} min-h-[80px] resize-y`}
                         style={inputStyle}
                         placeholder="e.g. We'll review your submission and get back to you within 48 hours."
@@ -3945,9 +3946,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
               <div className="space-y-3">
                 <div>
                   <label className={labelCls} style={labelStyle}>Event brief</label>
-                  <textarea
+                  <AiTextarea
                     value={eventAssistantPrompt}
-                    onChange={e => setEventAssistantPrompt(e.target.value)}
+                    onValueChange={setEventAssistantPrompt}
                     className={`${inputCls} min-h-[140px] resize-y`}
                     style={inputStyle}
                     placeholder="Example: Create a virtual workshop for beginner creators on how to pitch brands next Thursday at 6pm WAT. Keep it friendly, collect name, email, niche, and Instagram handle, and write a strong confirmation message."
@@ -4045,9 +4046,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                 </div>
                 <div>
                   <label className={labelCls} style={labelStyle}>Extra instructions</label>
-                  <textarea
+                  <AiTextarea
                     value={aiDescriptionPrompt}
-                    onChange={e => setAiDescriptionPrompt(e.target.value)}
+                    onValueChange={setAiDescriptionPrompt}
                     className={`${inputCls} min-h-[96px] resize-y`}
                     style={inputStyle}
                     placeholder="Optional: mention the audience, outcomes to emphasize, or the exact vibe you want."
@@ -4184,9 +4185,9 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     Extra instructions{' '}
                     <span style={{ color: FE.faint, fontWeight: 400 }}>(optional)</span>
                   </label>
-                  <textarea
+                  <AiTextarea
                     value={aiCustomPrompt}
-                    onChange={e => setAiCustomPrompt(e.target.value.slice(0, 800))}
+                    onValueChange={value => setAiCustomPrompt(value.slice(0, 800))}
                     className={`${inputCls} min-h-[88px] resize-y`}
                     style={inputStyle}
                     placeholder="e.g. Focus on practical scenarios, avoid theory-heavy questions, use beginner-friendly language."
@@ -4296,11 +4297,11 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                     {lessonPromptModal.q.lessonOnly ? 'Topic / Instructions' : 'Custom Instructions'}{' '}
                     {!lessonPromptModal.q.lessonOnly && <span style={{ color: FE.faint, fontWeight: 400 }}>(optional)</span>}
                   </label>
-                  <textarea
+                  <AiTextarea
                     autoFocus
                     rows={5}
                     value={lessonPrompts[lessonPromptModal.q.id] ?? ''}
-                    onChange={e => setLessonPrompts(prev => ({ ...prev, [lessonPromptModal!.q.id]: e.target.value }))}
+                    onValueChange={value => setLessonPrompts(prev => ({ ...prev, [lessonPromptModal!.q.id]: value }))}
                     placeholder={lessonPromptModal.q.lessonOnly
                       ? 'e.g. Explain the water cycle for secondary school students, include real-world examples…'
                       : 'e.g. Focus on common misconceptions, use analogies, keep it beginner-friendly…'}
