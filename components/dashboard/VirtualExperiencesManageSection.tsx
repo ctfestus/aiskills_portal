@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Briefcase, Copy, Download, Trash2, Plus, Edit2, BarChart3, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C, cardStyle } from '@/lib/theme';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { SYNC_ENABLED } from '@/lib/sync';
 import { exportContent, exportAllInSection } from '@/lib/dashboard-export';
 import { PushAllButton, usePushStatus, PushStatusPill } from '@/components/dashboard/primitives';
@@ -66,7 +67,7 @@ function VECard({ form, handleDuplicate, setFormToDelete, C }: {
         onKeyDown={e => e.key === 'Enter' && router.push(`/dashboard/${form.id}`)}
         className="cursor-pointer">
         {cfg.coverImage
-          ? <img src={cfg.coverImage} alt="" loading="lazy" className="w-full h-28 object-cover group-hover:opacity-90 transition-opacity" />
+          ? <img src={resolveCoverUrl(cfg.coverImage)} alt="" loading="lazy" className="w-full h-28 object-cover group-hover:opacity-90 transition-opacity" onError={e => (e.currentTarget.style.display = 'none')} />
           : <div className="w-full h-28 flex items-center justify-center" style={{ background: `${color}18` }}>
               <Briefcase className="w-8 h-8" style={{ color }} />
             </div>}

@@ -14,6 +14,7 @@ import {
   Download, Briefcase, Video, Database, MoreVertical, Send, Code2,
 } from 'lucide-react';
 import { LIGHT_C, useC, cardStyle } from '@/lib/theme';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { exportContent } from '@/lib/dashboard-export';
 import { SYNC_ENABLED } from '@/lib/sync';
 import { getLastScheduledSessionDate, getNextScheduledSessionDate } from '@/lib/event-sessions';
@@ -79,7 +80,7 @@ function ShareMenu({ form, triggerRect, onClose }: { form: any; triggerRect: DOM
       </div>
       {form.config?.coverImage && (
         <div className="mx-4 mt-3 rounded-xl overflow-hidden border h-20" style={{ borderColor: C.cardBorder }}>
-          <img src={form.config.coverImage} alt={title} className="w-full h-full object-cover"/>
+          <img src={resolveCoverUrl(form.config.coverImage)} alt={title} className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
         </div>
       )}
       <div className="px-4 py-3 border-b" style={{ borderColor: C.divider }}>
@@ -603,7 +604,7 @@ function FormCard({ form, index, shareMenuOpen, setShareMenuOpen, setFormToDelet
         className="relative h-44 w-full overflow-hidden cursor-pointer rounded-2xl flex-shrink-0"
         style={{ background: C.thumbBg }}>
         {(form.config?.coverImage && !coverError)
-          ? <img src={form.config.coverImage} alt={form.title} loading="lazy" onError={() => setCoverError(true)} className="block w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"/>
+          ? <img src={resolveCoverUrl(form.config.coverImage)} alt={form.title} loading="lazy" onError={() => setCoverError(true)} className="block w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"/>
           : <div className="w-full h-full flex items-center justify-center group-hover:scale-105 transition-transform duration-700 ease-out">
               <meta.Icon className="w-10 h-10 opacity-20" style={{ color: C.green }}/>
             </div>
@@ -792,7 +793,7 @@ export function EventCard({ form, index, isLast, shareMenuOpen, setShareMenuOpen
           <div className="relative w-[180px] h-[180px] rounded-2xl overflow-hidden flex-shrink-0 group/img"
             style={{ background: C.thumbBg }}>
             {showImage
-              ? <img src={form.config.coverImage} alt={form.title} onError={() => setCoverError(true)}
+              ? <img src={resolveCoverUrl(form.config.coverImage)} alt={form.title} onError={() => setCoverError(true)}
                   className="w-full h-full object-cover"/>
               : <div className="w-full h-full flex flex-col items-center justify-center gap-0.5">
                   {dateObj

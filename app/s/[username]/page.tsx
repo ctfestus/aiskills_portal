@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import {
   motion, AnimatePresence,
   useScroll, useTransform, useMotionValue, useSpring, useInView,
@@ -481,7 +482,7 @@ function CertCard({ cert, t, isDark }: { cert: any; t: typeof LIGHT; isDark: boo
       <Link href={`/certificate/${cert.id}`} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column' }}>
         <div style={{ height: 100, overflow: 'hidden', background: cert.coverImage ? undefined : isDark ? '#1e1b4b' : '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           {cert.coverImage
-            ? <img src={cert.coverImage} alt={cert.courseName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ? <img src={resolveCoverUrl(cert.coverImage)} alt={cert.courseName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => (e.currentTarget.style.display = 'none')} />
             : <Award style={{ width: 28, height: 28, color: isDark ? '#818cf8' : '#6366f1' }} />}
         </div>
         <div style={{ padding: '11px 13px 14px' }}>

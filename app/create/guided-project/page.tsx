@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import { uploadToCloudinary, uploadCoverImage } from '@/lib/uploadToCloudinary';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import type { LessonDoc } from '@/lib/lesson-doc';
 import { useTheme } from '@/components/ThemeProvider';
@@ -753,9 +754,9 @@ function VirtualExperienceCreatePageInner() {
     if (!file) return;
     setUploadingCover(true);
     try {
-      const publicUrl = await uploadToCloudinary(file, 'covers');
-      setCoverImage(publicUrl);
-      setConfig(c => c ? { ...c, coverImage: publicUrl } : c);
+      const ref = await uploadCoverImage(file, 'covers');
+      setCoverImage(ref);
+      setConfig(c => c ? { ...c, coverImage: ref } : c);
     } catch (e: any) {
       alert('Upload failed: ' + e.message);
     } finally {
@@ -1344,7 +1345,7 @@ function VirtualExperienceCreatePageInner() {
                   {/* Cover */}
                   {coverImage ? (
                     <div style={{ height: 160, overflow: 'hidden', position: 'relative' }}>
-                      <img src={coverImage} alt="cover" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <img src={resolveCoverUrl(coverImage)} alt="cover" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => (e.target as HTMLImageElement).style.display = 'none'} />
                       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 60%)' }} />
                     </div>
                   ) : (
@@ -2195,8 +2196,8 @@ function VirtualExperienceCreatePageInner() {
                 <div style={card} className="p-5 space-y-3">
                   <p className="text-[12px] font-bold uppercase tracking-widest" style={{ color: C.muted }}>Cover Image</p>
                   {coverImage && (
-                    <img src={coverImage} alt="cover" className="w-full object-cover rounded-xl"
-                      style={{ height: 112 }} onError={() => setCoverImage('')} />
+                    <img src={resolveCoverUrl(coverImage)} alt="cover" className="w-full object-cover rounded-xl"
+                      style={{ height: 112 }} onError={e => (e.target as HTMLImageElement).style.display = 'none'} />
                   )}
                   <div className="flex gap-2">
                     <input style={{ ...inp, fontSize: 13 }} value={coverImage} onChange={e => setCoverImage(e.target.value)} placeholder="Paste image URL…" />
@@ -2216,7 +2217,8 @@ function VirtualExperienceCreatePageInner() {
                     <ImageLibrary
                       uploadFolder="covers"
                       initialFolder="covers"
-                      onSelect={url => setCoverImage(url)}
+                      returnPublicId
+                      onSelect={ref => { setCoverImage(ref); setConfig(c => c ? { ...c, coverImage: ref } : c); }}
                       onClose={() => setShowCoverLibrary(false)}
                     />
                   )}

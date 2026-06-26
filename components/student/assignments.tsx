@@ -14,6 +14,7 @@ import { sanitizeRichText } from '@/lib/sanitize';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
 import { LIGHT_C } from '@/lib/theme';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { Sk, EmptyState, StatusBadge } from '@/components/student/shared';
 import {
   BookOpen, ClipboardList, Users, ChevronDown, X, CheckCircle, AlertCircle, Star,
@@ -433,10 +434,11 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
         {assignment.cover_image && (
           <div className="px-4 pt-4">
             <img
-              src={assignment.cover_image}
+              src={resolveCoverUrl(assignment.cover_image)}
               alt={assignment.title}
               className="w-full object-cover rounded-xl"
               style={{ maxHeight: 220 }}
+              onError={e => (e.currentTarget.style.display = 'none')}
             />
           </div>
         )}
@@ -463,7 +465,7 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
                 <div className="flex-shrink-0 p-2">
                   <div className="w-16 h-16 rounded-lg overflow-hidden flex items-center justify-center" style={{ background: `${C.green}18` }}>
                     {assignment._course_cover
-                      ? <img src={assignment._course_cover} alt={assignment._course_title} className="w-full h-full object-cover" />
+                      ? <img src={resolveCoverUrl(assignment._course_cover)} alt={assignment._course_title} className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
                       : <BookOpen className="w-6 h-6" style={{ color: C.green }}/>
                     }
                   </div>
@@ -1310,7 +1312,7 @@ export function AssignmentsSection({ userId, studentName, studentEmail, C }: { u
       onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
       <div className="relative h-40 overflow-hidden" style={{ background: C.thumbBg }}>
         {item.cover_image
-          ? <img src={item.cover_image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
+          ? <img src={resolveCoverUrl(item.cover_image)} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onError={e => (e.currentTarget.style.display = 'none')}/>
           : <div className="w-full h-full flex items-center justify-center text-4xl font-black" style={{ color: C.green, opacity: 0.25 }}>{item.title?.[0]?.toUpperCase()}</div>}
         {(item.group_ids?.length > 0) && (
           <div className="absolute top-2 left-2">

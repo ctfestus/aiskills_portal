@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/components/TenantProvider';
 import { useTheme } from '@/components/ThemeProvider';
 import { resolveConfig, type SiteConfig } from '@/lib/site-templates';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { ArrowRight, Check, LayoutDashboard, ChevronDown, ChevronLeft, ChevronRight, User, Settings, LogOut, BookOpen, Calendar, Briefcase, Award, TrendingUp, Users, Zap, BarChart3, GraduationCap, Play } from 'lucide-react';
 import { HoverPreviewCard } from '@/components/student/shared';
 import { getToolIcon } from '@/lib/tool-icons';
@@ -188,12 +189,12 @@ function useProgrammes() {
     ]).then(async ([c, v, lp]) => {
       const courses: ProgrammeItem[] = (c.data ?? []).map((r: any) => ({
         id: r.id, title: r.title, description: r.description ?? '',
-        imageUrl: r.cover_image ?? '', badge: 'Course', type: 'course', slug: r.slug,
+        imageUrl: resolveCoverUrl(r.cover_image), badge: 'Course', type: 'course', slug: r.slug,
         category: r.category ?? '',
       }));
       const ves: ProgrammeItem[] = (v.data ?? []).map((r: any) => ({
         id: r.id, title: r.title, description: r.tagline ?? r.industry ?? '',
-        imageUrl: r.cover_image ?? '', badge: 'Guided Project',
+        imageUrl: resolveCoverUrl(r.cover_image), badge: 'Guided Project',
         difficulty: r.difficulty ? r.difficulty.charAt(0).toUpperCase() + r.difficulty.slice(1) : undefined,
         type: 've', slug: r.slug, category: r.industry ? r.industry.charAt(0).toUpperCase() + r.industry.slice(1) : '',
       }));
@@ -210,14 +211,14 @@ function useProgrammes() {
         const byPath: Record<string, PathCourse[]> = {};
         (piData ?? []).forEach((r: any) => {
           if (!byPath[r.path_id]) byPath[r.path_id] = [];
-          byPath[r.path_id].push({ id: r.id, title: r.title, imageUrl: r.cover_image ?? '', slug: r.slug, type: r.type });
+          byPath[r.path_id].push({ id: r.id, title: r.title, imageUrl: resolveCoverUrl(r.cover_image), slug: r.slug, type: r.type });
         });
         pathCourseMap = byPath;
       }
 
       const paths: ProgrammeItem[] = lpData.map((r: any) => ({
         id: r.id, title: r.title, description: r.description ?? '',
-        imageUrl: r.cover_image ?? '', badge: 'Learning Path', type: 'path', slug: '', category: '',
+        imageUrl: resolveCoverUrl(r.cover_image), badge: 'Learning Path', type: 'path', slug: '', category: '',
         pathCourses: pathCourseMap[r.id] ?? [],
       }));
       const merged = [...courses, ...ves, ...paths];

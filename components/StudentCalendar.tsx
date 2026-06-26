@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { sanitizeRichText } from '@/lib/sanitize';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 
 /* --- tokens --- */
 const LIGHT = {
@@ -219,7 +220,7 @@ function ItemModal({ item, onClose, onNavigate }: {
           {item.coverImage && !imgErr
             ? (
               <img
-                src={item.coverImage} alt={item.title}
+                src={resolveCoverUrl(item.coverImage)} alt={item.title}
                 className="w-full h-full object-cover"
                 onError={() => setImgErr(true)}
               />
@@ -605,7 +606,7 @@ function ListRow({ item, onSelect }: { item: CalItem; onSelect: (i: CalItem) => 
         style={{ background: meta.bg }}
       >
         {item.coverImage && !imgErr
-          ? <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover" onError={() => setImgErr(true)} />
+          ? <img src={resolveCoverUrl(item.coverImage)} alt={item.title} className="w-full h-full object-cover" onError={() => setImgErr(true)} />
           : item.kind === 'event'
             ? <CalendarDays className="w-5 h-5" style={{ color: meta.dot }} />
             : <ClipboardList className="w-5 h-5" style={{ color: meta.dot }} />}

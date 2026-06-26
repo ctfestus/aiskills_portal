@@ -8,6 +8,7 @@ import { motion } from 'motion/react';
 import { ArrowLeft, CheckCircle2, ChevronDown, ClipboardList, Copy, Download, Edit2, ExternalLink, FileText, Loader2, Plus, Trash2, Users, TrendingUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText } from '@/lib/sanitize';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { ReviewReportView, REVIEW_TYPES } from '@/components/ReviewReportView';
 import { parseReviewNotes, inferReviewType } from '@/lib/reviewRecord';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -749,7 +750,7 @@ export function AssignmentsManageSection({ C }: { C: typeof LIGHT_C }) {
             <div className="w-12 h-12 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center text-xl font-black"
               style={{ background: C.thumbBg, color: C.green }}>
               {a.cover_image
-                ? <img src={a.cover_image} alt="" className="w-full h-full object-cover"/>
+                ? <img src={resolveCoverUrl(a.cover_image)} alt="" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
                 : <span style={{ opacity: 0.5 }}>{a.title?.[0]?.toUpperCase()}</span>}
             </div>
             {/* Info */}

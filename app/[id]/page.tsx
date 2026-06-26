@@ -6,6 +6,7 @@ import { useTenant } from '@/components/TenantProvider';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, CheckCircle2, ArrowRight, MapPin, Building2, ExternalLink, Calendar, Download, Copy, Check, Star, BookOpen, FileText, Zap, Clock } from 'lucide-react';
 import { AnimatedField, ThemeColor, ThemeMode } from '@/components/AnimatedField';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { CourseTaker } from '@/components/CourseTaker';
 import dynamic from 'next/dynamic';
 const VirtualExperienceTaker = dynamic(() => import('@/components/VirtualExperienceTaker'), { ssr: false });
@@ -787,7 +788,7 @@ export default function PublicFormPage() {
         {/* -- Hero banner -- */}
         <div style={{ position: 'relative', width: '100%', minHeight: 340, background: '#0a0a0a', overflow: 'hidden', display: 'flex', alignItems: 'flex-end' }}>
           {config.coverImage
-            ? <img src={config.coverImage} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.55 }} />
+            ? <img src={resolveCoverUrl(config.coverImage)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.55 }} />
             : <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${indColor}55 0%, #0a0a0a 70%)` }} />
           }
           {/* Gradient overlay */}
@@ -897,7 +898,7 @@ export default function PublicFormPage() {
               {/* Cover thumbnail */}
               {config.coverImage && (
                 <div style={{ height: 140, overflow: 'hidden', position: 'relative' }}>
-                  <img src={config.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src={resolveCoverUrl(config.coverImage)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.35) 0%, transparent 60%)' }} />
                 </div>
               )}
@@ -1001,7 +1002,7 @@ export default function PublicFormPage() {
         {!courseStarted && (
           <div style={{ position: 'relative', width: '100%', minHeight: 420, background: '#0a0a0a', overflow: 'hidden', display: 'flex', alignItems: 'flex-end' }}>
             {config.coverImage
-              ? <img src={config.coverImage} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', opacity: 0.55 }} />
+              ? <img src={resolveCoverUrl(config.coverImage)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', opacity: 0.55 }} />
               : <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${accentColor}55 0%, #0a0a0a 70%)` }} />
             }
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.3) 55%, transparent 100%)' }} />
@@ -1123,7 +1124,7 @@ export default function PublicFormPage() {
                 {/* Cover thumbnail */}
                 {config.coverImage && (
                   <div style={{ height: 140, overflow: 'hidden', position: 'relative' }}>
-                    <img src={config.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={resolveCoverUrl(config.coverImage)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.35) 0%, transparent 60%)' }} />
                   </div>
                 )}
@@ -1422,7 +1423,7 @@ export default function PublicFormPage() {
                         onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = t.cardShadow; }}>
                         {rfConfig.coverImage ? (
                           <div style={{ width: 112, flexShrink: 0, minHeight: 110 }}>
-                            <img src={rfConfig.coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <img src={resolveCoverUrl(rfConfig.coverImage)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           </div>
                         ) : (
                           <div style={{ width: 112, flexShrink: 0, minHeight: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, background: t.sectionBg }}>🗓</div>
@@ -1461,7 +1462,7 @@ export default function PublicFormPage() {
                   {/* Cover image */}
                   {config.coverImage && (
                     <div style={{ borderRadius: 18, overflow: 'hidden', background: '#1a1a1a', aspectRatio: '16/9' }}>
-                      <img src={config.coverImage} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }}/>
+                      <img src={resolveCoverUrl(config.coverImage)} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }}/>
                     </div>
                   )}
 
@@ -1589,7 +1590,7 @@ export default function PublicFormPage() {
                   {/* Cover image -- mobile only (always first) */}
                   {config.coverImage && (
                     <div className="block sm:hidden" style={{ borderRadius: 18, overflow: 'hidden', background: '#1a1a1a', aspectRatio: '4/3', marginBottom: 16 }}>
-                      <img src={config.coverImage} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
+                      <img src={resolveCoverUrl(config.coverImage)} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
                     </div>
                   )}
 
@@ -1599,7 +1600,7 @@ export default function PublicFormPage() {
                     <div className="flex-shrink-0 w-full sm:w-[300px] order-2 sm:order-1" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {config.coverImage && (
                         <div className="hidden sm:block" style={{ borderRadius: 18, overflow: 'hidden', background: '#1a1a1a', aspectRatio: '4/3' }}>
-                          <img src={config.coverImage} alt="Cover"
+                          <img src={resolveCoverUrl(config.coverImage)} alt="Cover"
                             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
                         </div>
                       )}

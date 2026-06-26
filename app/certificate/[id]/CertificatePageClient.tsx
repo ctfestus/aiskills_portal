@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import CertificateTemplate, { CertificateSettings } from "@/components/CertificateTemplate";
+import { resolveCoverUrl } from "@/lib/cloudinary-url";
 import { Download, Loader2, Check, Link as LinkIcon } from "lucide-react";
 
 const CERT_W = 1860;
@@ -337,7 +338,7 @@ export default function CertificatePageClient({
             <div className="mt-10">
               {pathCoverImage && (
                 <div className="mb-5 rounded-xl overflow-hidden" style={{ height: 160, boxShadow: '0 2px 12px rgba(0,0,0,0.10)' }}>
-                  <img src={pathCoverImage} alt={courseName} className="w-full h-full object-cover" />
+                  <img src={resolveCoverUrl(pathCoverImage)} alt={courseName} className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
                 </div>
               )}
               {pathItems && pathItems.length > 0 && (
@@ -355,7 +356,7 @@ export default function CertificatePageClient({
                           style={{ background: item.coverImage ? undefined : '#f1f5f9' }}
                         >
                           {item.coverImage
-                            ? <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover" />
+                            ? <img src={resolveCoverUrl(item.coverImage)} alt={item.title} className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
                             : (
                               <div className="w-full h-full flex items-center justify-center">
                                 <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

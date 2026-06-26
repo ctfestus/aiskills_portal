@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/components/ThemeProvider';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { LIGHT_C } from '@/lib/theme';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { CarouselSkeleton, EmptyState, ProgressBar, HoverPreviewCard } from '@/components/student/shared';
 import {
   Briefcase, CheckCircle, ChevronLeft, ChevronRight, FileText, Play, RefreshCw, Star, X, Zap,
@@ -66,7 +67,7 @@ function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
       <div className="relative h-36 overflow-hidden cursor-pointer group flex-shrink-0"
         style={{ background: `${color}14` }} onClick={onDetails}>
         {cfg.coverImage
-          ? <img src={cfg.coverImage} alt={form.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
+          ? <img src={resolveCoverUrl(cfg.coverImage)} alt={form.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onError={e => (e.currentTarget.style.display = 'none')}/>
           : <div className="w-full h-full flex items-center justify-center">
               <Briefcase className="w-10 h-10 opacity-25" style={{ color }}/>
             </div>}
@@ -206,7 +207,7 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
           {/* Cover */}
           {cfg.coverImage && !imgErr ? (
             <div style={{ height: 180, overflow: 'hidden', flexShrink: 0 }}>
-              <img src={cfg.coverImage} alt={form.title} onError={() => setImgErr(true)} className="w-full h-full object-cover"/>
+              <img src={resolveCoverUrl(cfg.coverImage)} alt={form.title} onError={() => setImgErr(true)} className="w-full h-full object-cover"/>
             </div>
           ) : (
             <div className="h-32 flex items-center justify-center" style={{ background: `${color}14` }}>
@@ -412,7 +413,7 @@ function IndustryRow({ industry, items, attempts, deadlines, C, onDetails }: {
               <button onClick={() => onDetails(form)} className="block w-full text-left transition-transform hover:-translate-y-0.5">
                 <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
                   {cover
-                    ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
+                    ? <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
                     : <div className="w-full h-full flex items-center justify-center"><Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/></div>}
                   {status && (
                     <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"

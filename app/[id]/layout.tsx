@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Metadata } from 'next';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -54,7 +55,10 @@ export async function generateMetadata({
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
   const appUrl = rawUrl.replace(/\/$/, '');
 
-  const coverImage = data.coverImage;
+  // Resolve bare Cloudinary public_ids to full https URLs so the http branch below uses them
+  // directly (crawlers fetch Cloudinary). Otherwise they fall through to the /api/og proxy,
+  // which has no Cloudinary handling and 404s -- breaking social previews for new covers.
+  const coverImage = resolveCoverUrl(data.coverImage);
 
   let ogImage: string | undefined;
   if (coverImage) {

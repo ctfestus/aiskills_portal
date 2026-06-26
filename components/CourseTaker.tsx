@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { safeEmbedUrl as getVideoEmbedUrl } from '@/lib/safe-embed-url';
 import { DARK_C, LIGHT_C } from '@/lib/theme';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1621,7 +1622,7 @@ export function CourseTaker({
                       className={`flex rounded-2xl overflow-hidden transition-all duration-200 hover:scale-[1.02] hover:shadow-lg ${isDark ? 'bg-zinc-900 border border-zinc-800' : 'bg-white border border-zinc-100 shadow-sm'}`}>
                       {rfConfig.coverImage ? (
                         <div className="w-28 flex-shrink-0">
-                          <img src={rfConfig.coverImage} alt="" className="w-full h-full object-cover" style={{ minHeight: '100px' }} />
+                          <img src={resolveCoverUrl(rfConfig.coverImage)} alt="" className="w-full h-full object-cover" style={{ minHeight: '100px' }} onError={e => (e.currentTarget.style.display = 'none')} />
                         </div>
                       ) : (
                         <div className={`w-28 flex-shrink-0 flex items-center justify-center text-2xl ${isDark ? 'bg-zinc-800' : 'bg-zinc-100'}`} style={{ minHeight: '100px' }}>🗓</div>
@@ -1702,7 +1703,7 @@ export function CourseTaker({
                   <div className="w-10 h-10 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center"
                     style={{ background: `${accent}15` }}>
                     {rec.coverImage
-                      ? <img src={rec.coverImage} alt="" className="w-full h-full object-cover" />
+                      ? <img src={resolveCoverUrl(rec.coverImage)} alt="" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
                       : <BookOpen className="w-4 h-4" style={{ color: accent }} />}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -2493,7 +2494,7 @@ export function CourseTaker({
         {/* Full-bleed background -- cover image with overlay, or gradient fallback */}
         {coverImage ? (
           <>
-            <img src={coverImage} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ filter: 'brightness(0.35) saturate(1.2)' }} />
+            <img src={resolveCoverUrl(coverImage)} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ filter: 'brightness(0.35) saturate(1.2)' }} />
             <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${accent}55 0%, transparent 60%, rgba(0,0,0,0.6) 100%)` }} />
           </>
         ) : (

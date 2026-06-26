@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/components/TenantProvider';
 import { LIGHT_C } from '@/lib/theme';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { Sk, CarouselSkeleton, EmptyState } from '@/components/student/shared';
 import {
   Award, BookOpen, ChevronLeft, ChevronRight, Download, Lock, Medal, RefreshCw, Sparkles, Trophy, Users, Zap,
@@ -458,7 +459,7 @@ function CertRow({ title, certs, C }: { title: string; certs: any[]; C: typeof L
               <div className="relative rounded-xl overflow-hidden w-full aspect-video flex items-center justify-center"
                 style={{ background: cover ? '#0b0b0d' : `linear-gradient(135deg, ${C.green}18 0%, ${C.lime}30 100%)` }}>
                 {cover
-                  ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
+                  ? <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
                   : <div className="flex flex-col items-center gap-1">
                       <Award className="w-9 h-9" style={{ color: C.green }}/>
                       <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: C.green }}>Certificate</span>

@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import { uploadCoverImage } from '@/lib/uploadToCloudinary';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import { LIGHT_C, DARK_C, useC } from '@/lib/theme';
 import { motion, AnimatePresence } from 'motion/react';
@@ -349,8 +350,8 @@ export default function CreateAssignmentPage() {
     if (!file) return;
     setCoverUploading(true);
     try {
-      const publicUrl = await uploadToCloudinary(file, 'covers');
-      setCoverImage(publicUrl);
+      const ref = await uploadCoverImage(file, 'covers');
+      setCoverImage(ref);
     } catch (err: any) {
       setError(err?.message || 'Image upload failed.');
     } finally {
@@ -600,8 +601,8 @@ export default function CreateAssignmentPage() {
               <label style={labelStyle(C)}>Cover Image</label>
               <input ref={coverRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleCoverUpload}/>
               <div style={{ display: 'flex', gap: 8 }}>
-                <input type="url" value={coverImage} onChange={e => setCoverImage(e.target.value)}
-                  placeholder="https://example.com/image.jpg" style={{ ...inputStyle(C), flex: 1 }}/>
+                <input type="text" value={coverImage} onChange={e => setCoverImage(e.target.value)}
+                  placeholder="Paste an image URL or upload" style={{ ...inputStyle(C), flex: 1 }}/>
                 <button type="button" onClick={() => coverRef.current?.click()} disabled={coverUploading}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderRadius: 10, border: `1px solid ${C.cardBorder}`, background: C.pill, color: C.muted, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   <Upload style={{ width: 14, height: 14 }}/>{coverUploading ? 'Uploading…' : 'Upload'}
@@ -613,7 +614,7 @@ export default function CreateAssignmentPage() {
               </div>
               {coverImage && (
                 <div style={{ marginTop: 10, borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.cardBorder}`, position: 'relative' }}>
-                  <img src={coverImage} alt="Cover" style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} onError={e => (e.target as HTMLImageElement).style.display = 'none'}/>
+                  <img src={resolveCoverUrl(coverImage)} alt="Cover" style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} onError={e => (e.target as HTMLImageElement).style.display = 'none'}/>
                   <button type="button" onClick={() => setCoverImage('')}
                     style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.55)', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                     <X style={{ width: 14, height: 14, color: 'white' }}/>
@@ -624,7 +625,8 @@ export default function CreateAssignmentPage() {
                 <ImageLibrary
                   uploadFolder="covers"
                   initialFolder="covers"
-                  onSelect={url => setCoverImage(url)}
+                  returnPublicId
+                  onSelect={ref => setCoverImage(ref)}
                   onClose={() => setShowCoverLibrary(false)}
                 />
               )}
@@ -864,7 +866,7 @@ export default function CreateAssignmentPage() {
                   <div style={{ borderRadius: 16, overflow: 'hidden', background: C.card, border: `1px solid ${C.cardBorder}`, marginBottom: 16 }}>
                     {coverImage && (
                       <div style={{ padding: '16px 16px 0' }}>
-                        <img src={coverImage} alt={title} style={{ width: '100%', objectFit: 'cover', borderRadius: 12, maxHeight: 220 }}/>
+                        <img src={resolveCoverUrl(coverImage)} alt={title} style={{ width: '100%', objectFit: 'cover', borderRadius: 12, maxHeight: 220 }} onError={e => (e.target as HTMLImageElement).style.display = 'none'}/>
                       </div>
                     )}
                     <div style={{ padding: '20px 24px' }}>

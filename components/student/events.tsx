@@ -10,6 +10,7 @@ import { sanitizeRichText } from '@/lib/sanitize';
 import { buildGoogleCalUrl, buildOutlookCalUrl, buildYahooCalUrl, downloadIcs, buildCalendarFields, isRecurring } from '@/lib/calendar-links';
 import { getLastScheduledSessionDate, getNextScheduledSessionDate } from '@/lib/event-sessions';
 import { LIGHT_C } from '@/lib/theme';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { Sk, EmptyState } from '@/components/student/shared';
 import {
   CalendarDays, Calendar, Sun, CheckCircle, ChevronRight, ChevronLeft, Video, MapPin, Repeat, Download,
@@ -98,7 +99,7 @@ export function EventsSection({ userId, C }: { userId: string; C: typeof LIGHT_C
       meetingNote: mode === 'Virtual' ? 'Link shared after registration' : (f.location || 'In-person event'),
       meetingUrl,
       joinToken: regTokenMap.get(f.id) ?? null,
-      imageUrl: f.cover_image || '',
+      imageUrl: resolveCoverUrl(f.cover_image) || '',
       source: registered ? 'registration' : 'cohort',
       nextSessionDate,
       displayDate,

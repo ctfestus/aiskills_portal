@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText, sanitizeEmailContent } from '@/lib/sanitize';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { applyNameTags } from '@/lib/merge-tags';
 import { LessonRenderer } from '@/components/lesson/LessonRenderer';
 import type { LessonDoc } from '@/lib/lesson-doc';
@@ -548,8 +549,9 @@ export default function VirtualExperienceTaker({
         <div className="relative overflow-hidden flex-shrink-0" style={{ minHeight: 300 }}>
           {/* Cover image or solid blue fallback */}
           {config.coverImage ? (
-            <img src={config.coverImage} alt="cover"
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={resolveCoverUrl(config.coverImage)} alt="cover"
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+              onError={e => (e.currentTarget.style.display = 'none')} />
           ) : (
             <div style={{ position: 'absolute', inset: 0, background: '#0e09dd' }} />
           )}

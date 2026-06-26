@@ -67,6 +67,7 @@ export async function GET(req: NextRequest) {
       url,
       thumbUrl,
       folder: subFolder,
+      format: r.format,
       createdAt: r.created_at,
       width: r.width,
       height: r.height,

@@ -8,6 +8,7 @@ import {
   BookOpen, Copy, Check, Sun, Moon, Zap, ArrowRight, Building2, Globe,
 } from 'lucide-react';
 import Link from 'next/link';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
 
@@ -544,7 +545,7 @@ function CourseCard({ index, href, cover, title, cta, config, creatorName, creat
         <div className="relative transition-transform duration-700 group-hover:scale-[1.03]"
           style={{ borderRadius: 14, overflow: 'hidden', aspectRatio: '16/9', background: dark ? '#0f1f14' : '#1a2a1e' }}>
           {cover
-            ? <img src={cover} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
+            ? <img src={resolveCoverUrl(cover)} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => (e.currentTarget.style.display = 'none')}/>
             : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div style={{ width: 52, height: 52, borderRadius: 16, background: `${accent}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <BookOpen style={{ width: 24, height: 24, color: accent }}/>
@@ -664,7 +665,7 @@ function EventCard({ index, isLast, href, cover, title, description, status, loc
           <div className="block sm:hidden overflow-hidden w-full transition-transform duration-700 group-hover:scale-[1.02]"
             style={{ aspectRatio: '16/9', background: dark ? '#0f1a14' : '#1a2a1e' }}>
             {cover
-              ? <img src={cover} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
+              ? <img src={resolveCoverUrl(cover)} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => (e.currentTarget.style.display = 'none')}/>
               : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <CalendarDays style={{ width: 28, height: 28, color: accent }}/>
                 </div>}
@@ -673,7 +674,7 @@ function EventCard({ index, isLast, href, cover, title, description, status, loc
           <div className="hidden sm:block overflow-hidden flex-shrink-0 transition-transform duration-700 group-hover:scale-[1.03]"
             style={{ width: 148, height: 148, borderRadius: 18, background: dark ? '#0f1a14' : '#1a2a1e', overflow: 'hidden', margin: 12 }}>
             {cover
-              ? <img src={cover} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
+              ? <img src={resolveCoverUrl(cover)} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => (e.currentTarget.style.display = 'none')}/>
               : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <div style={{ width: 52, height: 52, borderRadius: 16, background: `${accent}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <CalendarDays style={{ width: 24, height: 24, color: accent }}/>

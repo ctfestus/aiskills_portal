@@ -9,15 +9,67 @@ import { autoRegisterEventCohorts } from '@/lib/auto-register-event-cohorts';
 import { getVectorIndex } from '@/lib/vector';
 import { cloudinary, extractPublicId } from '@/lib/cloudinary-server';
 
+// Resolve a stored image value to a Cloudinary public_id.
+// Handles both the legacy full-URL format and the new bare-public_id format.
+// Returns null for non-Cloudinary values (Supabase Storage, other hosts) -- not ours to destroy.
+function toPublicId(value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  if (v.includes('res.cloudinary.com')) return extractPublicId(v);
+  if (/^(https?:|data:|blob:|\/)/.test(v)) return null; // other absolute URL/host
+  return v; // bare public_id (new storage format)
+}
+
 async function deleteCloudinaryUrls(urls: (string | undefined | null)[]) {
-  const ids = urls
-    .filter((u): u is string => !!u && u.includes('res.cloudinary.com'))
-    .map(u => extractPublicId(u))
-    .filter((id): id is string => !!id);
+  const ids = [...new Set(
+    urls
+      .filter((u): u is string => !!u)
+      .map(u => toPublicId(u))
+      .filter((id): id is string => !!id),
+  )];
   if (!ids.length) return;
   await Promise.all(
     ids.map(id => cloudinary.uploader.destroy(id).catch(e => console.error('[cloudinary] delete failed:', id, e?.message)))
   );
+}
+
+// Content tables that store a cover_image. A duplicated course/VE/assignment shares the
+// original's image reference, so deleting one must NOT destroy an asset another row still uses.
+const COVER_TABLES = ['courses', 'events', 'virtual_experiences', 'assignments'] as const;
+
+// True if any content row OTHER than `keep` still references this Cloudinary public_id via its cover.
+async function isCoverReferencedElsewhere(
+  supabase: ReturnType<typeof adminClient>,
+  publicId: string,
+  keep: { table: string; id: string },
+): Promise<boolean> {
+  // Escape LIKE metacharacters so a public_id containing `_`/`%` matches literally.
+  const likeNeedle = `%${publicId.replace(/[\\%_]/g, '\\$&')}%`;
+  for (const table of COVER_TABLES) {
+    let query = supabase.from(table).select('id').ilike('cover_image', likeNeedle).limit(1);
+    if (table === keep.table) query = query.neq('id', keep.id);
+    const { data, error } = await query;
+    if (error) {
+      // Be conservative on error: assume still referenced so we never destroy a shared asset.
+      console.error('[cloudinary] cover reference check failed:', table, error.message);
+      return true;
+    }
+    if (data && data.length) return true;
+  }
+  return false;
+}
+
+// Delete a cover asset only if no other content row references the same image.
+async function deleteCoverIfUnreferenced(
+  supabase: ReturnType<typeof adminClient>,
+  coverValue: string | undefined | null,
+  keep: { table: string; id: string },
+) {
+  if (!coverValue) return;
+  const id = toPublicId(coverValue);
+  if (!id) return; // non-Cloudinary cover (e.g. Supabase Storage) -- not handled here
+  if (await isCoverReferencedElsewhere(supabase, id, keep)) return;
+  await cloudinary.uploader.destroy(id).catch(e => console.error('[cloudinary] delete failed:', id, e?.message));
 }
 
 export const dynamic = 'force-dynamic';
@@ -409,8 +461,9 @@ export async function DELETE(req: NextRequest) {
   // Clean up Cloudinary images and Supabase Storage files before deleting
   if (found.table === 'courses') {
     const { data: row } = await supabase.from('courses').select('cover_image, questions').eq('id', formId).single();
+    // Cover may be shared by a duplicated course -- only destroy it if no other row references it.
+    await deleteCoverIfUnreferenced(supabase, row?.cover_image, { table: 'courses', id: formId });
     const urls = [
-      row?.cover_image,
       ...(row?.questions ?? []).map((q: any) => q.imageUrl),
       ...(row?.questions ?? []).flatMap((q: any) => [q.lesson?.imageUrl]),
       // inline images stored inside interactive lesson docs (lesson.doc)
@@ -421,8 +474,8 @@ export async function DELETE(req: NextRequest) {
 
   if (found.table === 'events') {
     const { data: row } = await supabase.from('events').select('cover_image, speakers').eq('id', formId).single();
+    await deleteCoverIfUnreferenced(supabase, row?.cover_image, { table: 'events', id: formId });
     const urls = [
-      row?.cover_image,
       ...(row?.speakers ?? []).map((s: any) => s.avatar_url),
     ];
     await deleteCloudinaryUrls(urls);
@@ -430,10 +483,11 @@ export async function DELETE(req: NextRequest) {
 
   if (found.table === 'virtual_experiences') {
     const { data: row } = await supabase.from('virtual_experiences').select('cover_image, dataset, modules').eq('id', formId).single();
+    await deleteCoverIfUnreferenced(supabase, row?.cover_image, { table: 'virtual_experiences', id: formId });
     // inline images stored inside interactive lesson docs across all module lessons
     const docImageUrls = ((row?.modules ?? []) as any[]).flatMap((m: any) =>
       ((m?.lessons ?? []) as any[]).flatMap((l: any) => extractDocImageUrls(l?.doc)));
-    await deleteCloudinaryUrls([row?.cover_image, ...docImageUrls]);
+    await deleteCloudinaryUrls(docImageUrls);
     const datasetUrl = row?.dataset?.url;
     if (datasetUrl?.includes('/storage/v1/object/public/datasets/')) {
       const storagePath = datasetUrl.split('/storage/v1/object/public/datasets/')[1];

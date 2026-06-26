@@ -1,4 +1,5 @@
 ﻿import { tenant } from './tenant';
+import { resolveCoverUrl } from './cloudinary-url';
 
 function esc(s: string | null | undefined): string {
   return (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -226,7 +227,7 @@ export function courseResultEmail(data: {
     ${recommendations.slice(0, 3).map(r => `
       <a href="${appUrl}/${r.slug}?go=1" style="display:block;text-decoration:none;margin-bottom:14px;border-radius:0;overflow:hidden;border:1px solid #e5e7eb;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
         ${r.coverImage ? `
-          <img src="${r.coverImage}" width="100%" height="140" style="display:block;width:100%;height:140px;object-fit:cover;" />
+          <img src="${resolveCoverUrl(r.coverImage)}" width="100%" height="140" style="display:block;width:100%;height:140px;object-fit:cover;" />
         ` : `
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td height="140" style="background:#f0fdf4;text-align:center;vertical-align:middle;font-size:40px;">📘</td></tr></table>
         `}
@@ -349,7 +350,7 @@ export function nudgeEmail(data: {
     ${relatedAssignmentTitle ? `
     <p style="margin:20px 0 10px;font-weight:700;color:#111827;font-size:14px;">📋 Related assignment waiting for you</p>
     <a href="${formUrl}" style="display:block;text-decoration:none;border-radius:0;overflow:hidden;border:1px solid #e5e7eb;margin-bottom:16px;">
-      ${coverImage ? `<img src="${coverImage}" alt="${contentTitle}" style="display:block;width:100%;height:160px;object-fit:cover;" />` : `<div style="width:100%;height:120px;background:linear-gradient(135deg,#1e3a5f,#0f766e);display:flex;align-items:center;justify-content:center;"><span style="color:white;font-size:28px;">📚</span></div>`}
+      ${coverImage ? `<img src="${resolveCoverUrl(coverImage)}" alt="${contentTitle}" style="display:block;width:100%;height:160px;object-fit:cover;" />` : `<div style="width:100%;height:120px;background:linear-gradient(135deg,#1e3a5f,#0f766e);display:flex;align-items:center;justify-content:center;"><span style="color:white;font-size:28px;">📚</span></div>`}
       <div style="padding:14px 16px;background:#ffffff;">
         <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Continue Learning</p>
         <p style="margin:0 0 8px;font-size:16px;font-weight:700;color:#111827;">${contentTitle}</p>
@@ -679,7 +680,7 @@ export function learningPathAssignedEmail(data: {
     const connector = '';
 
     const imageCell = item.coverImage
-      ? `<td width="72" style="padding:0;vertical-align:top;"><img src="${item.coverImage}" width="72" height="72" style="display:block;width:72px;height:72px;object-fit:cover;border-radius:4px;" /></td>`
+      ? `<td width="72" style="padding:0;vertical-align:top;"><img src="${resolveCoverUrl(item.coverImage)}" width="72" height="72" style="display:block;width:72px;height:72px;object-fit:cover;border-radius:4px;" /></td>`
       : `<td width="72" bgcolor="#1e3a5f" style="padding:0;vertical-align:top;text-align:center;height:72px;border-radius:4px;"><span style="font-size:24px;line-height:72px;">${emoji}</span></td>`;
 
     return `
@@ -756,7 +757,7 @@ export function recordingPublishedEmail(data: {
 
     ${coverImage ? `
     <a href="${dashboardUrl}" style="display:block;text-decoration:none;margin:16px 0;border-radius:0;overflow:hidden;border:1px solid #e5e7eb;">
-      <img src="${coverImage}" alt="${recordingTitle}" width="600" style="display:block;width:100%;height:200px;object-fit:cover;" />
+      <img src="${resolveCoverUrl(coverImage)}" alt="${recordingTitle}" width="600" style="display:block;width:100%;height:200px;object-fit:cover;" />
     </a>` : ''}
 
     <p><b>${weekLabel}</b> recordings for <b>${recordingTitle}</b> are now available. Log in to watch them and stay on track with your programme.</p>
@@ -791,7 +792,7 @@ export function learningPathCertificateEmail(data: {
           <tr>
             ${item.coverImage ? `
             <td width="64" style="padding:0;vertical-align:middle;">
-              <img src="${item.coverImage}" width="64" height="52" style="display:block;width:64px;height:52px;object-fit:cover;" />
+              <img src="${resolveCoverUrl(item.coverImage)}" width="64" height="52" style="display:block;width:64px;height:52px;object-fit:cover;" />
             </td>` : `
             <td width="64" style="padding:0;vertical-align:middle;background:linear-gradient(135deg,#064e3b,#065f46);text-align:center;height:52px;">
               <span style="font-size:20px;line-height:52px;">${item.isVE ? '💼' : '📘'}</span>
@@ -872,7 +873,7 @@ export function courseCompletedNextUpEmail(data: {
     <table width="100%" cellpadding="0" cellspacing="0" style="background:transparent;margin-bottom:20px;">
       <tr>
         ${nextCoverImage
-          ? `<td width="72" style="padding:0;vertical-align:top;"><img src="${nextCoverImage}" width="72" height="72" style="display:block;width:72px;height:72px;object-fit:cover;border-radius:4px;" /></td>`
+          ? `<td width="72" style="padding:0;vertical-align:top;"><img src="${resolveCoverUrl(nextCoverImage)}" width="72" height="72" style="display:block;width:72px;height:72px;object-fit:cover;border-radius:4px;" /></td>`
           : `<td width="72" bgcolor="#1e3a5f" style="padding:0;vertical-align:top;text-align:center;height:72px;border-radius:4px;"><span style="font-size:24px;line-height:72px;">${emoji}</span></td>`}
         <td style="padding:10px 14px;vertical-align:middle;">
           <p style="margin:0 0 3px;font-size:13px;font-weight:700;color:#111827;line-height:1.35;font-family:Arial,sans-serif;">${nextTitle}</p>

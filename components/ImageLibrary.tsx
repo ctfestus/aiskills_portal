@@ -4,25 +4,32 @@ import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Search, Upload, Loader2, Images } from 'lucide-react';
 import { useC } from '@/lib/theme';
-import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import { uploadToCloudinaryWithMeta } from '@/lib/uploadToCloudinary';
 
 export interface LibraryImage {
   publicId: string;
   url: string;
   thumbUrl: string;
   folder: string;
+  format?: string;
   createdAt: string;
   width: number;
   height: number;
 }
 
 interface Props {
-  onSelect: (url: string) => void;
+  onSelect: (value: string) => void;
   onClose: () => void;
   /** Folder used when uploading a new image from within the library. */
   uploadFolder?: string;
   /** Pre-select this folder filter on open. */
   initialFolder?: string;
+  /**
+   * Persist a stable Cloudinary public_id instead of a full URL (resolved at render
+   * via resolveCoverUrl). Use for content covers so switching accounts can't orphan them.
+   * SVGs still return a full URL (they must not be f_auto-transformed).
+   */
+  returnPublicId?: boolean;
 }
 
 const FOLDERS = [
@@ -35,7 +42,7 @@ const FOLDERS = [
   { value: 'tool-logos', label: 'Tool logos' },
 ];
 
-export function ImageLibrary({ onSelect, onClose, uploadFolder, initialFolder }: Props) {
+export function ImageLibrary({ onSelect, onClose, uploadFolder, initialFolder, returnPublicId }: Props) {
   const C = useC();
   const [images, setImages] = useState<LibraryImage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -70,12 +77,17 @@ export function ImageLibrary({ onSelect, onClose, uploadFolder, initialFolder }:
     fetchImages();
   }, [fetchImages]);
 
+  // For cover usage we persist the bare public_id; SVGs keep their full URL.
+  const valueOf = (img: LibraryImage) =>
+    returnPublicId && img.format !== 'svg' ? img.publicId : img.url;
+
   async function handleUpload(file: File) {
     setUploading(true);
     setError('');
     try {
-      const url = await uploadToCloudinary(file, uploadFolder ?? (folder || 'assets'));
-      onSelect(url);
+      const { url, publicId } = await uploadToCloudinaryWithMeta(file, uploadFolder ?? (folder || 'assets'));
+      const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
+      onSelect(returnPublicId && !isSvg ? (publicId || url) : url);
       onClose();
     } catch (err) {
       setError((err as Error).message || 'Upload failed');
@@ -159,7 +171,7 @@ export function ImageLibrary({ onSelect, onClose, uploadFolder, initialFolder }:
               {filtered.map(img => (
                 <button
                   key={img.publicId}
-                  onClick={() => { onSelect(img.url); onClose(); }}
+                  onClick={() => { onSelect(valueOf(img)); onClose(); }}
                   style={{ position: 'relative', padding: 0, borderRadius: 12, overflow: 'hidden', aspectRatio: '4/3', border: '3px solid transparent', cursor: 'pointer', background: C.input, transition: 'border-color 0.15s, transform 0.12s' }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = C.cta; e.currentTarget.style.transform = 'scale(1.02)'; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}

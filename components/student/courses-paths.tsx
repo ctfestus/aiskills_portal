@@ -16,6 +16,7 @@ import { sanitizeRichText } from '@/lib/sanitize';
 import { getToolIcon } from '@/lib/tool-icons';
 import { computeAccess } from '@/lib/enrollment-access';
 import { LIGHT_C } from '@/lib/theme';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { CarouselSkeleton, EmptyState, ProgressBar, HoverPreviewCard, stripSqlSolutions } from '@/components/student/shared';
 
 // --- Course card ---
@@ -64,7 +65,7 @@ function CourseCard({ course, deadline, C, onDetails, hideCategory }: { course: 
       <div className="p-3 cursor-pointer" onClick={onDetails}>
         <div className="relative h-44 overflow-hidden rounded-xl group">
           {coverImage && !imgErr
-            ? <img src={coverImage} alt={course.form?.title} onError={() => setImgErr(true)}
+            ? <img src={resolveCoverUrl(coverImage)} alt={course.form?.title} onError={() => setImgErr(true)}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"/>
             : <div className="w-full h-full flex items-center justify-center">
                 <BookOpen className="w-10 h-10 opacity-30" style={{ color: C.green }}/>
@@ -201,7 +202,7 @@ function CourseDetailPane({ course, C, onClose }: { course: any; C: typeof LIGHT
           {/* Cover image */}
           {config.coverImage && !imgErr && (
             <div style={{ height: 180, overflow: 'hidden', flexShrink: 0 }}>
-              <img src={config.coverImage} alt={course.form?.title}
+              <img src={resolveCoverUrl(config.coverImage)} alt={course.form?.title}
                 onError={() => setImgErr(true)}
                 className="w-full h-full object-cover object-center"/>
             </div>
@@ -418,7 +419,7 @@ function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
             <>
               <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
                 {cover
-                  ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
+                  ? <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
                   : <div className="w-full h-full flex items-center justify-center">
                       {isVE ? <Layers className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>}
                     </div>}
@@ -504,7 +505,7 @@ function PathItemPreview({ item, isVE, done, isCurrent, isLocked, href, C }: {
     <div className="rounded-2xl overflow-hidden" style={{ background: C.card, boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
       <div className="relative w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
         {cover
-          ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
+          ? <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
           : <div className="w-full h-full flex items-center justify-center">{isVE ? <Layers className="w-9 h-9" style={{ color: '#16a34a' }}/> : <BookOpen className="w-9 h-9" style={{ color: '#16a34a' }}/>}</div>}
         {!isLocked && (
           <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
@@ -605,7 +606,7 @@ function ToolRow({ tool, courses, deadlines, C, onDetails }: { tool: string; cou
               <button onClick={() => onDetails(c)} className="block w-full text-left transition-transform hover:-translate-y-0.5">
                 <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
                   {cover
-                    ? <img src={cover} alt="" loading="lazy" className="w-full h-full object-cover"/>
+                    ? <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
                     : <div className="w-full h-full flex items-center justify-center"><BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/></div>}
                   {status && (
                     <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"

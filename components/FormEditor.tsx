@@ -30,6 +30,7 @@ import { getFontById, loadGoogleFont } from '@/lib/fonts';
 import { FontPickerModal } from '@/components/FontPickerModal';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary, uploadToCloudinaryWithMeta, deleteFromCloudinary } from '@/lib/uploadToCloudinary';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { deleteUploadedFile } from '@/lib/storage-cleanup';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import { uploadToGithub } from '@/lib/uploadToGithub';
@@ -2078,7 +2079,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
               <div className="space-y-5">
               {formConfig.coverImage ? (
                 <div className="relative w-full h-28 rounded-xl overflow-hidden group" style={{ border: `1px solid ${FE.cardBorder}` }}>
-                  <img src={formConfig.coverImage} alt="Cover" className="w-full h-full object-cover" />
+                  <img src={resolveCoverUrl(formConfig.coverImage)} alt="Cover" className="w-full h-full object-cover" onError={e => (e.target as HTMLImageElement).style.display = 'none'} />
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                     <button onClick={() => setShowCoverLibrary(true)} className="flex items-center gap-1.5 text-xs font-medium bg-white/90 px-3 py-1.5 rounded-lg hover:bg-white transition-colors" style={{ color: '#111' }}>
                       <ImageIcon className="w-3.5 h-3.5" /> Change
@@ -2100,7 +2101,8 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                 <ImageLibrary
                   uploadFolder="covers"
                   initialFolder="covers"
-                  onSelect={url => { if (formConfig?.coverImage && formConfig.coverImage !== url) deleteUploadedFile(formConfig.coverImage); updateConfig({ coverImage: url }); }}
+                  returnPublicId
+                  onSelect={ref => { if (formConfig?.coverImage && formConfig.coverImage !== ref) deleteUploadedFile(formConfig.coverImage); updateConfig({ coverImage: ref }); }}
                   onClose={() => setShowCoverLibrary(false)}
                 />
               )}

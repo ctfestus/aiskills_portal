@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import { motion } from 'motion/react';
 import { AnimatedField, type ThemeColor } from '@/components/AnimatedField';
 import { getFontById, loadGoogleFont } from '@/lib/fonts';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { sanitizeRichText } from '@/lib/sanitize';
 import type { FormConfig, FormField } from '@/lib/course-schema';
 import { SocialIcon, SOCIAL_PLATFORMS, isRequired } from '@/components/create/shared';
@@ -75,7 +76,7 @@ export function FormPreview({ config, isSubmitting, onSubmit, isSuccess, onReset
         {(config.coverImage || config.title || config.description) && (
           <div className={`border rounded-2xl overflow-hidden ${containerBg}`} style={fontStyle}>
             {config.coverImage && (
-              <img src={config.coverImage} alt="Cover" className="w-full h-44 object-cover" />
+              <img src={resolveCoverUrl(config.coverImage)} alt="Cover" className="w-full h-44 object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
             )}
             <div className="p-7">
               <h2 className={`text-xl font-semibold tracking-tight ${textColor}`}>{config.title}</h2>
@@ -179,7 +180,7 @@ export function FormPreview({ config, isSubmitting, onSubmit, isSuccess, onReset
 
   return (
     <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }} className={`max-w-xl mx-auto border rounded-3xl overflow-hidden ${containerBg}`} style={fontStyle}>
-      {config.coverImage && <img src={config.coverImage} alt="Cover" className="w-full h-52 object-cover" />}
+      {config.coverImage && <img src={resolveCoverUrl(config.coverImage)} alt="Cover" className="w-full h-52 object-cover" onError={e => (e.currentTarget.style.display = 'none')} />}
       <div className="p-8 md:p-10">
         <div className="mb-8">
           <h2 className={`text-2xl font-semibold mb-2 tracking-tight ${textColor}`}>{config.title}</h2>

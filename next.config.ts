@@ -26,6 +26,13 @@ const appHeaders = [
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
   serverExternalPackages: ['@duckdb/duckdb-wasm'],
+  // Expose the (non-secret) Cloudinary cloud name to the browser bundle so covers stored as
+  // bare public_ids resolve client-side. Bridged from the existing server-only CLOUDINARY_CLOUD_NAME
+  // (honouring an explicit NEXT_PUBLIC_ override if set) so there's no duplicate env var to keep.
+  env: {
+    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME:
+      process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ?? process.env.CLOUDINARY_CLOUD_NAME ?? '',
+  },
   async redirects() {
     return [
       { source: '/favicon.ico', destination: 'https://jbdfdxqvdaztmlzaxxtk.supabase.co/storage/v1/object/public/Assets/brand_assets/powered%20by%20FestMan%20(1).png', permanent: false },
