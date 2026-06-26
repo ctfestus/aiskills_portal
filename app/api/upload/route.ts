@@ -51,10 +51,11 @@ export async function POST(req: NextRequest) {
 
   const uploadOpts: Record<string, unknown> = { folder, resource_type: 'auto', overwrite: true };
 
-  // Reject duplicate image uploads: a byte-identical image already in this folder is a duplicate.
-  // The user should reuse the existing one from the image library instead of creating a copy.
-  // (Only images -- non-image files like PDFs have no library to reuse from.)
-  if (file.type.startsWith('image/')) {
+  // Reject duplicate uploads only for content COVERS, where a byte-identical image is a real
+  // duplicate the user should reuse from the library. Other folders (branding logos, lesson
+  // images, avatars) legitimately reuse the same file -- e.g. the same image for light and dark
+  // logo -- so they must NOT be blocked. Non-image files (PDFs) have no library to reuse from.
+  if (file.type.startsWith('image/') && rawSubfolder === 'covers') {
     const contentHash = createHash('sha1').update(buffer).digest('hex');
     const publicId = `${folder}/${contentHash}`;
     let exists = false;

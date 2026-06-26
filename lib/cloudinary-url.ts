@@ -6,14 +6,13 @@
  * and are returned unchanged for backward compatibility.
  *
  * Storing the public_id instead of a baked-in URL means switching the Cloudinary
- * account only requires moving the assets and updating NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME --
+ * account only requires moving the assets and updating CLOUDINARY_CLOUD_NAME --
  * no database rows have to be rewritten and no saved URL can point at a dead account.
  */
-// Prefer the public var (available in the browser bundle); fall back to the server-only
-// CLOUDINARY_CLOUD_NAME so server components / route handlers / OG metadata still resolve
-// covers even if the NEXT_PUBLIC_ copy is missing in an environment.
-const CLOUD_NAME =
-  process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ?? process.env.CLOUDINARY_CLOUD_NAME ?? '';
+// Single source of truth: CLOUDINARY_CLOUD_NAME. It's non-secret (it appears in every delivery
+// URL), and next.config.ts exposes it to the browser bundle under the same name, so this one var
+// works both client- and server-side -- no NEXT_PUBLIC_ duplicate to keep in sync.
+const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME ?? '';
 
 const DEFAULT_TRANSFORM = 'f_auto,q_auto';
 

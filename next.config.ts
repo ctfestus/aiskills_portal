@@ -26,12 +26,11 @@ const appHeaders = [
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
   serverExternalPackages: ['@duckdb/duckdb-wasm'],
-  // Expose the (non-secret) Cloudinary cloud name to the browser bundle so covers stored as
-  // bare public_ids resolve client-side. Bridged from the existing server-only CLOUDINARY_CLOUD_NAME
-  // (honouring an explicit NEXT_PUBLIC_ override if set) so there's no duplicate env var to keep.
+  // Expose the (non-secret) Cloudinary cloud name to the browser bundle under its own name, so
+  // covers stored as bare public_ids resolve client-side using the SAME CLOUDINARY_CLOUD_NAME the
+  // server uses -- no separate NEXT_PUBLIC_ variable to set or keep in sync.
   env: {
-    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME:
-      process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ?? process.env.CLOUDINARY_CLOUD_NAME ?? '',
+    CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ?? '',
   },
   async redirects() {
     return [
