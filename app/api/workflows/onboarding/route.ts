@@ -10,6 +10,7 @@
 import { serve } from '@upstash/workflow/nextjs';
 import { Resend } from 'resend';
 import { adminClient } from '@/lib/admin-client';
+import { addToResendAudience } from '@/lib/resend-audience';
 import {
   welcomeEmail,
   day3CheckInEmail,
@@ -32,18 +33,9 @@ export const { POST } = serve<{ email: string; name: string; userId: string }>(
       const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
       const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
 
-      // Add to Resend Audience if configured
-      const audienceId = process.env.RESEND_AUDIENCE_ID;
-      if (audienceId) {
-        const [firstName, ...rest] = name.trim().split(' ');
-        await resend.contacts.create({
-          audienceId,
-          email,
-          firstName: firstName || name,
-          lastName:  rest.join(' ') || undefined,
-          unsubscribed: false,
-        }).catch((err: any) => console.error('[onboarding] resend contact create failed', err?.message ?? err));
-      }
+      // Add to the Resend audience (backstop -- students are normally added at
+      // admission time; this covers self-serve signups that skip provisioning).
+      await addToResendAudience({ email, name });
 
       await resend.emails.send({
         from:    FROM,

@@ -4,6 +4,7 @@ import { requireRole, isAuthError } from '@/lib/api-auth';
 import { createAdmissionRecord, activateEnrollment } from '@/lib/db-payments';
 import { Resend } from 'resend';
 import { studentAccountCreatedEmail } from '@/lib/email-templates';
+import { addToResendAudience } from '@/lib/resend-audience';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { randomBytes } from 'crypto';
 
@@ -449,6 +450,18 @@ export async function POST(req: NextRequest) {
       }
     }
   }
+
+  // Add newly provisioned students to the Resend audience. Each call is
+  // self-contained and never throws, so a contact failure cannot affect the
+  // admission result; the onboarding workflow is a backstop for self-serve signups.
+  await Promise.all(
+    accountEmails
+      .filter(account => account.isNewAccount)
+      .map(account => addToResendAudience({
+        email: account.email,
+        name:  account.name === 'there' ? null : account.name,
+      })),
+  );
 
   return NextResponse.json({ ok: true, inserted, updated, provisioned: accountEmails.length, setupEmailsSent, errors });
 }
