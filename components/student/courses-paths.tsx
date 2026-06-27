@@ -417,12 +417,7 @@ function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
 
           const card = (
             <>
-              <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
-                {cover
-                  ? <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
-                  : <div className="w-full h-full flex items-center justify-center">
-                      {isVE ? <Layers className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>}
-                    </div>}
+              <CoverThumbnail cover={cover} Icon={isVE ? Layers : BookOpen}>
                 {/* Status -- light-green chip with white text for active items */}
                 {!isLocked && (
                   <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
@@ -436,7 +431,7 @@ function PathRow({ path, C }: { path: any; C: typeof LIGHT_C }) {
                     <Lock className="w-3 h-3" style={{ color: '#475569' }}/>
                   </span>
                 )}
-              </div>
+              </CoverThumbnail>
               <p className="text-xs mt-2" style={{ color: C.faint }}>{isVE ? 'Virtual Experience' : 'Course'}</p>
               <p className="text-[15px] font-bold leading-snug mt-0.5 line-clamp-2" style={{ color: C.text }}>{item.title}</p>
             </>
@@ -496,6 +491,39 @@ function groupCoursesByTool(courses: any[]): [string, any[]][] {
   });
 }
 
+function CoverThumbnail({ cover, alt = '', Icon = BookOpen, iconClassName = 'w-8 h-8', children }: {
+  cover?: string | null;
+  alt?: string;
+  Icon?: any;
+  iconClassName?: string;
+  children?: any;
+}) {
+  const [imgErr, setImgErr] = useState(false);
+  const showImage = !!cover && !imgErr;
+
+  return (
+    <div
+      className="relative rounded-xl overflow-hidden w-full aspect-video flex items-center justify-center"
+      style={{ background: showImage ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}
+    >
+      {showImage ? (
+        <img
+          src={resolveCoverUrl(cover)}
+          alt={alt}
+          loading="lazy"
+          className="w-full h-full object-cover"
+          onError={() => setImgErr(true)}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <Icon className={iconClassName} style={{ color: '#16a34a' }} />
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
 function PathItemPreview({ item, isVE, done, isCurrent, isLocked, href, C }: {
   item: any; isVE: boolean; done: boolean; isCurrent: boolean; isLocked: boolean; href: string; C: typeof LIGHT_C;
 }) {
@@ -503,10 +531,7 @@ function PathItemPreview({ item, isVE, done, isCurrent, isLocked, href, C }: {
   const desc = (item.description || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: C.card, boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
-      <div className="relative w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
-        {cover
-          ? <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
-          : <div className="w-full h-full flex items-center justify-center">{isVE ? <Layers className="w-9 h-9" style={{ color: '#16a34a' }}/> : <BookOpen className="w-9 h-9" style={{ color: '#16a34a' }}/>}</div>}
+      <CoverThumbnail cover={cover} Icon={isVE ? Layers : BookOpen} iconClassName="w-9 h-9">
         {!isLocked && (
           <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
             style={{ background: done ? '#16a34a' : '#22c55e', color: '#ffffff' }}>
@@ -518,7 +543,7 @@ function PathItemPreview({ item, isVE, done, isCurrent, isLocked, href, C }: {
             <Lock className="w-3 h-3" style={{ color: '#475569' }}/>
           </span>
         )}
-      </div>
+      </CoverThumbnail>
       <div className="p-5">
         <p className="text-xs mb-1" style={{ color: C.faint }}>{isVE ? 'Virtual Experience' : 'Course'}</p>
         <h3 className="text-lg font-bold leading-snug mb-2 line-clamp-2" style={{ color: C.text }}>{item.title}</h3>
@@ -604,17 +629,14 @@ function ToolRow({ tool, courses, deadlines, C, onDetails }: { tool: string; cou
             <div key={c.form_id} className="flex-shrink-0 w-[220px] snap-start"
               onMouseEnter={(e) => openHover(c, e.currentTarget)} onMouseLeave={scheduleClose}>
               <button onClick={() => onDetails(c)} className="block w-full text-left transition-transform hover:-translate-y-0.5">
-                <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
-                  {cover
-                    ? <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
-                    : <div className="w-full h-full flex items-center justify-center"><BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/></div>}
+                <CoverThumbnail cover={cover} alt={title}>
                   {status && (
                     <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
                       style={{ background: completed ? '#16a34a' : '#22c55e', color: '#ffffff' }}>
                       {status}
                     </span>
                   )}
-                </div>
+                </CoverThumbnail>
                 <p className="text-xs mt-2" style={{ color: C.faint }}>Course</p>
                 <p className="text-[15px] font-bold leading-snug mt-0.5 mb-2.5 line-clamp-2" style={{ color: C.text }}>{title}</p>
                 <ProgressBar value={progress} color="#22c55e"/>
