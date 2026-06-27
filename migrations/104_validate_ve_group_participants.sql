@@ -2,6 +2,10 @@
 -- the leader may submit without being a participant, but final submissions must
 -- include at least one valid participant from the group.
 
+DROP FUNCTION IF EXISTS public.complete_ve_assignment(
+  uuid, uuid, uuid, jsonb, text, text
+);
+
 CREATE OR REPLACE FUNCTION public.complete_ve_assignment(
   p_ve_id              uuid,
   p_assignment_id      uuid,
@@ -113,3 +117,10 @@ BEGIN
   RETURN jsonb_build_object('submission', v_submission);
 END;
 $$;
+
+REVOKE EXECUTE ON FUNCTION public.complete_ve_assignment(
+  uuid, uuid, uuid, jsonb, text, text, uuid, uuid[]
+) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.complete_ve_assignment(
+  uuid, uuid, uuid, jsonb, text, text, uuid, uuid[]
+) TO service_role;

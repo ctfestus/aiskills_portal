@@ -6,6 +6,7 @@
 import {
   LayoutDashboard, Film, Layers, Briefcase, Database, CalendarDays, ClipboardList,
   CalendarCheck, Users, Megaphone, Calendar, Video, Trophy, Award, Medal, CreditCard,
+  Sparkles,
 } from 'lucide-react';
 
 export const NAV_ITEMS = [
@@ -24,6 +25,7 @@ export const NAV_ITEMS = [
   { id: 'leaderboard',       label: 'Leaderboard',         Icon: Trophy          },
   { id: 'certificates',      label: 'Certificates',        Icon: Award           },
   { id: 'badges',            label: 'Badges',              Icon: Medal           },
+  { id: 'ai_toolkit',        label: 'AI Toolkit',          Icon: Sparkles, badge: 'New' },
   { id: 'payments',          label: 'Payments',            Icon: CreditCard      },
 ] as const;
 export type SectionId = typeof NAV_ITEMS[number]['id'];
@@ -32,6 +34,6 @@ export const NAV_GROUPS: { label: string; items: SectionId[] }[] = [
   { label: 'Learn',       items: ['overview', 'courses', 'learning_paths', 'virtual_experiences', 'data_center'] },
   { label: 'Activities',  items: ['events', 'assignments', 'calendar', 'schedule', 'recordings'] },
   { label: 'Community',   items: ['community', 'announcements'] },
-  { label: 'Achievements', items: ['leaderboard', 'certificates', 'badges'] },
+  { label: 'Achievements', items: ['leaderboard', 'certificates', 'badges', 'ai_toolkit'] },
   { label: 'Account',     items: ['payments'] },
 ];

@@ -1222,10 +1222,12 @@ BEGIN
   RETURN jsonb_build_object('submission', v_submission);
 END;
 $$;
-REVOKE EXECUTE ON FUNCTION public.complete_ve_assignment(uuid, uuid, uuid, jsonb, text, text)
-  FROM PUBLIC, anon, authenticated;
-GRANT  EXECUTE ON FUNCTION public.complete_ve_assignment(uuid, uuid, uuid, jsonb, text, text)
-  TO service_role;
+REVOKE EXECUTE ON FUNCTION public.complete_ve_assignment(
+  uuid, uuid, uuid, jsonb, text, text, uuid, uuid[]
+) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.complete_ve_assignment(
+  uuid, uuid, uuid, jsonb, text, text, uuid, uuid[]
+) TO service_role;
 
 
 -- ─────────────────────────────────────────────────────────────

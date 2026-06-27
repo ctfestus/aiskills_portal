@@ -31,6 +31,7 @@ import { CommunitySection, AnnouncementsSection } from '@/components/student/com
 import { VirtualExperiencesSection } from '@/components/student/virtual-experiences';
 import { DataCenterSection, RecordingsSection, ScheduleSection } from '@/components/student/schedule-recordings';
 import { StudentBadgesSection, LeaderboardSection, CertificatesSection } from '@/components/student/badges-leaderboard-certs';
+import { AiCareerToolkitSection } from '@/components/student/ai-career-toolkit';
 
 
 // Sk, CarouselSkeleton, EmptyState, StatusBadge, ProgressBar live in @/components/student/shared
@@ -353,11 +354,19 @@ export default function StudentDashboard() {
                             }}
                             onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.text; }}
                             onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = C.muted; }}>
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
+                            <div className="relative w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
                               style={{ background: isActive ? `${navAccent}18` : C.pill }}>
                               <item.Icon className="w-4 h-4" style={{ color: isActive ? navAccent : theme === 'dark' ? 'rgba(255,255,255,0.35)' : '#9ca3af' }}/>
+                              {navCollapsed && 'badge' in item && item.badge && (
+                                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full" style={{ background: C.green, boxShadow: `0 0 0 2px ${C.card}` }}/>
+                              )}
                             </div>
                             {!navCollapsed && <span className="truncate">{item.label}</span>}
+                            {!navCollapsed && 'badge' in item && item.badge && (
+                              <span className="ml-auto text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: C.green, color: '#fff' }}>
+                                {item.badge}
+                              </span>
+                            )}
                           </button>
                         );
                       })}
@@ -526,6 +535,9 @@ export default function StudentDashboard() {
             )}
             {activeSection === 'certificates' && user && (
               <CertificatesSection userId={effectiveId} userEmail={effectiveEmail} C={C}/>
+            )}
+            {activeSection === 'ai_toolkit' && user && (
+              <AiCareerToolkitSection C={C}/>
             )}
             {activeSection === 'payments' && user && (
               <PaymentsSection userId={effectiveId} C={C} readOnly={!!viewingAs}/>

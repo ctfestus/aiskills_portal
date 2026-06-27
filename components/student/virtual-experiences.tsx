@@ -21,6 +21,7 @@ const IND_COLORS: Record<string, string> = {
   fintech: '#6366f1', marketing: '#f59e0b', hr: '#10b981', finance: '#3b82f6',
   edtech: '#8b5cf6', healthcare: '#ef4444', ecommerce: '#f97316', consulting: '#14b8a6',
 };
+const DEADLINE_REFERENCE_MS = Date.now();
 
 // --- Virtual Experience Card ---
 function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
@@ -44,10 +45,8 @@ function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
   const totalLessons = (cfg.modules || []).reduce((a: number, m: any) => a + (m.lessons?.length || 0), 0);
 
   // Deadline display
-  // eslint-disable-next-line react-hooks/purity
-  const nowMs = Date.now();
   const daysLeft = deadline && !isCompleted
-    ? Math.ceil((deadline.getTime() - nowMs) / 86400000)
+    ? Math.ceil((deadline.getTime() - DEADLINE_REFERENCE_MS) / 86400000)
     : null;
   const deadlineLabel = daysLeft === null ? null
     : daysLeft < 0  ? 'Overdue'
@@ -326,7 +325,7 @@ function VirtualExperienceDetailPane({ form, attempt, C, onClose }: {
         </div>
 
         {/* Footer CTA */}
-        <div className="p-4 flex-shrink-0" style={{ borderTop: `1px solid ${C.cardBorder}` }}>
+        <div className="p-4 flex-shrink-0 space-y-2" style={{ borderTop: `1px solid ${C.cardBorder}` }}>
           <a href={`/${slug}`}
             className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
             style={{ background: isCompleted ? C.green : color, color: 'white', textDecoration: 'none' }}>

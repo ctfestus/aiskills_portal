@@ -39,6 +39,14 @@ export async function GET(req: NextRequest) {
   const auth = await requireUser(req);
   if (isAuthError(auth)) return auth.error;
   const { user, supabase } = auth;
+  const scopeType = req.nextUrl.searchParams.get('type');
+  const scopeId = req.nextUrl.searchParams.get('id');
+  const scopedVeId = scopeType === 'virtual_experience' && scopeId ? scopeId : null;
+  const scopedAssignmentId = scopeType === 'assignment' && scopeId ? scopeId : null;
+
+  if ((scopeType || scopeId) && !scopedVeId && !scopedAssignmentId) {
+    return NextResponse.json({ error: 'Unknown portfolio package scope' }, { status: 400 });
+  }
 
   try {
     // --- Assemble portfolio data ---
@@ -62,11 +70,12 @@ export async function GET(req: NextRequest) {
       : { data: [] };
     const courseMap = Object.fromEntries((courseRows ?? []).map((r: any) => [r.id, r]));
 
-    const { data: veAttempts } = await supabase
+    let veAttemptsQuery = supabase
       .from('guided_project_attempts')
       .select('completed_at, ve_id')
       .eq('student_id', user.id)
       .not('completed_at', 'is', null);
+    const { data: veAttempts } = await veAttemptsQuery;
 
     const veIds = [...new Set((veAttempts ?? []).map((a: any) => a.ve_id).filter(Boolean))];
     const { data: veRows } = veIds.length
@@ -77,25 +86,44 @@ export async function GET(req: NextRequest) {
       : { data: [] };
     const veMap = Object.fromEntries((veRows ?? []).map((r: any) => [r.id, r]));
 
-    const { data: submissions } = await supabase
+    let submissionsQuery = supabase
       .from('assignment_submissions')
-      .select('score, submitted_at, status, feedback, assignment_id')
+      .select('score, submitted_at, status, feedback, assignment_id, participants')
+      .in('status', ['submitted', 'graded']);
+    submissionsQuery = submissionsQuery
       .eq('student_id', user.id)
-      .in('status', ['submitted', 'graded'])
       .not('feedback', 'is', null);
+    const { data: submissions } = await submissionsQuery;
 
-    const assignmentIds = [...new Set((submissions ?? []).map((s: any) => s.assignment_id).filter(Boolean))];
+    let selectedSubmission: any | null = null;
+    if (scopedAssignmentId && !(submissions ?? []).some((s: any) => s.assignment_id === scopedAssignmentId)) {
+      const { data } = await supabase
+        .from('assignment_submissions')
+        .select('score, submitted_at, status, feedback, assignment_id, participants')
+        .eq('assignment_id', scopedAssignmentId)
+        .in('status', ['submitted', 'graded'])
+        .or(`student_id.eq.${user.id},participants.cs.{${user.id}}`)
+        .maybeSingle();
+      selectedSubmission = data ?? null;
+    }
+
+    const allSubmissions = selectedSubmission
+      ? [...(submissions ?? []), selectedSubmission]
+      : (submissions ?? []);
+
+    const assignmentIds = [...new Set(allSubmissions.map((s: any) => s.assignment_id).filter(Boolean))];
     const { data: assignmentRows } = assignmentIds.length
       ? await supabase.from('assignments').select('id, title, type, scenario, brief, tasks').in('id', assignmentIds)
       : { data: [] };
     const assignmentMap = Object.fromEntries((assignmentRows ?? []).map((r: any) => [r.id, r]));
 
-    const { data: certs } = await supabase
+    let certsQuery = supabase
       .from('certificates')
       .select('id, issued_at, course_id, ve_id, learning_path_id')
       .eq('student_id', user.id)
       .eq('revoked', false)
       .order('issued_at', { ascending: false });
+    const { data: certs } = await certsQuery;
 
     const { data: earnedBadges } = await supabase
       .from('student_badges')
@@ -109,6 +137,11 @@ export async function GET(req: NextRequest) {
     const badgeMap = Object.fromEntries((badgeRows ?? []).map((r: any) => [r.id, r]));
 
     const portfolio = {
+      selectedProject: scopedVeId
+        ? { type: 'virtual_experience', id: scopedVeId }
+        : scopedAssignmentId
+          ? { type: 'assignment', id: scopedAssignmentId }
+          : null,
       student: {
         name:   student?.full_name ?? '',
         email:  student?.email ?? '',
@@ -146,9 +179,9 @@ export async function GET(req: NextRequest) {
           completedAt:   a.completed_at,
         };
       }).filter((v: any) => v.title),
-      assignments: (submissions ?? []).map((s: any) => {
+      assignments: allSubmissions.map((s: any) => {
         const asgn = assignmentMap[s.assignment_id] ?? {};
-        const record = parseReviewNotes(s.feedback);
+        const record = s.feedback ? parseReviewNotes(s.feedback) : null;
         const report = record?.report;
         return {
           title:              asgn.title ?? '',
