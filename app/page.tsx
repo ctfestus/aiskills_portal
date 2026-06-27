@@ -1496,7 +1496,7 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
             {user ? <NavProfileMenu user={user} profile={profile} pageDark={isPageDark} /> : (
               <>
                 <Link href="/auth"
-                  className="px-4 py-2 text-sm font-semibold rounded-md transition-colors hidden sm:block"
+                  className="px-3 sm:px-4 py-2 text-sm font-semibold rounded-md transition-colors"
                   style={{ color: isPageDark ? 'rgba(255,255,255,0.80)' : '#1C1D1F' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = isPageDark ? 'rgba(255,255,255,0.08)' : '#F7F9FC'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
