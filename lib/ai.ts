@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
+import { resolveGeminiJob, extractGeminiText, type GeminiJob } from './ai-config';
 
 // All model names come from env -- no hardcoding
 export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
@@ -47,25 +48,27 @@ function isRetryableGeminiError(err: unknown) {
 async function generateGeminiJSON(
   prompt: string,
   geminiSchema?: any,
-  opts: { temperature?: number; geminiRetries?: number } = {},
+  opts: { temperature?: number; geminiRetries?: number; job?: GeminiJob } = {},
 ) {
   const retries = Math.max(0, opts.geminiRetries ?? 1);
+  const { model, thinkingBudget } = resolveGeminiJob(opts.job);
   const config: any = {
     responseMimeType: 'application/json',
     systemInstruction: FORMATTING_SYSTEM_INSTRUCTION,
   };
   if (geminiSchema) config.responseSchema = geminiSchema;
   if (opts.temperature !== undefined) config.temperature = opts.temperature;
+  if (thinkingBudget !== undefined) config.thinkingConfig = { thinkingBudget };
 
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
       const result = await geminiClient().models.generateContent({
-        model: GEMINI_MODEL,
+        model,
         contents: prompt,
         config,
       });
-      return safeJSON(result.text ?? '{}');
+      return safeJSON(extractGeminiText(result) || '{}');
     } catch (err) {
       lastError = err;
       if (attempt >= retries || !isRetryableGeminiError(err)) throw err;
@@ -80,7 +83,7 @@ async function generateGeminiJSON(
 export async function generateJSON(
   prompt: string,
   geminiSchema?: any,
-  opts: { temperature?: number; geminiRetries?: number } = {},
+  opts: { temperature?: number; geminiRetries?: number; job?: GeminiJob } = {},
 ): Promise<any> {
   try {
     return await generateGeminiJSON(prompt, geminiSchema, opts);
@@ -109,22 +112,24 @@ export async function generateVisionJSON(
   prompt: string,
   image: { data: string; mimeType: string },
   geminiSchema?: any,
-  opts: { temperature?: number } = {},
+  opts: { temperature?: number; job?: GeminiJob } = {},
 ): Promise<any> {
   try {
+    const { model, thinkingBudget } = resolveGeminiJob(opts.job);
     const config: any = {
       responseMimeType: 'application/json',
       systemInstruction: FORMATTING_SYSTEM_INSTRUCTION,
     };
     if (geminiSchema) config.responseSchema = geminiSchema;
     if (opts.temperature !== undefined) config.temperature = opts.temperature;
+    if (thinkingBudget !== undefined) config.thinkingConfig = { thinkingBudget };
 
     const result = await geminiClient().models.generateContent({
-      model: GEMINI_MODEL,
+      model,
       contents: [{ role: 'user', parts: [{ text: prompt }, { inlineData: { mimeType: image.mimeType, data: image.data } }] }],
       config,
     });
-    return safeJSON(result.text ?? '{}');
+    return safeJSON(extractGeminiText(result) || '{}');
   } catch (err) {
     console.warn('[AI] Gemini vision failed, falling back to OpenAI:', (err as Error).message);
     const client = openaiClient();
@@ -155,18 +160,25 @@ export async function generateVisionJSON(
 export async function generateStream(
   prompt: string,
   geminiSchema?: any,
+  opts: { job?: GeminiJob } = {},
 ): Promise<ReadableStream> {
   const encoder = new TextEncoder();
 
   try {
+    const { model, thinkingBudget } = resolveGeminiJob(opts.job);
     const config: any = {
       responseMimeType: 'application/json',
       systemInstruction: FORMATTING_SYSTEM_INSTRUCTION,
     };
     if (geminiSchema) config.responseSchema = geminiSchema;
+    // Streaming consumers all use the default job (no thinking) today. If a streaming
+    // surface ever opts into a thinking job, also strip thought parts from the streamed
+    // chunks (chunk.text below) before enqueuing -- see extractGeminiText for the
+    // non-streaming equivalent.
+    if (thinkingBudget !== undefined) config.thinkingConfig = { thinkingBudget };
 
     const geminiStream = await geminiClient().models.generateContentStream({
-      model: GEMINI_MODEL,
+      model,
       contents: prompt,
       config,
     });
