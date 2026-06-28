@@ -58,6 +58,9 @@ export function LessonContentStyles() {
 .lesson-content pre { font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 0.85em; background: #f6f8fa; color: #1a1d2e; border: 1px solid #d0d7de; border-radius: 8px; padding: 12px 16px; margin: 0.75rem 0; overflow-x: auto; white-space: pre; }
 .lesson-content.dark pre { background: #0f1120; color: #c9d1d9; border-color: #2e2e33; }
 .lesson-content pre code { background: none; padding: 0; border-radius: 0; color: inherit; font-size: inherit; }
+/* Dark block-code reset must out-specify .lesson-content.dark code (two classes), or
+   inline-code green/background leaks onto block code inside <pre> in dark mode. */
+.lesson-content.dark pre code { background: none; color: inherit; }
 
 .lesson-content blockquote { border-left: 3px solid #10b981; padding-left: 0.875rem; margin: 0.75rem 0; color: #52525b; font-style: normal; }
 .lesson-content.dark blockquote { color: #a1a1aa; }
