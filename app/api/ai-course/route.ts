@@ -1207,6 +1207,20 @@ ${JSON.stringify(structure.sharedDatasetPlan?.tables ?? [], null, 2)}`;
 
       const tableNames = (outline.sharedDataset?.tables ?? []).map((t: any) => t.tableName).join(', ');
 
+      // Escape plain text for safe HTML interpolation.
+      const esc = (s: string) =>
+        String(s ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+
+      const stripHtml = (s: string) =>
+        String(s ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+
+      const quoteSqlIdent = (name: string) => `"${String(name ?? '').replace(/"/g, '""')}"`;
+
       // Include only CREATE TABLE (strip INSERT statements) -- column names are all Gemini needs,
       // and INSERT rows can be 3000+ tokens which causes ECONNRESET on every module call.
       const createOnly = (seedSql: string): string => {
@@ -1228,6 +1242,7 @@ SHARED DATASET SCHEMA (use ONLY these tables and ONLY these exact column names -
 ${tableSchemas}
 
 STRICT FORMATTING: No em dashes. No curly quotes - use straight quotes only. No ellipsis. No asterisks.
+STYLE: Write like a senior data professional coaching a junior analyst. Be practical, specific, and concise. Teach only what the learner needs for the task.
 Return the EXACT lessonId value from the input for every lesson - do not change IDs.`;
 
       const mcqQuestionSchema = {
@@ -1277,61 +1292,54 @@ Return the EXACT lessonId value from the input for every lesson - do not change 
       };
 
       const lessonBodyRules = `LESSON BODY STRUCTURE - lessonBody must follow this exact order:
-1. CONCEPT: Define the SQL keyword, clause, or operator. Explain what it does and why it exists. Use <strong> for the keyword. One focused paragraph.
-2. SYNTAX: Show how it works. Use <pre><code> for a short generic SQL syntax pattern or example (not using the course tables). Use <code> inline for SQL keywords like <code>SELECT</code>, <code>WHERE</code>, <code>GROUP BY</code>.
-3. KEY POINT (optional): Use <blockquote> to highlight one important rule, gotcha, or best practice about this concept.
-4. BUSINESS CONTEXT: Connect to the industry and role. Explain why this skill matters in this specific domain. Reference the company/team from the business scenario.
-lessonBody HTML allowed tags: <p> <strong> <ul> <li> <pre> <code> <blockquote>. No headings. 120-200 words total.
-Do NOT include the task instruction in lessonBody - that goes in questionText only.`;
-
-      const masterLessonSchema = {
-        type: Type.OBJECT,
-        properties: {
-          title:  { type: Type.STRING },
-          body:   { type: Type.STRING },
-          blocks: { type: Type.ARRAY, items: blockItemSchema, description: 'Interactive lesson blocks for the rich player' },
-        },
-        required: ['title', 'body'],
-      };
+1. CONCEPT: Define the SQL keyword, clause, or operator in one practical paragraph. Say what it helps an analyst do.
+2. SYNTAX: Show one short syntax pattern or example in <pre><code>. Use <code> inline for SQL keywords like <code>SELECT</code>, <code>WHERE</code>, <code>GROUP BY</code>.
+3. WORK CONTEXT: Add one sentence connecting the concept to the role and industry.
+lessonBody HTML allowed tags: <p> <strong> <ul> <li> <pre> <code> <blockquote>. No headings. 70-110 words total.
+Do NOT include the task instruction in lessonBody - that goes in questionText only.
+Avoid textbook filler, history, edge cases, and long business storytelling.`;
 
       const lessonMap = new Map<string, any>();
-      const masterLessonMap = new Map<string, any>(); // mod.id -> { title, body }
+      const buildModuleIntro = (mod: any) => {
+        const lessons = (mod.lessons ?? []).map((l: any) => l.title).filter(Boolean);
+        const lessonList = lessons.slice(0, 5).map((title: string) => `<li>${esc(title)}</li>`).join('');
+        const moduleDescription = stripHtml(mod.description ?? '');
+        const firstTable = (outline.sharedDataset?.tables ?? [])[0];
+        const firstTableName = String(firstTable?.tableName ?? '').trim();
+        const demoQuery = firstTableName ? `SELECT *\nFROM ${quoteSqlIdent(firstTableName)}\nLIMIT 5;` : '';
+        const setupSql = String(firstTable?.seedSql ?? '').trim();
+
+        const body = [
+          `<p>This module focuses on ${esc(mod.title)}${moduleDescription ? `: ${esc(moduleDescription)}` : '.'}</p>`,
+          lessonList ? `<p><strong>You will practice:</strong></p><ul>${lessonList}</ul>` : '',
+          firstTableName ? `<p>Start by inspecting the shared <strong>${esc(firstTableName)}</strong> table so each exercise feels grounded in the data.</p>` : '',
+        ].filter(Boolean).join('');
+
+        const blocks = [
+          { type: 'heading', level: 4, text: mod.title },
+          {
+            type:    'callout',
+            variant: 'info',
+            title:   'Module focus',
+            text:    moduleDescription || `Practice the SQL skills in ${mod.title} using the shared dataset.`,
+          },
+          ...(lessons.length ? [{ type: 'bulletList', items: lessons.slice(0, 5) }] : []),
+          ...(firstTableName ? [{
+            type:     'runnableCode',
+            language: 'sql',
+            code:     demoQuery,
+            setupSql,
+          }] : []),
+        ];
+
+        return {
+          title: mod.title,
+          body,
+          doc: buildLessonDoc(blocks),
+        };
+      };
 
       for (const mod of outline.modules) {
-        // Generate one master lesson per module before the individual lesson questions
-        const lessonTitles = (mod.lessons ?? []).map((l: any) => l.title).join(', ');
-        const masterPrompt = `You are writing a module introduction lesson for a SQL course.
-${baseCtx}
-
-Module: ${mod.title}
-${mod.description ? `Module description: ${mod.description}` : ''}
-Lessons covered in this module: ${lessonTitles}
-
-Write a standalone teaching lesson that introduces this entire module.
-
-Requirements:
-- Start with a short paragraph explaining what this module covers and why it matters.
-- Show a clear, annotated SQL example for each major concept in this module using the shared dataset tables.
-- Use <h4> for concept sub-headers (e.g. the name of each SQL keyword or clause).
-- Use <pre><code> blocks for all SQL examples - they must use ONLY the exact column names from the SHARED DATASET SCHEMA.
-- Use <ul><li> for key rules or tips where helpful.
-- Use <blockquote> for one standout rule or gotcha per concept.
-- End with a short "What you will practice" paragraph listing the lessons ahead.
-- Total length: 250-400 words.
-- HTML tags allowed: <p> <strong> <h4> <ul> <li> <pre> <code> <blockquote>.
-- No em dashes. No curly quotes. No asterisks.
-- Return a short title (the module name) and the full HTML body.
-
-Also produce a "blocks" array that builds the same lesson as interactive TipTap nodes:
-- Use heading (level 4), paragraph, callout (info/warning), and bulletList for prose structure.
-- Include 1-2 runnableCode blocks (language "sql") demonstrating the key SQL concepts for this module.
-  For each runnableCode: write a clear teaching query in "code" and include a self-contained "setupSql" with CREATE TABLE + INSERT (3-5 rows using the EXACT column names from SHARED DATASET SCHEMA).
-- End with exactly one knowledgeCheck testing the central concept of this module (4 options, correctIndex 0-3).
-- Keep block prose concise; the runnableCode examples are the main teaching tool.`;
-
-        const masterResult = await generateJSON(masterPrompt, masterLessonSchema, { temperature: 0.5, geminiRetries: 2 } as any);
-        if (masterResult?.body) masterLessonMap.set(mod.id, masterResult);
-
         for (const lesson of mod.lessons ?? []) {
           const lessonInput = {
             lessonId: lesson.id,
@@ -1353,6 +1361,12 @@ ${lessonBodyRules}
 
 SQL/completion/debug lessons MUST have a "questions" array with EXACTLY 2 questions.
 MCQ lessons MUST have a "questions" array with EXACTLY 1 question.
+For every SQL question:
+- initialCode must be a useful starter query the learner edits.
+- Use real table names from the schema.
+- Use blanks like ____ for missing expressions, selected columns, filters, or aliases.
+- Do NOT use table_name, column_name, or a complete final answer as initialCode.
+- requirements must contain 2-4 short checklist items that match the task.
 `;
 
           if (lesson.questionType === 'mcq') {
@@ -1379,18 +1393,22 @@ ${JSON.stringify(lessonInput, null, 2)}`;
 For this SQL lesson, produce a "questions" array with EXACTLY 2 items. Each question has its own lessonBody.
 
 questions[0]:
-- lessonBody: The full teaching lesson. Follow LESSON BODY STRUCTURE above. 120-200 words.
+- lessonBody: The full teaching lesson. Follow LESSON BODY STRUCTURE above. 70-110 words.
 - questionText: Task instruction only. 1-2 sentences starting with a verb. No background or context.
 - solution, initialCode, hints, requirements, expectedOutputDescription as described above.
 
 questions[1]:
-- lessonBody: A brief scenario (2-3 sentences, 40-70 words). Do NOT repeat the lesson explanation.
+- lessonBody: A brief scenario (1-2 sentences, 25-45 words). Do NOT repeat the lesson explanation.
   Write a new business situation where the same SQL concept applies. Mention a specific team, report, or business need from the course scenario.
   Use HTML <p> and <strong> only. Example: "<p>The operations team also needs a quick overview of all <strong>supplier</strong> records. They have requested every column from the suppliers table for an internal audit report.</p>"
 - questionText: Task instruction only. 1-2 sentences starting with a verb. No background or context.
 - solution, initialCode, hints, requirements, expectedOutputDescription as described above.
 
 All SQL must use only these tables and exact column names: ${tableNames}
+Good starter examples:
+- SELECT ____ FROM Customers;
+- SELECT SUBSTRING(phone_number, ____, ____) AS ____ FROM Customers;
+- SELECT ____ FROM Orders WHERE ____;
 
 Lesson input:
 ${JSON.stringify(lessonInput, null, 2)}`;
@@ -1400,15 +1418,33 @@ ${JSON.stringify(lessonInput, null, 2)}`;
         }
       }
 
-      // Escape plain text for safe HTML interpolation
-      const esc = (s: string) =>
-        s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
       const buildSqlLessonBody = (lessonBody: string, requirements: string[]): string => {
         if (!requirements?.length) return lessonBody;
         const items = requirements.map(r => `<li>${esc(r)}</li>`).join('');
         return `${lessonBody}<p><strong>Before submitting:</strong></p><ul>${items}</ul>`;
+      };
+
+      const firstTableName = String((outline.sharedDataset?.tables ?? [])[0]?.tableName ?? '').trim();
+      const starterFromSolution = (solution: string) => {
+        const fromMatch = String(solution ?? '').match(/\bFROM\s+("[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][\w]*)/i);
+        const table = fromMatch?.[1] || (firstTableName ? quoteSqlIdent(firstTableName) : '');
+        if (!table) return 'SELECT ____\nFROM ____;';
+
+        const clauses: string[] = [`SELECT ____`, `FROM ${table}`];
+        if (/\bWHERE\b/i.test(solution)) clauses.push('WHERE ____');
+        if (/\bGROUP\s+BY\b/i.test(solution)) clauses.push('GROUP BY ____');
+        if (/\bORDER\s+BY\b/i.test(solution)) clauses.push('ORDER BY ____');
+        return `${clauses.join('\n')};`;
+      };
+
+      const normalizeSqlStarter = (starter: unknown, solution: unknown) => {
+        const raw = String(starter ?? '').trim();
+        const sol = String(solution ?? '').trim();
+        const hasPlaceholder = /____|TODO|fill\s+in|your_/i.test(raw);
+        const isGeneric = /\b(table_name|column_name)\b/i.test(raw);
+        const isSolution = raw && sol && raw.replace(/\s+/g, ' ').toLowerCase() === sol.replace(/\s+/g, ' ').toLowerCase();
+        if (!raw || isGeneric || isSolution || !hasPlaceholder) return starterFromSolution(sol);
+        return raw;
       };
 
       const tables: any[] = outline.sharedDataset?.tables ?? [];
@@ -1418,20 +1454,15 @@ ${JSON.stringify(lessonInput, null, 2)}`;
 
       for (const mod of outline.modules) {
         // Insert the master lesson as a lessonOnly slide at the top of each module
-        const masterLesson = masterLessonMap.get(mod.id);
-        if (masterLesson?.body) {
-          const masterDoc = Array.isArray(masterLesson.blocks) && masterLesson.blocks.length
-            ? buildLessonDoc(masterLesson.blocks)
-            : undefined;
-          questions.push({
-            id:            uid(),
-            lessonOnly:    true,
-            question:      '',
-            options:       [],
-            correctAnswer: '',
-            lesson:        { title: masterLesson.title || mod.title, body: masterLesson.body, ...(masterDoc ? { doc: masterDoc } : {}) },
-          });
-        }
+        const masterLesson = buildModuleIntro(mod);
+        questions.push({
+          id:            uid(),
+          lessonOnly:    true,
+          question:      '',
+          options:       [],
+          correctAnswer: '',
+          lesson:        { title: masterLesson.title || mod.title, body: masterLesson.body, doc: masterLesson.doc },
+        });
 
         for (const outLesson of mod.lessons ?? []) {
           const gen = lessonMap.get(outLesson.id);
@@ -1483,7 +1514,7 @@ ${JSON.stringify(lessonInput, null, 2)}`;
                 correctAnswer:       '',
                 sqlTables,
                 sqlSolution:         q.solution ?? '',
-                sqlStarterCode:      q.initialCode ?? '',
+                sqlStarterCode:      normalizeSqlStarter(q.initialCode, q.solution),
                 sqlHints:            q.hints ?? [],
                 sqlRequiredPatterns: [],
                 lesson:              { title: lessonTitle, body },

@@ -76,6 +76,34 @@ function generatedModule(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function sqlOutline() {
+  return {
+    courseTitle: 'SQL for Analysts',
+    courseDescription: 'Learn SQL analysis.',
+    businessScenario: 'A customer operations team reviews support activity.',
+    learningOutcomes: ['Query customer data'],
+    sharedDataset: {
+      tables: [{
+        tableName: 'Customers',
+        description: 'Customer profile records',
+        seedSql: 'CREATE TABLE Customers (customer_id INTEGER, phone_number TEXT);\nINSERT INTO Customers VALUES (1, "2125550199"), (2, "4155550123");',
+      }],
+    },
+    modules: [{
+      id: 'm1',
+      title: 'Text Functions',
+      description: 'Extract useful pieces from text fields.',
+      lessons: [{
+        id: 'l1',
+        title: 'Extract Area Codes',
+        skillFocus: 'SUBSTRING',
+        questionType: 'sql_exercise',
+        questionSummary: 'Extract the first three digits from phone numbers.',
+      }],
+    }],
+  };
+}
+
 beforeEach(() => {
   mockRequireRole.mockReset();
   mockGetRedis.mockReset();
@@ -161,5 +189,47 @@ describe('POST /api/ai-course Python course generation', () => {
     const pythonExercise = body.questions.find((q: any) => q.type === 'python_exercise');
     expect(pythonExercise).toBeTruthy();
     expect(pythonExercise.pythonExpectedOutput).toBe('');
+  });
+
+  it('builds SQL module intros without an extra AI call and normalizes starter SQL', async () => {
+    mockGenerateJSON.mockResolvedValue({
+      lessonId: 'l1',
+      lessonTitle: 'Extract Area Codes',
+      questions: [{
+        lessonBody: '<p><strong>SUBSTRING</strong> extracts part of a text value for analysis.</p><pre><code>SELECT SUBSTRING(value, 1, 3);</code></pre><p>Analysts use it to standardize identifiers.</p>',
+        questionText: 'Extract the first three digits of each phone number.',
+        solution: 'SELECT SUBSTRING(phone_number, 1, 3) AS AreaCode FROM Customers;',
+        initialCode: 'SELECT SUBSTRING(phone_number, 1, 3) AS AreaCode FROM Customers;',
+        hints: ['Use SUBSTRING.', 'Start at position 1.'],
+        requirements: ['Use SUBSTRING.', 'Select phone_number.', 'Alias the result as AreaCode.'],
+        expectedOutputDescription: 'Area code values for each customer.',
+      }, {
+        lessonBody: '<p>The compliance team needs phone prefixes for a regional review.</p>',
+        questionText: 'Return each customer area code.',
+        solution: 'SELECT SUBSTRING(phone_number, 1, 3) AS AreaCode FROM Customers;',
+        initialCode: '',
+        hints: ['Use the same function.'],
+        requirements: ['Use SUBSTRING.', 'Alias the result as AreaCode.'],
+        expectedOutputDescription: 'Area code values for each customer.',
+      }],
+    });
+
+    const res = await post({
+      action: 'generate_sql_course_full',
+      title: 'SQL for Analysts',
+      industry: 'Customer Support',
+      role: 'Data Analyst',
+      level: 'Beginner',
+      outline: sqlOutline(),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(mockGenerateJSON).toHaveBeenCalledTimes(1);
+    expect(body.questions[0].lessonOnly).toBe(true);
+    expect(body.questions[0].lesson.doc.content.some((node: any) => node.type === 'runnableCode')).toBe(true);
+    const sqlExercise = body.questions.find((q: any) => q.type === 'sql_exercise');
+    expect(sqlExercise.sqlStarterCode).toContain('____');
+    expect(sqlExercise.sqlStarterCode).not.toBe(sqlExercise.sqlSolution);
   });
 });
