@@ -21,7 +21,7 @@ const SAFE_SUBFOLDER = /^[a-zA-Z0-9_\-/]+$/;
 // Content tables that store a cover_image. One image can be referenced by several items
 // (reused from the library, or carried by a duplicated item), so it must not be destroyed
 // while another item still uses it as a cover.
-const COVER_TABLES = ['courses', 'events', 'virtual_experiences', 'assignments'] as const;
+const COVER_TABLES = ['courses', 'events', 'virtual_experiences', 'assignments', 'learning_paths'] as const;
 
 // POST /api/upload
 // Body: multipart/form-data with `file` (File) and optional `folder` (subfolder name)
