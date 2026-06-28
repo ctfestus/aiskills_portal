@@ -55,8 +55,8 @@ export function LessonContentStyles() {
 
 .lesson-content code { font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 0.88em; background: rgba(0,0,0,0.06); color: #166534; border-radius: 4px; padding: 1px 5px; }
 .lesson-content.dark code { background: rgba(255,255,255,0.08); color: #86efac; }
-.lesson-content pre { font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 0.85em; background: #f1f3f8; color: #1a1d2e; border-radius: 8px; padding: 12px 16px; margin: 0.75rem 0; overflow-x: auto; white-space: pre; }
-.lesson-content.dark pre { background: #0f1120; color: #c9d1d9; }
+.lesson-content pre { font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 0.85em; background: #f6f8fa; color: #1a1d2e; border: 1px solid #d0d7de; border-radius: 8px; padding: 12px 16px; margin: 0.75rem 0; overflow-x: auto; white-space: pre; }
+.lesson-content.dark pre { background: #0f1120; color: #c9d1d9; border-color: #2e2e33; }
 .lesson-content pre code { background: none; padding: 0; border-radius: 0; color: inherit; font-size: inherit; }
 
 .lesson-content blockquote { border-left: 3px solid #10b981; padding-left: 0.875rem; margin: 0.75rem 0; color: #52525b; font-style: normal; }
