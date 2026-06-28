@@ -125,7 +125,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
     <div
       className="rounded-lg overflow-hidden"
       style={{
-        background: dark ? 'rgba(255,255,255,0.05)' : '#f4f5f7',
+        background: dark ? 'rgba(255,255,255,0.05)' : '#ffffff',
         border: dark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
       }}
     >
