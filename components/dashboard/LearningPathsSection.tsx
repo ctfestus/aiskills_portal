@@ -4,9 +4,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, Loader2, Plus, Upload, X, Zap } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronLeft, ChevronRight, Images, Loader2, Plus, Upload, X, Zap } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
+import { ImageLibrary } from '@/components/ImageLibrary';
 import { LIGHT_C, cardStyle } from '@/lib/theme';
 
 export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: any[] }) {
@@ -18,6 +19,7 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
   const [saveMsg, setSaveMsg]       = useState<{ ok: boolean; text: string } | null>(null);
   const [deleting, setDeleting]     = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [showCoverLibrary, setShowCoverLibrary] = useState(false);
   const [uploadingBadge, setUploadingBadge] = useState(false);
   const [generatingDesc, setGeneratingDesc] = useState(false);
   const [lpSection, setLpSection] = useState<'details' | 'content'>('details');
@@ -237,12 +239,25 @@ export function LearningPathsSection({ C, forms }: { C: typeof LIGHT_C; forms: a
                 {uploadingCover ? <Loader2 className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4"/>}
                 {uploadingCover ? 'Uploading…' : editing.cover_image ? 'Change image' : 'Upload image'}
               </button>
+              <button onClick={() => setShowCoverLibrary(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-opacity hover:opacity-80"
+                style={{ border: `1px solid ${C.cardBorder}`, color: C.muted, background: C.pill }}>
+                <Images className="w-4 h-4"/> Browse library
+              </button>
               {editing.cover_image && (
                 <button onClick={() => setEditing((p: any) => ({ ...p, cover_image: '' }))}
                   className="text-xs px-3 py-2 rounded-xl transition-opacity hover:opacity-70"
                   style={{ color: '#ef4444', background: '#ef444412' }}>Remove</button>
               )}
             </div>
+            {showCoverLibrary && (
+              <ImageLibrary
+                uploadFolder="covers"
+                initialFolder="covers"
+                onSelect={url => setEditing((p: any) => ({ ...p, cover_image: url }))}
+                onClose={() => setShowCoverLibrary(false)}
+              />
+            )}
           </div>
 
           {/* Completion Badge */}

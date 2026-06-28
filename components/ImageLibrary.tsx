@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Search, Upload, Loader2, Images } from 'lucide-react';
+import { X, Search, Upload, Loader2, Images, Trash2 } from 'lucide-react';
 import { useC } from '@/lib/theme';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinaryWithMeta } from '@/lib/uploadToCloudinary';
@@ -63,6 +63,7 @@ export function ImageLibrary({ onSelect, onClose, uploadFolder, initialFolder, r
   const [folder, setFolder] = useState(initialFolder ?? '');
   const [search, setSearch] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   // Pexels tab state
@@ -143,6 +144,34 @@ export function ImageLibrary({ onSelect, onClose, uploadFolder, initialFolder, r
     } catch (err) {
       setError((err as Error).message || 'Upload failed');
       setUploading(false);
+    }
+  }
+
+  // Delete an image from the user's library. The server only destroys assets under the
+  // caller's own folder, and refuses to delete one still used as a content cover (it
+  // returns skipped:'referenced'), so this can't orphan a course/path cover.
+  async function handleDelete(img: LibraryImage) {
+    if (deletingId) return;
+    if (!window.confirm('Delete this image from your library permanently? This cannot be undone.')) return;
+    setDeletingId(img.publicId);
+    setError('');
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicId: img.publicId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(json.error || 'Could not delete image.'); return; }
+      if (json.skipped === 'referenced') {
+        setError('This image is still used as a cover somewhere, so it was not deleted.');
+        return;
+      }
+      setImages(prev => prev.filter(i => i.publicId !== img.publicId));
+    } catch {
+      setError('Could not delete image. Please try again.');
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -280,22 +309,37 @@ export function ImageLibrary({ onSelect, onClose, uploadFolder, initialFolder, r
 
               {filtered.length > 0 && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 10 }}>
-                  {filtered.map(img => (
-                    <button
-                      key={img.publicId}
-                      onClick={() => { onSelect(valueOf(img)); onClose(); }}
-                      style={{ position: 'relative', padding: 0, borderRadius: 12, overflow: 'hidden', aspectRatio: '4/3', border: '3px solid transparent', cursor: 'pointer', background: C.input, transition: 'border-color 0.15s, transform 0.12s' }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = C.cta; e.currentTarget.style.transform = 'scale(1.02)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}
-                    >
-                      <img src={img.thumbUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} loading="lazy" />
-                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.65))', padding: '20px 8px 7px' }}>
-                        <span style={{ fontSize: 11, color: 'white', fontWeight: 600, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {img.folder}
-                        </span>
+                  {filtered.map(img => {
+                    const isDeleting = deletingId === img.publicId;
+                    return (
+                      <div
+                        key={img.publicId}
+                        style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', aspectRatio: '4/3', border: '3px solid transparent', background: C.input, transition: 'border-color 0.15s, transform 0.12s' }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = C.cta; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}
+                      >
+                        <button
+                          onClick={() => { onSelect(valueOf(img)); onClose(); }}
+                          style={{ display: 'block', width: '100%', height: '100%', padding: 0, border: 'none', cursor: 'pointer', background: 'transparent' }}
+                        >
+                          <img src={img.thumbUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} loading="lazy" />
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.65))', padding: '20px 8px 7px', pointerEvents: 'none' }}>
+                            <span style={{ fontSize: 11, color: 'white', fontWeight: 600, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {img.folder}
+                            </span>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(img)}
+                          disabled={isDeleting}
+                          title="Delete from library"
+                          style={{ position: 'absolute', top: 6, right: 6, width: 28, height: 28, borderRadius: 8, border: 'none', background: 'rgba(0,0,0,0.55)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: isDeleting ? 'wait' : 'pointer' }}
+                        >
+                          {isDeleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                        </button>
                       </div>
-                    </button>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
