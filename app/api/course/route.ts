@@ -1,7 +1,6 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { requireUser, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { hasNudgeBeenSent, recordNudge } from '@/lib/nudge-helpers';
 import { getRedis, leaderboardKey, studentNameKey } from '@/lib/redis';
@@ -10,6 +9,8 @@ import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { updateLearningPathProgress } from '@/lib/learning-path-progress';
 import { courseResultEmail } from '@/lib/email-templates';
 import { pointsSystemFromCourseRow, type PointsSystem } from '@/lib/course-schema';
+import { gradeQuestion, parseAnswer, normalizePythonOutput } from '@/lib/grade-question';
+import { ensureCertificate, awardContentBadge, sendCertificateEmailOnce } from '@/lib/issue-certificate';
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -25,10 +26,6 @@ async function getSessionUser(req: NextRequest): Promise<{ id: string; email: st
   const auth = await requireUser(req);
   if (isAuthError(auth) || !auth.user.email) return null;
   return { id: auth.user.id, email: auth.user.email.trim().toLowerCase() };
-}
-
-function normalizePythonOutput(value: unknown): string {
-  return String(value ?? '').trim();
 }
 
 function pythonProofSecret(): string {
@@ -57,13 +54,6 @@ function verifyPythonProof(courseId: string, questionId: string, output: string,
   } catch {
     return false;
   }
-}
-
-function parseAnswer(value: unknown): any | null {
-  if (value == null) return null;
-  if (typeof value === 'object') return value;
-  if (typeof value !== 'string') return null;
-  try { return JSON.parse(value); } catch { return null; }
 }
 
 function mergeAnswerFlag(existing: unknown, patch: Record<string, unknown>) {
@@ -174,34 +164,11 @@ async function markPythonSolutionViewed(
   });
 }
 
-async function ensureCourseCertificate(
+function ensureCourseCertificate(
   supabase: ReturnType<typeof adminClient>,
   { course_id, student_id, student_name }: { course_id: string; student_id: string; student_name: string }
 ): Promise<{ certId: string; isNew: boolean }> {
-  const { data: existing } = await supabase
-    .from('certificates').select('id')
-    .eq('course_id', course_id).eq('student_id', student_id).eq('revoked', false)
-    .maybeSingle();
-  if (existing?.id) return { certId: existing.id, isNew: false };
-
-  const { data: cert, error } = await supabase
-    .from('certificates')
-    .insert({ course_id, student_id, student_name: student_name.trim() })
-    .select('id').single();
-
-  if (error) {
-    if (error.code === '23505') {
-      // Concurrent insert won the race; re-fetch the winning row
-      const { data: raced } = await supabase
-        .from('certificates').select('id')
-        .eq('course_id', course_id).eq('student_id', student_id).eq('revoked', false)
-        .maybeSingle();
-      if (raced?.id) return { certId: raced.id, isNew: false };
-    }
-    throw error;
-  }
-
-  return { certId: cert.id, isNew: true };
+  return ensureCertificate(supabase, { column: 'course_id', contentId: course_id, studentId: student_id, studentName: student_name });
 }
 
 function runCourseCertificateSideEffects(
@@ -224,63 +191,31 @@ function runCourseCertificateSideEffects(
       let badgeName: string | undefined;
       let badgeImageUrl: string | undefined;
       if (courseRow.badge_image_url) {
-        try {
-          const badgeId = `crs_${course_id}`;
-          const { error: badgesErr } = await supabase.from('badges').upsert({
-            id:          badgeId,
-            name:        `${courseRow.title} Badge`,
-            description: `Awarded for completing ${courseRow.title}`,
-            icon:        'graduated',
-            color:       '#6366f1',
-            image_url:   courseRow.badge_image_url,
-            category:    'course',
-          }, { onConflict: 'id' });
-          if (badgesErr) console.error('[runCourseCertificateSideEffects] badges upsert failed', badgesErr);
-          const { error: studentBadgesErr } = await supabase.from('student_badges').upsert({
-            student_id,
-            badge_id: badgeId,
-          }, { onConflict: 'student_id,badge_id', ignoreDuplicates: true });
-          if (studentBadgesErr) console.error('[runCourseCertificateSideEffects] student_badges upsert failed', studentBadgesErr);
-          badgeName     = `${courseRow.title} Badge`;
-          badgeImageUrl = courseRow.badge_image_url;
-        } catch (badgeErr) {
-          console.error('[runCourseCertificateSideEffects] badge award failed', badgeErr);
-        }
+        await awardContentBadge(supabase, {
+          badgeId:     `crs_${course_id}`,
+          name:        `${courseRow.title} Badge`,
+          description: `Awarded for completing ${courseRow.title}`,
+          imageUrl:    courseRow.badge_image_url,
+          category:    'course',
+          studentId:   student_id,
+        });
+        badgeName     = `${courseRow.title} Badge`;
+        badgeImageUrl = courseRow.badge_image_url;
       }
 
       if (process.env.RESEND_API_KEY) {
-        // Insert-as-lock: acquire before sending so concurrent callers race on
-        // UNIQUE(dedupe_key, type) rather than a read-then-write.
-        // On 23505: check status. 'sent' = already done. 'pending' = prior holder
-        // crashed before marking sent -- log it so the stale row can be deleted
-        // manually and the next call re-acquires.
-        const { error: lockErr } = await supabase.from('email_dedup')
-          .insert({ dedupe_key: cert_id, type: 'course-certificate' });
-        if (lockErr) {
-          if (lockErr.code === '23505') {
-            const { data: existing } = await supabase.from('email_dedup')
-              .select('status').eq('dedupe_key', cert_id).eq('type', 'course-certificate')
-              .maybeSingle();
-            if (existing?.status !== 'sent') {
-              console.error('[runCourseCertificateSideEffects] stale pending lock -- cert email may not have been sent, delete the email_dedup row to unblock', { cert_id });
-            }
-          } else {
-            console.error('[runCourseCertificateSideEffects] email_dedup lock failed', lockErr);
-          }
-          return;
-        }
-
         const t        = await getTenantSettings();
         const FROM     = process.env.RESEND_FROM_EMAIL || `${t.senderName} <${t.supportEmail}>`;
         const branding = { logoUrl: t.logoUrl, emailBannerUrl: t.emailBannerUrl, teamName: t.teamName, appName: t.appName, appUrl: t.appUrl };
         const certUrl  = `${t.appUrl}/certificate/${cert_id}`;
         const formUrl  = courseRow.slug ? `${t.appUrl}/${courseRow.slug}` : `${t.appUrl}/${course_id}`;
-        const resend   = new Resend(process.env.RESEND_API_KEY);
-        await resend.emails.send({
-          from:    FROM,
-          to:      studentRow.email,
-          subject: `Congratulations! Your certificate for ${courseRow.title} is ready`,
-          html:    courseResultEmail({
+        await sendCertificateEmailOnce(supabase, {
+          certId:     cert_id,
+          dedupeType: 'course-certificate',
+          from:       FROM,
+          to:         studentRow.email,
+          subject:    `Congratulations! Your certificate for ${courseRow.title} is ready`,
+          html:       courseResultEmail({
             name:         studentRow.full_name ?? 'there',
             courseTitle:  courseRow.title,
             score:        bestAttempt?.score ?? 100,
@@ -295,11 +230,6 @@ function runCourseCertificateSideEffects(
             branding,
           }),
         });
-
-        const { error: markSentErr } = await supabase.from('email_dedup')
-          .update({ status: 'sent' })
-          .eq('dedupe_key', cert_id).eq('type', 'course-certificate');
-        if (markSentErr) console.error('[runCourseCertificateSideEffects] email_dedup mark-sent failed', markSentErr);
       }
     } catch (err) {
       console.error('[runCourseCertificateSideEffects] post-cert tasks failed', err);
@@ -637,36 +567,11 @@ export async function POST(req: NextRequest) {
 
         const scorable = questions.filter(q => !q.lessonOnly && !q.isSection && !q.isDownloads);
         let correct = 0;
-        const scoreQuestion = (q: any): boolean => {
-          const ua = storedAnswers[q.id];
-          if (ua == null) return false;
-          const type = q.type ?? 'multiple_choice';
-          if (['code_review', 'excel_review', 'dashboard_critique', 'document_review'].includes(type)) return ua === 'completed';
-          if (type === 'sql_exercise') {
-            // Trust the browser-stored result; re-running WASM in Node produces different
-            // results, and solutionViewed/skipped penalties must still apply.
-            try {
-              const parsed = typeof ua === 'string' ? JSON.parse(ua) : ua;
-              if (parsed?.skipped || parsed?.solutionViewed) return false;
-              return !!parsed?.passed;
-            } catch {
-              return false;
-            }
-          }
-          if (type === 'python_exercise') {
-            const persisted = parseAnswer(persistedAnswers[q.id]);
-            if (persisted?.skipped || persisted?.solutionViewed) return false;
-            const parsed = parseAnswer(ua);
-            if (!parsed || parsed.skipped || parsed.solutionViewed || !parsed.passed) return false;
-            return verifyPythonProof(course_id, q.id, parsed.output, parsed.proof);
-          }
-          if (type === 'fill_blank') {
-            const accepted = (q.correctAnswer ?? '').split('|').map((s: string) => s.trim().toLowerCase());
-            return accepted.includes(String(ua).trim().toLowerCase());
-          }
-          if (type === 'arrange') return ua === q.correctAnswer;
-          return ua === q.correctAnswer;
-        };
+        const scoreQuestion = (q: any): boolean => gradeQuestion(q, {
+          storedAnswers,
+          persistedAnswers,
+          verifyProof: (questionId, output, proof) => verifyPythonProof(course_id, questionId, output, proof),
+        });
 
         for (const q of scorable) {
           if (scoreQuestion(q)) correct++;

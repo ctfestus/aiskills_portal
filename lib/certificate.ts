@@ -10,7 +10,7 @@ const svc = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-type CertType = 'course' | 'virtual_experience' | 'learning_path';
+type CertType = 'course' | 'virtual_experience' | 'learning_path' | 'certification';
 
 export interface CertificateData {
   certId:           string;
@@ -59,7 +59,7 @@ const fmtDate = (iso: string) =>
 export async function loadCertificate(id: string): Promise<CertificateResult> {
   const { data: cert, error } = await svc
     .from('certificates')
-    .select('id, student_name, issued_at, revoked, course_id, ve_id, learning_path_id, student_id')
+    .select('id, student_name, issued_at, revoked, course_id, ve_id, learning_path_id, certification_id, student_id')
     .eq('id', id)
     .single();
 
@@ -102,6 +102,30 @@ export async function loadCertificate(id: string): Promise<CertificateResult> {
         courseName:    ve?.title ?? 'Virtual Experience',
         certType:      'virtual_experience',
         badgeImageUrl: ve?.badge_image_url ?? null,
+        settings:      mapSettings(rawSettings),
+      },
+    };
+  }
+
+  // Certification certificate
+  if (cert.certification_id) {
+    const { data: c } = await svc
+      .from('certifications')
+      .select('title, user_id, badge_image_url')
+      .eq('id', cert.certification_id)
+      .maybeSingle();
+
+    const { data: rawSettings } = c?.user_id
+      ? await svc.from('certificate_defaults').select('*').eq('user_id', c.user_id).maybeSingle()
+      : { data: null };
+
+    return {
+      status: 'ready',
+      data: {
+        ...base,
+        courseName:    c?.title ?? 'Certification',
+        certType:      'certification',
+        badgeImageUrl: c?.badge_image_url ?? null,
         settings:      mapSettings(rawSettings),
       },
     };

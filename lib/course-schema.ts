@@ -32,7 +32,7 @@ export interface FormField {
 }
 
 export type QuestionType =
-  | 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'code'
+  | 'multiple_choice' | 'fill_blank' | 'arrange' | 'image' | 'image_choice' | 'code'
   | 'code_review' | 'excel_review' | 'dashboard_critique' | 'sql_exercise' | 'document_review'
   | 'python_exercise';
 
@@ -55,6 +55,7 @@ export interface CourseQuestion {
   correctAnswer: string;      // MC: option text; fill_blank: pipe-separated; arrange: options.join('|||'); image: index string
   explanation?: string;
   optionImages?: string[];    // image type only -- one base64 per option, same length as options
+  imageUrl?: string;          // image_choice: a single prompt image shown above the text options
   hint?: string;
   codeSnippet?: string;
   codeLanguage?: string;
@@ -100,6 +101,18 @@ export interface CourseQuestion {
   pythonHasExpectedOutput?: boolean;
   pythonSetupCode?: string;
   pythonHints?: string[];
+  // Optional NON-GRADED runnable playground attached to any question (a SQL/Python scratchpad the
+  // student runs to work out the answer). Carries no answer key, so it is safe to send to the client.
+  playground?: {
+    language?: 'sql' | 'python';
+    setupSql?: string;        // SQL: seed tables (CREATE/INSERT) the student can query
+    setupPython?: string;     // Python: code run once before the student's code
+    starterCode?: string;     // initial code in the editor
+    // SQL: uploaded CSV tables loaded into DuckDB (same shape as sql_exercise sqlTables)
+    sqlTables?: { id?: string; tableName: string; fileName?: string; fileUrl?: string; csvUrl?: string; seedSql?: string }[];
+    // Python: uploaded CSVs loaded into pandas DataFrames named by variableName
+    pythonDatasets?: { id?: string; variableName: string; fileName?: string; fileUrl?: string; csvUrl?: string }[];
+  };
 }
 
 export interface Speaker {
@@ -182,6 +195,29 @@ export interface FormConfig {
   deadline_days?: number | null;
   category?: string | null;
   badgeImageUrl?: string | null;
+}
+
+// --- Certifications ---
+//
+// Certifications are a separate first-class content type (their own table + player + overview),
+// but they reuse the CourseQuestion shape so authoring and grading stay consistent with courses.
+// Exam types only: multiple_choice | fill_blank | arrange | image | code | sql_exercise | python_exercise.
+export interface CertificationConfig {
+  title: string;
+  description?: string;
+  coverImage?: string;
+  badgeImageUrl?: string | null;
+  questions: CourseQuestion[];
+  passmark: number;
+  timeLimit?: number | null;   // minutes; null/0 = untimed
+  maxAttempts: number;         // 0 = unlimited
+  examProtection: boolean;
+  deadline_days?: number | null;
+  learnOutcomes?: string[];
+  theme?: ThemeColor;
+  mode?: ThemeMode;
+  font?: string;
+  customAccent?: string;
 }
 
 // --- Defaults ---

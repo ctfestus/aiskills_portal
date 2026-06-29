@@ -108,6 +108,7 @@ interface Props {
   isLastQuestion?: boolean;
   solutionPenalty?: number;
   isFirstTaskForLesson?: boolean;
+  examMode?: boolean;   // certifications: hide hints + View Solution (no answers shown in an exam)
 }
 
 type DetailModal =
@@ -407,6 +408,7 @@ export default function SQLExercisePlayer({
   solutionPenalty,
   onComplete, onHintUsed, onRevealSolution, onNext, isLastQuestion,
   isFirstTaskForLesson = true,
+  examMode = false,
 }: Props) {
   const saved = useMemo(() => parseSaved(savedAnswer), [savedAnswer]);
   const firstTableName = runtime?.tables?.[0]?.tableName ?? '';
@@ -526,8 +528,8 @@ export default function SQLExercisePlayer({
   const visibleResult = activeTab === 'result' ? result : (sampleResults[activeTab] ?? null);
   const hasChecker = !!question.sqlExpectedResult || !!question.sqlSolution?.trim();
   const availableHints: string[] = (question.sqlHints?.length ? question.sqlHints : question.hint ? [question.hint] : []);
-  const hasHints = availableHints.length > 0;
-  const canRevealSolution = hasChecker && !completed;
+  const hasHints = !examMode && availableHints.length > 0;
+  const canRevealSolution = !examMode && hasChecker && !completed;
   const solutionText = (revealedSolution || String(question.sqlSolution ?? '')).trim();
   const rowCount   = visibleResult?.rows.length ?? 0;
   const displayedRowCount = Math.min(rowCount, 100);
@@ -749,7 +751,7 @@ export default function SQLExercisePlayer({
         {/* ══════════ MOBILE TAB BAR ══════════ */}
         {isMobile && (
           <div className="flex-shrink-0 flex items-stretch gap-1.5 px-2 pt-2">
-            {(lesson?.title || lesson?.doc || lesson?.body || lesson?.videoUrl || lesson?.imageUrl || question.question) && (
+            {!examMode && (lesson?.title || lesson?.doc || lesson?.body || lesson?.videoUrl || lesson?.imageUrl || question.question) && (
               <button
                 type="button"
                 onClick={() => setMobileTab('lesson')}
@@ -774,7 +776,7 @@ export default function SQLExercisePlayer({
         <div className="flex-1 min-h-0 flex overflow-hidden p-2 sm:p-3">
 
         {/* ══════════ LEFT PANEL ══════════ */}
-        {(!isMobile ? leftOpen : mobileTab === 'lesson') && (
+        {!examMode && (!isMobile ? leftOpen : mobileTab === 'lesson') && (
           <div
             className="flex flex-col rounded-2xl overflow-hidden"
             style={{
@@ -894,7 +896,7 @@ export default function SQLExercisePlayer({
         )}
 
         {/* ══════════ RESIZE HANDLE (desktop only) -- canvas seam between cards ══════════ */}
-        {!isMobile && leftOpen && (
+        {!isMobile && !examMode && leftOpen && (
           <div
             className="flex-shrink-0 group relative"
             style={{ width: 8, cursor: 'col-resize', background: 'transparent' }}
@@ -922,7 +924,7 @@ export default function SQLExercisePlayer({
               className="flex-shrink-0 flex items-center gap-3 px-3 m-2 rounded-xl"
               style={{ height: 48, background: headerBg }}
             >
-              {!isMobile && (
+              {!isMobile && !examMode && (
                 <button
                   type="button"
                   onClick={() => setLeftOpen(o => !o)}
@@ -980,6 +982,13 @@ export default function SQLExercisePlayer({
               className="flex-shrink-0 flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 px-4 py-3"
               style={{ background: 'transparent' }}
             >
+              {examMode && onNext && !completed && (
+                <button type="button" onClick={onNext}
+                  className="mr-auto inline-flex items-center justify-center h-9 px-4 rounded-lg text-[13px] font-semibold transition-opacity hover:opacity-80"
+                  style={{ color: muted, background: subtle }}>
+                  Skip question
+                </button>
+              )}
               {canRevealSolution && !solutionRevealed && (
                 <button
                   type="button"
@@ -1043,7 +1052,7 @@ export default function SQLExercisePlayer({
           )} {/* end editor section */}
 
           {/* ---- VERTICAL RESIZE HANDLE (desktop only) -- canvas seam between cards ---- */}
-          {!isMobile && (
+          {!isMobile && !examMode && (
           <div
             className="flex-shrink-0 group relative"
             style={{ height: 8, cursor: 'row-resize', background: 'transparent' }}

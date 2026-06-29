@@ -17,7 +17,7 @@ interface Props {
   issueDate:         string;
   settings:          CertificateSettings;
   issuedAt:          string;
-  certType:          'course' | 'virtual_experience' | 'learning_path';
+  certType:          'course' | 'virtual_experience' | 'learning_path' | 'certification';
   badgeImageUrl?:    string | null;
   pathItems?:        { id: string; title: string; coverImage: string | null }[];
   pathCoverImage?:   string | null;
@@ -27,6 +27,7 @@ const CERT_TYPE_BADGE: Record<string, { label: string; bg: string; color: string
   course:             { label: 'Course',            bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
   virtual_experience: { label: 'Virtual Experience', bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' },
   learning_path:      { label: 'Learning Path',     bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' },
+  certification:      { label: 'Certification',     bg: '#ecfdf5', color: '#047857', border: '#a7f3d0' },
 };
 
 function LinkedInIcon() {

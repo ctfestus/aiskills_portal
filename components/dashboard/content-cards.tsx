@@ -11,7 +11,7 @@ import { sanitizeRichText } from '@/lib/sanitize';
 import {
   Plus, FileText, BarChart3, ExternalLink, Trash2, Edit2, Share2, Check, Copy, X,
   CalendarDays, AlignLeft, ChevronDown, ChevronRight, ChevronLeft, BookOpen, MapPin,
-  Download, Briefcase, Video, Database, MoreVertical, Send, Code2,
+  Download, Briefcase, Video, Database, MoreVertical, Send, Code2, ShieldCheck,
 } from 'lucide-react';
 import { LIGHT_C, useC, cardStyle } from '@/lib/theme';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
@@ -123,6 +123,7 @@ export function CreateCourseMenu({ C }: { C: any }) {
     { href: '/create?type=sql-course',      label: 'SQL Course AI',       desc: 'Generate a full SQL course with exercises', Icon: Database, color: '#3b82f6' },
     { href: '/create?type=python-course',   label: 'Python Course AI',    desc: 'Generate a data analysis course with Python exercises', Icon: Code2, color: '#f59e0b' },
     { href: '/create?type=doc-course',      label: 'Document to Course',  desc: 'Turn a PDF, deck, or guide into a course',  Icon: FileText, color: C.green },
+    { href: '/create/certification',        label: 'Certification Exam',  desc: 'Timed, protected exam that issues a certificate', Icon: ShieldCheck, color: '#10b981' },
   ];
   return (
     <div className="relative">

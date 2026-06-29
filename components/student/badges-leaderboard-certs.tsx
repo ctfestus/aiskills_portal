@@ -20,6 +20,7 @@ const BADGE_TABS = [
   { id: 'course',            label: 'Courses'            },
   { id: 'learning_path',     label: 'Learning Paths'     },
   { id: 'virtual_experience',label: 'Virtual Experiences'},
+  { id: 'certification',     label: 'Certifications'     },
 ] as const;
 
 // One badge category rendered as a titled, horizontally-scrolling carousel
@@ -116,7 +117,7 @@ export function StudentBadgesSection({ userId, C }: { userId: string; C: typeof 
         supabase.from('badges').select('id, name, description, icon, color, image_url, category').order('id'),
         supabase.from('student_badges').select('id, badge_id').eq('student_id', userId),
         supabase.from('student_streaks').select('current_streak, longest_streak').eq('student_id', userId).maybeSingle(),
-        supabase.from('certificates').select('id, course_id, ve_id, learning_path_id').eq('student_id', userId).eq('revoked', false),
+        supabase.from('certificates').select('id, course_id, ve_id, learning_path_id, certification_id').eq('student_id', userId).eq('revoked', false),
       ]);
       setAllBadges(badgesRes.data ?? []);
       const earnedRows = earnedRes.data ?? [];
@@ -131,6 +132,7 @@ export function StudentBadgesSection({ userId, C }: { userId: string; C: typeof 
         if (cert.course_id)        map[`crs_${cert.course_id}`]                   = cert.id;
         if (cert.ve_id)            map[`ve_${cert.ve_id}`]                        = cert.id;
         if (cert.learning_path_id) map[`lp_${cert.learning_path_id}`]            = cert.id;
+        if (cert.certification_id) map[`cert_${cert.certification_id}`]          = cert.id;
       }
       setCertIdMap(map);
       setLoading(false);
@@ -419,9 +421,9 @@ export function LeaderboardSection({ userEmail, C }: { userEmail: string; C: typ
 // --- Certificates section ---
 // Group certificates by type, in a fixed order, skipping empty types
 function groupCertsByType(certs: any[]): [string, any[]][] {
-  const buckets: Record<string, any[]> = { Courses: [], 'Virtual Experiences': [], 'Learning Paths': [] };
+  const buckets: Record<string, any[]> = { Courses: [], 'Virtual Experiences': [], 'Learning Paths': [], Certifications: [] };
   for (const c of certs) {
-    const key = c.ve_id ? 'Virtual Experiences' : c.learning_path_id ? 'Learning Paths' : 'Courses';
+    const key = c.ve_id ? 'Virtual Experiences' : c.learning_path_id ? 'Learning Paths' : c.certification_id ? 'Certifications' : 'Courses';
     buckets[key].push(c);
   }
   return (['Courses', 'Virtual Experiences', 'Learning Paths'] as const)
@@ -487,7 +489,7 @@ export function CertificatesSection({ userId, userEmail, C }: { userId: string; 
       setLoading(true);
       const { data: certsData } = await supabase
         .from('certificates')
-        .select('id, course_id, ve_id, learning_path_id, student_name, issued_at')
+        .select('id, course_id, ve_id, learning_path_id, certification_id, student_name, issued_at')
         .eq('student_id', userId)
         .eq('revoked', false)
         .order('issued_at', { ascending: false });
@@ -497,21 +499,34 @@ export function CertificatesSection({ userId, userEmail, C }: { userId: string; 
       const courseIds  = [...new Set(certsData.map((c: any) => c.course_id).filter(Boolean))];
       const veIds      = [...new Set(certsData.map((c: any) => c.ve_id).filter(Boolean))];
       const pathIds    = [...new Set(certsData.map((c: any) => c.learning_path_id).filter(Boolean))];
+      const certIds    = [...new Set(certsData.map((c: any) => c.certification_id).filter(Boolean))];
 
-      const [{ data: courseRows }, { data: veRows }, { data: pathRows }] = await Promise.all([
+      // Certification metadata comes from the service-role API (the base table denies student reads).
+      const { data: { session } } = await supabase.auth.getSession();
+      const certMetaFetch = certIds.length
+        ? fetch('/api/certification-attempt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+            body: JSON.stringify({ action: 'meta', ids: certIds }),
+          }).then(r => r.ok ? r.json() : { certifications: [] }).then((j: any) => ({ data: j.certifications ?? [] })).catch(() => ({ data: [] }))
+        : Promise.resolve({ data: [] });
+      const [{ data: courseRows }, { data: veRows }, { data: pathRows }, { data: certRows }] = await Promise.all([
         courseIds.length ? supabase.from('courses').select('id, title, cover_image').in('id', courseIds) : Promise.resolve({ data: [] }),
         veIds.length     ? supabase.from('virtual_experiences').select('id, title, cover_image').in('id', veIds) : Promise.resolve({ data: [] }),
         pathIds.length   ? supabase.from('learning_paths').select('id, title').in('id', pathIds) : Promise.resolve({ data: [] }),
+        certMetaFetch,
       ]);
 
       const courseMap = Object.fromEntries((courseRows ?? []).map((r: any) => [r.id, r]));
       const veMap     = Object.fromEntries((veRows     ?? []).map((r: any) => [r.id, r]));
       const pathMap   = Object.fromEntries((pathRows   ?? []).map((r: any) => [r.id, r]));
+      const certMap   = Object.fromEntries((certRows   ?? []).map((r: any) => [r.id, r]));
 
       setCerts(certsData.map((cert: any) => {
         const content = cert.course_id ? courseMap[cert.course_id]
           : cert.ve_id ? veMap[cert.ve_id]
           : cert.learning_path_id ? pathMap[cert.learning_path_id]
+          : cert.certification_id ? certMap[cert.certification_id]
           : null;
         return { ...cert, content };
       }));
