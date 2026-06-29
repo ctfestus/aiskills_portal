@@ -11,6 +11,7 @@ import { getFormType, groupFormsByCategory, CreateCourseMenu, EventCard, CourseT
 import { SchedulesManageSection } from '@/components/dashboard/SchedulesManageSection';
 import { RecordingsManageSection } from '@/components/dashboard/RecordingsManageSection';
 import { VirtualExperiencesManageSection } from '@/components/dashboard/VirtualExperiencesManageSection';
+import { CertificationsManageSection } from '@/components/dashboard/CertificationsManageSection';
 import { AttendanceReportSection } from '@/components/dashboard/AttendanceReportSection';
 import { AssignmentsManageSection } from '@/components/dashboard/AssignmentsManageSection';
 import { CertificatesSection } from '@/components/dashboard/CertificatesSection';
@@ -53,6 +54,8 @@ export function SectionContent({ section, forms, shareMenuOpen, setShareMenuOpen
   if (section === 'assignments') return <AssignmentsManageSection C={C}/>;
 
   if (section === 'virtual_experiences') return <VirtualExperiencesManageSection C={C} forms={forms} setFormToDelete={setFormToDelete} onDuplicated={onDuplicated} />;
+
+  if (section === 'certifications') return <CertificationsManageSection C={C} />;
 
   if (section === 'community') return <GenericListSection table="communities" label="Communities" createHref="/create/community" createLabel="New Community" Icon={Users} C={C} renderRow={item => (
     <div className="min-w-0">

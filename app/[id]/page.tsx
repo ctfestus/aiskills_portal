@@ -10,6 +10,7 @@ import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { CourseTaker } from '@/components/CourseTaker';
 import dynamic from 'next/dynamic';
 const VirtualExperienceTaker = dynamic(() => import('@/components/VirtualExperienceTaker'), { ssr: false });
+const CertificationTaker = dynamic(() => import('@/components/CertificationTaker'), { ssr: false });
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { sanitizeRichText } from '@/lib/sanitize';
@@ -289,6 +290,8 @@ export default function PublicFormPage() {
   const [creatorProfile, setCreatorProfile] = useState<any>(null);
   const [profilePopupOpen, setProfilePopupOpen] = useState(false);
   const profileHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Certification taker auth (resolved after the content loads; certifications require login).
+  const [certAuth, setCertAuth] = useState<{ name: string; email: string; token: string } | null>(null);
 
   const copyToClipboard = (text: string, id: string) => {
     const done = () => { setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); };
@@ -318,7 +321,8 @@ export default function PublicFormPage() {
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id as string);
       const lookupField = isUUID ? 'id' : 'slug';
 
-      // Query all content tables
+      // Query all content tables. Certifications are resolved separately via the service-role API
+      // (their base table denies student SELECT because it holds exam answer keys).
       const [{ data: course }, { data: event }, { data: ve }] = await Promise.all([
         supabase.from('courses').select('*').eq(lookupField, id).maybeSingle(),
         supabase.from('events').select('*').eq(lookupField, id).maybeSingle(),
@@ -364,8 +368,35 @@ export default function PublicFormPage() {
           theme: ve.theme, mode: ve.mode, font: ve.font, customAccent: ve.custom_accent,
         }};
       }
+
+      // Certifications: resolved through the service-role API, which access-checks the student and
+      // returns answer-stripped questions (the base table is not student-readable).
+      if (!data) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const res = await fetch('/api/certification-attempt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+            body: JSON.stringify({ action: 'get-exam', certification_id: id }),
+          });
+          if (res.ok) {
+            const { certification } = await res.json();
+            if (certification) data = { id: certification.id, slug: certification.slug, user_id: certification.user_id, content_type: 'certification', config: certification.config };
+          }
+        } catch { /* fall through to not-found */ }
+      }
+
       if (data) {
         setForm(data);
+        if (data.config?.isCertification && user) {
+          const { data: { session } } = await supabase.auth.getSession();
+          const { data: student } = await supabase.from('students').select('full_name, email').eq('id', user.id).single();
+          setCertAuth({
+            name:  student?.full_name || user.user_metadata?.full_name || user.email?.split('@')[0] || '',
+            email: student?.email || user.email || '',
+            token: session?.access_token ?? '',
+          });
+        }
         if (data.config?.eventDetails?.isEvent) {
           const { data: count } = await supabase.rpc('get_response_count', { p_form_id: data.id });
           if (count !== null) setAttendeeCount(Number(count));
@@ -684,6 +715,34 @@ export default function PublicFormPage() {
   const inputBg = resolvedMode === 'light' ? 'bg-transparent text-zinc-900 placeholder:text-zinc-400' : 'bg-transparent text-white placeholder:text-zinc-600';
   const selectOptionBg = resolvedMode === 'light' ? 'bg-white text-zinc-900' : 'bg-zinc-900 text-white';
   const selectPlaceholderColor = resolvedMode === 'light' ? 'text-zinc-400' : 'text-zinc-500';
+
+  // -- Certification (full-screen, protected exam) ---
+  // Certifications require login + cohort access (RLS), so the row only loads for an authed
+  // participant; render the taker once auth is resolved (brief loader otherwise).
+  if (config.isCertification) {
+    if (!certAuth) {
+      return (
+        <div style={{ minHeight: '100vh', background: '#17181E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Loader2 className="w-7 h-7 animate-spin" style={{ color: accentColor }} />
+        </div>
+      );
+    }
+    return (
+      <CertificationTaker
+        certificationId={form.id}
+        slug={form.slug}
+        config={config}
+        studentName={certAuth.name}
+        studentEmail={certAuth.email}
+        sessionToken={certAuth.token || undefined}
+        isDark={dark}
+        accentColor={accentColor}
+        logoUrl={logoUrl}
+        logoDarkUrl={logoDarkUrl}
+        onExit={() => { window.location.href = '/student'; }}
+      />
+    );
+  }
 
   // -- Virtual Experience ---
   if (config.isVirtualExperience || config.isGuidedProject) {

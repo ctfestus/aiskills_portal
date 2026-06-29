@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import {
-  X, ListChecks, PenLine, ArrowUpDown, Image as ImageIcon,
+  X, ListChecks, PenLine, ArrowUpDown, Image as ImageIcon, Images,
   Code2, Bot, Table2, BarChart2, ScrollText,
   Database, Terminal, Download,
 } from 'lucide-react';
@@ -16,7 +16,8 @@ export const TYPE_LABELS: Record<QuestionTypeOrDownloads, string> = {
   multiple_choice:    'Multiple Choice',
   fill_blank:         'Fill in the Blank',
   arrange:            'Arrange / Order',
-  image:              'Image Question',
+  image:              'Image Options',
+  image_choice:       'Image Question',
   code:               'Code Snippet',
   code_review:        'AI Code Review',
   excel_review:       'AI Excel Review',
@@ -29,6 +30,9 @@ export const TYPE_LABELS: Record<QuestionTypeOrDownloads, string> = {
 
 type TypeEntry = { value: QuestionTypeOrDownloads; label: string; icon: React.ReactNode; wide?: boolean };
 
+// Types only offered when a caller explicitly allows them (e.g. certifications), hidden by default.
+const OPT_IN_TYPES = new Set<QuestionTypeOrDownloads>(['image_choice']);
+
 const CATEGORIES: Array<{ label: string; color: string; types: TypeEntry[] }> = [
   {
     label: 'Quiz',
@@ -37,7 +41,8 @@ const CATEGORIES: Array<{ label: string; color: string; types: TypeEntry[] }> = 
       { value: 'multiple_choice', label: 'Multiple Choice',   icon: <ListChecks  className="w-[15px] h-[15px]" /> },
       { value: 'fill_blank',      label: 'Fill in the Blank', icon: <PenLine     className="w-[15px] h-[15px]" /> },
       { value: 'arrange',         label: 'Arrange / Order',   icon: <ArrowUpDown className="w-[15px] h-[15px]" /> },
-      { value: 'image',           label: 'Image Question',    icon: <ImageIcon   className="w-[15px] h-[15px]" /> },
+      { value: 'image',           label: 'Image Options',     icon: <Images      className="w-[15px] h-[15px]" /> },
+      { value: 'image_choice',    label: 'Image Question',    icon: <ImageIcon   className="w-[15px] h-[15px]" /> },
     ],
   },
   {
@@ -72,9 +77,10 @@ interface QuestionTypePickerProps {
   onSelect: (type: QuestionTypeOrDownloads) => void;
   onClose: () => void;
   includeDownloads?: boolean;
+  allowedTypes?: QuestionTypeOrDownloads[];   // when set, only these types are offered
 }
 
-export function QuestionTypePicker({ onSelect, onClose, includeDownloads = true }: QuestionTypePickerProps) {
+export function QuestionTypePicker({ onSelect, onClose, includeDownloads = true, allowedTypes }: QuestionTypePickerProps) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
 
@@ -121,7 +127,10 @@ export function QuestionTypePicker({ onSelect, onClose, includeDownloads = true 
         {/* Categories */}
         <div className="px-3.5 pb-3.5">
           {CATEGORIES.map((cat, catIdx) => {
-            const types = includeDownloads ? cat.types : cat.types.filter(t => t.value !== 'downloads');
+            let types = includeDownloads ? cat.types : cat.types.filter(t => t.value !== 'downloads');
+            if (allowedTypes) types = types.filter(t => allowedTypes.includes(t.value));
+            // image_choice is opt-in (certifications): hidden unless explicitly allowed.
+            else types = types.filter(t => !OPT_IN_TYPES.has(t.value));
             if (!types.length) return null;
             return (
               <div key={cat.label} style={{ marginTop: catIdx === 0 ? 14 : 12 }}>

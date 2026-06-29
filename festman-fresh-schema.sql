@@ -227,6 +227,38 @@ CREATE TABLE public.virtual_experiences (
 
 CREATE INDEX idx_ve_group_ids ON public.virtual_experiences USING GIN (group_ids);
 
+-- ── certifications (migration 123) ────────────────────────────
+-- Timed, anti-copy-protected exams. Own content type (not a course flag): own player,
+-- own attempts table, own overview pages. Reuses the CourseQuestion shape in `questions`.
+CREATE TABLE public.certifications (
+  id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  title           text        NOT NULL DEFAULT 'Untitled',
+  description     text,
+  slug            text        NOT NULL UNIQUE,
+  status          text        NOT NULL DEFAULT 'published'
+                                CHECK (status IN ('draft','published','archived')),
+  cohort_ids      uuid[]      NOT NULL DEFAULT '{}',
+  cover_image     text,
+  badge_image_url text,
+  questions       jsonb       NOT NULL DEFAULT '[]',
+  passmark        integer     NOT NULL DEFAULT 70 CHECK (passmark BETWEEN 0 AND 100),
+  time_limit      integer     CHECK (time_limit IS NULL OR time_limit > 0), -- minutes; null = untimed
+  max_attempts    integer     NOT NULL DEFAULT 1 CHECK (max_attempts >= 0),  -- 0 = unlimited
+  exam_protection boolean     NOT NULL DEFAULT true,
+  deadline_days   integer,
+  learn_outcomes  text[]      DEFAULT '{}',
+  theme           text,
+  mode            text        CHECK (mode IN ('light','dark')),
+  font            text,
+  custom_accent   text,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER trg_certifications_updated_at
+  BEFORE UPDATE ON public.certifications FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
 -- ── data_center_datasets (migration 106) ──────────────────────
 CREATE TABLE IF NOT EXISTS public.data_center_datasets (
   id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -462,7 +494,7 @@ CREATE TABLE public.schedule_resources (
 CREATE TABLE public.cohort_assignments (
   id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   cohort_id    uuid        NOT NULL REFERENCES public.cohorts(id) ON DELETE CASCADE,
-  content_type text        NOT NULL CHECK (content_type IN ('course','event','virtual_experience','form')),
+  content_type text        NOT NULL CHECK (content_type IN ('course','event','virtual_experience','form','certification')),
   content_id   uuid        NOT NULL,
   assigned_by  uuid        REFERENCES auth.users(id) ON DELETE SET NULL,
   assigned_at  timestamptz NOT NULL DEFAULT now(),
@@ -523,6 +555,32 @@ CREATE TABLE public.guided_project_attempts (
   UNIQUE (student_id, ve_id)
 );
 
+-- ── certification_attempts (migration 123) ────────────────────
+-- One row per exam attempt. proctor holds Standard-protection counters
+-- (tab-switch / blur / fullscreen-exit). No XP trigger: exams are not gamified.
+CREATE TABLE public.certification_attempts (
+  id                     uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id             uuid        NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  certification_id       uuid        NOT NULL REFERENCES public.certifications(id) ON DELETE CASCADE,
+  attempt_number         integer     NOT NULL DEFAULT 1,
+  started_at             timestamptz NOT NULL DEFAULT now(),
+  completed_at           timestamptz,
+  passed                 boolean,
+  score                  integer     NOT NULL DEFAULT 0,
+  current_question_index integer     NOT NULL DEFAULT 0,
+  answers                jsonb       NOT NULL DEFAULT '{}',
+  proctor                jsonb       NOT NULL DEFAULT '{}',
+  updated_at             timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_cert_attempts_student      ON public.certification_attempts(student_id);
+CREATE INDEX idx_cert_attempts_cert         ON public.certification_attempts(certification_id);
+CREATE INDEX idx_cert_attempts_student_cert ON public.certification_attempts(student_id, certification_id);
+-- At most one active (in-progress) attempt per student across ALL certifications -- enforces
+-- "one certification in progress at a time" atomically.
+CREATE UNIQUE INDEX idx_cert_attempts_one_active_per_student
+  ON public.certification_attempts (student_id)
+  WHERE completed_at IS NULL;
+
 -- ── student_xp ────────────────────────────────────────────────
 CREATE TABLE public.student_xp (
   student_id uuid        PRIMARY KEY REFERENCES public.students(id) ON DELETE CASCADE,
@@ -536,12 +594,13 @@ CREATE TABLE public.certificates (
   course_id        uuid,        -- no FK: certificate must outlive its course
   ve_id            uuid,        -- no FK: certificate must outlive its virtual experience
   learning_path_id uuid,        -- no FK: certificate must outlive its learning path
+  certification_id uuid,        -- no FK: certificate must outlive its certification (migration 123)
   student_id       uuid        NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
   student_name     text        NOT NULL,
   revoked          boolean     NOT NULL DEFAULT false,
   revoked_at       timestamptz,
   issued_at        timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT check_cert_has_content CHECK (course_id IS NOT NULL OR ve_id IS NOT NULL OR learning_path_id IS NOT NULL)
+  CONSTRAINT check_cert_has_content CHECK (course_id IS NOT NULL OR ve_id IS NOT NULL OR learning_path_id IS NOT NULL OR certification_id IS NOT NULL)
 );
 CREATE UNIQUE INDEX certificates_unique_active_student
   ON public.certificates (course_id, student_id)
@@ -549,6 +608,9 @@ CREATE UNIQUE INDEX certificates_unique_active_student
 CREATE UNIQUE INDEX certificates_unique_active_student_ve
   ON public.certificates (ve_id, student_id)
   WHERE revoked = false AND ve_id IS NOT NULL;
+CREATE UNIQUE INDEX certificates_unique_active_student_certification
+  ON public.certificates (certification_id, student_id)
+  WHERE revoked = false AND certification_id IS NOT NULL;
 
 -- ── certificate_defaults ──────────────────────────────────────
 CREATE TABLE public.certificate_defaults (
@@ -770,6 +832,8 @@ ALTER TABLE public.cohort_assignments         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.learning_paths             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.course_attempts            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.guided_project_attempts    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.certifications             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.certification_attempts     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.student_xp                 ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.certificates               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.certificate_defaults       ENABLE ROW LEVEL SECURITY;
@@ -1530,6 +1594,42 @@ CREATE POLICY "virtual_experiences: staff published select"
   ON public.virtual_experiences FOR SELECT
   USING ((SELECT public.is_staff()) AND status = 'published');
 
+-- ── certifications (migration 123) ─────────────────────────────
+-- Students do NOT get direct SELECT: `questions` holds answer keys. Student-facing reads go through
+-- the service-role API (app/api/certification-attempt). Only owner / admin / staff (published) read here.
+CREATE POLICY "certifications: owner admin select"
+  ON public.certifications FOR SELECT
+  USING (user_id = (SELECT auth.uid()) OR (SELECT public.is_admin()));
+
+CREATE POLICY "certifications: instructor insert"
+  ON public.certifications FOR INSERT
+  WITH CHECK (
+    (SELECT public.is_instructor_or_admin())
+    AND (user_id = (SELECT auth.uid()) OR (SELECT public.is_admin()))
+  );
+
+CREATE POLICY "certifications: instructor update"
+  ON public.certifications FOR UPDATE
+  USING (
+    (SELECT public.is_instructor_or_admin())
+    AND (user_id = (SELECT auth.uid()) OR (SELECT public.is_admin()))
+  )
+  WITH CHECK (
+    (SELECT public.is_instructor_or_admin())
+    AND (user_id = (SELECT auth.uid()) OR (SELECT public.is_admin()))
+  );
+
+CREATE POLICY "certifications: instructor delete"
+  ON public.certifications FOR DELETE
+  USING (
+    (SELECT public.is_instructor_or_admin())
+    AND (user_id = (SELECT auth.uid()) OR (SELECT public.is_admin()))
+  );
+
+CREATE POLICY "certifications: staff published select"
+  ON public.certifications FOR SELECT
+  USING ((SELECT public.is_staff()) AND status = 'published');
+
 -- ── assignments (migration 097: use my_group_ids() helper for group check) ──
 CREATE POLICY "assignments: select"
   ON public.assignments FOR SELECT
@@ -1988,6 +2088,24 @@ CREATE POLICY "course_attempts: student update"
   ON public.course_attempts FOR UPDATE
   USING (student_id = (SELECT auth.uid()))
   WITH CHECK (student_id = (SELECT auth.uid()));
+
+-- ── certification_attempts (migration 123) ────────────────────
+-- Students READ their own rows only. NO student INSERT/UPDATE: all attempt writes go through the
+-- service-role API (app/api/certification-attempt), so passed/score/completed_at cannot be tampered.
+-- Read of answers/proctor is scoped to the certification's OWNER (and admin), not every instructor.
+CREATE POLICY "certification_attempts: owner read"
+  ON public.certification_attempts FOR SELECT
+  USING (
+    (SELECT public.is_admin())
+    OR EXISTS (
+      SELECT 1 FROM public.certifications c
+      WHERE c.id = certification_attempts.certification_id AND c.user_id = (SELECT auth.uid())
+    )
+  );
+
+CREATE POLICY "certification_attempts: student read"
+  ON public.certification_attempts FOR SELECT
+  USING (student_id = (SELECT auth.uid()));
 
 -- ── guided_project_attempts ───────────────────────────────────
 CREATE POLICY "student_own"

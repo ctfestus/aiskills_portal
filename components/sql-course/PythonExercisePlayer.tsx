@@ -296,6 +296,7 @@ interface Props {
   completed: boolean;
   topOffset?: number;
   leftOffset?: number;
+  rightOffset?: number;
   sessionToken?: string;
   hintPenalty?: number;
   solutionPenalty?: number;
@@ -306,6 +307,7 @@ interface Props {
   onNext?: () => void;
   isLastQuestion?: boolean;
   isFirstTaskForLesson?: boolean;
+  examMode?: boolean;   // certifications: hide hints + View Solution (no answers shown in an exam)
 }
 
 function PythonPlots({ plots }: { plots: string[] }) {
@@ -329,6 +331,7 @@ export default function PythonExercisePlayer({
   completed,
   topOffset = 0,
   leftOffset = 0,
+  rightOffset = 0,
   sessionToken,
   hintPenalty,
   solutionPenalty,
@@ -339,6 +342,7 @@ export default function PythonExercisePlayer({
   isFirstTaskForLesson = true,
   onCheckAnswer,
   onRevealSolution,
+  examMode = false,
 }: Props) {
   const saved = parseSaved(savedAnswer);
   const starterCode = String(question.pythonStarterCode ?? '# Write your Python code here\n').trimEnd();
@@ -382,7 +386,7 @@ export default function PythonExercisePlayer({
   const vResizeStartPct = useRef(0);
 
   const lesson = question?.lesson;
-  const hasHints = (question.pythonHints ?? []).filter(Boolean).length > 0;
+  const hasHints = !examMode && (question.pythonHints ?? []).filter(Boolean).length > 0;
   const hasChecker = !!question.pythonHasExpectedOutput || !!(question.pythonExpectedOutput?.trim());
 
   const runnableDatasets = () => (question.pythonDatasets ?? [])
@@ -629,7 +633,7 @@ export default function PythonExercisePlayer({
   }
 
   const feedbackVisible = feedback && !feedbackDismissed;
-  const canReveal = hasChecker && !completed && !revealedSolution;
+  const canReveal = !examMode && hasChecker && !completed && !revealedSolution;
   const showContinueAfterSolution = solutionRevealed && !completed && !!onNext;
   const showContinueWithoutChecker = !hasChecker && !completed && !!onNext;
   const showingSolutionTab = codeTab === 'solution' && !!revealedSolution;
@@ -637,17 +641,26 @@ export default function PythonExercisePlayer({
   return (
     <div
       className="fixed bottom-0 right-0 z-40 flex flex-col overflow-hidden"
-      style={{ top: topOffset, left: leftOffset, transition: 'left 300ms ease', background: canvas, color: text }}
+      style={{ top: topOffset, left: leftOffset, right: rightOffset, transition: 'left 300ms ease, right 300ms ease', background: canvas, color: text }}
     >
       <style>{`
         .task-body code { font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace !important; font-size: 0.85em; background: ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}; color: ${isDark ? '#86efac' : '#166534'}; border-radius: 4px; padding: 1px 5px; }
         .task-body pre { font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 0.85em; background: ${isDark ? '#0f1120' : '#f1f3f8'}; color: ${isDark ? '#c9d1d9' : '#1a1d2e'}; border-radius: 6px; padding: 12px 16px; margin: 0.75rem 0; overflow-x: auto; }
         .task-body pre code { background: none; padding: 0; border-radius: 0; color: inherit; font-size: inherit; }
       `}</style>
+      {/* EXAM MODE: the task reads like a normal certification question -- a centered heading on top (no "TASK" label or box), matching the multiple-choice question style. */}
+      {examMode && question.question && (
+        <div className="flex-shrink-0 px-6 pt-6 pb-1" style={{ maxHeight: '26vh', overflowY: 'auto' }}>
+          <div className="task-body"
+            style={{ textAlign: 'center', fontSize: 22, fontWeight: 700, lineHeight: 1.4, color: text, maxWidth: 940, margin: '0 auto' }}
+            dangerouslySetInnerHTML={{ __html: renderRichText(question.question) }} />
+        </div>
+      )}
+
       {/* MOBILE TAB BAR */}
       {isMobile && (
         <div className="flex-shrink-0 flex items-stretch gap-1.5 px-2 pt-2">
-          {(lesson?.title || lesson?.doc || lesson?.body || question.question) && (
+          {!examMode && (lesson?.title || lesson?.doc || lesson?.body || question.question) && (
             <button type="button" onClick={() => setMobileTab('lesson')}
               className="flex-1 h-9 rounded-lg text-[12px] font-semibold transition-colors"
               style={{ background: mobileTab === 'lesson' ? leftBg : 'transparent', color: mobileTab === 'lesson' ? text : muted }}>
@@ -670,8 +683,8 @@ export default function PythonExercisePlayer({
       {/* CONTENT ROW */}
       <div className="flex-1 min-h-0 flex overflow-hidden p-2 sm:p-3">
 
-        {/* LEFT PANEL */}
-        {(!isMobile ? leftOpen : mobileTab === 'lesson') && (
+        {/* LEFT PANEL (hidden in exam mode -- the task is shown on top instead) */}
+        {!examMode && (!isMobile ? leftOpen : mobileTab === 'lesson') && (
           <div className="flex flex-col rounded-2xl overflow-hidden"
             style={{ width: isMobile ? '100%' : leftWidth, flexShrink: 0, background: leftBg }}>
             <div className="flex-shrink-0 flex items-center gap-1 px-3 m-2 rounded-xl" style={{ height: 48, background: headerBg }}>
@@ -734,23 +747,23 @@ export default function PythonExercisePlayer({
         )}
 
         {/* RESIZE HANDLE */}
-        {!isMobile && leftOpen && (
+        {!isMobile && !examMode && leftOpen && (
           <div onMouseDown={onResizeStart}
             className="flex-shrink-0 w-2 cursor-col-resize hover:bg-white/10 transition-colors mx-1 rounded-full" />
         )}
 
-        {/* RIGHT PANEL */}
+        {/* RIGHT PANEL -- exam mode (desktop) lays editor + output side by side; otherwise stacked. */}
         {(!isMobile || mobileTab === 'code' || mobileTab === 'output') && (
-          <div ref={rightPanelRef} className="flex-1 min-w-0 flex flex-col gap-2 sm:gap-0">
+          <div ref={rightPanelRef} className={`flex-1 min-w-0 flex ${examMode && !isMobile ? 'flex-row gap-3' : 'flex-col gap-2 sm:gap-0'}`}>
 
             {/* CODE EDITOR SECTION */}
             {(!isMobile || mobileTab === 'code') && (
               <div className="flex flex-col rounded-2xl overflow-hidden"
-                style={{ flex: isMobile ? 1 : `0 0 ${editorPct}%`, minHeight: 0, background: editorBg }}>
+                style={{ flex: isMobile ? 1 : (examMode ? '1 1 0%' : `0 0 ${editorPct}%`), minHeight: 0, minWidth: 0, background: editorBg }}>
 
                 {/* Editor header */}
                 <div className="flex-shrink-0 flex items-center gap-3 px-3 m-2 rounded-xl" style={{ height: 48, background: headerBg }}>
-                  {!isMobile && (
+                  {!isMobile && !examMode && (
                     <button type="button" onClick={() => setLeftOpen(v => !v)}
                       className="w-8 h-8 grid place-items-center rounded-lg transition-opacity hover:opacity-70 flex-shrink-0"
                       style={{ background: subtle, color: muted }}
@@ -811,6 +824,13 @@ export default function PythonExercisePlayer({
 
                 {/* ACTION BAR -- same position as SQL exercise */}
                 <div className="flex-shrink-0 flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 px-4 py-3">
+                  {examMode && onNext && !completed && (
+                    <button type="button" onClick={onNext}
+                      className="mr-auto inline-flex items-center justify-center h-9 px-4 rounded-lg text-[13px] font-semibold transition-opacity hover:opacity-80"
+                      style={{ color: muted, background: subtle }}>
+                      Skip question
+                    </button>
+                  )}
                   {canReveal && (
                     <button type="button" onClick={doRevealSolution} disabled={solutionLoading}
                       className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-lg text-[13px] font-semibold transition-opacity disabled:opacity-50 hover:opacity-80"
@@ -863,8 +883,8 @@ export default function PythonExercisePlayer({
               </div>
             )}
 
-            {/* VERTICAL RESIZE HANDLE */}
-            {!isMobile && (
+            {/* VERTICAL RESIZE HANDLE (only when editor is stacked above output) */}
+            {!isMobile && !examMode && (
               <div onMouseDown={onVerticalResizeStart}
                 className="flex-shrink-0 h-2 cursor-row-resize hover:bg-white/10 transition-colors rounded-full" />
             )}
@@ -872,7 +892,7 @@ export default function PythonExercisePlayer({
             {/* OUTPUT PANEL */}
             {(!isMobile || mobileTab === 'output') && (
               <div className="flex flex-col rounded-2xl overflow-hidden"
-                style={{ flex: isMobile ? 1 : `1 1 0%`, minHeight: 0, background: outputBg }}>
+                style={{ flex: isMobile ? 1 : `1 1 0%`, minHeight: 0, minWidth: 0, background: outputBg }}>
 
                 {/* Tab bar: Output + one tab per dataset */}
                 <div className="flex-shrink-0 flex items-center gap-1 px-3 overflow-x-auto no-scrollbar"

@@ -29,6 +29,7 @@ import { EventsSection } from '@/components/student/events';
 import { AssignmentsSection } from '@/components/student/assignments';
 import { CommunitySection, AnnouncementsSection } from '@/components/student/community-announcements';
 import { VirtualExperiencesSection } from '@/components/student/virtual-experiences';
+import { CertificationsSection } from '@/components/student/certifications';
 import { DataCenterSection, RecordingsSection, ScheduleSection } from '@/components/student/schedule-recordings';
 import { StudentBadgesSection, LeaderboardSection, CertificatesSection } from '@/components/student/badges-leaderboard-certs';
 import { AiCareerToolkitSection } from '@/components/student/ai-career-toolkit';
@@ -517,6 +518,9 @@ export default function StudentDashboard() {
             )}
             {activeSection === 'virtual_experiences' && user && (
               <VirtualExperiencesSection userId={effectiveId} userEmail={effectiveEmail} C={C}/>
+            )}
+            {activeSection === 'certifications' && user && (
+              <CertificationsSection userId={effectiveId} userEmail={effectiveEmail} C={C}/>
             )}
             {activeSection === 'data_center' && user && (
               <DataCenterSection C={C} />

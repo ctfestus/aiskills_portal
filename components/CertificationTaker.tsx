@@ -1,0 +1,820 @@
+'use client';
+
+// Chromeless, anti-copy-protected exam player for the `certifications` content type. "Full screen"
+// here means the platform UI fills the viewport with no nav/sidebar/outline -- NOT the browser's
+// Fullscreen API. Distinct from CourseTaker: no points/gamification, an enforced countdown that
+// auto-submits, and a document-level protection layer (block copy/cut/paste/right-click + text
+// selection, log tab-switch / blur). Reuses the CourseQuestion shape and the SQL/Python players.
+
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { X, Clock, Loader2, CheckCircle2, XCircle, ShieldAlert, Award, AlertTriangle, Circle, Check, ListChecks, Sparkle, ChevronRight } from 'lucide-react';
+import { initSQLRuntime, SQLRuntime } from '@/lib/sql-engine';
+import SQLExercisePlayer from '@/components/sql-course/SQLExercisePlayer';
+import PythonExercisePlayer from '@/components/sql-course/PythonExercisePlayer';
+import { CertificationPlayground } from '@/components/CertificationPlayground';
+import type { CourseQuestion } from '@/lib/course-schema';
+
+type Phase = 'loading' | 'intro' | 'exam' | 'review' | 'result' | 'blocked';
+type Proctor = { hidden: number; blur: number };
+
+interface Props {
+  certificationId: string;
+  slug?: string;
+  config: any;
+  studentName: string;
+  studentEmail: string;
+  sessionToken?: string;
+  isDark: boolean;
+  accentColor: string;
+  logoUrl?: string;
+  logoDarkUrl?: string;
+  onExit: () => void;
+}
+
+const isExerciseType = (t?: string) => t === 'sql_exercise' || t === 'python_exercise';
+
+// Plain-text, truncated question text for the review summary list.
+function shortText(html: string): string {
+  const txt = String(html ?? '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+  return txt.length > 90 ? `${txt.slice(0, 90)}...` : txt;
+}
+
+// A code exercise counts as answered only when its stored payload says it passed.
+function exercisePassed(raw?: string): boolean {
+  if (!raw) return false;
+  try { const p = JSON.parse(raw); return !!p?.passed && !p?.skipped && !p?.solutionViewed; } catch { return false; }
+}
+
+export default function CertificationTaker({
+  certificationId, slug, config, studentName, studentEmail, sessionToken,
+  isDark, accentColor, logoUrl, logoDarkUrl, onExit,
+}: Props) {
+  // Questions are NOT in config -- they are delivered by start-attempt (when the clock starts), so a
+  // student cannot read them before the timer begins. config carries only metadata + questionCount.
+  const questionCount: number = Number(config?.questionCount) || 0;
+  const timeLimitMin: number = Number(config?.timeLimit) || 0;
+  const maxAttempts: number = Number(config?.maxAttempts) || 0;
+  const protect: boolean = config?.examProtection !== false;
+
+  const [phase, setPhase] = useState<Phase>('loading');
+  const [questions, setQuestions] = useState<CourseQuestion[]>([]);
+  const total = questions.length;
+  const [index, setIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [startError, setStartError] = useState('');
+  const [starting, setStarting] = useState(false);
+  const [isPreview, setIsPreview] = useState(false);
+  const [canResume, setCanResume] = useState(false);
+  // True when the student jumped from the review page to answer a still-unanswered question; after
+  // saving they go straight back to review (they cannot wander into already-answered questions).
+  const [returnToReview, setReturnToReview] = useState(false);
+  const [result, setResult] = useState<{ score: number; passed: boolean; certId?: string } | null>(null);
+  const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
+  const [warning, setWarning] = useState('');
+
+  const answersRef = useRef<Record<string, string>>({});
+  const proctorRef = useRef<Proctor>({ hidden: 0, blur: 0 });
+  const indexRef = useRef(0);
+  const submittedRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Measured horizontal bounds of the progress bar track, so the question content can line up exactly
+  // with the bar (which is inset by the exit button + timer).
+  const barRef = useRef<HTMLDivElement>(null);
+  const [contentPad, setContentPad] = useState<{ left: number; right: number }>({ left: 56, right: 56 });
+  // Server-computed seconds left on a resumed attempt (from started_at + time_limit). Seeds the
+  // countdown so a refresh cannot regain time; null on a fresh start (uses the full limit).
+  const resumeRemainingRef = useRef<number | null>(null);
+
+  useEffect(() => { answersRef.current = answers; }, [answers]);
+  useEffect(() => { indexRef.current = index; }, [index]);
+
+  const t = isDark
+    ? { bg: '#17181E', card: '#1E1F26', cardHover: '#23242c', border: 'rgba(255,255,255,0.10)', text: '#f0f0f0', muted: '#8a8a93', track: 'rgba(255,255,255,0.08)' }
+    : { bg: '#0f1117', card: '#1b1d26', cardHover: '#22242e', border: 'rgba(255,255,255,0.10)', text: '#f4f4f5', muted: '#9aa0aa', track: 'rgba(255,255,255,0.10)' };
+  // The exam chrome is intentionally dark in both modes (focused, distraction-free, like a proctored exam).
+
+  const api = useCallback((action: string, extra: Record<string, any> = {}) =>
+    fetch('/api/certification-attempt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+      body: JSON.stringify({ action, certification_id: certificationId, ...extra }),
+    }), [certificationId, sessionToken]);
+
+  // -- Initial load: resume / blocked / already-passed --
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api('get-progress');
+        const d = await res.json();
+        if (cancelled) return;
+        if (d.hasPassed || d.cert?.id) {
+          setResult({ score: d.passingAttempt?.score ?? 100, passed: true, certId: d.cert?.id });
+          setPhase('result');
+          return;
+        }
+        const completed = Number(d.attemptCount ?? 0);
+        // An in-progress attempt means "resume" -- but the actual questions/answers/clock are loaded
+        // by start-attempt when the student clicks Resume, not here.
+        if (d.progress) {
+          setCanResume(true);
+          setAttemptsLeft(maxAttempts > 0 ? Math.max(0, maxAttempts - completed) : null);
+          setPhase('intro');
+          return;
+        }
+        if (maxAttempts > 0 && completed >= maxAttempts) {
+          setPhase('blocked');
+          return;
+        }
+        setAttemptsLeft(maxAttempts > 0 ? Math.max(0, maxAttempts - completed) : null);
+        setPhase('intro');
+      } catch {
+        if (!cancelled) setPhase('intro');
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // -- SQL runtime preparation (mirrors CourseTaker) --
+  const [sqlRuntime, setSqlRuntime] = useState<SQLRuntime | null>(null);
+  const [sqlPreparing, setSqlPreparing] = useState(false);
+  const [sqlPrepareError, setSqlPrepareError] = useState('');
+  const sqlRuntimeRef = useRef<SQLRuntime | null>(null);
+  const sqlInitStartedRef = useRef(false);
+  const sqlTables = useMemo(() => {
+    const byKey = new Map<string, any>();
+    for (const q of questions) {
+      if ((q as any)?.type !== 'sql_exercise') continue;
+      for (const table of ((q as any).sqlTables ?? [])) {
+        const key = `${table.tableName}|${table.fileUrl || table.csvUrl || table.seedSql || ''}`;
+        if (table.tableName && !byKey.has(key)) byKey.set(key, table);
+      }
+    }
+    return Array.from(byKey.values());
+  }, [questions]);
+
+  const currentQuestion = questions[index];
+  const qType = (currentQuestion as any)?.type ?? 'multiple_choice';
+
+  useEffect(() => {
+    if (phase !== 'exam' || qType !== 'sql_exercise' || sqlRuntimeRef.current || sqlInitStartedRef.current || sqlTables.length === 0) return;
+    let cancelled = false;
+    sqlInitStartedRef.current = true;
+    setSqlPreparing(true);
+    setSqlPrepareError('');
+    initSQLRuntime(sqlTables)
+      .then(rt => { if (cancelled) { rt.close(); return; } sqlRuntimeRef.current = rt; setSqlRuntime(rt); })
+      .catch(err => { if (!cancelled) setSqlPrepareError(err?.message || 'Could not prepare the SQL environment.'); })
+      .finally(() => { if (!cancelled) setSqlPreparing(false); if (!sqlRuntimeRef.current) sqlInitStartedRef.current = false; });
+    return () => { cancelled = true; };
+  }, [phase, qType, sqlTables]);
+
+  useEffect(() => () => { sqlRuntimeRef.current?.close(); sqlRuntimeRef.current = null; }, []);
+
+  // -- Submit (server re-scores) --
+  const submit = useCallback(async () => {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+    if (timerRef.current) clearInterval(timerRef.current);
+    // Preview (owner/admin/instructor/staff) has no attempt and is never scored.
+    if (isPreview) {
+      setResult({ score: 0, passed: false });
+      setPhase('result');
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      const res = await api('complete-attempt', {
+        current_question_index: total,
+        final_answers: answersRef.current,
+        proctor: proctorRef.current,
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to submit.');
+      setResult({ score: d.score ?? 0, passed: !!d.passed, certId: d.certId });
+      setPhase('result');
+    } catch (err: any) {
+      submittedRef.current = false;
+      setSubmitError(err?.message || 'Could not submit your exam. Check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [api, total, isPreview]);
+
+  // -- Enforced timer --
+  useEffect(() => {
+    if ((phase !== 'exam' && phase !== 'review') || !timeLimitMin) return;
+    // Resume uses the server-computed remaining seconds; a fresh start uses the full limit.
+    setTimeLeft(prev => (prev === null ? (resumeRemainingRef.current ?? timeLimitMin * 60) : prev));
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev === null || prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          submit();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, timeLimitMin]);
+
+  const flashWarning = useCallback((msg: string) => {
+    setWarning(msg);
+    if (warnTimer.current) clearTimeout(warnTimer.current);
+    warnTimer.current = setTimeout(() => setWarning(''), 3200);
+  }, []);
+
+  // -- Protection layer: active only during the exam --
+  useEffect(() => {
+    if ((phase !== 'exam' && phase !== 'review') || !protect) return;
+    const block = (e: Event) => { e.preventDefault(); e.stopImmediatePropagation(); };
+    const onVisibility = () => { if (document.hidden) { proctorRef.current.hidden++; flashWarning('Leaving the exam is recorded.'); } };
+    const onBlur = () => { proctorRef.current.blur++; };
+    document.addEventListener('copy', block, true);
+    document.addEventListener('cut', block, true);
+    document.addEventListener('paste', block, true);
+    document.addEventListener('contextmenu', block, true);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      document.removeEventListener('copy', block, true);
+      document.removeEventListener('cut', block, true);
+      document.removeEventListener('paste', block, true);
+      document.removeEventListener('contextmenu', block, true);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, [phase, protect, flashWarning]);
+
+  const timerMounted = timeLeft !== null;
+
+  // Match the question content's left/right to the progress bar track. The timer mounts just after the
+  // exam starts, so observe the bar instead of relying only on the phase transition measurement.
+  useEffect(() => {
+    if (phase !== 'exam' && phase !== 'review') return;
+    const measure = () => {
+      const r = barRef.current?.getBoundingClientRect();
+      // Use clientWidth (excludes the vertical scrollbar) so the right edge lines up with the bar,
+      // which as a fixed element is laid out against the scrollbar-excluded viewport.
+      if (r) {
+        const viewportWidth = document.documentElement.clientWidth;
+        const contentWidth = Math.min(r.width, 1000);
+        const left = r.left + (r.width - contentWidth) / 2;
+        setContentPad({ left: Math.round(left), right: Math.round(viewportWidth - left - contentWidth) });
+      }
+    };
+    measure();
+    const frame = window.requestAnimationFrame(measure);
+    const observer = typeof ResizeObserver !== 'undefined' && barRef.current ? new ResizeObserver(measure) : null;
+    if (barRef.current) observer?.observe(barRef.current);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [phase, timerMounted]);
+
+  const saveProgress = useCallback((nextAnswers: Record<string, string>, nextIndex: number) => {
+    api('save-progress', { current_question_index: nextIndex, answers: nextAnswers, proctor: proctorRef.current })
+      .catch(() => {});
+  }, [api]);
+
+  const startExam = useCallback(async () => {
+    setStartError('');
+    setStarting(true);
+    try {
+      // start-attempt is the ONLY place the attempt (and its started_at) is created and where the
+      // questions are delivered -- so the clock starts exactly when the student gets the questions.
+      const res = await api('start-attempt');
+      const d = await res.json();
+      if (!res.ok) {
+        if (res.status === 403) { setPhase('blocked'); return; }
+        if (res.status === 409 && d.reason === 'already_passed') { setResult({ score: 100, passed: true }); setPhase('result'); return; }
+        setStartError(d.error || 'Could not start the exam.');
+        return;
+      }
+      const loaded = Array.isArray(d.questions) ? d.questions : [];
+      setQuestions(loaded);
+      const savedAnswers = d.answers && typeof d.answers === 'object' ? d.answers : {};
+      setAnswers(savedAnswers);
+      answersRef.current = savedAnswers;
+      const startIndex = Math.min(Number(d.currentIndex ?? 0), Math.max(0, loaded.length - 1));
+      setIndex(startIndex);
+      indexRef.current = startIndex;
+      if (d.proctor && typeof d.proctor === 'object') proctorRef.current = { hidden: 0, blur: 0, ...d.proctor };
+      resumeRemainingRef.current = typeof d.remainingSeconds === 'number' ? d.remainingSeconds : null;
+      setIsPreview(!!d.preview);
+      setTimeLeft(null); // re-seed from resumeRemainingRef in the timer effect
+      submittedRef.current = false;
+      setPhase('exam');
+    } catch {
+      setStartError('Could not start the exam. Check your connection and try again.');
+    } finally {
+      setStarting(false);
+    }
+  }, [api]);
+
+  const setAnswer = useCallback((qid: string, value: string) => {
+    setAnswers(prev => ({ ...prev, [qid]: value }));
+  }, []);
+
+  // Advance from a non-exercise question via the Continue button.
+  const advance = useCallback(() => {
+    // Fixing skipped questions from the review: move to the NEXT still-unanswered question, and only
+    // go back to review once none remain (don't bounce back to review after every single one).
+    if (returnToReview) {
+      saveProgress(answersRef.current, indexRef.current);
+      const nextUnanswered = questions.findIndex(qq =>
+        !(isExerciseType((qq as any).type) ? exercisePassed(answersRef.current[qq.id]) : !!answersRef.current[qq.id]));
+      if (nextUnanswered >= 0 && nextUnanswered !== indexRef.current) { setIndex(nextUnanswered); return; }
+      setReturnToReview(false);
+      setPhase('review');
+      return;
+    }
+    const next = indexRef.current + 1;
+    // After the last question, go to the review/summary page (not straight to submit).
+    if (next >= total) { saveProgress(answersRef.current, indexRef.current); setPhase('review'); return; }
+    setIndex(next);
+    saveProgress(answersRef.current, next);
+  }, [total, saveProgress, returnToReview, questions]);
+
+  // Exercise players record their own result then drive navigation through onNext.
+  const recordExercise = useCallback((qid: string, payload: any) => {
+    setAnswers(prev => {
+      const updated = { ...prev, [qid]: JSON.stringify(payload) };
+      answersRef.current = updated;
+      return updated;
+    });
+    saveProgress({ ...answersRef.current, [qid]: JSON.stringify(payload) }, indexRef.current);
+  }, [saveProgress]);
+
+  // --- Render ---
+
+  if (phase === 'loading') {
+    return (
+      <div style={{ minHeight: '100vh', background: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 className="w-7 h-7 animate-spin" style={{ color: accentColor }} />
+      </div>
+    );
+  }
+
+  const protectStyle = protect ? (
+    <style>{`.cert-noselect{user-select:none;-webkit-user-select:none;}
+.cert-noselect input,.cert-noselect textarea,.cert-noselect [contenteditable],.cert-noselect .cm-editor,.cert-noselect .cm-content{user-select:text;-webkit-user-select:text;}`}</style>
+  ) : null;
+
+  if (phase === 'blocked') {
+    return (
+      <div style={{ minHeight: '100vh', background: t.bg, color: t.text, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ maxWidth: 460, textAlign: 'center' }}>
+          <AlertTriangle className="w-12 h-12 mx-auto mb-4" style={{ color: '#f59e0b' }} />
+          <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>No attempts remaining</h1>
+          <p style={{ fontSize: 14, color: t.muted, marginBottom: 20 }}>You have used all {maxAttempts} attempt{maxAttempts === 1 ? '' : 's'} for this certification.</p>
+          <button onClick={onExit} style={{ background: accentColor, color: '#06281a', fontWeight: 600, fontSize: 14, padding: '10px 22px', borderRadius: 10 }}>Back</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'result' && result) {
+    const certUrl = result.certId ? `/certificate/${result.certId}` : null;
+    return (
+      <div style={{ minHeight: '100vh', background: t.bg, color: t.text, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 480, width: '100%', textAlign: 'center' }}>
+          {result.passed || isPreview
+            ? <CheckCircle2 className="w-14 h-14 mx-auto mb-4" style={{ color: accentColor }} />
+            : <XCircle className="w-14 h-14 mx-auto mb-4" style={{ color: '#f43f5e' }} />}
+          <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 6 }}>{isPreview ? 'Preview complete' : result.passed ? 'Certification passed' : 'Not passed yet'}</h1>
+          <p style={{ fontSize: 15, color: t.muted, marginBottom: 24 }}>
+            {isPreview
+              ? 'This was a preview. Attempts taken here are not scored or recorded.'
+              : <>Your score: <span style={{ color: t.text, fontWeight: 700 }}>{result.score}%</span> (pass mark {config?.passmark ?? 70}%)</>}
+          </p>
+          {result.passed && certUrl && (
+            <a href={certUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: accentColor, color: '#06281a', fontWeight: 700, fontSize: 14, padding: '11px 24px', borderRadius: 10, marginBottom: 12 }}>
+              <Award className="w-4 h-4" /> View certificate
+            </a>
+          )}
+          <div>
+            <button onClick={onExit} style={{ marginTop: 12, color: t.muted, fontSize: 13, textDecoration: 'underline' }}>Back to certifications</button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (phase === 'intro') {
+    return (
+      <div style={{ minHeight: '100vh', background: t.bg, color: t.text, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        {protectStyle}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 560, width: '100%' }}>
+          <button onClick={onExit} className="mb-6 flex items-center gap-1.5" style={{ color: t.muted, fontSize: 13 }}><X className="w-4 h-4" /> Exit</button>
+          <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 10 }}>{config?.title || 'Certification exam'}</h1>
+          {config?.description && <p style={{ fontSize: 15, color: t.muted, marginBottom: 24, lineHeight: 1.6 }}>{config.description}</p>}
+          <div style={{ display: 'grid', gap: 12, marginBottom: 28 }}>
+            <Rule t={t} label="Questions" value={`${questionCount}`} />
+            <Rule t={t} label="Pass mark" value={`${config?.passmark ?? 70}%`} />
+            <Rule t={t} label="Time limit" value={timeLimitMin ? `${timeLimitMin} minute${timeLimitMin === 1 ? '' : 's'}` : 'Untimed'} />
+            <Rule t={t} label="Attempts" value={maxAttempts > 0 ? `${attemptsLeft ?? maxAttempts} of ${maxAttempts} left` : 'Unlimited'} />
+          </div>
+          {protect && (
+            <div style={{ display: 'flex', gap: 10, padding: '12px 14px', borderRadius: 10, background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.25)', marginBottom: 24 }}>
+              <ShieldAlert className="w-5 h-5 flex-shrink-0" style={{ color: '#f59e0b' }} />
+              <p style={{ fontSize: 12.5, color: t.muted, lineHeight: 1.55 }}>
+                Protected exam: copying, pasting and right-click are disabled. Leaving the tab is recorded. The timer cannot be paused.
+              </p>
+            </div>
+          )}
+          <button onClick={startExam} disabled={starting} style={{ background: accentColor, color: '#06281a', fontWeight: 700, fontSize: 15, padding: '12px 28px', borderRadius: 12, opacity: starting ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {starting && <Loader2 className="w-4 h-4 animate-spin" />}
+            {canResume ? 'Resume exam' : 'Start exam'}
+          </button>
+          {startError && <p style={{ marginTop: 12, fontSize: 13, color: '#f43f5e' }}>{startError}</p>}
+        </motion.div>
+      </div>
+    );
+  }
+
+  // -- Exam / review phase --
+  const answeredCount = questions.filter(qq => isExerciseType((qq as any).type) ? exercisePassed(answers[qq.id]) : !!answers[qq.id]).length;
+  const progress = phase === 'review' ? 100 : total > 0 ? (index / total) * 100 : 0;
+  const timeWarn = timeLeft !== null && timeLeft <= 60;
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const answered = currentQuestion ? (isExerciseType(qType) ? exercisePassed(answers[currentQuestion.id]) : !!answers[currentQuestion.id]) : false;
+
+  return (
+    <div className={protect ? 'cert-noselect' : undefined} style={{ minHeight: '100vh', background: t.bg, color: t.text }}>
+      {protectStyle}
+
+      {/* Top bar */}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 56, zIndex: 60, display: 'flex', alignItems: 'center', gap: 28, padding: '0 56px', background: t.bg }}>
+        <button onClick={onExit} title="Exit exam" style={{ color: t.muted }}><X className="w-5 h-5" /></button>
+        <div ref={barRef} style={{ flex: '1 1 0%', width: '100%', maxWidth: 1200, minWidth: 0, margin: '0 auto', height: 9, borderRadius: 999, background: t.track }}>
+          <div style={{ height: '100%', width: `${progress}%`, minWidth: progress > 0 ? 9 : 0, background: accentColor, borderRadius: 999, transition: 'width 240ms ease' }} />
+        </div>
+        {timeLeft !== null && (
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, width: 70, fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: timeWarn ? '#f43f5e' : t.muted }}>
+            <Clock className="w-4 h-4" /> {fmt(timeLeft)}
+          </span>
+        )}
+      </div>
+
+      {/* Recorded-action warning */}
+      <AnimatePresence>
+        {warning && (
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            style={{ position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)', zIndex: 70, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b', fontSize: 12.5, fontWeight: 600 }}>
+            <ShieldAlert className="w-4 h-4" /> {warning}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* SQL / Python exercises render as their own full-screen overlay below the top bar */}
+      {phase === 'exam' && currentQuestion && qType === 'sql_exercise' && (
+        <SQLExercisePlayer
+          key={currentQuestion.id}
+          question={currentQuestion}
+          runtime={sqlRuntime}
+          isPreparing={sqlPreparing}
+          prepareError={sqlPrepareError}
+          isDark
+          accentColor={accentColor}
+          savedAnswer={answers[currentQuestion.id]}
+          completed={exercisePassed(answers[currentQuestion.id])}
+          topOffset={56}
+          leftOffset={0}
+          sessionToken={sessionToken}
+          examMode
+          onComplete={(payload) => recordExercise(currentQuestion.id, payload)}
+          onHintUsed={() => {}}
+          onNext={advance}
+          isLastQuestion={index >= total - 1}
+        />
+      )}
+      {phase === 'exam' && currentQuestion && qType === 'python_exercise' && (
+        <PythonExercisePlayer
+          key={currentQuestion.id}
+          question={currentQuestion}
+          isDark
+          accentColor={accentColor}
+          savedAnswer={answers[currentQuestion.id]}
+          completed={exercisePassed(answers[currentQuestion.id])}
+          topOffset={56}
+          leftOffset={contentPad.left}
+          rightOffset={contentPad.right}
+          sessionToken={sessionToken}
+          examMode
+          onComplete={(payload) => recordExercise(currentQuestion.id, payload)}
+          onHintUsed={() => {}}
+          onCheckAnswer={async (questionId, _code, output) => {
+            const res = await api('check-python-answer', { question_id: questionId, output });
+            const d = await res.json();
+            if (!res.ok) throw new Error(d.error || 'Failed to check answer.');
+            return { passed: !!d.passed, message: d.message || (d.passed ? 'Output matches.' : 'Output does not match the expected result.'), proof: d.proof };
+          }}
+          onNext={advance}
+          isLastQuestion={index >= total - 1}
+        />
+      )}
+
+      {/* Non-exercise questions -- content left/right match the progress bar track exactly */}
+      {phase === 'exam' && currentQuestion && !isExerciseType(qType) && (
+        <div style={{ paddingTop: 96, paddingBottom: 140, paddingLeft: contentPad.left, paddingRight: contentPad.right }}>
+          <AnimatePresence mode="wait">
+            <motion.div key={currentQuestion.id} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.22 }}>
+              <QuestionView q={currentQuestion} qType={qType} value={answers[currentQuestion.id] ?? ''} onChange={(v) => setAnswer(currentQuestion.id, v)} t={t} accentColor={accentColor} />
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* Continue (non-exercise only; exercises navigate via their own Next) */}
+      {phase === 'exam' && currentQuestion && !isExerciseType(qType) && (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: 88, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', background: `linear-gradient(to top, ${t.bg}, transparent)` }}>
+          {returnToReview
+            ? <button onClick={() => { setReturnToReview(false); setPhase('review'); }} style={{ color: t.muted, fontSize: 13, fontWeight: 600, background: 'transparent' }}>Back to review</button>
+            : <span />}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {submitError && <span style={{ color: '#f43f5e', fontSize: 12.5 }}>{submitError}</span>}
+            <button
+              onClick={advance}
+              disabled={returnToReview && !answered}
+              style={{ background: answered ? accentColor : t.card, color: answered ? '#06281a' : t.muted, fontWeight: 700, fontSize: 14, padding: '11px 30px', borderRadius: 12, cursor: (returnToReview && !answered) ? 'not-allowed' : 'pointer', opacity: (returnToReview && !answered) ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
+            >
+              {returnToReview ? 'Continue' : answered ? (index >= total - 1 ? 'Review answers' : 'Continue') : 'Skip'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Final review / summary page -- reached after the last question; the bar is full here. */}
+      {phase === 'review' && (
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '80px 24px 64px' }}>
+          {/* Animated checkmark with a burst of star sparkles */}
+          <div style={{ position: 'relative', width: 132, height: 132, margin: '0 auto 16px' }}>
+            <motion.div
+              initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+              style={{ position: 'absolute', inset: 22, borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.15, type: 'spring', stiffness: 320, damping: 16 }}>
+                <Check className="w-11 h-11" strokeWidth={3} style={{ color: '#fff' }} />
+              </motion.span>
+            </motion.div>
+            {[
+              { top: 6, left: 30, size: 16 }, { top: 14, right: 20, size: 22 },
+              { bottom: 10, left: 24, size: 20 }, { bottom: 18, right: 30, size: 15 },
+              { top: '46%', left: -2, size: 13 },
+            ].map((s, i) => (
+              <motion.span key={i}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: [0.75, 1.2, 0.75], opacity: [0.45, 1, 0.45], rotate: [0, 25, 0] }}
+                transition={{ duration: 1.8, delay: 0.3 + i * 0.16, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ position: 'absolute', top: s.top as any, left: s.left as any, right: s.right as any, bottom: s.bottom as any, lineHeight: 0 }}>
+                <Sparkle style={{ width: s.size, height: s.size, color: '#fbbf24' }} fill="#fbbf24" />
+              </motion.span>
+            ))}
+          </div>
+          <h2 style={{ fontSize: 26, fontWeight: 800, textAlign: 'center', marginBottom: 6 }}>Review your answers</h2>
+          <p style={{ textAlign: 'center', fontSize: 14.5, color: t.muted, marginBottom: 28 }}>Answered questions are final. You can still answer the ones you skipped, then submit.</p>
+
+          {/* Summary */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 44, marginBottom: 30 }}>
+            <Stat t={t} Icon={ListChecks} label="Questions" value={total} color={t.muted} />
+            <Stat t={t} Icon={CheckCircle2} label="Answered" value={answeredCount} color={accentColor} />
+            <Stat t={t} Icon={Circle} label="Not answered" value={total - answeredCount} color={total - answeredCount > 0 ? '#f43f5e' : t.muted} />
+          </div>
+
+          <div style={{ display: 'grid', gap: 8 }}>
+            {questions.map((qq, i) => {
+              const ok = isExerciseType((qq as any).type) ? exercisePassed(answers[qq.id]) : !!answers[qq.id];
+              // Unanswered questions stay editable while time remains; answered ones are final.
+              const canAnswerThis = !ok && (timeLeft === null || timeLeft > 0);
+              const rowStyle = { display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', borderRadius: 12, background: t.card, color: t.text } as const;
+              const inner = (
+                <>
+                  {ok
+                    ? <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: accentColor }} />
+                    : <Circle className="w-5 h-5 flex-shrink-0" style={{ color: t.muted }} />}
+                  <span style={{ color: t.muted, fontWeight: 700, fontSize: 13, width: 22, flexShrink: 0 }}>{i + 1}</span>
+                  <span className="truncate" style={{ fontSize: 14, flex: 1, minWidth: 0, color: ok ? t.text : t.muted }}>
+                    {shortText((qq as any).question) || `Question ${i + 1}`}
+                  </span>
+                  {canAnswerThis && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, fontSize: 12, fontWeight: 600, color: accentColor }}>
+                      Answer <ChevronRight className="w-4 h-4" />
+                    </span>
+                  )}
+                </>
+              );
+              return canAnswerThis
+                ? <button key={qq.id} onClick={() => { setReturnToReview(true); setIndex(i); setPhase('exam'); }} style={{ ...rowStyle, textAlign: 'left', cursor: 'pointer' }}>{inner}</button>
+                : <div key={qq.id} style={rowStyle}>{inner}</div>;
+            })}
+          </div>
+
+          {submitError && <p style={{ color: '#f43f5e', fontSize: 13, textAlign: 'center', marginTop: 16 }}>{submitError}</p>}
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 28 }}>
+            <button onClick={submit} disabled={submitting}
+              style={{ background: accentColor, color: '#06281a', fontWeight: 700, fontSize: 14, padding: '11px 36px', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 8, opacity: submitting ? 0.7 : 1 }}>
+              {submitting && <Loader2 className="w-4 h-4 animate-spin" />} Submit exam
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Stat({ t, Icon, label, value, color }: { t: any; Icon: any; label: string; value: number; color: string }) {
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <Icon className="w-5 h-5" style={{ color }} />
+        <span style={{ fontSize: 24, fontWeight: 800, color: t.text, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+      </div>
+      <div style={{ fontSize: 12, color: t.muted, marginTop: 4 }}>{label}</div>
+    </div>
+  );
+}
+
+function Rule({ t, label, value }: { t: any; label: string; value: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderRadius: 10, background: t.card, border: `1px solid ${t.border}` }}>
+      <span style={{ fontSize: 13, color: t.muted }}>{label}</span>
+      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{value}</span>
+    </div>
+  );
+}
+
+// One non-exercise question (multiple_choice | image | code | fill_blank | arrange), optionally with
+// a non-graded runnable playground the student uses to work out the answer.
+function QuestionView({ q, qType, value, onChange, t, accentColor }: {
+  q: any; qType: string; value: string; onChange: (v: string) => void; t: any; accentColor: string;
+}) {
+  const options: string[] = Array.isArray(q.options) ? q.options : [];
+  const [hovered, setHovered] = useState<number | null>(null);
+  const hoverProps = (i: number) => ({ onMouseEnter: () => setHovered(i), onMouseLeave: () => setHovered(null) });
+
+  // The answer body for this question type (no title -- the title renders once on top).
+  let body: React.ReactNode;
+
+  if (qType === 'image') {
+    const images: string[] = Array.isArray(q.optionImages) ? q.optionImages : [];
+    body = (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+        {options.map((opt, i) => {
+          const selected = value === String(i);
+          const hover = hovered === i && !selected;
+          // The image is the answer; only show a label if the instructor set a real one (hide the
+          // auto-seeded "Option 1"/"Option 2" placeholders).
+          const showLabel = !!opt && !/^option\s*\d+$/i.test(opt.trim());
+          return (
+            <button key={i} onClick={() => onChange(String(i))} {...hoverProps(i)}
+              style={{ background: '#fff', borderRadius: 16, padding: 18, border: `2px solid ${selected ? accentColor : hover ? `${accentColor}80` : 'transparent'}`, boxShadow: selected ? `0 0 0 4px ${accentColor}33` : hover ? '0 6px 18px rgba(0,0,0,0.4)' : '0 1px 3px rgba(0,0,0,0.3)', transform: hover ? 'translateY(-2px)' : 'none', transition: 'all 140ms ease', textAlign: 'center', cursor: 'pointer' }}>
+              {images[i] && <img src={images[i]} alt="" style={{ width: '100%', height: 300, objectFit: 'contain', marginBottom: showLabel ? 10 : 0 }} />}
+              {showLabel && <span style={{ color: '#111', fontSize: 14, fontWeight: 600 }}>{opt}</span>}
+            </button>
+          );
+        })}
+      </div>
+    );
+  } else if (qType === 'multiple_choice' || qType === 'code' || qType === 'image_choice') {
+    body = (
+      <>
+        {qType === 'code' && q.codeSnippet && (
+          <pre style={{ background: '#0c0d12', border: `1px solid ${t.border}`, borderRadius: 12, padding: 16, width: '100%', margin: '0 0 22px', overflowX: 'auto', fontSize: 13, lineHeight: 1.6, color: '#e4e4e7' }}><code>{q.codeSnippet}</code></pre>
+        )}
+        <div style={{ display: 'grid', gap: 14, width: '100%' }}>
+          {options.map((opt, i) => {
+            const selected = value === opt;
+            const hover = hovered === i && !selected;
+            return (
+              <button key={i} onClick={() => onChange(opt)} {...hoverProps(i)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, textAlign: 'left', padding: '18px 22px', borderRadius: 14, background: selected ? `${accentColor}1f` : hover ? t.cardHover : t.card, border: `1.5px solid ${selected ? accentColor : hover ? `${accentColor}80` : t.border}`, color: t.text, fontSize: 15.5, transform: hover ? 'translateY(-1px)' : 'none', transition: 'all 130ms ease', cursor: 'pointer' }}>
+                <span>{opt}</span>
+                <span style={{ fontSize: 13, color: selected || hover ? accentColor : t.muted, fontWeight: 600 }}>{i + 1}</span>
+              </button>
+            );
+          })}
+        </div>
+      </>
+    );
+  } else if (qType === 'fill_blank') {
+    const snippet: string = q.codeSnippet ?? '';
+    const segments = snippet.split(/_{3,}/);          // '___' (3+ underscores) marks each blank
+    const blankCount = segments.length - 1;
+    if (blankCount >= 1) {
+      const vals = value ? value.split('|||') : [];
+      const setBlank = (i: number, v: string) => {
+        const next = Array.from({ length: blankCount }, (_, k) => (k === i ? v : (vals[k] ?? '')));
+        onChange(next.join('|||'));
+      };
+      body = (
+        <>
+          <style>{`.cert-blank:focus{border-color:${accentColor};box-shadow:0 0 0 2px ${accentColor}40;}`}</style>
+          <div style={{ width: '100%', background: '#0c0d12', border: `1px solid ${t.border}`, borderRadius: 12, padding: 18, overflowX: 'auto', fontFamily: 'ui-monospace, monospace', fontSize: 14, lineHeight: 2.1, color: '#e4e4e7', whiteSpace: 'pre-wrap' }}>
+            {segments.map((seg, i) => (
+              <span key={i}>
+                {seg}
+                {i < blankCount && (
+                  <input
+                    className="cert-blank"
+                    value={vals[i] ?? ''}
+                    onChange={(e) => setBlank(i, e.target.value)}
+                    placeholder="write code here"
+                    spellCheck={false}
+                    autoComplete="off"
+                    size={Math.max(12, (vals[i] ?? '').length + 2)}
+                    style={{ display: 'inline-block', margin: '0 4px', padding: '2px 10px', background: 'rgba(255,255,255,0.06)', border: `1px solid ${t.border}`, borderRadius: 6, color: t.text, fontFamily: 'inherit', fontSize: 'inherit', outline: 'none', transition: 'border-color 120ms ease, box-shadow 120ms ease' }}
+                  />
+                )}
+              </span>
+            ))}
+          </div>
+        </>
+      );
+    } else {
+      body = (
+        <>
+          {snippet && (
+            <pre style={{ background: '#0c0d12', border: `1px solid ${t.border}`, borderRadius: 12, padding: 16, width: '100%', margin: '0 0 18px', overflowX: 'auto', fontSize: 13, lineHeight: 1.6, color: '#e4e4e7' }}><code>{snippet}</code></pre>
+          )}
+          <input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="Type your answer"
+            spellCheck={false}
+            autoComplete="off"
+            style={{ width: '100%', display: 'block', background: t.card, border: `1.5px solid ${t.border}`, borderRadius: 12, padding: '14px 18px', color: t.text, fontSize: 16, fontFamily: snippet ? 'ui-monospace, monospace' : undefined }}
+          />
+        </>
+      );
+    }
+  } else if (qType === 'arrange') {
+    const order = value ? value.split('|||') : [];
+    const toggle = (opt: string) => {
+      const next = order.includes(opt) ? order.filter(o => o !== opt) : [...order, opt];
+      onChange(next.join('|||'));
+    };
+    body = (
+      <>
+        <p style={{ textAlign: 'center', fontSize: 13, color: t.muted, marginBottom: 18 }}>Click the options in the correct order.</p>
+        <div style={{ display: 'grid', gap: 12, width: '100%' }}>
+          {options.map((opt, i) => {
+            const pos = order.indexOf(opt);
+            const selected = pos >= 0;
+            const hover = hovered === i && !selected;
+            return (
+              <button key={i} onClick={() => toggle(opt)} {...hoverProps(i)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, textAlign: 'left', padding: '16px 20px', borderRadius: 12, background: selected ? `${accentColor}1f` : hover ? t.cardHover : t.card, border: `1.5px solid ${selected ? accentColor : hover ? `${accentColor}80` : t.border}`, color: t.text, fontSize: 15, transform: hover ? 'translateY(-1px)' : 'none', transition: 'all 130ms ease', cursor: 'pointer' }}>
+                <span>{opt}</span>
+                {selected && <span style={{ width: 24, height: 24, borderRadius: 999, background: accentColor, color: '#06281a', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{pos + 1}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </>
+    );
+  } else {
+    body = <p style={{ textAlign: 'center', color: t.muted }}>Unsupported question type.</p>;
+  }
+
+  const pg = q.playground;
+  const hasPlayground = !!pg && !!((pg.starterCode ?? '').trim() || (pg.setupSql ?? '').trim() || (pg.setupPython ?? '').trim() || pg.language);
+  // Left panel (rendered beside the answer): a runnable playground, or an image-question's prompt image.
+  const leftPanel = hasPlayground
+    ? <CertificationPlayground playground={pg!} accentColor={accentColor} />
+    : (qType === 'image_choice' && q.imageUrl)
+      ? <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+          <img src={q.imageUrl} alt="" style={{ maxWidth: '100%', maxHeight: 440, borderRadius: 12, objectFit: 'contain' }} />
+        </div>
+      : null;
+  const Title = (
+    <h2 style={{ fontSize: 22, fontWeight: 700, textAlign: 'center', marginBottom: leftPanel ? 22 : 28, lineHeight: 1.4, color: t.text }}>{q.question}</h2>
+  );
+
+  if (leftPanel) {
+    // Question on top, image/playground on the left, the answer options on the right.
+    return (
+      <div>
+        {Title}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, alignItems: 'start' }}>
+          {leftPanel}
+          <div>{body}</div>
+        </div>
+      </div>
+    );
+  }
+  return <div>{Title}{body}</div>;
+}
