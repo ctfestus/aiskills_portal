@@ -12,6 +12,7 @@ import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { ArrowRight, Check, LayoutDashboard, ChevronDown, ChevronLeft, ChevronRight, User, Settings, LogOut, BookOpen, Calendar, Briefcase, Award, TrendingUp, Users, Zap, BarChart3, GraduationCap, Play } from 'lucide-react';
 import { HoverPreviewCard } from '@/components/student/shared';
 import { getToolIcon } from '@/lib/tool-icons';
+import { getFontById, loadGoogleFont } from '@/lib/fonts';
 
 // --- FadeIn on scroll ---
 function FadeIn({ children, delay = 0, className = '' }: { children: React.ReactNode; delay?: number; className?: string }) {
@@ -239,6 +240,12 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
   const [sliderIdx, setSliderIdx] = useState(0);
   const PAGE = 3;
 
+  // Load the landing-page fonts: Google Sans (Text) as primary, Inter as the backup.
+  useEffect(() => {
+    loadGoogleFont(getFontById('google-sans-text'));
+    loadGoogleFont(getFontById('inter'));
+  }, []);
+
   const filteredProgrammes = activeFilter === 'all' ? programmes : programmes.filter(p => p.type === activeFilter);
 
   const countByType = {
@@ -308,8 +315,10 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
   const on_dark  = textOnDarkColor  || '#ffffff';
   const on_alt   = textOnAltColor   || '#111111';
 
-  const hFont = headingFont ? `'${headingFont}', sans-serif` : undefined;
-  const bFont = bodyFont    ? `'${bodyFont}', sans-serif`    : undefined;
+  // Landing page font: Google Sans (Text) with Inter as the backup. A site-configured font, if set,
+  // still takes precedence as the first choice; Inter then sans-serif are the fallbacks.
+  const hFont = `'${headingFont || 'Google Sans Text'}', 'Inter', sans-serif`;
+  const bFont = `'${bodyFont    || 'Google Sans Text'}', 'Inter', sans-serif`;
 
   const tracks = [
     { title: track1Title, desc: track1Description, img: track1ImageUrl, badge: track1Badge },

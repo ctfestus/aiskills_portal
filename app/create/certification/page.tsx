@@ -5,21 +5,22 @@
 // list. Reuses the shared CourseQuestion shape, QuestionTypePicker, the create-editor LOCAL theme,
 // and the dnd-kit sortable pattern. Persists to /api/certifications.
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Trash2, ChevronDown, ChevronUp, Plus, ArrowLeft, Loader2, Check, ImagePlus, ShieldCheck, Upload } from 'lucide-react';
+import { GripVertical, Trash2, ChevronDown, ChevronUp, Plus, ArrowLeft, Loader2, Check, ImagePlus, ShieldCheck, Upload, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { uploadToGithub } from '@/lib/uploadToGithub';
 import { useC } from '@/components/create/theme';
+import { useC as useLibC } from '@/lib/theme';
 import { Toggle, inputCls, labelCls } from '@/components/create/shared';
 import { QuestionTypePicker, TYPE_LABELS, type QuestionTypeOrDownloads } from '@/components/create/QuestionTypePicker';
-import type { CourseQuestion, QuestionType } from '@/lib/course-schema';
+import type { CourseQuestion, QuestionType, SkillArea } from '@/lib/course-schema';
 
 const EXAM_TYPES: QuestionTypeOrDownloads[] = ['multiple_choice', 'fill_blank', 'arrange', 'image', 'image_choice', 'code', 'python_exercise'];
 
@@ -54,17 +55,32 @@ interface CertState {
   maxAttempts: number;        // 0 = unlimited
   examProtection: boolean;
   cohortIds: string[];
+  skillAreas: SkillArea[];
+  studyGuideUrl: string;
+  studyGuideName: string;
+  studyGuidePublished: boolean;
+  posterUrl: string;
+  posterPublished: boolean;
+  practiceTestUrl: string;
   questions: CourseQuestion[];
 }
 
 const DEFAULTS: CertState = {
   title: '', description: '', coverImage: '',
   passmark: 70, timeLimit: 30, maxAttempts: 1, examProtection: true,
-  cohortIds: [], questions: [],
+  cohortIds: [],
+  skillAreas: [], studyGuideUrl: '', studyGuideName: '', studyGuidePublished: false,
+  posterUrl: '', posterPublished: false, practiceTestUrl: '',
+  questions: [],
 };
 
 function CertificationEditor() {
-  const C = useC();
+  const baseC = useC();
+  const libC = useLibC();
+  // Accent mirrors the course/dashboard pages exactly (lib/theme): tenant primary brand color in
+  // light, ocean (#3E93FF) in dark. Borderless cards, per the house style. Overridden here only --
+  // the course create editor (which shares the create theme) is untouched.
+  const C = useMemo(() => ({ ...baseC, cta: libC.cta, ctaText: '#ffffff', cardBorder: 'transparent' }), [baseC, libC]);
   const router = useRouter();
   const params = useSearchParams();
   const editId = params.get('id');
@@ -91,6 +107,11 @@ function CertificationEditor() {
           title: data.title ?? '', description: data.description ?? '', coverImage: data.cover_image ?? '',
           passmark: data.passmark ?? 70, timeLimit: data.time_limit ?? 0, maxAttempts: data.max_attempts ?? 1,
           examProtection: data.exam_protection !== false, cohortIds: data.cohort_ids ?? [],
+          skillAreas: Array.isArray(data.skill_areas) ? data.skill_areas : [],
+          studyGuideUrl: data.study_guide_url ?? '', studyGuideName: data.study_guide_name ?? '',
+          studyGuidePublished: data.study_guide_published === true,
+          posterUrl: data.poster_url ?? '', posterPublished: data.poster_published === true,
+          practiceTestUrl: data.practice_test_url ?? '',
           questions: Array.isArray(data.questions) ? data.questions : [],
         });
       }
@@ -102,6 +123,16 @@ function CertificationEditor() {
   const updateQuestion = useCallback((id: string, patch: Partial<CourseQuestion>) => {
     setState(prev => ({ ...prev, questions: prev.questions.map(q => q.id === id ? { ...q, ...patch } : q) }));
   }, []);
+  const inputStyle = { background: C.input, border: `1px solid ${C.inputBorder}`, color: C.text };
+
+  // Skill areas: add / rename / remove. Removing a skill also clears it from any question mapped to it.
+  const addSkill = () => setState(prev => ({ ...prev, skillAreas: [...prev.skillAreas, { id: newId(), name: '' }] }));
+  const setSkill = (id: string, name: string) => setState(prev => ({ ...prev, skillAreas: prev.skillAreas.map(s => s.id === id ? { ...s, name } : s) }));
+  const removeSkill = (id: string) => setState(prev => ({
+    ...prev,
+    skillAreas: prev.skillAreas.filter(s => s.id !== id),
+    questions: prev.questions.map(q => q.skillAreaId === id ? { ...q, skillAreaId: undefined } : q),
+  }));
 
   const addQuestion = (type: QuestionTypeOrDownloads) => {
     const q = blankQuestion(type as QuestionType);
@@ -140,6 +171,13 @@ function CertificationEditor() {
           timeLimit: state.timeLimit || null,
           maxAttempts: state.maxAttempts,
           examProtection: state.examProtection,
+          skillAreas: state.skillAreas,
+          studyGuideUrl: state.studyGuideUrl,
+          studyGuideName: state.studyGuideName,
+          studyGuidePublished: state.studyGuidePublished,
+          posterUrl: state.posterUrl,
+          posterPublished: state.posterPublished,
+          practiceTestUrl: state.practiceTestUrl,
         },
       };
       const res = await fetch('/api/certifications', {
@@ -175,7 +213,7 @@ function CertificationEditor() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-5 py-8 space-y-8">
+      <div className="max-w-4xl mx-auto px-5 py-8 space-y-8">
         <div className="flex items-center gap-2" style={{ color: C.cta }}>
           <ShieldCheck className="w-5 h-5" />
           <span className="text-xs font-bold uppercase tracking-wider">Certification exam</span>
@@ -234,6 +272,41 @@ function CertificationEditor() {
           </div>
         </div>
 
+        {/* Skill areas */}
+        <div className="rounded-xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <div>
+            <h3 className="text-sm font-semibold">Skill areas</h3>
+            <p className="text-xs mt-0.5" style={{ color: C.faint }}>Define the skills this certification assesses, then map each question to a skill below.</p>
+          </div>
+          {state.skillAreas.length > 0 && (
+            <div className="space-y-2">
+              {state.skillAreas.map((s, i) => (
+                <div key={s.id} className="flex items-center gap-2">
+                  <input value={s.name} onChange={e => setSkill(s.id, e.target.value)} placeholder={`Skill area ${i + 1}`} className={inputCls} style={inputStyle} />
+                  <button onClick={() => removeSkill(s.id)} style={{ color: C.faint }}><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button onClick={addSkill} className="text-xs font-medium flex items-center gap-1" style={{ color: C.cta }}><Plus className="w-3 h-3" /> Add skill area</button>
+        </div>
+
+        {/* Learner resources */}
+        <div className="rounded-xl p-5 space-y-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <h3 className="text-sm font-semibold">Learner resources</h3>
+          <StudyGuideField C={C} url={state.studyGuideUrl} name={state.studyGuideName} published={state.studyGuidePublished}
+            onChange={(url, name) => update({ studyGuideUrl: url, studyGuideName: name, ...(url ? {} : { studyGuidePublished: false }) })}
+            onPublish={v => update({ studyGuidePublished: v })} />
+          <PosterField C={C} url={state.posterUrl} published={state.posterPublished}
+            onChange={url => update({ posterUrl: url, ...(url ? {} : { posterPublished: false }) })}
+            onPublish={v => update({ posterPublished: v })} />
+          <div>
+            <label className={labelCls} style={{ color: C.faint }}>Practice test link</label>
+            <input value={state.practiceTestUrl} onChange={e => update({ practiceTestUrl: e.target.value })} placeholder="https://..." className={inputCls} style={inputStyle} />
+            <p className="text-xs mt-1.5" style={{ color: C.faint }}>Learners can launch the practice test from the certification before the real exam.</p>
+          </div>
+        </div>
+
         {/* Questions */}
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -243,7 +316,7 @@ function CertificationEditor() {
             <SortableContext items={state.questions.map(q => q.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
                 {state.questions.map((q, i) => (
-                  <QuestionCard key={q.id} q={q} index={i} C={C}
+                  <QuestionCard key={q.id} q={q} index={i} C={C} skillAreas={state.skillAreas}
                     expanded={expanded === q.id}
                     onToggle={() => setExpanded(expanded === q.id ? null : q.id)}
                     onUpdate={patch => updateQuestion(q.id, patch)}
@@ -300,9 +373,116 @@ function CoverInput({ C, value, onChange }: { C: any; value: string; onChange: (
   );
 }
 
+// Derive a readable name from a pasted URL (the filename, or a generic fallback).
+function nameFromUrl(u: string): string {
+  try {
+    const last = decodeURIComponent(new URL(u).pathname.split('/').filter(Boolean).pop() ?? '');
+    return last && /\.[a-z0-9]{2,4}$/i.test(last) ? last : 'Study guide';
+  } catch { return 'Study guide'; }
+}
+
+// Study guide: upload a PDF (via the shared /api/upload Cloudinary path) OR paste a link to an
+// externally hosted PDF. Preview + publish to learners.
+function StudyGuideField({ C, url, name, published, onChange, onPublish }: {
+  C: any; url: string; name: string; published: boolean; onChange: (url: string, name: string) => void; onPublish: (v: boolean) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [link, setLink] = useState('');
+  const inputStyle = { background: C.input, border: `1px solid ${C.inputBorder}`, color: C.text };
+  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    setBusy(true);
+    try {
+      const uploaded = await uploadToCloudinary(file, 'certification-guides');
+      // Cloudinary serves PDFs as an `image` resource; the f_auto,q_auto transform the upload route
+      // adds rasterizes it to a single page. Strip it so the full multi-page PDF is delivered.
+      onChange(uploaded.replace('/upload/f_auto,q_auto/', '/upload/'), file.name);
+    }
+    catch { window.alert('Upload failed. Try again.'); }
+    finally { setBusy(false); }
+  };
+  const addLink = () => { const u = link.trim(); if (u) { onChange(u, nameFromUrl(u)); setLink(''); } };
+  return (
+    <div>
+      <label className={labelCls} style={{ color: C.faint }}>Study guide (PDF)</label>
+      {url ? (
+        <div className="flex items-center gap-3 flex-wrap text-sm">
+          <span className="flex items-center gap-1.5 min-w-0" style={{ color: C.text }}>
+            <FileText className="w-4 h-4 flex-shrink-0" style={{ color: C.cta }} /><span className="truncate" style={{ maxWidth: 220 }}>{name || 'Study guide.pdf'}</span>
+          </span>
+          <a href={url} target="_blank" rel="noreferrer" className="text-xs font-medium" style={{ color: C.cta }}>Preview</a>
+          <label className="text-xs cursor-pointer" style={{ color: C.muted }}>{busy ? 'Uploading...' : 'Replace'}<input type="file" accept="application/pdf,.pdf" className="hidden" onChange={upload} /></label>
+          <button onClick={() => onChange('', '')} className="text-xs" style={{ color: C.faint }}>Remove</button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer text-sm w-fit" style={{ ...inputStyle, color: C.muted }}>
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            <span>Upload PDF</span>
+            <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={upload} />
+          </label>
+          <div className="flex items-center gap-2">
+            <input value={link} onChange={e => setLink(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addLink(); } }}
+              placeholder="or paste a link to a PDF (https://...)" className={inputCls} style={inputStyle} />
+            <button onClick={addLink} disabled={!link.trim()} className="px-3 py-2 rounded-lg text-xs font-medium flex-shrink-0" style={{ background: C.cta, color: C.ctaText, opacity: link.trim() ? 1 : 0.5 }}>Add</button>
+          </div>
+        </div>
+      )}
+      {url && (
+        <div className="flex items-center justify-between mt-3">
+          <span className="text-xs" style={{ color: C.faint }}>Published (learners can view or download it)</span>
+          <Toggle checked={published} onChange={() => onPublish(!published)} accentColor={C.cta} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Certification poster: upload an image, preview, and publish to learners.
+function PosterField({ C, url, published, onChange, onPublish }: {
+  C: any; url: string; published: boolean; onChange: (url: string) => void; onPublish: (v: boolean) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    setBusy(true);
+    try { onChange(await uploadToCloudinary(file, 'certification-posters')); }
+    catch { window.alert('Upload failed. Try again.'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div>
+      <label className={labelCls} style={{ color: C.faint }}>Certification poster</label>
+      <div className="flex items-center gap-3">
+        <div style={{ width: 92, height: 120, borderRadius: 8, background: C.input, border: `1px solid ${C.inputBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: C.faint }} />
+            : url ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <ImagePlus className="w-5 h-5" style={{ color: C.faint }} />}
+        </div>
+        <div className="space-y-2">
+          <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer text-xs w-fit" style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.muted }}>
+            <Upload className="w-3.5 h-3.5" /> {url ? 'Replace' : 'Upload'}
+            <input type="file" accept="image/*" className="hidden" onChange={upload} />
+          </label>
+          {url && <a href={url} target="_blank" rel="noreferrer" className="text-xs font-medium block" style={{ color: C.cta }}>Preview</a>}
+          {url && <button onClick={() => onChange('')} className="text-xs block" style={{ color: C.faint }}>Remove</button>}
+        </div>
+      </div>
+      {url && (
+        <div className="flex items-center justify-between mt-3">
+          <span className="text-xs" style={{ color: C.faint }}>Published (visible to learners)</span>
+          <Toggle checked={published} onChange={() => onPublish(!published)} accentColor={C.cta} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---- One sortable question card with per-type fields ----
-function QuestionCard({ q, index, C, expanded, onToggle, onUpdate, onRemove }: {
-  q: CourseQuestion; index: number; C: any; expanded: boolean; onToggle: () => void; onUpdate: (patch: Partial<CourseQuestion>) => void; onRemove: () => void;
+function QuestionCard({ q, index, C, skillAreas, expanded, onToggle, onUpdate, onRemove }: {
+  q: CourseQuestion; index: number; C: any; skillAreas: SkillArea[]; expanded: boolean; onToggle: () => void; onUpdate: (patch: Partial<CourseQuestion>) => void; onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: q.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
@@ -329,6 +509,15 @@ function QuestionCard({ q, index, C, expanded, onToggle, onUpdate, onRemove }: {
             <label className={labelCls} style={{ color: C.faint }}>Question</label>
             <textarea value={q.question} onChange={e => onUpdate({ question: e.target.value })} rows={2} className={inputCls} style={inputStyle} placeholder="Ask the question..." />
           </div>
+          {skillAreas.length > 0 && (
+            <div>
+              <label className={labelCls} style={{ color: C.faint }}>Skill area</label>
+              <select value={q.skillAreaId ?? ''} onChange={e => onUpdate({ skillAreaId: e.target.value || undefined })} className={inputCls} style={inputStyle}>
+                <option value="">No skill area</option>
+                {skillAreas.map(s => <option key={s.id} value={s.id}>{s.name.trim() || 'Untitled skill'}</option>)}
+              </select>
+            </div>
+          )}
           <TypeFields q={q} type={type} C={C} inputStyle={inputStyle} onUpdate={onUpdate} />
           <PlaygroundEditor q={q} C={C} inputStyle={inputStyle} onUpdate={onUpdate} />
         </div>

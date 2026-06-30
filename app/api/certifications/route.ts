@@ -42,6 +42,16 @@ function toRow(config: any) {
     exam_protection: config.examProtection !== false,
     deadline_days:   config.deadline_days != null ? Number(config.deadline_days) : null,
     learn_outcomes:  config.learnOutcomes ?? [],
+    // Foundation assets
+    skill_areas:           Array.isArray(config.skillAreas)
+      ? config.skillAreas.filter((s: any) => s?.id && String(s?.name ?? '').trim()).map((s: any) => ({ id: String(s.id), name: String(s.name).trim() }))
+      : [],
+    study_guide_url:       config.studyGuideUrl ?? null,
+    study_guide_name:      config.studyGuideName ?? null,
+    study_guide_published: config.studyGuidePublished === true,
+    poster_url:            config.posterUrl ?? null,
+    poster_published:      config.posterPublished === true,
+    practice_test_url:     config.practiceTestUrl?.trim() || null,
     theme:           config.theme ?? null,
     mode:            config.mode ?? null,
     font:            config.font ?? null,
@@ -211,7 +221,7 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
   const { data: row } = await supabase
-    .from('certifications').select('user_id, cover_image, questions').eq('id', id).maybeSingle();
+    .from('certifications').select('user_id, cover_image, poster_url, study_guide_url, questions').eq('id', id).maybeSingle();
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const { data: profile } = await supabase.from('students').select('role').eq('id', user.id).single();
@@ -219,10 +229,12 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // Clean up Cloudinary cover + question images (single imageUrl and image-question optionImages)
-  // before deleting (cascade removes attempts).
+  // Clean up Cloudinary cover + poster + study-guide PDF + question images (single imageUrl and
+  // image-question optionImages) before deleting (cascade removes attempts).
   await deleteCloudinaryUrls([
     row.cover_image,
+    row.poster_url,
+    row.study_guide_url,
     ...((row.questions ?? []) as any[]).map(q => q?.imageUrl),
     ...((row.questions ?? []) as any[]).flatMap(q => Array.isArray(q?.optionImages) ? q.optionImages : []),
   ]);
