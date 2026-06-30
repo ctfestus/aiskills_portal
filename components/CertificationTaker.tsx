@@ -53,9 +53,10 @@ export default function CertificationTaker({
   isDark, accentColor, logoUrl, logoDarkUrl, onExit,
 }: Props) {
   // Platform branding colours, used for the OVERVIEW only (the exam keeps the content `accentColor`):
-  // - tenantBrand = Primary Colour (`primary_color`, the platform brand color) -> the hero band.
+  // - tenantBrand = Brand Colour (`brand_color`) -> the hero band. The OVERVIEW uses the BRAND color
+  // (NOT primary/ocean -- that convention is only for the instructor editor, which mirrors courses).
   // - tenantAccent = Accent Colour (`accent_color`, the Landing Page "secondary accent") -> highlight text.
-  const { primaryColor: tenantBrand, accentColor: tenantAccent } = useTenant();
+  const { brandColor: tenantBrand, accentColor: tenantAccent } = useTenant();
   // Questions are NOT in config -- they are delivered by start-attempt (when the clock starts), so a
   // student cannot read them before the timer begins. config carries only metadata + questionCount.
   const questionCount: number = Number(config?.questionCount) || 0;
