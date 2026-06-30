@@ -19,6 +19,15 @@ describe('gradeQuestion', () => {
     expect(grade({ id: 'q', type: 'code', correctAnswer: 'x' }, 'x')).toBe(true);
   });
 
+  it('multiple_choice multiSelect: order-independent set equality on |||-joined options', () => {
+    const q = { id: 'q', type: 'multiple_choice', multiSelect: true, correctAnswer: 'A|||C' };
+    expect(grade(q, 'A|||C')).toBe(true);
+    expect(grade(q, 'C|||A')).toBe(true);      // order does not matter
+    expect(grade(q, 'A')).toBe(false);          // missing a correct option
+    expect(grade(q, 'A|||B|||C')).toBe(false);  // an extra wrong option
+    expect(grade(q, 'B')).toBe(false);
+  });
+
   it('fill_blank: case-insensitive, trimmed, pipe-separated alternatives', () => {
     const q = { id: 'q', type: 'fill_blank', correctAnswer: 'COUNT(*)|count(*)' };
     expect(grade(q, ' count(*) ')).toBe(true);

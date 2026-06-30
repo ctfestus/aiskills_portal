@@ -98,6 +98,15 @@ export function gradeQuestion(q: any, ctx: GradeContext): boolean {
     return ctx.verifyProof ? ctx.verifyProof(q.id, parsed.output, parsed.proof) : true;
   }
 
+  // Multiple-answer MCQ (multiple_choice / image_choice / code with multiSelect): correctAnswer and
+  // the student answer are both '|||'-joined option text; grade is order-independent set equality.
+  if (q.multiSelect && (type === 'multiple_choice' || type === 'image_choice' || type === 'code')) {
+    const norm = (s: string) => s.trim();
+    const correct = new Set(String(q.correctAnswer ?? '').split('|||').map(norm).filter(Boolean));
+    const chosen = new Set(String(ua).split('|||').map(norm).filter(Boolean));
+    return correct.size > 0 && correct.size === chosen.size && [...correct].every(c => chosen.has(c));
+  }
+
   if (type === 'fill_blank') {
     const norm = (s: string) => s.trim().toLowerCase();
     // Multiple inline blanks are joined by '|||' (in both correctAnswer and the student answer);
