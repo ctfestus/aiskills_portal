@@ -14,6 +14,7 @@ import SQLExercisePlayer from '@/components/sql-course/SQLExercisePlayer';
 import PythonExercisePlayer from '@/components/sql-course/PythonExercisePlayer';
 import { CertificationPlayground } from '@/components/CertificationPlayground';
 import { useTenant } from '@/components/TenantProvider';
+import { sanitizeQuestionContent } from '@/lib/sanitize';
 import type { CourseQuestion } from '@/lib/course-schema';
 
 type Phase = 'loading' | 'intro' | 'exam' | 'review' | 'result' | 'blocked';
@@ -52,9 +53,10 @@ export default function CertificationTaker({
   isDark, accentColor, logoUrl, logoDarkUrl, onExit,
 }: Props) {
   // Platform branding colours, used for the OVERVIEW only (the exam keeps the content `accentColor`):
-  // - tenantBrand = Primary Colour (`primary_color`, the platform brand color) -> the hero band.
+  // - tenantBrand = Brand Colour (`brand_color`) -> the hero band. The OVERVIEW uses the BRAND color
+  // (NOT primary/ocean -- that convention is only for the instructor editor, which mirrors courses).
   // - tenantAccent = Accent Colour (`accent_color`, the Landing Page "secondary accent") -> highlight text.
-  const { primaryColor: tenantBrand, accentColor: tenantAccent } = useTenant();
+  const { brandColor: tenantBrand, accentColor: tenantAccent } = useTenant();
   // Questions are NOT in config -- they are delivered by start-attempt (when the clock starts), so a
   // student cannot read them before the timer begins. config carries only metadata + questionCount.
   const questionCount: number = Number(config?.questionCount) || 0;
@@ -66,6 +68,7 @@ export default function CertificationTaker({
   const studyGuide: { url: string; name: string } | null = config?.studyGuide?.url ? config.studyGuide : null;
   const posterUrl: string = config?.poster || '';
   const practiceTestUrl: string = config?.practiceTestUrl || '';
+  const sections: string[] = Array.isArray(config?.sections) ? config.sections : [];
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [questions, setQuestions] = useState<CourseQuestion[]>([]);
@@ -563,6 +566,15 @@ export default function CertificationTaker({
             <p style={sub}>
               {timeLimitMin ? `A ${timeLimitMin}-minute timed exam` : 'An untimed exam'} of {questionCount} question{questionCount === 1 ? '' : 's'}. You need {config?.passmark ?? 70}% to pass{maxAttempts > 0 ? `, with ${maxAttempts} attempt${maxAttempts === 1 ? '' : 's'} allowed.` : '.'}
             </p>
+            {sections.length > 0 && (
+              <p style={sub}>
+                {sections.length === 2
+                  ? 'It has two sections: a Technical section and a Practical / Case study section.'
+                  : sections[0] === 'practical'
+                    ? 'This is a Practical / Case study exam.'
+                    : 'This is a Technical exam.'}
+              </p>
+            )}
             {protect && (
               <div style={{ display: 'flex', gap: 12, padding: '14px 16px', borderRadius: 12, background: 'rgba(245,158,11,0.12)' }}>
                 <ShieldAlert className="w-5 h-5 flex-shrink-0" style={{ color: '#f59e0b' }} />
@@ -876,20 +888,33 @@ function QuestionView({ q, qType, value, onChange, t, accentColor }: {
       </div>
     );
   } else if (qType === 'multiple_choice' || qType === 'code' || qType === 'image_choice') {
+    // Multiple-answer mode: the value is the selected option texts '|||'-joined (in option order).
+    const multi = !!q.multiSelect;
+    const selectedList = value ? value.split('|||') : [];
+    const isSel = (opt: string) => multi ? selectedList.includes(opt) : value === opt;
+    const choose = (opt: string) => {
+      if (!multi) { onChange(opt); return; }
+      const set = new Set(selectedList);
+      set.has(opt) ? set.delete(opt) : set.add(opt);
+      onChange(options.filter(o => set.has(o)).join('|||'));
+    };
     body = (
       <>
         {qType === 'code' && q.codeSnippet && (
           <pre style={{ background: '#0c0d12', border: `1px solid ${t.border}`, borderRadius: 12, padding: 16, width: '100%', margin: '0 0 22px', overflowX: 'auto', fontSize: 13, lineHeight: 1.6, color: '#e4e4e7' }}><code>{q.codeSnippet}</code></pre>
         )}
+        {multi && <p style={{ fontSize: 13, color: t.muted, margin: '0 0 14px' }}>Select all that apply.</p>}
         <div style={{ display: 'grid', gap: 14, width: '100%' }}>
           {options.map((opt, i) => {
-            const selected = value === opt;
+            const selected = isSel(opt);
             const hover = hovered === i && !selected;
             return (
-              <button key={i} onClick={() => onChange(opt)} {...hoverProps(i)}
+              <button key={i} onClick={() => choose(opt)} {...hoverProps(i)}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, textAlign: 'left', padding: '18px 22px', borderRadius: 14, background: selected ? `${accentColor}1f` : hover ? t.cardHover : t.card, border: `1.5px solid ${selected ? accentColor : hover ? `${accentColor}80` : t.border}`, color: t.text, fontSize: 15.5, transform: hover ? 'translateY(-1px)' : 'none', transition: 'all 130ms ease', cursor: 'pointer' }}>
                 <span>{opt}</span>
-                <span style={{ fontSize: 13, color: selected || hover ? accentColor : t.muted, fontWeight: 600 }}>{i + 1}</span>
+                {multi
+                  ? <span style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${selected ? accentColor : t.muted}`, background: selected ? accentColor : 'transparent' }}>{selected && <Check className="w-3.5 h-3.5" style={{ color: '#06281a' }} />}</span>
+                  : <span style={{ fontSize: 13, color: selected || hover ? accentColor : t.muted, fontWeight: 600 }}>{i + 1}</span>}
               </button>
             );
           })}
@@ -986,8 +1011,38 @@ function QuestionView({ q, qType, value, onChange, t, accentColor }: {
           <img src={q.imageUrl} alt="" style={{ maxWidth: '100%', maxHeight: 440, borderRadius: 12, objectFit: 'contain' }} />
         </div>
       : null;
-  const Title = (
+  // Rich-text questions (authored via the rich editor) carry HTML -- render them sanitized and
+  // left-aligned with proper typography. Plain legacy questions keep the centered heading.
+  const isRich = /<[a-z][\s\S]*>/i.test(String(q.question ?? ''));
+  const heading = isRich ? (
+    <>
+      <style>{`
+        .cert-q-rich { font-size: 18px; line-height: 1.65; text-align: left; }
+        .cert-q-rich > :first-child { margin-top: 0; }
+        .cert-q-rich p { margin: 0 0 12px; }
+        .cert-q-rich strong { font-weight: 700; }
+        .cert-q-rich ul, .cert-q-rich ol { margin: 0 0 12px; padding-left: 22px; }
+        .cert-q-rich li { margin: 4px 0; }
+        .cert-q-rich a { color: ${accentColor}; text-decoration: underline; }
+        .cert-q-rich code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 5px; font-family: ui-monospace, monospace; font-size: 0.92em; }
+        .cert-q-rich pre { background: #0c0d12; border: 1px solid ${t.border}; border-radius: 10px; padding: 14px; overflow-x: auto; margin: 0 0 12px; }
+        .cert-q-rich pre code { background: none; padding: 0; }
+        .cert-q-rich img { max-width: 100%; border-radius: 10px; margin: 6px 0; }
+        .cert-q-rich table { border-collapse: collapse; width: 100%; margin: 0 0 12px; }
+        .cert-q-rich th, .cert-q-rich td { border: 1px solid ${t.border}; padding: 8px 10px; text-align: left; }
+        .cert-q-rich h2, .cert-q-rich h3 { font-weight: 700; margin: 0 0 10px; }
+      `}</style>
+      <div className="cert-q-rich" style={{ marginBottom: leftPanel ? 20 : 26, color: t.text }} dangerouslySetInnerHTML={{ __html: sanitizeQuestionContent(q.question) }} />
+    </>
+  ) : (
     <h2 style={{ fontSize: 22, fontWeight: 700, textAlign: 'center', marginBottom: leftPanel ? 22 : 28, lineHeight: 1.4, color: t.text }}>{q.question}</h2>
+  );
+  const sectionName = q.section === 'practical' ? 'Practical / Case study' : q.section === 'technical' ? 'Technical' : '';
+  const Title = (
+    <>
+      {sectionName && <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: accentColor, marginBottom: 8, textAlign: isRich ? 'left' : 'center' }}>{sectionName} section</div>}
+      {heading}
+    </>
   );
 
   if (leftPanel) {

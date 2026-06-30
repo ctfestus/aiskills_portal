@@ -191,6 +191,9 @@ export async function POST(req: NextRequest) {
             ? { url: cert.study_guide_url, name: cert.study_guide_name || 'Study guide' } : null,
           poster: cert.poster_published && cert.poster_url ? cert.poster_url : null,
           practiceTestUrl: cert.practice_test_url || null,
+          // Distinct exam sections present (Technical / Practical), in canonical order, for the overview.
+          sections: ['technical', 'practical'].filter(s =>
+            (Array.isArray(cert.questions) ? cert.questions : []).some((q: any) => q?.section === s)),
         },
       } });
     } catch (err: any) {

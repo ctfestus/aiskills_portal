@@ -647,12 +647,22 @@ export default function PythonExercisePlayer({
         .task-body code { font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace !important; font-size: 0.85em; background: ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}; color: ${isDark ? '#86efac' : '#166534'}; border-radius: 4px; padding: 1px 5px; }
         .task-body pre { font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 0.85em; background: ${isDark ? '#0f1120' : '#f1f3f8'}; color: ${isDark ? '#c9d1d9' : '#1a1d2e'}; border-radius: 6px; padding: 12px 16px; margin: 0.75rem 0; overflow-x: auto; }
         .task-body pre code { background: none; padding: 0; border-radius: 0; color: inherit; font-size: inherit; }
+        .task-body p { margin: 0 0 12px; }
+        .task-body ul, .task-body ol { margin: 0 0 12px; padding-left: 22px; }
+        .task-body li { margin: 4px 0; }
+        .task-body h2, .task-body h3 { font-weight: 700; margin: 0 0 10px; }
+        .task-body a { color: ${accentColor}; text-decoration: underline; }
+        .task-body table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; }
+        .task-body th, .task-body td { border: 1px solid ${isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)'}; padding: 6px 10px; text-align: left; }
+        .task-body th { font-weight: 700; background: ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}; }
       `}</style>
       {/* EXAM MODE: the task reads like a normal certification question -- a centered heading on top (no "TASK" label or box), matching the multiple-choice question style. */}
       {examMode && question.question && (
         <div className="flex-shrink-0 px-6 pt-6 pb-1" style={{ maxHeight: '26vh', overflowY: 'auto' }}>
           <div className="task-body"
-            style={{ textAlign: 'center', fontSize: 22, fontWeight: 700, lineHeight: 1.4, color: text, maxWidth: 940, margin: '0 auto' }}
+            style={/<(table|ul|ol|pre|h[1-4]|blockquote|img)/i.test(question.question)
+              ? { textAlign: 'left', fontSize: 18, fontWeight: 400, lineHeight: 1.6, color: text, maxWidth: 940, margin: '0 auto' }
+              : { textAlign: 'center', fontSize: 22, fontWeight: 700, lineHeight: 1.4, color: text, maxWidth: 940, margin: '0 auto' }}
             dangerouslySetInnerHTML={{ __html: renderRichText(question.question) }} />
         </div>
       )}

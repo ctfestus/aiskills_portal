@@ -57,6 +57,8 @@ export interface CourseQuestion {
   optionImages?: string[];    // image type only -- one base64 per option, same length as options
   imageUrl?: string;          // image_choice: a single prompt image shown above the text options
   skillAreaId?: string;       // certifications: maps this question to a CertificationConfig.skillAreas entry
+  multiSelect?: boolean;      // multiple_choice/image_choice: more than one correct option (correctAnswer is '|||'-joined, order-independent)
+  section?: 'technical' | 'practical';  // certifications: which exam section this question belongs to (Technical vs Practical/Case study)
   hint?: string;
   codeSnippet?: string;
   codeLanguage?: string;

@@ -20,6 +20,7 @@ import { useC } from '@/components/create/theme';
 import { useC as useLibC } from '@/lib/theme';
 import { Toggle, inputCls, labelCls } from '@/components/create/shared';
 import { QuestionTypePicker, TYPE_LABELS, type QuestionTypeOrDownloads } from '@/components/create/QuestionTypePicker';
+import { RichTextEditor } from '@/components/RichTextEditor';
 import type { CourseQuestion, QuestionType, SkillArea } from '@/lib/course-schema';
 
 const EXAM_TYPES: QuestionTypeOrDownloads[] = ['multiple_choice', 'fill_blank', 'arrange', 'image', 'image_choice', 'code', 'python_exercise'];
@@ -495,7 +496,7 @@ function QuestionCard({ q, index, C, skillAreas, expanded, onToggle, onUpdate, o
         <button className="cursor-grab active:cursor-grabbing" style={{ color: C.faint }} {...attributes} {...listeners}><GripVertical className="w-3.5 h-3.5" /></button>
         <button onClick={onToggle} className="flex-1 text-left min-w-0">
           <span className="text-sm font-medium truncate block" style={{ color: C.text }}>
-            {q.question || <span className="italic" style={{ color: C.faint }}>Question {index + 1}</span>}
+            {(q.question?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()) || <span className="italic" style={{ color: C.faint }}>Question {index + 1}</span>}
           </span>
           <span className="text-[10px]" style={{ color: C.faint }}>{TYPE_LABELS[type]}</span>
         </button>
@@ -507,17 +508,28 @@ function QuestionCard({ q, index, C, skillAreas, expanded, onToggle, onUpdate, o
         <div className="px-3 pt-3 pb-4 space-y-3" style={{ background: C.card, border: `1px solid ${C.cardBorder}`, borderTop: 'none', borderRadius: '0 0 12px 12px' }}>
           <div>
             <label className={labelCls} style={{ color: C.faint }}>Question</label>
-            <textarea value={q.question} onChange={e => onUpdate({ question: e.target.value })} rows={2} className={inputCls} style={inputStyle} placeholder="Ask the question..." />
+            <RichTextEditor value={q.question} onChange={html => onUpdate({ question: html })}
+              placeholder="Ask the question. Use the toolbar for bold, lists, code, links, and images."
+              onImageUpload={(file) => uploadToCloudinary(file, 'certification-prompts')} />
           </div>
-          {skillAreas.length > 0 && (
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls} style={{ color: C.faint }}>Skill area</label>
-              <select value={q.skillAreaId ?? ''} onChange={e => onUpdate({ skillAreaId: e.target.value || undefined })} className={inputCls} style={inputStyle}>
-                <option value="">No skill area</option>
-                {skillAreas.map(s => <option key={s.id} value={s.id}>{s.name.trim() || 'Untitled skill'}</option>)}
+              <label className={labelCls} style={{ color: C.faint }}>Section</label>
+              <select value={q.section ?? 'technical'} onChange={e => onUpdate({ section: e.target.value as 'technical' | 'practical' })} className={inputCls} style={inputStyle}>
+                <option value="technical">Technical</option>
+                <option value="practical">Practical / Case study</option>
               </select>
             </div>
-          )}
+            {skillAreas.length > 0 && (
+              <div>
+                <label className={labelCls} style={{ color: C.faint }}>Skill area</label>
+                <select value={q.skillAreaId ?? ''} onChange={e => onUpdate({ skillAreaId: e.target.value || undefined })} className={inputCls} style={inputStyle}>
+                  <option value="">No skill area</option>
+                  {skillAreas.map(s => <option key={s.id} value={s.id}>{s.name.trim() || 'Untitled skill'}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
           <TypeFields q={q} type={type} C={C} inputStyle={inputStyle} onUpdate={onUpdate} />
           <PlaygroundEditor q={q} C={C} inputStyle={inputStyle} onUpdate={onUpdate} />
         </div>
@@ -643,11 +655,40 @@ function TypeFields({ q, type, C, inputStyle, onUpdate }: { q: CourseQuestion; t
   // text). `code` shows a code snippet above the options; `image_choice` shows one prompt image.
   if (type === 'multiple_choice' || type === 'code' || type === 'image_choice') {
     const options = q.options ?? [];
+    // Multiple-answer mode: correctAnswer holds the correct option texts '|||'-joined (in option order).
+    const multi = !!q.multiSelect;
+    const correctList = String(q.correctAnswer ?? '').split('|||').filter(Boolean);
+    const isCorrect = (opt: string) => multi ? correctList.includes(opt) : (q.correctAnswer === opt && opt !== '');
+    const correctFromSet = (set: Set<string>, opts: string[]) => opts.filter(o => o && set.has(o)).join('|||');
+    const toggleCorrect = (opt: string) => {
+      if (!opt) return;
+      if (!multi) { onUpdate({ correctAnswer: opt }); return; }
+      const set = new Set(correctList);
+      set.has(opt) ? set.delete(opt) : set.add(opt);
+      onUpdate({ correctAnswer: correctFromSet(set, options) });
+    };
     const setOption = (i: number, text: string) => {
+      const prev = options[i];
       const next = [...options];
-      const wasCorrect = next[i] === q.correctAnswer && q.correctAnswer !== '';
       next[i] = text;
-      onUpdate({ options: next, ...(wasCorrect ? { correctAnswer: text } : {}) });
+      if (multi) {
+        const set = new Set(correctList);
+        if (set.has(prev)) { set.delete(prev); if (text) set.add(text); }
+        onUpdate({ options: next, correctAnswer: correctFromSet(set, next) });
+      } else {
+        const wasCorrect = prev === q.correctAnswer && q.correctAnswer !== '';
+        onUpdate({ options: next, ...(wasCorrect ? { correctAnswer: text } : {}) });
+      }
+    };
+    const removeOption = (i: number) => {
+      const opt = options[i];
+      const next = options.filter((_, x) => x !== i);
+      if (multi) {
+        const set = new Set(correctList); set.delete(opt);
+        onUpdate({ options: next, correctAnswer: correctFromSet(set, next) });
+      } else {
+        onUpdate({ options: next, ...(opt === q.correctAnswer ? { correctAnswer: '' } : {}) });
+      }
     };
     const uploadPrompt = async (file: File) => {
       setImgUploading(true);
@@ -677,14 +718,20 @@ function TypeFields({ q, type, C, inputStyle, onUpdate }: { q: CourseQuestion; t
             </label>
           </div>
         )}
-        <label className={labelCls} style={{ color: C.faint }}>Options (select the correct one)</label>
+        <div className="flex items-center justify-between gap-3">
+          <label className={labelCls} style={{ color: C.faint, marginBottom: 0 }}>{multi ? 'Options (select all correct)' : 'Options (select the correct one)'}</label>
+          <label className="flex items-center gap-2 text-xs flex-shrink-0" style={{ color: C.muted }}>
+            Multiple answers
+            <Toggle checked={multi} onChange={() => onUpdate({ multiSelect: !multi, correctAnswer: '' })} accentColor={C.cta} />
+          </label>
+        </div>
         <div className="space-y-2">
           {options.map((opt, i) => (
             <div key={i} className="flex items-center gap-2">
-              <input type="radio" checked={q.correctAnswer === opt && opt !== ''} onChange={() => onUpdate({ correctAnswer: opt })} style={{ accentColor: C.cta }} />
+              <input type={multi ? 'checkbox' : 'radio'} checked={isCorrect(opt)} onChange={() => toggleCorrect(opt)} style={{ accentColor: C.cta }} />
               <input value={opt} onChange={e => setOption(i, e.target.value)} placeholder={`Option ${i + 1}`} className={inputCls} style={inputStyle} />
               {options.length > 2 && (
-                <button onClick={() => { const next = options.filter((_, x) => x !== i); onUpdate({ options: next, ...(options[i] === q.correctAnswer ? { correctAnswer: '' } : {}) }); }} style={{ color: C.faint }}><Trash2 className="w-3.5 h-3.5" /></button>
+                <button onClick={() => removeOption(i)} style={{ color: C.faint }}><Trash2 className="w-3.5 h-3.5" /></button>
               )}
             </div>
           ))}
