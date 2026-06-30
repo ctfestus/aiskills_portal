@@ -49,6 +49,14 @@ export function sanitizeEmailContent(html: string): string {
   });
 }
 
+/**
+ * Sanitizer for certification question content authored with RichTextEditor: rich text + tables +
+ * images (https-only). Same policy as sanitizeEmailContent (which already permits img/table safely).
+ */
+export function sanitizeQuestionContent(html: string): string {
+  return sanitizeEmailContent(html);
+}
+
 const YT_IFRAME = (id: string) =>
   `<div style="width:100%;margin:8px 0;"><iframe src="https://www.youtube.com/embed/${id}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen title="YouTube video" style="width:100%;aspect-ratio:16/9;display:block;border-radius:8px;border:none;"></iframe></div>`;
 

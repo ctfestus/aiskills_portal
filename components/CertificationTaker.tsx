@@ -14,7 +14,7 @@ import SQLExercisePlayer from '@/components/sql-course/SQLExercisePlayer';
 import PythonExercisePlayer from '@/components/sql-course/PythonExercisePlayer';
 import { CertificationPlayground } from '@/components/CertificationPlayground';
 import { useTenant } from '@/components/TenantProvider';
-import { sanitizeRichText } from '@/lib/sanitize';
+import { sanitizeQuestionContent } from '@/lib/sanitize';
 import type { CourseQuestion } from '@/lib/course-schema';
 
 type Phase = 'loading' | 'intro' | 'exam' | 'review' | 'result' | 'blocked';
@@ -1031,7 +1031,7 @@ function QuestionView({ q, qType, value, onChange, t, accentColor }: {
         .cert-q-rich th, .cert-q-rich td { border: 1px solid ${t.border}; padding: 8px 10px; text-align: left; }
         .cert-q-rich h2, .cert-q-rich h3 { font-weight: 700; margin: 0 0 10px; }
       `}</style>
-      <div className="cert-q-rich" style={{ marginBottom: leftPanel ? 20 : 26, color: t.text }} dangerouslySetInnerHTML={{ __html: sanitizeRichText(q.question) }} />
+      <div className="cert-q-rich" style={{ marginBottom: leftPanel ? 20 : 26, color: t.text }} dangerouslySetInnerHTML={{ __html: sanitizeQuestionContent(q.question) }} />
     </>
   ) : (
     <h2 style={{ fontSize: 22, fontWeight: 700, textAlign: 'center', marginBottom: leftPanel ? 22 : 28, lineHeight: 1.4, color: t.text }}>{q.question}</h2>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { Bold, Code2, FileCode2, Italic, RemoveFormatting, Underline, List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote, Youtube, ImageIcon, Loader2, UserRound } from 'lucide-react';
+import { Bold, Code2, FileCode2, Table, Italic, RemoveFormatting, Underline, List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote, Youtube, ImageIcon, Loader2, UserRound } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { RichTextAiMenu } from '@/components/RichTextAiMenu';
 
@@ -226,6 +226,30 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
     onChange(editor.innerHTML);
   }, [onChange]);
 
+  const handleInsertTable = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    const cols = Math.min(8, Math.max(1, parseInt(window.prompt('Number of columns?', '3') || '0', 10) || 0));
+    const rows = Math.min(20, Math.max(1, parseInt(window.prompt('Number of body rows?', '2') || '0', 10) || 0));
+    if (!cols || !rows) return;
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+    const headRow = Array.from({ length: cols }, (_, i) => `<th>Header ${i + 1}</th>`).join('');
+    const bodyRow = `<tr>${Array.from({ length: cols }, () => '<td>&nbsp;</td>').join('')}</tr>`;
+    const bodyRows = Array.from({ length: rows }, () => bodyRow).join('');
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = `<table><thead><tr>${headRow}</tr></thead><tbody>${bodyRows}</tbody></table><p><br></p>`;
+    range.deleteContents();
+    const frag = document.createDocumentFragment();
+    while (wrapper.firstChild) frag.appendChild(wrapper.firstChild);
+    range.insertNode(frag);
+    isInternalChange.current = true;
+    onChange(editor.innerHTML);
+  }, [onChange]);
+
   const handleClearFormat = useCallback(() => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -374,6 +398,9 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         <ToolbarButton onClick={handleCodeBlock} title="Code block" dark={dark}>
           <FileCode2 className="w-3.5 h-3.5" />
         </ToolbarButton>
+        <ToolbarButton onClick={handleInsertTable} title="Insert table" dark={dark}>
+          <Table className="w-3.5 h-3.5" />
+        </ToolbarButton>
         <div className="w-px h-4 mx-1" style={{ background: toolDiv }} />
         <ToolbarButton onClick={() => exec('insertUnorderedList')} title="Bullet list" dark={dark}>
           <List className="w-3.5 h-3.5" />
@@ -477,6 +504,9 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         .rich-editor pre { font-family: "JetBrains Mono","Fira Code",ui-monospace,monospace; font-size: 0.85em; background: ${dark ? '#0f1120' : '#f1f3f8'}; color: ${dark ? '#c9d1d9' : '#1a1d2e'}; border-radius: 6px; padding: 12px 16px; margin: 0.75rem 0; overflow-x: auto; white-space: pre; }
         .rich-editor pre code { background: none; padding: 0; border-radius: 0; color: inherit; font-size: inherit; }
         .rich-editor blockquote { border-left: 3px solid #10b981; padding-left: 0.875rem; margin: 0.75rem 0; color: ${dark ? '#a1a1aa' : '#444444'}; font-style: normal; }
+        .rich-editor table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; }
+        .rich-editor th, .rich-editor td { border: 1px solid ${dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)'}; padding: 6px 10px; text-align: left; min-width: 40px; }
+        .rich-editor th { font-weight: 700; background: ${dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'}; }
         .rich-editor .yt-embed { width: 100%; margin: 8px 0; border-radius: 8px; overflow: hidden; position: relative; cursor: default; display: block; }
         .rich-editor .yt-embed img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; }
         .rich-editor .yt-embed::after { content: '▶'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 56px; height: 40px; background: rgba(255,0,0,0.88); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; padding-left: 4px; pointer-events: none; box-sizing: border-box; }
