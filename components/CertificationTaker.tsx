@@ -8,11 +8,12 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Clock, Loader2, CheckCircle2, XCircle, ShieldAlert, Award, AlertTriangle, Circle, Check, ListChecks, Sparkle, ChevronRight } from 'lucide-react';
+import { X, Clock, Loader2, CheckCircle2, XCircle, ShieldAlert, Award, AlertTriangle, Circle, Check, ListChecks, Sparkle, ChevronRight, FileText, ExternalLink, Image as ImageIcon } from 'lucide-react';
 import { initSQLRuntime, SQLRuntime } from '@/lib/sql-engine';
 import SQLExercisePlayer from '@/components/sql-course/SQLExercisePlayer';
 import PythonExercisePlayer from '@/components/sql-course/PythonExercisePlayer';
 import { CertificationPlayground } from '@/components/CertificationPlayground';
+import { useTenant } from '@/components/TenantProvider';
 import type { CourseQuestion } from '@/lib/course-schema';
 
 type Phase = 'loading' | 'intro' | 'exam' | 'review' | 'result' | 'blocked';
@@ -50,12 +51,21 @@ export default function CertificationTaker({
   certificationId, slug, config, studentName, studentEmail, sessionToken,
   isDark, accentColor, logoUrl, logoDarkUrl, onExit,
 }: Props) {
+  // Platform branding colours, used for the OVERVIEW only (the exam keeps the content `accentColor`):
+  // - tenantBrand = Primary Colour (`primary_color`, the platform brand color) -> the hero band.
+  // - tenantAccent = Accent Colour (`accent_color`, the Landing Page "secondary accent") -> highlight text.
+  const { primaryColor: tenantBrand, accentColor: tenantAccent } = useTenant();
   // Questions are NOT in config -- they are delivered by start-attempt (when the clock starts), so a
   // student cannot read them before the timer begins. config carries only metadata + questionCount.
   const questionCount: number = Number(config?.questionCount) || 0;
   const timeLimitMin: number = Number(config?.timeLimit) || 0;
   const maxAttempts: number = Number(config?.maxAttempts) || 0;
   const protect: boolean = config?.examProtection !== false;
+  // Foundation assets shown on the intro screen.
+  const skillAreas: { id: string; name: string }[] = Array.isArray(config?.skillAreas) ? config.skillAreas : [];
+  const studyGuide: { url: string; name: string } | null = config?.studyGuide?.url ? config.studyGuide : null;
+  const posterUrl: string = config?.poster || '';
+  const practiceTestUrl: string = config?.practiceTestUrl || '';
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [questions, setQuestions] = useState<CourseQuestion[]>([]);
@@ -415,33 +425,218 @@ export default function CertificationTaker({
   }
 
   if (phase === 'intro') {
+    // DataCamp-style certification overview: a light, airy, card-based marketing page, always light
+    // for clean contrast (distinct from the dark, focused exam chrome that takes over once the exam
+    // starts). The overview uses the tenant brand primary color; the exam keeps the content accent.
+    const ov = { bg: '#ffffff', surface: '#f4f5f7', surfaceAlt: '#eef1f5', border: '#e6e8ec', text: '#10131a', muted: '#5a616b' };
+    const brandColor = tenantBrand || accentColor;
+    // Brand tint that works for any hex color (falls back to a neutral wash for non-hex values).
+    const tint = (a: number) => {
+      const h = String(brandColor || '').replace('#', '');
+      if (h.length === 6) { const n = parseInt(h, 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; }
+      return isDark ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a})`;
+    };
+    // A darker shade of the brand color (multiply each channel), for a brand gradient with depth that
+    // stays fully saturated -- no white overlay, so the color never looks faint or transparent.
+    const shade = (factor: number) => {
+      const h = String(brandColor || '').replace('#', '');
+      if (h.length === 6) { const n = parseInt(h, 16); return `rgb(${Math.round(((n >> 16) & 255) * factor)},${Math.round(((n >> 8) & 255) * factor)},${Math.round((n & 255) * factor)})`; }
+      return brandColor;
+    };
+    // A lighter shade of the brand color (mix p toward white) at alpha a -- used for the box-grid lines,
+    // so the pattern is derived from the SAME brand color (not hardcoded white). The alpha is what keeps
+    // it SUBTLE: an opaque lifted color reads as a hard near-white line; a low alpha blends it into the
+    // band as a soft, brand-hued line.
+    const lift = (p: number, a = 1) => {
+      const h = String(brandColor || '').replace('#', '');
+      if (h.length === 6) { const n = parseInt(h, 16); const m = (c: number) => Math.round(c + (255 - c) * p); return `rgba(${m((n >> 16) & 255)},${m((n >> 8) & 255)},${m(n & 255)},${a})`; }
+      return `rgba(255,255,255,${0.18 * a})`;
+    };
+    // Brand bands (hero + closing CTA): full-strength brand color deepening to a darker shade, with a
+    // soft box-grid texture in a low-alpha lighter shade of the same brand color (subtle, on-brand).
+    const gridLine = lift(0.3, 0.15);
+    const heroBg = `linear-gradient(to right, ${gridLine} 1px, transparent 1px) 0 0 / 46px 46px, linear-gradient(to bottom, ${gridLine} 1px, transparent 1px) 0 0 / 46px 46px, linear-gradient(160deg, ${brandColor} 0%, ${shade(0.78)} 100%)`;
+    // Overview is always light, so use the light-mode logo (the dark-mode logo is built for dark backgrounds).
+    const logo = logoUrl || logoDarkUrl;
+    // Hero uses the cover image; the poster is a separate resource shown below.
+    const heroVisual = config?.coverImage || '';
+    const title = config?.title || 'Certification';
+    const ctaLabel = canResume ? 'Resume exam' : 'Start exam';
+    const facts = [
+      { icon: ListChecks, label: 'Questions', value: `${questionCount}` },
+      { icon: Clock, label: 'Time limit', value: timeLimitMin ? `${timeLimitMin} min` : 'Untimed' },
+      { icon: Award, label: 'Pass mark', value: `${config?.passmark ?? 70}%` },
+      { icon: CheckCircle2, label: 'Attempts', value: maxAttempts > 0 ? `${attemptsLeft ?? maxAttempts} of ${maxAttempts}` : 'Unlimited' },
+    ];
+    const howSteps = [
+      { title: 'Complete courses', desc: 'Build the skills this certification assesses.' },
+      { title: 'Ace your exams', desc: 'Pass the timed, protected certification exam.' },
+      { title: 'Showcase it', desc: 'Share your certificate and badge on LinkedIn.' },
+    ];
+    const resources = [
+      studyGuide ? { icon: FileText, title: 'Study guide', desc: 'View or download the PDF.', href: studyGuide.url } : null,
+      practiceTestUrl ? { icon: ExternalLink, title: 'Practice test', desc: 'Warm up before the real exam.', href: practiceTestUrl } : null,
+      posterUrl ? { icon: ImageIcon, title: 'Poster', desc: 'View the certification poster.', href: posterUrl } : null,
+    ].filter(Boolean) as { icon: any; title: string; desc: string; href: string }[];
+
+    // Small section labels use a dark ~90% tone (not blue/primary, per design).
+    const eyebrow = { fontSize: 12.5, fontWeight: 800 as const, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'rgba(16,19,26,0.9)', marginBottom: 12 };
+    const h2 = { fontSize: 26, fontWeight: 800 as const, marginBottom: 8, color: ov.text };
+    const sub = { fontSize: 15, color: ov.muted, lineHeight: 1.6, marginBottom: 24, maxWidth: 640 };
+    const card = { background: '#ffffff', borderRadius: 16, padding: 20 };
+    const sectionStyle = { padding: '32px 0' };
+    const ctaPrimary = { background: brandColor, color: '#ffffff', fontWeight: 700 as const, fontSize: 15, padding: '13px 30px', borderRadius: 12, opacity: starting ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer' };
+    // Hero sits on a full-width primary-color band, so its text is white and its CTA is a white
+    // button (an accent button would vanish on the accent background).
+    const heroCtaPrimary = { background: '#ffffff', color: '#10131a', fontWeight: 700 as const, fontSize: 15, padding: '13px 30px', borderRadius: 12, opacity: starting ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer' };
+    const heroCtaSecondary = { background: 'rgba(255,255,255,0.16)', color: '#ffffff', fontWeight: 600 as const, fontSize: 15, padding: '13px 24px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' };
+    const heroEyebrow = { fontSize: 12.5, fontWeight: 800 as const, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'rgba(255,255,255,0.85)', marginBottom: 12 };
+
     return (
-      <div style={{ minHeight: '100vh', background: t.bg, color: t.text, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ minHeight: '100vh', background: ov.bg, color: ov.text, overflowY: 'auto' }}>
         {protectStyle}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 560, width: '100%' }}>
-          <button onClick={onExit} className="mb-6 flex items-center gap-1.5" style={{ color: t.muted, fontSize: 13 }}><X className="w-4 h-4" /> Exit</button>
-          <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 10 }}>{config?.title || 'Certification exam'}</h1>
-          {config?.description && <p style={{ fontSize: 15, color: t.muted, marginBottom: 24, lineHeight: 1.6 }}>{config.description}</p>}
-          <div style={{ display: 'grid', gap: 12, marginBottom: 28 }}>
-            <Rule t={t} label="Questions" value={`${questionCount}`} />
-            <Rule t={t} label="Pass mark" value={`${config?.passmark ?? 70}%`} />
-            <Rule t={t} label="Time limit" value={timeLimitMin ? `${timeLimitMin} minute${timeLimitMin === 1 ? '' : 's'}` : 'Untimed'} />
-            <Rule t={t} label="Attempts" value={maxAttempts > 0 ? `${attemptsLeft ?? maxAttempts} of ${maxAttempts} left` : 'Unlimited'} />
+        <style>{`
+          .cert-card { box-shadow: 0 1px 2px rgba(16,19,26,0.04), 0 10px 30px rgba(16,19,26,0.06); transition: transform .2s ease, box-shadow .2s ease; }
+          .cert-card:hover { transform: translateY(-4px); box-shadow: 0 8px 18px rgba(16,19,26,0.08), 0 22px 48px rgba(16,19,26,0.12); }
+          .cert-cta { transition: transform .16s ease, box-shadow .16s ease; }
+          .cert-cta:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(16,19,26,0.22); }
+          .cert-cta:active { transform: translateY(0); }
+          @media (prefers-reduced-motion: reduce) {
+            .cert-card, .cert-cta { transition: none; }
+            .cert-card:hover, .cert-cta:hover { transform: none; }
+          }
+          @media (prefers-reduced-motion: no-preference) {
+            @supports ((animation-timeline: view()) and (animation-range: entry)) {
+              @keyframes cert-reveal { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: translateY(0); } }
+              .cert-reveal { animation: cert-reveal linear both; animation-timeline: view(); animation-range: entry 0% cover 30%; }
+            }
+          }
+        `}</style>
+        {/* Top bar */}
+        <div style={{ position: 'sticky', top: 0, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 24px', background: ov.bg }}>
+          {logo ? <img src={logo} alt="" style={{ height: 26, objectFit: 'contain' }} /> : <span style={{ fontWeight: 800, fontSize: 15 }}>{title}</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <button onClick={onExit} style={{ color: ov.muted, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}><X className="w-4 h-4" /> Exit</button>
+            <button onClick={startExam} disabled={starting} className="cert-cta" style={{ ...ctaPrimary, padding: '9px 18px', fontSize: 13.5 }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{ctaLabel}</button>
           </div>
-          {protect && (
-            <div style={{ display: 'flex', gap: 10, padding: '12px 14px', borderRadius: 10, background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.25)', marginBottom: 24 }}>
-              <ShieldAlert className="w-5 h-5 flex-shrink-0" style={{ color: '#f59e0b' }} />
-              <p style={{ fontSize: 12.5, color: t.muted, lineHeight: 1.55 }}>
-                Protected exam: copying, pasting and right-click are disabled. Leaving the tab is recorded. The timer cannot be paused.
-              </p>
+        </div>
+
+        {/* Hero band - full width, brand primary color. The image is bottom-anchored and flush with the band's bottom edge; the text is vertically centered. No section vertical padding -- the text column supplies its own, so the image can reach the very bottom. */}
+        <div style={{ background: heroBg, overflow: 'hidden' }}>
+          <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 1040, margin: '0 auto', display: 'flex', flexWrap: 'wrap', gap: 40, alignItems: 'stretch', padding: '0 24px' }}>
+            <div style={{ flex: '1 1 360px', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '56px 0' }}>
+              <div style={heroEyebrow}>Certification</div>
+              <h1 style={{ fontSize: 'clamp(32px, 4.4vw, 46px)', fontWeight: 800, lineHeight: 1.07, marginBottom: 16, letterSpacing: '-0.02em', color: '#ffffff' }}>Prove your skills as <span style={{ color: tenantAccent }}>{title}</span></h1>
+              {config?.description && <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.9)', lineHeight: 1.6, marginBottom: 26, maxWidth: 560 }}>{config.description}</p>}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <button onClick={startExam} disabled={starting} className="cert-cta" style={heroCtaPrimary}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{ctaLabel}<ChevronRight className="w-4 h-4" /></button>
+                {practiceTestUrl && <a href={practiceTestUrl} target="_blank" rel="noreferrer" className="cert-cta" style={heroCtaSecondary}>Try the practice test</a>}
+              </div>
+              {startError && <p style={{ marginTop: 14, fontSize: 13, color: '#ffffff' }}>{startError}</p>}
             </div>
+            {heroVisual
+              ? <div style={{ flex: '0 1 440px', alignSelf: 'flex-end', display: 'flex', alignItems: 'flex-end' }}><img src={heroVisual} alt="" style={{ width: '100%', display: 'block', filter: 'drop-shadow(0 14px 26px rgba(0,0,0,0.22))' }} /></div>
+              : <div style={{ flex: '0 1 300px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '56px 0' }}>
+                  <div style={{ width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Award style={{ width: 92, height: 92, color: '#ffffff' }} />
+                  </div>
+                </div>}
+          </motion.section>
+        </div>
+
+        <div style={{ maxWidth: 1040, margin: '0 auto', padding: '36px 24px 72px' }}>
+          {/* Facts strip */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14 }}>
+            {facts.map((f, i) => (
+              <div key={i} className="cert-card" style={{ ...card, padding: 18 }}>
+                <f.icon className="w-5 h-5" style={{ color: brandColor, marginBottom: 10 }} />
+                <div style={{ fontSize: 22, fontWeight: 800 }}>{f.value}</div>
+                <div style={{ fontSize: 12.5, color: ov.muted, marginTop: 2 }}>{f.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* What to expect */}
+          <section style={sectionStyle}>
+            <div style={eyebrow}>The exam</div>
+            <h2 style={h2}>What to expect</h2>
+            <p style={sub}>
+              {timeLimitMin ? `A ${timeLimitMin}-minute timed exam` : 'An untimed exam'} of {questionCount} question{questionCount === 1 ? '' : 's'}. You need {config?.passmark ?? 70}% to pass{maxAttempts > 0 ? `, with ${maxAttempts} attempt${maxAttempts === 1 ? '' : 's'} allowed.` : '.'}
+            </p>
+            {protect && (
+              <div style={{ display: 'flex', gap: 12, padding: '14px 16px', borderRadius: 12, background: 'rgba(245,158,11,0.12)' }}>
+                <ShieldAlert className="w-5 h-5 flex-shrink-0" style={{ color: '#f59e0b' }} />
+                <p style={{ fontSize: 13, color: ov.muted, lineHeight: 1.55 }}>Protected exam: copying, pasting and right-click are disabled, leaving the tab is recorded, and the timer cannot be paused.</p>
+              </div>
+            )}
+          </section>
+
+          {/* Skills */}
+          {skillAreas.length > 0 && (
+            <section className="cert-reveal" style={sectionStyle}>
+              <div style={eyebrow}>Skills</div>
+              <h2 style={h2}>Skills you will prove</h2>
+              <p style={sub}>This certification assesses your ability across the following areas.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+                {skillAreas.map(s => (
+                  <div key={s.id} className="cert-card" style={{ ...card, display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <CheckCircle2 className="w-5 h-5 flex-shrink-0" style={{ color: brandColor }} />
+                    <span style={{ fontSize: 15, fontWeight: 600 }}>{s.name}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
-          <button onClick={startExam} disabled={starting} style={{ background: accentColor, color: '#06281a', fontWeight: 700, fontSize: 15, padding: '12px 28px', borderRadius: 12, opacity: starting ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            {starting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {canResume ? 'Resume exam' : 'Start exam'}
-          </button>
-          {startError && <p style={{ marginTop: 12, fontSize: 13, color: '#f43f5e' }}>{startError}</p>}
-        </motion.div>
+
+          {/* How it works */}
+          <section className="cert-reveal" style={sectionStyle}>
+            <div style={eyebrow}>Get certified</div>
+            <h2 style={h2}>How it works</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginTop: 8 }}>
+              {howSteps.map((step, i) => (
+                <div key={i} className="cert-card" style={card}>
+                  <span style={{ width: 34, height: 34, borderRadius: 999, background: tint(0.12), color: 'rgba(16,19,26,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, marginBottom: 14 }}>{i + 1}</span>
+                  <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{step.title}</div>
+                  <div style={{ fontSize: 13.5, color: ov.muted, lineHeight: 1.5 }}>{step.desc}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Prepare / resources */}
+          {resources.length > 0 && (
+            <section className="cert-reveal" style={sectionStyle}>
+              <div style={eyebrow}>Prepare</div>
+              <h2 style={h2}>Prepare for the exam</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, marginTop: 8 }}>
+                {resources.map((r, i) => (
+                  <a key={i} href={r.href} target="_blank" rel="noreferrer" className="cert-card" style={{ ...card, display: 'flex', alignItems: 'flex-start', gap: 12, textDecoration: 'none', color: ov.text }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 10, background: tint(0.12), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <r.icon className="w-5 h-5" style={{ color: brandColor }} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>{r.title} <ChevronRight className="w-3.5 h-3.5" style={{ color: ov.muted }} /></div>
+                      <div style={{ fontSize: 13, color: ov.muted, marginTop: 2 }}>{r.desc}</div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Closing CTA - full brand colour band, using the exact hero background. No cert-reveal here: its opacity fade would make the brand band look semi-transparent (faint) mid-scroll. */}
+          <div style={{ marginTop: 48, borderRadius: 24, padding: '56px 32px', textAlign: 'center', overflow: 'hidden', background: heroBg }}>
+            <div style={{ width: 60, height: 60, borderRadius: 18, background: 'rgba(255,255,255,0.16)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
+              <Award style={{ width: 30, height: 30, color: '#ffffff' }} />
+            </div>
+            <h2 style={{ fontSize: 26, fontWeight: 800, marginBottom: 8, color: '#ffffff' }}>Ready to get certified?</h2>
+            <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.85)', marginBottom: 24 }}>
+              {maxAttempts > 0 && attemptsLeft != null ? `You have ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} remaining.` : 'Take the exam when you are ready.'}
+            </p>
+            <button onClick={startExam} disabled={starting} className="cert-cta" style={{ ...heroCtaPrimary, fontSize: 16, padding: '14px 34px' }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{ctaLabel}<ChevronRight className="w-4 h-4" /></button>
+            {startError && <p style={{ marginTop: 14, fontSize: 13, color: '#ffffff' }}>{startError}</p>}
+          </div>
+        </div>
       </div>
     );
   }
@@ -644,15 +839,6 @@ function Stat({ t, Icon, label, value, color }: { t: any; Icon: any; label: stri
         <span style={{ fontSize: 24, fontWeight: 800, color: t.text, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
       </div>
       <div style={{ fontSize: 12, color: t.muted, marginTop: 4 }}>{label}</div>
-    </div>
-  );
-}
-
-function Rule({ t, label, value }: { t: any; label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 16px', borderRadius: 10, background: t.card, border: `1px solid ${t.border}` }}>
-      <span style={{ fontSize: 13, color: t.muted }}>{label}</span>
-      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{value}</span>
     </div>
   );
 }

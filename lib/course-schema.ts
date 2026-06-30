@@ -56,6 +56,7 @@ export interface CourseQuestion {
   explanation?: string;
   optionImages?: string[];    // image type only -- one base64 per option, same length as options
   imageUrl?: string;          // image_choice: a single prompt image shown above the text options
+  skillAreaId?: string;       // certifications: maps this question to a CertificationConfig.skillAreas entry
   hint?: string;
   codeSnippet?: string;
   codeLanguage?: string;
@@ -214,10 +215,23 @@ export interface CertificationConfig {
   examProtection: boolean;
   deadline_days?: number | null;
   learnOutcomes?: string[];
+  // Foundation assets
+  skillAreas?: SkillArea[];          // defined skill areas; questions map to one via CourseQuestion.skillAreaId
+  studyGuideUrl?: string;            // uploaded PDF (Cloudinary)
+  studyGuideName?: string;
+  studyGuidePublished?: boolean;     // learners see the study guide only when published
+  posterUrl?: string;                // uploaded poster image (Cloudinary)
+  posterPublished?: boolean;         // learners see the poster only when published
+  practiceTestUrl?: string;          // link to the practice test
   theme?: ThemeColor;
   mode?: ThemeMode;
   font?: string;
   customAccent?: string;
+}
+
+export interface SkillArea {
+  id: string;
+  name: string;
 }
 
 // --- Defaults ---

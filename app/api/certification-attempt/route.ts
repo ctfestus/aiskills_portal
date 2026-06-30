@@ -184,6 +184,13 @@ export async function POST(req: NextRequest) {
           maxAttempts: cert.max_attempts, examProtection: cert.exam_protection,
           coverImage: cert.cover_image, deadline_days: cert.deadline_days,
           theme: cert.theme, mode: cert.mode, font: cert.font, customAccent: cert.custom_accent,
+          // Foundation assets shown on the intro screen. Study guide + poster are gated on their
+          // publish flags; skill areas + practice-test link are always visible.
+          skillAreas: Array.isArray(cert.skill_areas) ? cert.skill_areas : [],
+          studyGuide: cert.study_guide_published && cert.study_guide_url
+            ? { url: cert.study_guide_url, name: cert.study_guide_name || 'Study guide' } : null,
+          poster: cert.poster_published && cert.poster_url ? cert.poster_url : null,
+          practiceTestUrl: cert.practice_test_url || null,
         },
       } });
     } catch (err: any) {

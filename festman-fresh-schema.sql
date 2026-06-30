@@ -252,6 +252,14 @@ CREATE TABLE public.certifications (
   mode            text        CHECK (mode IN ('light','dark')),
   font            text,
   custom_accent   text,
+  -- Foundation assets (migration 124): skill areas + study guide PDF + poster + practice-test link.
+  skill_areas           jsonb   NOT NULL DEFAULT '[]',  -- [{id,name}]; questions map via CourseQuestion.skillAreaId
+  study_guide_url       text,
+  study_guide_name      text,
+  study_guide_published boolean NOT NULL DEFAULT false,
+  poster_url            text,
+  poster_published      boolean NOT NULL DEFAULT false,
+  practice_test_url     text,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
