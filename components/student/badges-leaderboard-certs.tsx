@@ -12,7 +12,7 @@ import { LIGHT_C } from '@/lib/theme';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { Sk, CarouselSkeleton, EmptyState } from '@/components/student/shared';
 import {
-  Award, BookOpen, ChevronLeft, ChevronRight, Download, Lock, Medal, RefreshCw, Trophy, Users, Zap,
+  Award, BarChart3, BookOpen, ChevronLeft, ChevronRight, Download, Lock, Medal, RefreshCw, Trophy, Users, Zap,
 } from 'lucide-react';
 
 const BADGE_TABS = [
@@ -456,23 +456,31 @@ function CertRow({ title, certs, C }: { title: string; certs: any[]; C: typeof L
         {certs.map((cert: any) => {
           const cover = cert.content?.cover_image;
           return (
-            <a key={cert.id} href={`/certificate/${cert.id}`} target="_blank" rel="noreferrer"
-              className="flex-shrink-0 w-[240px] snap-start block transition-transform hover:-translate-y-0.5">
-              <div className="relative rounded-xl overflow-hidden w-full aspect-video flex items-center justify-center"
-                style={{ background: cover ? '#0b0b0d' : `linear-gradient(135deg, ${C.green}18 0%, ${C.lime}30 100%)` }}>
-                {cover
-                  ? <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
-                  : <div className="flex flex-col items-center gap-1">
-                      <Award className="w-9 h-9" style={{ color: C.green }}/>
-                      <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: C.green }}>Certificate</span>
-                    </div>}
-                <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md" style={{ background: '#16a34a', color: '#ffffff' }}>Earned</span>
-              </div>
-              <p className="text-[15px] font-bold leading-snug mt-2 line-clamp-2" style={{ color: C.text }}>{cert.content?.title || 'Certificate'}</p>
-              <p className="text-xs mt-1" style={{ color: C.faint }}>
-                Issued {new Date(cert.issued_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-              </p>
-            </a>
+            <div key={cert.id} className="flex-shrink-0 w-[240px] snap-start">
+              <a href={`/certificate/${cert.id}`} target="_blank" rel="noreferrer"
+                className="block transition-transform hover:-translate-y-0.5">
+                <div className="relative rounded-xl overflow-hidden w-full aspect-video flex items-center justify-center"
+                  style={{ background: cover ? '#0b0b0d' : `linear-gradient(135deg, ${C.green}18 0%, ${C.lime}30 100%)` }}>
+                  {cover
+                    ? <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
+                    : <div className="flex flex-col items-center gap-1">
+                        <Award className="w-9 h-9" style={{ color: C.green }}/>
+                        <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: C.green }}>Certificate</span>
+                      </div>}
+                  <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md" style={{ background: '#16a34a', color: '#ffffff' }}>Earned</span>
+                </div>
+                <p className="text-[15px] font-bold leading-snug mt-2 line-clamp-2" style={{ color: C.text }}>{cert.content?.title || 'Certificate'}</p>
+                <p className="text-xs mt-1" style={{ color: C.faint }}>
+                  Issued {new Date(cert.issued_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                </p>
+              </a>
+              {cert.certification_id && (
+                <a href={`/cert-report/${cert.id}`} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-semibold mt-1.5 transition-opacity hover:opacity-80" style={{ color: C.cta }}>
+                  <BarChart3 className="w-3.5 h-3.5" /> View report
+                </a>
+              )}
+            </div>
           );
         })}
       </div>
