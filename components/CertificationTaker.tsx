@@ -537,7 +537,7 @@ export default function CertificationTaker({
           {logo ? <img src={logo} alt="" style={{ height: 26, objectFit: 'contain' }} /> : <span style={{ fontWeight: 800, fontSize: 15 }}>{title}</span>}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <button onClick={onExit} style={{ color: ov.muted, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}><X className="w-4 h-4" /> Exit</button>
-            <button onClick={startExam} disabled={starting} className="cert-cta" style={{ ...ctaPrimary, padding: '9px 18px', fontSize: 13.5 }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{ctaLabel}</button>
+            <button onClick={startExam} disabled={starting || retakeBlocked} className="cert-cta" style={{ ...ctaPrimary, padding: '9px 18px', fontSize: 13.5, ...(retakeBlocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{retakeBlocked ? 'Retake unavailable' : ctaLabel}</button>
           </div>
         </div>
 
@@ -549,10 +549,10 @@ export default function CertificationTaker({
               <h1 style={{ fontSize: 'clamp(32px, 4.4vw, 46px)', fontWeight: 800, lineHeight: 1.07, marginBottom: 16, letterSpacing: '-0.02em', color: '#ffffff' }}>Prove your skills as <span style={{ color: tenantAccent }}>{title}</span></h1>
               {config?.description && <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.9)', lineHeight: 1.6, marginBottom: 26, maxWidth: 560 }}>{config.description}</p>}
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <button onClick={startExam} disabled={starting} className="cert-cta" style={heroCtaPrimary}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{ctaLabel}<ChevronRight className="w-4 h-4" /></button>
+                <button onClick={startExam} disabled={starting || retakeBlocked} className="cert-cta" style={{ ...heroCtaPrimary, ...(retakeBlocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{retakeBlocked ? 'Retake not available yet' : ctaLabel}<ChevronRight className="w-4 h-4" /></button>
                 {practiceTestUrl && <a href={practiceTestUrl} target="_blank" rel="noreferrer" className="cert-cta" style={heroCtaSecondary}>Try the practice test</a>}
               </div>
-              {startError && <p style={{ marginTop: 14, fontSize: 13, color: '#ffffff' }}>{startError}</p>}
+              {(startError || retakeBlocked) && <p style={{ marginTop: 14, fontSize: 13, color: '#ffffff' }}>{startError || `You can retake this certification on ${retakeWhen}.`}</p>}
             </div>
             {heroVisual
               ? <div style={{ flex: '0 1 440px', alignSelf: 'flex-end', display: 'flex', alignItems: 'flex-end' }}><img src={heroVisual} alt="" style={{ width: '100%', display: 'block', filter: 'drop-shadow(0 14px 26px rgba(0,0,0,0.22))' }} /></div>
