@@ -16,8 +16,10 @@ function ordinal(n: number): string {
 }
 
 export default function CertReportClient({ data }: { data: CertReportData }) {
-  const { brandColor, appName, orgName, logoUrl } = useTenant();
-  const accent = brandColor || '#3E93FF';
+  const { appName, orgName, logoUrl } = useTenant();
+  // The report uses a professional success-green accent (not the tenant brand, which can be purple).
+  const accent = '#16a34a';
+  const barGray = '#3a3d48';
   const org = orgName || appName || 'our platform';
   const issued = new Date(data.issuedAt);
   const firstName = data.studentName.split(' ')[0] || data.studentName;
@@ -43,9 +45,10 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
 
   // Stylized score-distribution curve. The bars follow a fixed bell shape; the marker sits at the
   // student's percentile (or score, when there are too few test-takers to compute a percentile).
-  const N = 46, mid = N * 0.58, sigma = N * 0.2;
+  const N = 72, mid = N * 0.58, sigma = N * 0.2;
   const bars = Array.from({ length: N }, (_, i) => Math.exp(-((i - mid) ** 2) / (2 * sigma * sigma)));
   const markerPct = data.percentile != null ? data.percentile : data.score;
+  const posIdx = Math.round((markerPct / 100) * (N - 1));
 
   const STRONG = 70;
   const strengths = data.skills.filter(s => s.pct >= STRONG);
@@ -111,10 +114,10 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
               <span style={{ position: 'absolute', top: -10, left: -18, background: '#fff', color: '#111', fontSize: 12, fontWeight: 800, padding: '2px 8px', borderRadius: 6 }}>{data.score}</span>
             </div>
             {/* bars */}
-            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 22, display: 'flex', alignItems: 'flex-end', gap: 3, height: 120 }}>
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 22, display: 'flex', alignItems: 'flex-end', gap: 2, height: 108 }}>
               {bars.map((h, i) => {
-                const barPct = ((i + 0.5) / N) * 100;
-                return <div key={i} style={{ flex: 1, height: `${Math.max(6, h * 116)}px`, borderRadius: 4, background: barPct <= markerPct ? accent : C.track }} />;
+                const isPos = i === posIdx;
+                return <div key={i} style={{ flex: 1, height: `${isPos ? Math.max(36, h * 104) : Math.max(6, h * 104)}px`, borderRadius: 999, background: isPos ? accent : barGray }} />;
               })}
             </div>
             {/* percentile caption under the marker */}
