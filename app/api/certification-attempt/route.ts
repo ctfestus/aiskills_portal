@@ -5,6 +5,7 @@ import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { courseResultEmail } from '@/lib/email-templates';
 import { gradeQuestion, normalizePythonOutput, signProof, verifyProof, sanitizeExamQuestions } from '@/lib/grade-question';
 import { ensureCertificate, awardContentBadge, sendCertificateEmailOnce } from '@/lib/issue-certificate';
+import { retakeReadyAt } from '@/lib/cert-cooldown';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -181,7 +182,8 @@ export async function POST(req: NextRequest) {
           title: cert.title, description: cert.description, isCertification: true,
           questionCount,
           passmark: cert.passmark, timeLimit: cert.time_limit,
-          maxAttempts: cert.max_attempts, examProtection: cert.exam_protection,
+          maxAttempts: cert.max_attempts, retakeCooldownHours: cert.retake_cooldown_hours ?? 24,
+          examProtection: cert.exam_protection,
           coverImage: cert.cover_image, deadline_days: cert.deadline_days,
           theme: cert.theme, mode: cert.mode, font: cert.font, customAccent: cert.custom_accent,
           // Foundation assets shown on the intro screen. Study guide + poster are gated on their
@@ -207,7 +209,7 @@ export async function POST(req: NextRequest) {
   // -- Resume state + existing cert + completed-attempt count --
   if (action === 'get-progress') {
     try {
-      const [{ data: cert }, { data: progress }, { count: attemptCount }, { data: passingAttempt }, { data: certRow }] = await Promise.all([
+      const [{ data: cert }, { data: progress }, { count: attemptCount }, { data: passingAttempt }, { data: certRow }, { data: lastCompleted }] = await Promise.all([
         supabase.from('certificates').select('id')
           .eq('certification_id', certification_id).eq('student_id', sessionUser.id).eq('revoked', false)
           .maybeSingle(),
@@ -221,7 +223,10 @@ export async function POST(req: NextRequest) {
         supabase.from('certification_attempts').select('answers, score')
           .eq('certification_id', certification_id).eq('student_id', sessionUser.id)
           .eq('passed', true).order('score', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('certifications').select('time_limit').eq('id', certification_id).maybeSingle(),
+        supabase.from('certifications').select('time_limit, retake_cooldown_hours').eq('id', certification_id).maybeSingle(),
+        supabase.from('certification_attempts').select('completed_at')
+          .eq('certification_id', certification_id).eq('student_id', sessionUser.id)
+          .not('completed_at', 'is', null).order('completed_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       // Server-derived remaining time so a refresh/reopen cannot regain time (the clock runs from
       // the attempt's started_at, computed with the server clock).
@@ -231,7 +236,13 @@ export async function POST(req: NextRequest) {
         const elapsed = Math.floor((Date.now() - new Date(progress.started_at).getTime()) / 1000);
         remainingSeconds = Math.max(0, timeLimit * 60 - elapsed);
       }
-      return NextResponse.json({ cert, progress, attemptCount: attemptCount ?? 0, hasPassed: !!passingAttempt, passingAttempt, remainingSeconds });
+      // When can a fresh attempt start? Blocked until the retake cooldown elapses after the last
+      // completed attempt (only relevant when they haven't passed and one isn't already in progress).
+      const cooldownHours = Number((certRow as any)?.retake_cooldown_hours) || 0;
+      const retakeAt = (passingAttempt || progress)
+        ? null
+        : retakeReadyAt((lastCompleted as any)?.completed_at, cooldownHours, Date.now());
+      return NextResponse.json({ cert, progress, attemptCount: attemptCount ?? 0, hasPassed: !!passingAttempt, passingAttempt, remainingSeconds, cooldownHours, retakeAt });
     } catch (err: any) {
       console.error('[certification-attempt/get-progress]', err);
       return NextResponse.json({ error: 'Failed to load progress.' }, { status: 500 });
@@ -297,7 +308,7 @@ export async function POST(req: NextRequest) {
     try {
       const access = await loadAccessibleCertification(
         supabase, certification_id, sessionUser,
-        'id, user_id, status, cohort_ids, questions, max_attempts, time_limit',
+        'id, user_id, status, cohort_ids, questions, max_attempts, time_limit, retake_cooldown_hours',
       );
       if ('error' in access) return access.error;
       const cert = access.cert as any;
@@ -344,12 +355,22 @@ export async function POST(req: NextRequest) {
         const [{ count: completedCount }, { data: last }] = await Promise.all([
           supabase.from('certification_attempts').select('id', { count: 'exact', head: true })
             .eq('certification_id', certification_id).eq('student_id', sessionUser.id).not('completed_at', 'is', null),
-          supabase.from('certification_attempts').select('attempt_number')
+          supabase.from('certification_attempts').select('attempt_number, completed_at')
             .eq('certification_id', certification_id).eq('student_id', sessionUser.id)
             .order('attempt_number', { ascending: false }).limit(1).maybeSingle(),
         ]);
         if (maxAttempts > 0 && (completedCount ?? 0) >= maxAttempts) {
           return NextResponse.json({ error: 'No attempts remaining.' }, { status: 403 });
+        }
+        // Retake cooldown: minimum wait after the previous attempt. Passing is already blocked above,
+        // so any prior attempt here is a failed one; the most recent is `last` (attempts are serial).
+        const cooldownHours = Number(cert.retake_cooldown_hours) || 0;
+        const retakeAt = retakeReadyAt(last?.completed_at, cooldownHours, Date.now());
+        if (retakeAt) {
+          return NextResponse.json({
+            error: `You can retake this certification after the ${cooldownHours}-hour wait.`,
+            reason: 'cooldown', retakeAt,
+          }, { status: 429 });
         }
         const ins = await supabase.from('certification_attempts').insert({
           student_id: sessionUser.id, certification_id,

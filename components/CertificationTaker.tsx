@@ -62,6 +62,7 @@ export default function CertificationTaker({
   const questionCount: number = Number(config?.questionCount) || 0;
   const timeLimitMin: number = Number(config?.timeLimit) || 0;
   const maxAttempts: number = Number(config?.maxAttempts) || 0;
+  const retakeCooldownHours: number = Number(config?.retakeCooldownHours) || 0;
   const protect: boolean = config?.examProtection !== false;
   // Foundation assets shown on the intro screen.
   const skillAreas: { id: string; name: string }[] = Array.isArray(config?.skillAreas) ? config.skillAreas : [];
@@ -87,6 +88,8 @@ export default function CertificationTaker({
   const [returnToReview, setReturnToReview] = useState(false);
   const [result, setResult] = useState<{ score: number; passed: boolean; certId?: string } | null>(null);
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
+  // ISO time a fresh attempt becomes allowed again (retake cooldown); null when startable now.
+  const [retakeAt, setRetakeAt] = useState<string | null>(null);
   const [warning, setWarning] = useState('');
 
   const answersRef = useRef<Record<string, string>>({});
@@ -110,6 +113,10 @@ export default function CertificationTaker({
     ? { bg: '#17181E', card: '#1E1F26', cardHover: '#23242c', border: 'rgba(255,255,255,0.10)', text: '#f0f0f0', muted: '#8a8a93', track: 'rgba(255,255,255,0.08)' }
     : { bg: '#0f1117', card: '#1b1d26', cardHover: '#22242e', border: 'rgba(255,255,255,0.10)', text: '#f4f4f5', muted: '#9aa0aa', track: 'rgba(255,255,255,0.10)' };
   // The exam chrome is intentionally dark in both modes (focused, distraction-free, like a proctored exam).
+
+  // Retake cooldown, for the intro CTA: blocked until `retakeAt`, with a friendly local time.
+  const retakeBlocked = !!retakeAt && Date.parse(retakeAt) > Date.now();
+  const retakeWhen = retakeAt ? new Date(retakeAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
 
   const api = useCallback((action: string, extra: Record<string, any> = {}) =>
     fetch('/api/certification-attempt', {
@@ -144,6 +151,7 @@ export default function CertificationTaker({
           setPhase('blocked');
           return;
         }
+        if (d.retakeAt) setRetakeAt(d.retakeAt);
         setAttemptsLeft(maxAttempts > 0 ? Math.max(0, maxAttempts - completed) : null);
         setPhase('intro');
       } catch {
@@ -314,6 +322,7 @@ export default function CertificationTaker({
       if (!res.ok) {
         if (res.status === 403) { setPhase('blocked'); return; }
         if (res.status === 409 && d.reason === 'already_passed') { setResult({ score: 100, passed: true }); setPhase('result'); return; }
+        if (res.status === 429 && d.reason === 'cooldown') { setRetakeAt(d.retakeAt || null); setStartError(d.error || 'Retake is not available yet.'); return; }
         setStartError(d.error || 'Could not start the exam.');
         return;
       }
@@ -573,6 +582,7 @@ export default function CertificationTaker({
             <h2 style={h2}>What to expect</h2>
             <p style={sub}>
               {timeLimitMin ? `A ${timeLimitMin}-minute timed exam` : 'An untimed exam'} of {questionCount} question{questionCount === 1 ? '' : 's'}. You need {config?.passmark ?? 70}% to pass{maxAttempts > 0 ? `, with ${maxAttempts} attempt${maxAttempts === 1 ? '' : 's'} allowed.` : '.'}
+              {retakeCooldownHours > 0 && maxAttempts !== 1 ? ` If you don't pass, you can retake after ${retakeCooldownHours} hour${retakeCooldownHours === 1 ? '' : 's'}.` : ''}
             </p>
             {sections.length > 0 && (
               <p style={sub}>
@@ -651,9 +661,11 @@ export default function CertificationTaker({
             </div>
             <h2 style={{ fontSize: 26, fontWeight: 800, marginBottom: 8, color: '#ffffff' }}>Ready to get certified?</h2>
             <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.85)', marginBottom: 24 }}>
-              {maxAttempts > 0 && attemptsLeft != null ? `You have ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} remaining.` : 'Take the exam when you are ready.'}
+              {retakeBlocked
+                ? `You can retake this certification on ${retakeWhen}.`
+                : maxAttempts > 0 && attemptsLeft != null ? `You have ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} remaining.` : 'Take the exam when you are ready.'}
             </p>
-            <button onClick={startExam} disabled={starting} className="cert-cta" style={{ ...heroCtaPrimary, fontSize: 16, padding: '14px 34px' }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{ctaLabel}<ChevronRight className="w-4 h-4" /></button>
+            <button onClick={startExam} disabled={starting || retakeBlocked} className="cert-cta" style={{ ...heroCtaPrimary, fontSize: 16, padding: '14px 34px', ...(retakeBlocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{retakeBlocked ? 'Retake not available yet' : ctaLabel}<ChevronRight className="w-4 h-4" /></button>
             {startError && <p style={{ marginTop: 14, fontSize: 13, color: '#ffffff' }}>{startError}</p>}
           </div>
         </div>

@@ -54,6 +54,7 @@ interface CertState {
   passmark: number;
   timeLimit: number;          // minutes; 0 = untimed
   maxAttempts: number;        // 0 = unlimited
+  retakeCooldownHours: number; // min wait after a fail before a retake; 0 = none
   examProtection: boolean;
   cohortIds: string[];
   skillAreas: SkillArea[];
@@ -68,7 +69,7 @@ interface CertState {
 
 const DEFAULTS: CertState = {
   title: '', description: '', coverImage: '',
-  passmark: 70, timeLimit: 30, maxAttempts: 1, examProtection: true,
+  passmark: 70, timeLimit: 30, maxAttempts: 1, retakeCooldownHours: 24, examProtection: true,
   cohortIds: [],
   skillAreas: [], studyGuideUrl: '', studyGuideName: '', studyGuidePublished: false,
   posterUrl: '', posterPublished: false, practiceTestUrl: '',
@@ -107,6 +108,7 @@ function CertificationEditor() {
         setState({
           title: data.title ?? '', description: data.description ?? '', coverImage: data.cover_image ?? '',
           passmark: data.passmark ?? 70, timeLimit: data.time_limit ?? 0, maxAttempts: data.max_attempts ?? 1,
+          retakeCooldownHours: data.retake_cooldown_hours ?? 24,
           examProtection: data.exam_protection !== false, cohortIds: data.cohort_ids ?? [],
           skillAreas: Array.isArray(data.skill_areas) ? data.skill_areas : [],
           studyGuideUrl: data.study_guide_url ?? '', studyGuideName: data.study_guide_name ?? '',
@@ -171,6 +173,7 @@ function CertificationEditor() {
           passmark: state.passmark,
           timeLimit: state.timeLimit || null,
           maxAttempts: state.maxAttempts,
+          retakeCooldownHours: state.retakeCooldownHours,
           examProtection: state.examProtection,
           skillAreas: state.skillAreas,
           studyGuideUrl: state.studyGuideUrl,
@@ -237,6 +240,7 @@ function CertificationEditor() {
             <NumField C={C} label="Pass mark (%)" value={state.passmark} min={0} max={100} onChange={v => update({ passmark: v })} />
             <NumField C={C} label="Time limit (minutes, 0 = none)" value={state.timeLimit} min={0} max={600} onChange={v => update({ timeLimit: v })} />
             <NumField C={C} label="Max attempts (0 = unlimited)" value={state.maxAttempts} min={0} max={20} onChange={v => update({ maxAttempts: v })} />
+            <NumField C={C} label="Retake wait (hours, 0 = none)" value={state.retakeCooldownHours} min={0} max={720} onChange={v => update({ retakeCooldownHours: v })} />
             <div>
               <label className={labelCls} style={{ color: C.faint }}>Cover image</label>
               <CoverInput C={C} value={state.coverImage} onChange={url => update({ coverImage: url })} />

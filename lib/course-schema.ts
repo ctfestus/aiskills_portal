@@ -214,6 +214,7 @@ export interface CertificationConfig {
   passmark: number;
   timeLimit?: number | null;   // minutes; null/0 = untimed
   maxAttempts: number;         // 0 = unlimited
+  retakeCooldownHours?: number; // min hours between attempts after a fail; 0 = no wait (default 24)
   examProtection: boolean;
   deadline_days?: number | null;
   learnOutcomes?: string[];

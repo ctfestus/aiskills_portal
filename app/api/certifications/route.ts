@@ -39,6 +39,7 @@ function toRow(config: any) {
     passmark:        Math.max(0, Math.min(100, Number.isFinite(Number(config.passmark)) ? Number(config.passmark) : 70)),
     time_limit:      Number(config.timeLimit) > 0 ? Number(config.timeLimit) : null,  // 0 / blank = untimed
     max_attempts:    Math.max(0, Number.isFinite(Number(config.maxAttempts)) ? Number(config.maxAttempts) : 1),
+    retake_cooldown_hours: Math.max(0, Number.isFinite(Number(config.retakeCooldownHours)) ? Number(config.retakeCooldownHours) : 24),
     exam_protection: config.examProtection !== false,
     deadline_days:   config.deadline_days != null ? Number(config.deadline_days) : null,
     learn_outcomes:  config.learnOutcomes ?? [],
