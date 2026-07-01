@@ -86,10 +86,13 @@ export default function CertificationTaker({
   // True when the student jumped from the review page to answer a still-unanswered question; after
   // saving they go straight back to review (they cannot wander into already-answered questions).
   const [returnToReview, setReturnToReview] = useState(false);
-  const [result, setResult] = useState<{ score: number; passed: boolean; certId?: string } | null>(null);
+  const [result, setResult] = useState<{ score: number; passed: boolean; certId?: string; passmark?: number; correctQuestions?: number; totalQuestions?: number; skills?: { id: string; name: string; correct: number; total: number; pct: number }[] } | null>(null);
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   // ISO time a fresh attempt becomes allowed again (retake cooldown); null when startable now.
   const [retakeAt, setRetakeAt] = useState<string | null>(null);
+  // Set when starting is blocked because the student is enrolled in another unpassed certification;
+  // confirming switches (abandons the other) and starts this one.
+  const [switchPrompt, setSwitchPrompt] = useState<{ title: string } | null>(null);
   const [warning, setWarning] = useState('');
 
   const answersRef = useRef<Record<string, string>>({});
@@ -219,7 +222,7 @@ export default function CertificationTaker({
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || 'Failed to submit.');
-      setResult({ score: d.score ?? 0, passed: !!d.passed, certId: d.certId });
+      setResult({ score: d.score ?? 0, passed: !!d.passed, certId: d.certId, passmark: d.passmark, correctQuestions: d.correctQuestions, totalQuestions: d.totalQuestions, skills: Array.isArray(d.skills) ? d.skills : [] });
       setPhase('result');
     } catch (err: any) {
       submittedRef.current = false;
@@ -311,21 +314,24 @@ export default function CertificationTaker({
       .catch(() => {});
   }, [api]);
 
-  const startExam = useCallback(async () => {
+  const doStart = useCallback(async (doSwitch: boolean) => {
     setStartError('');
     setStarting(true);
     try {
       // start-attempt is the ONLY place the attempt (and its started_at) is created and where the
       // questions are delivered -- so the clock starts exactly when the student gets the questions.
-      const res = await api('start-attempt');
+      const res = await api('start-attempt', doSwitch ? { switch: true } : {});
       const d = await res.json();
       if (!res.ok) {
         if (res.status === 403) { setPhase('blocked'); return; }
         if (res.status === 409 && d.reason === 'already_passed') { setResult({ score: 100, passed: true }); setPhase('result'); return; }
         if (res.status === 429 && d.reason === 'cooldown') { setRetakeAt(d.retakeAt || null); setStartError(d.error || 'Retake is not available yet.'); return; }
+        // Blocked: enrolled in another certification not yet passed. Offer to switch (abandon it).
+        if (res.status === 409 && d.reason === 'other_unpassed') { setSwitchPrompt({ title: d.otherCertTitle || 'another certification' }); return; }
         setStartError(d.error || 'Could not start the exam.');
         return;
       }
+      setSwitchPrompt(null);
       const loaded = Array.isArray(d.questions) ? d.questions : [];
       setQuestions(loaded);
       const savedAnswers = d.answers && typeof d.answers === 'object' ? d.answers : {};
@@ -346,6 +352,8 @@ export default function CertificationTaker({
       setStarting(false);
     }
   }, [api]);
+  // Buttons call this (no args); the switch-confirm modal calls doStart(true).
+  const startExam = useCallback(() => doStart(false), [doStart]);
 
   const setAnswer = useCallback((qid: string, value: string) => {
     setAnswers(prev => ({ ...prev, [qid]: value }));
@@ -412,18 +420,81 @@ export default function CertificationTaker({
   if (phase === 'result' && result) {
     const certUrl = result.certId ? `/certificate/${result.certId}` : null;
     const reportUrl = result.certId ? `/cert-report/${result.certId}` : null;
+    const pm = result.passmark ?? config?.passmark ?? 70;
+    const skills = result.skills ?? [];
+    const strengths = skills.filter(s => s.pct >= pm);
+    const gaps = skills.filter(s => s.pct < pm);
+    const hasBreakdown = !isPreview && skills.length > 0;
+    // Half-dial score gauge with a pass-mark tick (mirrors the shareable report), rendered inline.
+    const gCx = 108, gCy = 108, gR = 82, gStroke = 14, gArc = Math.PI * gR;
+    const scoreFrac = Math.max(0, Math.min(100, result.score)) / 100;
+    const passFrac = Math.max(0, Math.min(100, pm)) / 100;
+    const pcos = Math.cos(passFrac * Math.PI), psin = Math.sin(passFrac * Math.PI);
+    const tickIn = gR - gStroke / 2 - 2, tickOut = gR + gStroke / 2 + 2;
+    const gaugePath = `M ${gCx - gR} ${gCy} A ${gR} ${gR} 0 0 1 ${gCx + gR} ${gCy}`;
+    const gaugeFill = result.passed ? '#16a34a' : '#f43f5e';
+    const SkillBar = (s: { id: string; name: string; correct: number; total: number; pct: number }) => (
+      <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <span style={{ flex: '0 0 130px', fontSize: 13, color: t.text, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+        <div style={{ flex: 1, maxWidth: 240, position: 'relative', height: 7, borderRadius: 999, background: t.track }}>
+          <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${s.pct}%`, minWidth: s.pct > 0 ? 7 : 0, background: '#16a34a', borderRadius: 999 }} />
+          <div title={`Pass mark ${pm}%`} style={{ position: 'absolute', left: `${pm}%`, top: -3, bottom: -3, width: 2, marginLeft: -1, background: t.text, borderRadius: 2 }} />
+        </div>
+        <span style={{ flex: '0 0 auto', fontSize: 12.5, color: t.muted, fontVariantNumeric: 'tabular-nums' }}>{s.pct}%</span>
+      </div>
+    );
     return (
       <div style={{ minHeight: '100vh', background: t.bg, color: t.text, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 480, width: '100%', textAlign: 'center' }}>
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: hasBreakdown ? 640 : 480, width: '100%', textAlign: 'center' }}>
           {result.passed || isPreview
             ? <CheckCircle2 className="w-14 h-14 mx-auto mb-4" style={{ color: accentColor }} />
             : <XCircle className="w-14 h-14 mx-auto mb-4" style={{ color: '#f43f5e' }} />}
           <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 6 }}>{isPreview ? 'Preview complete' : result.passed ? 'Certification passed' : 'Not passed yet'}</h1>
-          <p style={{ fontSize: 15, color: t.muted, marginBottom: 24 }}>
-            {isPreview
-              ? 'This was a preview. Attempts taken here are not scored or recorded.'
-              : <>Your score: <span style={{ color: t.text, fontWeight: 700 }}>{result.score}%</span> (pass mark {config?.passmark ?? 70}%)</>}
-          </p>
+
+          {isPreview ? (
+            <p style={{ fontSize: 15, color: t.muted, marginBottom: 24 }}>This was a preview. Attempts taken here are not scored or recorded.</p>
+          ) : (
+            <>
+              {/* Score gauge (half dial) */}
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 6 }}>
+                <div style={{ position: 'relative', width: 200, height: 112 }}>
+                  <svg width="200" height="112" viewBox="0 0 216 118" style={{ width: '100%', height: '100%' }}>
+                    <path d={gaugePath} fill="none" stroke={t.track} strokeWidth={gStroke} strokeLinecap="round" />
+                    <path d={gaugePath} fill="none" stroke={gaugeFill} strokeWidth={gStroke} strokeLinecap="round" strokeDasharray={`${scoreFrac * gArc} ${gArc}`} />
+                    <line x1={gCx - tickIn * pcos} y1={gCy - tickIn * psin} x2={gCx - tickOut * pcos} y2={gCy - tickOut * psin} stroke={t.text} strokeWidth={3} strokeLinecap="round" />
+                  </svg>
+                  <div style={{ position: 'absolute', left: 0, right: 0, bottom: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <span style={{ fontSize: 32, fontWeight: 800, lineHeight: 1 }}>{result.score}%</span>
+                    <span style={{ fontSize: 11.5, color: t.muted, marginTop: 3 }}>Overall score</span>
+                  </div>
+                </div>
+              </div>
+              <p style={{ fontSize: 14, color: t.muted, marginTop: 4, marginBottom: hasBreakdown ? 20 : 24 }}>
+                {result.correctQuestions != null && result.totalQuestions != null
+                  ? <>Scored <span style={{ color: t.text, fontWeight: 700 }}>{result.correctQuestions} of {result.totalQuestions}</span> correct. Pass mark {pm}%.</>
+                  : <>Your score: <span style={{ color: t.text, fontWeight: 700 }}>{result.score}%</span> (pass mark {pm}%)</>}
+              </p>
+            </>
+          )}
+
+          {/* Per-skill breakdown -- the mark on each bar is the pass mark */}
+          {hasBreakdown && (
+            <div style={{ textAlign: 'left', marginBottom: 24, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 24 }}>
+              {strengths.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 12 }}>Strengths</div>
+                  {strengths.map(SkillBar)}
+                </div>
+              )}
+              {gaps.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 12 }}>Areas to improve</div>
+                  {gaps.map(SkillBar)}
+                </div>
+              )}
+            </div>
+          )}
+
           {result.passed && certUrl && (
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
               <a href={certUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: accentColor, color: '#06281a', fontWeight: 700, fontSize: 14, padding: '11px 24px', borderRadius: 10 }}>
@@ -537,9 +608,25 @@ export default function CertificationTaker({
           {logo ? <img src={logo} alt="" style={{ height: 26, objectFit: 'contain' }} /> : <span style={{ fontWeight: 800, fontSize: 15 }}>{title}</span>}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <button onClick={onExit} style={{ color: ov.muted, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}><X className="w-4 h-4" /> Exit</button>
-            <button onClick={startExam} disabled={starting} className="cert-cta" style={{ ...ctaPrimary, padding: '9px 18px', fontSize: 13.5 }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{ctaLabel}</button>
+            <button onClick={startExam} disabled={starting || retakeBlocked} className="cert-cta" style={{ ...ctaPrimary, padding: '9px 18px', fontSize: 13.5, ...(retakeBlocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{retakeBlocked ? 'Retake unavailable' : ctaLabel}</button>
           </div>
         </div>
+
+        {/* Switch-certification confirmation (blocked because enrolled in another unpassed cert) */}
+        {switchPrompt && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <div style={{ background: ov.bg, color: ov.text, maxWidth: 440, width: '100%', borderRadius: 16, padding: 28, boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }}>
+              <h3 style={{ fontSize: 19, fontWeight: 800, marginBottom: 10 }}>Switch certification?</h3>
+              <p style={{ fontSize: 14.5, color: ov.muted, lineHeight: 1.6, marginBottom: 22 }}>
+                You are enrolled in <strong style={{ color: ov.text }}>{switchPrompt.title}</strong>, which you have not passed yet. You can work on only one certification at a time. Switching discards your progress there and starts <strong style={{ color: ov.text }}>{title}</strong> fresh.
+              </p>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <button onClick={() => setSwitchPrompt(null)} style={{ background: ov.surface, color: ov.text, fontWeight: 600, fontSize: 14, padding: '10px 18px', borderRadius: 10, border: `1px solid ${ov.border}` }}>Cancel</button>
+                <button onClick={() => { setSwitchPrompt(null); doStart(true); }} disabled={starting} className="cert-cta" style={{ ...ctaPrimary, padding: '10px 20px' }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}Switch and start</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Hero band - full width, brand primary color. The image is bottom-anchored and flush with the band's bottom edge; the text is vertically centered. No section vertical padding -- the text column supplies its own, so the image can reach the very bottom. */}
         <div style={{ background: heroBg, overflow: 'hidden' }}>
@@ -549,10 +636,10 @@ export default function CertificationTaker({
               <h1 style={{ fontSize: 'clamp(32px, 4.4vw, 46px)', fontWeight: 800, lineHeight: 1.07, marginBottom: 16, letterSpacing: '-0.02em', color: '#ffffff' }}>Prove your skills as <span style={{ color: tenantAccent }}>{title}</span></h1>
               {config?.description && <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.9)', lineHeight: 1.6, marginBottom: 26, maxWidth: 560 }}>{config.description}</p>}
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <button onClick={startExam} disabled={starting} className="cert-cta" style={heroCtaPrimary}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{ctaLabel}<ChevronRight className="w-4 h-4" /></button>
+                <button onClick={startExam} disabled={starting || retakeBlocked} className="cert-cta" style={{ ...heroCtaPrimary, ...(retakeBlocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{retakeBlocked ? 'Retake not available yet' : ctaLabel}<ChevronRight className="w-4 h-4" /></button>
                 {practiceTestUrl && <a href={practiceTestUrl} target="_blank" rel="noreferrer" className="cert-cta" style={heroCtaSecondary}>Try the practice test</a>}
               </div>
-              {startError && <p style={{ marginTop: 14, fontSize: 13, color: '#ffffff' }}>{startError}</p>}
+              {(startError || retakeBlocked) && <p style={{ marginTop: 14, fontSize: 13, color: '#ffffff' }}>{startError || `You can retake this certification on ${retakeWhen}.`}</p>}
             </div>
             {heroVisual
               ? <div style={{ flex: '0 1 440px', alignSelf: 'flex-end', display: 'flex', alignItems: 'flex-end' }}><img src={heroVisual} alt="" style={{ width: '100%', display: 'block', filter: 'drop-shadow(0 14px 26px rgba(0,0,0,0.22))' }} /></div>

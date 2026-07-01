@@ -23,7 +23,6 @@ export interface SkillResult {
 export interface CertReportData {
   certId: string;
   studentName: string;
-  studentAvatarUrl: string | null;
   certTitle: string;
   issueDate: string;       // formatted
   issuedAt: string;        // ISO
@@ -60,9 +59,6 @@ export async function loadCertReport(certId: string): Promise<CertReportResult> 
     .eq('id', cert.certification_id)
     .maybeSingle();
   if (!c) return { status: 'notfound' };
-
-  const { data: studentRow } = await svc
-    .from('students').select('avatar_url').eq('id', cert.student_id).maybeSingle();
 
   // Best passing attempt for this student + certification.
   const { data: attempt } = await svc
@@ -111,7 +107,6 @@ export async function loadCertReport(certId: string): Promise<CertReportResult> 
     data: {
       certId: cert.id,
       studentName: cert.student_name,
-      studentAvatarUrl: studentRow?.avatar_url ?? null,
       certTitle: c.title ?? 'Certification',
       issueDate: fmtDate(cert.issued_at),
       issuedAt: cert.issued_at,

@@ -28,7 +28,6 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
   const issued = new Date(data.issuedAt);
   const firstName = data.studentName.split(' ')[0] || data.studentName;
 
-  const suggestedText = `I'm pleased to share that I have completed the ${data.certTitle}${data.skills.length ? `, covering ${data.skills.map(s => s.name).join(', ')}` : ''}.`;
   const reportUrl = () => `${window.location.origin}/cert-report/${data.certId}`;
   const certUrl = () => `${window.location.origin}/certificate/${data.certId}`;
   const openNew = (url: string) => window.open(url, '_blank', 'noopener,noreferrer');
@@ -68,10 +67,12 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
   const SkillRow = (s: SkillResult) => (
     <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
       <span style={{ flex: '0 0 150px', fontSize: 14, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-      <div style={{ flex: 1, height: 8, borderRadius: 999, background: C.track, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${s.pct}%`, minWidth: s.pct > 0 ? 8 : 0, background: accent, borderRadius: 999 }} />
+      <div style={{ flex: 1, maxWidth: 240, position: 'relative', height: 8, borderRadius: 999, background: C.track }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${s.pct}%`, minWidth: s.pct > 0 ? 8 : 0, background: accent, borderRadius: 999 }} />
+        {/* pass-mark tick -- same marker as the score gauge */}
+        <div title={`Pass mark ${data.passmark}%`} style={{ position: 'absolute', left: `${data.passmark}%`, top: -3, bottom: -3, width: 2, marginLeft: -1, background: C.text, borderRadius: 2 }} />
       </div>
-      <span style={{ flex: '0 0 auto', fontSize: 13, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{s.correct}/{s.total}</span>
+      <span style={{ flex: '0 0 auto', fontSize: 13, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{s.pct}%</span>
     </div>
   );
 
@@ -97,17 +98,12 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
             </div>
           </div>
 
-          {/* Profile card */}
-          <div style={{ flex: '0 1 300px', minWidth: 0 }}>
-            <div style={{ ...card, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 26 }}>
-              {data.studentAvatarUrl
-                ? <img src={data.studentAvatarUrl} alt="" style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover' }} />
+          {/* Profile card -- shows the certification badge (no student photo). Flat: no background or border. */}
+          <div style={{ flex: '0 1 300px', minWidth: 0, display: 'flex', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 0 }}>
+              {data.badgeImageUrl
+                ? <img src={data.badgeImageUrl} alt="Certification badge" style={{ width: 128, height: 128, objectFit: 'contain' }} />
                 : <div style={{ width: 96, height: 96, borderRadius: '50%', background: accent, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, fontWeight: 800 }}>{firstName.charAt(0).toUpperCase()}</div>}
-            </div>
-            <div style={{ padding: '16px 4px 0' }}>
-              <div style={{ ...eyebrow, marginBottom: 6 }}>Certified</div>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>{data.studentName}</div>
-              <div style={{ fontSize: 13.5, color: C.muted, marginTop: 2 }}>{data.certTitle}</div>
             </div>
           </div>
         </div>
@@ -138,7 +134,7 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
             </p>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: C.muted }}>
               <span style={{ display: 'inline-block', width: 3, height: 15, background: C.text, borderRadius: 2 }} />
-              Pass mark {data.passmark}% (marked on the dial)
+              Pass mark {data.passmark}% (marked on the dial and each skill bar)
             </div>
           </div>
         </div>
@@ -174,15 +170,6 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
               {copied === 'link' ? <><Check className="w-4 h-4" /> Copied</> : <><Link2 className="w-4 h-4" /> Copy link</>}
             </button>
             <button onClick={() => openNew(certUrl())} style={{ ...btn, background: C.cardAlt, color: C.text }}><Award className="w-4 h-4" /> View certificate <ExternalLink className="w-3.5 h-3.5" /></button>
-          </div>
-          <div style={{ marginTop: 18, background: C.cardAlt, borderRadius: 14, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: C.muted }}>Suggested post</span>
-              <button onClick={() => copy(suggestedText, 'text')} style={{ ...btn, padding: '6px 12px', fontSize: 12.5, background: hexToRgba(accent, 0.16), color: accent }}>
-                {copied === 'text' ? <><Check className="w-3.5 h-3.5" /> Copied</> : <><Link2 className="w-3.5 h-3.5" /> Copy text</>}
-              </button>
-            </div>
-            <p style={{ fontSize: 14, color: C.text, lineHeight: 1.6, margin: 0 }}>{suggestedText}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, paddingTop: 16, fontSize: 12.5, color: C.muted }}>
             <ShieldCheck className="w-4 h-4" style={{ color: '#3E93FF' }} />
