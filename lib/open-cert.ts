@@ -48,6 +48,7 @@ export async function loadOpenCert(id: string): Promise<OpenCertResult> {
     .from('certificate_defaults')
     .select('*')
     .eq('user_id', cert.issued_by)
+    .eq('content_type', 'default')
     .maybeSingle();
 
   const settings = rawSettings ? {

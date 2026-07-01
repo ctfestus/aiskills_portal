@@ -624,7 +624,8 @@ CREATE UNIQUE INDEX certificates_unique_active_student_certification
 -- ── certificate_defaults ──────────────────────────────────────
 CREATE TABLE public.certificate_defaults (
   id                   uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id              uuid        NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id              uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  content_type         text        NOT NULL DEFAULT 'default',  -- 'default' (course/VE/path) or 'certification' (migration 127)
   institution_name     text        NOT NULL DEFAULT '',
   primary_color        text        NOT NULL DEFAULT '#00bf63',
   accent_color         text        NOT NULL DEFAULT '#ADEE66',
@@ -641,7 +642,8 @@ CREATE TABLE public.certificate_defaults (
   padding_left         integer     NOT NULL DEFAULT 182,
   line_spacing         text        NOT NULL DEFAULT 'normal',
   text_positions       jsonb,
-  updated_at           timestamptz NOT NULL DEFAULT now()
+  updated_at           timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, content_type)
 );
 
 -- ── event_registrations ───────────────────────────────────────

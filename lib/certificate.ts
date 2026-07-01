@@ -92,7 +92,7 @@ export async function loadCertificate(id: string): Promise<CertificateResult> {
       .single();
 
     const { data: rawSettings } = ve?.user_id
-      ? await svc.from('certificate_defaults').select('*').eq('user_id', ve.user_id).maybeSingle()
+      ? await svc.from('certificate_defaults').select('*').eq('user_id', ve.user_id).eq('content_type', 'default').maybeSingle()
       : { data: null };
 
     return {
@@ -115,9 +115,16 @@ export async function loadCertificate(id: string): Promise<CertificateResult> {
       .eq('id', cert.certification_id)
       .maybeSingle();
 
-    const { data: rawSettings } = c?.user_id
-      ? await svc.from('certificate_defaults').select('*').eq('user_id', c.user_id).maybeSingle()
-      : { data: null };
+    // Certification uses its own design when customized, otherwise falls back to the default one.
+    let rawSettings: any = null;
+    if (c?.user_id) {
+      ({ data: rawSettings } = await svc.from('certificate_defaults').select('*')
+        .eq('user_id', c.user_id).eq('content_type', 'certification').maybeSingle());
+      if (!rawSettings) {
+        ({ data: rawSettings } = await svc.from('certificate_defaults').select('*')
+          .eq('user_id', c.user_id).eq('content_type', 'default').maybeSingle());
+      }
+    }
 
     return {
       status: 'ready',
@@ -141,7 +148,7 @@ export async function loadCertificate(id: string): Promise<CertificateResult> {
 
     const [{ data: rawSettings }, pathItemsResult] = await Promise.all([
       path?.instructor_id
-        ? svc.from('certificate_defaults').select('*').eq('user_id', path.instructor_id).maybeSingle()
+        ? svc.from('certificate_defaults').select('*').eq('user_id', path.instructor_id).eq('content_type', 'default').maybeSingle()
         : Promise.resolve({ data: null }),
       (path?.item_ids ?? []).length > 0
         ? Promise.all([
@@ -183,7 +190,7 @@ export async function loadCertificate(id: string): Promise<CertificateResult> {
     .maybeSingle();
 
   const { data: rawSettings } = content?.user_id
-    ? await svc.from('certificate_defaults').select('*').eq('user_id', content.user_id).maybeSingle()
+    ? await svc.from('certificate_defaults').select('*').eq('user_id', content.user_id).eq('content_type', 'default').maybeSingle()
     : { data: null };
 
   return {

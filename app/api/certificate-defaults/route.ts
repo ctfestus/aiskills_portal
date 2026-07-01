@@ -4,18 +4,34 @@ import { requireUser, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 
+// Certificate design is stored per content type: 'default' (course / VE / learning path) and
+// 'certification'. A certification design falls back to the default until it's customized.
+function normalizeType(v: any): 'default' | 'certification' {
+  return v === 'certification' ? 'certification' : 'default';
+}
+
 export async function GET(req: NextRequest) {
   const auth = await requireUser(req);
   if (isAuthError(auth)) return auth.error;
   const { user } = auth;
 
-  const { data } = await adminClient()
-    .from('certificate_defaults')
-    .select('*')
-    .eq('user_id', user.id)
-    .maybeSingle();
+  const contentType = normalizeType(req.nextUrl.searchParams.get('content_type'));
+  const db = adminClient();
 
-  return NextResponse.json({ data });
+  let { data } = await db.from('certificate_defaults').select('*')
+    .eq('user_id', user.id).eq('content_type', contentType).maybeSingle();
+
+  // Editing the certification design for the first time: seed from the default so the instructor
+  // starts from their existing certificate rather than a blank one (matches the render fallback).
+  let inherited = false;
+  if (!data && contentType === 'certification') {
+    const { data: def } = await db.from('certificate_defaults').select('*')
+      .eq('user_id', user.id).eq('content_type', 'default').maybeSingle();
+    data = def ?? null;
+    inherited = !!def;
+  }
+
+  return NextResponse.json({ data, inherited });
 }
 
 export async function POST(req: NextRequest) {
@@ -30,6 +46,7 @@ export async function POST(req: NextRequest) {
 
   const { error } = await adminClient().from('certificate_defaults').upsert({
     user_id:              user.id,
+    content_type:         normalizeType(body.contentType),
     institution_name:     body.institutionName     ?? (process.env.NEXT_PUBLIC_ORG_NAME ?? ''),
     primary_color:        body.primaryColor        ?? '#00bf63',
     accent_color:         body.accentColor         ?? '#ADEE66',
@@ -47,7 +64,7 @@ export async function POST(req: NextRequest) {
     line_spacing:         body.lineSpacing         ?? 'normal',
     text_positions:       body.textPositions       ?? null,
     updated_at:           new Date().toISOString(),
-  }, { onConflict: 'user_id' });
+  }, { onConflict: 'user_id,content_type' });
 
   if (error) {
     console.error('[certificate-defaults]', error);

@@ -19,6 +19,8 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
   const [saveMsg, setSaveMsg]     = useState<{ ok: boolean; msg: string } | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const [settings, setSettings]   = useState<CertificateSettings>(DEFAULT_CERT_SETTINGS);
+  // Which design is being edited: 'default' (courses / VEs / paths) or 'certification'.
+  const [contentType, setContentType] = useState<'default' | 'certification'>('default');
   const [selectedElement, setSelectedElement] = useState<keyof TextPositions | null>(null);
   const [previewScale, setPreviewScale] = useState(1);
   const previewWrapRef = useRef<HTMLDivElement>(null);
@@ -55,38 +57,53 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
     });
 
 
+  const applySettingsData = (data: any) => {
+    setSettings(data ? {
+      institutionName:    data.institution_name    ?? DEFAULT_CERT_SETTINGS.institutionName,
+      primaryColor:       data.primary_color       ?? DEFAULT_CERT_SETTINGS.primaryColor,
+      accentColor:        data.accent_color        ?? DEFAULT_CERT_SETTINGS.accentColor,
+      backgroundImageUrl: data.background_image_url ?? null,
+      logoUrl:            data.logo_url            ?? null,
+      signatureUrl:       data.signature_url       ?? null,
+      signatoryName:      data.signatory_name      ?? DEFAULT_CERT_SETTINGS.signatoryName,
+      signatoryTitle:     data.signatory_title     ?? DEFAULT_CERT_SETTINGS.signatoryTitle,
+      certifyText:        data.certify_text        ?? DEFAULT_CERT_SETTINGS.certifyText,
+      completionText:     data.completion_text     ?? DEFAULT_CERT_SETTINGS.completionText,
+      fontFamily:         (data.font_family        ?? DEFAULT_CERT_SETTINGS.fontFamily) as CertificateSettings['fontFamily'],
+      headingSize:        (data.heading_size       ?? DEFAULT_CERT_SETTINGS.headingSize) as CertificateSettings['headingSize'],
+      paddingTop:         data.padding_top         ?? DEFAULT_CERT_SETTINGS.paddingTop,
+      paddingLeft:        data.padding_left        ?? DEFAULT_CERT_SETTINGS.paddingLeft,
+      lineSpacing:        (data.line_spacing       ?? DEFAULT_CERT_SETTINGS.lineSpacing) as CertificateSettings['lineSpacing'],
+      textPositions:      data.text_positions      ?? undefined,
+    } : DEFAULT_CERT_SETTINGS);
+  };
+
+  const fetchSettings = async (ct: 'default' | 'certification') => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`/api/certificate-defaults?content_type=${ct}`, {
+      headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+    });
+    if (res.ok) { const { data } = await res.json(); applySettingsData(data); }
+  };
+
+  // Switch which design is being edited; loads that type (certification seeds from the default
+  // design the first time, matching how the certificate renders).
+  const switchType = async (ct: 'default' | 'certification') => {
+    if (ct === contentType) return;
+    setContentType(ct);
+    setSaveMsg(null);
+    await fetchSettings(ct);
+  };
+
   useEffect(() => {
     (async () => {
-      const { data: { user }, } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
       setUser(user);
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/certificate-defaults', {
-        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
-      });
-      if (res.ok) {
-        const { data } = await res.json();
-        if (data) setSettings({
-          institutionName:    data.institution_name    ?? DEFAULT_CERT_SETTINGS.institutionName,
-          primaryColor:       data.primary_color       ?? DEFAULT_CERT_SETTINGS.primaryColor,
-          accentColor:        data.accent_color        ?? DEFAULT_CERT_SETTINGS.accentColor,
-          backgroundImageUrl: data.background_image_url ?? null,
-          logoUrl:            data.logo_url            ?? null,
-          signatureUrl:       data.signature_url       ?? null,
-          signatoryName:      data.signatory_name      ?? DEFAULT_CERT_SETTINGS.signatoryName,
-          signatoryTitle:     data.signatory_title     ?? DEFAULT_CERT_SETTINGS.signatoryTitle,
-          certifyText:        data.certify_text        ?? DEFAULT_CERT_SETTINGS.certifyText,
-          completionText:     data.completion_text     ?? DEFAULT_CERT_SETTINGS.completionText,
-          fontFamily:         (data.font_family        ?? DEFAULT_CERT_SETTINGS.fontFamily) as CertificateSettings['fontFamily'],
-          headingSize:        (data.heading_size       ?? DEFAULT_CERT_SETTINGS.headingSize) as CertificateSettings['headingSize'],
-          paddingTop:         data.padding_top         ?? DEFAULT_CERT_SETTINGS.paddingTop,
-          paddingLeft:        data.padding_left        ?? DEFAULT_CERT_SETTINGS.paddingLeft,
-          lineSpacing:        (data.line_spacing       ?? DEFAULT_CERT_SETTINGS.lineSpacing) as CertificateSettings['lineSpacing'],
-          textPositions:      data.text_positions      ?? undefined,
-        });
-      }
+      await fetchSettings('default');
       setLoading(false);
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const uploadImage = async (slot: 'background' | 'logo' | 'signature', file: File) => {
@@ -113,7 +130,7 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
         'Content-Type': 'application/json',
         ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
       },
-      body: JSON.stringify(settings),
+      body: JSON.stringify({ ...settings, contentType }),
     });
     const json = await res.json();
     if (!res.ok) {
@@ -134,8 +151,24 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
   return (
     <div className="space-y-5">
       <div className="rounded-2xl p-5 space-y-4" style={{ ...cardStyle(C) }}>
-        <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Certificate Default Design</h2>
-        <p className="text-xs" style={{ color: C.muted }}>Set once. All your courses inherit this design automatically.</p>
+        <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.faint }}>Certificate Design</h2>
+        {/* Design a separate certificate for certifications, distinct from courses/VEs/paths. */}
+        <div className="flex gap-2">
+          {([['default', 'Courses & paths'], ['certification', 'Certifications']] as const).map(([ct, label]) => (
+            <button key={ct} onClick={() => switchType(ct)} disabled={saving}
+              className="px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors"
+              style={contentType === ct
+                ? { background: C.cta, color: C.ctaText ?? '#ffffff' }
+                : { background: C.input, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs" style={{ color: C.muted }}>
+          {contentType === 'certification'
+            ? 'Design the certificate awarded for certifications. It starts from your default design; customize it to make certification certificates distinct.'
+            : 'Set once. All your courses, virtual experiences and learning paths inherit this design automatically.'}
+        </p>
         <div>
           <label className={labelCls} style={{ color: C.muted }}>Institution Name</label>
           <input value={settings.institutionName} onChange={e => set('institutionName', e.target.value)} placeholder="Your institution name" className={inputCls} style={inputStyle}/>
