@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTenant } from '@/components/TenantProvider';
-import { ShieldCheck, Calendar, Linkedin, Link2, Check, Award, ExternalLink } from 'lucide-react';
+import { ShieldCheck, Calendar, Linkedin, Link2, Check, CheckCircle2, XCircle, Award, ExternalLink } from 'lucide-react';
 import type { CertReportData, SkillResult } from '@/lib/cert-report';
 
 function hexToRgba(hex: string, a: number): string {
@@ -10,16 +10,11 @@ function hexToRgba(hex: string, a: number): string {
   if (h.length === 6) { const n = parseInt(h, 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; }
   return `rgba(62,147,255,${a})`;
 }
-function ordinal(n: number): string {
-  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
-  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
-}
 
 export default function CertReportClient({ data }: { data: CertReportData }) {
   const { appName, orgName, logoUrl } = useTenant();
   // The report uses a professional success-green accent (not the tenant brand, which can be purple).
   const accent = '#16a34a';
-  const barGray = '#3a3d48';
   const org = orgName || appName || 'our platform';
   const issued = new Date(data.issuedAt);
   const firstName = data.studentName.split(' ')[0] || data.studentName;
@@ -43,12 +38,14 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
   // Dark palette (mirrors the reference report).
   const C = { page: '#15161d', card: '#1e1f27', cardAlt: '#23242f', text: '#e8eaf0', muted: '#9097a5', faint: '#6b7280', track: '#2a2c37', border: 'rgba(255,255,255,0.08)' };
 
-  // Stylized score-distribution curve. The bars follow a fixed bell shape; the marker sits at the
-  // student's percentile (or score, when there are too few test-takers to compute a percentile).
-  const N = 72, mid = N * 0.58, sigma = N * 0.2;
-  const bars = Array.from({ length: N }, (_, i) => Math.exp(-((i - mid) ** 2) / (2 * sigma * sigma)));
-  const markerPct = data.percentile != null ? data.percentile : data.score;
-  const posIdx = Math.round((markerPct / 100) * (N - 1));
+  // Overall-score gauge: a half (semicircle) dial. Green fill = score; the tick marks the pass mark.
+  const gCx = 108, gCy = 108, gR = 88, gStroke = 15;
+  const gArc = Math.PI * gR;                                   // path length of the semicircle
+  const scoreFrac = Math.max(0, Math.min(100, data.score)) / 100;
+  const passFrac = Math.max(0, Math.min(100, data.passmark)) / 100;
+  const pcos = Math.cos(passFrac * Math.PI), psin = Math.sin(passFrac * Math.PI);
+  const tickIn = gR - gStroke / 2 - 2, tickOut = gR + gStroke / 2 + 2;
+  const gaugePath = `M ${gCx - gR} ${gCy} A ${gR} ${gR} 0 0 1 ${gCx + gR} ${gCy}`;
 
   const STRONG = 70;
   const strengths = data.skills.filter(s => s.pct >= STRONG);
@@ -82,8 +79,7 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
             <div style={eyebrow}>Assessment report</div>
             <h1 style={{ fontSize: 'clamp(30px, 4vw, 44px)', fontWeight: 800, lineHeight: 1.1, letterSpacing: '-0.02em', margin: '0 0 16px' }}>{data.certTitle}</h1>
             <p style={{ fontSize: 17, color: C.muted, lineHeight: 1.6, margin: '0 0 18px', maxWidth: 560 }}>
-              {firstName} scored <span style={{ color: C.text, fontWeight: 700 }}>{data.score}%</span>.
-              {data.percentile != null && <> They performed better than {data.percentile}% of others who took this certification.</>}
+              {firstName} {data.passed ? 'passed' : 'completed'} this assessment with an overall score of <span style={{ color: C.text, fontWeight: 700 }}>{data.score}%</span>.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 13.5, color: C.muted, flexWrap: 'wrap' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><ShieldCheck className="w-4 h-4" style={{ color: '#3E93FF' }} /> Credentials verified</span>
@@ -106,23 +102,33 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
           </div>
         </div>
 
-        {/* Score distribution */}
-        <div style={{ marginBottom: 40 }}>
-          <div style={{ position: 'relative', height: 150, marginLeft: 8 }}>
-            {/* marker line + score label */}
-            <div style={{ position: 'absolute', top: 0, bottom: 22, left: `${markerPct}%`, width: 0, borderLeft: `2px dashed ${C.muted}`, zIndex: 2 }}>
-              <span style={{ position: 'absolute', top: -10, left: -18, background: '#fff', color: '#111', fontSize: 12, fontWeight: 800, padding: '2px 8px', borderRadius: 6 }}>{data.score}</span>
+        {/* Overall score gauge (half dial) */}
+        <div style={{ ...card, marginBottom: 36, display: 'flex', flexWrap: 'wrap', gap: 30, alignItems: 'center' }}>
+          <div style={{ position: 'relative', width: 216, height: 122, flexShrink: 0 }}>
+            <svg width="216" height="122" viewBox="0 0 216 118">
+              <path d={gaugePath} fill="none" stroke={C.track} strokeWidth={gStroke} strokeLinecap="round" />
+              <path d={gaugePath} fill="none" stroke={accent} strokeWidth={gStroke} strokeLinecap="round"
+                strokeDasharray={`${scoreFrac * gArc} ${gArc}`} />
+              {/* pass-mark tick */}
+              <line x1={gCx - tickIn * pcos} y1={gCy - tickIn * psin} x2={gCx - tickOut * pcos} y2={gCy - tickOut * psin}
+                stroke={C.text} strokeWidth={3} strokeLinecap="round" />
+            </svg>
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <span style={{ fontSize: 40, fontWeight: 800, lineHeight: 1 }}>{data.score}%</span>
+              <span style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>Overall score</span>
             </div>
-            {/* bars */}
-            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 22, display: 'flex', alignItems: 'flex-end', gap: 2, height: 108 }}>
-              {bars.map((h, i) => {
-                const isPos = i === posIdx;
-                return <div key={i} style={{ flex: 1, height: `${isPos ? Math.max(36, h * 104) : Math.max(6, h * 104)}px`, borderRadius: 999, background: isPos ? accent : barGray }} />;
-              })}
+          </div>
+          <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 999, fontSize: 13.5, fontWeight: 700, marginBottom: 14, background: data.passed ? hexToRgba(accent, 0.14) : 'rgba(239,68,68,0.14)', color: data.passed ? '#22c55e' : '#f87171' }}>
+              {data.passed ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+              {data.passed ? 'Passed' : 'Not passed'}
             </div>
-            {/* percentile caption under the marker */}
-            <div style={{ position: 'absolute', bottom: 0, left: `${markerPct}%`, transform: 'translateX(-6px)', fontSize: 12.5, color: C.muted, whiteSpace: 'nowrap' }}>
-              {data.percentile != null ? `${ordinal(data.percentile)} percentile` : 'Your score'}
+            <p style={{ fontSize: 15.5, color: C.muted, lineHeight: 1.6, margin: '0 0 12px' }}>
+              Scored <strong style={{ color: C.text, fontWeight: 700 }}>{data.correctQuestions} of {data.totalQuestions}</strong> questions correct.
+            </p>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: C.muted }}>
+              <span style={{ display: 'inline-block', width: 3, height: 15, background: C.text, borderRadius: 2 }} />
+              Pass mark {data.passmark}% (marked on the dial)
             </div>
           </div>
         </div>
