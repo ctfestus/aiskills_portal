@@ -28,7 +28,6 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
   const issued = new Date(data.issuedAt);
   const firstName = data.studentName.split(' ')[0] || data.studentName;
 
-  const suggestedText = `I'm pleased to share that I have completed the ${data.certTitle}${data.skills.length ? `, covering ${data.skills.map(s => s.name).join(', ')}` : ''}.`;
   const reportUrl = () => `${window.location.origin}/cert-report/${data.certId}`;
   const certUrl = () => `${window.location.origin}/certificate/${data.certId}`;
   const openNew = (url: string) => window.open(url, '_blank', 'noopener,noreferrer');
@@ -171,15 +170,6 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
               {copied === 'link' ? <><Check className="w-4 h-4" /> Copied</> : <><Link2 className="w-4 h-4" /> Copy link</>}
             </button>
             <button onClick={() => openNew(certUrl())} style={{ ...btn, background: C.cardAlt, color: C.text }}><Award className="w-4 h-4" /> View certificate <ExternalLink className="w-3.5 h-3.5" /></button>
-          </div>
-          <div style={{ marginTop: 18, background: C.cardAlt, borderRadius: 14, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: C.muted }}>Suggested post</span>
-              <button onClick={() => copy(suggestedText, 'text')} style={{ ...btn, padding: '6px 12px', fontSize: 12.5, background: hexToRgba(accent, 0.16), color: accent }}>
-                {copied === 'text' ? <><Check className="w-3.5 h-3.5" /> Copied</> : <><Link2 className="w-3.5 h-3.5" /> Copy text</>}
-              </button>
-            </div>
-            <p style={{ fontSize: 14, color: C.text, lineHeight: 1.6, margin: 0 }}>{suggestedText}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, paddingTop: 16, fontSize: 12.5, color: C.muted }}>
             <ShieldCheck className="w-4 h-4" style={{ color: '#3E93FF' }} />
