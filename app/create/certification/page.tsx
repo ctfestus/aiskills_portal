@@ -21,6 +21,7 @@ import { useC as useLibC } from '@/lib/theme';
 import { Toggle, inputCls, labelCls } from '@/components/create/shared';
 import { QuestionTypePicker, TYPE_LABELS, type QuestionTypeOrDownloads } from '@/components/create/QuestionTypePicker';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { ImageLibrary } from '@/components/ImageLibrary';
 import type { CourseQuestion, QuestionType, SkillArea } from '@/lib/course-schema';
 
 const EXAM_TYPES: QuestionTypeOrDownloads[] = ['multiple_choice', 'fill_blank', 'arrange', 'image', 'image_choice', 'code', 'python_exercise'];
@@ -50,6 +51,7 @@ function blankQuestion(type: QuestionType): CourseQuestion {
 interface CertState {
   title: string;
   description: string;
+  slug: string;               // public URL; blank keeps the current/auto-generated one
   coverImage: string;
   badgeImageUrl: string;      // awarded on pass; shown on the certificate, report, and badges
   passmark: number;
@@ -69,7 +71,7 @@ interface CertState {
 }
 
 const DEFAULTS: CertState = {
-  title: '', description: '', coverImage: '', badgeImageUrl: '',
+  title: '', description: '', slug: '', coverImage: '', badgeImageUrl: '',
   passmark: 70, timeLimit: 30, maxAttempts: 1, retakeCooldownHours: 24, examProtection: true,
   cohortIds: [],
   skillAreas: [], studyGuideUrl: '', studyGuideName: '', studyGuidePublished: false,
@@ -107,7 +109,7 @@ function CertificationEditor() {
     supabase.from('certifications').select('*').eq('id', editId).single().then(({ data }) => {
       if (data) {
         setState({
-          title: data.title ?? '', description: data.description ?? '', coverImage: data.cover_image ?? '',
+          title: data.title ?? '', description: data.description ?? '', slug: data.slug ?? '', coverImage: data.cover_image ?? '',
           badgeImageUrl: data.badge_image_url ?? '',
           passmark: data.passmark ?? 70, timeLimit: data.time_limit ?? 0, maxAttempts: data.max_attempts ?? 1,
           retakeCooldownHours: data.retake_cooldown_hours ?? 24,
@@ -167,6 +169,7 @@ function CertificationEditor() {
         id: editId || undefined,
         title: state.title,
         description: state.description,
+        slug: state.slug.trim() || undefined,
         cohort_ids: state.cohortIds,
         status,
         config: {
@@ -234,6 +237,15 @@ function CertificationEditor() {
             className="w-full bg-transparent text-2xl font-bold outline-none" style={{ color: C.text }} />
           <textarea value={state.description} onChange={e => update({ description: e.target.value })} placeholder="Short description shown before the exam starts"
             rows={2} className={inputCls} style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.text }} />
+          <div>
+            <label className={labelCls} style={{ color: C.faint }}>Public URL</label>
+            <div className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
+              <span className="text-sm" style={{ color: C.faint }}>/</span>
+              <input value={state.slug} onChange={e => update({ slug: e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') })}
+                placeholder="auto-generated" className="flex-1 bg-transparent text-sm outline-none" style={{ color: C.text }} />
+            </div>
+            <p className="text-xs mt-1" style={{ color: C.faint }}>The link students open. Leave blank to keep the current one.</p>
+          </div>
         </div>
 
         {/* Settings */}
@@ -246,11 +258,11 @@ function CertificationEditor() {
             <NumField C={C} label="Retake wait (hours, 0 = none)" value={state.retakeCooldownHours} min={0} max={720} onChange={v => update({ retakeCooldownHours: v })} />
             <div>
               <label className={labelCls} style={{ color: C.faint }}>Cover image</label>
-              <CoverInput C={C} value={state.coverImage} onChange={url => update({ coverImage: url })} />
+              <ImagePickerField C={C} value={state.coverImage} onChange={url => update({ coverImage: url })} folder="certification-covers" placeholder="Select or upload cover image" />
             </div>
             <div>
               <label className={labelCls} style={{ color: C.faint }}>Certification badge</label>
-              <BadgeInput C={C} value={state.badgeImageUrl} onChange={url => update({ badgeImageUrl: url })} />
+              <ImagePickerField C={C} value={state.badgeImageUrl} onChange={url => update({ badgeImageUrl: url })} folder="certification-badges" placeholder="Select or upload badge" contain />
               <p className="text-xs mt-1.5" style={{ color: C.faint }}>Awarded on pass. Shown on the report and the student&apos;s badges.</p>
             </div>
           </div>
@@ -365,51 +377,34 @@ function NumField({ C, label, value, min, max, onChange }: { C: any; label: stri
   );
 }
 
-function CoverInput({ C, value, onChange }: { C: any; value: string; onChange: (url: string) => void }) {
-  const [busy, setBusy] = useState(false);
-  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    setBusy(true);
-    try { onChange(await uploadToCloudinary(file, 'certification-covers')); }
-    catch {
-      const r = new FileReader(); r.onload = ev => onChange(ev.target?.result as string); r.readAsDataURL(file);
-    } finally { setBusy(false); }
-  };
+// Cover / badge picker: surfaces the shared Cloudinary image gallery (pick an existing image or
+// upload a new one) and shows a preview of what's attached. `contain` fits badges without cropping.
+function ImagePickerField({ C, value, onChange, folder, placeholder, contain }: {
+  C: any; value: string; onChange: (url: string) => void; folder: string; placeholder: string; contain?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
   return (
-    <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer text-sm" style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.muted }}>
-      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
-      <span className="truncate">{value ? 'Change image' : 'Upload'}</span>
-      <input type="file" accept="image/*" className="hidden" onChange={upload} />
-    </label>
-  );
-}
-
-// Certification badge: a small image awarded on pass (shown on the report + the student's badges).
-// A badge is a visual mark, so this shows a contained thumbnail preview and a remove control.
-function BadgeInput({ C, value, onChange }: { C: any; value: string; onChange: (url: string) => void }) {
-  const [busy, setBusy] = useState(false);
-  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    setBusy(true);
-    try { onChange(await uploadToCloudinary(file, 'certification-badges')); }
-    catch {
-      const r = new FileReader(); r.onload = ev => onChange(ev.target?.result as string); r.readAsDataURL(file);
-    } finally { setBusy(false); }
-  };
-  return (
-    <div className="flex items-center gap-3">
-      {value && <img src={value} alt="" style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 8, background: C.input, flexShrink: 0 }} />}
-      <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer text-sm" style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.muted }}>
-        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
-        <span className="truncate">{value ? 'Change badge' : 'Upload'}</span>
-        <input type="file" accept="image/*" className="hidden" onChange={upload} />
-      </label>
-      {value && <button onClick={() => onChange('')} className="text-xs" style={{ color: C.faint }}>Remove</button>}
-    </div>
+    <>
+      {value ? (
+        <div className="relative w-full h-28 rounded-xl overflow-hidden group" style={{ border: `1px solid ${C.inputBorder}`, background: C.input }}>
+          <img src={value} alt="" className="w-full h-full" style={{ objectFit: contain ? 'contain' : 'cover' }} onError={e => ((e.target as HTMLImageElement).style.display = 'none')} />
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2" style={{ background: 'rgba(0,0,0,0.5)' }}>
+            <button type="button" onClick={() => setOpen(true)} className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.92)', color: '#111' }}><ImagePlus className="w-3.5 h-3.5" /> Change</button>
+            <button type="button" onClick={() => onChange('')} className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.85)', color: '#dc2626' }}><Trash2 className="w-3.5 h-3.5" /> Remove</button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setOpen(true)} className="block w-full">
+          <div className="w-full rounded-xl px-3 py-6 flex flex-col items-center justify-center gap-2 transition-colors hover:opacity-80" style={{ background: C.input, border: `1.5px dashed ${C.inputBorder}` }}>
+            <ImagePlus className="w-5 h-5" style={{ color: C.faint }} />
+            <span className="text-xs" style={{ color: C.faint }}>{placeholder}</span>
+          </div>
+        </button>
+      )}
+      {open && (
+        <ImageLibrary uploadFolder={folder} initialFolder={folder} onSelect={v => onChange(v)} onClose={() => setOpen(false)} />
+      )}
+    </>
   );
 }
 
