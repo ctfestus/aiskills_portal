@@ -103,7 +103,7 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
         </div>
 
         {/* Overall score gauge (half dial) */}
-        <div style={{ ...card, marginBottom: 36, display: 'flex', flexWrap: 'wrap', gap: 30, alignItems: 'center' }}>
+        <div style={{ ...card, border: 'none', marginBottom: 36, display: 'flex', flexWrap: 'wrap', gap: 30, alignItems: 'center' }}>
           <div style={{ position: 'relative', width: 216, height: 122, flexShrink: 0 }}>
             <svg width="216" height="122" viewBox="0 0 216 118">
               <path d={gaugePath} fill="none" stroke={C.track} strokeWidth={gStroke} strokeLinecap="round" />
