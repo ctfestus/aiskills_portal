@@ -51,6 +51,7 @@ interface CertState {
   title: string;
   description: string;
   coverImage: string;
+  badgeImageUrl: string;      // awarded on pass; shown on the certificate, report, and badges
   passmark: number;
   timeLimit: number;          // minutes; 0 = untimed
   maxAttempts: number;        // 0 = unlimited
@@ -68,7 +69,7 @@ interface CertState {
 }
 
 const DEFAULTS: CertState = {
-  title: '', description: '', coverImage: '',
+  title: '', description: '', coverImage: '', badgeImageUrl: '',
   passmark: 70, timeLimit: 30, maxAttempts: 1, retakeCooldownHours: 24, examProtection: true,
   cohortIds: [],
   skillAreas: [], studyGuideUrl: '', studyGuideName: '', studyGuidePublished: false,
@@ -107,6 +108,7 @@ function CertificationEditor() {
       if (data) {
         setState({
           title: data.title ?? '', description: data.description ?? '', coverImage: data.cover_image ?? '',
+          badgeImageUrl: data.badge_image_url ?? '',
           passmark: data.passmark ?? 70, timeLimit: data.time_limit ?? 0, maxAttempts: data.max_attempts ?? 1,
           retakeCooldownHours: data.retake_cooldown_hours ?? 24,
           examProtection: data.exam_protection !== false, cohortIds: data.cohort_ids ?? [],
@@ -169,6 +171,7 @@ function CertificationEditor() {
         status,
         config: {
           coverImage: state.coverImage,
+          badgeImageUrl: state.badgeImageUrl || null,
           questions: state.questions,
           passmark: state.passmark,
           timeLimit: state.timeLimit || null,
@@ -244,6 +247,11 @@ function CertificationEditor() {
             <div>
               <label className={labelCls} style={{ color: C.faint }}>Cover image</label>
               <CoverInput C={C} value={state.coverImage} onChange={url => update({ coverImage: url })} />
+            </div>
+            <div>
+              <label className={labelCls} style={{ color: C.faint }}>Certification badge</label>
+              <BadgeInput C={C} value={state.badgeImageUrl} onChange={url => update({ badgeImageUrl: url })} />
+              <p className="text-xs mt-1.5" style={{ color: C.faint }}>Awarded on pass. Shown on the report and the student&apos;s badges.</p>
             </div>
           </div>
           <div className="flex items-center justify-between pt-1">
@@ -375,6 +383,33 @@ function CoverInput({ C, value, onChange }: { C: any; value: string; onChange: (
       <span className="truncate">{value ? 'Change image' : 'Upload'}</span>
       <input type="file" accept="image/*" className="hidden" onChange={upload} />
     </label>
+  );
+}
+
+// Certification badge: a small image awarded on pass (shown on the report + the student's badges).
+// A badge is a visual mark, so this shows a contained thumbnail preview and a remove control.
+function BadgeInput({ C, value, onChange }: { C: any; value: string; onChange: (url: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setBusy(true);
+    try { onChange(await uploadToCloudinary(file, 'certification-badges')); }
+    catch {
+      const r = new FileReader(); r.onload = ev => onChange(ev.target?.result as string); r.readAsDataURL(file);
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="flex items-center gap-3">
+      {value && <img src={value} alt="" style={{ width: 44, height: 44, objectFit: 'contain', borderRadius: 8, background: C.input, flexShrink: 0 }} />}
+      <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer text-sm" style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.muted }}>
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
+        <span className="truncate">{value ? 'Change badge' : 'Upload'}</span>
+        <input type="file" accept="image/*" className="hidden" onChange={upload} />
+      </label>
+      {value && <button onClick={() => onChange('')} className="text-xs" style={{ color: C.faint }}>Remove</button>}
+    </div>
   );
 }
 
