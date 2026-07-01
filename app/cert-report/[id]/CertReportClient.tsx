@@ -100,16 +100,11 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
           </div>
 
           {/* Profile card -- shows the certification badge (no student photo). Flat: no background or border. */}
-          <div style={{ flex: '0 1 300px', minWidth: 0 }}>
+          <div style={{ flex: '0 1 300px', minWidth: 0, display: 'flex', justifyContent: 'center' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 0 }}>
               {data.badgeImageUrl
                 ? <img src={data.badgeImageUrl} alt="Certification badge" style={{ width: 128, height: 128, objectFit: 'contain' }} />
                 : <div style={{ width: 96, height: 96, borderRadius: '50%', background: accent, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, fontWeight: 800 }}>{firstName.charAt(0).toUpperCase()}</div>}
-            </div>
-            <div style={{ padding: '16px 4px 0' }}>
-              <div style={{ ...eyebrow, marginBottom: 6 }}>Certified</div>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>{data.studentName}</div>
-              <div style={{ fontSize: 13.5, color: C.muted, marginTop: 2 }}>{data.certTitle}</div>
             </div>
           </div>
         </div>
