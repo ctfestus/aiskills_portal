@@ -67,12 +67,12 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
   const SkillRow = (s: SkillResult) => (
     <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
       <span style={{ flex: '0 0 150px', fontSize: 14, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-      <div style={{ flex: 1, position: 'relative', height: 8, borderRadius: 999, background: C.track }}>
-        <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${s.pct}%`, minWidth: s.pct > 0 ? 8 : 0, background: accent, borderRadius: 999 }} />
+      <div style={{ flex: 1, position: 'relative', height: 6, borderRadius: 999, background: C.track }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${s.pct}%`, minWidth: s.pct > 0 ? 6 : 0, background: accent, borderRadius: 999 }} />
         {/* pass-mark tick -- same marker as the score gauge */}
         <div title={`Pass mark ${data.passmark}%`} style={{ position: 'absolute', left: `${data.passmark}%`, top: -3, bottom: -3, width: 2, marginLeft: -1, background: C.text, borderRadius: 2 }} />
       </div>
-      <span style={{ flex: '0 0 auto', fontSize: 13, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{s.correct}/{s.total}</span>
+      <span style={{ flex: '0 0 auto', fontSize: 13, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{s.pct}%</span>
     </div>
   );
 

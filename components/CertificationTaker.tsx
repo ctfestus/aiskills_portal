@@ -436,11 +436,11 @@ export default function CertificationTaker({
     const SkillBar = (s: { id: string; name: string; correct: number; total: number; pct: number }) => (
       <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
         <span style={{ flex: '0 0 130px', fontSize: 13, color: t.text, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-        <div style={{ flex: 1, position: 'relative', height: 7, borderRadius: 999, background: t.track }}>
-          <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${s.pct}%`, minWidth: s.pct > 0 ? 7 : 0, background: '#16a34a', borderRadius: 999 }} />
+        <div style={{ flex: 1, position: 'relative', height: 6, borderRadius: 999, background: t.track }}>
+          <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${s.pct}%`, minWidth: s.pct > 0 ? 6 : 0, background: '#16a34a', borderRadius: 999 }} />
           <div title={`Pass mark ${pm}%`} style={{ position: 'absolute', left: `${pm}%`, top: -3, bottom: -3, width: 2, marginLeft: -1, background: t.text, borderRadius: 2 }} />
         </div>
-        <span style={{ flex: '0 0 auto', fontSize: 12.5, color: t.muted, fontVariantNumeric: 'tabular-nums' }}>{s.correct}/{s.total}</span>
+        <span style={{ flex: '0 0 auto', fontSize: 12.5, color: t.muted, fontVariantNumeric: 'tabular-nums' }}>{s.pct}%</span>
       </div>
     );
     return (
