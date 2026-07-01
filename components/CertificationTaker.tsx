@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Clock, Loader2, CheckCircle2, XCircle, ShieldAlert, Award, AlertTriangle, Circle, Check, ListChecks, Sparkle, ChevronRight, FileText, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import { X, Clock, Loader2, CheckCircle2, XCircle, ShieldAlert, Award, AlertTriangle, Circle, Check, ListChecks, Sparkle, ChevronRight, FileText, ExternalLink, BarChart3, Image as ImageIcon } from 'lucide-react';
 import { initSQLRuntime, SQLRuntime } from '@/lib/sql-engine';
 import SQLExercisePlayer from '@/components/sql-course/SQLExercisePlayer';
 import PythonExercisePlayer from '@/components/sql-course/PythonExercisePlayer';
@@ -402,6 +402,7 @@ export default function CertificationTaker({
 
   if (phase === 'result' && result) {
     const certUrl = result.certId ? `/certificate/${result.certId}` : null;
+    const reportUrl = result.certId ? `/cert-report/${result.certId}` : null;
     return (
       <div style={{ minHeight: '100vh', background: t.bg, color: t.text, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 480, width: '100%', textAlign: 'center' }}>
@@ -415,9 +416,16 @@ export default function CertificationTaker({
               : <>Your score: <span style={{ color: t.text, fontWeight: 700 }}>{result.score}%</span> (pass mark {config?.passmark ?? 70}%)</>}
           </p>
           {result.passed && certUrl && (
-            <a href={certUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: accentColor, color: '#06281a', fontWeight: 700, fontSize: 14, padding: '11px 24px', borderRadius: 10, marginBottom: 12 }}>
-              <Award className="w-4 h-4" /> View certificate
-            </a>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+              <a href={certUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: accentColor, color: '#06281a', fontWeight: 700, fontSize: 14, padding: '11px 24px', borderRadius: 10 }}>
+                <Award className="w-4 h-4" /> View certificate
+              </a>
+              {reportUrl && (
+                <a href={reportUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: t.card, color: t.text, fontWeight: 700, fontSize: 14, padding: '11px 24px', borderRadius: 10, border: `1px solid ${t.border}` }}>
+                  <BarChart3 className="w-4 h-4" /> View report
+                </a>
+              )}
+            </div>
           )}
           <div>
             <button onClick={onExit} style={{ marginTop: 12, color: t.muted, fontSize: 13, textDecoration: 'underline' }}>Back to certifications</button>
