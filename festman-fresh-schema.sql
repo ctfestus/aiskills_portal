@@ -2574,6 +2574,7 @@ CREATE TABLE IF NOT EXISTS public.platform_settings (
   app_description text,
   favicon_url       text,
   email_banner_url  text,
+  whatsapp_community_url text,
   updated_at      timestamptz DEFAULT now()
 );
 

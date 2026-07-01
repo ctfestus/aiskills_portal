@@ -10,6 +10,14 @@ import { PexelsImagePicker } from '@/components/PexelsImagePicker';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { LIGHT_C, DARK_C, cardStyle } from '@/lib/theme';
 
+function WhatsAppIcon({ size = 24, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden>
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  );
+}
+
 type DatasetFile = { name: string; url: string };
 type DatasetQuestionType = 'sql' | 'analytics';
 type AnalystTask = { id?: string; prompt: string; description?: string; type?: DatasetQuestionType };
@@ -55,10 +63,51 @@ export function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
   // Drag-and-drop reordering for analysis phases and their tasks.
   const [dragState, setDragState] = useState<{ kind: 'section' | 'task'; sectionId: string; id: string } | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  // Community WhatsApp link (stored in platform_settings, shown as a banner on the Data Playground).
+  const [waOpen, setWaOpen]     = useState(false);
+  const [waLink, setWaLink]     = useState('');
+  const [waLoading, setWaLoading] = useState(false);
+  const [waSaving, setWaSaving] = useState(false);
+  const [waMsg, setWaMsg]       = useState<{ ok: boolean; text: string } | null>(null);
 
   async function getToken() {
     const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token ?? '';
+  }
+
+  async function openWhatsApp() {
+    setWaMsg(null);
+    setWaOpen(true);
+    setWaLoading(true);
+    try {
+      const res = await fetch('/api/platform-settings');
+      if (res.ok) {
+        const { data } = await res.json();
+        setWaLink(data?.whatsapp_community_url ?? '');
+      }
+    } catch {}
+    setWaLoading(false);
+  }
+
+  async function saveWhatsApp() {
+    setWaSaving(true);
+    setWaMsg(null);
+    try {
+      const token = await getToken();
+      const res = await fetch('/api/platform-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ whatsappCommunityUrl: waLink }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Save failed');
+      setWaMsg({ ok: true, text: 'Saved. The banner updates on the Data Playground within 60 seconds.' });
+      setTimeout(() => setWaOpen(false), 1400);
+    } catch (e: any) {
+      setWaMsg({ ok: false, text: e.message });
+    } finally {
+      setWaSaving(false);
+    }
   }
 
   async function load() {
@@ -1008,6 +1057,10 @@ export function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: cardBorder, background: C.card, color: importMsg ? (importMsg.ok ? '#16a34a' : '#ef4444') : C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
             <Upload size={14} /> {importing ? 'Importing...' : importMsg ? importMsg.text : 'Import'}
           </button>
+          <button onClick={openWhatsApp} title="Set the WhatsApp community link shown on the Data Playground"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: cardBorder, background: C.card, color: '#25D366', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            <WhatsAppIcon size={15} /> WhatsApp Community
+          </button>
           <button onClick={openCreate} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
             <Plus size={15} /> New Dataset
           </button>
@@ -1078,6 +1131,42 @@ export function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {waOpen && (
+        <div onClick={() => !waSaving && setWaOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...cardStyle(C), borderRadius: 16, padding: 24, width: '100%', maxWidth: 460 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ width: 36, height: 36, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <WhatsAppIcon size={20} color="#fff" />
+              </span>
+              <h3 style={{ fontWeight: 700, fontSize: 16, color: C.text, margin: 0, flex: 1 }}>WhatsApp community link</h3>
+              <button onClick={() => setWaOpen(false)} style={{ border: 'none', background: 'transparent', color: C.faint, cursor: 'pointer', padding: 4, display: 'flex' }}>
+                <X size={18} />
+              </button>
+            </div>
+            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 16px', lineHeight: 1.5 }}>
+              Paste your group invite link. It shows as a &quot;Join our community&quot; banner on the Data Playground. Leave blank to hide the banner.
+            </p>
+            <input type="url" value={waLink} onChange={e => setWaLink(e.target.value)}
+              placeholder={waLoading ? 'Loading...' : 'https://chat.whatsapp.com/...'} disabled={waLoading}
+              style={{ ...inputStyle }} />
+            {waMsg && (
+              <p style={{ fontSize: 12.5, fontWeight: 600, color: waMsg.ok ? '#16a34a' : '#ef4444', margin: '10px 0 0' }}>{waMsg.text}</p>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
+              <button onClick={() => setWaOpen(false)} disabled={waSaving}
+                style={{ padding: '9px 16px', borderRadius: 10, border: cardBorder, background: C.card, color: C.muted, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={saveWhatsApp} disabled={waSaving || waLoading}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 10, border: 'none', background: C.cta, color: C.ctaText, fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: (waSaving || waLoading) ? 0.6 : 1 }}>
+                {waSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save link
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

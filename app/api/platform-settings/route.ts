@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
   if (body.appDescription !== undefined) record.app_description = body.appDescription.trim() || null;
   if (body.faviconUrl     !== undefined) record.favicon_url     = safeUrl(body.faviconUrl);
   if (body.emailBannerUrl !== undefined) record.email_banner_url = safeUrl(body.emailBannerUrl);
+  if (body.whatsappCommunityUrl !== undefined) record.whatsapp_community_url = safeUrl(body.whatsappCommunityUrl);
 
   const { error } = await adminClient()
     .from('platform_settings')

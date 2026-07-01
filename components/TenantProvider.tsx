@@ -27,6 +27,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           brandColor:      d.brand_color      || tenant.brandColor,
           faviconUrl:      d.favicon_url      || tenant.faviconUrl,
           emailBannerUrl:  d.email_banner_url || tenant.emailBannerUrl,
+          whatsappCommunityUrl: d.whatsapp_community_url || tenant.whatsappCommunityUrl,
           primaryColor:    d.primary_color    || tenant.primaryColor,
           accentColor:     d.accent_color     || tenant.accentColor,
           heroTitle:       d.hero_title       || tenant.heroTitle,
