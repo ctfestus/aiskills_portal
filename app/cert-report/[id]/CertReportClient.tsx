@@ -114,7 +114,7 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
                 stroke={C.text} strokeWidth={3} strokeLinecap="round" />
             </svg>
             <div style={{ position: 'absolute', left: 0, right: 0, bottom: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <span style={{ fontSize: 40, fontWeight: 800, lineHeight: 1 }}>{data.score}%</span>
+              <span style={{ fontSize: 34, fontWeight: 800, lineHeight: 1 }}>{data.score}%</span>
               <span style={{ fontSize: 12.5, color: C.muted, marginTop: 4 }}>Overall score</span>
             </div>
           </div>
