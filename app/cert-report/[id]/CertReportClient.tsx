@@ -2,8 +2,17 @@
 
 import { useState } from 'react';
 import { useTenant } from '@/components/TenantProvider';
-import { ShieldCheck, Calendar, Linkedin, Link2, Check, CheckCircle2, XCircle, Award, ExternalLink } from 'lucide-react';
+import { ShieldCheck, Calendar, Link2, Check, CheckCircle2, XCircle, Award, ExternalLink } from 'lucide-react';
 import type { CertReportData, SkillResult } from '@/lib/cert-report';
+
+// Official LinkedIn brand mark (fills currentColor so it inherits the button colour).
+function LinkedInIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z" />
+    </svg>
+  );
+}
 
 function hexToRgba(hex: string, a: number): string {
   const h = String(hex || '').replace('#', '');
@@ -154,18 +163,18 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
         )}
 
         {/* Share + verification */}
-        <div style={card}>
+        <div style={{ ...card, border: 'none' }}>
           <div style={eyebrow}>Share</div>
           <h2 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 16px' }}>Showcase your achievement</h2>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-            <button onClick={addToLinkedIn} style={{ ...btn, background: '#0a66c2', color: '#fff' }}><Linkedin className="w-4 h-4" /> Add to LinkedIn profile</button>
-            <button onClick={shareToLinkedIn} style={{ ...btn, background: hexToRgba(accent, 0.16), color: accent }}><Linkedin className="w-4 h-4" /> Share a post</button>
+            <button onClick={addToLinkedIn} style={{ ...btn, background: '#0a66c2', color: '#fff' }}><LinkedInIcon className="w-4 h-4" /> Add to LinkedIn profile</button>
+            <button onClick={shareToLinkedIn} style={{ ...btn, background: hexToRgba(accent, 0.16), color: accent }}><LinkedInIcon className="w-4 h-4" /> Share a post</button>
             <button onClick={() => copy(reportUrl(), 'link')} style={{ ...btn, background: C.cardAlt, color: C.text }}>
               {copied === 'link' ? <><Check className="w-4 h-4" /> Copied</> : <><Link2 className="w-4 h-4" /> Copy link</>}
             </button>
             <button onClick={() => openNew(certUrl())} style={{ ...btn, background: C.cardAlt, color: C.text }}><Award className="w-4 h-4" /> View certificate <ExternalLink className="w-3.5 h-3.5" /></button>
           </div>
-          <div style={{ marginTop: 18, background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
+          <div style={{ marginTop: 18, background: C.cardAlt, borderRadius: 14, padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
               <span style={{ fontSize: 12.5, fontWeight: 700, color: C.muted }}>Suggested post</span>
               <button onClick={() => copy(suggestedText, 'text')} style={{ ...btn, padding: '6px 12px', fontSize: 12.5, background: hexToRgba(accent, 0.16), color: accent }}>
@@ -174,7 +183,7 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
             </div>
             <p style={{ fontSize: 14, color: C.text, lineHeight: 1.6, margin: 0 }}>{suggestedText}</p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.border}`, fontSize: 12.5, color: C.muted }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 18, paddingTop: 16, fontSize: 12.5, color: C.muted }}>
             <ShieldCheck className="w-4 h-4" style={{ color: '#3E93FF' }} />
             Verified credential &middot; ID <span style={{ fontFamily: 'ui-monospace, monospace', color: C.text }}>{data.certId}</span>
           </div>
