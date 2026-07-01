@@ -97,13 +97,22 @@ export async function loadCertReport(certId: string): Promise<CertReportResult> 
   const total = scorable.length;
   const score = typeof attempt?.score === 'number' ? attempt.score : (total === 0 ? 100 : Math.round((correctCount / total) * 100));
 
-  // Percentile across all completed attempts for this certification (for the distribution chart).
-  const { data: allScores } = await svc
-    .from('certification_attempts').select('score').eq('certification_id', cert.certification_id).not('completed_at', 'is', null);
-  const scores = (allScores ?? []).map((a: any) => a.score).filter((s: any) => typeof s === 'number') as number[];
-  const population = scores.length;
-  const below = scores.filter(s => s < score).length;
-  const percentile = population >= 2 ? Math.round((below / population) * 100) : null;
+  // Percentile vs OTHER test-takers. Uses the best completed score per distinct OTHER student --
+  // it excludes this student's own attempts (so their own retakes/preview runs never count) and
+  // needs at least a few others to be meaningful (otherwise the report shows just the score).
+  const { data: allAtt } = await svc
+    .from('certification_attempts').select('student_id, score')
+    .eq('certification_id', cert.certification_id).not('completed_at', 'is', null);
+  const bestByOther = new Map<string, number>();
+  for (const a of ((allAtt ?? []) as any[])) {
+    if (!a || a.student_id === cert.student_id || typeof a.score !== 'number') continue;
+    const prev = bestByOther.get(a.student_id);
+    if (prev == null || a.score > prev) bestByOther.set(a.student_id, a.score);
+  }
+  const others = [...bestByOther.values()];
+  const population = others.length;
+  const below = others.filter(s => s < score).length;
+  const percentile = population >= 3 ? Math.round((below / population) * 100) : null;
 
   // Per-skill-area performance (only skill areas that actually have questions mapped to them).
   const skillAreas: { id: string; name: string }[] = Array.isArray(c.skill_areas) ? c.skill_areas : [];
