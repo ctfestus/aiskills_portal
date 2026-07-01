@@ -34,6 +34,7 @@ export const getTenantSettings = unstable_cache(
         brandColor:      data.brand_color      || tenant.brandColor,
         faviconUrl:      data.favicon_url      || tenant.faviconUrl,
         emailBannerUrl:  data.email_banner_url || tenant.emailBannerUrl,
+        whatsappCommunityUrl: data.whatsapp_community_url || tenant.whatsappCommunityUrl,
         primaryColor:    data.primary_color    || tenant.primaryColor,
         accentColor:     data.accent_color     || tenant.accentColor,
         heroTitle:       data.hero_title       || tenant.heroTitle,

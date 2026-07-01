@@ -10,6 +10,7 @@ export const tenant = {
   brandColor:      process.env.NEXT_PUBLIC_BRAND_COLOR       ?? '#2563eb',
   faviconUrl:      '/icon.png',
   emailBannerUrl:  process.env.NEXT_PUBLIC_EMAIL_BANNER_URL  ?? '',
+  whatsappCommunityUrl: process.env.NEXT_PUBLIC_WHATSAPP_COMMUNITY_URL ?? '',
 
   // Landing page branding
   primaryColor:    process.env.NEXT_PUBLIC_PRIMARY_COLOR     ?? '#2563eb',
