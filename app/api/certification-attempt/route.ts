@@ -51,7 +51,11 @@ async function loadAccessibleCertification(
 
 function runCertificateSideEffects(
   supabase: ReturnType<typeof adminClient>,
-  { certification_id, student_id, cert_id }: { certification_id: string; student_id: string; cert_id: string },
+  { certification_id, student_id, cert_id, skills, correctQuestions, totalQuestions, passmark }: {
+    certification_id: string; student_id: string; cert_id: string;
+    skills?: { name: string; correct: number; total: number; pct: number }[];
+    correctQuestions?: number; totalQuestions?: number; passmark?: number;
+  },
 ): void {
   (async () => {
     try {
@@ -90,7 +94,7 @@ function runCertificateSideEffects(
           dedupeType: 'certification-certificate',
           from:       FROM,
           to:         studentRow.email,
-          subject:    `Congratulations! Your certificate for ${certRow.title} is ready`,
+          subject:    `Congratulations! You are now a ${certRow.title}`,
           html:       courseResultEmail({
             name:        studentRow.full_name ?? 'there',
             courseTitle: certRow.title,
@@ -98,6 +102,10 @@ function runCertificateSideEffects(
             total:       100,
             percentage:  bestAttempt?.score ?? 100,
             passed:      true,
+            passmark,
+            correctQuestions,
+            totalQuestions,
+            skills,
             formUrl,
             certUrl,
             badgeName,
@@ -561,7 +569,10 @@ export async function POST(req: NextRequest) {
             column: 'certification_id', contentId: certification_id, studentId: sessionUser.id, studentName,
           });
           certId = result.certId;
-          if (result.isNew) runCertificateSideEffects(supabase, { certification_id, student_id: sessionUser.id, cert_id: result.certId });
+          if (result.isNew) runCertificateSideEffects(supabase, {
+            certification_id, student_id: sessionUser.id, cert_id: result.certId,
+            skills, correctQuestions: correct, totalQuestions: total, passmark,
+          });
         } catch (certErr) {
           console.error('[certification-attempt/complete-attempt] certificate creation failed', certErr);
         }

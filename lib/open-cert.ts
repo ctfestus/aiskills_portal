@@ -48,6 +48,7 @@ export async function loadOpenCert(id: string): Promise<OpenCertResult> {
     .from('certificate_defaults')
     .select('*')
     .eq('user_id', cert.issued_by)
+    .eq('content_type', 'default')
     .maybeSingle();
 
   const settings = rawSettings ? {
@@ -66,6 +67,7 @@ export async function loadOpenCert(id: string): Promise<OpenCertResult> {
     paddingTop:         rawSettings.padding_top,
     paddingLeft:        rawSettings.padding_left,
     lineSpacing:        rawSettings.line_spacing,
+    alignment:          rawSettings.alignment ?? 'left',
     textPositions:      rawSettings.text_positions ?? null,
   } : null;
 

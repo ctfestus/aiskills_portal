@@ -31,6 +31,7 @@ export async function generateMetadata({
     .from('certificate_defaults')
     .select('background_image_url')
     .eq('user_id', cert.issued_by)
+    .eq('content_type', 'default')
     .maybeSingle();
   const program = Array.isArray((cert as any).programs) ? (cert as any).programs[0] : (cert as any).programs;
   const previewImageUrl = program?.badge_image_url ?? defaults?.background_image_url ?? undefined;
