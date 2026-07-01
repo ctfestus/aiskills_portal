@@ -43,6 +43,7 @@ export interface CertificateSettings {
   paddingTop?:        number;
   paddingLeft?:       number;
   lineSpacing?:       "tight" | "normal" | "relaxed";
+  alignment?:         "left" | "center";
   textPositions?:     TextPositions;
 }
 
@@ -62,6 +63,7 @@ export const DEFAULT_CERT_SETTINGS: CertificateSettings = {
   paddingTop:       280,
   paddingLeft:      182,
   lineSpacing:      "normal",
+  alignment:        "left",
   textPositions:    undefined,
 };
 
@@ -156,7 +158,12 @@ const CertificateTemplate = React.forwardRef<HTMLDivElement, CertificateTemplate
     // Resolve positions: saved overrides take priority, then defaults derived from paddingTop/paddingLeft
     const defaults = defaultTextPositions(s.paddingTop, s.paddingLeft, s.headingSize);
     const tp = { ...defaults, ...(s.textPositions ?? {}) } as Required<TextPositions>;
-    const pos = (key: keyof TextPositions) => ({ position: "absolute" as const, left: `${tp[key].x}px`, top: `${tp[key].y}px` });
+    const centered = s.alignment === "center";
+    // Centered layout (DataCamp-style): keep each element's vertical position but center it
+    // horizontally on the canvas and center its text. Left layout keeps the saved x/y.
+    const pos = (key: keyof TextPositions) => centered
+      ? { position: "absolute" as const, top: `${tp[key].y}px`, left: "50%", transform: "translateX(-50%)", textAlign: "center" as const }
+      : { position: "absolute" as const, left: `${tp[key].x}px`, top: `${tp[key].y}px` };
 
     return (
       <div
@@ -194,7 +201,7 @@ const CertificateTemplate = React.forwardRef<HTMLDivElement, CertificateTemplate
 
         {/* Logo */}
         {s.logoUrl && (
-          <div style={{ position: "absolute", top: "60px", left: "120px", zIndex: 20 }}>
+          <div style={{ position: "absolute", top: "60px", left: centered ? "50%" : "120px", transform: centered ? "translateX(-50%)" : undefined, zIndex: 20 }}>
             <img src={s.logoUrl} alt={s.institutionName} crossOrigin="anonymous"
               style={{ height: "120px", width: "auto", objectFit: "contain" }} />
           </div>
@@ -248,13 +255,13 @@ const CertificateTemplate = React.forwardRef<HTMLDivElement, CertificateTemplate
         {/* Signatory */}
         {(s.signatoryName || s.signatureUrl) && (
           <div style={{
-            ...pos("signatory"), zIndex: 30, textAlign: "left",
+            ...pos("signatory"), zIndex: 30, textAlign: centered ? "center" : "left",
           }}>
             {s.signatureUrl && (
               <img src={s.signatureUrl} alt="Signature" crossOrigin="anonymous"
-                style={{ height: "80px", width: "auto", objectFit: "contain", marginBottom: "8px", display: "block" }} />
+                style={{ height: "80px", width: "auto", objectFit: "contain", margin: centered ? "0 auto 8px" : "0 0 8px", display: "block" }} />
             )}
-            <div style={{ borderTop: `2px solid ${C.w45}`, width: "280px", marginBottom: "10px" }} />
+            <div style={{ borderTop: `2px solid ${C.w45}`, width: "280px", margin: centered ? "0 auto 10px" : "0 0 10px" }} />
             {s.signatoryName && (
               <p style={{ fontFamily, fontSize: "26px", fontWeight: "700", color: C.white, margin: 0 }}>
                 {s.signatoryName}

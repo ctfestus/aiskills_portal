@@ -626,6 +626,7 @@ CREATE TABLE public.certificate_defaults (
   id                   uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id              uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   content_type         text        NOT NULL DEFAULT 'default',  -- 'default' (course/VE/path) or 'certification' (migration 127)
+  alignment            text        NOT NULL DEFAULT 'left',      -- 'left' or 'center' (DataCamp-style) (migration 127)
   institution_name     text        NOT NULL DEFAULT '',
   primary_color        text        NOT NULL DEFAULT '#00bf63',
   accent_color         text        NOT NULL DEFAULT '#ADEE66',

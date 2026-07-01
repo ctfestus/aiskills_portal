@@ -49,6 +49,7 @@ function mapSettings(raw: any): Record<string, any> | null {
     paddingTop:         raw.padding_top,
     paddingLeft:        raw.padding_left,
     lineSpacing:        raw.line_spacing,
+    alignment:          raw.alignment ?? 'left',
     textPositions:      raw.text_positions ?? undefined,
   } : null;
 }

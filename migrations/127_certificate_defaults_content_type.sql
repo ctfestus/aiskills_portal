@@ -5,6 +5,11 @@
 ALTER TABLE public.certificate_defaults
   ADD COLUMN IF NOT EXISTS content_type text NOT NULL DEFAULT 'default';
 
+-- Layout alignment: 'left' (absolute per-element positions, the original look) or 'center'
+-- (all blocks centered horizontally, DataCamp-style). Applies per design row.
+ALTER TABLE public.certificate_defaults
+  ADD COLUMN IF NOT EXISTS alignment text NOT NULL DEFAULT 'left';
+
 ALTER TABLE public.certificate_defaults
   DROP CONSTRAINT IF EXISTS certificate_defaults_user_id_key;
 

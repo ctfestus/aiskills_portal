@@ -74,6 +74,7 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
       paddingTop:         data.padding_top         ?? DEFAULT_CERT_SETTINGS.paddingTop,
       paddingLeft:        data.padding_left        ?? DEFAULT_CERT_SETTINGS.paddingLeft,
       lineSpacing:        (data.line_spacing       ?? DEFAULT_CERT_SETTINGS.lineSpacing) as CertificateSettings['lineSpacing'],
+      alignment:          (data.alignment          ?? DEFAULT_CERT_SETTINGS.alignment) as CertificateSettings['alignment'],
       textPositions:      data.text_positions      ?? undefined,
     } : DEFAULT_CERT_SETTINGS);
   };
@@ -169,6 +170,18 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
             ? 'Design the certificate awarded for certifications. It starts from your default design; customize it to make certification certificates distinct.'
             : 'Set once. All your courses, virtual experiences and learning paths inherit this design automatically.'}
         </p>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium" style={{ color: C.muted }}>Alignment</span>
+          {([['left', 'Left'], ['center', 'Centered']] as const).map(([al, label]) => (
+            <button key={al} onClick={() => set('alignment', al)}
+              className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+              style={(settings.alignment ?? 'left') === al
+                ? { background: C.cta, color: C.ctaText ?? '#ffffff' }
+                : { background: C.input, color: C.muted, border: `1px solid ${C.cardBorder}` }}>
+              {label}
+            </button>
+          ))}
+        </div>
         <div>
           <label className={labelCls} style={{ color: C.muted }}>Institution Name</label>
           <input value={settings.institutionName} onChange={e => set('institutionName', e.target.value)} placeholder="Your institution name" className={inputCls} style={inputStyle}/>
