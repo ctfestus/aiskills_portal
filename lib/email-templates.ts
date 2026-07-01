@@ -213,12 +213,15 @@ export function courseResultEmail(data: {
   passmark?: number;
   formUrl: string;
   certUrl?: string;
+  correctQuestions?: number;
+  totalQuestions?: number;
+  skills?: Array<{ name: string; correct: number; total: number; pct: number }>;
   badgeName?: string;
   badgeImageUrl?: string;
   recommendations?: Array<{ title: string; slug: string; coverImage?: string | null }>;
   branding?: EmailBranding;
 }) {
-  const { name, courseTitle, score, total, percentage, passed, points, passmark, formUrl, certUrl, badgeName, badgeImageUrl, recommendations, branding } = data;
+  const { name, courseTitle, score, total, percentage, passed, points, passmark, formUrl, certUrl, correctQuestions, totalQuestions, skills, badgeName, badgeImageUrl, recommendations, branding } = data;
   const appUrl = branding?.appUrl || process.env.APP_URL || tenant.appUrl;
 
   const recsHtml = recommendations?.length ? `
@@ -239,11 +242,37 @@ export function courseResultEmail(data: {
     `).join('')}
   ` : '';
 
+  // Embedded performance report (certifications only -- courses do not pass `skills`). Email-safe:
+  // percentage bars via nested tables with bgcolor, so it renders without CSS/SVG support.
+  const pm = passmark ?? 70;
+  const resultsHtml = (passed && skills && skills.length) ? `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0;border:1px solid #e5e7eb;border-radius:12px;">
+      <tr><td style="padding:20px 22px;">
+        <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;">Your results</p>
+        <p style="margin:0 0 16px;font-size:15px;color:#111;">Overall score <b style="font-size:22px;color:#16a34a;">${percentage}%</b>${correctQuestions != null && totalQuestions != null ? ` <span style="color:#6b7280;">&middot; scored ${correctQuestions} of ${totalQuestions}, pass mark ${pm}%</span>` : ''}</p>
+        ${skills.map(s => `
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0;"><tr>
+            <td width="150" style="font-size:14px;color:#374151;vertical-align:middle;">${esc(s.name)}</td>
+            <td style="vertical-align:middle;padding:0 10px;">
+              <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#e5e7eb" style="border-radius:999px;"><tr>
+                <td style="padding:0;font-size:0;line-height:0;">
+                  <table width="${Math.max(3, Math.min(100, s.pct))}%" cellpadding="0" cellspacing="0" bgcolor="#16a34a" style="border-radius:999px;"><tr><td height="8" style="font-size:0;line-height:0;">&nbsp;</td></tr></table>
+                </td>
+              </tr></table>
+            </td>
+            <td width="42" style="font-size:13px;color:#6b7280;text-align:right;vertical-align:middle;">${s.pct}%</td>
+          </tr></table>
+        `).join('')}
+      </td></tr>
+    </table>
+  ` : '';
+
   const content = `
     <p><b>Hi ${esc(name || 'there')},</b></p>
 
     ${passed ? `
       <p style="color:#555;">You have successfully completed <b>${courseTitle}</b>. Your certificate is ready to view, download, and share.</p>
+      ${resultsHtml}
       ${certUrl ? cta('🎓 View Your Certificate', certUrl) : cta('View Course', formUrl)}
     ` : `
       <p>Thanks for completing <b>${courseTitle}</b>. Keep practising. You can retake it to improve your score.</p>
