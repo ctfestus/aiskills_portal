@@ -457,7 +457,10 @@ export async function POST(req: NextRequest) {
   if (action === 'complete-attempt') {
     const { current_question_index, final_answers, proctor } = body;
     try {
-      const access = await loadAccessibleCertification(supabase, certification_id, sessionUser);
+      const access = await loadAccessibleCertification(
+        supabase, certification_id, sessionUser,
+        'id, user_id, status, cohort_ids, questions, passmark, max_attempts, time_limit, skill_areas',
+      );
       if ('error' in access) return access.error;
       const cert = access.cert as any;
 
@@ -485,6 +488,7 @@ export async function POST(req: NextRequest) {
 
       const scorable = questions.filter(q => !q.lessonOnly && !q.isSection && !q.isDownloads);
       let correct = 0;
+      const correctIds = new Set<string>();
       for (const q of scorable) {
         const ok = gradeQuestion(q, {
           storedAnswers,
@@ -492,11 +496,21 @@ export async function POST(req: NextRequest) {
           // Proof must have been minted for THIS attempt (bound to attempt.id) -- blocks cross-attempt reuse.
           verifyProof: (questionId, output, proof) => verifyProof(certification_id, questionId, output, proof, attempt.id),
         });
-        if (ok) correct++;
+        if (ok) { correct++; correctIds.add(q.id); }
       }
       const total = scorable.length;
       const scorePct = total === 0 ? 100 : Math.round((correct / total) * 100);
       const passed = scorePct >= passmark;
+
+      // Per-skill-area breakdown for the result screen (only skills with mapped questions).
+      const skillAreas: { id: string; name: string }[] = Array.isArray(cert.skill_areas) ? cert.skill_areas : [];
+      const skills = skillAreas
+        .map(sa => {
+          const qs = scorable.filter(q => q?.skillAreaId === sa.id);
+          const c = qs.filter(q => correctIds.has(q.id)).length;
+          return { id: sa.id, name: sa.name, correct: c, total: qs.length, pct: qs.length ? Math.round((c / qs.length) * 100) : 0 };
+        })
+        .filter(s => s.total > 0);
 
       const { error: updateError } = await supabase.from('certification_attempts').update({
         completed_at:           new Date().toISOString(),
@@ -527,7 +541,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      return NextResponse.json({ ok: true, score: scorePct, passed, certId });
+      return NextResponse.json({ ok: true, score: scorePct, passed, certId, passmark, correctQuestions: correct, totalQuestions: total, skills });
     } catch (err: any) {
       console.error('[certification-attempt/complete-attempt]', err);
       return NextResponse.json({ error: 'Failed to complete attempt.' }, { status: 500 });
