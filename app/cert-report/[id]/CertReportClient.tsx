@@ -56,7 +56,8 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
   const tickIn = gR - gStroke / 2 - 2, tickOut = gR + gStroke / 2 + 2;
   const gaugePath = `M ${gCx - gR} ${gCy} A ${gR} ${gR} 0 0 1 ${gCx + gR} ${gCy}`;
 
-  const STRONG = 70;
+  // A skill counts as a strength when it clears the certification's own pass mark.
+  const STRONG = data.passmark;
   const strengths = data.skills.filter(s => s.pct >= STRONG);
   const gaps = data.skills.filter(s => s.pct < STRONG);
 
