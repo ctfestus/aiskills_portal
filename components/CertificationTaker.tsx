@@ -90,6 +90,9 @@ export default function CertificationTaker({
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   // ISO time a fresh attempt becomes allowed again (retake cooldown); null when startable now.
   const [retakeAt, setRetakeAt] = useState<string | null>(null);
+  // Set when starting is blocked because the student is enrolled in another unpassed certification;
+  // confirming switches (abandons the other) and starts this one.
+  const [switchPrompt, setSwitchPrompt] = useState<{ title: string } | null>(null);
   const [warning, setWarning] = useState('');
 
   const answersRef = useRef<Record<string, string>>({});
@@ -311,21 +314,24 @@ export default function CertificationTaker({
       .catch(() => {});
   }, [api]);
 
-  const startExam = useCallback(async () => {
+  const doStart = useCallback(async (doSwitch: boolean) => {
     setStartError('');
     setStarting(true);
     try {
       // start-attempt is the ONLY place the attempt (and its started_at) is created and where the
       // questions are delivered -- so the clock starts exactly when the student gets the questions.
-      const res = await api('start-attempt');
+      const res = await api('start-attempt', doSwitch ? { switch: true } : {});
       const d = await res.json();
       if (!res.ok) {
         if (res.status === 403) { setPhase('blocked'); return; }
         if (res.status === 409 && d.reason === 'already_passed') { setResult({ score: 100, passed: true }); setPhase('result'); return; }
         if (res.status === 429 && d.reason === 'cooldown') { setRetakeAt(d.retakeAt || null); setStartError(d.error || 'Retake is not available yet.'); return; }
+        // Blocked: enrolled in another certification not yet passed. Offer to switch (abandon it).
+        if (res.status === 409 && d.reason === 'other_unpassed') { setSwitchPrompt({ title: d.otherCertTitle || 'another certification' }); return; }
         setStartError(d.error || 'Could not start the exam.');
         return;
       }
+      setSwitchPrompt(null);
       const loaded = Array.isArray(d.questions) ? d.questions : [];
       setQuestions(loaded);
       const savedAnswers = d.answers && typeof d.answers === 'object' ? d.answers : {};
@@ -346,6 +352,8 @@ export default function CertificationTaker({
       setStarting(false);
     }
   }, [api]);
+  // Buttons call this (no args); the switch-confirm modal calls doStart(true).
+  const startExam = useCallback(() => doStart(false), [doStart]);
 
   const setAnswer = useCallback((qid: string, value: string) => {
     setAnswers(prev => ({ ...prev, [qid]: value }));
@@ -603,6 +611,22 @@ export default function CertificationTaker({
             <button onClick={startExam} disabled={starting || retakeBlocked} className="cert-cta" style={{ ...ctaPrimary, padding: '9px 18px', fontSize: 13.5, ...(retakeBlocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{retakeBlocked ? 'Retake unavailable' : ctaLabel}</button>
           </div>
         </div>
+
+        {/* Switch-certification confirmation (blocked because enrolled in another unpassed cert) */}
+        {switchPrompt && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <div style={{ background: ov.bg, color: ov.text, maxWidth: 440, width: '100%', borderRadius: 16, padding: 28, boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }}>
+              <h3 style={{ fontSize: 19, fontWeight: 800, marginBottom: 10 }}>Switch certification?</h3>
+              <p style={{ fontSize: 14.5, color: ov.muted, lineHeight: 1.6, marginBottom: 22 }}>
+                You are enrolled in <strong style={{ color: ov.text }}>{switchPrompt.title}</strong>, which you have not passed yet. You can work on only one certification at a time. Switching discards your progress there and starts <strong style={{ color: ov.text }}>{title}</strong> fresh.
+              </p>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <button onClick={() => setSwitchPrompt(null)} style={{ background: ov.surface, color: ov.text, fontWeight: 600, fontSize: 14, padding: '10px 18px', borderRadius: 10, border: `1px solid ${ov.border}` }}>Cancel</button>
+                <button onClick={() => { setSwitchPrompt(null); doStart(true); }} disabled={starting} className="cert-cta" style={{ ...ctaPrimary, padding: '10px 20px' }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}Switch and start</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Hero band - full width, brand primary color. The image is bottom-anchored and flush with the band's bottom edge; the text is vertically centered. No section vertical padding -- the text column supplies its own, so the image can reach the very bottom. */}
         <div style={{ background: heroBg, overflow: 'hidden' }}>

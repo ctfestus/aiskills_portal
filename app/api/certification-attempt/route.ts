@@ -331,25 +331,51 @@ export async function POST(req: NextRequest) {
         .eq('certification_id', certification_id).eq('student_id', sessionUser.id).is('completed_at', null)
         .order('updated_at', { ascending: false }).limit(1).maybeSingle()).data;
 
-      // Resolves "one certification in progress at a time" given any in-progress attempt: a different
-      // certification means the rule is violated; the same one means resume.
-      const inProgressConflict = async () => {
-        const { data: other } = await supabase.from('certification_attempts')
-          .select('certification_id').eq('student_id', sessionUser.id).is('completed_at', null)
-          .neq('certification_id', certification_id).limit(1).maybeSingle();
-        if (other) {
+      // "One active certification at a time": a student may be enrolled in only ONE certification they
+      // have not yet passed. ANY other certification they have attempted without passing blocks a new
+      // start -- not just one that is mid-exam (a failed attempt still counts as an active enrollment).
+      // The student can `switch`, which abandons the other enrollment(s); see leaveOtherEnrollments.
+      const doSwitch = body.switch === true;
+      const otherUnpassed = async (): Promise<{ id: string; title: string } | null> => {
+        const { data: rows } = await supabase.from('certification_attempts')
+          .select('certification_id, passed').eq('student_id', sessionUser.id).neq('certification_id', certification_id);
+        const list = rows ?? [];
+        const passedSet = new Set(list.filter(r => r.passed).map(r => r.certification_id));
+        const blockingId = list.map(r => r.certification_id).find(cid => !passedSet.has(cid));
+        if (!blockingId) return null;
+        const { data: c } = await supabase.from('certifications').select('title').eq('id', blockingId).maybeSingle();
+        return { id: blockingId, title: (c as any)?.title || 'another certification' };
+      };
+      // Switch = reset: delete every other not-yet-passed enrollment's attempts, so returning to it
+      // later starts fresh. Passing attempts (which back earned certificates) are never touched.
+      const leaveOtherEnrollments = async () => {
+        const { data: rows } = await supabase.from('certification_attempts')
+          .select('certification_id, passed').eq('student_id', sessionUser.id).neq('certification_id', certification_id);
+        const list = rows ?? [];
+        const passedSet = new Set(list.filter(r => r.passed).map(r => r.certification_id));
+        const blockingIds = [...new Set(list.map(r => r.certification_id).filter(cid => !passedSet.has(cid)))];
+        if (blockingIds.length) {
+          await supabase.from('certification_attempts').delete()
+            .eq('student_id', sessionUser.id).in('certification_id', blockingIds);
+        }
+      };
+      const enrollmentGate = async (): Promise<NextResponse | null> => {
+        if (doSwitch) { await leaveOtherEnrollments(); return null; }
+        const blocker = await otherUnpassed();
+        if (blocker) {
           return NextResponse.json({
-            error: 'Finish your in-progress certification before starting another.',
-            reason: 'other_in_progress',
+            error: `You are enrolled in "${blocker.title}", which you have not passed yet. Switch to this certification to leave it.`,
+            reason: 'other_unpassed', otherCertId: blocker.id, otherCertTitle: blocker.title,
           }, { status: 409 });
         }
         return null;
       };
 
       if (!attempt) {
-        // Fast-path check (the unique index below is the atomic guarantee against concurrent starts).
-        const conflict = await inProgressConflict();
-        if (conflict) return conflict;
+        // Enforce one active (unpassed) enrollment; on `switch`, this abandons the others first.
+        // (The unique index below is the atomic guarantee against concurrent in-progress starts.)
+        const gate = await enrollmentGate();
+        if (gate) return gate;
 
         const maxAttempts = Number(cert.max_attempts) || 0;
         const [{ count: completedCount }, { data: last }] = await Promise.all([
@@ -383,8 +409,8 @@ export async function POST(req: NextRequest) {
             .eq('certification_id', certification_id).eq('student_id', sessionUser.id).is('completed_at', null)
             .order('updated_at', { ascending: false }).limit(1).maybeSingle()).data;
           if (!attempt) {
-            const conflict = await inProgressConflict();
-            if (conflict) return conflict;
+            const gate = await enrollmentGate();
+            if (gate) return gate;
             return NextResponse.json({ error: 'Could not start the exam.' }, { status: 500 });
           }
         } else {
