@@ -245,6 +245,7 @@ CREATE TABLE public.certifications (
   passmark        integer     NOT NULL DEFAULT 70 CHECK (passmark BETWEEN 0 AND 100),
   time_limit      integer     CHECK (time_limit IS NULL OR time_limit > 0), -- minutes; null = untimed
   max_attempts    integer     NOT NULL DEFAULT 1 CHECK (max_attempts >= 0),  -- 0 = unlimited
+  retake_cooldown_hours integer NOT NULL DEFAULT 24 CHECK (retake_cooldown_hours >= 0), -- min wait after a fail; 0 = none (migration 126)
   exam_protection boolean     NOT NULL DEFAULT true,
   deadline_days   integer,
   learn_outcomes  text[]      DEFAULT '{}',
