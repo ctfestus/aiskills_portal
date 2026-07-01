@@ -23,6 +23,7 @@ export interface SkillResult {
 export interface CertReportData {
   certId: string;
   studentName: string;
+  studentAvatarUrl: string | null;
   certTitle: string;
   issueDate: string;       // formatted
   issuedAt: string;        // ISO
@@ -33,6 +34,8 @@ export interface CertReportData {
   correctQuestions: number;
   skills: SkillResult[];   // per skill area that has mapped questions
   badgeImageUrl: string | null;
+  percentile: number | null; // % of other test-takers this score beat (null when too few to be meaningful)
+  population: number;        // number of completed attempts for this certification
 }
 
 export type CertReportResult =
@@ -59,6 +62,9 @@ export async function loadCertReport(certId: string): Promise<CertReportResult> 
     .eq('id', cert.certification_id)
     .maybeSingle();
   if (!c) return { status: 'notfound' };
+
+  const { data: studentRow } = await svc
+    .from('students').select('avatar_url').eq('id', cert.student_id).maybeSingle();
 
   // Best passing attempt for this student + certification.
   const { data: attempt } = await svc
@@ -91,6 +97,14 @@ export async function loadCertReport(certId: string): Promise<CertReportResult> 
   const total = scorable.length;
   const score = typeof attempt?.score === 'number' ? attempt.score : (total === 0 ? 100 : Math.round((correctCount / total) * 100));
 
+  // Percentile across all completed attempts for this certification (for the distribution chart).
+  const { data: allScores } = await svc
+    .from('certification_attempts').select('score').eq('certification_id', cert.certification_id).not('completed_at', 'is', null);
+  const scores = (allScores ?? []).map((a: any) => a.score).filter((s: any) => typeof s === 'number') as number[];
+  const population = scores.length;
+  const below = scores.filter(s => s < score).length;
+  const percentile = population >= 2 ? Math.round((below / population) * 100) : null;
+
   // Per-skill-area performance (only skill areas that actually have questions mapped to them).
   const skillAreas: { id: string; name: string }[] = Array.isArray(c.skill_areas) ? c.skill_areas : [];
   const skills: SkillResult[] = skillAreas
@@ -107,6 +121,7 @@ export async function loadCertReport(certId: string): Promise<CertReportResult> 
     data: {
       certId: cert.id,
       studentName: cert.student_name,
+      studentAvatarUrl: studentRow?.avatar_url ?? null,
       certTitle: c.title ?? 'Certification',
       issueDate: fmtDate(cert.issued_at),
       issuedAt: cert.issued_at,
@@ -117,6 +132,8 @@ export async function loadCertReport(certId: string): Promise<CertReportResult> 
       correctQuestions: correctCount,
       skills,
       badgeImageUrl: c.badge_image_url ?? null,
+      percentile,
+      population,
     },
   };
 }
