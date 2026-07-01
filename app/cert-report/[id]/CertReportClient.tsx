@@ -97,11 +97,11 @@ export default function CertReportClient({ data }: { data: CertReportData }) {
             </div>
           </div>
 
-          {/* Profile card */}
+          {/* Profile card -- shows the certification badge (no student photo) */}
           <div style={{ flex: '0 1 300px', minWidth: 0 }}>
             <div style={{ ...card, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 26 }}>
-              {data.studentAvatarUrl
-                ? <img src={data.studentAvatarUrl} alt="" style={{ width: 96, height: 96, borderRadius: '50%', objectFit: 'cover' }} />
+              {data.badgeImageUrl
+                ? <img src={data.badgeImageUrl} alt="Certification badge" style={{ width: 128, height: 128, objectFit: 'contain' }} />
                 : <div style={{ width: 96, height: 96, borderRadius: '50%', background: accent, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, fontWeight: 800 }}>{firstName.charAt(0).toUpperCase()}</div>}
             </div>
             <div style={{ padding: '16px 4px 0' }}>
