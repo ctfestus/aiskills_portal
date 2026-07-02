@@ -36,6 +36,7 @@ export interface CertificateSettings {
   signatureUrl?:      string | null;
   signatoryName:      string;
   signatoryTitle:     string;
+  headerText?:        string;
   certifyText:        string;
   completionText:     string;
   fontFamily:         "serif" | "sans-serif" | "lato" | "source-sans-pro" | "google-sans-text" | "script";
@@ -56,6 +57,7 @@ export const DEFAULT_CERT_SETTINGS: CertificateSettings = {
   signatureUrl:     null,
   signatoryName:    "",
   signatoryTitle:   "",
+  headerText:       "Certificate of Completion",
   certifyText:      "This is to certify that",
   completionText:   "has successfully completed",
   fontFamily:       "serif",
@@ -218,7 +220,7 @@ const CertificateTemplate = React.forwardRef<HTMLDivElement, CertificateTemplate
         {/* Certificate header */}
         <p style={{ ...pos("header"), zIndex: 20, fontFamily, fontSize: "35px", fontWeight: "400",
           color: C.white, textTransform: "uppercase", letterSpacing: "4px", margin: 0, opacity: 0.9 }}>
-          Certificate of Completion
+          {s.headerText || "Certificate of Completion"}
         </p>
 
         {/* Certify text */}

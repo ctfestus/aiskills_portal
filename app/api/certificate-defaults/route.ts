@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
     padding_left:         body.paddingLeft         ?? 182,
     line_spacing:         body.lineSpacing         ?? 'normal',
     alignment:            body.alignment           ?? 'left',
+    header_text:          body.headerText          ?? 'Certificate of Completion',
     text_positions:       body.textPositions       ?? null,
     updated_at:           new Date().toISOString(),
   }, { onConflict: 'user_id,content_type' });
