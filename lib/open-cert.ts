@@ -68,6 +68,7 @@ export async function loadOpenCert(id: string): Promise<OpenCertResult> {
     paddingLeft:        rawSettings.padding_left,
     lineSpacing:        rawSettings.line_spacing,
     alignment:          rawSettings.alignment ?? 'left',
+    headerText:         rawSettings.header_text ?? 'Certificate of Completion',
     textPositions:      rawSettings.text_positions ?? null,
   } : null;
 

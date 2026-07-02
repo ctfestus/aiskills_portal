@@ -50,6 +50,7 @@ function mapSettings(raw: any): Record<string, any> | null {
     paddingLeft:        raw.padding_left,
     lineSpacing:        raw.line_spacing,
     alignment:          raw.alignment ?? 'left',
+    headerText:         raw.header_text ?? 'Certificate of Completion',
     textPositions:      raw.text_positions ?? undefined,
   } : null;
 }

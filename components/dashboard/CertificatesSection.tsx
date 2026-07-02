@@ -67,6 +67,7 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
       signatureUrl:       data.signature_url       ?? null,
       signatoryName:      data.signatory_name      ?? DEFAULT_CERT_SETTINGS.signatoryName,
       signatoryTitle:     data.signatory_title     ?? DEFAULT_CERT_SETTINGS.signatoryTitle,
+      headerText:         data.header_text         ?? DEFAULT_CERT_SETTINGS.headerText,
       certifyText:        data.certify_text        ?? DEFAULT_CERT_SETTINGS.certifyText,
       completionText:     data.completion_text     ?? DEFAULT_CERT_SETTINGS.completionText,
       fontFamily:         (data.font_family        ?? DEFAULT_CERT_SETTINGS.fontFamily) as CertificateSettings['fontFamily'],
@@ -185,6 +186,10 @@ export function CertificatesSection({ C }: { C: typeof LIGHT_C }) {
         <div>
           <label className={labelCls} style={{ color: C.muted }}>Institution Name</label>
           <input value={settings.institutionName} onChange={e => set('institutionName', e.target.value)} placeholder="Your institution name" className={inputCls} style={inputStyle}/>
+        </div>
+        <div>
+          <label className={labelCls} style={{ color: C.muted }}>Header text</label>
+          <input value={settings.headerText ?? ''} onChange={e => set('headerText', e.target.value)} placeholder="Certificate of Completion" className={inputCls} style={inputStyle}/>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
