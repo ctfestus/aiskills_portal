@@ -1,5 +1,5 @@
 import { Type } from '@google/genai';
-import { requireUser, isAuthError } from '@/lib/api-auth';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { generateJSON, generateVisionJSON } from '@/lib/ai';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -22,7 +22,7 @@ function adminClient() {
 }
 
 async function authenticate(req: NextRequest): Promise<{ userId: string } | NextResponse> {
-  const auth = await requireUser(req);
+  const auth = await requireRole(req, ['instructor', 'admin']);
   if (isAuthError(auth)) return auth.error;
   return { userId: auth.user.id };
 }

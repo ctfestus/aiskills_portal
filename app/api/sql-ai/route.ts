@@ -2,9 +2,13 @@ import { generateJSON } from '@/lib/ai';
 import { requireUser, isAuthError } from '@/lib/api-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getRedis } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+const RATE_LIMIT = 60;
+const RATE_WINDOW_SECONDS = 3600;
 
 interface ColumnInfo { name: string; type?: string }
 interface TableInfo  { tableName: string; columns: ColumnInfo[] }
@@ -19,6 +23,29 @@ function adminClient() {
 async function getSessionUser(req: NextRequest): Promise<{ id: string } | null> {
   const auth = await requireUser(req);
   return isAuthError(auth) ? null : { id: auth.user.id };
+}
+
+async function checkRateLimit(userId: string): Promise<NextResponse | null> {
+  const redis = getRedis();
+  if (!redis) return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
+
+  try {
+    const key = `rate:sql-ai:${userId}`;
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, RATE_WINDOW_SECONDS);
+    if (count > RATE_LIMIT) {
+      const ttl = await redis.ttl(key).catch(() => RATE_WINDOW_SECONDS);
+      const retryAfter = Math.max(1, ttl > 0 ? ttl : RATE_WINDOW_SECONDS);
+      return NextResponse.json(
+        { error: `SQL AI limit reached. You can make up to ${RATE_LIMIT} requests per hour.` },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+      );
+    }
+  } catch {
+    return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
+  }
+
+  return null;
 }
 
 function schemaText(tables: TableInfo[]): string {
@@ -39,6 +66,13 @@ export async function POST(req: NextRequest) {
 
     const { action, query, error, task, tables, lessonContext } = await req.json();
     const schema = schemaText(tables ?? []);
+
+    if (action !== 'explain-error' && action !== 'hint') {
+      return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    }
+
+    const rateLimitError = await checkRateLimit(sessionUser.id);
+    if (rateLimitError) return rateLimitError;
 
     if (action === 'explain-error') {
       const prompt = `You are a helpful SQL tutor for beginners. A student ran this SQL query and got an error.
