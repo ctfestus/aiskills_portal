@@ -1,0 +1,26 @@
+# Normalize line endings. Text files are stored in the repository as LF and
+# checked out as LF on every platform, which ends the Windows CRLF "phantom
+# modified" churn (git no longer relies on core.autocrlf for these files).
+# Binary assets are never passed through text/eol conversion.
+* text=auto eol=lf
+
+# Windows shell scripts must keep CRLF to run correctly.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets: never apply line-ending or text conversion.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.pdf   binary
+*.zip   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.mp4   binary
+*.wasm  binary
