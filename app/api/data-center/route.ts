@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireRole, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
+import { validatePublicDatasetUrl } from '@/lib/dataset-url-safety';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,27 @@ function publicClient() {
   return createClient(url, key);
 }
 
+const FIELDS = 'id,title,description,cover_image_url,cover_image_alt,tags,category,sample_questions,sample_question_types,analyst_sections,file_url,file_name,files,row_count,source,source_url,scenario,disclaimer,table_type,sql_workbench_enabled,is_published,created_at,created_by';
+
+async function validateDatasetFileInputs(fileUrl: unknown, files: unknown): Promise<NextResponse | null> {
+  const urls: string[] = [];
+  if (typeof fileUrl === 'string' && fileUrl.trim()) urls.push(fileUrl.trim());
+  if (Array.isArray(files)) {
+    for (const file of files) {
+      const record = file && typeof file === 'object' ? file as Record<string, unknown> : null;
+      const url = typeof record?.url === 'string' ? record.url.trim() : '';
+      if (url) urls.push(url);
+    }
+  }
+  for (const url of urls) {
+    const check = await validatePublicDatasetUrl(url);
+    if (!check.ok) {
+      return NextResponse.json({ error: `Invalid dataset file URL: ${check.error}` }, { status: 400 });
+    }
+  }
+  return null;
+}
+
 
 // GET - list datasets
 // Public (no auth): published only
@@ -28,8 +50,6 @@ export async function GET(req: NextRequest) {
   // anonymous, invalid token) sees published only.
   const staffAuth = await requireRole(req, ['admin', 'instructor']);
   const showAll = !isAuthError(staffAuth);
-
-  const FIELDS = 'id,title,description,cover_image_url,cover_image_alt,tags,category,sample_questions,sample_question_types,analyst_sections,file_url,file_name,files,row_count,source,source_url,scenario,disclaimer,table_type,sql_workbench_enabled,is_published,created_at,created_by';
   const db = showAll ? adminClient() : publicClient();
   let query = db
     .from('data_center_datasets')
@@ -59,6 +79,8 @@ export async function POST(req: NextRequest) {
   } = body;
 
   if (!title?.trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+  const urlError = await validateDatasetFileInputs(file_url, files);
+  if (urlError) return urlError;
 
   const { data, error } = await adminClient()
     .from('data_center_datasets')
@@ -113,6 +135,11 @@ export async function PUT(req: NextRequest) {
     if (key in fields) update[key] = fields[key];
   }
   if (update.title && typeof update.title === 'string') update.title = update.title.trim();
+  const urlError = await validateDatasetFileInputs(
+    Object.prototype.hasOwnProperty.call(update, 'file_url') ? update.file_url : undefined,
+    Object.prototype.hasOwnProperty.call(update, 'files') ? update.files : undefined,
+  );
+  if (urlError) return urlError;
 
   const { data, error } = await adminClient()
     .from('data_center_datasets')

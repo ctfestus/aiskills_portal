@@ -215,8 +215,8 @@ export async function POST(req: NextRequest) {
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
 
     const ext = file.name.split('.').pop()?.toLowerCase();
-    if (!['xlsx', 'xls'].includes(ext ?? '')) {
-      return NextResponse.json({ error: 'Only .xlsx and .xls files are supported' }, { status: 400 });
+    if (ext !== 'xlsx') {
+      return NextResponse.json({ error: 'Only .xlsx files are supported' }, { status: 400 });
     }
 
     if (file.size > 5 * 1024 * 1024) {

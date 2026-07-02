@@ -540,7 +540,7 @@ function SQLCodeEditor({
 }
 
 function stripKnownExtension(name: string) {
-  return name.replace(/\.(csv|tsv|txt|xlsx|xls|zip)$/i, '');
+  return name.replace(/\.(csv|tsv|txt|xlsx|zip)$/i, '');
 }
 
 function normalizeSQLTableKey(name: string) {
@@ -584,7 +584,7 @@ function fileHasExtension(file: DatasetFile, extensions: string[]) {
 }
 
 function isWorkbenchSupportedFile(file: DatasetFile) {
-  return fileHasExtension(file, ['.csv', '.tsv', '.txt', '.xlsx', '.xls', '.zip']);
+  return fileHasExtension(file, ['.csv', '.tsv', '.txt', '.xlsx', '.zip']);
 }
 
 export function getDatasetFiles(d: DCDataset): DatasetFile[] {
@@ -680,7 +680,7 @@ print("Access any table directly, e.g.:")
 for name in list(dataframes.keys())[:3]:
     print(f"  {name}.head()")`;
   }
-  if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
+  if (lower.endsWith('.xlsx')) {
     return `import pandas as pd
 
 url = "${safeUrl}"
@@ -826,7 +826,7 @@ function DatasetDetailPane({
       const zip = await JSZip.loadAsync(buf);
       return Promise.all(
         Object.keys(zip.files)
-          .filter(n => !zip.files[n].dir && (n.toLowerCase().endsWith('.csv') || n.toLowerCase().endsWith('.pdf') || n.toLowerCase().endsWith('.xlsx') || n.toLowerCase().endsWith('.xls')))
+          .filter(n => !zip.files[n].dir && (n.toLowerCase().endsWith('.csv') || n.toLowerCase().endsWith('.pdf') || n.toLowerCase().endsWith('.xlsx')))
           .map(async n => {
             const base = n.replace(/^.*\//, '');
             if (n.toLowerCase().endsWith('.pdf')) {
@@ -835,7 +835,7 @@ function DatasetDetailPane({
               blobUrlsRef.current.push(url);
               return { name: displayName(base), type: 'pdf' as const, content: '', blobUrl: url };
             }
-            if (n.toLowerCase().endsWith('.xlsx') || n.toLowerCase().endsWith('.xls')) {
+            if (n.toLowerCase().endsWith('.xlsx')) {
               const bytes = await zip.files[n].async('arraybuffer');
               return expandXLSXEntries(bytes, displayName(base), true);
             }
@@ -855,23 +855,55 @@ function DatasetDetailPane({
       blobUrlsRef.current.push(url);
       return [{ name: file.name, type: 'pdf', content: '', blobUrl: url }];
     }
-    if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
+    if (lower.endsWith('.xlsx')) {
       return expandXLSXEntries(await res.arrayBuffer(), file.name, includeFilePrefix);
     }
     return [{ name: file.name, type: 'csv', content: await res.text() }];
   }
 
   async function expandXLSXEntries(buf: ArrayBuffer, fileName: string, includeFilePrefix: boolean): Promise<PreviewEntry[]> {
-    const XLSX = await import('xlsx');
-    const wb = XLSX.read(buf, { type: 'array', bookSheets: true });
-    const sheets = wb.SheetNames.length ? wb.SheetNames : ['Sheet 1'];
-    return sheets.map(sheetName => ({
-      name: sheets.length > 1 ? (includeFilePrefix ? `${fileName}: ${sheetName}` : sheetName) : fileName,
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf);
+    const sheets = wb.worksheets.map(sheet => sheet.name);
+    const names = sheets.length ? sheets : ['Sheet 1'];
+    return names.map(sheetName => ({
+      name: names.length > 1 ? (includeFilePrefix ? `${fileName}: ${sheetName}` : sheetName) : fileName,
       type: 'xlsx' as const,
       content: '',
       xlsxBuf: buf,
       sheetName,
     }));
+  }
+
+  function workbookCellText(value: unknown): string {
+    if (value == null) return '';
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value !== 'object') return String(value);
+    const record = value as Record<string, any>;
+    if ('result' in record) return workbookCellText(record.result);
+    if ('text' in record) return workbookCellText(record.text);
+    if ('hyperlink' in record && 'text' in record) return workbookCellText(record.text);
+    if (Array.isArray(record.richText)) return record.richText.map(part => part?.text ?? '').join('');
+    return JSON.stringify(value);
+  }
+
+  async function workbookRows(buf: ArrayBuffer, sheetName?: string): Promise<string[][]> {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf);
+    const ws = (sheetName ? wb.getWorksheet(sheetName) : undefined) ?? wb.worksheets[0];
+    if (!ws) return [];
+    const rows: string[][] = [];
+    for (let rowIndex = 1; rowIndex <= ws.rowCount; rowIndex += 1) {
+      const row = ws.getRow(rowIndex);
+      const values: string[] = [];
+      for (let colIndex = 1; colIndex <= ws.columnCount; colIndex += 1) {
+        values.push(workbookCellText(row.getCell(colIndex).value));
+      }
+      rows.push(values);
+    }
+    return rows;
   }
 
   function parseCSVContent(csv: string) {
@@ -884,14 +916,14 @@ function DatasetDetailPane({
   }
 
   function parseXLSXBuffer(buf: ArrayBuffer, sheetName?: string) {
-    import('xlsx').then(XLSX => {
-      const wb = XLSX.read(buf, { type: 'array' });
-      const ws = wb.Sheets[sheetName || wb.SheetNames[0]];
-      const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as string[][];
+    workbookRows(buf, sheetName).then(rows => {
       if (rows.length === 0) { setHeaders([]); setPreview([]); return; }
       const hdrs = rows[0].map(String);
       setHeaders(hdrs);
       setPreview(rows.slice(1, 11).map(r => hdrs.map((_, i) => String(r[i] ?? ''))));
+    }).catch(() => {
+      setHeaders([]);
+      setPreview([]);
     });
   }
 
@@ -930,7 +962,7 @@ function DatasetDetailPane({
 
     for (const file of datasetFiles) {
       const isZip = fileHasExtension(file, ['.zip']);
-      const isWorkbook = fileHasExtension(file, ['.xlsx', '.xls']);
+      const isWorkbook = fileHasExtension(file, ['.xlsx']);
       if (fileHasExtension(file, ['.pdf'])) continue;
       if (!isWorkbenchSupportedFile(file)) continue;
 
@@ -941,12 +973,12 @@ function DatasetDetailPane({
         const JSZip = (await import('jszip')).default;
         const zip = await JSZip.loadAsync(buf);
         const names = Object.keys(zip.files)
-          .filter(n => !zip.files[n].dir && (n.toLowerCase().endsWith('.csv') || n.toLowerCase().endsWith('.tsv') || n.toLowerCase().endsWith('.xlsx') || n.toLowerCase().endsWith('.xls')))
+          .filter(n => !zip.files[n].dir && (n.toLowerCase().endsWith('.csv') || n.toLowerCase().endsWith('.tsv') || n.toLowerCase().endsWith('.xlsx')))
           .slice(0, MAX_WORKBENCH_TABLES);
 
         for (const name of names) {
           const base = name.replace(/^.*\//, '');
-          if (name.toLowerCase().endsWith('.xlsx') || name.toLowerCase().endsWith('.xls')) {
+          if (name.toLowerCase().endsWith('.xlsx')) {
             const bytes = await zip.files[name].async('arraybuffer');
             totalBytes += bytes.byteLength;
             if (totalBytes > MAX_WORKBENCH_BYTES) {
@@ -987,10 +1019,7 @@ function DatasetDetailPane({
     }
 
     if (entry.type === 'xlsx' && entry.xlsxBuf) {
-      const XLSX = await import('xlsx');
-      const wb = XLSX.read(entry.xlsxBuf, { type: 'array' });
-      const ws = wb.Sheets[entry.sheetName || wb.SheetNames[0]];
-      return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][];
+      return workbookRows(entry.xlsxBuf, entry.sheetName);
     }
 
     return [];
@@ -1417,7 +1446,7 @@ function DatasetDetailPane({
                   {zipTables.map(t => (
                     <button key={t.name} onClick={() => switchTable(t.name)}
                       style={{ padding: '7px 14px', borderRadius: '8px 8px 0 0', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.15s', background: activeTable === t.name ? C.card : 'transparent', color: activeTable === t.name ? C.text : C.faint, borderBottom: activeTable === t.name ? `2px solid ${C.cta}` : '2px solid transparent' }}>
-                      {t.name.replace(/\.(csv|pdf|xlsx|xls)$/i, '')}
+                      {t.name.replace(/\.(csv|pdf|xlsx)$/i, '')}
                     </button>
                   ))}
                 </div>

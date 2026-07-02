@@ -3,19 +3,19 @@ import { NextResponse } from 'next/server';
 
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api-auth')>()),
-  requireUser: vi.fn(),
+  requireRole: vi.fn(),
 }));
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(),
 }));
 
-import { requireUser } from '@/lib/api-auth';
+import { requireRole } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 import { GET } from '@/app/api/course-progress/route';
 import { makeSupabaseStub } from '../helpers/supabaseStub';
 
-const mockRequireUser = vi.mocked(requireUser);
+const mockRequireRole = vi.mocked(requireRole);
 const mockCreateClient = vi.mocked(createClient);
 
 function get() {
@@ -25,18 +25,16 @@ function get() {
 }
 
 beforeEach(() => {
-  mockRequireUser.mockReset();
+  mockRequireRole.mockReset();
   mockCreateClient.mockReset();
 });
 
 describe('GET /api/course-progress attempt status', () => {
   it('shows an active retake instead of an older failed completed attempt', async () => {
-    mockRequireUser.mockResolvedValue({ token: 'test-token', user: { id: 'owner1' } } as any);
+    mockRequireRole.mockResolvedValue({ token: 'test-token', user: { id: 'owner1' }, role: 'instructor' } as any);
     mockCreateClient
-      .mockReturnValueOnce(makeSupabaseStub({
+      .mockReturnValue(makeSupabaseStub({
         courses: { data: [{ id: 'course1' }], error: null },
-      }) as any)
-      .mockReturnValueOnce(makeSupabaseStub({
         course_attempts: {
           data: [
             {
@@ -80,7 +78,13 @@ describe('GET /api/course-progress attempt status', () => {
   });
 
   it('401 for an anonymous caller', async () => {
-    mockRequireUser.mockResolvedValue({ error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) });
+    mockRequireRole.mockResolvedValue({ error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) });
     expect((await get()).status).toBe(401);
+  });
+
+  it('requires a staff role before returning cross-student progress', async () => {
+    mockRequireRole.mockResolvedValue({ error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) });
+    expect((await get()).status).toBe(403);
+    expect(mockCreateClient).not.toHaveBeenCalled();
   });
 });

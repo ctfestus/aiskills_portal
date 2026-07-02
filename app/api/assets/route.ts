@@ -3,15 +3,15 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { cloudinary } from '@/lib/cloudinary-server';
 
-async function getSession() {
+async function getVerifiedUser() {
   const cookieStore = await cookies();
   const client = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } },
   );
-  const { data: { session } } = await client.auth.getSession();
-  return session;
+  const { data: { user }, error } = await client.auth.getUser();
+  return error ? null : user;
 }
 
 // GET /api/assets?folder=<subfolder>&cursor=<next_cursor>
@@ -19,8 +19,8 @@ async function getSession() {
 // folder: optional subfolder (e.g. "lesson-images", "covers"). Omit for all user images.
 // cursor: pagination cursor from a previous response.
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const user = await getVerifiedUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = req.nextUrl;
   const folder = searchParams.get('folder') ?? '';
@@ -28,8 +28,8 @@ export async function GET(req: NextRequest) {
 
   // Always scope to the authenticated user's own folder tree
   const prefix = folder
-    ? `users/${session.user.id}/${folder}/`
-    : `users/${session.user.id}/`;
+    ? `users/${user.id}/${folder}/`
+    : `users/${user.id}/`;
 
   const result = await cloudinary.api.resources({
     type: 'upload',
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       ? r.secure_url
       : `https://res.cloudinary.com/${cloudName}/image/upload/w_200,h_150,c_fill/${r.public_id}.${r.format}`;
     const subFolder = r.public_id
-      .replace(`users/${session.user.id}/`, '')
+      .replace(`users/${user.id}/`, '')
       .split('/')
       .slice(0, -1)
       .join('/') || 'assets';

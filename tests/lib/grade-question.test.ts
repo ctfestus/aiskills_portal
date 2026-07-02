@@ -62,6 +62,16 @@ describe('gradeQuestion', () => {
     expect(grade(q, JSON.stringify({ passed: false }))).toBe(false);
   });
 
+  it('sql_exercise: requires a valid SQL proof when a verifier is supplied', () => {
+    const q = { id: 'q', type: 'sql_exercise' };
+    const verifySqlProof = (qid: string, query: string, proof: unknown) =>
+      qid === 'q' && query === 'SELECT 1' && proof === 'signed';
+
+    expect(grade(q, JSON.stringify({ passed: true, query: 'SELECT 1' }), { verifySqlProof })).toBe(false);
+    expect(grade(q, JSON.stringify({ passed: true, query: 'SELECT 2', proof: 'signed' }), { verifySqlProof })).toBe(false);
+    expect(grade(q, JSON.stringify({ passed: true, query: 'SELECT 1', proof: 'signed' }), { verifySqlProof })).toBe(true);
+  });
+
   it('python_exercise: requires a valid proof when a verifier is supplied', () => {
     const q = { id: 'q', type: 'python_exercise' };
     const proof = signProof('cert-1', 'q', '42');

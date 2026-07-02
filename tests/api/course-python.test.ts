@@ -44,6 +44,12 @@ const pythonQuestion = {
   pythonSolution: 'print(42)',
 };
 
+const sqlQuestion = {
+  id: 'sql1',
+  type: 'sql_exercise',
+  sqlExpectedResult: { columns: ['n'], rows: [[1]] },
+};
+
 beforeEach(() => {
   mockRequireUser.mockReset();
   mockCreateClient.mockReset();
@@ -51,6 +57,166 @@ beforeEach(() => {
 });
 
 describe('POST /api/course Python exercise security', () => {
+  it('does not accept forged SQL passed answers without a server proof', async () => {
+    authed(makeSupabaseStub({
+      courses: {
+        data: { questions: [sqlQuestion], passmark: 50, points_enabled: false, points_base: 100 },
+        error: null,
+      },
+      course_attempts: [
+        { data: { id: 'attempt1', answers: {}, hints_used: [] }, error: null },
+        { data: null, error: null },
+      ],
+      students: { data: { full_name: 'Student One' }, error: null },
+    }));
+
+    const res = await post({
+      action: 'complete-attempt',
+      course_id: 'course1',
+      final_answers: {
+        sql1: JSON.stringify({ passed: true, query: 'SELECT 1' }),
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.passed).toBe(false);
+    expect(body.score).toBe(0);
+  });
+
+  it('mints a SQL proof only after the browser result matches the hidden expected result', async () => {
+    authed(makeSupabaseStub({
+      courses: {
+        data: {
+          id: 'course1',
+          user_id: 'owner1',
+          status: 'published',
+          cohort_ids: [],
+          questions: [sqlQuestion],
+        },
+        error: null,
+      },
+      students: { data: { role: 'student', cohort_id: 'co1' }, error: null },
+    }));
+
+    const res = await post({
+      action: 'check-sql-answer',
+      course_id: 'course1',
+      question_id: 'sql1',
+      query: 'SELECT 1 AS n',
+      result: { columns: ['n'], rows: [[1]] },
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.passed).toBe(true);
+    expect(body.proof).toMatch(/^v1:/);
+    expect(body.feedback).toMatchObject({
+      passed: true,
+      matchedRows: 0,
+      totalRows: 0,
+      message: 'Your result matches the expected output.',
+    });
+  });
+
+  it('does not leak expected SQL cells or row counts in check-sql-answer feedback', async () => {
+    authed(makeSupabaseStub({
+      courses: {
+        data: {
+          id: 'course1',
+          user_id: 'owner1',
+          status: 'published',
+          cohort_ids: [],
+          questions: [{ ...sqlQuestion, sqlExpectedResult: { columns: ['secret'], rows: [['hidden-value'], ['second-row']] } }],
+        },
+        error: null,
+      },
+      students: { data: { role: 'student', cohort_id: 'co1' }, error: null },
+    }));
+
+    const res = await post({
+      action: 'check-sql-answer',
+      course_id: 'course1',
+      question_id: 'sql1',
+      query: 'SELECT 1 AS secret',
+      result: { columns: ['secret'], rows: [[1]] },
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.passed).toBe(false);
+    expect(body.proof).toBeUndefined();
+    expect(body.feedback).toMatchObject({
+      passed: false,
+      matchedRows: 0,
+      totalRows: 0,
+    });
+    expect(JSON.stringify(body.feedback)).not.toContain('hidden-value');
+    expect(JSON.stringify(body.feedback)).not.toContain('second-row');
+    expect(body.feedback.message).toMatch(/doesn't match/i);
+  });
+
+  it('records SQL solution viewing server-side before returning the solution', async () => {
+    const updates: any[] = [];
+    const supabase = {
+      from(table: string) {
+        const state: { op: 'select' | 'update'; payload?: unknown } = { op: 'select' };
+        const result = () => {
+          if (table === 'courses') return { data: { id: 'course1', user_id: 'owner1', status: 'published', cohort_ids: [], questions: [{ ...sqlQuestion, sqlSolution: 'SELECT 1 AS n' }] }, error: null };
+          if (table === 'students') return { data: { role: 'student', cohort_id: 'co1' }, error: null };
+          if (table === 'course_attempts' && state.op === 'select') return { data: { id: 'attempt1', answers: {} }, error: null };
+          return { data: null, error: null };
+        };
+        const builder: any = {
+          select: () => builder,
+          eq: () => builder,
+          is: () => builder,
+          order: () => builder,
+          limit: () => builder,
+          single: async () => result(),
+          maybeSingle: async () => result(),
+          update: (payload: unknown) => {
+            state.op = 'update';
+            state.payload = payload;
+            updates.push(payload);
+            return builder;
+          },
+          insert: (payload: unknown) => {
+            state.op = 'update';
+            state.payload = payload;
+            updates.push(payload);
+            return builder;
+          },
+          then: (resolve: any, reject: any) => Promise.resolve(result()).then(resolve, reject),
+        };
+        return builder;
+      },
+    };
+    authed(supabase);
+
+    const res = await post({
+      action: 'get-sql-solution',
+      course_id: 'course1',
+      question_id: 'sql1',
+      attempts: 2,
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.solution).toBe('SELECT 1 AS n');
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toMatchObject({
+      answers: {
+        sql1: expect.any(String),
+      },
+    });
+    expect(JSON.parse(updates[0].answers.sql1)).toMatchObject({
+      passed: false,
+      solutionViewed: true,
+      attempts: 2,
+    });
+  });
+
   it('does not accept forged Python passed answers without a server proof', async () => {
     authed(makeSupabaseStub({
       courses: {

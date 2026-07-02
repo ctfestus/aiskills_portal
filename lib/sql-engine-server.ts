@@ -87,6 +87,11 @@ export async function withServerSqlRuntime<T>(tables: SQLTableConfig[], fn: (con
   const conn = db.connect();
 
   try {
+    try {
+      await conn.query('SET enable_external_access = false');
+    } catch (err) {
+      console.warn('[sql-engine-server] Could not disable DuckDB external access:', err);
+    }
     await loadSQLTables(conn, tables);
     return await fn(conn);
   } finally {

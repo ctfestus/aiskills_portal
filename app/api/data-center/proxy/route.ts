@@ -53,7 +53,6 @@ function contentTypeForPath(path: string) {
   if (lower.endsWith('.json')) return 'application/json';
   if (lower.endsWith('.zip')) return 'application/zip';
   if (lower.endsWith('.xlsx')) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-  if (lower.endsWith('.xls')) return 'application/vnd.ms-excel';
   if (lower.endsWith('.pdf')) return 'application/pdf';
   return 'application/octet-stream';
 }
@@ -100,7 +99,7 @@ async function fetchManagedGitHubFile(rawUrl: string, signal: AbortSignal): Prom
       Accept: 'application/vnd.github.raw',
       'X-GitHub-Api-Version': '2022-11-28',
     },
-    redirect: 'follow',
+    redirect: 'error',
     signal,
   });
 
@@ -181,7 +180,7 @@ export async function GET(req: NextRequest) {
 
     const upstream = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
-      redirect: 'follow',
+      redirect: 'error',
       signal: controller.signal,
     });
     clearTimeout(timer);

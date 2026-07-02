@@ -4,16 +4,16 @@ import { cookies } from 'next/headers';
 import { createHash } from 'crypto';
 import { cloudinary, extractPublicId } from '@/lib/cloudinary-server';
 
-// Auth helper -- server component style. Returns the session and the (RLS-scoped) client.
-async function getSession() {
+// Auth helper -- server component style. Returns the verified user and the RLS-scoped client.
+async function getVerifiedUser() {
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } },
   );
-  const { data: { session } } = await supabase.auth.getSession();
-  return { session, supabase };
+  const { data: { user }, error } = await supabase.auth.getUser();
+  return { user: error ? null : user, supabase };
 }
 
 const SAFE_SUBFOLDER = /^[a-zA-Z0-9_\-/]+$/;
@@ -27,8 +27,8 @@ const COVER_TABLES = ['courses', 'events', 'virtual_experiences', 'assignments',
 // Body: multipart/form-data with `file` (File) and optional `folder` (subfolder name)
 // Returns: { url: string, publicId: string }
 export async function POST(req: NextRequest) {
-  const { session } = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user } = await getVerifiedUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const form = await req.formData();
   const file          = form.get('file') as File | null;
@@ -36,6 +36,9 @@ export async function POST(req: NextRequest) {
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
   if (file.size > 20 * 1024 * 1024) return NextResponse.json({ error: 'File too large (max 20 MB)' }, { status: 413 });
+  if (file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')) {
+    return NextResponse.json({ error: 'SVG uploads are not allowed. Use PNG, JPG, WebP, PDF, or another supported safe format.' }, { status: 400 });
+  }
 
   // Reject any subfolder that contains path traversal or unsafe characters
   if (!SAFE_SUBFOLDER.test(rawSubfolder) || rawSubfolder.includes('..')) {
@@ -43,7 +46,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Always scope uploads to the authenticated user -- client never controls the root path
-  const folder = `users/${session.user.id}/${rawSubfolder}`;
+  const folder = `users/${user.id}/${rawSubfolder}`;
 
   // Convert Web File Buffer
   const arrayBuffer = await file.arrayBuffer();
@@ -91,11 +94,7 @@ export async function POST(req: NextRequest) {
     ).end(buffer);
   });
 
-  // SVGs must not have f_auto applied -- Cloudinary converts them to raster, breaking the image.
-  const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
-  const optimisedUrl = isSvg
-    ? result.secure_url
-    : result.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
+  const optimisedUrl = result.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
 
   return NextResponse.json({ url: optimisedUrl, publicId: result.public_id, pages: result.pages ?? 1 });
 }
@@ -103,8 +102,8 @@ export async function POST(req: NextRequest) {
 // DELETE /api/upload
 // Body: { publicId: string } OR { url: string }
 export async function DELETE(req: NextRequest) {
-  const { session, supabase } = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { user, supabase } = await getVerifiedUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json().catch(() => null);
   const publicId: string | null = body?.publicId ?? (body?.url ? extractPublicId(body.url) : null);
@@ -112,7 +111,7 @@ export async function DELETE(req: NextRequest) {
   if (!publicId) return NextResponse.json({ error: 'No publicId provided' }, { status: 400 });
 
   // Ownership check -- publicId must live under the caller's own folder
-  if (!publicId.startsWith(`users/${session.user.id}/`)) {
+  if (!publicId.startsWith(`users/${user.id}/`)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

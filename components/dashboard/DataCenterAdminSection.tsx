@@ -958,7 +958,7 @@ export function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                           <p style={{ fontSize: 12, color: C.faint, margin: 0 }}>CSV, Excel (.xlsx), JSON, ZIP, PDF - max 50 MB</p>
                         </>
                     }
-                    <input ref={dataFileRef} type="file" multiple accept=".csv,.xlsx,.xls,.json,.zip,.pdf" style={{ display: 'none' }} onChange={e => { if (e.target.files?.length) handleDataFilesUpload(e.target.files); }} />
+                    <input ref={dataFileRef} type="file" multiple accept=".csv,.xlsx,.json,.zip,.pdf" style={{ display: 'none' }} onChange={e => { if (e.target.files?.length) handleDataFilesUpload(e.target.files); }} />
                   </div>
 
                   {/* Uploaded files */}
