@@ -1,7 +1,7 @@
 import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateStream } from '@/lib/ai';
-import { requireUser, isAuthError } from '@/lib/api-auth';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // allow up to 60s for streaming LLM responses
@@ -10,7 +10,7 @@ const MAX_PROMPT_LENGTH = 500;
 
 export async function POST(req: NextRequest) {
   // -- Auth ---
-  const auth = await requireUser(req);
+  const auth = await requireRole(req, ['instructor', 'admin']);
   if (isAuthError(auth)) return auth.error;
 
   // -- Parse & validate body ---
