@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
   const docDescription = 'a completed reference solution file';
 
   const isExcel = mime.includes('spreadsheet') || mime.includes('excel') ||
-    file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    file.name.endsWith('.xlsx');
   const isText = mime.startsWith('text/') || file.name.endsWith('.csv') || file.name.endsWith('.txt');
 
   try {

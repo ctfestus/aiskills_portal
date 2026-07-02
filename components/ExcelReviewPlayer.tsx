@@ -96,8 +96,8 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
 
   function pickFile(f: File) {
     const ext = f.name.split('.').pop()?.toLowerCase();
-    if (!['xlsx', 'xls'].includes(ext ?? '')) {
-      setError('Only .xlsx and .xls files are supported.');
+    if (ext !== 'xlsx') {
+      setError('Only .xlsx files are supported.');
       return;
     }
     setFile(f);
@@ -185,14 +185,14 @@ export default function ExcelReviewPlayer({ reqId, isDark, accentColor, complete
             padding: '36px 24px',
             background: dragging ? `${accentColor}08` : inner,
           }}>
-          <input ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden"
+          <input ref={inputRef} type="file" accept=".xlsx" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) pickFile(f); }} />
           <FileSpreadsheet className="w-8 h-8" style={{ color: file ? '#22c55e' : muted }} />
           {file
             ? <p style={{ fontSize: 13, fontWeight: 600, color: text }}>{file.name}</p>
             : <>
                 <p style={{ fontSize: 13, fontWeight: 600, color: text }}>Drop your Excel file here</p>
-                <p style={{ fontSize: 12, color: muted }}>or click to browse · .xlsx or .xls</p>
+                <p style={{ fontSize: 12, color: muted }}>or click to browse - .xlsx</p>
               </>
           }
         </div>

@@ -6,8 +6,8 @@
 //
 // Client-supplied scores are never trusted -- the runtime players send raw answers and the
 // server re-grades here. Code-exercise results (SQL/Python) are checked through their
-// stored pass/skipped/solutionViewed flags; Python additionally requires a valid HMAC proof
-// that the expected-output match was confirmed server-side (see signProof/verifyProof).
+// stored pass/skipped/solutionViewed flags; Python and SQL can additionally require a valid
+// HMAC proof that the match was confirmed server-side (see signProof/verifyProof).
 
 import { createHmac, timingSafeEqual } from 'crypto';
 
@@ -72,6 +72,9 @@ export interface GradeContext {
   // Verifies a Python proof for this content. Omit to accept the stored `passed` flag without proof
   // (used where proofs are not minted). When provided, a Python answer must carry a valid proof.
   verifyProof?: (questionId: string, output: string, proof: unknown) => boolean;
+  // Course SQL answers are browser-executed to preserve WASM semantics, but final grading can
+  // require a server-minted proof for the exact student/query pair.
+  verifySqlProof?: (questionId: string, query: string, proof: unknown) => boolean;
 }
 
 // Re-grade one question from its stored answer. Pure: no DB, no side effects.
@@ -83,10 +86,14 @@ export function gradeQuestion(q: any, ctx: GradeContext): boolean {
   if (REVIEW_TYPES.includes(type)) return ua === 'completed';
 
   if (type === 'sql_exercise') {
-    // Trust the browser-stored result; re-running WASM in Node produces different results,
-    // and solutionViewed/skipped penalties must still apply.
+    // Trust the browser-stored result only when the course route has minted a proof. Re-running
+    // WASM in Node can disagree, so the proof is issued after comparing the browser result
+    // against the hidden expected result server-side.
     const parsed = parseAnswer(ua);
     if (!parsed || parsed.skipped || parsed.solutionViewed) return false;
+    if (ctx.verifySqlProof) {
+      return !!parsed.passed && ctx.verifySqlProof(q.id, String(parsed.query ?? ''), parsed.proof);
+    }
     return !!parsed.passed;
   }
 

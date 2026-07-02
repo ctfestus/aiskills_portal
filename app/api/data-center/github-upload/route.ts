@@ -5,7 +5,7 @@ import path from 'path';
 export const dynamic = 'force-dynamic';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
-const ALLOWED_EXTENSIONS = new Set(['.csv', '.tsv', '.json', '.xlsx', '.xls', '.zip', '.pdf']);
+const ALLOWED_EXTENSIONS = new Set(['.csv', '.tsv', '.json', '.xlsx', '.zip', '.pdf']);
 
 
 function sanitizeFilename(raw: string): string {

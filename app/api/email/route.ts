@@ -1,5 +1,5 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
-import { requireUser, isAuthError } from '@/lib/api-auth';
+import { requireUser, requireRole, isAuthError } from '@/lib/api-auth';
 import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
 import { confirmationEmail, reminderEmail, courseResultEmail, blastEmail } from '@/lib/email-templates';
@@ -31,6 +31,11 @@ async function getAuthUser(req: NextRequest) {
 async function getCreatorId(req: NextRequest): Promise<string | null> {
   const user = await getAuthUser(req);
   return user?.id ?? null;
+}
+
+async function requireEmailTester(req: NextRequest): Promise<boolean> {
+  const auth = await requireRole(req, ['admin', 'instructor']);
+  return !isAuthError(auth);
 }
 
 // Returns true if creatorId owns the given content item (across courses, events, virtual_experiences).
@@ -183,7 +188,7 @@ export async function POST(req: NextRequest) {
       // Confirmation emails are now sent server-side inside /api/event-register.
       // Test mode only is still supported here (creator previewing template).
       if (typeof to === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim()) && !data?.responseId) {
-        if (!await getCreatorId(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!await requireEmailTester(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         const html = confirmationEmail({ ...data, branding });
         await resend.emails.send({ from: FROM, to: to.trim(), subject: `You're registered: ${data?.eventTitle || 'Event'}`, html });
         return NextResponse.json({ success: true, test: true });
@@ -194,7 +199,7 @@ export async function POST(req: NextRequest) {
     } else if (type === 'course-result') {
       // Test mode: single email + no responseId -> creator-initiated test send
       if (typeof to === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.trim()) && !data?.responseId) {
-        if (!await getCreatorId(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!await requireEmailTester(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         const html = courseResultEmail({ ...data, branding });
         const testSubject = data?.passed ? `🎉 Congratulations! Your certificate for ${data?.courseTitle || 'Course'} is ready.` : `Your result: ${data?.courseTitle || 'Course'}`;
         await resend.emails.send({ from: FROM, to: to.trim(), subject: testSubject, html });

@@ -1402,7 +1402,7 @@ const [isSaving, setIsSaving] = useState(false);
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (!/\.(csv|tsv|xlsx|xls)$/i.test(file.name)) {
+    if (!/\.(csv|tsv|xlsx)$/i.test(file.name)) {
       showToast('Upload a CSV, TSV, or Excel file for SQL exercises.', 'error');
       return;
     }
@@ -3776,7 +3776,7 @@ const [isSaving, setIsSaving] = useState(false);
                               <div className="mb-2">
                                 {(() => { const key = `${q.id}:reference_solution`; const busy = extractingRubric === key; return (
                                   <>
-                                    <input type="file" accept=".xlsx,.xls,.pdf,.csv,.txt,.png,.jpg,.jpeg,.docx"
+                                    <input type="file" accept=".xlsx,.pdf,.csv,.txt,.png,.jpg,.jpeg,.docx"
                                       style={{ display: 'none' }}
                                       ref={el => { rubricFileRefs.current[key] = el; }}
                                       onChange={e => handleExtractRubric(q.id, 'reference_solution', e)}
@@ -3921,7 +3921,7 @@ const [isSaving, setIsSaving] = useState(false);
                                     </div>
                                     <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer" style={{ background: C.pill, color: C.muted }}>
                                       <Upload className="w-3 h-3" /> Upload CSV/XLSX
-                                      <input type="file" className="hidden" accept=".csv,.tsv,.xlsx,.xls" onChange={e => handleSqlDatasetUpload(q.id, table.id ?? String(tableIdx), e)} />
+                                      <input type="file" className="hidden" accept=".csv,.tsv,.xlsx" onChange={e => handleSqlDatasetUpload(q.id, table.id ?? String(tableIdx), e)} />
                                     </label>
                                     <span className="text-xs truncate" style={{ color: C.faint }}>{table.fileName || table.fileUrl || 'No file uploaded'}</span>
                                   </div>

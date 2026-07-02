@@ -253,7 +253,7 @@ function RubricBuilder({ criteria, onChange, C, inp, sessionToken }: {
       </p>
       {sessionToken && (
         <div>
-          <input type="file" accept=".xlsx,.xls,.pdf,.csv,.txt,.png,.jpg,.jpeg,.docx"
+          <input type="file" accept=".xlsx,.pdf,.csv,.txt,.png,.jpg,.jpeg,.docx"
             style={{ display: 'none' }}
             ref={el => { fileRefs.current['reference_solution'] = el; }}
             onChange={e => handleFile('reference_solution', e)}

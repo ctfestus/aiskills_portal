@@ -51,7 +51,7 @@ const nextConfig: NextConfig = {
       { source: '/onboarding',        headers: appHeaders },
     ];
   },
-  reactStrictMode: false,
+  reactStrictMode: true,
   eslint: {
     // Run ESLint during `next build`. The lint is clean of errors (only warnings remain,
     // which do not fail the build), so this is a guardrail against new error-level violations.

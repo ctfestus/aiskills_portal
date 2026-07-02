@@ -1035,7 +1035,7 @@ export function CourseTaker({
       try {
         const parsed = JSON.parse(answers[currentQuestion.id] ?? '');
         if (questionType === 'python_exercise') return !!parsed?.passed && !!parsed?.proof;
-        return !!parsed?.passed;
+        return !!parsed?.passed && !!parsed?.proof;
       } catch { return false; }
     }
     if (REVIEW_TYPES.includes(questionType)) return reviewCompleted.has(currentQuestion.id);
@@ -1074,7 +1074,7 @@ export function CourseTaker({
       try {
         const parsed = JSON.parse(answer);
         if (qType === 'python_exercise') return !!parsed?.passed && !!parsed?.proof;
-        return !!parsed?.passed;
+        return !!parsed?.passed && !!parsed?.proof;
       } catch { return false; }
     }
     if (REVIEW_TYPES.includes(qType)) return answer === 'completed';
@@ -1092,7 +1092,7 @@ export function CourseTaker({
       }
       try {
         const parsed = JSON.parse(rawAnswer);
-        const passed = !!parsed?.passed;
+        const passed = !!parsed?.passed && (q.type === 'sql_exercise' || q.type === 'python_exercise' ? !!parsed?.proof : true);
         const skipped = !!parsed?.skipped || !!parsed?.solutionViewed;
         return { answered, completed: answered, skipped, failed: !passed && !skipped };
       } catch {
@@ -2301,6 +2301,7 @@ export function CourseTaker({
       skipped: !!payload.skipped,
       attempts: Number(payload.attempts ?? 0),
       solutionViewed: !!payload.solutionViewed,
+      proof: payload.proof,
       elapsedSeconds: Math.max(0, (Date.now() - questionStartTime) / 1000),
       checkedAt: new Date().toISOString(),
     }, (_, v) => typeof v === 'bigint' ? Number(v) : v);
@@ -3159,6 +3160,19 @@ export function CourseTaker({
               leftOffset={!inlineMode && typeof window !== 'undefined' && window.innerWidth >= 640 ? (sidebarOpen ? 372 : 60) : 0}
               sessionToken={sessionTokenRef.current ?? undefined}
               onComplete={handleSqlComplete}
+              onCheckAnswer={async (questionId, query, result) => {
+                const res = await fetch('/api/course', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(sessionTokenRef.current ? { Authorization: `Bearer ${sessionTokenRef.current}` } : {}),
+                  },
+                  body: JSON.stringify({ action: 'check-sql-answer', course_id: formId, question_id: questionId, query, result }),
+                });
+                const d = await res.json();
+                if (!res.ok) throw new Error(d.error || 'Failed to check SQL answer.');
+                return d;
+              }}
               hintPenalty={pointsEnabled ? (ps?.hintPenalty ?? 20) : undefined}
               solutionPenalty={pointsEnabled ? (ps?.solutionPenalty ?? 30) : undefined}
               onHintUsed={() => setHintsUsed(prev => new Set(prev).add(currentQuestion.id))}

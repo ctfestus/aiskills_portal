@@ -3,10 +3,13 @@ import { GoogleGenAI } from '@google/genai';
 import { requireRole, isAuthError } from '@/lib/api-auth';
 import { getRedis } from '@/lib/redis';
 import { cloudinary } from '@/lib/cloudinary-server';
+import dns from 'dns/promises';
+import net from 'net';
 
 export const dynamic = 'force-dynamic';
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
+const MAX_URL_BYTES = 512 * 1024; // URL imports only need enough HTML/text to extract source material
 const MAX_SOURCE_CHARS = 100_000;
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
 
@@ -49,20 +52,95 @@ Return clean, well-structured Markdown that faithfully captures the substantive 
 
 Output only the Markdown content, with no preamble or commentary.`;
 
-// -- SSRF guard: only public http(s) hosts --
-function isBlockedHost(hostname: string): boolean {
-  const h = hostname.toLowerCase();
-  if (h === 'localhost' || h.endsWith('.localhost') || h === '::1') return true;
-  // IPv4 literal in private / loopback / link-local ranges
-  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (m) {
-    const [a, b] = [Number(m[1]), Number(m[2])];
-    if (a === 127 || a === 10 || a === 0) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 169 && b === 254) return true; // link-local incl. cloud metadata
-    if (a === 172 && b >= 16 && b <= 31) return true;
-  }
+function normalizeHost(hostname: string) {
+  return hostname.toLowerCase().replace(/^\[|\]$/g, '');
+}
+
+function isPrivateIPv4(ip: string) {
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+  const [a, b] = parts;
+  if (a === 0 || a === 10 || a === 127) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a >= 224) return true;
   return false;
+}
+
+function isPrivateIPv6(ip: string) {
+  const h = normalizeHost(ip);
+  if (h === '::' || h === '::1') return true;
+  if (h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true;
+  if (h.startsWith('ff')) return true;
+  const mapped = h.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped) return isPrivateIPv4(mapped[1]);
+  return false;
+}
+
+function isPrivateIp(address: string) {
+  const family = net.isIP(address);
+  if (family === 4) return isPrivateIPv4(address);
+  if (family === 6) return isPrivateIPv6(address);
+  return true;
+}
+
+async function validatePublicFetchUrl(raw: string): Promise<{ ok: true; url: URL } | { ok: false; error: string }> {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return { ok: false, error: 'Invalid URL.' };
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) return { ok: false, error: 'That URL is not allowed.' };
+  if (parsed.username || parsed.password) return { ok: false, error: 'Credentials in URLs are not allowed.' };
+
+  const hostname = normalizeHost(parsed.hostname);
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local') || hostname === 'metadata.google.internal') {
+    return { ok: false, error: 'That URL is not allowed.' };
+  }
+
+  if (net.isIP(hostname) && isPrivateIp(hostname)) {
+    return { ok: false, error: 'That URL is not allowed.' };
+  }
+
+  try {
+    const records = await dns.lookup(hostname, { all: true, verbatim: true });
+    if (!records.length || records.some(record => isPrivateIp(record.address))) {
+      return { ok: false, error: 'That URL is not allowed.' };
+    }
+  } catch {
+    return { ok: false, error: 'Could not verify that URL.' };
+  }
+
+  return { ok: true, url: parsed };
+}
+
+async function readResponseTextWithCap(res: Response, maxBytes: number): Promise<string> {
+  const contentLength = res.headers.get('content-length');
+  if (contentLength && parseInt(contentLength, 10) > maxBytes) {
+    throw new Error('Response too large');
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new Error('Response too large');
+    }
+    chunks.push(value);
+  }
+
+  return new TextDecoder().decode(Buffer.concat(chunks));
 }
 
 function stripHtml(html: string): string {
@@ -171,17 +249,13 @@ export async function POST(req: NextRequest) {
     }
 
     if (typeof body.url === 'string' && body.url.trim()) {
-      let parsed: URL;
-      try { parsed = new URL(body.url.trim()); } catch {
-        return NextResponse.json({ error: 'Invalid URL.' }, { status: 400 });
-      }
-      if (!['http:', 'https:'].includes(parsed.protocol) || isBlockedHost(parsed.hostname)) {
-        return NextResponse.json({ error: 'That URL is not allowed.' }, { status: 400 });
-      }
+      const urlCheck = await validatePublicFetchUrl(body.url.trim());
+      if (!urlCheck.ok) return NextResponse.json({ error: urlCheck.error }, { status: 400 });
+      const parsed = urlCheck.url;
       let res: Response;
       try {
         res = await fetch(parsed.toString(), {
-          redirect: 'follow',
+          redirect: 'error',
           headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CourseBuilder/1.0)' },
           signal: AbortSignal.timeout(15_000),
         });
@@ -189,7 +263,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Could not fetch that URL.' }, { status: 422 });
       }
       if (!res.ok) return NextResponse.json({ error: `Could not fetch that URL (status ${res.status}).` }, { status: 422 });
-      const html = (await res.text()).slice(0, 2 * MAX_SOURCE_CHARS);
+      let html: string;
+      try {
+        html = await readResponseTextWithCap(res, MAX_URL_BYTES);
+      } catch {
+        return NextResponse.json({ error: 'That URL returned too much content to ingest safely.' }, { status: 413 });
+      }
       const sourceText = stripHtml(html).slice(0, MAX_SOURCE_CHARS);
       if (!sourceText.trim()) return NextResponse.json({ error: 'No readable content found at that URL.' }, { status: 422 });
       return NextResponse.json({ sourceText });

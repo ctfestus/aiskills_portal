@@ -136,10 +136,10 @@ export function confirmationEmail(data: {
 
   const content = `
     <p><b>Hi ${esc(name || 'there')},</b></p>
-    <p>${customBody || 'Your registration has been confirmed. We look forward to seeing you!'}</p>
+    <p>${customBody ? esc(customBody) : 'Your registration has been confirmed. We look forward to seeing you!'}</p>
 
-    <p style="font-size:18px;font-weight:bold;margin-top:16px;">${customTitle || 'Registration Confirmed ✓'}</p>
-    <p><b>${eventTitle}</b></p>
+    <p style="font-size:18px;font-weight:bold;margin-top:16px;">${customTitle ? esc(customTitle) : 'Registration Confirmed ✓'}</p>
+    <p><b>${esc(eventTitle)}</b></p>
 
     ${eventDate ? detailBlock('Date', [eventDate, eventTime, eventTimezone].filter(Boolean).join(' · ')) : ''}
     ${eventLocation ? detailBlock('Location', eventLocation) : ''}
@@ -235,7 +235,7 @@ export function courseResultEmail(data: {
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td height="140" style="background:#f0fdf4;text-align:center;vertical-align:middle;font-size:40px;">📘</td></tr></table>
         `}
         <div style="padding:14px 16px 16px;">
-          <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#111;line-height:1.3;">${r.title}</p>
+          <p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#111;line-height:1.3;">${esc(r.title)}</p>
           <p style="margin:0;font-size:12px;font-weight:600;color:#00bf63;">Start course </p>
         </div>
       </a>
@@ -273,11 +273,11 @@ export function courseResultEmail(data: {
     <p><b>Hi ${esc(name || 'there')},</b></p>
 
     ${passed ? `
-      <p style="color:#555;">You have successfully completed <b>${courseTitle}</b>. Your certificate is ready to view, download, and share.</p>
+      <p style="color:#555;">You have successfully completed <b>${esc(courseTitle)}</b>. Your certificate is ready to view, download, and share.</p>
       ${resultsHtml}
       ${certUrl ? cta('🎓 View Your Certificate', certUrl) : cta('View Course', formUrl)}
     ` : `
-      <p>Thanks for completing <b>${courseTitle}</b>. Keep practising. You can retake it to improve your score.</p>
+      <p>Thanks for completing <b>${esc(courseTitle)}</b>. Keep practising. You can retake it to improve your score.</p>
       ${cta('Retake Course', formUrl)}
     `}
 

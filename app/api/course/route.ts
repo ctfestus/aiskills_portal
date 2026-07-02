@@ -11,6 +11,8 @@ import { courseResultEmail } from '@/lib/email-templates';
 import { pointsSystemFromCourseRow, type PointsSystem } from '@/lib/course-schema';
 import { gradeQuestion, parseAnswer, normalizePythonOutput } from '@/lib/grade-question';
 import { ensureCertificate, awardContentBadge, sendCertificateEmailOnce } from '@/lib/issue-certificate';
+import { checkRequiredSqlPatterns, compareResults, type SQLResult } from '@/lib/sql-engine';
+import { computeServerSqlResult } from '@/lib/sql-engine-server';
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -56,6 +58,60 @@ function verifyPythonProof(courseId: string, questionId: string, output: string,
   }
 }
 
+function sqlProofSecret(): string {
+  return process.env.COURSE_SQL_PROOF_SECRET || process.env.COURSE_PYTHON_PROOF_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+}
+
+function normalizeSqlProofQuery(value: unknown): string {
+  return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function signSqlProof(courseId: string, studentId: string, questionId: string, query: string): string {
+  const secret = sqlProofSecret();
+  if (!secret) throw new Error('SQL proof secret not configured');
+  const payload = JSON.stringify({
+    v: 1,
+    courseId,
+    studentId,
+    questionId,
+    query: normalizeSqlProofQuery(query),
+  });
+  return `v1:${createHmac('sha256', secret).update(payload).digest('hex')}`;
+}
+
+function verifySqlProof(courseId: string, studentId: string, questionId: string, query: string, proof: unknown): boolean {
+  if (typeof proof !== 'string' || !proof.startsWith('v1:')) return false;
+  try {
+    const expected = signSqlProof(courseId, studentId, questionId, query);
+    const a = Buffer.from(proof);
+    const b = Buffer.from(expected);
+    return a.length === b.length && timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+function coerceSqlResult(value: unknown): SQLResult | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  if (!Array.isArray(record.columns) || !Array.isArray(record.rows)) return null;
+  if (record.columns.length > 100 || record.rows.length > 5000) return null;
+  const columns = record.columns.map(column => String(column ?? ''));
+  const rows: unknown[][] = [];
+  for (const row of record.rows) {
+    if (!Array.isArray(row) || row.length > 100) return null;
+    rows.push(row.map(cell => {
+      if (cell == null || ['string', 'number', 'boolean'].includes(typeof cell)) return cell;
+      return String(cell);
+    }));
+  }
+  return {
+    columns,
+    rows,
+    totalRows: Number.isFinite(Number(record.totalRows)) ? Number(record.totalRows) : rows.length,
+  };
+}
+
 function mergeAnswerFlag(existing: unknown, patch: Record<string, unknown>) {
   const parsed = parseAnswer(existing);
   return JSON.stringify({
@@ -74,6 +130,7 @@ function shouldAcceptIncomingExerciseAnswer(existing: unknown, incoming: unknown
 
   // A later correct SQL/Python check should replace an earlier failed check when
   // progress is saved before final submission or before a refresh/new session.
+  if (incomingParsed.passed === true && !incomingParsed.proof) return false;
   if (incomingParsed.passed === true && existingParsed?.passed !== true) return true;
 
   // Persist a newly-viewed solution/skipped state unless the stored answer already passed.
@@ -108,7 +165,7 @@ async function loadAccessibleCourse(
   return { course };
 }
 
-async function markPythonSolutionViewed(
+async function markSolutionViewed(
   supabase: ReturnType<typeof adminClient>,
   courseId: string,
   studentId: string,
@@ -308,16 +365,85 @@ export async function POST(req: NextRequest) {
 
     try {
       const supabase = adminClient();
-      const { data: course } = await supabase.from('courses').select('questions').eq('id', course_id).single();
+      const access = await loadAccessibleCourse(supabase, course_id, sessionUser);
+      if ('error' in access) return access.error;
+      const course = access.course as any;
 
       const question = (Array.isArray(course?.questions) ? course.questions : [])
         .find((q: any) => q?.id === question_id && q?.type === 'sql_exercise');
       if (!question) return NextResponse.json({ error: 'SQL exercise not found.' }, { status: 404 });
+      await markSolutionViewed(supabase, course_id, sessionUser.id, question_id, attempts);
 
       return NextResponse.json({ solution: String(question.sqlSolution ?? '') });
     } catch (err: any) {
       console.error('[course/get-sql-solution]', err);
       return NextResponse.json({ error: 'Failed to load SQL solution.' }, { status: 500 });
+    }
+  }
+
+  // -- Server-side SQL pass proof: browser executes SQL; server compares the browser result
+  // against the hidden expected result and signs only a legitimate pass for this student.
+  if (action === 'check-sql-answer') {
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { course_id, question_id, query, result } = body;
+    if (!course_id) return NextResponse.json({ error: 'course_id required' }, { status: 400 });
+    if (!question_id) return NextResponse.json({ error: 'question_id required' }, { status: 400 });
+    if (typeof query !== 'string' || !query.trim()) return NextResponse.json({ error: 'query required' }, { status: 400 });
+    const actual = coerceSqlResult(result);
+    if (!actual) return NextResponse.json({ error: 'Valid SQL result required' }, { status: 400 });
+
+    try {
+      const supabase = adminClient();
+      const access = await loadAccessibleCourse(supabase, course_id, sessionUser);
+      if ('error' in access) return access.error;
+      const course = access.course as any;
+      const question = (Array.isArray(course?.questions) ? course.questions : [])
+        .find((q: any) => q?.id === question_id && q?.type === 'sql_exercise');
+      if (!question) return NextResponse.json({ error: 'SQL exercise not found.' }, { status: 404 });
+
+      const expected = question.sqlExpectedResult
+        ?? (question.sqlSolution?.trim()
+          ? await computeServerSqlResult(question.sqlTables ?? [], question.sqlSolution)
+          : null);
+      if (!expected) return NextResponse.json({ error: 'SQL expected result is not configured.' }, { status: 400 });
+
+      const patternCheck = checkRequiredSqlPatterns(query, question.sqlRequiredPatterns);
+      if (!patternCheck.passed) {
+        const feedback = {
+          passed: false,
+          matchedRows: 0,
+          totalRows: 0,
+          message: patternCheck.message,
+        };
+        return NextResponse.json({ passed: false, feedback });
+      }
+
+      const feedback = compareResults(actual, expected, {
+        ordered: !!question.sqlResultOrdered,
+        numericTolerance: Number(question.sqlNumericTolerance ?? 0),
+      });
+      const safeFeedback = feedback.passed
+        ? {
+            passed: true,
+            matchedRows: 0,
+            totalRows: 0,
+            message: 'Your result matches the expected output.',
+          }
+        : {
+            passed: false,
+            matchedRows: 0,
+            totalRows: 0,
+            message: "Your result doesn't match the expected output yet. Re-check your columns, row count, and values.",
+          };
+      return NextResponse.json({
+        passed: feedback.passed,
+        feedback: safeFeedback,
+        proof: feedback.passed ? signSqlProof(course_id, sessionUser.id, question_id, query) : undefined,
+      });
+    } catch (err: any) {
+      console.error('[course/check-sql-answer]', err);
+      return NextResponse.json({ error: 'Failed to check SQL answer.' }, { status: 500 });
     }
   }
 
@@ -336,7 +462,7 @@ export async function POST(req: NextRequest) {
       const question = (Array.isArray(course?.questions) ? course.questions : [])
         .find((q: any) => q?.id === question_id && q?.type === 'python_exercise');
       if (!question) return NextResponse.json({ error: 'Python exercise not found.' }, { status: 404 });
-      await markPythonSolutionViewed(supabase, course_id, sessionUser.id, question_id, attempts);
+      await markSolutionViewed(supabase, course_id, sessionUser.id, question_id, attempts);
       return NextResponse.json({ solution: String(question.pythonSolution ?? '') });
     } catch (err: any) {
       console.error('[course/get-python-solution]', err);
@@ -570,6 +696,7 @@ export async function POST(req: NextRequest) {
         const scoreQuestion = (q: any): boolean => gradeQuestion(q, {
           storedAnswers,
           persistedAnswers,
+          verifySqlProof: (questionId, query, proof) => verifySqlProof(course_id, sessionUser.id, questionId, query, proof),
           verifyProof: (questionId, output, proof) => verifyPythonProof(course_id, questionId, output, proof),
         });
 

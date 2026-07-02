@@ -97,7 +97,13 @@ export function ProgressBar({ value, max = 100, color }: { value: number; max?: 
 export function stripSqlSolutions(questions: any[] = []) {
   return questions.map(q => {
     if (!q || typeof q !== 'object') return q;
-    const { sqlSolution, ...safeQuestion } = q;
+    const { sqlSolution, sqlExpectedResult, ...safeQuestion } = q;
+    if (q.type === 'sql_exercise') {
+      return {
+        ...safeQuestion,
+        sqlHasExpectedResult: !!sqlExpectedResult || !!String(sqlSolution ?? '').trim(),
+      };
+    }
     return safeQuestion;
   });
 }

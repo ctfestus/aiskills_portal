@@ -492,7 +492,7 @@ export default function CreateAssignmentPage() {
                     <div style={{ marginBottom: 10 }}>
                       <input
                         type="file"
-                        accept=".xlsx,.xls,.pdf,.csv,.txt,.png,.jpg,.jpeg,.docx"
+                        accept=".xlsx,.pdf,.csv,.txt,.png,.jpg,.jpeg,.docx"
                         style={{ display: 'none' }}
                         ref={el => { rubricFileRefs.current['reference_solution'] = el; }}
                         onChange={e => handleExtractRubric('reference_solution', e)}

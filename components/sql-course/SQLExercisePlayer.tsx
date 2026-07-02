@@ -101,7 +101,8 @@ interface Props {
   leftOffset?: number;
   sessionToken?: string;
   hintPenalty?: number;
-  onComplete: (payload: { query: string; result: SQLResult; passed: boolean; feedback: SQLCompareResult; skipped?: boolean; attempts?: number; solutionViewed?: boolean }) => void;
+  onComplete: (payload: { query: string; result: SQLResult; passed: boolean; feedback: SQLCompareResult; skipped?: boolean; attempts?: number; solutionViewed?: boolean; proof?: string }) => void | Promise<void>;
+  onCheckAnswer?: (questionId: string, query: string, result: SQLResult) => Promise<{ passed: boolean; feedback: SQLCompareResult; proof?: string }>;
   onHintUsed: () => void;
   onRevealSolution?: (questionId: string, attempts: number) => Promise<string>;
   onNext?: () => void;
@@ -406,7 +407,7 @@ export default function SQLExercisePlayer({
   sessionToken,
   hintPenalty,
   solutionPenalty,
-  onComplete, onHintUsed, onRevealSolution, onNext, isLastQuestion,
+  onComplete, onCheckAnswer, onHintUsed, onRevealSolution, onNext, isLastQuestion,
   isFirstTaskForLesson = true,
   examMode = false,
 }: Props) {
@@ -526,7 +527,7 @@ export default function SQLExercisePlayer({
     [tables],
   );
   const visibleResult = activeTab === 'result' ? result : (sampleResults[activeTab] ?? null);
-  const hasChecker = !!question.sqlExpectedResult || !!question.sqlSolution?.trim();
+  const hasChecker = !!question.sqlHasExpectedResult || !!question.sqlExpectedResult || !!question.sqlSolution?.trim();
   const availableHints: string[] = (question.sqlHints?.length ? question.sqlHints : question.hint ? [question.hint] : []);
   const hasHints = !examMode && availableHints.length > 0;
   const canRevealSolution = !examMode && hasChecker && !completed;
@@ -614,26 +615,37 @@ export default function SQLExercisePlayer({
     try {
       const out = await executeQuery(runtime.conn, query, false, { limit: null });
       setResult(out);
-      const expected = question.sqlSolution?.trim()
-        ? await executeQuery(runtime.conn, question.sqlSolution, false, { limit: null })
-        : question.sqlExpectedResult;
-      const pat = checkRequiredSqlPatterns(query, question.sqlRequiredPatterns);
-      if (!pat.passed) {
+      let serverCheck: { passed: boolean; feedback: SQLCompareResult; proof?: string };
+      if (onCheckAnswer) {
+        serverCheck = await onCheckAnswer(question.id, query, out);
+      } else {
+        const expected = question.sqlSolution?.trim()
+          ? await executeQuery(runtime.conn, question.sqlSolution, false, { limit: null })
+          : question.sqlExpectedResult;
+        const pat = checkRequiredSqlPatterns(query, question.sqlRequiredPatterns);
+        if (!pat.passed) {
+          serverCheck = {
+            passed: false,
+            feedback: { passed: false, matchedRows: 0, totalRows: expected?.rows?.length ?? 0, message: pat.message },
+          };
+        } else {
+          const feedback = compareResults(out, expected, {
+            ordered: !!question.sqlResultOrdered,
+            numericTolerance: Number(question.sqlNumericTolerance ?? 0),
+          });
+          serverCheck = { passed: feedback.passed, feedback };
+        }
+      }
+      if (!serverCheck.passed) {
         const attempts = failedAttempts + 1;
         setFailedAttempts(attempts);
-        const fail: SQLCompareResult = { passed: false, matchedRows: 0, totalRows: expected?.rows?.length ?? 0, message: pat.message };
-        setFeedback(fail);
-        onComplete({ query, result: out, passed: false, feedback: fail, attempts, solutionViewed: solutionRevealed });
+        setFeedback(serverCheck.feedback);
+        await onComplete({ query, result: out, passed: false, feedback: serverCheck.feedback, attempts, solutionViewed: solutionRevealed });
         return;
       }
-      const check = compareResults(out, expected, {
-        ordered: !!question.sqlResultOrdered,
-        numericTolerance: Number(question.sqlNumericTolerance ?? 0),
-      });
-      const attempts = check.passed ? failedAttempts : failedAttempts + 1;
-      if (!check.passed) setFailedAttempts(attempts);
-      setFeedback(check);
-      onComplete({ query, result: out, passed: check.passed, feedback: check, attempts, solutionViewed: solutionRevealed });
+      const attempts = failedAttempts;
+      setFeedback(serverCheck.feedback);
+      await onComplete({ query, result: out, passed: true, feedback: serverCheck.feedback, attempts, solutionViewed: solutionRevealed, proof: serverCheck.proof });
     } catch (e: any) {
       const attempts = failedAttempts + 1;
       setFailedAttempts(attempts);

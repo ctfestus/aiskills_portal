@@ -17,8 +17,8 @@ export async function POST(req: NextRequest) {
     { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } },
   );
 
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
   const { assignment_id } = body;
@@ -29,9 +29,9 @@ export async function POST(req: NextRequest) {
   try {
     const admin = adminClient();
     const [{ data: student }, { data: assignment }, { data: membership }] = await Promise.all([
-      admin.from('students').select('full_name, email').eq('id', session.user.id).single(),
+      admin.from('students').select('full_name, email').eq('id', user.id).single(),
       admin.from('assignments').select('title').eq('id', assignment_id).single(),
-      admin.from('group_members').select('group_id, is_leader').eq('student_id', session.user.id).maybeSingle(),
+      admin.from('group_members').select('group_id, is_leader').eq('student_id', user.id).maybeSingle(),
     ]);
 
     if (!student?.email || !assignment?.title) return NextResponse.json({ ok: true });

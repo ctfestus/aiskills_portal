@@ -39,6 +39,8 @@ export interface SQLRuntime {
 }
 
 const MUTATING_SQL = /\b(create|insert|update|delete|drop|alter|truncate|copy|attach|detach|install|load|pragma|export|import|vacuum)\b/i;
+const EXTERNAL_ACCESS_SQL = /\b(read_(?:csv|json|ndjson|parquet|text|blob)(?:_auto)?|from_(?:csv|json|parquet)_auto|parquet_scan|glob|getenv|sqlite_scan|postgres_scan|mysql_scan)\s*\(/i;
+const SEED_FORBIDDEN_SQL = /\b(copy|attach|detach|install|load|pragma|export|import|vacuum)\b/i;
 export const STUDENT_RESULT_LIMIT = 500;
 
 function quoteIdent(name: string) {
@@ -267,9 +269,19 @@ export function validateStudentSql(sql: string): string | null {
   if (!trimmed) return 'Write a SELECT query before running it.';
   const stripped = stripSqlForValidation(trimmed);
   if (MUTATING_SQL.test(stripped)) return 'Only read-only SELECT queries are allowed in course exercises.';
+  if (EXTERNAL_ACCESS_SQL.test(stripped)) return 'Queries cannot access files, environment variables, or external data sources.';
   const statements = splitSqlStatements(trimmed);
   if (statements.length > 1) return 'Run one SELECT statement at a time.';
   if (!/^(with|select)\b/i.test(stripped.trim())) return 'Your query must start with SELECT or WITH.';
+  return null;
+}
+
+export function validateSeedSql(sql: string): string | null {
+  const stripped = stripSqlForValidation(sql.trim());
+  if (!stripped) return 'Seed SQL is empty.';
+  if (SEED_FORBIDDEN_SQL.test(stripped) || EXTERNAL_ACCESS_SQL.test(stripped)) {
+    return 'Seed SQL cannot access files, environment variables, extensions, or external data sources.';
+  }
   return null;
 }
 
@@ -334,21 +346,49 @@ export async function initSQLRuntimeFromRows(tables: SQLRowsTableConfig[]): Prom
 }
 
 export async function loadSQLTables(conn: any, tables: SQLTableConfig[]): Promise<SQLRuntime['tables']> {
+  const workbookCellText = (value: unknown): string => {
+    if (value == null) return '';
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value !== 'object') return String(value);
+    const record = value as Record<string, any>;
+    if ('result' in record) return workbookCellText(record.result);
+    if ('text' in record) return workbookCellText(record.text);
+    if (Array.isArray(record.richText)) return record.richText.map(part => part?.text ?? '').join('');
+    return JSON.stringify(value);
+  };
+
+  const workbookRows = async (buf: ArrayBuffer): Promise<unknown[][]> => {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf);
+    const ws = wb.worksheets[0];
+    if (!ws) return [];
+    const rows: string[][] = [];
+    for (let rowIndex = 1; rowIndex <= ws.rowCount; rowIndex += 1) {
+      const row = ws.getRow(rowIndex);
+      const values: string[] = [];
+      for (let colIndex = 1; colIndex <= ws.columnCount; colIndex += 1) {
+        values.push(workbookCellText(row.getCell(colIndex).value));
+      }
+      rows.push(values);
+    }
+    return rows;
+  };
+
   for (const table of tables) {
     const tableName = normalizeTableName(table.tableName);
     if (table.seedSql?.trim()) {
+      const validation = validateSeedSql(table.seedSql);
+      if (validation) throw new Error(validation);
       await conn.query(table.seedSql);
     } else {
       const url = table.fileUrl || table.csvUrl;
       if (!url) continue;
       const lower = url.toLowerCase();
-      if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
-        const XLSX = await import('xlsx');
+      if (lower.endsWith('.xlsx')) {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Dataset fetch failed: ${url} (HTTP ${res.status})`);
-        const wb = XLSX.read(await res.arrayBuffer(), { type: 'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as unknown[][];
+        const rows = await workbookRows(await res.arrayBuffer());
         await loadRows(conn, tableName, rows);
       } else {
         const res = await fetch(url);

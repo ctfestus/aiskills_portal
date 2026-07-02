@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 const ALLOWED_EXTENSIONS = new Set([
   '.pdf', '.doc', '.docx', '.ppt', '.pptx',
-  '.xls', '.xlsx', '.csv', '.tsv',
+  '.xlsx', '.csv', '.tsv',
   '.png', '.jpg', '.jpeg', '.gif', '.webp',
   '.zip', '.json', '.txt', '.md',
 ]);

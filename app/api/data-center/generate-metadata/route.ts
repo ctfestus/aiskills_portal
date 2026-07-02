@@ -3,6 +3,7 @@ import { requireRole, isAuthError } from '@/lib/api-auth';
 import { generateJSON } from '@/lib/ai';
 import { Type } from '@google/genai';
 import { validatePublicDatasetUrl } from '@/lib/dataset-url-safety';
+import ExcelJS from 'exceljs';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,6 +52,17 @@ async function safeFetch(url: string): Promise<ArrayBuffer> {
 }
 
 async function fetchDataSample(fileUrl: string): Promise<string> {
+  const workbookCellText = (value: unknown): string => {
+    if (value == null) return '';
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value !== 'object') return String(value);
+    const record = value as Record<string, any>;
+    if ('result' in record) return workbookCellText(record.result);
+    if ('text' in record) return workbookCellText(record.text);
+    if (Array.isArray(record.richText)) return record.richText.map(part => part?.text ?? '').join('');
+    return JSON.stringify(value);
+  };
+
   const lower = fileUrl.toLowerCase();
   try {
     if (lower.endsWith('.zip')) {
@@ -76,22 +88,26 @@ async function fetchDataSample(fileUrl: string): Promise<string> {
       return lines.join('\n');
     }
 
-    if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
-      const XLSX = await import('xlsx');
+    if (lower.endsWith('.xlsx')) {
       const buf = await safeFetch(fileUrl);
-      const wb = XLSX.read(buf, { type: 'array' });
-      const sheets = wb.SheetNames.slice(0, MAX_XLSX_SHEETS);
-      const lines: string[] = [`Excel workbook with ${wb.SheetNames.length} sheet(s):`];
-      for (const name of sheets) {
-        const ws = wb.Sheets[name];
-        const ref = ws['!ref'];
-        if (!ref) continue;
-        const range = XLSX.utils.decode_range(ref);
-        range.e.r = Math.min(range.e.r, range.s.r + 3);
-        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', range });
-        const header = (rows[0] as string[])?.join(', ') ?? '';
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buf);
+      const sheets = wb.worksheets.slice(0, MAX_XLSX_SHEETS);
+      const lines: string[] = [`Excel workbook with ${wb.worksheets.length} sheet(s):`];
+      for (const ws of sheets) {
+        const rows: string[][] = [];
+        const maxRows = Math.min(ws.rowCount, 4);
+        for (let rowIndex = 1; rowIndex <= maxRows; rowIndex += 1) {
+          const row = ws.getRow(rowIndex);
+          const values: string[] = [];
+          for (let colIndex = 1; colIndex <= ws.columnCount; colIndex += 1) {
+            values.push(workbookCellText(row.getCell(colIndex).value));
+          }
+          rows.push(values);
+        }
+        const header = rows[0]?.join(', ') ?? '';
         const sample = rows.slice(1, 4).map(r => (r as string[]).join(', ')).join(' | ');
-        lines.push(`Sheet "${name}" columns: ${header}`);
+        lines.push(`Sheet "${ws.name}" columns: ${header}`);
         if (sample) lines.push(`  Sample rows: ${sample}`);
       }
       return lines.join('\n');

@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from "react";
 import CertificateTemplate, { CertificateSettings } from "@/components/CertificateTemplate";
 import { Download, Loader2, Check, Link as LinkIcon, ChevronDown, BadgeCheck } from "lucide-react";
 import { useTheme } from "@/components/ThemeProvider";
+import { sanitizeRichText } from "@/lib/sanitize";
 
 const CERT_W = 1860;
 const CERT_H = 1200;
@@ -184,6 +185,9 @@ export default function OpenCertPageClient({
   const tw = isMobile ? THUMB_W_MOB : THUMB_W;
   const th = isMobile ? thumbHMob   : thumbH;
   const ts = isMobile ? thumbScaleMob : thumbScale;
+  const descriptionHtml = description
+    ? sanitizeRichText(description.includes('<') ? description : description.replace(/\n/g, '<br/>'))
+    : '';
 
   const CertThumb = (
     <div
@@ -403,7 +407,7 @@ export default function OpenCertPageClient({
             <div
               className="cert-desc"
               style={{ margin: '0 0 20px', fontSize: isMobile ? 14 : 15, color: cl.body, lineHeight: 1.75 }}
-              dangerouslySetInnerHTML={{ __html: description.includes('<') ? description : description.replace(/\n/g, '<br/>') }}
+              dangerouslySetInnerHTML={{ __html: descriptionHtml }}
             />
           )}
 

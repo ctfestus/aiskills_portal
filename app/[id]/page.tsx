@@ -95,11 +95,17 @@ const buttonThemes: Record<ThemeColor, string> = {
 function stripExerciseSecrets(questions: any[] = []) {
   return questions.map(q => {
     if (!q || typeof q !== 'object') return q;
-    const { sqlSolution, pythonSolution, pythonExpectedOutput, ...safeQuestion } = q;
+    const { sqlSolution, sqlExpectedResult, pythonSolution, pythonExpectedOutput, ...safeQuestion } = q;
     if (q.type === 'python_exercise') {
       return {
         ...safeQuestion,
         pythonHasExpectedOutput: !!String(pythonExpectedOutput ?? '').trim(),
+      };
+    }
+    if (q.type === 'sql_exercise') {
+      return {
+        ...safeQuestion,
+        sqlHasExpectedResult: !!sqlExpectedResult || !!String(sqlSolution ?? '').trim(),
       };
     }
     return safeQuestion;

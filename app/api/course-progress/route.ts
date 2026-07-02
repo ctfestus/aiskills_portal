@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser, isAuthError } from '@/lib/api-auth';
+import { requireRole, isAuthError } from '@/lib/api-auth';
 import { createClient } from '@supabase/supabase-js';
 
-// User-scoped client -- RLS enforces ownership at the DB level.
-function userClient(jwt: string) {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: `Bearer ${jwt}` } } },
-  );
-}
-
-// Admin client used only for cross-student data queries (auth is requireUser).
+// Admin client used only after staff auth and explicit ownership checks.
 function adminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,9 +11,9 @@ function adminClient() {
 }
 
 export async function GET(req: NextRequest) {
-  const authRes = await requireUser(req);
+  const authRes = await requireRole(req, ['admin', 'instructor', 'staff']);
   if (isAuthError(authRes)) return authRes.error;
-  const { token: jwt } = authRes;
+  const { user, role } = authRes;
 
   const { searchParams } = new URL(req.url);
   const formId  = searchParams.get('formId');
@@ -31,15 +22,13 @@ export async function GET(req: NextRequest) {
   const ids = formIds ? formIds.split(',').filter(Boolean) : formId ? [formId] : [];
   if (!ids.length) return NextResponse.json({ error: 'formId or formIds is required' }, { status: 400 });
 
-  // Use the user-scoped client -- RLS on `courses` enforces user_id = auth.uid()
-  // so only courses this user owns will be returned. No manual ownership check needed.
-  const supabase = userClient(jwt);
-
-  const { data: ownedCourses } = await supabase
+  const courseQuery = adminClient()
     .from('courses')
     .select('id')
     .in('id', ids);
+  if (role === 'instructor') courseQuery.eq('user_id', user.id);
 
+  const { data: ownedCourses } = await courseQuery;
   const ownedIds = (ownedCourses ?? []).map((c: any) => c.id);
   if (!ownedIds.length) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
