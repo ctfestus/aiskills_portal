@@ -1284,9 +1284,20 @@ export function CourseTaker({
               ) : (
                 <div className="flex flex-col items-center text-center gap-3">
                   {config.title && <p className={`text-xs font-semibold tracking-widest uppercase ${mutedColor}`}>{config.title}</p>}
-                  <ScoreGauge score={submittedPct} passmark={passmark} passed={submittedPassed}
-                    track={isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)'}
-                    scoreColor={isDark ? '#f4f4f5' : '#18181b'} mutedColor={txtMuted} tickColor={isDark ? '#f4f4f5' : '#18181b'} />
+                  <div className="flex flex-wrap items-center justify-center gap-x-10 sm:gap-x-14 gap-y-4">
+                    <ScoreGauge score={submittedPct} passmark={passmark} passed={submittedPassed}
+                      track={isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)'}
+                      scoreColor={isDark ? '#f4f4f5' : '#18181b'} mutedColor={txtMuted} tickColor={isDark ? '#f4f4f5' : '#18181b'} />
+                    {pointsEnabled && (
+                      <div className="flex items-center gap-3">
+                        <span className="text-4xl">⭐</span>
+                        <div className="text-left">
+                          <p className={`text-xs font-semibold tracking-widest uppercase ${mutedColor}`}>XP Earned</p>
+                          <p className="text-5xl font-black leading-none mt-0.5" style={{ color: isDark ? '#facc15' : '#10b981' }}>{displayedPoints.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold tracking-wider text-white" style={{ background: resultColor }}>
                     {submittedPassed ? 'PASSED' : 'FAILED'}
                   </span>
@@ -1321,27 +1332,18 @@ export function CourseTaker({
               </div>
             )}
 
-            {/* XP + milestones */}
-            {pointsEnabled && (
+            {/* Streak + milestones (XP earned now sits beside the gauge above) */}
+            {pointsEnabled && (streak >= (ps?.streakCount ?? 3) || (ps?.milestones ?? []).length > 0) && (
               <div className={`rounded-xl ${isDark ? 'bg-zinc-800/40' : 'bg-zinc-50'}`}>
 
-                {/* XP row */}
-                <div className="flex items-center justify-between px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xl">⭐</span>
-                    <div>
-                      <p className={`text-[10px] font-semibold tracking-widest uppercase ${mutedColor}`}>XP Earned</p>
-                      <p className="text-2xl font-black leading-none" style={{ color: isDark ? '#facc15' : '#10b981' }}>
-                        {displayedPoints.toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                  {streak >= (ps?.streakCount ?? 3) && (
+                {/* Streak */}
+                {streak >= (ps?.streakCount ?? 3) && (
+                  <div className="flex items-center justify-end px-4 py-3">
                     <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${isDark ? 'bg-orange-500/15 text-orange-400' : 'bg-orange-100 text-orange-600'}`}>
                       🔥 {streak} streak
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Milestones */}
                 {(ps?.milestones ?? []).length > 0 && (() => {
