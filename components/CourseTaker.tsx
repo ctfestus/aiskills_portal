@@ -1284,15 +1284,16 @@ export function CourseTaker({
               ) : (
                 <div className="flex flex-col items-center text-center gap-3">
                   {config.title && <p className={`text-xs font-semibold tracking-widest uppercase ${mutedColor}`}>{config.title}</p>}
-                  <div className="flex flex-wrap items-center justify-center gap-x-10 sm:gap-x-14 gap-y-4">
+                  {/* Gauge centered as the anchor; XP floats to the right, aligned to the gauge's middle. */}
+                  <div className="relative w-full flex justify-center">
                     <ScoreGauge score={submittedPct} passmark={passmark} passed={submittedPassed}
                       track={isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)'}
                       scoreColor={isDark ? '#f4f4f5' : '#18181b'} mutedColor={txtMuted} tickColor={isDark ? '#f4f4f5' : '#18181b'} />
                     {pointsEnabled && (
-                      <div className="flex items-center gap-3">
+                      <div className="hidden sm:flex absolute right-1 top-1/2 -translate-y-1/2 items-center gap-3">
                         <span className="text-4xl">⭐</span>
                         <div className="text-left">
-                          <p className={`text-xs font-semibold tracking-widest uppercase ${mutedColor}`}>XP Earned</p>
+                          <p className={`text-[11px] font-semibold tracking-widest uppercase ${mutedColor}`}>XP Earned</p>
                           <p className="text-5xl font-black leading-none mt-0.5" style={{ color: isDark ? '#facc15' : '#10b981' }}>{displayedPoints.toLocaleString()}</p>
                         </div>
                       </div>
@@ -1304,6 +1305,14 @@ export function CourseTaker({
                   <p className={`text-sm ${mutedColor}`}>
                     Scored <b className={textColor}>{scoreDisplay} of {totalQuestions}</b> correct. Pass mark {passmark}%.
                   </p>
+                  {/* Compact XP line for narrow screens (the floated version is hidden there). */}
+                  {pointsEnabled && (
+                    <div className="sm:hidden flex items-center gap-2">
+                      <span className="text-2xl">⭐</span>
+                      <span className={`text-[11px] font-semibold tracking-widest uppercase ${mutedColor}`}>XP Earned</span>
+                      <span className="text-2xl font-black" style={{ color: isDark ? '#facc15' : '#10b981' }}>{displayedPoints.toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
