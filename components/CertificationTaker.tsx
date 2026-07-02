@@ -13,6 +13,7 @@ import { initSQLRuntime, SQLRuntime } from '@/lib/sql-engine';
 import SQLExercisePlayer from '@/components/sql-course/SQLExercisePlayer';
 import PythonExercisePlayer from '@/components/sql-course/PythonExercisePlayer';
 import { CertificationPlayground } from '@/components/CertificationPlayground';
+import { ScoreGauge } from '@/components/ScoreGauge';
 import { useTenant } from '@/components/TenantProvider';
 import { sanitizeQuestionContent } from '@/lib/sanitize';
 import type { CourseQuestion } from '@/lib/course-schema';
@@ -425,14 +426,6 @@ export default function CertificationTaker({
     const strengths = skills.filter(s => s.pct >= pm);
     const gaps = skills.filter(s => s.pct < pm);
     const hasBreakdown = !isPreview && skills.length > 0;
-    // Half-dial score gauge with a pass-mark tick (mirrors the shareable report), rendered inline.
-    const gCx = 108, gCy = 108, gR = 82, gStroke = 14, gArc = Math.PI * gR;
-    const scoreFrac = Math.max(0, Math.min(100, result.score)) / 100;
-    const passFrac = Math.max(0, Math.min(100, pm)) / 100;
-    const pcos = Math.cos(passFrac * Math.PI), psin = Math.sin(passFrac * Math.PI);
-    const tickIn = gR - gStroke / 2 - 2, tickOut = gR + gStroke / 2 + 2;
-    const gaugePath = `M ${gCx - gR} ${gCy} A ${gR} ${gR} 0 0 1 ${gCx + gR} ${gCy}`;
-    const gaugeFill = result.passed ? '#16a34a' : '#f43f5e';
     const SkillBar = (s: { id: string; name: string; correct: number; total: number; pct: number }) => (
       <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
         <span style={{ flex: '0 0 130px', fontSize: 13, color: t.text, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
@@ -457,17 +450,7 @@ export default function CertificationTaker({
             <>
               {/* Score gauge (half dial) */}
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: 6 }}>
-                <div style={{ position: 'relative', width: 200, height: 112 }}>
-                  <svg width="200" height="112" viewBox="0 0 216 118" style={{ width: '100%', height: '100%' }}>
-                    <path d={gaugePath} fill="none" stroke={t.track} strokeWidth={gStroke} strokeLinecap="round" />
-                    <path d={gaugePath} fill="none" stroke={gaugeFill} strokeWidth={gStroke} strokeLinecap="round" strokeDasharray={`${scoreFrac * gArc} ${gArc}`} />
-                    <line x1={gCx - tickIn * pcos} y1={gCy - tickIn * psin} x2={gCx - tickOut * pcos} y2={gCy - tickOut * psin} stroke={t.text} strokeWidth={3} strokeLinecap="round" />
-                  </svg>
-                  <div style={{ position: 'absolute', left: 0, right: 0, bottom: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ fontSize: 32, fontWeight: 800, lineHeight: 1 }}>{result.score}%</span>
-                    <span style={{ fontSize: 11.5, color: t.muted, marginTop: 3 }}>Overall score</span>
-                  </div>
-                </div>
+                <ScoreGauge score={result.score} passmark={pm} passed={result.passed} track={t.track} scoreColor={t.text} mutedColor={t.muted} tickColor={t.text} />
               </div>
               <p style={{ fontSize: 14, color: t.muted, marginTop: 4, marginBottom: hasBreakdown ? 20 : 24 }}>
                 {result.correctQuestions != null && result.totalQuestions != null

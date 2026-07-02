@@ -39,6 +39,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { ScoreGauge } from '@/components/ScoreGauge';
 import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
 import CodeReviewPlayer from '@/components/CodeReviewPlayer';
 import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
@@ -479,7 +480,6 @@ export function CourseTaker({
   const textColor = isDark ? 'text-[#ACB8C5]' : 'text-[#111111]';
   const mutedColor = isDark ? 'text-[#A8B5C2]' : 'text-[#555555]';
   const faintColor = isDark ? 'text-[#6b7a89]' : 'text-[#888888]';
-  const subtleBg = isDark ? 'bg-zinc-800/60' : 'bg-zinc-50';
   // Text tones mirror the shared theme (DARK_C/LIGHT_C) so the player matches the dashboard.
   // Two forms of the same tones: textColor/mutedColor/faintColor (above) for className, and
   // txt/txtMuted/txtFaint (below) for inline style={{ color }}. Roles: headings/primary = text,
@@ -1253,8 +1253,6 @@ export function CourseTaker({
     // the right number rather than "0 / N correct".
     const correctCount = Math.round((submittedPct / 100) * totalQuestions);
     const scoreDisplay = String(correctCount);
-    const scoreMarker = Math.max(4, Math.min(96, submittedPct));
-    const passMarker = Math.max(4, Math.min(96, passmark));
 
     const resultColor = submittedPassed ? '#10b981' : '#f43f5e';
 
@@ -1272,84 +1270,44 @@ export function CourseTaker({
 
           <div className="p-7 sm:p-8 space-y-6">
 
-            {/* Score row */}
+            {/* Score -- half-dial gauge (mirrors the certification result) */}
             <div className="space-y-4">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div className="flex-1 min-w-0 space-y-2">
-                  {config.title && (
-                    <p className={`text-xs font-semibold tracking-widest uppercase truncate ${mutedColor}`}>{config.title}</p>
-                  )}
-                  <div className="flex items-end gap-2 flex-wrap">
-                    {isLessonOnly ? (
-                      <span className={`text-4xl sm:text-5xl font-black leading-none ${textColor}`}>100%</span>
-                    ) : (
-                      <>
-                        <span className={`text-4xl sm:text-5xl font-black leading-none ${textColor}`}>{submittedPct}%</span>
-                        <span className={`text-sm sm:text-base pb-1 ${mutedColor}`}>{scoreDisplay} / {totalQuestions} correct</span>
-                      </>
+              {isLessonOnly ? (
+                <div className="flex flex-col items-center text-center gap-3 py-2">
+                  {config.title && <p className={`text-xs font-semibold tracking-widest uppercase ${mutedColor}`}>{config.title}</p>}
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-500/10">
+                    <CheckCircle2 className="w-7 h-7 text-emerald-400" />
+                  </div>
+                  <p className="text-sm font-medium" style={{ color: txtMuted }}>You have completed all lessons in this course.</p>
+                  <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold tracking-wider text-white" style={{ background: resultColor }}>COMPLETED</span>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-5">
+                  {config.title && <p className={`text-center text-lg font-bold tracking-wide uppercase ${mutedColor}`}>{config.title}</p>}
+                  {/* Left: gauge + PASSED + score. Right: XP earned. Stacks and centers on narrow screens. */}
+                  <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-6 w-full max-w-lg mx-auto">
+                    <div className="flex flex-col items-center gap-2.5">
+                      <ScoreGauge score={submittedPct} passmark={passmark} passed={submittedPassed} width={190}
+                        track={isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)'}
+                        scoreColor={isDark ? '#f4f4f5' : '#18181b'} mutedColor={txtMuted} tickColor={isDark ? '#f4f4f5' : '#18181b'} />
+                      <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold tracking-wider text-white" style={{ background: resultColor }}>
+                        {submittedPassed ? 'PASSED' : 'FAILED'}
+                      </span>
+                      <p className={`text-sm ${mutedColor}`}>
+                        Scored <b className={textColor}>{scoreDisplay} of {totalQuestions}</b> correct. Pass mark {passmark}%.
+                      </p>
+                    </div>
+                    {pointsEnabled && (
+                      <div className="text-center sm:text-left flex-shrink-0">
+                        <p className={`text-[11px] font-semibold tracking-widest uppercase ${mutedColor}`}>XP Earned</p>
+                        <p className="text-6xl font-black leading-none mt-1" style={{ color: isDark ? '#facc15' : '#10b981' }}>
+                          {displayedPoints.toLocaleString()}<span className="text-2xl font-bold ml-1.5">XP</span>
+                        </p>
+                      </div>
                     )}
                   </div>
-                  <span
-                    className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider text-white"
-                    style={{ background: resultColor }}
-                  >
-                    {isLessonOnly ? 'COMPLETED' : (submittedPassed ? 'PASSED' : 'FAILED')}
-                  </span>
                 </div>
-                {!isLessonOnly && (
-                  <div className={`rounded-xl px-5 py-4 sm:min-w-[170px] ${subtleBg}`}>
-                    <p className={`text-[11px] font-semibold tracking-widest uppercase ${mutedColor}`}>Pass Target</p>
-                    <p className="mt-1 text-2xl font-black text-rose-500">{passmark}%</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-xl px-5 sm:px-6 py-5" style={{ background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)' }}>
-                {isLessonOnly ? (
-                  <div className="flex items-center gap-3 py-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                    <p className="text-sm font-medium" style={{ color: txtMuted }}>
-                      You have completed all lessons in this course.
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-[11px] font-semibold mb-3" style={{ color: txtMuted }}>Score progress</div>
-
-                    <div className="relative pt-7 pb-8">
-                      <div className="h-4 rounded-full overflow-hidden" style={{ background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' }}>
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${submittedPct}%`,
-                            background: submittedPassed
-                              ? 'linear-gradient(90deg, #10b981, #34d399)'
-                              : 'linear-gradient(90deg, #f97316, #f43f5e)',
-                            transition: 'width 1s cubic-bezier(.4,0,.2,1)',
-                          }}
-                        />
-                      </div>
-
-                      <div
-                        className="absolute top-4 bottom-5 w-0"
-                        style={{ left: `${passMarker}%`, borderLeft: '2px dashed #ef4444' }}
-                      />
-                      <div
-                        className="absolute top-0 -translate-x-1/2 px-2 py-1 rounded-full text-[10px] font-bold whitespace-nowrap"
-                        style={{ left: `${scoreMarker}%`, background: resultColor, color: '#fff' }}
-                      >
-                        You: {submittedPct}%
-                      </div>
-                      <div
-                        className={`absolute bottom-0 -translate-x-1/2 px-2 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap ${isDark ? 'bg-zinc-800 text-[#A8B5C2]' : 'bg-zinc-100 text-[#555555]'}`}
-                        style={{ left: `${passMarker}%` }}
-                      >
-                        Pass mark
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+              )}
             </div>
 
             {/* Certificate + share actions */}
@@ -1376,27 +1334,18 @@ export function CourseTaker({
               </div>
             )}
 
-            {/* XP + milestones */}
-            {pointsEnabled && (
+            {/* Streak + milestones (XP earned now sits beside the gauge above) */}
+            {pointsEnabled && (streak >= (ps?.streakCount ?? 3) || (ps?.milestones ?? []).length > 0) && (
               <div className={`rounded-xl ${isDark ? 'bg-zinc-800/40' : 'bg-zinc-50'}`}>
 
-                {/* XP row */}
-                <div className="flex items-center justify-between px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xl">⭐</span>
-                    <div>
-                      <p className={`text-[10px] font-semibold tracking-widest uppercase ${mutedColor}`}>XP Earned</p>
-                      <p className="text-2xl font-black leading-none" style={{ color: isDark ? '#facc15' : '#10b981' }}>
-                        {displayedPoints.toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                  {streak >= (ps?.streakCount ?? 3) && (
+                {/* Streak */}
+                {streak >= (ps?.streakCount ?? 3) && (
+                  <div className="flex items-center justify-end px-4 py-3">
                     <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${isDark ? 'bg-orange-500/15 text-orange-400' : 'bg-orange-100 text-orange-600'}`}>
                       🔥 {streak} streak
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Milestones */}
                 {(ps?.milestones ?? []).length > 0 && (() => {
