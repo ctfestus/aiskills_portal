@@ -459,7 +459,9 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               <a
                 href={`/${assignment._course_slug || assignment.related_course}`}
                 className="flex items-center gap-3 no-underline transition-all hover:opacity-80"
-                style={{ background: '#fff', border: `1px solid ${C.divider}`, borderRadius: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}
+                style={theme === 'dark'
+                  ? { background: C.pill, borderRadius: 10 }
+                  : { background: '#fff', border: `1px solid ${C.divider}`, borderRadius: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}
               >
                 {/* Cover image with padding */}
                 <div className="flex-shrink-0 p-2">
