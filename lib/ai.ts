@@ -31,7 +31,19 @@ function openaiClient() {
 const safeJSON = (text: string) =>
   JSON.parse(text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim());
 
+export type GenerateJSONOpts = {
+  temperature?: number;
+  geminiRetries?: number;
+  // Caps model thinking on large structured calls. Requires a Gemini 3+ model;
+  // older models reject thinkingLevel. Unbounded thinking adds 10-100s of latency
+  // per call and can starve the output budget, truncating the JSON mid-string.
+  thinkingLevel?: 'minimal' | 'low';
+};
+
 function isRetryableGeminiError(err: unknown) {
+  // Malformed JSON (bad string escaping, output cut off) is intermittent model
+  // flakiness -- a retry of the same prompt almost always returns a clean response.
+  if (err instanceof SyntaxError) return true;
   const error = err as { message?: string; cause?: { code?: string; errno?: number; message?: string } };
   const message = String(error?.message ?? '').toLowerCase();
   const causeMessage = String(error?.cause?.message ?? '').toLowerCase();
@@ -39,6 +51,7 @@ function isRetryableGeminiError(err: unknown) {
   return (
     message.includes('fetch failed') ||
     message.includes('econnreset') ||
+    message.includes('truncated') ||
     causeMessage.includes('econnreset') ||
     code === 'ECONNRESET'
   );
@@ -47,7 +60,7 @@ function isRetryableGeminiError(err: unknown) {
 async function generateGeminiJSON(
   prompt: string,
   geminiSchema?: any,
-  opts: { temperature?: number; geminiRetries?: number } = {},
+  opts: GenerateJSONOpts = {},
 ) {
   const retries = Math.max(0, opts.geminiRetries ?? 1);
   const config: any = {
@@ -56,6 +69,7 @@ async function generateGeminiJSON(
   };
   if (geminiSchema) config.responseSchema = geminiSchema;
   if (opts.temperature !== undefined) config.temperature = opts.temperature;
+  if (opts.thinkingLevel) config.thinkingConfig = { thinkingLevel: opts.thinkingLevel.toUpperCase() };
 
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -65,6 +79,10 @@ async function generateGeminiJSON(
         contents: prompt,
         config,
       });
+      // result.text silently returns partial JSON when the output budget runs out.
+      if (result.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+        throw new Error('Gemini response truncated (MAX_TOKENS)');
+      }
       return safeJSON(result.text ?? '{}');
     } catch (err) {
       lastError = err;
@@ -80,7 +98,7 @@ async function generateGeminiJSON(
 export async function generateJSON(
   prompt: string,
   geminiSchema?: any,
-  opts: { temperature?: number; geminiRetries?: number } = {},
+  opts: GenerateJSONOpts = {},
 ): Promise<any> {
   try {
     return await generateGeminiJSON(prompt, geminiSchema, opts);
