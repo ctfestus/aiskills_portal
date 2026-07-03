@@ -7,16 +7,20 @@
 // selection, log tab-switch / blur). Reuses the CourseQuestion shape and the SQL/Python players.
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Clock, Loader2, CheckCircle2, XCircle, ShieldAlert, Award, AlertTriangle, Circle, Check, ListChecks, Sparkle, ChevronRight, FileText, ExternalLink, BarChart3, Image as ImageIcon } from 'lucide-react';
+import { X, Clock, Loader2, CheckCircle2, XCircle, ShieldAlert, Award, AlertTriangle, Circle, Check, ListChecks, Sparkle, ChevronRight, FileText, ExternalLink, BarChart3, Image as ImageIcon, BookOpen, Play } from 'lucide-react';
 import { initSQLRuntime, SQLRuntime } from '@/lib/sql-engine';
 import SQLExercisePlayer from '@/components/sql-course/SQLExercisePlayer';
 import PythonExercisePlayer from '@/components/sql-course/PythonExercisePlayer';
 import { CertificationPlayground } from '@/components/CertificationPlayground';
 import { ScoreGauge } from '@/components/ScoreGauge';
+import { HoverPreviewCard } from '@/components/student/shared';
 import { useTenant } from '@/components/TenantProvider';
+import { supabase } from '@/lib/supabase';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { sanitizeQuestionContent } from '@/lib/sanitize';
-import type { CourseQuestion } from '@/lib/course-schema';
+import type { CourseQuestion, CertificationPrepItem } from '@/lib/course-schema';
 
 type Phase = 'loading' | 'intro' | 'exam' | 'review' | 'result' | 'blocked';
 type Proctor = { hidden: number; blur: number };
@@ -56,8 +60,7 @@ export default function CertificationTaker({
   // Platform branding colours, used for the OVERVIEW only (the exam keeps the content `accentColor`):
   // - tenantBrand = Brand Colour (`brand_color`) -> the hero band. The OVERVIEW uses the BRAND color
   // (NOT primary/ocean -- that convention is only for the instructor editor, which mirrors courses).
-  // - tenantAccent = Accent Colour (`accent_color`, the Landing Page "secondary accent") -> highlight text.
-  const { brandColor: tenantBrand, accentColor: tenantAccent } = useTenant();
+  const { brandColor: tenantBrand } = useTenant();
   // Questions are NOT in config -- they are delivered by start-attempt (when the clock starts), so a
   // student cannot read them before the timer begins. config carries only metadata + questionCount.
   const questionCount: number = Number(config?.questionCount) || 0;
@@ -70,6 +73,7 @@ export default function CertificationTaker({
   const studyGuide: { url: string; name: string } | null = config?.studyGuide?.url ? config.studyGuide : null;
   const posterUrl: string = config?.poster || '';
   const practiceTestUrl: string = config?.practiceTestUrl || '';
+  const prepItems: CertificationPrepItem[] = Array.isArray(config?.prepItems) ? config.prepItems : [];
   const sections: string[] = Array.isArray(config?.sections) ? config.sections : [];
 
   const [phase, setPhase] = useState<Phase>('loading');
@@ -564,7 +568,7 @@ export default function CertificationTaker({
     // button (an accent button would vanish on the accent background).
     const heroCtaPrimary = { background: '#ffffff', color: '#10131a', fontWeight: 700 as const, fontSize: 15, padding: '13px 30px', borderRadius: 12, opacity: starting ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer' };
     const heroCtaSecondary = { background: 'rgba(255,255,255,0.16)', color: '#ffffff', fontWeight: 600 as const, fontSize: 15, padding: '13px 24px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' };
-    const heroEyebrow = { fontSize: 12.5, fontWeight: 800 as const, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'rgba(255,255,255,0.85)', marginBottom: 12 };
+    const heroEyebrow = { display: 'inline-flex' as const, alignItems: 'center' as const, gap: 6, fontSize: 12.5, fontWeight: 800 as const, letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: '#22c55e', marginBottom: 12 };
 
     return (
       <div style={{ minHeight: '100vh', background: ov.bg, color: ov.text, overflowY: 'auto' }}>
@@ -575,9 +579,11 @@ export default function CertificationTaker({
           .cert-cta { transition: transform .16s ease, box-shadow .16s ease; }
           .cert-cta:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(16,19,26,0.22); }
           .cert-cta:active { transform: translateY(0); }
+          .cert-prep-card { transition: transform .18s ease; }
+          .cert-prep-card:hover { transform: translateY(-3px); }
           @media (prefers-reduced-motion: reduce) {
-            .cert-card, .cert-cta { transition: none; }
-            .cert-card:hover, .cert-cta:hover { transform: none; }
+            .cert-card, .cert-cta, .cert-prep-card { transition: none; }
+            .cert-card:hover, .cert-cta:hover, .cert-prep-card:hover { transform: none; }
           }
           @media (prefers-reduced-motion: no-preference) {
             @supports ((animation-timeline: view()) and (animation-range: entry)) {
@@ -615,8 +621,8 @@ export default function CertificationTaker({
         <div style={{ background: heroBg, overflow: 'hidden' }}>
           <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 1040, margin: '0 auto', display: 'flex', flexWrap: 'wrap', gap: 40, alignItems: 'stretch', padding: '0 24px' }}>
             <div style={{ flex: '1 1 360px', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '56px 0' }}>
-              <div style={heroEyebrow}>Certification</div>
-              <h1 style={{ fontSize: 'clamp(32px, 4.4vw, 46px)', fontWeight: 800, lineHeight: 1.07, marginBottom: 16, letterSpacing: '-0.02em', color: '#ffffff' }}>Prove your skills as <span style={{ color: tenantAccent }}>{title}</span></h1>
+              <div style={heroEyebrow}><Award style={{ width: 15, height: 15 }} /> Certification</div>
+              <h1 style={{ fontSize: 'clamp(32px, 4.4vw, 46px)', fontWeight: 800, lineHeight: 1.07, marginBottom: 16, letterSpacing: '-0.02em', color: '#ffffff' }}>{title}</h1>
               {config?.description && <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.9)', lineHeight: 1.6, marginBottom: 26, maxWidth: 560 }}>{config.description}</p>}
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <button onClick={startExam} disabled={starting || retakeBlocked} className="cert-cta" style={{ ...heroCtaPrimary, ...(retakeBlocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{retakeBlocked ? 'Retake not available yet' : ctaLabel}<ChevronRight className="w-4 h-4" /></button>
@@ -701,6 +707,10 @@ export default function CertificationTaker({
                 </div>
               ))}
             </div>
+            {/* Courses / learning paths to complete -- landing-page-style cards with hover previews. */}
+            {prepItems.length > 0 && (
+              <CertPrepCourses prepItems={prepItems} brandColor={brandColor} ov={ov} />
+            )}
           </section>
 
           {/* Prepare / resources */}
@@ -1148,4 +1158,162 @@ function QuestionView({ q, qType, value, onChange, t, accentColor }: {
     );
   }
   return <div>{Title}{body}</div>;
+}
+
+// --- Overview "Complete courses" cards ---
+//
+// The courses / learning paths a learner should finish before the exam. Resolved fresh from the
+// public published_* views (the same source the marketing landing page reads) and shown as
+// landing-page-style cards with a grow-on-hover preview. Always light, to match the overview.
+type PrepDetail = {
+  id: string; type: 'course' | 'path'; title: string; description: string; imageUrl: string; slug: string;
+  pathCourses?: { id: string; title: string; imageUrl: string }[];
+};
+
+// No-cover fallback matches the learning path page (components/student CoverThumbnail):
+// a soft green tint with a green icon, rather than the landing page's per-type gradients.
+const PREP_FALLBACK_BG = 'rgba(34,197,94,0.10)';
+const PREP_ICON = '#16a34a';
+
+// Courses open at their public slug; a learning path opens in the student dashboard.
+const prepHref = (item: PrepDetail) => (item.type === 'course' ? `/${item.slug}` : '/student');
+
+function CertPrepCourses({ prepItems, brandColor, ov }: {
+  prepItems: CertificationPrepItem[];
+  brandColor: string;
+  ov: { text: string; muted: string };
+}) {
+  const [details, setDetails] = useState<PrepDetail[]>([]);
+  const [hover, setHover] = useState<{ item: PrepDetail; left: number; top: number; originX: number; originY: number } | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelClose = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
+  const scheduleClose = () => { cancelClose(); closeTimer.current = setTimeout(() => setHover(null), 120); };
+
+  useEffect(() => {
+    let cancelled = false;
+    const courseIds = prepItems.filter(p => p.type === 'course').map(p => p.id);
+    const pathIds = prepItems.filter(p => p.type === 'path').map(p => p.id);
+    (async () => {
+      const [cRes, pRes] = await Promise.all([
+        courseIds.length ? supabase.from('published_courses').select('id,title,description,cover_image,slug').in('id', courseIds) : Promise.resolve({ data: [] as any[] }),
+        pathIds.length ? supabase.from('published_learning_paths').select('id,title,description,cover_image').in('id', pathIds) : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const pathItemMap: Record<string, { id: string; title: string; imageUrl: string }[]> = {};
+      if (pathIds.length) {
+        const { data: pi } = await supabase.from('published_path_items').select('path_id,id,title,cover_image,position').in('path_id', pathIds).order('position');
+        (pi ?? []).forEach((r: any) => { (pathItemMap[r.path_id] ||= []).push({ id: r.id, title: r.title, imageUrl: resolveCoverUrl(r.cover_image) }); });
+      }
+      const courseMap: Record<string, PrepDetail> = {};
+      (cRes.data ?? []).forEach((r: any) => { courseMap[r.id] = { id: r.id, type: 'course', title: r.title, description: r.description ?? '', imageUrl: resolveCoverUrl(r.cover_image), slug: r.slug }; });
+      const pathMap: Record<string, PrepDetail> = {};
+      (pRes.data ?? []).forEach((r: any) => { pathMap[r.id] = { id: r.id, type: 'path', title: r.title, description: r.description ?? '', imageUrl: resolveCoverUrl(r.cover_image), slug: '', pathCourses: pathItemMap[r.id] ?? [] }; });
+      // Keep the instructor's chosen order; drop any id that is no longer published.
+      const ordered = prepItems.map(p => (p.type === 'course' ? courseMap[p.id] : pathMap[p.id])).filter(Boolean) as PrepDetail[];
+      if (!cancelled) setDetails(ordered);
+    })();
+    return () => { cancelled = true; };
+  }, [prepItems]);
+
+  useEffect(() => () => cancelClose(), []);
+
+  if (details.length === 0) return null;
+
+  const openHover = (item: PrepDetail, el: HTMLElement) => {
+    if (typeof window === 'undefined' || !window.matchMedia('(hover: hover)').matches) return;
+    cancelClose();
+    const r = el.getBoundingClientRect();
+    const W = item.type === 'path' ? Math.min(640, Math.max(360, (item.pathCourses?.length ?? 0) * 120 + 32)) : 320;
+    const H = 460;
+    const left = Math.max(12, Math.min(r.left + r.width / 2 - W / 2, window.innerWidth - W - 12));
+    const top = Math.max(12, Math.min(r.top - 20, window.innerHeight - H - 12));
+    const originX = Math.max(0, Math.min(r.left + r.width / 2 - left, W));
+    const originY = Math.max(0, Math.min(r.top + r.height / 2 - top, H));
+    setHover({ item, left, top, originX, originY });
+  };
+
+  return (
+    <div style={{ marginTop: 20 }}>
+      <div style={{ fontSize: 18, fontWeight: 700, color: ov.text, marginBottom: 12 }}>Courses to prepare for the exam</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
+        {details.map(item => (
+          <div key={`${item.type}:${item.id}`} onMouseEnter={e => openHover(item, e.currentTarget)} onMouseLeave={scheduleClose}>
+            <a href={prepHref(item)} className="cert-prep-card" style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+              <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', width: '100%', aspectRatio: '16/9', background: item.imageUrl ? '#0b0b0d' : 'transparent' }}>
+                {item.imageUrl
+                  ? <img src={item.imageUrl} alt={item.title} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: PREP_FALLBACK_BG }}><BookOpen style={{ width: 30, height: 30, color: PREP_ICON }} /></div>}
+              </div>
+              <p style={{ fontSize: 12, color: ov.muted, marginTop: 8 }}>{item.type === 'path' ? 'Learning Path' : 'Course'}</p>
+              <p style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3, marginTop: 2, color: ov.text, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.title}</p>
+            </a>
+          </div>
+        ))}
+      </div>
+      {typeof document !== 'undefined' && hover && createPortal(
+        <HoverPreviewCard key={`${hover.item.type}:${hover.item.id}`} left={hover.left} top={hover.top} originX={hover.originX} originY={hover.originY} onEnter={cancelClose} onLeave={scheduleClose}>
+          <PrepPreview item={hover.item} brandColor={brandColor} />
+        </HoverPreviewCard>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+// Hover popup content -- mirrors the landing page's course/path preview, always light.
+function PrepPreview({ item, brandColor }: { item: PrepDetail; brandColor: string }) {
+  const desc = item.description.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  const href = prepHref(item);
+  const clamp = (lines: number) => ({ display: '-webkit-box', WebkitLineClamp: lines, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' });
+  const cta = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, padding: '10px 16px', borderRadius: 12, background: brandColor, color: 'white', textDecoration: 'none' };
+
+  if (item.type === 'path') {
+    const courses = item.pathCourses ?? [];
+    const popupW = Math.min(640, Math.max(360, courses.length * 120 + 32));
+    return (
+      <div style={{ width: popupW, borderRadius: 16, overflow: 'hidden', background: 'white', boxShadow: '0 4px 24px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.05)' }}>
+        <div style={{ padding: '16px 16px 0' }}>
+          <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, marginBottom: 8, background: PREP_ICON, color: 'white' }}>Learning Path</span>
+          <h3 style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.3, marginBottom: 6, color: '#111', ...clamp(2) }}>{item.title}</h3>
+          {desc && <p style={{ fontSize: 14, lineHeight: 1.5, color: '#555', ...clamp(2) }}>{desc}</p>}
+        </div>
+        <div style={{ padding: 16 }}>
+          {courses.length > 0 ? (
+            <>
+              <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12, color: '#888' }}>{courses.length} item{courses.length !== 1 ? 's' : ''} in this path</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                {courses.map(c => (
+                  <div key={c.id} style={{ flexShrink: 0, width: 110 }}>
+                    <div style={{ borderRadius: 8, overflow: 'hidden', marginBottom: 6, aspectRatio: '16/9', background: c.imageUrl ? '#0b0b0d' : '#F0F6FF' }}>
+                      {c.imageUrl
+                        ? <img src={c.imageUrl} alt={c.title} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><BookOpen style={{ width: 18, height: 18, color: '#9CA3AF' }} /></div>}
+                    </div>
+                    <p style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.3, color: '#333', ...clamp(2) }}>{c.title}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (desc && <p style={{ fontSize: 14, lineHeight: 1.5, color: '#555' }}>{desc}</p>)}
+          <a href={href} style={{ ...cta, marginTop: 16 }}><Play style={{ width: 14, height: 14 }} /> Start path</a>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ width: 320, borderRadius: 16, overflow: 'hidden', background: 'white', boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
+      <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: item.imageUrl ? '#0b0b0d' : 'transparent' }}>
+        {item.imageUrl
+          ? <img src={item.imageUrl} alt={item.title} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: PREP_FALLBACK_BG }}><BookOpen style={{ width: 40, height: 40, color: PREP_ICON }} /></div>}
+        <span style={{ position: 'absolute', top: 8, left: 8, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: PREP_ICON, color: 'white' }}>Course</span>
+      </div>
+      <div style={{ padding: 20 }}>
+        <p style={{ fontSize: 12, marginBottom: 4, color: '#888' }}>Course</p>
+        <h3 style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.3, marginBottom: 8, color: '#111', ...clamp(2) }}>{item.title}</h3>
+        {desc && <p style={{ fontSize: 14, lineHeight: 1.5, marginBottom: 12, color: '#555', ...clamp(3) }}>{desc}</p>}
+        <a href={href} style={cta}><Play style={{ width: 14, height: 14 }} /> Start learning</a>
+      </div>
+    </div>
+  );
 }

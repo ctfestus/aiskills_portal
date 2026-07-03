@@ -238,6 +238,9 @@ CREATE TABLE public.certifications (
   slug            text        NOT NULL UNIQUE,
   status          text        NOT NULL DEFAULT 'published'
                                 CHECK (status IN ('draft','published','archived')),
+  -- Career vs Technology (migration 130); the certifications page groups by this.
+  cert_type       text        NOT NULL DEFAULT 'technology'
+                                CHECK (cert_type IN ('career','technology')),
   cohort_ids      uuid[]      NOT NULL DEFAULT '{}',
   cover_image     text,
   badge_image_url text,
@@ -261,6 +264,8 @@ CREATE TABLE public.certifications (
   poster_url            text,
   poster_published      boolean NOT NULL DEFAULT false,
   practice_test_url     text,
+  -- Courses / learning paths to complete before the exam (migration 129): [{id, type:'course'|'path'}]
+  prep_items            jsonb   NOT NULL DEFAULT '[]',
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );

@@ -205,9 +205,13 @@ export interface FormConfig {
 // Certifications are a separate first-class content type (their own table + player + overview),
 // but they reuse the CourseQuestion shape so authoring and grading stay consistent with courses.
 // Exam types only: multiple_choice | fill_blank | arrange | image | code | sql_exercise | python_exercise.
+// Certification classification, used to group certifications on the certifications page.
+export type CertificationType = 'career' | 'technology';
+
 export interface CertificationConfig {
   title: string;
   description?: string;
+  certType?: CertificationType;      // 'career' | 'technology'; groups the certifications listing
   coverImage?: string;
   badgeImageUrl?: string | null;
   questions: CourseQuestion[];
@@ -226,6 +230,7 @@ export interface CertificationConfig {
   posterUrl?: string;                // uploaded poster image (Cloudinary)
   posterPublished?: boolean;         // learners see the poster only when published
   practiceTestUrl?: string;          // link to the practice test
+  prepItems?: CertificationPrepItem[]; // published courses / learning paths to complete before the exam (overview "Complete courses" step)
   theme?: ThemeColor;
   mode?: ThemeMode;
   font?: string;
@@ -235,6 +240,11 @@ export interface CertificationConfig {
 export interface SkillArea {
   id: string;
   name: string;
+}
+
+export interface CertificationPrepItem {
+  id: string;              // published course or learning-path id
+  type: 'course' | 'path';
 }
 
 // --- Defaults ---

@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
       const cohortId = (student as any)?.cohort_id;
       const { data: rows } = await supabase
         .from('certifications')
-        .select('id, title, slug, cover_image, passmark, time_limit, max_attempts, description, cohort_ids')
+        .select('id, title, slug, cert_type, cover_image, badge_image_url, passmark, time_limit, max_attempts, description, cohort_ids')
         .eq('status', 'published');
       // A certification with no assigned cohorts is open to everyone; otherwise the student's cohort
       // must be in the list. Privileged users see all.
@@ -201,6 +201,9 @@ export async function POST(req: NextRequest) {
             ? { url: cert.study_guide_url, name: cert.study_guide_name || 'Study guide' } : null,
           poster: cert.poster_published && cert.poster_url ? cert.poster_url : null,
           practiceTestUrl: cert.practice_test_url || null,
+          // Courses / learning paths to complete before the exam ("Complete courses" step). Ids only;
+          // the client resolves details from the public published_* views, so unpublished items drop out.
+          prepItems: Array.isArray(cert.prep_items) ? cert.prep_items : [],
           // Distinct exam sections present (Technical / Practical), in canonical order, for the overview.
           sections: ['technical', 'practical'].filter(s =>
             (Array.isArray(cert.questions) ? cert.questions : []).some((q: any) => q?.section === s)),

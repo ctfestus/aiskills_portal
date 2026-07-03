@@ -12,7 +12,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Trash2, ChevronDown, ChevronUp, Plus, ArrowLeft, Loader2, Check, ImagePlus, ShieldCheck, Upload, FileText } from 'lucide-react';
+import { GripVertical, Trash2, ChevronDown, ChevronUp, Plus, ArrowLeft, Loader2, Check, ImagePlus, ShieldCheck, Upload, FileText, BookOpen, Route, Search, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary } from '@/lib/uploadToCloudinary';
 import { uploadToGithub } from '@/lib/uploadToGithub';
@@ -22,7 +22,8 @@ import { Toggle, inputCls, labelCls } from '@/components/create/shared';
 import { QuestionTypePicker, TYPE_LABELS, type QuestionTypeOrDownloads } from '@/components/create/QuestionTypePicker';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { ImageLibrary } from '@/components/ImageLibrary';
-import type { CourseQuestion, QuestionType, SkillArea } from '@/lib/course-schema';
+import { resolveCoverUrl } from '@/lib/cloudinary-url';
+import type { CourseQuestion, QuestionType, SkillArea, CertificationPrepItem, CertificationType } from '@/lib/course-schema';
 
 const EXAM_TYPES: QuestionTypeOrDownloads[] = ['multiple_choice', 'fill_blank', 'arrange', 'image', 'image_choice', 'code', 'python_exercise'];
 
@@ -51,6 +52,7 @@ function blankQuestion(type: QuestionType): CourseQuestion {
 interface CertState {
   title: string;
   description: string;
+  certType: CertificationType; // 'career' | 'technology'; groups the certifications listing
   slug: string;               // public URL; blank keeps the current/auto-generated one
   coverImage: string;
   badgeImageUrl: string;      // awarded on pass; shown on the certificate, report, and badges
@@ -67,15 +69,16 @@ interface CertState {
   posterUrl: string;
   posterPublished: boolean;
   practiceTestUrl: string;
+  prepItems: CertificationPrepItem[];  // published courses / learning paths to complete before the exam
   questions: CourseQuestion[];
 }
 
 const DEFAULTS: CertState = {
-  title: '', description: '', slug: '', coverImage: '', badgeImageUrl: '',
+  title: '', description: '', certType: 'technology', slug: '', coverImage: '', badgeImageUrl: '',
   passmark: 70, timeLimit: 30, maxAttempts: 1, retakeCooldownHours: 24, examProtection: true,
   cohortIds: [],
   skillAreas: [], studyGuideUrl: '', studyGuideName: '', studyGuidePublished: false,
-  posterUrl: '', posterPublished: false, practiceTestUrl: '',
+  posterUrl: '', posterPublished: false, practiceTestUrl: '', prepItems: [],
   questions: [],
 };
 
@@ -109,7 +112,8 @@ function CertificationEditor() {
     supabase.from('certifications').select('*').eq('id', editId).single().then(({ data }) => {
       if (data) {
         setState({
-          title: data.title ?? '', description: data.description ?? '', slug: data.slug ?? '', coverImage: data.cover_image ?? '',
+          title: data.title ?? '', description: data.description ?? '', certType: data.cert_type === 'career' ? 'career' : 'technology',
+          slug: data.slug ?? '', coverImage: data.cover_image ?? '',
           badgeImageUrl: data.badge_image_url ?? '',
           passmark: data.passmark ?? 70, timeLimit: data.time_limit ?? 0, maxAttempts: data.max_attempts ?? 1,
           retakeCooldownHours: data.retake_cooldown_hours ?? 24,
@@ -119,6 +123,9 @@ function CertificationEditor() {
           studyGuidePublished: data.study_guide_published === true,
           posterUrl: data.poster_url ?? '', posterPublished: data.poster_published === true,
           practiceTestUrl: data.practice_test_url ?? '',
+          prepItems: Array.isArray(data.prep_items)
+            ? data.prep_items.filter((p: any) => p?.id && (p?.type === 'course' || p?.type === 'path'))
+            : [],
           questions: Array.isArray(data.questions) ? data.questions : [],
         });
       }
@@ -173,6 +180,7 @@ function CertificationEditor() {
         cohort_ids: state.cohortIds,
         status,
         config: {
+          certType: state.certType,
           coverImage: state.coverImage,
           badgeImageUrl: state.badgeImageUrl || null,
           questions: state.questions,
@@ -188,6 +196,7 @@ function CertificationEditor() {
           posterUrl: state.posterUrl,
           posterPublished: state.posterPublished,
           practiceTestUrl: state.practiceTestUrl,
+          prepItems: state.prepItems,
         },
       };
       const res = await fetch('/api/certifications', {
@@ -237,6 +246,22 @@ function CertificationEditor() {
             className="w-full bg-transparent text-2xl font-bold outline-none" style={{ color: C.text }} />
           <textarea value={state.description} onChange={e => update({ description: e.target.value })} placeholder="Short description shown before the exam starts"
             rows={2} className={inputCls} style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.text }} />
+          <div>
+            <label className={labelCls} style={{ color: C.faint }}>Certification type</label>
+            <div className="flex gap-2">
+              {(['career', 'technology'] as const).map(tp => {
+                const on = state.certType === tp;
+                return (
+                  <button key={tp} type="button" onClick={() => update({ certType: tp })}
+                    className="px-4 py-1.5 rounded-full text-xs font-medium capitalize"
+                    style={{ background: on ? C.cta : C.pill, color: on ? C.ctaText : C.muted }}>
+                    {tp}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs mt-1.5" style={{ color: C.faint }}>Groups this certification on the certifications page.</p>
+          </div>
           <div>
             <label className={labelCls} style={{ color: C.faint }}>Public URL</label>
             <div className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
@@ -332,6 +357,9 @@ function CertificationEditor() {
           </div>
         </div>
 
+        {/* Courses to complete (shown on the overview's "Complete courses" step) */}
+        <PrepItemsField C={C} value={state.prepItems} onChange={items => update({ prepItems: items })} />
+
         {/* Questions */}
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -405,6 +433,115 @@ function ImagePickerField({ C, value, onChange, folder, placeholder, contain }: 
         <ImageLibrary uploadFolder={folder} initialFolder={folder} onSelect={v => onChange(v)} onClose={() => setOpen(false)} />
       )}
     </>
+  );
+}
+
+// Courses / learning paths a learner completes before the exam. These render on the certification
+// overview's "Complete courses" step as landing-page-style cards with hover previews. Instructors
+// pick from PUBLISHED courses and learning paths (the same public views the landing page reads);
+// only ids + type are stored, so details resolve fresh at render time and unpublished items drop out.
+type PrepOption = { id: string; title: string; coverImage: string; type: 'course' | 'path' };
+
+function PrepItemsField({ C, value, onChange }: {
+  C: any; value: CertificationPrepItem[]; onChange: (items: CertificationPrepItem[]) => void;
+}) {
+  const [options, setOptions] = useState<PrepOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('published_courses').select('id,title,cover_image').limit(200),
+      supabase.from('published_learning_paths').select('id,title,cover_image').limit(200),
+    ]).then(([c, lp]) => {
+      const courses: PrepOption[] = (c.data ?? []).map((r: any) => ({ id: r.id, title: r.title, coverImage: r.cover_image ?? '', type: 'course' as const }));
+      const paths: PrepOption[] = (lp.data ?? []).map((r: any) => ({ id: r.id, title: r.title, coverImage: r.cover_image ?? '', type: 'path' as const }));
+      setOptions([...courses, ...paths]);
+      setLoading(false);
+    });
+  }, []);
+
+  const byId = useMemo(() => {
+    const m: Record<string, PrepOption> = {};
+    options.forEach(o => { m[o.id] = o; });
+    return m;
+  }, [options]);
+
+  const isSelected = (o: PrepOption) => value.some(v => v.id === o.id && v.type === o.type);
+  const toggle = (o: PrepOption) => onChange(
+    isSelected(o) ? value.filter(v => !(v.id === o.id && v.type === o.type)) : [...value, { id: o.id, type: o.type }],
+  );
+  const remove = (p: CertificationPrepItem) => onChange(value.filter(v => !(v.id === p.id && v.type === p.type)));
+
+  const q = query.trim().toLowerCase();
+  const filtered = q ? options.filter(o => o.title.toLowerCase().includes(q)) : options;
+
+  const Thumb = ({ o, size }: { o?: PrepOption; size: number }) => (
+    <div className="rounded-md overflow-hidden flex-shrink-0 flex items-center justify-center" style={{ width: size, height: size, background: C.pill }}>
+      {o?.coverImage
+        ? <img src={resolveCoverUrl(o.coverImage)} alt="" className="w-full h-full object-cover" onError={e => ((e.target as HTMLImageElement).style.display = 'none')} />
+        : (o?.type === 'path' ? <Route className="w-4 h-4" style={{ color: C.faint }} /> : <BookOpen className="w-4 h-4" style={{ color: C.faint }} />)}
+    </div>
+  );
+
+  return (
+    <div className="rounded-xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+      <div>
+        <h3 className="text-sm font-semibold">Courses to prepare for the exam</h3>
+        <p className="text-xs mt-0.5" style={{ color: C.faint }}>Attach the courses or learning paths that build the skills for this certification. They appear on the certification page under &quot;Complete courses&quot; as cards with a hover preview.</p>
+      </div>
+
+      {value.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {value.map(p => {
+            const o = byId[p.id];
+            return (
+              <div key={`${p.type}:${p.id}`} className="flex items-center gap-3 p-2 rounded-lg" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
+                <Thumb o={o ?? (p as any)} size={48} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate" style={{ color: C.text }}>{o?.title ?? (loading ? 'Loading...' : 'No longer published')}</p>
+                  <p className="text-xs" style={{ color: C.faint }}>{p.type === 'path' ? 'Learning path' : 'Course'}</p>
+                </div>
+                <button type="button" onClick={() => remove(p)} style={{ color: C.faint }} aria-label="Remove"><X className="w-4 h-4" /></button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <button type="button" onClick={() => setOpen(o => !o)} className="text-xs font-medium flex items-center gap-1" style={{ color: C.cta }}>
+        <Plus className="w-3 h-3" /> Add courses or learning paths
+      </button>
+
+      {open && (
+        <div className="rounded-lg p-3 space-y-2" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
+          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md" style={{ background: C.card }}>
+            <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: C.faint }} />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search courses and paths" className="flex-1 bg-transparent text-sm outline-none" style={{ color: C.text }} />
+          </div>
+          <div className="max-h-64 overflow-y-auto space-y-1">
+            {loading ? <p className="text-xs p-2" style={{ color: C.faint }}>Loading...</p>
+              : filtered.length === 0 ? <p className="text-xs p-2" style={{ color: C.faint }}>No published courses or paths found.</p>
+              : filtered.map(o => {
+                const on = isSelected(o);
+                return (
+                  <button type="button" key={`${o.type}:${o.id}`} onClick={() => toggle(o)} className="w-full flex items-center gap-3 p-2 rounded-md text-left" style={{ background: on ? C.pill : 'transparent' }}>
+                    <Thumb o={o} size={36} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm truncate" style={{ color: C.text }}>{o.title}</p>
+                      <p className="text-xs" style={{ color: C.faint }}>{o.type === 'path' ? 'Learning path' : 'Course'}</p>
+                    </div>
+                    <span className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0" style={{ background: on ? C.cta : 'transparent', border: on ? 'none' : `1.5px solid ${C.inputBorder}` }}>
+                      {on && <Check className="w-3 h-3" style={{ color: C.ctaText }} />}
+                    </span>
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

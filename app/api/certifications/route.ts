@@ -32,6 +32,7 @@ async function deleteCloudinaryUrls(urls: (string | undefined | null)[]) {
 // Map a normalized CertificationConfig (client) into certifications table columns.
 function toRow(config: any) {
   return {
+    cert_type:       config.certType === 'career' ? 'career' : 'technology',
     cover_image:     config.coverImage ?? null,
     badge_image_url: config.badgeImageUrl ?? null,
     questions:       normalizeQuestions(config.questions),
@@ -53,6 +54,11 @@ function toRow(config: any) {
     poster_url:            config.posterUrl ?? null,
     poster_published:      config.posterPublished === true,
     practice_test_url:     config.practiceTestUrl?.trim() || null,
+    prep_items:            Array.isArray(config.prepItems)
+      ? config.prepItems
+          .filter((p: any) => p?.id && (p?.type === 'course' || p?.type === 'path'))
+          .map((p: any) => ({ id: String(p.id), type: p.type }))
+      : [],
     theme:           config.theme ?? null,
     mode:            config.mode ?? null,
     font:            config.font ?? null,
