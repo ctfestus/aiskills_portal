@@ -7,6 +7,9 @@ import { pdfPageImageUrl } from '@/lib/cloudinary-pdf';
 import type { LessonDoc } from '@/lib/lesson-doc';
 import { normalizePythonCodeInput } from '@/lib/python-engine';
 
+// Full-course generation fans out many LLM calls; use the platform's maximum window.
+export const maxDuration = 300;
+
 const ALLOWED_ACTIONS = new Set([
   'generate_questions',
   'generate_distractors',
@@ -1031,7 +1034,7 @@ Generate a fresh replacement module that:
           },
           required: ['module'],
         };
-        const result = await generateJSON(prompt, schema, { temperature: 0.7 });
+        const result = await generateJSON(prompt, schema, { temperature: 0.7, geminiRetries: 2, thinkingLevel: 'low' });
         return NextResponse.json(result);
       }
 
@@ -1128,7 +1131,7 @@ Strict formatting: No em dashes. No curly quotes. No ellipsis. No asterisks.`;
         required: ['courseTitle', 'courseDescription', 'businessScenario', 'learningOutcomes', 'sharedDatasetPlan', 'modules'],
       };
 
-      const structure = await generateJSON(structurePrompt, structureSchema, { temperature: 0.7, geminiRetries: 2 } as any);
+      const structure = await generateJSON(structurePrompt, structureSchema, { temperature: 0.7, geminiRetries: 2, thinkingLevel: 'low' });
 
       const datasetPrompt = `You are generating the shared dataset for a SQL course outline.
 
@@ -1183,7 +1186,7 @@ ${JSON.stringify(structure.sharedDatasetPlan?.tables ?? [], null, 2)}`;
         required: ['sharedDataset'],
       };
 
-      const dataset = await generateJSON(datasetPrompt, datasetSchema, { temperature: 0.5, geminiRetries: 2 } as any);
+      const dataset = await generateJSON(datasetPrompt, datasetSchema, { temperature: 0.5, geminiRetries: 2, thinkingLevel: 'low' });
       return NextResponse.json({
         ...structure,
         sharedDataset: dataset.sharedDataset,
@@ -1339,7 +1342,10 @@ Avoid textbook filler, history, edge cases, and long business storytelling.`;
         };
       };
 
-      for (const mod of outline.modules) {
+      // Generate modules in parallel (lessons sequential within each module) -- wall time
+      // becomes the slowest module instead of the sum of every lesson. A typical 8x5
+      // outline is ~40 sequential Gemini calls otherwise, which exceeds the function timeout.
+      await Promise.all(outline.modules.map(async (mod: any) => {
         for (const lesson of mod.lessons ?? []) {
           const lessonInput = {
             lessonId: lesson.id,
@@ -1383,7 +1389,7 @@ For this MCQ lesson, produce a "questions" array with exactly 1 item:
 Lesson input:
 ${JSON.stringify(lessonInput, null, 2)}`;
 
-            const result = await generateJSON(mcqPrompt, mcqItemSchema, { temperature: 0.6, geminiRetries: 2 } as any);
+            const result = await generateJSON(mcqPrompt, mcqItemSchema, { temperature: 0.6, geminiRetries: 2, thinkingLevel: 'low' });
             lessonMap.set(result.lessonId, result);
             continue;
           }
@@ -1413,10 +1419,10 @@ Good starter examples:
 Lesson input:
 ${JSON.stringify(lessonInput, null, 2)}`;
 
-          const result = await generateJSON(sqlPrompt, sqlItemSchema, { temperature: 0.6, geminiRetries: 2 } as any);
+          const result = await generateJSON(sqlPrompt, sqlItemSchema, { temperature: 0.6, geminiRetries: 2, thinkingLevel: 'low' });
           lessonMap.set(result.lessonId, result);
         }
-      }
+      }));
 
       const buildSqlLessonBody = (lessonBody: string, requirements: string[]): string => {
         if (!requirements?.length) return lessonBody;
@@ -1635,7 +1641,7 @@ ${sourceText}`;
           },
           required: ['module'],
         };
-        const result = await generateJSON(prompt, schema, { temperature: 0.6, geminiRetries: 2 } as any);
+        const result = await generateJSON(prompt, schema, { temperature: 0.6, geminiRetries: 2, thinkingLevel: 'low' });
         return NextResponse.json(result);
       }
 
@@ -1679,7 +1685,7 @@ ${sourceText}`;
         required: ['courseTitle', 'courseDescription', 'learningOutcomes', 'modules'],
       };
 
-      const result = await generateJSON(prompt, schema, { temperature: 0.6, geminiRetries: 2 } as any);
+      const result = await generateJSON(prompt, schema, { temperature: 0.6, geminiRetries: 2, thinkingLevel: 'low' });
       return NextResponse.json(result);
     }
 
@@ -1850,7 +1856,7 @@ ${clamp(sourceText, 40_000)}`;
         };
 
         try {
-          const ds = await generateJSON(datasetPrompt, datasetSchema, { temperature: 0.4, geminiRetries: 2 } as any);
+          const ds = await generateJSON(datasetPrompt, datasetSchema, { temperature: 0.4, geminiRetries: 2, thinkingLevel: 'low' });
           if (Array.isArray(ds?.tables)) {
             sqlTables = ds.tables.filter((t: any) => t?.tableName && t?.seedSql);
           }
@@ -1919,7 +1925,7 @@ ${clamp(sourceText, 60_000)}`;
 
         let gen: any;
         try {
-          gen = await generateJSON(modulePrompt, moduleContentSchema, { temperature: 0.6, geminiRetries: 2 } as any);
+          gen = await generateJSON(modulePrompt, moduleContentSchema, { temperature: 0.6, geminiRetries: 2, thinkingLevel: 'low' });
         } catch (err) {
           console.warn('[doc-course] module generation failed, skipping:', (err as Error).message);
           continue;
@@ -2116,7 +2122,7 @@ Return exactly one replacement module with 3-5 lessons.
           required: ['module'],
         };
 
-        const result = await generateJSON(prompt, schema, { temperature: 0.7, geminiRetries: 2 } as any);
+        const result = await generateJSON(prompt, schema, { temperature: 0.7, geminiRetries: 2, thinkingLevel: 'low' });
         return NextResponse.json(result);
       }
 
@@ -2192,7 +2198,7 @@ Strict formatting: No em dashes. No curly quotes. No ellipsis. No asterisks.`;
         required: ['courseTitle', 'courseDescription', 'businessScenario', 'learningOutcomes', 'datasetPlan', 'modules'],
       };
 
-      const result = await generateJSON(prompt, schema, { temperature: 0.7, geminiRetries: 2 } as any);
+      const result = await generateJSON(prompt, schema, { temperature: 0.7, geminiRetries: 2, thinkingLevel: 'low' });
       return NextResponse.json(result);
     }
 
@@ -2378,7 +2384,7 @@ STRICT RULES:
       const moduleResults = await Promise.all(
         outline.modules.map(async (mod: any, modIdx: number) => {
           try {
-            const result = await generateJSON(buildModulePrompt(mod, modIdx), moduleSchema, { temperature: 0.5, geminiRetries: 2 } as any);
+            const result = await generateJSON(buildModulePrompt(mod, modIdx), moduleSchema, { temperature: 0.5, geminiRetries: 2, thinkingLevel: 'low' });
             return { mod, result };
           } catch {
             return { mod, result: null };
