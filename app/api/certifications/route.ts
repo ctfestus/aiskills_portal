@@ -71,6 +71,10 @@ function toRow(config: any) {
     skill_areas:           Array.isArray(config.skillAreas)
       ? config.skillAreas.filter((s: any) => s?.id && String(s?.name ?? '').trim()).map((s: any) => ({ id: String(s.id), name: String(s.name).trim() }))
       : [],
+    scenarios:             Array.isArray(config.scenarios)
+      ? config.scenarios.filter((s: any) => s?.id && (String(s?.title ?? '').trim() || String(s?.content ?? '').trim()))
+          .map((s: any) => ({ id: String(s.id), title: String(s.title ?? '').trim(), content: String(s.content ?? '') }))
+      : [],
     study_guide_url:       config.studyGuideUrl ?? null,
     study_guide_name:      config.studyGuideName ?? null,
     study_guide_published: config.studyGuidePublished === true,

@@ -5,7 +5,7 @@
 // list. Reuses the shared CourseQuestion shape, QuestionTypePicker, the create-editor LOCAL theme,
 // and the dnd-kit sortable pattern. Persists to /api/certifications.
 
-import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
@@ -23,7 +23,7 @@ import { QuestionTypePicker, TYPE_LABELS, type QuestionTypeOrDownloads } from '@
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
-import type { CourseQuestion, QuestionType, SkillArea, CertificationPrepItem, CertificationType, PlaygroundData } from '@/lib/course-schema';
+import type { CourseQuestion, QuestionType, SkillArea, CertificationPrepItem, CertificationType, PlaygroundData, CertificationScenario } from '@/lib/course-schema';
 
 const EXAM_TYPES: QuestionTypeOrDownloads[] = ['multiple_choice', 'fill_blank', 'arrange', 'image', 'image_choice', 'code', 'python_exercise'];
 
@@ -63,6 +63,7 @@ interface CertState {
   examProtection: boolean;
   cohortIds: string[];
   skillAreas: SkillArea[];
+  scenarios: CertificationScenario[];  // case studies (shared stimulus referenced by questions)
   studyGuideUrl: string;
   studyGuideName: string;
   studyGuidePublished: boolean;
@@ -82,7 +83,7 @@ const DEFAULTS: CertState = {
   title: '', description: '', certType: 'technology', slug: '', coverImage: '', badgeImageUrl: '',
   passmark: 70, timeLimit: 30, maxAttempts: 1, retakeCooldownHours: 24, examProtection: true,
   cohortIds: [],
-  skillAreas: [], studyGuideUrl: '', studyGuideName: '', studyGuidePublished: false,
+  skillAreas: [], scenarios: [], studyGuideUrl: '', studyGuideName: '', studyGuidePublished: false,
   posterUrl: '', posterPublished: false, practiceTestUrl: '', prepItems: [], playgroundData: {},
   randomizeQuestions: false, shuffleOptions: false, questionPoolSize: 0,
   questions: [], practiceQuestions: [],
@@ -105,6 +106,19 @@ function CertificationEditor() {
   const [picking, setPicking] = useState(false);
   const [expandedPractice, setExpandedPractice] = useState<string | null>(null);
   const [pickingPractice, setPickingPractice] = useState(false);
+  // Shared image library for case-study rich text (Cloudinary + Pexels), opened via RichTextEditor's
+  // onRequestImage. One modal serves all scenario editors; the resolver returns the picked URL.
+  const [scenarioImgOpen, setScenarioImgOpen] = useState(false);
+  const scenarioImgResolver = useRef<((url: string | null) => void) | null>(null);
+  const requestScenarioImage = useCallback(() => new Promise<string | null>(resolve => {
+    scenarioImgResolver.current = resolve;
+    setScenarioImgOpen(true);
+  }), []);
+  const resolveScenarioImage = useCallback((url: string | null) => {
+    scenarioImgResolver.current?.(url);
+    scenarioImgResolver.current = null;
+    setScenarioImgOpen(false);
+  }, []);
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -127,6 +141,7 @@ function CertificationEditor() {
           retakeCooldownHours: data.retake_cooldown_hours ?? 24,
           examProtection: data.exam_protection !== false, cohortIds: data.cohort_ids ?? [],
           skillAreas: Array.isArray(data.skill_areas) ? data.skill_areas : [],
+          scenarios: Array.isArray(data.scenarios) ? data.scenarios : [],
           studyGuideUrl: data.study_guide_url ?? '', studyGuideName: data.study_guide_name ?? '',
           studyGuidePublished: data.study_guide_published === true,
           posterUrl: data.poster_url ?? '', posterPublished: data.poster_published === true,
@@ -158,6 +173,16 @@ function CertificationEditor() {
     ...prev,
     skillAreas: prev.skillAreas.filter(s => s.id !== id),
     questions: prev.questions.map(q => q.skillAreaId === id ? { ...q, skillAreaId: undefined } : q),
+  }));
+
+  // Case studies: add / edit / remove. Removing a scenario also detaches it from any question (exam or practice).
+  const addScenario = () => setState(prev => ({ ...prev, scenarios: [...prev.scenarios, { id: newId(), title: '', content: '' }] }));
+  const setScenario = (id: string, patch: Partial<CertificationScenario>) => setState(prev => ({ ...prev, scenarios: prev.scenarios.map(s => s.id === id ? { ...s, ...patch } : s) }));
+  const removeScenario = (id: string) => setState(prev => ({
+    ...prev,
+    scenarios: prev.scenarios.filter(s => s.id !== id),
+    questions: prev.questions.map(q => q.scenarioId === id ? { ...q, scenarioId: undefined } : q),
+    practiceQuestions: prev.practiceQuestions.map(q => q.scenarioId === id ? { ...q, scenarioId: undefined } : q),
   }));
 
   const addQuestion = (type: QuestionTypeOrDownloads) => {
@@ -222,6 +247,7 @@ function CertificationEditor() {
           retakeCooldownHours: state.retakeCooldownHours,
           examProtection: state.examProtection,
           skillAreas: state.skillAreas,
+          scenarios: state.scenarios,
           studyGuideUrl: state.studyGuideUrl,
           studyGuideName: state.studyGuideName,
           studyGuidePublished: state.studyGuidePublished,
@@ -397,6 +423,30 @@ function CertificationEditor() {
           <button onClick={addSkill} className="text-xs font-medium flex items-center gap-1" style={{ color: C.cta }}><Plus className="w-3 h-3" /> Add skill area</button>
         </div>
 
+        {/* Case studies */}
+        <div className="rounded-xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+          <div>
+            <h3 className="text-sm font-semibold">Case studies</h3>
+            <p className="text-xs mt-0.5" style={{ color: C.faint }}>Define a shared scenario, then attach questions to it below. Each attached question shows the scenario alongside it, so several questions can build on one context.</p>
+          </div>
+          {state.scenarios.length > 0 && (
+            <div className="space-y-3">
+              {state.scenarios.map((s, i) => (
+                <div key={s.id} className="rounded-lg p-3 space-y-2" style={{ background: C.input, border: `1px solid ${C.inputBorder}` }}>
+                  <div className="flex items-center gap-2">
+                    <input value={s.title} onChange={e => setScenario(s.id, { title: e.target.value })} placeholder={`Case study ${i + 1} title`} className={inputCls} style={inputStyle} />
+                    <button onClick={() => removeScenario(s.id)} style={{ color: C.faint }}><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                  <RichTextEditor value={s.content} onChange={html => setScenario(s.id, { content: html })}
+                    placeholder="Scenario / context shown to the student. Use the toolbar for images, block quotes, tables, lists, and more."
+                    onRequestImage={requestScenarioImage} />
+                </div>
+              ))}
+            </div>
+          )}
+          <button onClick={addScenario} className="text-xs font-medium flex items-center gap-1" style={{ color: C.cta }}><Plus className="w-3 h-3" /> Add case study</button>
+        </div>
+
         {/* Learner resources */}
         <div className="rounded-xl p-5 space-y-5" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
           <h3 className="text-sm font-semibold">Learner resources</h3>
@@ -428,7 +478,7 @@ function CertificationEditor() {
             <SortableContext items={state.questions.map(q => q.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
                 {state.questions.map((q, i) => (
-                  <QuestionCard key={q.id} q={q} index={i} C={C} skillAreas={state.skillAreas}
+                  <QuestionCard key={q.id} q={q} index={i} C={C} skillAreas={state.skillAreas} scenarios={state.scenarios}
                     hasSharedData={hasPlaygroundData(state.playgroundData)}
                     expanded={expanded === q.id}
                     onToggle={() => setExpanded(expanded === q.id ? null : q.id)}
@@ -455,7 +505,7 @@ function CertificationEditor() {
             <SortableContext items={state.practiceQuestions.map(q => q.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
                 {state.practiceQuestions.map((q, i) => (
-                  <QuestionCard key={q.id} q={q} index={i} C={C} skillAreas={state.skillAreas}
+                  <QuestionCard key={q.id} q={q} index={i} C={C} skillAreas={state.skillAreas} scenarios={state.scenarios}
                     hasSharedData={hasPlaygroundData(state.playgroundData)}
                     expanded={expandedPractice === q.id}
                     onToggle={() => setExpandedPractice(expandedPractice === q.id ? null : q.id)}
@@ -480,6 +530,10 @@ function CertificationEditor() {
       {pickingPractice && (
         <QuestionTypePicker allowedTypes={EXAM_TYPES} includeDownloads={false}
           onSelect={(type) => addPracticeQuestion(type)} onClose={() => setPickingPractice(false)} />
+      )}
+      {scenarioImgOpen && (
+        <ImageLibrary uploadFolder="certification-scenarios" initialFolder="certification-scenarios"
+          onSelect={(url) => resolveScenarioImage(url)} onClose={() => resolveScenarioImage(null)} />
       )}
     </div>
   );
@@ -744,8 +798,8 @@ function PosterField({ C, url, published, onChange, onPublish }: {
 }
 
 // ---- One sortable question card with per-type fields ----
-function QuestionCard({ q, index, C, skillAreas, hasSharedData, expanded, onToggle, onUpdate, onRemove }: {
-  q: CourseQuestion; index: number; C: any; skillAreas: SkillArea[]; hasSharedData: boolean; expanded: boolean; onToggle: () => void; onUpdate: (patch: Partial<CourseQuestion>) => void; onRemove: () => void;
+function QuestionCard({ q, index, C, skillAreas, scenarios, hasSharedData, expanded, onToggle, onUpdate, onRemove }: {
+  q: CourseQuestion; index: number; C: any; skillAreas: SkillArea[]; scenarios: CertificationScenario[]; hasSharedData: boolean; expanded: boolean; onToggle: () => void; onUpdate: (patch: Partial<CourseQuestion>) => void; onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: q.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
@@ -788,6 +842,15 @@ function QuestionCard({ q, index, C, skillAreas, hasSharedData, expanded, onTogg
                 <select value={q.skillAreaId ?? ''} onChange={e => onUpdate({ skillAreaId: e.target.value || undefined })} className={inputCls} style={inputStyle}>
                   <option value="">No skill area</option>
                   {skillAreas.map(s => <option key={s.id} value={s.id}>{s.name.trim() || 'Untitled skill'}</option>)}
+                </select>
+              </div>
+            )}
+            {scenarios.length > 0 && (
+              <div>
+                <label className={labelCls} style={{ color: C.faint }}>Case study</label>
+                <select value={q.scenarioId ?? ''} onChange={e => onUpdate({ scenarioId: e.target.value || undefined })} className={inputCls} style={inputStyle}>
+                  <option value="">No case study</option>
+                  {scenarios.map((s, i) => <option key={s.id} value={s.id}>{s.title.trim() || `Case study ${i + 1}`}</option>)}
                 </select>
               </div>
             )}

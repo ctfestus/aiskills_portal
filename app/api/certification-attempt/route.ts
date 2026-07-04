@@ -49,6 +49,17 @@ async function loadAccessibleCertification(
   return { cert };
 }
 
+// Build a fn that attaches a case-study scenario (by scenarioId) to a delivered question. Scenarios
+// carry no answer key, so it is safe to ship to the client alongside the already-sanitized questions.
+function makeScenarioAttacher(scenarios: any): (q: any) => any {
+  const map = new Map(
+    (Array.isArray(scenarios) ? scenarios : [])
+      .filter((s: any) => s?.id)
+      .map((s: any) => [String(s.id), { id: String(s.id), title: String(s.title ?? ''), content: String(s.content ?? '') }]),
+  );
+  return (q: any) => (q?.scenarioId && map.has(q.scenarioId) ? { ...q, scenario: map.get(q.scenarioId) } : q);
+}
+
 function runCertificateSideEffects(
   supabase: ReturnType<typeof adminClient>,
   { certification_id, student_id, cert_id, skills, correctQuestions, totalQuestions, passmark }: {
@@ -328,7 +339,7 @@ export async function POST(req: NextRequest) {
     try {
       const access = await loadAccessibleCertification(
         supabase, certification_id, sessionUser,
-        'id, user_id, status, cohort_ids, questions, max_attempts, time_limit, retake_cooldown_hours, randomize_questions, shuffle_options, question_pool_size',
+        'id, user_id, status, cohort_ids, questions, scenarios, max_attempts, time_limit, retake_cooldown_hours, randomize_questions, shuffle_options, question_pool_size',
       );
       if ('error' in access) return access.error;
       const cert = access.cert as any;
@@ -337,6 +348,8 @@ export async function POST(req: NextRequest) {
       const randomize = cert.randomize_questions === true;
       const shuffleOpts = cert.shuffle_options === true;
       const poolSize = Number(cert.question_pool_size) || 0;
+      // Case-study stimulus attached to each question that references it (scenarios carry no answer key).
+      const attachScenario = makeScenarioAttacher(cert.scenarios);
       // Build the questions delivered to an attempt: reorder/subset per the attempt's persisted form
       // (empty = full authored order), then shuffle options deterministically per attempt so a resume
       // sees the same layout. Grading in complete-attempt uses the same persisted form.
@@ -345,7 +358,8 @@ export async function POST(req: NextRequest) {
         const base = Array.isArray(formIds) && formIds.length
           ? formIds.map(id => byId.get(id)).filter(Boolean)
           : questions;
-        return shuffleOpts ? base.map((q: any) => withShuffledOptions(q, seededRng(`${attemptId}:${q.id}`))) : base;
+        const withOpts = shuffleOpts ? base.map((q: any) => withShuffledOptions(q, seededRng(`${attemptId}:${q.id}`))) : base;
+        return withOpts.map(attachScenario);
       };
 
       const { data: student } = await supabase.from('students').select('role').eq('id', sessionUser.id).maybeSingle();
@@ -731,7 +745,7 @@ export async function POST(req: NextRequest) {
     try {
       const access = await loadAccessibleCertification(
         supabase, certification_id, sessionUser,
-        'id, user_id, status, cohort_ids, practice_questions, randomize_questions, shuffle_options',
+        'id, user_id, status, cohort_ids, practice_questions, scenarios, randomize_questions, shuffle_options',
       );
       if ('error' in access) return access.error;
       const cert = access.cert as any;
@@ -739,13 +753,14 @@ export async function POST(req: NextRequest) {
       if (!questions.length) return NextResponse.json({ error: 'No practice questions are available for this certification.' }, { status: 404 });
       const randomize = cert.randomize_questions === true;
       const shuffleOpts = cert.shuffle_options === true;
+      const attachScenario = makeScenarioAttacher(cert.scenarios);
       // Practice uses ALL practice questions (no pooling); just apply order/option variety per the settings.
       const formIds = assembleExamFormIds(questions, { randomize, poolSize: 0 }, Math.random);
       const byId = new Map(questions.map((q: any) => [q.id, q]));
       const base = formIds.length ? formIds.map(id => byId.get(id)).filter(Boolean) : questions;
       const seedBase = `practice:${Math.random()}`;
-      const delivered = shuffleOpts ? base.map((q: any) => withShuffledOptions(q, seededRng(`${seedBase}:${q.id}`))) : base;
-      return NextResponse.json({ questions: delivered });
+      const withOpts = shuffleOpts ? base.map((q: any) => withShuffledOptions(q, seededRng(`${seedBase}:${q.id}`))) : base;
+      return NextResponse.json({ questions: withOpts.map(attachScenario) });
     } catch (err: any) {
       console.error('[certification-attempt/practice-questions]', err);
       return NextResponse.json({ error: 'Failed to load practice questions.' }, { status: 500 });
