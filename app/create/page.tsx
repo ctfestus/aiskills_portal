@@ -13,7 +13,7 @@ import {
   Share2,
   Video, BookOpen, Search, Zap, Settings, Upload,
   Download, Link2, FileText, Database, ArrowLeft, Lock, LockOpen,
-  Clock, Users, Globe, Repeat, Code2, RefreshCw,
+  Clock, Users, Globe, Repeat, Code2, RefreshCw, Music,
 } from 'lucide-react';
 import { ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import type {
@@ -29,6 +29,8 @@ import GeneratingOverlay from '@/components/GeneratingOverlay';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { AiTextarea } from '@/components/AiTextarea';
 import { LessonEditor } from '@/components/lesson/LessonEditor';
+import { LessonAudioPlayer } from '@/components/lesson/LessonAudioPlayer';
+import { uploadToStorage } from '@/lib/uploadToStorage';
 import { lessonHtmlToDoc } from '@/components/lesson/extensions';
 import { QuestionTypePicker, TYPE_LABELS } from '@/components/create/QuestionTypePicker';
 import type { QuestionTypeOrDownloads } from '@/components/create/QuestionTypePicker';
@@ -4270,6 +4272,36 @@ const [isSaving, setIsSaving] = useState(false);
                                   </div>
                                 ) : null;
                               })()}
+                              {/* Audio: upload (max 20 MB) or paste a direct URL -- standard lesson media, like video/PDF */}
+                              <div className="flex items-center gap-2">
+                                <label className="cursor-pointer flex-shrink-0">
+                                  <input type="file" accept="audio/*" className="hidden" onChange={async e => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    e.target.value = '';
+                                    if (file.size > 20 * 1024 * 1024) { showToast(`Audio is too large (${(file.size / 1048576).toFixed(1)} MB). Maximum is 20 MB.`); return; }
+                                    try {
+                                      const url = await uploadToStorage(file, 'lesson-audio');
+                                      handleUpdateQuestion(q.id, { lesson: { ...q.lesson, audioUrl: url, audioName: file.name } });
+                                    } catch (err: any) { showToast(err?.message || 'Audio upload failed. Please try again.'); }
+                                  }} />
+                                  <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-opacity hover:opacity-70" style={{ background: C.groupBg, color: C.muted }}>
+                                    <Music className="w-3.5 h-3.5" /> Audio
+                                  </div>
+                                </label>
+                                <input
+                                  type="text"
+                                  value={q.lesson.audioUrl || ''}
+                                  onChange={e => handleUpdateQuestion(q.id, { lesson: { ...q.lesson, audioUrl: e.target.value, audioName: '' } })}
+                                  className={`${inputCls} flex-1`}
+                                  style={inputStyle}
+                                  placeholder="Or paste an audio URL (.mp3, .m4a, .wav)..."
+                                />
+                                {q.lesson.audioUrl && (
+                                  <button type="button" onClick={() => { deleteUploadedFile(q.lesson?.audioUrl); handleUpdateQuestion(q.id, { lesson: { ...q.lesson, audioUrl: '', audioName: '' } }); }} className="text-red-400 text-[10px] font-medium hover:opacity-70 flex-shrink-0">Remove</button>
+                                )}
+                              </div>
+                              {q.lesson.audioUrl && <LessonAudioPlayer src={q.lesson.audioUrl} isDark={theme === 'dark'} />}
                             </div>
                           )}
                           </>);

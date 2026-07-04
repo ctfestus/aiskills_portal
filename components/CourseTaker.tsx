@@ -18,6 +18,7 @@ import { AnimatedField } from '@/components/AnimatedField';
 import type { QuestionType, DownloadItem, CourseQuestion } from '@/lib/course-schema';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { LessonRenderer } from '@/components/lesson/LessonRenderer';
+import { LessonAudioPlayer } from '@/components/lesson/LessonAudioPlayer';
 import { supabase } from '@/lib/supabase';
 import { getFontById, loadGoogleFont } from '@/lib/fonts';
 import {
@@ -569,7 +570,7 @@ export function CourseTaker({
       }
     }
     // Auto-open lesson before question if timing is set to 'before' (only for unanswered questions)
-    if ((config as any).lessonTiming === 'before' && (currentQuestion.lesson?.doc || currentQuestion.lesson?.body || currentQuestion.lesson?.videoUrl || currentQuestion.lesson?.imageUrl || currentQuestion.lesson?.pdfUrl) && !prevAnswer) {
+    if ((config as any).lessonTiming === 'before' && (currentQuestion.lesson?.doc || currentQuestion.lesson?.body || currentQuestion.lesson?.videoUrl || currentQuestion.lesson?.imageUrl || currentQuestion.lesson?.pdfUrl || currentQuestion.lesson?.audioUrl) && !prevAnswer) {
       setLessonOpen(true);
     } else {
       setLessonOpen(false);
@@ -3407,6 +3408,13 @@ export function CourseTaker({
                           </div>
                         )}
 
+                        {/* Audio */}
+                        {lesson.audioUrl && (
+                          <div className="px-3 sm:px-8 pt-4 pb-2">
+                            <LessonAudioPlayer src={lesson.audioUrl} isDark={isDark} />
+                          </div>
+                        )}
+
                         {/* Body */}
                         {(lesson.doc || lesson.body) && (
                           <div className="px-4 sm:px-8 pt-4 sm:pt-6 pb-5 sm:pb-6">
@@ -3591,7 +3599,7 @@ export function CourseTaker({
                   )}
 
                   {/* -- Lesson content for review questions -- */}
-                  {REVIEW_TYPES.includes(questionType) && currentQuestion.lesson && (currentQuestion.lesson.doc || currentQuestion.lesson.body || currentQuestion.lesson.videoUrl || currentQuestion.lesson.imageUrl || currentQuestion.lesson.pdfUrl) && (
+                  {REVIEW_TYPES.includes(questionType) && currentQuestion.lesson && (currentQuestion.lesson.doc || currentQuestion.lesson.body || currentQuestion.lesson.videoUrl || currentQuestion.lesson.imageUrl || currentQuestion.lesson.pdfUrl || currentQuestion.lesson.audioUrl) && (
                     <>
                       {currentQuestion.lesson.videoUrl && getVideoEmbedUrl(currentQuestion.lesson.videoUrl) && (
                         <div className="mb-4 rounded-lg overflow-hidden" style={getVideoEmbedUrl(currentQuestion.lesson.videoUrl)!.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9' }}>
@@ -3611,6 +3619,11 @@ export function CourseTaker({
                       {currentQuestion.lesson.pdfUrl && (
                         <div className="mb-4">
                           <PdfCarousel url={currentQuestion.lesson.pdfUrl} pages={currentQuestion.lesson.pdfPages || 1} fileName={currentQuestion.lesson.pdfName} accent={accent} isDark={isDark} />
+                        </div>
+                      )}
+                      {currentQuestion.lesson.audioUrl && (
+                        <div className="mb-4">
+                          <LessonAudioPlayer src={currentQuestion.lesson.audioUrl} isDark={isDark} />
                         </div>
                       )}
                       {(currentQuestion.lesson.doc || currentQuestion.lesson.body) && (
@@ -3804,7 +3817,7 @@ export function CourseTaker({
                       );
                     }
 
-                    const hasLesson = (currentQuestion?.lesson?.doc || currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl || currentQuestion?.lesson?.pdfUrl) && (config as any).lessonTiming !== 'before';
+                    const hasLesson = (currentQuestion?.lesson?.doc || currentQuestion?.lesson?.body || currentQuestion?.lesson?.videoUrl || currentQuestion?.lesson?.imageUrl || currentQuestion?.lesson?.pdfUrl || currentQuestion?.lesson?.audioUrl) && (config as any).lessonTiming !== 'before';
                     const footerBg = isChecking
                       ? (isCorrect ? (isDark ? '#0a2e1a' : '#f0fdf4') : (isDark ? '#662525' : '#fff1f1'))
                       : (isDark ? '#1E1F26' : '#ffffff');
@@ -4036,6 +4049,9 @@ export function CourseTaker({
                   )}
                   {currentQuestion.lesson.pdfUrl && (
                     <PdfCarousel url={currentQuestion.lesson.pdfUrl} pages={currentQuestion.lesson.pdfPages || 1} fileName={currentQuestion.lesson.pdfName} accent={accent} isDark={isDark} />
+                  )}
+                  {currentQuestion.lesson.audioUrl && (
+                    <LessonAudioPlayer src={currentQuestion.lesson.audioUrl} isDark={isDark} />
                   )}
                   {(currentQuestion.lesson.doc || currentQuestion.lesson.body) && (
                     currentQuestion.lesson.doc ? (

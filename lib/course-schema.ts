@@ -81,6 +81,8 @@ export interface CourseQuestion {
     pdfUrl?: string;
     pdfName?: string;
     pdfPages?: number;
+    audioUrl?: string;      // standard media attachment: uploaded (Cloudinary) or a direct audio URL
+    audioName?: string;
   };
   // AI review fields (code_review | excel_review | dashboard_critique | document_review)
   rubric?: string[];
