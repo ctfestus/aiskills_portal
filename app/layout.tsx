@@ -7,6 +7,8 @@ import NavigationProgress from '@/components/NavigationProgress';
 import SessionInactivityGuard from '@/components/SessionInactivityGuard';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { TenantProvider } from '@/components/TenantProvider';
+import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar';
+import InstallAppButton from '@/components/InstallAppButton';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 // preload: false -- these fonts are only used when a form creator picks serif/mono
@@ -15,10 +17,14 @@ const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-serif'
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', preload: false });
 const lato = Lato({ subsets: ['latin'], weight: ['400', '700', '900'], variable: '--font-lato', preload: false });
 
-export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-};
+export async function generateViewport(): Promise<Viewport> {
+  const t = await getTenantSettings();
+  return {
+    width: 'device-width',
+    initialScale: 1,
+    themeColor: t.brandColor,
+  };
+}
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTenantSettings();
@@ -29,6 +35,12 @@ export async function generateMetadata(): Promise<Metadata> {
       icon: t.faviconUrl,
       shortcut: t.faviconUrl,
       apple: t.faviconUrl,
+    },
+    // Standalone launch on iOS (Add to Home Screen), where the web manifest is ignored.
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: 'default',
+      title: t.appName,
     },
   };
 }
@@ -48,6 +60,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <TenantProvider>
           <ThemeProvider>
             <SessionInactivityGuard />
+            <ServiceWorkerRegistrar />
+            <InstallAppButton />
             {children}
           </ThemeProvider>
         </TenantProvider>
