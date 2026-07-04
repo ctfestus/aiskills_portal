@@ -29,6 +29,28 @@ async function deleteCloudinaryUrls(urls: (string | undefined | null)[]) {
   ));
 }
 
+// Shared runnable-playground data: keep only well-formed table/dataset entries and the setup strings.
+// No answer keys live here, so it is safe to store and later ship to the client with the exam.
+function normalizePlaygroundData(pd: any) {
+  if (!pd || typeof pd !== 'object') return {};
+  const sqlTables = Array.isArray(pd.sqlTables)
+    ? pd.sqlTables
+        .filter((t: any) => t?.tableName && (t.fileUrl || t.csvUrl || t.seedSql))
+        .map((t: any) => ({ id: t.id, tableName: String(t.tableName), fileName: t.fileName, fileUrl: t.fileUrl, csvUrl: t.csvUrl, seedSql: t.seedSql }))
+    : [];
+  const pythonDatasets = Array.isArray(pd.pythonDatasets)
+    ? pd.pythonDatasets
+        .filter((d: any) => d?.variableName && (d.fileUrl || d.csvUrl))
+        .map((d: any) => ({ id: d.id, variableName: String(d.variableName), fileName: d.fileName, fileUrl: d.fileUrl, csvUrl: d.csvUrl }))
+    : [];
+  const out: any = {};
+  if (sqlTables.length) out.sqlTables = sqlTables;
+  if (pythonDatasets.length) out.pythonDatasets = pythonDatasets;
+  if (String(pd.setupSql ?? '').trim()) out.setupSql = String(pd.setupSql);
+  if (String(pd.setupPython ?? '').trim()) out.setupPython = String(pd.setupPython);
+  return out;
+}
+
 // Map a normalized CertificationConfig (client) into certifications table columns.
 function toRow(config: any) {
   return {
@@ -36,6 +58,7 @@ function toRow(config: any) {
     cover_image:     config.coverImage ?? null,
     badge_image_url: config.badgeImageUrl ?? null,
     questions:       normalizeQuestions(config.questions),
+    practice_questions: normalizeQuestions(Array.isArray(config.practiceQuestions) ? config.practiceQuestions : []),
     // Clamp to satisfy the DB CHECK constraints regardless of client input.
     passmark:        Math.max(0, Math.min(100, Number.isFinite(Number(config.passmark)) ? Number(config.passmark) : 70)),
     time_limit:      Number(config.timeLimit) > 0 ? Number(config.timeLimit) : null,  // 0 / blank = untimed
@@ -59,6 +82,10 @@ function toRow(config: any) {
           .filter((p: any) => p?.id && (p?.type === 'course' || p?.type === 'path'))
           .map((p: any) => ({ id: String(p.id), type: p.type }))
       : [],
+    playground_data:       normalizePlaygroundData(config.playgroundData),
+    randomize_questions:   config.randomizeQuestions === true,
+    shuffle_options:       config.shuffleOptions === true,
+    question_pool_size:    Number(config.questionPoolSize) > 0 ? Math.floor(Number(config.questionPoolSize)) : null,
     theme:           config.theme ?? null,
     mode:            config.mode ?? null,
     font:            config.font ?? null,
@@ -102,7 +129,7 @@ export async function POST(req: NextRequest) {
 
   const { title, description, slug: preferredSlug, cohort_ids, status: bodyStatus } = body;
   const config = body.config ?? {};
-  const badType = invalidExamType(config.questions);
+  const badType = invalidExamType(config.questions) || invalidExamType(config.practiceQuestions);
   if (badType) return NextResponse.json({ error: `Unsupported question type for certifications: ${badType}` }, { status: 400 });
   const status = bodyStatus === 'draft' ? 'draft' : 'published';
 
@@ -159,7 +186,7 @@ export async function PUT(req: NextRequest) {
   }
 
   const config = body.config ?? {};
-  const badType = invalidExamType(config.questions);
+  const badType = invalidExamType(config.questions) || invalidExamType(config.practiceQuestions);
   if (badType) return NextResponse.json({ error: `Unsupported question type for certifications: ${badType}` }, { status: 400 });
   const status = bodyStatus === 'draft' ? 'draft' : (bodyStatus === 'published' ? 'published' : existing.status);
   const slugValue = preferredSlug?.trim() || undefined;
@@ -228,7 +255,7 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
   const { data: row } = await supabase
-    .from('certifications').select('user_id, cover_image, poster_url, study_guide_url, questions').eq('id', id).maybeSingle();
+    .from('certifications').select('user_id, cover_image, poster_url, study_guide_url, questions, practice_questions').eq('id', id).maybeSingle();
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const { data: profile } = await supabase.from('students').select('role').eq('id', user.id).single();
@@ -238,12 +265,13 @@ export async function DELETE(req: NextRequest) {
 
   // Clean up Cloudinary cover + poster + study-guide PDF + question images (single imageUrl and
   // image-question optionImages) before deleting (cascade removes attempts).
+  const allQuestions = [...((row.questions ?? []) as any[]), ...((row.practice_questions ?? []) as any[])];
   await deleteCloudinaryUrls([
     row.cover_image,
     row.poster_url,
     row.study_guide_url,
-    ...((row.questions ?? []) as any[]).map(q => q?.imageUrl),
-    ...((row.questions ?? []) as any[]).flatMap(q => Array.isArray(q?.optionImages) ? q.optionImages : []),
+    ...allQuestions.map(q => q?.imageUrl),
+    ...allQuestions.flatMap(q => Array.isArray(q?.optionImages) ? q.optionImages : []),
   ]);
 
   const { error } = await supabase.from('certifications').delete().eq('id', id);

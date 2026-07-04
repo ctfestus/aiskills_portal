@@ -115,7 +115,20 @@ export interface CourseQuestion {
     sqlTables?: { id?: string; tableName: string; fileName?: string; fileUrl?: string; csvUrl?: string; seedSql?: string }[];
     // Python: uploaded CSVs loaded into pandas DataFrames named by variableName
     pythonDatasets?: { id?: string; variableName: string; fileName?: string; fileUrl?: string; csvUrl?: string }[];
+    // Certifications only: also load the certification's shared playground data (CertificationConfig.playgroundData).
+    // Defaults to true when shared data exists; set false to give this question a clean, question-only environment.
+    useSharedData?: boolean;
   };
+}
+
+// Reusable runnable-playground data: uploaded SQL tables and/or Python DataFrames plus optional setup
+// code. Used both per-question (above) and as certification-wide shared data (below), so a dataset only
+// needs to be defined once and every question's playground can reuse it.
+export interface PlaygroundData {
+  sqlTables?: { id?: string; tableName: string; fileName?: string; fileUrl?: string; csvUrl?: string; seedSql?: string }[];
+  pythonDatasets?: { id?: string; variableName: string; fileName?: string; fileUrl?: string; csvUrl?: string }[];
+  setupSql?: string;
+  setupPython?: string;
 }
 
 export interface Speaker {
@@ -215,6 +228,7 @@ export interface CertificationConfig {
   coverImage?: string;
   badgeImageUrl?: string | null;
   questions: CourseQuestion[];
+  practiceQuestions?: CourseQuestion[]; // separate practice-only bank; reveals feedback (never the real exam)
   passmark: number;
   timeLimit?: number | null;   // minutes; null/0 = untimed
   maxAttempts: number;         // 0 = unlimited
@@ -231,6 +245,11 @@ export interface CertificationConfig {
   posterPublished?: boolean;         // learners see the poster only when published
   practiceTestUrl?: string;          // link to the practice test
   prepItems?: CertificationPrepItem[]; // published courses / learning paths to complete before the exam (overview "Complete courses" step)
+  playgroundData?: PlaygroundData;   // shared runnable-playground data reused across question playgrounds (define once)
+  // Exam integrity
+  randomizeQuestions?: boolean;      // shuffle question order per attempt
+  shuffleOptions?: boolean;          // shuffle answer options per attempt (text-option types)
+  questionPoolSize?: number | null;  // draw N questions at random from the bank; null/0 = use all
   theme?: ThemeColor;
   mode?: ThemeMode;
   font?: string;

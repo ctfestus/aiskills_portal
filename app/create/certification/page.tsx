@@ -23,7 +23,7 @@ import { QuestionTypePicker, TYPE_LABELS, type QuestionTypeOrDownloads } from '@
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
-import type { CourseQuestion, QuestionType, SkillArea, CertificationPrepItem, CertificationType } from '@/lib/course-schema';
+import type { CourseQuestion, QuestionType, SkillArea, CertificationPrepItem, CertificationType, PlaygroundData } from '@/lib/course-schema';
 
 const EXAM_TYPES: QuestionTypeOrDownloads[] = ['multiple_choice', 'fill_blank', 'arrange', 'image', 'image_choice', 'code', 'python_exercise'];
 
@@ -70,7 +70,12 @@ interface CertState {
   posterPublished: boolean;
   practiceTestUrl: string;
   prepItems: CertificationPrepItem[];  // published courses / learning paths to complete before the exam
+  playgroundData: PlaygroundData;      // shared runnable-playground data reused across question playgrounds
+  randomizeQuestions: boolean;         // exam integrity: shuffle question order per attempt
+  shuffleOptions: boolean;             // exam integrity: shuffle answer options per attempt
+  questionPoolSize: number;            // exam integrity: draw N questions per attempt (0 = all)
   questions: CourseQuestion[];
+  practiceQuestions: CourseQuestion[]; // separate practice-only bank (reveals feedback; never the exam)
 }
 
 const DEFAULTS: CertState = {
@@ -78,8 +83,9 @@ const DEFAULTS: CertState = {
   passmark: 70, timeLimit: 30, maxAttempts: 1, retakeCooldownHours: 24, examProtection: true,
   cohortIds: [],
   skillAreas: [], studyGuideUrl: '', studyGuideName: '', studyGuidePublished: false,
-  posterUrl: '', posterPublished: false, practiceTestUrl: '', prepItems: [],
-  questions: [],
+  posterUrl: '', posterPublished: false, practiceTestUrl: '', prepItems: [], playgroundData: {},
+  randomizeQuestions: false, shuffleOptions: false, questionPoolSize: 0,
+  questions: [], practiceQuestions: [],
 };
 
 function CertificationEditor() {
@@ -97,6 +103,8 @@ function CertificationEditor() {
   const [cohorts, setCohorts] = useState<{ id: string; name: string }[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [expandedPractice, setExpandedPractice] = useState<string | null>(null);
+  const [pickingPractice, setPickingPractice] = useState(false);
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -126,7 +134,11 @@ function CertificationEditor() {
           prepItems: Array.isArray(data.prep_items)
             ? data.prep_items.filter((p: any) => p?.id && (p?.type === 'course' || p?.type === 'path'))
             : [],
+          playgroundData: (data.playground_data && typeof data.playground_data === 'object' && !Array.isArray(data.playground_data)) ? data.playground_data : {},
+          randomizeQuestions: data.randomize_questions === true, shuffleOptions: data.shuffle_options === true,
+          questionPoolSize: Number(data.question_pool_size) > 0 ? Number(data.question_pool_size) : 0,
           questions: Array.isArray(data.questions) ? data.questions : [],
+          practiceQuestions: Array.isArray(data.practice_questions) ? data.practice_questions : [],
         });
       }
       setLoading(false);
@@ -165,6 +177,26 @@ function CertificationEditor() {
     });
   };
 
+  // Practice-only bank: same authoring as the exam questions, but a separate list.
+  const updatePracticeQuestion = useCallback((id: string, patch: Partial<CourseQuestion>) => {
+    setState(prev => ({ ...prev, practiceQuestions: prev.practiceQuestions.map(q => q.id === id ? { ...q, ...patch } : q) }));
+  }, []);
+  const addPracticeQuestion = (type: QuestionTypeOrDownloads) => {
+    const q = blankQuestion(type as QuestionType);
+    setState(prev => ({ ...prev, practiceQuestions: [...prev.practiceQuestions, q] }));
+    setExpandedPractice(q.id);
+    setPickingPractice(false);
+  };
+  const onPracticeDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setState(prev => {
+      const from = prev.practiceQuestions.findIndex(q => q.id === active.id);
+      const to = prev.practiceQuestions.findIndex(q => q.id === over.id);
+      return from < 0 || to < 0 ? prev : { ...prev, practiceQuestions: arrayMove(prev.practiceQuestions, from, to) };
+    });
+  };
+
   const save = async (status: 'draft' | 'published') => {
     setError('');
     if (!state.title.trim()) { setError('Add a title.'); return; }
@@ -197,6 +229,11 @@ function CertificationEditor() {
           posterPublished: state.posterPublished,
           practiceTestUrl: state.practiceTestUrl,
           prepItems: state.prepItems,
+          playgroundData: state.playgroundData,
+          randomizeQuestions: state.randomizeQuestions,
+          shuffleOptions: state.shuffleOptions,
+          questionPoolSize: state.questionPoolSize,
+          practiceQuestions: state.practiceQuestions,
         },
       };
       const res = await fetch('/api/certifications', {
@@ -241,7 +278,7 @@ function CertificationEditor() {
         {error && <div className="text-sm px-4 py-3 rounded-lg" style={{ background: 'rgba(244,63,94,0.1)', color: '#f43f5e' }}>{error}</div>}
 
         {/* Basics */}
-        <div className="space-y-4">
+        <div className="rounded-xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
           <input value={state.title} onChange={e => update({ title: e.target.value })} placeholder="Certification title"
             className="w-full bg-transparent text-2xl font-bold outline-none" style={{ color: C.text }} />
           <textarea value={state.description} onChange={e => update({ description: e.target.value })} placeholder="Short description shown before the exam starts"
@@ -298,6 +335,25 @@ function CertificationEditor() {
             </div>
             <Toggle checked={state.examProtection} onChange={() => update({ examProtection: !state.examProtection })} accentColor={C.cta} />
           </div>
+
+          {/* Exam integrity: randomize order, shuffle options, question pooling */}
+          <div className="pt-4 space-y-4" style={{ borderTop: `1px solid ${C.divider}` }}>
+            <div>
+              <span className="text-sm font-medium">Exam integrity</span>
+              <p className="text-xs mt-0.5" style={{ color: C.faint }}>Vary the exam per attempt so answers can&apos;t be shared as easily.</p>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm" style={{ color: C.text }}>Randomize question order</span>
+              <Toggle checked={state.randomizeQuestions} onChange={() => update({ randomizeQuestions: !state.randomizeQuestions })} accentColor={C.cta} />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm" style={{ color: C.text }}>Shuffle answer options</span>
+              <Toggle checked={state.shuffleOptions} onChange={() => update({ shuffleOptions: !state.shuffleOptions })} accentColor={C.cta} />
+            </div>
+            <NumField C={C} label={`Questions per attempt (0 = all${state.questions.length ? `; ${state.questions.length} in the bank` : ''})`}
+              value={state.questionPoolSize} min={0} max={Math.max(0, state.questions.length)} onChange={v => update({ questionPoolSize: v })} />
+          </div>
+
           <div>
             <label className={labelCls} style={{ color: C.faint }}>Who can take this</label>
             <div className="flex flex-wrap gap-2">
@@ -360,6 +416,9 @@ function CertificationEditor() {
         {/* Courses to complete (shown on the overview's "Complete courses" step) */}
         <PrepItemsField C={C} value={state.prepItems} onChange={items => update({ prepItems: items })} />
 
+        {/* Shared playground data -- define tables/datasets once; question playgrounds reuse them */}
+        <SharedPlaygroundField C={C} inputStyle={inputStyle} value={state.playgroundData} onChange={pd => update({ playgroundData: pd })} />
+
         {/* Questions */}
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -370,6 +429,7 @@ function CertificationEditor() {
               <div className="space-y-3">
                 {state.questions.map((q, i) => (
                   <QuestionCard key={q.id} q={q} index={i} C={C} skillAreas={state.skillAreas}
+                    hasSharedData={hasPlaygroundData(state.playgroundData)}
                     expanded={expanded === q.id}
                     onToggle={() => setExpanded(expanded === q.id ? null : q.id)}
                     onUpdate={patch => updateQuestion(q.id, patch)}
@@ -384,11 +444,42 @@ function CertificationEditor() {
             <Plus className="w-4 h-4" /> Add question
           </button>
         </div>
+
+        {/* Practice questions -- a SEPARATE bank used only by practice mode (never the graded exam). */}
+        <div>
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold">Practice questions <span style={{ color: C.faint }}>({state.practiceQuestions.length})</span></h3>
+            <p className="text-xs mt-0.5" style={{ color: C.faint }}>Separate from the exam above. Students run these in Practice mode and see the correct answers and explanations afterwards, so keep them distinct from the real exam questions. Leave empty to hide Practice.</p>
+          </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onPracticeDragEnd}>
+            <SortableContext items={state.practiceQuestions.map(q => q.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-3">
+                {state.practiceQuestions.map((q, i) => (
+                  <QuestionCard key={q.id} q={q} index={i} C={C} skillAreas={state.skillAreas}
+                    hasSharedData={hasPlaygroundData(state.playgroundData)}
+                    expanded={expandedPractice === q.id}
+                    onToggle={() => setExpandedPractice(expandedPractice === q.id ? null : q.id)}
+                    onUpdate={patch => updatePracticeQuestion(q.id, patch)}
+                    onRemove={() => setState(prev => ({ ...prev, practiceQuestions: prev.practiceQuestions.filter(x => x.id !== q.id) }))}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+          <button onClick={() => setPickingPractice(true)} className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium"
+            style={{ border: `1.5px dashed ${C.inputBorder}`, color: C.muted }}>
+            <Plus className="w-4 h-4" /> Add practice question
+          </button>
+        </div>
       </div>
 
       {picking && (
         <QuestionTypePicker allowedTypes={EXAM_TYPES} includeDownloads={false}
           onSelect={(type) => addQuestion(type)} onClose={() => setPicking(false)} />
+      )}
+      {pickingPractice && (
+        <QuestionTypePicker allowedTypes={EXAM_TYPES} includeDownloads={false}
+          onSelect={(type) => addPracticeQuestion(type)} onClose={() => setPickingPractice(false)} />
       )}
     </div>
   );
@@ -653,8 +744,8 @@ function PosterField({ C, url, published, onChange, onPublish }: {
 }
 
 // ---- One sortable question card with per-type fields ----
-function QuestionCard({ q, index, C, skillAreas, expanded, onToggle, onUpdate, onRemove }: {
-  q: CourseQuestion; index: number; C: any; skillAreas: SkillArea[]; expanded: boolean; onToggle: () => void; onUpdate: (patch: Partial<CourseQuestion>) => void; onRemove: () => void;
+function QuestionCard({ q, index, C, skillAreas, hasSharedData, expanded, onToggle, onUpdate, onRemove }: {
+  q: CourseQuestion; index: number; C: any; skillAreas: SkillArea[]; hasSharedData: boolean; expanded: boolean; onToggle: () => void; onUpdate: (patch: Partial<CourseQuestion>) => void; onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: q.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
@@ -702,25 +793,25 @@ function QuestionCard({ q, index, C, skillAreas, expanded, onToggle, onUpdate, o
             )}
           </div>
           <TypeFields q={q} type={type} C={C} inputStyle={inputStyle} onUpdate={onUpdate} />
-          <PlaygroundEditor q={q} C={C} inputStyle={inputStyle} onUpdate={onUpdate} />
+          <PlaygroundEditor q={q} C={C} inputStyle={inputStyle} hasSharedData={hasSharedData} onUpdate={onUpdate} />
         </div>
       )}
     </div>
   );
 }
 
-// Optional non-graded runnable playground attached to a question (SQL/Python scratchpad).
-function PlaygroundEditor({ q, C, inputStyle, onUpdate }: { q: CourseQuestion; C: any; inputStyle: any; onUpdate: (patch: Partial<CourseQuestion>) => void }) {
-  const pg = q.playground;
-  const enabled = !!pg;
-  const lang = pg?.language ?? 'sql';
-  const mono = { ...inputStyle, fontFamily: 'ui-monospace, monospace', fontSize: 13 };
-  const tables = pg?.sqlTables ?? [];
-  const datasets = pg?.pythonDatasets ?? [];
+// True when the certification has any shared playground data defined.
+function hasPlaygroundData(pd: PlaygroundData): boolean {
+  return !!(pd.sqlTables?.length || pd.pythonDatasets?.length || pd.setupSql?.trim() || pd.setupPython?.trim());
+}
+
+// Editable list of SQL tables (a CSV per table). Reused by the per-question playground and the
+// certification-wide shared-data editor, so the upload flow lives in exactly one place.
+function SqlTablesEditor({ C, inputStyle, tables, onChange }: {
+  C: any; inputStyle: any; tables: NonNullable<PlaygroundData['sqlTables']>; onChange: (tables: NonNullable<PlaygroundData['sqlTables']>) => void;
+}) {
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
-  const update = (patch: Partial<NonNullable<CourseQuestion['playground']>>) =>
-    onUpdate({ playground: { ...(q.playground ?? { language: 'sql' }), ...patch } });
-  const setTable = (i: number, patch: any) => update({ sqlTables: tables.map((tb, k) => (k === i ? { ...tb, ...patch } : tb)) });
+  const setTable = (i: number, patch: any) => onChange(tables.map((tb, k) => (k === i ? { ...tb, ...patch } : tb)));
   const uploadCsv = async (i: number, file: File) => {
     setUploadingIdx(i);
     try {
@@ -729,7 +820,34 @@ function PlaygroundEditor({ q, C, inputStyle, onUpdate }: { q: CourseQuestion; C
     } catch { window.alert('Upload failed. Try again.'); }
     finally { setUploadingIdx(null); }
   };
-  const setDataset = (i: number, patch: any) => update({ pythonDatasets: datasets.map((d, k) => (k === i ? { ...d, ...patch } : d)) });
+  return (
+    <div>
+      <label className={labelCls} style={{ color: C.faint }}>Tables (upload a CSV per table)</label>
+      <div className="space-y-2">
+        {tables.map((tbl, i) => (
+          <div key={tbl.id ?? i} className="flex items-center gap-2">
+            <input value={tbl.tableName} onChange={e => setTable(i, { tableName: e.target.value })} placeholder="table_name" className={inputCls} style={inputStyle} />
+            <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer text-xs flex-shrink-0" style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.muted, maxWidth: 160 }}>
+              {uploadingIdx === i ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              <span className="truncate">{tbl.fileName || 'CSV'}</span>
+              <input type="file" accept=".csv,.tsv" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadCsv(i, f); }} />
+            </label>
+            <button onClick={() => onChange(tables.filter((_, k) => k !== i))} style={{ color: C.faint }}><Trash2 className="w-3.5 h-3.5" /></button>
+          </div>
+        ))}
+      </div>
+      <button onClick={() => onChange([...tables, { id: newId(), tableName: `table_${tables.length + 1}`, fileName: '', fileUrl: '', csvUrl: '' }])}
+        className="mt-2 text-xs font-medium flex items-center gap-1" style={{ color: C.cta }}><Plus className="w-3 h-3" /> Add table</button>
+    </div>
+  );
+}
+
+// Editable list of Python datasets (a CSV per pandas DataFrame). Reused per-question and cert-wide.
+function PythonDatasetsEditor({ C, inputStyle, datasets, onChange }: {
+  C: any; inputStyle: any; datasets: NonNullable<PlaygroundData['pythonDatasets']>; onChange: (datasets: NonNullable<PlaygroundData['pythonDatasets']>) => void;
+}) {
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+  const setDataset = (i: number, patch: any) => onChange(datasets.map((d, k) => (k === i ? { ...d, ...patch } : d)));
   const uploadDataset = async (i: number, file: File) => {
     setUploadingIdx(i);
     try {
@@ -738,6 +856,83 @@ function PlaygroundEditor({ q, C, inputStyle, onUpdate }: { q: CourseQuestion; C
     } catch { window.alert('Upload failed. Try again.'); }
     finally { setUploadingIdx(null); }
   };
+  return (
+    <div>
+      <label className={labelCls} style={{ color: C.faint }}>Datasets (CSV loaded into a pandas DataFrame)</label>
+      <div className="space-y-2">
+        {datasets.map((ds, i) => (
+          <div key={ds.id ?? i} className="flex items-center gap-2">
+            <input value={ds.variableName} onChange={e => setDataset(i, { variableName: e.target.value })} placeholder="df" className={inputCls} style={inputStyle} />
+            <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer text-xs flex-shrink-0" style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.muted, maxWidth: 160 }}>
+              {uploadingIdx === i ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              <span className="truncate">{ds.fileName || 'CSV'}</span>
+              <input type="file" accept=".csv,.tsv" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadDataset(i, f); }} />
+            </label>
+            <button onClick={() => onChange(datasets.filter((_, k) => k !== i))} style={{ color: C.faint }}><Trash2 className="w-3.5 h-3.5" /></button>
+          </div>
+        ))}
+      </div>
+      <button onClick={() => onChange([...datasets, { id: newId(), variableName: `df${datasets.length || ''}`, fileName: '', fileUrl: '', csvUrl: '' }])}
+        className="mt-2 text-xs font-medium flex items-center gap-1" style={{ color: C.cta }}><Plus className="w-3 h-3" /> Add dataset</button>
+    </div>
+  );
+}
+
+// Certification-wide shared playground data: tables/datasets defined ONCE and reused by every
+// question's runnable playground, so the same CSV is not re-uploaded on each question.
+function SharedPlaygroundField({ C, inputStyle, value, onChange }: {
+  C: any; inputStyle: any; value: PlaygroundData; onChange: (pd: PlaygroundData) => void;
+}) {
+  const mono = { ...inputStyle, fontFamily: 'ui-monospace, monospace', fontSize: 13 };
+  const [lang, setLang] = useState<'sql' | 'python'>(
+    (value.pythonDatasets?.length || value.setupPython?.trim()) && !(value.sqlTables?.length || value.setupSql?.trim()) ? 'python' : 'sql',
+  );
+  return (
+    <div className="rounded-xl p-5 space-y-4" style={{ background: C.card, border: `1px solid ${C.cardBorder}` }}>
+      <div>
+        <h3 className="text-sm font-semibold">Shared playground data</h3>
+        <p className="text-xs mt-0.5" style={{ color: C.faint }}>Define tables or datasets once here. Every question&apos;s runnable playground can reuse them, so you don&apos;t re-add the same data on each question.</p>
+      </div>
+      <div className="flex gap-2">
+        {(['sql', 'python'] as const).map(l => (
+          <button key={l} type="button" onClick={() => setLang(l)} className="px-3 py-1.5 rounded-full text-xs font-medium"
+            style={{ background: lang === l ? C.cta : C.pill, color: lang === l ? C.ctaText : C.muted }}>
+            {l === 'sql' ? 'SQL tables' : 'Python datasets'}
+          </button>
+        ))}
+      </div>
+      {lang === 'sql' ? (
+        <>
+          <SqlTablesEditor C={C} inputStyle={inputStyle} tables={value.sqlTables ?? []} onChange={t => onChange({ ...value, sqlTables: t })} />
+          <Field C={C} label="Setup SQL (optional). Extra CREATE/INSERT shared by every question">
+            <textarea value={value.setupSql ?? ''} onChange={e => onChange({ ...value, setupSql: e.target.value })} rows={3} className={inputCls} style={mono}
+              placeholder={'CREATE TABLE t(...);\nINSERT INTO t VALUES (...);'} />
+          </Field>
+        </>
+      ) : (
+        <>
+          <PythonDatasetsEditor C={C} inputStyle={inputStyle} datasets={value.pythonDatasets ?? []} onChange={d => onChange({ ...value, pythonDatasets: d })} />
+          <Field C={C} label="Setup Python (optional). Runs before student code, shared by every question">
+            <textarea value={value.setupPython ?? ''} onChange={e => onChange({ ...value, setupPython: e.target.value })} rows={3} className={inputCls} style={mono}
+              placeholder={'# import pandas as pd'} />
+          </Field>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Optional non-graded runnable playground attached to a question (SQL/Python scratchpad).
+function PlaygroundEditor({ q, C, inputStyle, hasSharedData, onUpdate }: { q: CourseQuestion; C: any; inputStyle: any; hasSharedData: boolean; onUpdate: (patch: Partial<CourseQuestion>) => void }) {
+  const pg = q.playground;
+  const enabled = !!pg;
+  const lang = pg?.language ?? 'sql';
+  const mono = { ...inputStyle, fontFamily: 'ui-monospace, monospace', fontSize: 13 };
+  const tables = pg?.sqlTables ?? [];
+  const datasets = pg?.pythonDatasets ?? [];
+  const useShared = pg?.useSharedData !== false; // default on when shared data exists
+  const update = (patch: Partial<NonNullable<CourseQuestion['playground']>>) =>
+    onUpdate({ playground: { ...(q.playground ?? { language: 'sql' }), ...patch } });
   return (
     <div className="pt-3 mt-1" style={{ borderTop: `1px solid ${C.divider}` }}>
       <div className="flex items-center justify-between gap-3">
@@ -758,49 +953,25 @@ function PlaygroundEditor({ q, C, inputStyle, onUpdate }: { q: CourseQuestion; C
             ))}
           </div>
 
-          {lang === 'sql' && (
-            <div>
-              <label className={labelCls} style={{ color: C.faint }}>Tables (upload a CSV per table)</label>
-              <div className="space-y-2">
-                {tables.map((tbl, i) => (
-                  <div key={tbl.id ?? i} className="flex items-center gap-2">
-                    <input value={tbl.tableName} onChange={e => setTable(i, { tableName: e.target.value })} placeholder="table_name" className={inputCls} style={inputStyle} />
-                    <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer text-xs flex-shrink-0" style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.muted, maxWidth: 160 }}>
-                      {uploadingIdx === i ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                      <span className="truncate">{tbl.fileName || 'CSV'}</span>
-                      <input type="file" accept=".csv,.tsv" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadCsv(i, f); }} />
-                    </label>
-                    <button onClick={() => update({ sqlTables: tables.filter((_, k) => k !== i) })} style={{ color: C.faint }}><Trash2 className="w-3.5 h-3.5" /></button>
-                  </div>
-                ))}
+          {hasSharedData && (
+            <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg" style={{ background: C.input }}>
+              <div>
+                <span className="text-xs font-medium" style={{ color: C.text }}>Use shared certification data</span>
+                <p className="text-[11px] mt-0.5" style={{ color: C.faint }}>Loads the certification&apos;s shared tables/datasets here too, alongside any added below.</p>
               </div>
-              <button onClick={() => update({ sqlTables: [...tables, { id: newId(), tableName: `table_${tables.length + 1}`, fileName: '', fileUrl: '', csvUrl: '' }] })}
-                className="mt-2 text-xs font-medium flex items-center gap-1" style={{ color: C.cta }}><Plus className="w-3 h-3" /> Add table</button>
+              <Toggle checked={useShared} onChange={() => update({ useSharedData: !useShared })} accentColor={C.cta} />
             </div>
+          )}
+
+          {lang === 'sql' && (
+            <SqlTablesEditor C={C} inputStyle={inputStyle} tables={tables} onChange={t => update({ sqlTables: t })} />
           )}
 
           {lang === 'python' && (
-            <div>
-              <label className={labelCls} style={{ color: C.faint }}>Datasets (CSV loaded into a pandas DataFrame)</label>
-              <div className="space-y-2">
-                {datasets.map((ds, i) => (
-                  <div key={ds.id ?? i} className="flex items-center gap-2">
-                    <input value={ds.variableName} onChange={e => setDataset(i, { variableName: e.target.value })} placeholder="df" className={inputCls} style={inputStyle} />
-                    <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg cursor-pointer text-xs flex-shrink-0" style={{ background: C.input, border: `1px solid ${C.inputBorder}`, color: C.muted, maxWidth: 160 }}>
-                      {uploadingIdx === i ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                      <span className="truncate">{ds.fileName || 'CSV'}</span>
-                      <input type="file" accept=".csv,.tsv" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadDataset(i, f); }} />
-                    </label>
-                    <button onClick={() => update({ pythonDatasets: datasets.filter((_, k) => k !== i) })} style={{ color: C.faint }}><Trash2 className="w-3.5 h-3.5" /></button>
-                  </div>
-                ))}
-              </div>
-              <button onClick={() => update({ pythonDatasets: [...datasets, { id: newId(), variableName: `df${datasets.length || ''}`, fileName: '', fileUrl: '', csvUrl: '' }] })}
-                className="mt-2 text-xs font-medium flex items-center gap-1" style={{ color: C.cta }}><Plus className="w-3 h-3" /> Add dataset</button>
-            </div>
+            <PythonDatasetsEditor C={C} inputStyle={inputStyle} datasets={datasets} onChange={d => update({ pythonDatasets: d })} />
           )}
 
-          <Field C={C} label={lang === 'sql' ? 'Setup SQL (optional) -- extra CREATE/INSERT if not using a CSV' : 'Setup Python -- runs before the student code (optional)'}>
+          <Field C={C} label={lang === 'sql' ? 'Setup SQL (optional). Extra CREATE/INSERT if not using a CSV' : 'Setup Python (optional). Runs before the student code'}>
             <textarea
               value={lang === 'sql' ? (pg?.setupSql ?? '') : (pg?.setupPython ?? '')}
               onChange={e => update(lang === 'sql' ? { setupSql: e.target.value } : { setupPython: e.target.value })}
@@ -957,7 +1128,7 @@ function TypeFields({ q, type, C, inputStyle, onUpdate }: { q: CourseQuestion; t
     return (
       <>
         <div>
-          <label className={labelCls} style={{ color: C.faint }}>Code / context -- put ___ where students type</label>
+          <label className={labelCls} style={{ color: C.faint }}>Code / context: put ___ where students type</label>
           <textarea value={q.codeSnippet ?? ''} onChange={e => onUpdate({ codeSnippet: e.target.value })} rows={4} className={inputCls} style={mono} placeholder={'SELECT ___(SQFT, ___)\nFROM gasoline'} />
         </div>
         {blankCount >= 2 ? (

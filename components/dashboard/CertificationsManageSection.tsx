@@ -1,15 +1,62 @@
 'use client';
 
 // Instructor management for the certifications content type. Lists the instructor's exams with
-// create / edit / preview / delete. Delete goes through /api/certifications so Cloudinary covers and
-// cohort_assignments are cleaned up (the cascade handles certification_attempts).
+// create / edit / preview / delete, plus an expandable Analytics panel per exam (pass rate, average
+// score, per-skill performance, and per-question correct rates to spot too-easy / too-hard items).
+// Delete goes through /api/certifications so Cloudinary covers and cohort_assignments are cleaned up
+// (the cascade handles certification_attempts).
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Edit2, Trash2, ExternalLink, ShieldCheck, Clock, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, ExternalLink, ShieldCheck, Clock, Loader2, BarChart3, ChevronDown, ChevronUp, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { LIGHT_C, cardStyle } from '@/lib/theme';
 import { SectionEmptyState } from '@/components/dashboard/primitives';
+
+type Analytics = {
+  totalAttempts: number; uniqueStudents: number; passCount: number; passRate: number; avgScore: number;
+  medianScore: number; minScore: number; maxScore: number; stdDev: number;
+  buckets: number[]; flagged: number; questionCount: number; passmark: number;
+  perSkill: { id: string; name: string; correctRate: number; questions: number }[];
+  perQuestion: { id: string; type: string; text: string; seen: number; correct: number; correctRate: number; discrimination: number | null }[];
+};
+
+// Classical item difficulty label from the correct rate (p-value).
+function difficultyLabel(rate: number): string {
+  return rate >= 80 ? 'Easy' : rate >= 50 ? 'Medium' : 'Hard';
+}
+
+// Build a standard item-analysis CSV: report header, summary stats, skill table, and per-item rows.
+function analyticsToCsv(a: Analytics, title: string, dateStr: string): string {
+  const esc = (v: unknown) => { const s = String(v ?? ''); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const rows: (string | number)[][] = [
+    ['Certification analytics report'],
+    ['Certification', title],
+    ['Generated', dateStr],
+    ['Pass mark (%)', a.passmark],
+    [],
+    ['Summary'],
+    ['Attempts', a.totalAttempts],
+    ['Unique students', a.uniqueStudents],
+    ['Passed', a.passCount],
+    ['Pass rate (%)', a.passRate],
+    ['Mean score (%)', a.avgScore],
+    ['Median score (%)', a.medianScore],
+    ['Std deviation', a.stdDev],
+    ['Min score (%)', a.minScore],
+    ['Max score (%)', a.maxScore],
+    ['Flagged attempts', a.flagged],
+    [],
+    ['Performance by skill'],
+    ['Skill', 'Questions', 'Correct rate (%)'],
+    ...a.perSkill.map(s => [s.name, s.questions, s.correctRate]),
+    [],
+    ['Item analysis'],
+    ['#', 'Question', 'Type', 'Delivered', 'Correct', 'Correct rate (%)', 'Difficulty', 'Discrimination'],
+    ...a.perQuestion.map((q, i) => [i + 1, q.text, q.type, q.seen, q.correct, q.correctRate, difficultyLabel(q.correctRate), q.discrimination == null ? '' : q.discrimination]),
+  ];
+  return rows.map(r => r.map(esc).join(',')).join('\r\n');
+}
 
 export function CertificationsManageSection({ C }: { C: typeof LIGHT_C }) {
   const [items, setItems] = useState<any[]>([]);
@@ -50,29 +97,169 @@ export function CertificationsManageSection({ C }: { C: typeof LIGHT_C }) {
       </div>
       <div className="space-y-3">
         {items.map(item => (
-          <div key={item.id} className="flex items-center justify-between gap-4 p-4 rounded-2xl" style={{ ...cardStyle(C) }}>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="font-semibold text-sm truncate" style={{ color: C.text }}>{item.title}</p>
-                {item.status === 'draft' && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>DRAFT</span>}
-              </div>
-              <div className="flex items-center gap-3 mt-1 text-xs" style={{ color: C.faint }}>
-                <span>Pass {item.passmark ?? 70}%</span>
-                <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{item.time_limit ? `${item.time_limit}m` : 'Untimed'}</span>
-                <span>{item.max_attempts ? `${item.max_attempts} attempt${item.max_attempts === 1 ? '' : 's'}` : 'Unlimited'}</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Link href={`/${item.slug || item.id}`} target="_blank" className="p-2 rounded-xl" style={{ background: C.pill, color: C.muted }} title="Preview"><ExternalLink className="w-3.5 h-3.5" /></Link>
-              <Link href={`/create/certification?id=${item.id}`} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold" style={{ background: C.pill, color: C.muted }}><Edit2 className="w-3.5 h-3.5" /> Edit</Link>
-              <button onClick={() => remove(item.id)} disabled={deletingId === item.id}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold"
-                style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}`, opacity: deletingId === item.id ? 0.6 : 1 }}>
-                <Trash2 className="w-3.5 h-3.5" /> {deletingId === item.id ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
+          <CertRow key={item.id} item={item} C={C} deleting={deletingId === item.id} onDelete={() => remove(item.id)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CertRow({ item, C, deleting, onDelete }: { item: any; C: typeof LIGHT_C; deleting: boolean; onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<Analytics | null>(null);
+  const [loadingA, setLoadingA] = useState(false);
+  const [error, setError] = useState('');
+
+  async function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && !data && !loadingA) {
+      setLoadingA(true); setError('');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch('/api/certification-attempt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+          body: JSON.stringify({ action: 'analytics', certification_id: item.id }),
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error || 'Failed to load analytics.');
+        setData(d.analytics);
+      } catch (e: any) {
+        setError(e?.message || 'Failed to load analytics.');
+      } finally {
+        setLoadingA(false);
+      }
+    }
+  }
+
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ ...cardStyle(C) }}>
+      <div className="flex items-center justify-between gap-4 p-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-sm truncate" style={{ color: C.text }}>{item.title}</p>
+            {item.status === 'draft' && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: 'rgba(251,191,36,0.12)', color: '#f59e0b' }}>DRAFT</span>}
+          </div>
+          <div className="flex items-center gap-3 mt-1 text-xs" style={{ color: C.faint }}>
+            <span>Pass {item.passmark ?? 70}%</span>
+            <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{item.time_limit ? `${item.time_limit}m` : 'Untimed'}</span>
+            <span>{item.max_attempts ? `${item.max_attempts} attempt${item.max_attempts === 1 ? '' : 's'}` : 'Unlimited'}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={toggle} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold" style={{ background: open ? C.cta : C.pill, color: open ? C.ctaText : C.muted }} title="Analytics">
+            <BarChart3 className="w-3.5 h-3.5" /> Analytics {open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+          <Link href={`/${item.slug || item.id}`} target="_blank" className="p-2 rounded-xl" style={{ background: C.pill, color: C.muted }} title="Preview"><ExternalLink className="w-3.5 h-3.5" /></Link>
+          <Link href={`/create/certification?id=${item.id}`} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold" style={{ background: C.pill, color: C.muted }}><Edit2 className="w-3.5 h-3.5" /> Edit</Link>
+          <button onClick={onDelete} disabled={deleting}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold"
+            style={{ background: C.deleteBg, color: C.deleteText, border: `1px solid ${C.deleteBorder}`, opacity: deleting ? 0.6 : 1 }}>
+            <Trash2 className="w-3.5 h-3.5" /> {deleting ? 'Deleting...' : 'Delete'}
+          </button>
+        </div>
+      </div>
+      {open && (
+        <div className="px-4 pb-4 pt-1" style={{ borderTop: `1px solid ${C.cardBorder}` }}>
+          {loadingA ? (
+            <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin" style={{ color: C.green }} /></div>
+          ) : error ? (
+            <p className="text-sm py-4" style={{ color: '#ef4444' }}>{error}</p>
+          ) : data ? (
+            <AnalyticsPanel a={data} C={C} title={item.title} />
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AnalyticsPanel({ a, C, title }: { a: Analytics; C: typeof LIGHT_C; title: string }) {
+  if (a.totalAttempts === 0) {
+    return <p className="text-sm py-4" style={{ color: C.faint }}>No completed attempts yet. Analytics appear once students finish the exam.</p>;
+  }
+  // Hardest questions first, so problem items surface at the top.
+  const questions = [...a.perQuestion].sort((x, y) => x.correctRate - y.correctRate);
+  const rateColor = (r: number) => (r >= 70 ? '#16a34a' : r >= 40 ? '#f59e0b' : '#ef4444');
+  const tiles = [
+    { label: 'Attempts', value: String(a.totalAttempts) },
+    { label: 'Students', value: String(a.uniqueStudents) },
+    { label: 'Pass rate', value: `${a.passRate}%` },
+    { label: 'Mean', value: `${a.avgScore}%` },
+    { label: 'Median', value: `${a.medianScore}%` },
+    { label: 'Flagged', value: String(a.flagged) },
+  ];
+
+  const exportCsv = () => {
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const csv = analyticsToCsv(a, title, dateStr);
+    const slug = (title || 'certification').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'certification';
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = `${slug}-analytics-${dateStr}.csv`;
+    document.body.appendChild(link); link.click(); link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="mt-3 space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs" style={{ color: C.faint }}>Range {a.minScore}% to {a.maxScore}%, std dev {a.stdDev}, pass mark {a.passmark}%</p>
+        <button onClick={exportCsv} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0" style={{ background: C.pill, color: C.text }}>
+          <Download className="w-3.5 h-3.5" /> Export CSV
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        {tiles.map(t => (
+          <div key={t.label} className="rounded-xl p-3" style={{ background: C.pill }}>
+            <div className="text-lg font-bold" style={{ color: C.text }}>{t.value}</div>
+            <div className="text-[11px]" style={{ color: C.faint }}>{t.label}</div>
           </div>
         ))}
+      </div>
+
+      {a.perSkill.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: C.faint }}>Performance by skill</p>
+          <div className="space-y-2">
+            {a.perSkill.map(s => (
+              <div key={s.id} className="flex items-center gap-3">
+                <span className="text-xs flex-shrink-0" style={{ width: 150, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                <div className="flex-1 h-2 rounded-full" style={{ background: C.pill }}>
+                  <div className="h-full rounded-full" style={{ width: `${s.correctRate}%`, background: rateColor(s.correctRate) }} />
+                </div>
+                <span className="text-xs tabular-nums flex-shrink-0" style={{ width: 36, textAlign: 'right', color: C.muted }}>{s.correctRate}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: C.faint }}>Item analysis (hardest first)</p>
+        {/* Header row */}
+        <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-wider pb-1.5" style={{ color: C.faint, borderBottom: `1px solid ${C.cardBorder}` }}>
+          <span className="flex-shrink-0" style={{ width: 20 }}>#</span>
+          <span className="flex-1 min-w-0">Question</span>
+          <span className="flex-shrink-0" style={{ width: 44, textAlign: 'right' }}>Corr.</span>
+          <span className="flex-shrink-0" style={{ width: 40, textAlign: 'right' }}>Rate</span>
+          <span className="flex-shrink-0" style={{ width: 52, textAlign: 'right' }}>Disc.</span>
+        </div>
+        <div className="space-y-1.5 mt-1.5">
+          {questions.map((q, i) => (
+            <div key={q.id} className="flex items-center gap-3 text-xs">
+              <span className="flex-shrink-0 tabular-nums" style={{ width: 20, color: C.faint }}>{i + 1}</span>
+              <span className="flex-1 min-w-0" style={{ color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={q.text}>{q.text}</span>
+              <span className="flex-shrink-0 tabular-nums" style={{ width: 44, textAlign: 'right', color: C.faint }}>{q.correct}/{q.seen}</span>
+              <span className="flex-shrink-0 font-semibold tabular-nums" style={{ width: 40, textAlign: 'right', color: rateColor(q.correctRate) }}>{q.correctRate}%</span>
+              <span className="flex-shrink-0 tabular-nums" style={{ width: 52, textAlign: 'right', color: q.discrimination != null && q.discrimination < 0.1 ? '#ef4444' : C.muted }}>{q.discrimination == null ? '-' : q.discrimination.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] mt-2" style={{ color: C.faint }}>Rate = % correct (difficulty). Disc. = discrimination (top vs bottom 27%); higher is better, values below 0.1 (red) flag weak or miskeyed items.</p>
       </div>
     </div>
   );
