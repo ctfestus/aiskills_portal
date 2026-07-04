@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { Bold, Code2, FileCode2, Table, Italic, RemoveFormatting, Underline, List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote, Youtube, ImageIcon, Loader2, UserRound } from 'lucide-react';
+import { Bold, Code2, FileCode2, Table, Italic, RemoveFormatting, Underline, List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote, Youtube, ImageIcon, Loader2, UserRound, Trash2 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { RichTextAiMenu } from '@/components/RichTextAiMenu';
 
@@ -13,6 +13,10 @@ interface RichTextEditorProps {
   bgOverride?: string;
   fontFamily?: string;
   onImageUpload?: (file: File) => Promise<string>;
+  /** Open a custom image picker (e.g. the Cloudinary + Pexels library) from the toolbar image button
+   *  and insert the chosen URL. Takes precedence over onImageUpload's file dialog when provided;
+   *  resolve null if the user cancels. */
+  onRequestImage?: () => Promise<string | null>;
   /** Show the inline "Ask AI" selection assistant. Instructor-authoring surfaces only --
    *  the AI route is instructor/admin, so never enable on student-facing editors. */
   enableAiAssist?: boolean;
@@ -21,7 +25,7 @@ interface RichTextEditorProps {
   enableNameTag?: boolean;
 }
 
-export function RichTextEditor({ value, onChange, placeholder = 'Add a description...', className = '', bgOverride, fontFamily, onImageUpload, enableAiAssist = false, enableNameTag = false }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, placeholder = 'Add a description...', className = '', bgOverride, fontFamily, onImageUpload, onRequestImage, enableAiAssist = false, enableNameTag = false }: RichTextEditorProps) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const bg        = bgOverride ?? (dark ? 'rgba(255,255,255,0.05)' : '#f4f5f7');
@@ -334,40 +338,109 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
     onChange(editor.innerHTML);
   }, [onChange]);
 
-  const handleInsertImage = useCallback(async (file: File) => {
-    if (!onImageUpload || !editorRef.current) return;
-    setUploadingImage(true);
-    try {
-      const url = await onImageUpload(file);
-      editorRef.current.focus();
-      const img = document.createElement('img');
-      img.src = url;
-      img.alt = file.name.replace(/\.[^.]+$/, '');
-      img.style.cssText = 'max-width:100%;border-radius:6px;margin:6px 0;display:block;';
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        if (editorRef.current.contains(range.commonAncestorContainer)) {
-          range.collapse(false);
-          range.insertNode(img);
-          range.setStartAfter(img);
-          range.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(range);
-        } else {
-          editorRef.current.appendChild(img);
-        }
+  // Insert an image at the caret (or append to the end if the selection is no longer inside the editor,
+  // e.g. after a modal picker closes).
+  const insertImageAtCaret = useCallback((url: string, alt = '') => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = alt;
+    // Default to a contained medium width (not full-bleed); the user can resize via the image control.
+    img.style.cssText = 'width:55%;max-width:100%;height:auto;border-radius:6px;margin:6px 0;display:block;';
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      if (editorRef.current.contains(range.commonAncestorContainer)) {
+        range.collapse(false);
+        range.insertNode(img);
+        range.setStartAfter(img);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
       } else {
         editorRef.current.appendChild(img);
       }
-      isInternalChange.current = true;
-      onChange(editorRef.current.innerHTML);
+    } else {
+      editorRef.current.appendChild(img);
+    }
+    isInternalChange.current = true;
+    onChange(editorRef.current.innerHTML);
+  }, [onChange]);
+
+  const handleInsertImage = useCallback(async (file: File) => {
+    if (!onImageUpload) return;
+    setUploadingImage(true);
+    try {
+      insertImageAtCaret(await onImageUpload(file), file.name.replace(/\.[^.]+$/, ''));
     } catch {
       alert('Image upload failed. Please try again.');
     } finally {
       setUploadingImage(false);
     }
-  }, [onImageUpload, onChange]);
+  }, [onImageUpload, insertImageAtCaret]);
+
+  // Toolbar image button when a library picker is provided: open it, insert the chosen URL.
+  const handlePickImage = useCallback(async () => {
+    if (!onRequestImage) return;
+    setUploadingImage(true);
+    try {
+      const url = await onRequestImage();
+      if (url) insertImageAtCaret(url);
+    } catch { /* cancelled or failed -- nothing to insert */ }
+    finally { setUploadingImage(false); }
+  }, [onRequestImage, insertImageAtCaret]);
+
+  // --- Inline image control: click an image to show a small floating bar for resize + delete. ---
+  const [imgCtl, setImgCtl] = useState<{ img: HTMLImageElement; top: number; left: number } | null>(null);
+  const imgCtlRef = useRef<HTMLDivElement>(null);
+  const emitChange = useCallback(() => {
+    if (!editorRef.current) return;
+    isInternalChange.current = true;
+    onChange(editorRef.current.innerHTML);
+  }, [onChange]);
+  const positionImgCtl = useCallback((img: HTMLImageElement) => {
+    const r = img.getBoundingClientRect();
+    setImgCtl({ img, top: r.top, left: r.left });
+  }, []);
+  const handleEditorClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target && target.tagName === 'IMG') positionImgCtl(target as HTMLImageElement);
+    else setImgCtl(null);
+  }, [positionImgCtl]);
+  const resizeSelectedImg = useCallback((width: string) => {
+    if (!imgCtl) return;
+    imgCtl.img.style.width = width;
+    imgCtl.img.style.maxWidth = '100%';
+    imgCtl.img.style.height = 'auto';
+    emitChange();
+    const r = imgCtl.img.getBoundingClientRect();
+    setImgCtl({ img: imgCtl.img, top: r.top, left: r.left });
+  }, [imgCtl, emitChange]);
+  const deleteSelectedImg = useCallback(() => {
+    if (!imgCtl) return;
+    imgCtl.img.remove();
+    emitChange();
+    setImgCtl(null);
+  }, [imgCtl, emitChange]);
+  // Close the control on scroll/resize or a click outside both the image and the control.
+  useEffect(() => {
+    if (!imgCtl) return;
+    const close = () => setImgCtl(null);
+    const onDown = (ev: MouseEvent) => {
+      const n = ev.target as Node;
+      if (imgCtlRef.current?.contains(n) || editorRef.current?.contains(n)) return;
+      setImgCtl(null);
+    };
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    document.addEventListener('mousedown', onDown, true);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      document.removeEventListener('mousedown', onDown, true);
+    };
+  }, [imgCtl]);
 
   return (
     <div
@@ -430,10 +503,10 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         <ToolbarButton onClick={handleInsertVideo} title="Embed YouTube video" dark={dark}>
           <Youtube className="w-3.5 h-3.5" />
         </ToolbarButton>
-        {onImageUpload && (
+        {(onImageUpload || onRequestImage) && (
           <>
             <ToolbarButton
-              onClick={() => imageInputRef.current?.click()}
+              onClick={() => (onRequestImage ? handlePickImage() : imageInputRef.current?.click())}
               title="Insert image"
               dark={dark}
             >
@@ -441,17 +514,19 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 : <ImageIcon className="w-3.5 h-3.5" />}
             </ToolbarButton>
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={e => {
-                const file = e.target.files?.[0];
-                if (file) handleInsertImage(file);
-                e.target.value = '';
-              }}
-            />
+            {onImageUpload && (
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) handleInsertImage(file);
+                  e.target.value = '';
+                }}
+              />
+            )}
           </>
         )}
       </div>
@@ -463,10 +538,35 @@ export function RichTextEditor({ value, onChange, placeholder = 'Add a descripti
         suppressContentEditableWarning
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onClick={handleEditorClick}
         data-placeholder={placeholder}
         className={`px-3 py-2.5 outline-none min-h-[100px] max-h-[300px] overflow-y-auto rich-editor${dark ? ' dark' : ''}`}
         style={{ color: textColor, ...(fontFamily ? { fontFamily } : {}) }}
       />
+
+      {/* Floating image control: resize (S/M/L) + delete, shown when an image is clicked. */}
+      {imgCtl && (
+        <div
+          ref={imgCtlRef}
+          onMouseDown={e => e.preventDefault()}
+          style={{
+            position: 'fixed', top: Math.max(8, imgCtl.top - 42), left: imgCtl.left, zIndex: 60,
+            display: 'flex', alignItems: 'center', gap: 2, padding: 4, borderRadius: 8,
+            background: dark ? '#1b1d26' : '#ffffff', border: `1px solid ${toolDiv}`, boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
+          }}
+        >
+          {([['S', '30%'], ['M', '55%'], ['L', '100%']] as const).map(([label, w]) => (
+            <button key={label} type="button" onClick={() => resizeSelectedImg(w)} title={`Resize ${label}`}
+              className="px-2 py-1 rounded text-xs font-semibold hover:opacity-70" style={{ color: textColor }}>
+              {label}
+            </button>
+          ))}
+          <div className="w-px h-4 mx-0.5" style={{ background: toolDiv }} />
+          <button type="button" onClick={deleteSelectedImg} title="Delete image" className="px-2 py-1 rounded hover:opacity-70" style={{ color: '#ef4444' }}>
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {enableAiAssist && (
         <RichTextAiMenu

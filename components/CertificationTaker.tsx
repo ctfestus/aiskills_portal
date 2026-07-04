@@ -1258,10 +1258,32 @@ function QuestionView({ q, qType, value, onChange, t, accentColor, sharedPlaygro
   // the question so several questions can build on one shared context.
   const scenario = q.scenario as { title?: string; content?: string } | undefined;
   const Scenario = scenario && (scenario.title || scenario.content) ? (
-    <div style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 12, padding: '14px 18px', marginBottom: 20, textAlign: 'left' }}>
+    <div style={{ background: t.card, borderRadius: 12, padding: '16px 20px', marginBottom: 20, textAlign: 'left' }}>
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: accentColor, marginBottom: 6 }}>Case study</div>
-      {scenario.title && <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6, color: t.text }}>{scenario.title}</div>}
-      {scenario.content && <div style={{ fontSize: 14, lineHeight: 1.6, color: t.muted, whiteSpace: 'pre-wrap' }}>{scenario.content}</div>}
+      {scenario.title && <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: t.text }}>{scenario.title}</div>}
+      {scenario.content && (
+        <>
+          <style>{`
+            .cert-scenario-rich { font-size: 14.5px; line-height: 1.65; color: ${t.muted}; }
+            .cert-scenario-rich > :first-child { margin-top: 0; }
+            .cert-scenario-rich > :last-child { margin-bottom: 0; }
+            .cert-scenario-rich p { margin: 0 0 10px; }
+            .cert-scenario-rich strong { font-weight: 700; color: ${t.text}; }
+            .cert-scenario-rich ul, .cert-scenario-rich ol { margin: 0 0 10px; padding-left: 22px; }
+            .cert-scenario-rich li { margin: 4px 0; }
+            .cert-scenario-rich a { color: ${accentColor}; text-decoration: underline; }
+            .cert-scenario-rich blockquote { margin: 0 0 10px; padding: 6px 16px; border-left: 3px solid ${accentColor}; color: ${t.text}; }
+            .cert-scenario-rich code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 5px; font-family: ui-monospace, monospace; font-size: 0.92em; }
+            .cert-scenario-rich pre { background: #0c0d12; border: 1px solid ${t.border}; border-radius: 10px; padding: 14px; overflow-x: auto; margin: 0 0 10px; }
+            .cert-scenario-rich pre code { background: none; padding: 0; }
+            .cert-scenario-rich img { max-width: 100%; border-radius: 10px; margin: 6px 0; }
+            .cert-scenario-rich table { border-collapse: collapse; width: 100%; margin: 0 0 10px; }
+            .cert-scenario-rich th, .cert-scenario-rich td { border: 1px solid ${t.border}; padding: 8px 10px; text-align: left; }
+            .cert-scenario-rich h2, .cert-scenario-rich h3 { font-weight: 700; margin: 0 0 8px; color: ${t.text}; }
+          `}</style>
+          <div className="cert-scenario-rich" dangerouslySetInnerHTML={{ __html: sanitizeQuestionContent(scenario.content) }} />
+        </>
+      )}
     </div>
   ) : null;
 

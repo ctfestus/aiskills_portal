@@ -5,7 +5,7 @@
 // list. Reuses the shared CourseQuestion shape, QuestionTypePicker, the create-editor LOCAL theme,
 // and the dnd-kit sortable pattern. Persists to /api/certifications.
 
-import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
@@ -106,6 +106,19 @@ function CertificationEditor() {
   const [picking, setPicking] = useState(false);
   const [expandedPractice, setExpandedPractice] = useState<string | null>(null);
   const [pickingPractice, setPickingPractice] = useState(false);
+  // Shared image library for case-study rich text (Cloudinary + Pexels), opened via RichTextEditor's
+  // onRequestImage. One modal serves all scenario editors; the resolver returns the picked URL.
+  const [scenarioImgOpen, setScenarioImgOpen] = useState(false);
+  const scenarioImgResolver = useRef<((url: string | null) => void) | null>(null);
+  const requestScenarioImage = useCallback(() => new Promise<string | null>(resolve => {
+    scenarioImgResolver.current = resolve;
+    setScenarioImgOpen(true);
+  }), []);
+  const resolveScenarioImage = useCallback((url: string | null) => {
+    scenarioImgResolver.current?.(url);
+    scenarioImgResolver.current = null;
+    setScenarioImgOpen(false);
+  }, []);
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -424,8 +437,9 @@ function CertificationEditor() {
                     <input value={s.title} onChange={e => setScenario(s.id, { title: e.target.value })} placeholder={`Case study ${i + 1} title`} className={inputCls} style={inputStyle} />
                     <button onClick={() => removeScenario(s.id)} style={{ color: C.faint }}><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
-                  <textarea value={s.content} onChange={e => setScenario(s.id, { content: e.target.value })} rows={4} placeholder="Scenario / context shown to the student"
-                    className={inputCls} style={inputStyle} />
+                  <RichTextEditor value={s.content} onChange={html => setScenario(s.id, { content: html })}
+                    placeholder="Scenario / context shown to the student. Use the toolbar for images, block quotes, tables, lists, and more."
+                    onRequestImage={requestScenarioImage} />
                 </div>
               ))}
             </div>
@@ -516,6 +530,10 @@ function CertificationEditor() {
       {pickingPractice && (
         <QuestionTypePicker allowedTypes={EXAM_TYPES} includeDownloads={false}
           onSelect={(type) => addPracticeQuestion(type)} onClose={() => setPickingPractice(false)} />
+      )}
+      {scenarioImgOpen && (
+        <ImageLibrary uploadFolder="certification-scenarios" initialFolder="certification-scenarios"
+          onSelect={(url) => resolveScenarioImage(url)} onClose={() => resolveScenarioImage(null)} />
       )}
     </div>
   );
