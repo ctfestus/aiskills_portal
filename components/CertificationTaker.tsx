@@ -390,6 +390,7 @@ export default function CertificationTaker({
   // Quit an in-progress exam: costs one attempt and discards progress (confirmed via the modal below),
   // then leave. Frees the student to start over or take a different certification.
   const [showQuit, setShowQuit] = useState(false);
+  const [showExit, setShowExit] = useState(false);
   const [quitting, setQuitting] = useState(false);
   const abandonExam = useCallback(async () => {
     setQuitting(true);
@@ -874,10 +875,7 @@ export default function CertificationTaker({
 
       {/* Top bar */}
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 56, zIndex: 60, display: 'flex', alignItems: 'center', gap: 28, padding: '0 56px', background: t.bg }}>
-        <button onClick={isPractice ? exitPractice : onExit} title={isPractice ? 'Exit practice' : 'Exit (progress saved, resume later)'} style={{ color: t.muted }}><X className="w-5 h-5" /></button>
-        {!isPractice && !isPreview && (
-          <button onClick={() => setShowQuit(true)} title="Quit exam" style={{ color: t.muted, display: 'inline-flex' }}><LogOut className="w-5 h-5" /></button>
-        )}
+        <button onClick={() => { if (isPractice) { exitPractice(); } else if (!isPreview && timeLimitMin > 0) { setShowExit(true); } else { onExit(); } }} title={isPractice ? 'Exit practice' : 'Exit (progress saved, resume later)'} style={{ color: t.muted }}><X className="w-5 h-5" /></button>
         <div ref={barRef} style={{ flex: '1 1 0%', width: '100%', maxWidth: 1200, minWidth: 0, margin: '0 auto', height: 9, borderRadius: 999, background: t.track }}>
           <div style={{ height: '100%', width: `${progress}%`, minWidth: progress > 0 ? 9 : 0, background: accentColor, borderRadius: 999, transition: 'width 240ms ease' }} />
         </div>
@@ -886,7 +884,24 @@ export default function CertificationTaker({
             <Clock className="w-4 h-4" /> {fmt(timeLeft)}
           </span>
         )}
+        {!isPractice && !isPreview && (
+          <button onClick={() => setShowQuit(true)} title="Quit exam" style={{ color: t.muted, display: 'inline-flex', flexShrink: 0 }}><LogOut className="w-5 h-5" /></button>
+        )}
       </div>
+
+      {/* Exit warning: the timer keeps running while away */}
+      {showExit && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: t.card, color: t.text, maxWidth: 420, width: '100%', borderRadius: 16, padding: 28, border: `2px solid ${dialogBorder}`, boxShadow: '0 24px 64px rgba(0,0,0,0.45)' }}>
+            <h3 style={{ fontSize: 19, fontWeight: 800, marginBottom: 10 }}>Exit exam?</h3>
+            <p style={{ fontSize: 14.5, color: t.muted, lineHeight: 1.6, marginBottom: 22 }}>The timer keeps running while you are away and cannot be paused. It will continue until the time is up. You can resume before it ends, but any time that passes counts against you.</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <button onClick={() => setShowExit(false)} style={{ background: t.cardHover, color: t.text, fontWeight: 600, fontSize: 14, padding: '10px 18px', borderRadius: 10 }}>Cancel</button>
+              <button onClick={onExit} style={{ background: accentColor, color: '#06281a', fontWeight: 700, fontSize: 14, padding: '10px 20px', borderRadius: 10 }}>Exit exam</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quit confirmation */}
       {showQuit && (
