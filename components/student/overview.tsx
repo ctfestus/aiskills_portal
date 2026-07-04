@@ -38,10 +38,9 @@ function InProgressPreview({ form, isProject, pct, done, total, href, C }: {
   const desc = (form.config?.description ?? form.description ?? '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: C.card, boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)' }}>
-      <div className="relative w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
-        {cover
-          ? <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
-          : <div className="w-full h-full flex items-center justify-center">{isProject ? <Briefcase className="w-9 h-9" style={{ color: '#16a34a' }}/> : <BookOpen className="w-9 h-9" style={{ color: '#16a34a' }}/>}</div>}
+      <div className="relative w-full aspect-video" style={{ background: 'rgba(34,197,94,0.10)' }}>
+        <div className="absolute inset-0 flex items-center justify-center">{isProject ? <Briefcase className="w-9 h-9" style={{ color: '#16a34a' }}/> : <BookOpen className="w-9 h-9" style={{ color: '#16a34a' }}/>}</div>
+        {cover && <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>}
         <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md" style={{ background: '#22c55e', color: '#ffffff' }}>In progress</span>
       </div>
       <div className="p-5">
@@ -119,10 +118,9 @@ function InProgressRow({ items, C }: { items: any[]; C: typeof LIGHT_C }) {
             <div key={form.id} className="flex-shrink-0 w-[220px] snap-start"
               onMouseEnter={(e) => openHover(data, e.currentTarget)} onMouseLeave={scheduleClose}>
               <a href={href} target="_blank" rel="noreferrer" className="block transition-transform hover:-translate-y-0.5">
-                <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
-                  {cover
-                    ? <img src={resolveCoverUrl(cover)} alt="" loading={isLcp ? undefined : 'lazy'} fetchPriority={isLcp ? 'high' : undefined} className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
-                    : <div className="w-full h-full flex items-center justify-center">{isProject ? <Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>}</div>}
+                <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: 'rgba(34,197,94,0.10)' }}>
+                  <div className="absolute inset-0 flex items-center justify-center">{isProject ? <Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>}</div>
+                  {cover && <img src={resolveCoverUrl(cover)} alt="" loading={isLcp ? undefined : 'lazy'} fetchPriority={isLcp ? 'high' : undefined} className="absolute inset-0 w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>}
                   <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md" style={{ background: '#22c55e', color: '#ffffff' }}>In progress</span>
                 </div>
                 <p className="text-xs mt-2" style={{ color: C.faint }}>{isProject ? 'Virtual Experience' : 'Course'}</p>
@@ -527,10 +525,9 @@ export function OverviewSection({ user, userEmail, C, onNavigate }: {
               const typeLabel = type === 'assignment' ? 'Assignment' : type === 'project' ? 'Project' : type === 'event' ? 'Event' : 'Course';
               return (
                 <div key={`${type}-${title}-${idx}`} className="flex-shrink-0 w-[210px] snap-start">
-                  <div className="relative rounded-xl overflow-hidden w-full aspect-video flex items-center justify-center" style={{ background: cover ? '#0b0b0d' : `${col}14` }}>
-                    {cover
-                      ? <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
-                      : <Icon className="w-10 h-10" style={{ color: col }}/>}
+                  <div className="relative rounded-xl overflow-hidden w-full aspect-video flex items-center justify-center" style={{ background: `${col}14` }}>
+                    <Icon className="w-10 h-10" style={{ color: col }}/>
+                    {cover && <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>}
                     <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md" style={{ background: col, color: '#ffffff' }}>{lbl}</span>
                   </div>
                   <p className="text-xs mt-2" style={{ color: C.faint }}>{typeLabel}</p>
@@ -580,10 +577,9 @@ export function OverviewSection({ user, userEmail, C, onNavigate }: {
                 <a key={gap.course.formId} href={href}
                   className="flex-shrink-0 w-[220px] snap-start block no-underline transition-transform hover:-translate-y-0.5">
                   <div className="relative rounded-xl overflow-hidden w-full aspect-video flex items-center justify-center"
-                    style={{ background: safeCover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
-                    {safeCover
-                      ? <img src={resolveCoverUrl(safeCover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
-                      : (isVE ? <Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>)}
+                    style={{ background: 'rgba(34,197,94,0.10)' }}>
+                    {isVE ? <Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/> : <BookOpen className="w-8 h-8" style={{ color: '#16a34a' }}/>}
+                    {safeCover && <img src={resolveCoverUrl(safeCover)} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>}
                     {gap.topic && (
                       <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
                         style={{ background: '#16a34a', color: '#ffffff' }}>

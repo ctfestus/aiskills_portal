@@ -465,11 +465,9 @@ function AssignmentDetail({ assignment, userId, studentName, studentEmail, C, on
               >
                 {/* Cover image with padding */}
                 <div className="flex-shrink-0 p-2">
-                  <div className="w-16 h-16 rounded-lg overflow-hidden flex items-center justify-center" style={{ background: `${C.green}18` }}>
-                    {assignment._course_cover
-                      ? <img src={resolveCoverUrl(assignment._course_cover)} alt={assignment._course_title} className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
-                      : <BookOpen className="w-6 h-6" style={{ color: C.green }}/>
-                    }
+                  <div className="relative w-16 h-16 rounded-lg overflow-hidden flex items-center justify-center" style={{ background: `${C.green}18` }}>
+                    <BookOpen className="w-6 h-6" style={{ color: C.green }}/>
+                    {assignment._course_cover && <img src={resolveCoverUrl(assignment._course_cover)} alt={assignment._course_title} className="absolute inset-0 w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />}
                   </div>
                 </div>
                 {/* Text */}
@@ -1313,9 +1311,8 @@ export function AssignmentsSection({ userId, studentName, studentEmail, C }: { u
       onMouseEnter={e => (e.currentTarget.style.boxShadow = C.hoverShadow)}
       onMouseLeave={e => (e.currentTarget.style.boxShadow = C.cardShadow)}>
       <div className="relative h-40 overflow-hidden" style={{ background: C.thumbBg }}>
-        {item.cover_image
-          ? <img src={resolveCoverUrl(item.cover_image)} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onError={e => (e.currentTarget.style.display = 'none')}/>
-          : <div className="w-full h-full flex items-center justify-center text-4xl font-black" style={{ color: C.green, opacity: 0.25 }}>{item.title?.[0]?.toUpperCase()}</div>}
+        <div className="absolute inset-0 flex items-center justify-center text-4xl font-black" style={{ color: C.green, opacity: 0.25 }}>{item.title?.[0]?.toUpperCase()}</div>
+        {item.cover_image && <img src={resolveCoverUrl(item.cover_image)} alt={item.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onError={e => (e.currentTarget.style.display = 'none')}/>}
         {(item.group_ids?.length > 0) && (
           <div className="absolute top-2 left-2">
             <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
