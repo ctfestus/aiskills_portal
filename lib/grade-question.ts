@@ -30,6 +30,67 @@ export function normalizePythonOutput(value: unknown): string {
   return String(value ?? '').trim();
 }
 
+// --- Exam-form assembly (integrity: randomize order, shuffle options, question pooling) ---
+
+// Fisher-Yates shuffle using a supplied [0,1) rng, returning a new array (input untouched).
+export function shuffleWith<T>(arr: T[], rng: () => number): T[] {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Deterministic PRNG from a string seed (xfnv1a hash -> mulberry32). Same seed -> same sequence, so
+// option order stays stable across resume/refresh without persisting it (seed = attemptId:questionId).
+export function seededRng(seed: string): () => number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i++) { h = Math.imul(h ^ seed.charCodeAt(i), 16777619); }
+  let a = h >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Only real, scorable questions (exclude section headers / lesson-only / downloads pseudo-entries).
+function isScorable(q: any): boolean {
+  return !!q && !q.lessonOnly && !q.isSection && !q.isDownloads;
+}
+
+// Select and order the scorable questions delivered for one attempt.
+// - poolSize > 0 and < total: draw that many at random (a fresh subset per attempt);
+// - randomize: shuffle the delivered order, else keep the authored order.
+// Returns the ordered list of question ids to persist on the attempt (empty when neither feature is on).
+export function assembleExamFormIds(
+  questions: any[],
+  opts: { randomize?: boolean; poolSize?: number },
+  rng: () => number,
+): string[] {
+  const randomize = opts.randomize === true;
+  const poolSize = Number(opts.poolSize) || 0;
+  if (!randomize && poolSize <= 0) return [];
+  const indexed = (Array.isArray(questions) ? questions : []).filter(isScorable).map((q, i) => ({ id: q.id, i }));
+  const pooling = poolSize > 0 && poolSize < indexed.length;
+  let chosen = pooling ? shuffleWith(indexed, rng).slice(0, poolSize) : indexed.slice();
+  if (randomize) chosen = shuffleWith(chosen, rng);
+  else chosen.sort((a, b) => a.i - b.i); // random subset, but presented in authored order
+  return chosen.map(c => c.id);
+}
+
+// Shuffle the answer options of a text-option question (correctAnswer is compared by TEXT, so display
+// order does not affect grading). Skips `image` (index-based) and `arrange` (order is the answer).
+export function withShuffledOptions(q: any, rng: () => number): any {
+  const shufflable = q?.type === 'multiple_choice' || q?.type === 'image_choice' || q?.type === 'code';
+  if (shufflable && Array.isArray(q.options) && q.options.length > 1) {
+    return { ...q, options: shuffleWith(q.options, rng) };
+  }
+  return q;
+}
+
 // Tolerant parse: exercise answers are stored as JSON strings, but may already be objects.
 export function parseAnswer(value: unknown): any | null {
   if (value == null) return null;

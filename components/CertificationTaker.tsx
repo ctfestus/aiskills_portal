@@ -20,7 +20,7 @@ import { useTenant } from '@/components/TenantProvider';
 import { supabase } from '@/lib/supabase';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { sanitizeQuestionContent } from '@/lib/sanitize';
-import type { CourseQuestion, CertificationPrepItem } from '@/lib/course-schema';
+import type { CourseQuestion, CertificationPrepItem, PlaygroundData } from '@/lib/course-schema';
 
 type Phase = 'loading' | 'intro' | 'exam' | 'review' | 'result' | 'blocked';
 type Proctor = { hidden: number; blur: number };
@@ -64,6 +64,7 @@ export default function CertificationTaker({
   // Questions are NOT in config -- they are delivered by start-attempt (when the clock starts), so a
   // student cannot read them before the timer begins. config carries only metadata + questionCount.
   const questionCount: number = Number(config?.questionCount) || 0;
+  const practiceCount: number = Number(config?.practiceCount) || 0;
   const timeLimitMin: number = Number(config?.timeLimit) || 0;
   const maxAttempts: number = Number(config?.maxAttempts) || 0;
   const retakeCooldownHours: number = Number(config?.retakeCooldownHours) || 0;
@@ -74,6 +75,8 @@ export default function CertificationTaker({
   const posterUrl: string = config?.poster || '';
   const practiceTestUrl: string = config?.practiceTestUrl || '';
   const prepItems: CertificationPrepItem[] = Array.isArray(config?.prepItems) ? config.prepItems : [];
+  // Shared runnable-playground data (tables/DataFrames) reused across question playgrounds.
+  const sharedPlayground: PlaygroundData = (config?.playgroundData && typeof config.playgroundData === 'object' && !Array.isArray(config.playgroundData)) ? config.playgroundData : {};
   const sections: string[] = Array.isArray(config?.sections) ? config.sections : [];
 
   const [phase, setPhase] = useState<Phase>('loading');
@@ -87,11 +90,14 @@ export default function CertificationTaker({
   const [startError, setStartError] = useState('');
   const [starting, setStarting] = useState(false);
   const [isPreview, setIsPreview] = useState(false);
+  // Practice mode: an ungraded, untimed, unprotected dry run. No attempt is recorded, no certificate
+  // is issued, and no answer key is revealed -- just a score + per-skill breakdown at the end.
+  const [isPractice, setIsPractice] = useState(false);
   const [canResume, setCanResume] = useState(false);
   // True when the student jumped from the review page to answer a still-unanswered question; after
   // saving they go straight back to review (they cannot wander into already-answered questions).
   const [returnToReview, setReturnToReview] = useState(false);
-  const [result, setResult] = useState<{ score: number; passed: boolean; certId?: string; passmark?: number; correctQuestions?: number; totalQuestions?: number; skills?: { id: string; name: string; correct: number; total: number; pct: number }[] } | null>(null);
+  const [result, setResult] = useState<{ score: number; passed: boolean; certId?: string; passmark?: number; correctQuestions?: number; totalQuestions?: number; skills?: { id: string; name: string; correct: number; total: number; pct: number }[]; practice?: boolean; review?: { id: string; question: string; correct: boolean; correctAnswer: string; explanation: string }[] } | null>(null);
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   // ISO time a fresh attempt becomes allowed again (retake cooldown); null when startable now.
   const [retakeAt, setRetakeAt] = useState<string | null>(null);
@@ -211,6 +217,24 @@ export default function CertificationTaker({
     if (submittedRef.current) return;
     submittedRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);
+    // Practice: grade statelessly (no attempt, no certificate); reveals only a score + skill breakdown.
+    if (isPractice) {
+      setSubmitting(true);
+      setSubmitError('');
+      try {
+        const res = await api('grade-practice', { answers: answersRef.current, questionIds: questions.map(qq => qq.id) });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.error || 'Failed to grade practice.');
+        setResult({ score: d.score ?? 0, passed: !!d.passed, passmark: d.passmark, correctQuestions: d.correctQuestions, totalQuestions: d.totalQuestions, skills: Array.isArray(d.skills) ? d.skills : [], review: Array.isArray(d.review) ? d.review : [], practice: true });
+        setPhase('result');
+      } catch (err: any) {
+        submittedRef.current = false;
+        setSubmitError(err?.message || 'Could not grade your practice run.');
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     // Preview (owner/admin/instructor/staff) has no attempt and is never scored.
     if (isPreview) {
       setResult({ score: 0, passed: false });
@@ -235,11 +259,11 @@ export default function CertificationTaker({
     } finally {
       setSubmitting(false);
     }
-  }, [api, total, isPreview]);
+  }, [api, total, isPreview, isPractice, questions]);
 
   // -- Enforced timer --
   useEffect(() => {
-    if ((phase !== 'exam' && phase !== 'review') || !timeLimitMin) return;
+    if ((phase !== 'exam' && phase !== 'review') || !timeLimitMin || isPractice) return;
     // Resume uses the server-computed remaining seconds; a fresh start uses the full limit.
     setTimeLeft(prev => (prev === null ? (resumeRemainingRef.current ?? timeLimitMin * 60) : prev));
     if (timerRef.current) clearInterval(timerRef.current);
@@ -263,9 +287,9 @@ export default function CertificationTaker({
     warnTimer.current = setTimeout(() => setWarning(''), 3200);
   }, []);
 
-  // -- Protection layer: active only during the exam --
+  // -- Protection layer: active only during the exam (never in practice) --
   useEffect(() => {
-    if ((phase !== 'exam' && phase !== 'review') || !protect) return;
+    if ((phase !== 'exam' && phase !== 'review') || !protect || isPractice) return;
     const block = (e: Event) => { e.preventDefault(); e.stopImmediatePropagation(); };
     const onVisibility = () => { if (document.hidden) { proctorRef.current.hidden++; flashWarning('Leaving the exam is recorded.'); } };
     const onBlur = () => { proctorRef.current.blur++; };
@@ -283,7 +307,7 @@ export default function CertificationTaker({
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('blur', onBlur);
     };
-  }, [phase, protect, flashWarning]);
+  }, [phase, protect, isPractice, flashWarning]);
 
   const timerMounted = timeLeft !== null;
 
@@ -315,9 +339,10 @@ export default function CertificationTaker({
   }, [phase, timerMounted]);
 
   const saveProgress = useCallback((nextAnswers: Record<string, string>, nextIndex: number) => {
+    if (isPractice) return; // practice is not persisted
     api('save-progress', { current_question_index: nextIndex, answers: nextAnswers, proctor: proctorRef.current })
       .catch(() => {});
-  }, [api]);
+  }, [api, isPractice]);
 
   const doStart = useCallback(async (doSwitch: boolean) => {
     setStartError('');
@@ -359,6 +384,44 @@ export default function CertificationTaker({
   }, [api]);
   // Buttons call this (no args); the switch-confirm modal calls doStart(true).
   const startExam = useCallback(() => doStart(false), [doStart]);
+
+  // Practice: fetch a pooled/shuffled set (no attempt, no timer, no protection) and run it as a dry run.
+  const startPractice = useCallback(async () => {
+    setStartError('');
+    setStarting(true);
+    try {
+      const res = await api('practice-questions');
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Could not start practice.');
+      const loaded = Array.isArray(d.questions) ? d.questions : [];
+      if (!loaded.length) throw new Error('No questions available to practice yet.');
+      setIsPractice(true);
+      setQuestions(loaded);
+      setAnswers({}); answersRef.current = {};
+      setIndex(0); indexRef.current = 0;
+      setResult(null);
+      setTimeLeft(null);
+      submittedRef.current = false;
+      setReturnToReview(false);
+      setPhase('exam');
+    } catch (err: any) {
+      setStartError(err?.message || 'Could not start practice.');
+    } finally {
+      setStarting(false);
+    }
+  }, [api]);
+
+  // Leave practice and return to the overview (practice records nothing).
+  const exitPractice = useCallback(() => {
+    submittedRef.current = false;
+    setIsPractice(false);
+    setQuestions([]);
+    setAnswers({}); answersRef.current = {};
+    setIndex(0); indexRef.current = 0;
+    setResult(null);
+    setReturnToReview(false);
+    setPhase('intro');
+  }, []);
 
   const setAnswer = useCallback((qid: string, value: string) => {
     setAnswers(prev => ({ ...prev, [qid]: value }));
@@ -442,11 +505,12 @@ export default function CertificationTaker({
     );
     return (
       <div style={{ minHeight: '100vh', background: t.bg, color: t.text, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: hasBreakdown ? 640 : 480, width: '100%', textAlign: 'center' }}>
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: hasBreakdown || (result.practice && (result.review?.length ?? 0) > 0) ? 640 : 480, width: '100%', textAlign: 'center' }}>
           {result.passed || isPreview
             ? <CheckCircle2 className="w-14 h-14 mx-auto mb-4" style={{ color: accentColor }} />
             : <XCircle className="w-14 h-14 mx-auto mb-4" style={{ color: '#f43f5e' }} />}
-          <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 6 }}>{isPreview ? 'Preview complete' : result.passed ? 'Certification passed' : 'Not passed yet'}</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 6 }}>{isPreview ? 'Preview complete' : result.practice ? 'Practice complete' : result.passed ? 'Certification passed' : 'Not passed yet'}</h1>
+          {result.practice && <p style={{ fontSize: 13, color: t.muted, marginBottom: 10 }}>Practice run. Not graded, no certificate issued.</p>}
 
           {isPreview ? (
             <p style={{ fontSize: 15, color: t.muted, marginBottom: 24 }}>This was a preview. Attempts taken here are not scored or recorded.</p>
@@ -494,9 +558,40 @@ export default function CertificationTaker({
               )}
             </div>
           )}
-          <div>
-            <button onClick={onExit} style={{ marginTop: 12, color: t.muted, fontSize: 13, textDecoration: 'underline' }}>Back to certifications</button>
-          </div>
+          {result.practice && (result.review?.length ?? 0) > 0 && (
+            <div style={{ textAlign: 'left', marginTop: 8, marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 12 }}>Review</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {result.review!.map((r, i) => (
+                  <div key={r.id} style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 12, padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                      {r.correct
+                        ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: '#16a34a', marginTop: 2 }} />
+                        : <XCircle className="w-4 h-4 flex-shrink-0" style={{ color: '#f43f5e', marginTop: 2 }} />}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 600, color: t.text }}>{i + 1}. {r.question}</div>
+                        {!r.correct && r.correctAnswer && <div style={{ fontSize: 12.5, color: t.muted, marginTop: 4 }}>Correct answer: <span style={{ color: t.text }}>{r.correctAnswer}</span></div>}
+                        {r.explanation && <div style={{ fontSize: 12.5, color: t.muted, marginTop: 4, lineHeight: 1.5 }}>{r.explanation}</div>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {result.practice ? (
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+              <button onClick={startPractice} disabled={starting} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: accentColor, color: '#06281a', fontWeight: 700, fontSize: 14, padding: '11px 24px', borderRadius: 10 }}>
+                {starting && <Loader2 className="w-4 h-4 animate-spin" />} Practice again
+              </button>
+              <button onClick={exitPractice} style={{ background: t.card, color: t.text, fontWeight: 700, fontSize: 14, padding: '11px 24px', borderRadius: 10, border: `1px solid ${t.border}` }}>Back to overview</button>
+            </div>
+          ) : (
+            <div>
+              <button onClick={onExit} style={{ marginTop: 12, color: t.muted, fontSize: 13, textDecoration: 'underline' }}>Back to certifications</button>
+            </div>
+          )}
         </motion.div>
       </div>
     );
@@ -626,6 +721,7 @@ export default function CertificationTaker({
               {config?.description && <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.9)', lineHeight: 1.6, marginBottom: 26, maxWidth: 560 }}>{config.description}</p>}
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <button onClick={startExam} disabled={starting || retakeBlocked} className="cert-cta" style={{ ...heroCtaPrimary, ...(retakeBlocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{retakeBlocked ? 'Retake not available yet' : ctaLabel}<ChevronRight className="w-4 h-4" /></button>
+                {practiceCount > 0 && <button onClick={startPractice} disabled={starting} className="cert-cta" style={heroCtaSecondary}>Practice run</button>}
                 {practiceTestUrl && <a href={practiceTestUrl} target="_blank" rel="noreferrer" className="cert-cta" style={heroCtaSecondary}>Try the practice test</a>}
               </div>
               {(startError || retakeBlocked) && <p style={{ marginTop: 14, fontSize: 13, color: '#ffffff' }}>{startError || `You can retake this certification on ${retakeWhen}.`}</p>}
@@ -766,7 +862,7 @@ export default function CertificationTaker({
 
       {/* Top bar */}
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 56, zIndex: 60, display: 'flex', alignItems: 'center', gap: 28, padding: '0 56px', background: t.bg }}>
-        <button onClick={onExit} title="Exit exam" style={{ color: t.muted }}><X className="w-5 h-5" /></button>
+        <button onClick={isPractice ? exitPractice : onExit} title={isPractice ? 'Exit practice' : 'Exit exam'} style={{ color: t.muted }}><X className="w-5 h-5" /></button>
         <div ref={barRef} style={{ flex: '1 1 0%', width: '100%', maxWidth: 1200, minWidth: 0, margin: '0 auto', height: 9, borderRadius: 999, background: t.track }}>
           <div style={{ height: '100%', width: `${progress}%`, minWidth: progress > 0 ? 9 : 0, background: accentColor, borderRadius: 999, transition: 'width 240ms ease' }} />
         </div>
@@ -840,7 +936,7 @@ export default function CertificationTaker({
         <div style={{ paddingTop: 96, paddingBottom: 140, paddingLeft: contentPad.left, paddingRight: contentPad.right }}>
           <AnimatePresence mode="wait">
             <motion.div key={currentQuestion.id} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.22 }}>
-              <QuestionView q={currentQuestion} qType={qType} value={answers[currentQuestion.id] ?? ''} onChange={(v) => setAnswer(currentQuestion.id, v)} t={t} accentColor={accentColor} />
+              <QuestionView q={currentQuestion} qType={qType} value={answers[currentQuestion.id] ?? ''} onChange={(v) => setAnswer(currentQuestion.id, v)} t={t} accentColor={accentColor} sharedPlayground={sharedPlayground} />
             </motion.div>
           </AnimatePresence>
         </div>
@@ -955,10 +1051,22 @@ function Stat({ t, Icon, label, value, color }: { t: any; Icon: any; label: stri
   );
 }
 
+// Merge the certification's shared playground data into a question's playground, so a dataset defined
+// once is available in every question. Shared tables/datasets load first, then any question-specific
+// ones; skipped when the question opts out (useSharedData === false).
+function mergeSharedPlayground(pg: NonNullable<CourseQuestion['playground']>, shared: PlaygroundData) {
+  if (pg.useSharedData === false) return pg;
+  const joinSetup = (a?: string, b?: string) => [a, b].map(s => (s ?? '').trim()).filter(Boolean).join('\n') || undefined;
+  if ((pg.language ?? 'sql') === 'sql') {
+    return { ...pg, sqlTables: [...(shared.sqlTables ?? []), ...(pg.sqlTables ?? [])], setupSql: joinSetup(shared.setupSql, pg.setupSql) };
+  }
+  return { ...pg, pythonDatasets: [...(shared.pythonDatasets ?? []), ...(pg.pythonDatasets ?? [])], setupPython: joinSetup(shared.setupPython, pg.setupPython) };
+}
+
 // One non-exercise question (multiple_choice | image | code | fill_blank | arrange), optionally with
 // a non-graded runnable playground the student uses to work out the answer.
-function QuestionView({ q, qType, value, onChange, t, accentColor }: {
-  q: any; qType: string; value: string; onChange: (v: string) => void; t: any; accentColor: string;
+function QuestionView({ q, qType, value, onChange, t, accentColor, sharedPlayground }: {
+  q: any; qType: string; value: string; onChange: (v: string) => void; t: any; accentColor: string; sharedPlayground: PlaygroundData;
 }) {
   const options: string[] = Array.isArray(q.options) ? q.options : [];
   const [hovered, setHovered] = useState<number | null>(null);
@@ -1102,10 +1210,11 @@ function QuestionView({ q, qType, value, onChange, t, accentColor }: {
   }
 
   const pg = q.playground;
-  const hasPlayground = !!pg && !!((pg.starterCode ?? '').trim() || (pg.setupSql ?? '').trim() || (pg.setupPython ?? '').trim() || pg.language);
+  const playground = pg ? mergeSharedPlayground(pg, sharedPlayground) : null;
+  const hasPlayground = !!playground && !!((playground.starterCode ?? '').trim() || (playground.setupSql ?? '').trim() || (playground.setupPython ?? '').trim() || playground.sqlTables?.length || playground.pythonDatasets?.length || playground.language);
   // Left panel (rendered beside the answer): a runnable playground, or an image-question's prompt image.
   const leftPanel = hasPlayground
-    ? <CertificationPlayground playground={pg!} accentColor={accentColor} />
+    ? <CertificationPlayground playground={playground!} accentColor={accentColor} />
     : (qType === 'image_choice' && q.imageUrl)
       ? <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
           <img src={q.imageUrl} alt="" style={{ maxWidth: '100%', maxHeight: 440, borderRadius: 12, objectFit: 'contain' }} />

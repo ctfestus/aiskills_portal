@@ -3,7 +3,7 @@ import { requireUser, isAuthError } from '@/lib/api-auth';
 import { adminClient } from '@/lib/admin-client';
 import { getTenantSettings } from '@/lib/get-tenant-settings';
 import { courseResultEmail } from '@/lib/email-templates';
-import { gradeQuestion, normalizePythonOutput, signProof, verifyProof, sanitizeExamQuestions } from '@/lib/grade-question';
+import { gradeQuestion, normalizePythonOutput, signProof, verifyProof, sanitizeExamQuestions, assembleExamFormIds, withShuffledOptions, seededRng } from '@/lib/grade-question';
 import { ensureCertificate, awardContentBadge, sendCertificateEmailOnce } from '@/lib/issue-certificate';
 import { retakeReadyAt } from '@/lib/cert-cooldown';
 
@@ -182,13 +182,19 @@ export async function POST(req: NextRequest) {
       const access = await loadAccessibleCertification(supabase, ref, sessionUser, '*');
       if ('error' in access) return access.error;
       const cert = access.cert as any;
-      const questionCount = (Array.isArray(cert.questions) ? cert.questions : [])
+      const scorableCount = (Array.isArray(cert.questions) ? cert.questions : [])
+        .filter((q: any) => !q?.lessonOnly && !q?.isSection && !q?.isDownloads).length;
+      // With pooling, each attempt draws a subset -- surface the drawn count on the overview.
+      const poolSize = Number(cert.question_pool_size) || 0;
+      const questionCount = poolSize > 0 ? Math.min(poolSize, scorableCount) : scorableCount;
+      // Practice mode uses a separate bank; the taker shows the "Practice run" button only when it exists.
+      const practiceCount = (Array.isArray(cert.practice_questions) ? cert.practice_questions : [])
         .filter((q: any) => !q?.lessonOnly && !q?.isSection && !q?.isDownloads).length;
       return NextResponse.json({ certification: {
         id: cert.id, slug: cert.slug, user_id: cert.user_id,
         config: {
           title: cert.title, description: cert.description, isCertification: true,
-          questionCount,
+          questionCount, practiceCount,
           passmark: cert.passmark, timeLimit: cert.time_limit,
           maxAttempts: cert.max_attempts, retakeCooldownHours: cert.retake_cooldown_hours ?? 24,
           examProtection: cert.exam_protection,
@@ -204,6 +210,9 @@ export async function POST(req: NextRequest) {
           // Courses / learning paths to complete before the exam ("Complete courses" step). Ids only;
           // the client resolves details from the public published_* views, so unpublished items drop out.
           prepItems: Array.isArray(cert.prep_items) ? cert.prep_items : [],
+          // Shared runnable-playground data (tables/DataFrames) reused across question playgrounds.
+          // No answer keys, so it is safe on the client; merged into each question's playground by the taker.
+          playgroundData: cert.playground_data && typeof cert.playground_data === 'object' ? cert.playground_data : {},
           // Distinct exam sections present (Technical / Practical), in canonical order, for the overview.
           sections: ['technical', 'practical'].filter(s =>
             (Array.isArray(cert.questions) ? cert.questions : []).some((q: any) => q?.section === s)),
@@ -319,25 +328,39 @@ export async function POST(req: NextRequest) {
     try {
       const access = await loadAccessibleCertification(
         supabase, certification_id, sessionUser,
-        'id, user_id, status, cohort_ids, questions, max_attempts, time_limit, retake_cooldown_hours',
+        'id, user_id, status, cohort_ids, questions, max_attempts, time_limit, retake_cooldown_hours, randomize_questions, shuffle_options, question_pool_size',
       );
       if ('error' in access) return access.error;
       const cert = access.cert as any;
       const questions = sanitizeExamQuestions(cert.questions);
       const timeLimit = Number(cert.time_limit) || 0;
+      const randomize = cert.randomize_questions === true;
+      const shuffleOpts = cert.shuffle_options === true;
+      const poolSize = Number(cert.question_pool_size) || 0;
+      // Build the questions delivered to an attempt: reorder/subset per the attempt's persisted form
+      // (empty = full authored order), then shuffle options deterministically per attempt so a resume
+      // sees the same layout. Grading in complete-attempt uses the same persisted form.
+      const byId = new Map(questions.map((q: any) => [q.id, q]));
+      const deliver = (attemptId: string, formIds: string[]) => {
+        const base = Array.isArray(formIds) && formIds.length
+          ? formIds.map(id => byId.get(id)).filter(Boolean)
+          : questions;
+        return shuffleOpts ? base.map((q: any) => withShuffledOptions(q, seededRng(`${attemptId}:${q.id}`))) : base;
+      };
 
       const { data: student } = await supabase.from('students').select('role').eq('id', sessionUser.id).maybeSingle();
       const role = String((student as any)?.role ?? '');
       const isPreview = cert.user_id === sessionUser.id || ['admin', 'instructor', 'staff'].includes(role);
       if (isPreview) {
-        return NextResponse.json({ questions, remainingSeconds: timeLimit > 0 ? timeLimit * 60 : null, currentIndex: 0, answers: {}, proctor: {}, preview: true });
+        const previewIds = assembleExamFormIds(questions, { randomize, poolSize }, Math.random);
+        return NextResponse.json({ questions: deliver('preview', previewIds), remainingSeconds: timeLimit > 0 ? timeLimit * 60 : null, currentIndex: 0, answers: {}, proctor: {}, preview: true });
       }
 
       const { data: passedRow } = await supabase.from('certification_attempts').select('id')
         .eq('certification_id', certification_id).eq('student_id', sessionUser.id).eq('passed', true).limit(1).maybeSingle();
       if (passedRow) return NextResponse.json({ error: 'You have already passed this certification.', reason: 'already_passed' }, { status: 409 });
 
-      const sel = 'id, started_at, current_question_index, answers, proctor';
+      const sel = 'id, started_at, current_question_index, answers, proctor, question_ids';
       let attempt = (await supabase.from('certification_attempts').select(sel)
         .eq('certification_id', certification_id).eq('student_id', sessionUser.id).is('completed_at', null)
         .order('updated_at', { ascending: false }).limit(1).maybeSingle()).data;
@@ -409,9 +432,12 @@ export async function POST(req: NextRequest) {
             reason: 'cooldown', retakeAt,
           }, { status: 429 });
         }
+        // Assemble this attempt's form (order + pool). Persisted so a resume sees the same questions
+        // and grading scores only what was delivered. Empty when neither randomize nor pooling is on.
+        const formIds = assembleExamFormIds(questions, { randomize, poolSize }, Math.random);
         const ins = await supabase.from('certification_attempts').insert({
           student_id: sessionUser.id, certification_id,
-          attempt_number: (last?.attempt_number ?? 0) + 1, updated_at: new Date().toISOString(),
+          attempt_number: (last?.attempt_number ?? 0) + 1, question_ids: formIds, updated_at: new Date().toISOString(),
         }).select(sel).single();
         if (ins.error) {
           // Lost a race on the one-active-attempt-per-student unique index. If the winner is THIS
@@ -436,7 +462,7 @@ export async function POST(req: NextRequest) {
         remainingSeconds = Math.max(0, timeLimit * 60 - elapsed);
       }
       return NextResponse.json({
-        questions,
+        questions: deliver(attempt.id, Array.isArray(attempt.question_ids) ? attempt.question_ids : []),
         remainingSeconds,
         currentIndex: attempt.current_question_index ?? 0,
         answers: attempt.answers && typeof attempt.answers === 'object' ? attempt.answers : {},
@@ -502,7 +528,7 @@ export async function POST(req: NextRequest) {
       const cert = access.cert as any;
 
       const attempt = (await supabase.from('certification_attempts')
-        .select('id, answers, started_at')
+        .select('id, answers, started_at, question_ids')
         .eq('certification_id', certification_id).eq('student_id', sessionUser.id)
         .is('completed_at', null)
         .order('updated_at', { ascending: false }).limit(1).maybeSingle()).data;
@@ -523,7 +549,12 @@ export async function POST(req: NextRequest) {
         : { ...persistedAnswers, ...(final_answers && typeof final_answers === 'object' ? final_answers : {}) };
       const passmark = cert.passmark ?? 70;
 
-      const scorable = questions.filter(q => !q.lessonOnly && !q.isSection && !q.isDownloads);
+      // Grade only the questions THIS attempt was delivered (pooling-correct). Empty question_ids
+      // (legacy attempts, or randomize/pool off) = grade all scorable, as before.
+      const formIds: string[] = Array.isArray((attempt as any).question_ids) ? (attempt as any).question_ids : [];
+      const formSet = new Set(formIds);
+      const scorableAll = questions.filter(q => !q.lessonOnly && !q.isSection && !q.isDownloads);
+      const scorable = formIds.length ? scorableAll.filter(q => formSet.has(q.id)) : scorableAll;
       let correct = 0;
       const correctIds = new Set<string>();
       for (const q of scorable) {
@@ -585,6 +616,186 @@ export async function POST(req: NextRequest) {
     } catch (err: any) {
       console.error('[certification-attempt/complete-attempt]', err);
       return NextResponse.json({ error: 'Failed to complete attempt.' }, { status: 500 });
+    }
+  }
+
+  // -- Instructor analytics: aggregate completed attempts for one certification (owner/admin/instructor/
+  // staff only). Returns pass rate, average score, score distribution, per-question correct rates
+  // (to spot too-easy / too-hard / broken items) and per-skill performance across the cohort. --
+  if (action === 'analytics') {
+    try {
+      const access = await loadAccessibleCertification(
+        supabase, certification_id, sessionUser,
+        'id, user_id, status, cohort_ids, questions, passmark, skill_areas',
+      );
+      if ('error' in access) return access.error;
+      const cert = access.cert as any;
+      const { data: student } = await supabase.from('students').select('role').eq('id', sessionUser.id).maybeSingle();
+      const role = String((student as any)?.role ?? '');
+      const privileged = cert.user_id === sessionUser.id || ['admin', 'instructor', 'staff'].includes(role);
+      if (!privileged) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+      const { data: rows } = await supabase.from('certification_attempts')
+        .select('student_id, score, passed, answers, question_ids, proctor, completed_at')
+        .eq('certification_id', certification_id).not('completed_at', 'is', null);
+      const attempts = rows ?? [];
+
+      const questions: any[] = Array.isArray(cert.questions) ? cert.questions : [];
+      const scorable = questions.filter(q => !q.lessonOnly && !q.isSection && !q.isDownloads);
+      const passmark = cert.passmark ?? 70;
+
+      const scorableIds = scorable.map(q => q.id);
+      const scorableById = new Map(scorable.map(q => [q.id, q]));
+
+      // Grade every completed attempt once: its score plus the set of questions it got right, over the
+      // questions it was actually delivered (pooling-correct). Reused for item stats and discrimination.
+      const graded = attempts.map((a: any) => {
+        const raw: string[] = Array.isArray(a.question_ids) && a.question_ids.length ? a.question_ids : scorableIds;
+        const seen = raw.filter((id: string) => scorableById.has(id));
+        const ans = a.answers && typeof a.answers === 'object' ? a.answers : {};
+        const correct = new Set<string>();
+        for (const id of seen) {
+          const q = scorableById.get(id);
+          if (q && gradeQuestion(q, { storedAnswers: ans, persistedAnswers: ans, verifyProof: () => true })) correct.add(id);
+        }
+        return { score: Number(a.score) || 0, passed: !!a.passed, seen: new Set(seen), correct };
+      });
+
+      const totalAttempts = graded.length;
+      const uniqueStudents = new Set(attempts.map((a: any) => a.student_id)).size;
+      const passCount = graded.filter(g => g.passed).length;
+      const passRate = totalAttempts ? Math.round((passCount / totalAttempts) * 100) : 0;
+
+      // Summary score statistics.
+      const scores = graded.map(g => g.score).sort((x, y) => x - y);
+      const sum = scores.reduce((s, v) => s + v, 0);
+      const mean = totalAttempts ? sum / totalAttempts : 0;
+      const avgScore = Math.round(mean);
+      const medianScore = totalAttempts
+        ? Math.round(scores.length % 2 ? scores[(scores.length - 1) / 2] : (scores[scores.length / 2 - 1] + scores[scores.length / 2]) / 2)
+        : 0;
+      const minScore = totalAttempts ? scores[0] : 0;
+      const maxScore = totalAttempts ? scores[scores.length - 1] : 0;
+      const stdDev = totalAttempts ? Math.round(Math.sqrt(scores.reduce((s, v) => s + (v - mean) ** 2, 0) / totalAttempts)) : 0;
+
+      // Score distribution in ten 10-point buckets (0-9, 10-19, ..., 90-100).
+      const buckets = Array.from({ length: 10 }, () => 0);
+      for (const g of graded) { buckets[Math.min(9, Math.floor(Math.max(0, Math.min(100, g.score)) / 10))]++; }
+
+      // Discrimination (upper-lower index): top vs bottom 27% by total score -- a standard item-analysis
+      // measure of how well an item separates strong from weak candidates. Needs >= 2 completed attempts.
+      const byScoreDesc = [...graded].sort((x, y) => y.score - x.score);
+      const groupSize = Math.max(1, Math.floor(totalAttempts * 0.27));
+      const upper = totalAttempts >= 2 ? byScoreDesc.slice(0, groupSize) : [];
+      const lower = totalAttempts >= 2 ? byScoreDesc.slice(-groupSize) : [];
+      const groupRate = (group: typeof graded, id: string): number | null => {
+        const seenN = group.filter(g => g.seen.has(id)).length;
+        return seenN ? group.filter(g => g.correct.has(id)).length / seenN : null;
+      };
+
+      const perQuestion = scorable.map(q => {
+        const seen = graded.filter(g => g.seen.has(q.id)).length;
+        const correct = graded.filter(g => g.correct.has(q.id)).length;
+        const pu = groupRate(upper, q.id), pl = groupRate(lower, q.id);
+        const discrimination = pu != null && pl != null ? Math.round((pu - pl) * 100) / 100 : null;
+        const text = String(q.question ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        return { id: q.id, type: q.type ?? 'multiple_choice', skillAreaId: q.skillAreaId ?? null,
+          text: text.length > 120 ? `${text.slice(0, 120)}...` : (text || '(no text)'),
+          seen, correct, correctRate: seen ? Math.round((correct / seen) * 100) : 0, discrimination };
+      });
+
+      const skillAreas: { id: string; name: string }[] = Array.isArray(cert.skill_areas) ? cert.skill_areas : [];
+      const perSkill = skillAreas.map(sa => {
+        const qs = perQuestion.filter(pq => pq.skillAreaId === sa.id);
+        const seen = qs.reduce((s, q) => s + q.seen, 0);
+        const correct = qs.reduce((s, q) => s + q.correct, 0);
+        return { id: sa.id, name: sa.name, correctRate: seen ? Math.round((correct / seen) * 100) : 0, questions: qs.length };
+      }).filter(s => s.questions > 0);
+
+      // Attempts with any proctoring signal (tab hidden / window blur).
+      const flagged = attempts.filter((a: any) => { const p = a.proctor || {}; return (Number(p.hidden) || 0) + (Number(p.blur) || 0) > 0; }).length;
+
+      return NextResponse.json({ analytics: {
+        totalAttempts, uniqueStudents, passCount, passRate, avgScore, medianScore, minScore, maxScore, stdDev,
+        buckets, perQuestion, perSkill, flagged, questionCount: scorable.length, passmark,
+      } });
+    } catch (err: any) {
+      console.error('[certification-attempt/analytics]', err);
+      return NextResponse.json({ error: 'Failed to load analytics.' }, { status: 500 });
+    }
+  }
+
+  // -- Practice questions: an ungraded dry run over the SEPARATE practice-only bank (never the graded
+  // exam), so it is safe to reveal feedback later. Creates NO attempt, no timer, no protection. --
+  if (action === 'practice-questions') {
+    try {
+      const access = await loadAccessibleCertification(
+        supabase, certification_id, sessionUser,
+        'id, user_id, status, cohort_ids, practice_questions, randomize_questions, shuffle_options',
+      );
+      if ('error' in access) return access.error;
+      const cert = access.cert as any;
+      const questions = sanitizeExamQuestions(cert.practice_questions);
+      if (!questions.length) return NextResponse.json({ error: 'No practice questions are available for this certification.' }, { status: 404 });
+      const randomize = cert.randomize_questions === true;
+      const shuffleOpts = cert.shuffle_options === true;
+      // Practice uses ALL practice questions (no pooling); just apply order/option variety per the settings.
+      const formIds = assembleExamFormIds(questions, { randomize, poolSize: 0 }, Math.random);
+      const byId = new Map(questions.map((q: any) => [q.id, q]));
+      const base = formIds.length ? formIds.map(id => byId.get(id)).filter(Boolean) : questions;
+      const seedBase = `practice:${Math.random()}`;
+      const delivered = shuffleOpts ? base.map((q: any) => withShuffledOptions(q, seededRng(`${seedBase}:${q.id}`))) : base;
+      return NextResponse.json({ questions: delivered });
+    } catch (err: any) {
+      console.error('[certification-attempt/practice-questions]', err);
+      return NextResponse.json({ error: 'Failed to load practice questions.' }, { status: 500 });
+    }
+  }
+
+  // -- Grade a practice run statelessly over the practice bank: returns score + per-skill breakdown AND
+  // per-question review (correct answer + explanation). Practice questions are not the real exam, so
+  // revealing feedback is safe. Nothing is persisted; exercise proofs are trusted (no stakes). --
+  if (action === 'grade-practice') {
+    try {
+      const access = await loadAccessibleCertification(
+        supabase, certification_id, sessionUser,
+        'id, user_id, status, cohort_ids, practice_questions, passmark, skill_areas',
+      );
+      if ('error' in access) return access.error;
+      const cert = access.cert as any;
+      const answers = body.answers && typeof body.answers === 'object' && !Array.isArray(body.answers) ? body.answers : {};
+      const ids: string[] = Array.isArray(body.questionIds) ? body.questionIds.filter((x: any) => typeof x === 'string') : [];
+      const idSet = new Set(ids);
+      const questions: any[] = Array.isArray(cert.practice_questions) ? cert.practice_questions : [];
+      const scorableAll = questions.filter(q => !q.lessonOnly && !q.isSection && !q.isDownloads);
+      const scorable = idSet.size ? scorableAll.filter(q => idSet.has(q.id)) : scorableAll;
+      let correct = 0;
+      const correctIds = new Set<string>();
+      const plain = (s: unknown) => String(s ?? '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      const review = scorable.map(q => {
+        const ok = gradeQuestion(q, { storedAnswers: answers, persistedAnswers: answers, verifyProof: () => true });
+        if (ok) { correct++; correctIds.add(q.id); }
+        // Practice-only questions -- safe to reveal the key + explanation.
+        const correctAnswer = plain(String(q.correctAnswer ?? '').split('|||').join(' | '));
+        const qtext = plain(q.question);
+        return { id: q.id, question: qtext.length > 140 ? `${qtext.slice(0, 140)}...` : qtext,
+          correct: ok, correctAnswer, explanation: plain(q.explanation) };
+      });
+      const total = scorable.length;
+      const scorePct = total === 0 ? 0 : Math.round((correct / total) * 100);
+      const passmark = cert.passmark ?? 70;
+      const skillAreas: { id: string; name: string }[] = Array.isArray(cert.skill_areas) ? cert.skill_areas : [];
+      const skills = skillAreas
+        .map(sa => {
+          const qs = scorable.filter(q => q?.skillAreaId === sa.id);
+          const c = qs.filter(q => correctIds.has(q.id)).length;
+          return { id: sa.id, name: sa.name, correct: c, total: qs.length, pct: qs.length ? Math.round((c / qs.length) * 100) : 0 };
+        })
+        .filter(s => s.total > 0);
+      return NextResponse.json({ score: scorePct, passed: scorePct >= passmark, passmark, correctQuestions: correct, totalQuestions: total, skills, review, practice: true });
+    } catch (err: any) {
+      console.error('[certification-attempt/grade-practice]', err);
+      return NextResponse.json({ error: 'Failed to grade practice.' }, { status: 500 });
     }
   }
 

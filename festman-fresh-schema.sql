@@ -245,6 +245,8 @@ CREATE TABLE public.certifications (
   cover_image     text,
   badge_image_url text,
   questions       jsonb       NOT NULL DEFAULT '[]',
+  -- Separate practice-only bank (migration 133); practice mode reveals feedback, never the exam bank.
+  practice_questions jsonb    NOT NULL DEFAULT '[]',
   passmark        integer     NOT NULL DEFAULT 70 CHECK (passmark BETWEEN 0 AND 100),
   time_limit      integer     CHECK (time_limit IS NULL OR time_limit > 0), -- minutes; null = untimed
   max_attempts    integer     NOT NULL DEFAULT 1 CHECK (max_attempts >= 0),  -- 0 = unlimited
@@ -266,6 +268,13 @@ CREATE TABLE public.certifications (
   practice_test_url     text,
   -- Courses / learning paths to complete before the exam (migration 129): [{id, type:'course'|'path'}]
   prep_items            jsonb   NOT NULL DEFAULT '[]',
+  -- Shared runnable-playground data reused across question playgrounds (migration 131):
+  -- { sqlTables:[...], pythonDatasets:[...], setupSql, setupPython }
+  playground_data       jsonb   NOT NULL DEFAULT '{}',
+  -- Exam integrity (migration 132): randomize order / shuffle options / draw N from the bank.
+  randomize_questions   boolean NOT NULL DEFAULT false,
+  shuffle_options       boolean NOT NULL DEFAULT false,
+  question_pool_size    integer CHECK (question_pool_size IS NULL OR question_pool_size > 0),
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
@@ -584,6 +593,8 @@ CREATE TABLE public.certification_attempts (
   current_question_index integer     NOT NULL DEFAULT 0,
   answers                jsonb       NOT NULL DEFAULT '{}',
   proctor                jsonb       NOT NULL DEFAULT '{}',
+  -- Ordered ids of the questions delivered to THIS attempt (migration 132); empty = all, authored order.
+  question_ids           jsonb       NOT NULL DEFAULT '[]',
   updated_at             timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_cert_attempts_student      ON public.certification_attempts(student_id);
