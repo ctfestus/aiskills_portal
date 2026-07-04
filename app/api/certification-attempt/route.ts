@@ -633,6 +633,24 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // -- Quit an in-progress (unsubmitted) exam: record the active attempt as a completed, failed one so
+  // it counts against max_attempts (the student is warned they "lose one attempt"), and clears the
+  // active-enrollment lock so they can start over or switch to another certification. --
+  if (action === 'abandon-attempt') {
+    try {
+      const { error } = await supabase.from('certification_attempts')
+        .update({ completed_at: new Date().toISOString(), passed: false, score: 0, updated_at: new Date().toISOString() })
+        .eq('certification_id', certification_id)
+        .eq('student_id', sessionUser.id)
+        .is('completed_at', null);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    } catch (err: any) {
+      console.error('[certification-attempt/abandon-attempt]', err);
+      return NextResponse.json({ error: 'Failed to quit the exam.' }, { status: 500 });
+    }
+  }
+
   // -- Instructor analytics: aggregate completed attempts for one certification (owner/admin/instructor/
   // staff only). Returns pass rate, average score, score distribution, per-question correct rates
   // (to spot too-easy / too-hard / broken items) and per-skill performance across the cohort. --
