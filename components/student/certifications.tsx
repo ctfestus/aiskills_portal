@@ -16,8 +16,10 @@ import { ShieldCheck, Clock, CheckCircle, Award, Briefcase, Cpu } from 'lucide-r
 export function CertificationsSection({ userId, userEmail, C }: { userId: string; userEmail?: string; C: typeof LIGHT_C }) {
   const [items, setItems] = useState<any[]>([]);
   const [attempts, setAttempts] = useState<Record<string, { passed: boolean; inProgress: boolean; score: number }>>({});
-  // The single certification the student currently has in progress (one allowed at a time).
-  const [inProgressId, setInProgressId] = useState<string | null>(null);
+  // The certification the student is currently "enrolled" in: one they have attempted but not passed
+  // (in progress OR a prior failed attempt). Only one exists at a time (enforced server-side). Every
+  // OTHER exam is locked to a Switch until they pass this one or switch away -- matching the server.
+  const [enrolledId, setEnrolledId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,8 +44,10 @@ export function CertificationsSection({ userId, userEmail, C }: { userId: string
         if (!a.completed_at) { cur.inProgress = true; active = a.certification_id; }
         byId[a.certification_id] = cur;
       }
+      // Enrollment = any attempted-but-unpassed cert (in progress OR failed). Prefer the in-progress one.
+      const enrolled = active ?? (Object.entries(byId).find(([, st]) => !st.passed)?.[0] ?? null);
       setAttempts(byId);
-      setInProgressId(active);
+      setEnrolledId(enrolled);
       setItems(certs ?? []);
       setLoading(false);
     })();
@@ -79,8 +83,9 @@ export function CertificationsSection({ userId, userEmail, C }: { userId: string
   const renderCard = (cert: any, i: number) => {
     const st = attempts[cert.id];
     const label = st?.passed ? 'View result' : st?.inProgress ? 'Continue' : 'Start exam';
-    // Locked while another certification is in progress (one at a time).
-    const lockedByOther = !!inProgressId && inProgressId !== cert.id && !st?.passed;
+    // Locked to a Switch while the student is enrolled in a DIFFERENT exam (in progress or failed),
+    // mirroring the server's one-at-a-time rule so a quit/fail cannot silently unlock the others.
+    const lockedByOther = !!enrolledId && enrolledId !== cert.id && !st?.passed;
     return (
       <motion.div key={cert.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
         className="relative rounded-2xl p-5 flex flex-col min-h-[320px]" style={{ background: C.card }}>
@@ -108,8 +113,15 @@ export function CertificationsSection({ userId, userEmail, C }: { userId: string
           <p className="text-sm mb-4" style={{ color: C.muted }}>{cert.description}</p>
         )}
         {lockedByOther ? (
-          <div className="mt-auto text-center px-4 py-2 rounded-xl text-xs font-medium" style={{ background: C.pill, color: C.faint }}>
-            Finish your certification in progress first
+          // Another exam is in progress. Keep this actionable: opening it lets the student switch
+          // (the taker asks to confirm, discarding the other) instead of a dead-end message.
+          <div className="mt-auto">
+            <a href={`/${cert.slug || cert.id}`}
+              className="inline-flex w-full items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90"
+              style={{ background: C.pill, color: C.text }}>
+              Switch to this exam
+            </a>
+            <p className="text-[11px] text-center mt-1.5" style={{ color: C.faint }}>You have another exam in progress.</p>
           </div>
         ) : (
           <a href={`/${cert.slug || cert.id}`}

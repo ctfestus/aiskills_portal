@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Clock, Loader2, CheckCircle2, XCircle, ShieldAlert, Award, AlertTriangle, Circle, Check, ListChecks, Sparkle, ChevronRight, FileText, ExternalLink, BarChart3, Image as ImageIcon, BookOpen, Play } from 'lucide-react';
+import { X, Clock, Loader2, CheckCircle2, XCircle, ShieldAlert, Award, AlertTriangle, Circle, Check, ListChecks, Sparkle, ChevronRight, FileText, ExternalLink, BarChart3, Image as ImageIcon, BookOpen, Play, LogOut } from 'lucide-react';
 import { initSQLRuntime, SQLRuntime } from '@/lib/sql-engine';
 import SQLExercisePlayer from '@/components/sql-course/SQLExercisePlayer';
 import PythonExercisePlayer from '@/components/sql-course/PythonExercisePlayer';
@@ -60,7 +60,9 @@ export default function CertificationTaker({
   // Platform branding colours, used for the OVERVIEW only (the exam keeps the content `accentColor`):
   // - tenantBrand = Brand Colour (`brand_color`) -> the hero band. The OVERVIEW uses the BRAND color
   // (NOT primary/ocean -- that convention is only for the instructor editor, which mirrors courses).
-  const { brandColor: tenantBrand } = useTenant();
+  const { brandColor: tenantBrand, primaryColor: tenantPrimary } = useTenant();
+  // Primary tenant colour for confirmation-popup borders (falls back to the content accent).
+  const dialogBorder = tenantPrimary || tenantBrand || accentColor;
   // Questions are NOT in config -- they are delivered by start-attempt (when the clock starts), so a
   // student cannot read them before the timer begins. config carries only metadata + questionCount.
   const questionCount: number = Number(config?.questionCount) || 0;
@@ -385,6 +387,16 @@ export default function CertificationTaker({
   // Buttons call this (no args); the switch-confirm modal calls doStart(true).
   const startExam = useCallback(() => doStart(false), [doStart]);
 
+  // Quit an in-progress exam: costs one attempt and discards progress (confirmed via the modal below),
+  // then leave. Frees the student to start over or take a different certification.
+  const [showQuit, setShowQuit] = useState(false);
+  const [quitting, setQuitting] = useState(false);
+  const abandonExam = useCallback(async () => {
+    setQuitting(true);
+    try { await api('abandon-attempt'); } catch { /* leave regardless */ }
+    onExit();
+  }, [api, onExit]);
+
   // Practice: fetch a pooled/shuffled set (no attempt, no timer, no protection) and run it as a dry run.
   const startPractice = useCallback(async () => {
     setStartError('');
@@ -699,7 +711,7 @@ export default function CertificationTaker({
         {/* Switch-certification confirmation (blocked because enrolled in another unpassed cert) */}
         {switchPrompt && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-            <div style={{ background: ov.bg, color: ov.text, maxWidth: 440, width: '100%', borderRadius: 16, padding: 28, boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }}>
+            <div style={{ background: ov.bg, color: ov.text, maxWidth: 440, width: '100%', borderRadius: 16, padding: 28, border: `2px solid ${dialogBorder}`, boxShadow: '0 24px 64px rgba(0,0,0,0.35)' }}>
               <h3 style={{ fontSize: 19, fontWeight: 800, marginBottom: 10 }}>Switch certification?</h3>
               <p style={{ fontSize: 14.5, color: ov.muted, lineHeight: 1.6, marginBottom: 22 }}>
                 You are enrolled in <strong style={{ color: ov.text }}>{switchPrompt.title}</strong>, which you have not passed yet. You can work on only one certification at a time. Switching discards your progress there and starts <strong style={{ color: ov.text }}>{title}</strong> fresh.
@@ -862,7 +874,10 @@ export default function CertificationTaker({
 
       {/* Top bar */}
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 56, zIndex: 60, display: 'flex', alignItems: 'center', gap: 28, padding: '0 56px', background: t.bg }}>
-        <button onClick={isPractice ? exitPractice : onExit} title={isPractice ? 'Exit practice' : 'Exit exam'} style={{ color: t.muted }}><X className="w-5 h-5" /></button>
+        <button onClick={isPractice ? exitPractice : onExit} title={isPractice ? 'Exit practice' : 'Exit (progress saved, resume later)'} style={{ color: t.muted }}><X className="w-5 h-5" /></button>
+        {!isPractice && !isPreview && (
+          <button onClick={() => setShowQuit(true)} title="Quit exam" style={{ color: t.muted, display: 'inline-flex' }}><LogOut className="w-5 h-5" /></button>
+        )}
         <div ref={barRef} style={{ flex: '1 1 0%', width: '100%', maxWidth: 1200, minWidth: 0, margin: '0 auto', height: 9, borderRadius: 999, background: t.track }}>
           <div style={{ height: '100%', width: `${progress}%`, minWidth: progress > 0 ? 9 : 0, background: accentColor, borderRadius: 999, transition: 'width 240ms ease' }} />
         </div>
@@ -872,6 +887,20 @@ export default function CertificationTaker({
           </span>
         )}
       </div>
+
+      {/* Quit confirmation */}
+      {showQuit && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: t.card, color: t.text, maxWidth: 420, width: '100%', borderRadius: 16, padding: 28, border: `2px solid ${dialogBorder}`, boxShadow: '0 24px 64px rgba(0,0,0,0.45)' }}>
+            <h3 style={{ fontSize: 19, fontWeight: 800, marginBottom: 10 }}>Quit Exam?</h3>
+            <p style={{ fontSize: 14.5, color: t.muted, lineHeight: 1.6, marginBottom: 22 }}>Are you sure you want to quit the exam? You will lose one attempt and progress.</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <button onClick={() => setShowQuit(false)} disabled={quitting} style={{ background: t.cardHover, color: t.text, fontWeight: 600, fontSize: 14, padding: '10px 18px', borderRadius: 10 }}>Cancel</button>
+              <button onClick={abandonExam} disabled={quitting} style={{ background: '#f43f5e', color: '#ffffff', fontWeight: 700, fontSize: 14, padding: '10px 20px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 8 }}>{quitting && <Loader2 className="w-4 h-4 animate-spin" />}Quit exam</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Recorded-action warning */}
       <AnimatePresence>
