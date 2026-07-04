@@ -260,6 +260,8 @@ CREATE TABLE public.certifications (
   custom_accent   text,
   -- Foundation assets (migration 124): skill areas + study guide PDF + poster + practice-test link.
   skill_areas           jsonb   NOT NULL DEFAULT '[]',  -- [{id,name}]; questions map via CourseQuestion.skillAreaId
+  -- Case studies (migration 134): [{id,title,content}]; questions reference one via CourseQuestion.scenarioId
+  scenarios             jsonb   NOT NULL DEFAULT '[]',
   study_guide_url       text,
   study_guide_name      text,
   study_guide_published boolean NOT NULL DEFAULT false,

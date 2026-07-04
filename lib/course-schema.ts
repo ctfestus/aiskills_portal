@@ -57,6 +57,7 @@ export interface CourseQuestion {
   optionImages?: string[];    // image type only -- one base64 per option, same length as options
   imageUrl?: string;          // image_choice: a single prompt image shown above the text options
   skillAreaId?: string;       // certifications: maps this question to a CertificationConfig.skillAreas entry
+  scenarioId?: string;        // certifications: attaches this question to a CertificationConfig.scenarios case study (shared stimulus)
   multiSelect?: boolean;      // multiple_choice/image_choice: more than one correct option (correctAnswer is '|||'-joined, order-independent)
   section?: 'technical' | 'practical';  // certifications: which exam section this question belongs to (Technical vs Practical/Case study)
   hint?: string;
@@ -238,6 +239,7 @@ export interface CertificationConfig {
   learnOutcomes?: string[];
   // Foundation assets
   skillAreas?: SkillArea[];          // defined skill areas; questions map to one via CourseQuestion.skillAreaId
+  scenarios?: CertificationScenario[]; // case studies: a shared stimulus shown with each question that references it via scenarioId
   studyGuideUrl?: string;            // uploaded PDF (Cloudinary)
   studyGuideName?: string;
   studyGuidePublished?: boolean;     // learners see the study guide only when published
@@ -259,6 +261,14 @@ export interface CertificationConfig {
 export interface SkillArea {
   id: string;
   name: string;
+}
+
+// A case study: a shared stimulus (scenario, dataset description, context) that several exam questions
+// reference via CourseQuestion.scenarioId. Shown alongside each of its questions in the taker.
+export interface CertificationScenario {
+  id: string;
+  title: string;
+  content: string;   // the stimulus text shown to the student
 }
 
 export interface CertificationPrepItem {

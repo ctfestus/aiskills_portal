@@ -1254,10 +1254,22 @@ function QuestionView({ q, qType, value, onChange, t, accentColor, sharedPlaygro
     </>
   );
 
+  // Case-study stimulus, delivered inline on the question when it belongs to a scenario. Shown above
+  // the question so several questions can build on one shared context.
+  const scenario = q.scenario as { title?: string; content?: string } | undefined;
+  const Scenario = scenario && (scenario.title || scenario.content) ? (
+    <div style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 12, padding: '14px 18px', marginBottom: 20, textAlign: 'left' }}>
+      <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: accentColor, marginBottom: 6 }}>Case study</div>
+      {scenario.title && <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6, color: t.text }}>{scenario.title}</div>}
+      {scenario.content && <div style={{ fontSize: 14, lineHeight: 1.6, color: t.muted, whiteSpace: 'pre-wrap' }}>{scenario.content}</div>}
+    </div>
+  ) : null;
+
   if (leftPanel) {
     // Question on top, image/playground on the left, the answer options on the right.
     return (
       <div>
+        {Scenario}
         {Title}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, alignItems: 'start' }}>
           {leftPanel}
@@ -1266,7 +1278,7 @@ function QuestionView({ q, qType, value, onChange, t, accentColor, sharedPlaygro
       </div>
     );
   }
-  return <div>{Title}{body}</div>;
+  return <div>{Scenario}{Title}{body}</div>;
 }
 
 // --- Overview "Complete courses" cards ---
