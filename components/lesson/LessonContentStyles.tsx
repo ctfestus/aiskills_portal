@@ -371,6 +371,15 @@ export function LessonContentStyles() {
 .lesson-content .lesson-image__alt-input { font: inherit; font-size: 11px; width: 110px; padding: 3px 7px; border-radius: 6px; border: 1px solid rgba(0,0,0,0.12); background: rgba(0,0,0,0.02); color: #52525b; outline: none; }
 .lesson-content.dark .lesson-image__alt-input { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); color: #d4d4d8; }
 
+.lesson-content .lesson-audio { margin: 0.9rem 0; position: relative; width: 100%; }
+.lesson-content .lesson-audio__player { width: 100%; max-width: 520px; border-radius: 10px; color-scheme: light; }
+.lesson-content.dark .lesson-audio__player { color-scheme: dark; }
+.lesson-content .lesson-audio__caption { font-size: 12.5px; color: #71717a; margin-top: 6px; }
+.lesson-content.dark .lesson-audio__caption { color: #a1a1aa; }
+.lesson-content .lesson-audio__caption-input { width: 100%; max-width: 520px; margin-top: 6px; font: inherit; font-size: 12.5px; text-align: center; color: #71717a; background: transparent; border: none; border-bottom: 1px dashed #d4d4d8; outline: none; padding: 2px 0; }
+.lesson-content.dark .lesson-audio__caption-input { color: #a1a1aa; border-bottom-color: #3f3f46; }
+.lesson-content .lesson-audio__caption-input::placeholder { color: #c4c4c8; }
+
 .lesson-content .lesson-carousel { margin: 0.9rem 0; position: relative; container-type: inline-size; --card-border-default: #e4e4e7; }
 .lesson-content.dark .lesson-carousel { --card-border-default: #3f3f46; }
 .lesson-content .lesson-carousel__viewport { display: flex; align-items: center; gap: 8px; }

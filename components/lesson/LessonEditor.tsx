@@ -20,7 +20,7 @@ import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code2, FileCode2,
   List, ListOrdered, Heading2, Heading3, Link as LinkIcon, Quote,
   Image as ImageIcon, Table as TableIcon, Info, ChevronsUpDown, LayoutGrid, HelpCircle, Terminal, GalleryHorizontal,
-  Layers, ListChecks, History, BookMarked, Braces,
+  Layers, ListChecks, History, BookMarked, Braces, AudioLines,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { StyleMenu, MenuRow, Segmented, ColorField } from '@/components/lesson/nodes/StyleControls';
@@ -31,6 +31,7 @@ import { GlossaryTooltip } from '@/components/lesson/GlossaryTooltip';
 import { LessonRuntimeProvider } from '@/components/lesson/LessonRuntimeContext';
 import { useTenant } from '@/components/TenantProvider';
 import { ImageLibrary } from '@/components/ImageLibrary';
+import { AudioPicker } from '@/components/lesson/AudioPicker';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { collectRunnableSetup, inlineGlossaryDefinitions, type LessonDoc } from '@/lib/lesson-doc';
 
@@ -47,6 +48,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
   const { primaryColor } = useTenant();
   const dark = isDark ?? theme === 'dark';
   const [showLibrary, setShowLibrary] = useState(false);
+  const [showAudioPicker, setShowAudioPicker] = useState(false);
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
   const onChangeRef = useRef(onChange);
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
@@ -159,6 +161,7 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
         <Btn dark={dark} title="Runnable code (Python)" onClick={() => editor.chain().focus().insertContent({ type: 'runnableCode', attrs: { language: 'python', code: '', setupSql: '', setupPython: '' } }).run()}><Braces className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Table" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableIcon className="w-3.5 h-3.5" /></Btn>
         <Btn dark={dark} title="Insert image" onClick={() => setShowLibrary(true)}><ImageIcon className="w-3.5 h-3.5" /></Btn>
+        <Btn dark={dark} title="Insert audio" onClick={() => setShowAudioPicker(true)}><AudioLines className="w-3.5 h-3.5" /></Btn>
       </Toolbar>
 
       {editor.isActive('table') && (() => {
@@ -209,6 +212,12 @@ export function LessonEditor({ doc, bodyFallback, onChange, placeholder = 'Write
           initialFolder="lesson-images"
           onSelect={url => editor.chain().focus().setImage({ src: url }).run()}
           onClose={() => setShowLibrary(false)}
+        />
+      )}
+      {showAudioPicker && (
+        <AudioPicker
+          onSelect={url => editor.chain().focus().insertContent({ type: 'lessonAudio', attrs: { src: url } }).run()}
+          onClose={() => setShowAudioPicker(false)}
         />
       )}
     </div>

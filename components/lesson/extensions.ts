@@ -18,6 +18,7 @@ import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
 import type { LessonDoc } from '@/lib/lesson-doc';
 import { LessonImage } from '@/components/lesson/nodes/LessonImage';
+import { LessonAudio } from '@/components/lesson/nodes/LessonAudio';
 import { Callout } from '@/components/lesson/nodes/Callout';
 import { Accordion, AccordionItem } from '@/components/lesson/nodes/Accordion';
 import { Tabs, TabPanel } from '@/components/lesson/nodes/Tabs';
@@ -65,6 +66,8 @@ export const lessonExtensions: Extensions = [
   // URL-only images (with align/size/caption/border controls); base64 is rejected so
   // large image data never lands inside the questions JSONB.
   LessonImage.configure({ inline: false, allowBase64: false }),
+  // Audio player block (uploaded Cloudinary file or pasted direct URL).
+  LessonAudio,
   Table.configure({ resizable: true }),
   TableRow,
   LessonTableHeader,

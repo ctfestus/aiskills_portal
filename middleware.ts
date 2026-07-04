@@ -45,7 +45,9 @@ export async function middleware(req: NextRequest) {
     "img-src https: data: blob:",
     `connect-src 'self' ${supabaseUrl} https://*.supabase.co https://api.resend.com wss://*.supabase.co https://cdn.jsdelivr.net https://challenges.cloudflare.com https://raw.githubusercontent.com`,
     "worker-src 'self' blob: https://cdn.jsdelivr.net",
-    "media-src 'self' blob:",
+    // Allow <audio>/<video> from any https source (Supabase Storage, Cloudinary, and
+    // author-pasted media URLs). Mirrors the permissive img-src https: policy.
+    "media-src 'self' blob: https:",
     "frame-src 'self' blob: https://www.youtube.com https://player.vimeo.com https://iframe.mediadelivery.net https://player.mediadelivery.net https://video.bunnycdn.com https://www.canva.com https://challenges.cloudflare.com",
     "base-uri 'self'",
     "form-action 'self'",
