@@ -65,11 +65,12 @@ function VirtualExperienceCard({ form, attempt, deadline, C, onDetails }: {
       {/* Cover */}
       <div className="relative h-36 overflow-hidden cursor-pointer group flex-shrink-0"
         style={{ background: `${color}14` }} onClick={onDetails}>
-        {cfg.coverImage
-          ? <img src={resolveCoverUrl(cfg.coverImage)} alt={form.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onError={e => (e.currentTarget.style.display = 'none')}/>
-          : <div className="w-full h-full flex items-center justify-center">
-              <Briefcase className="w-10 h-10 opacity-25" style={{ color }}/>
-            </div>}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Briefcase className="w-10 h-10 opacity-25" style={{ color }}/>
+        </div>
+        {cfg.coverImage && (
+          <img src={resolveCoverUrl(cfg.coverImage)} alt={form.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onError={e => (e.currentTarget.style.display = 'none')}/>
+        )}
         {/* Industry badge */}
         <div className="absolute top-2 left-2">
           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
@@ -410,10 +411,9 @@ function IndustryRow({ industry, items, attempts, deadlines, C, onDetails }: {
             <div key={form.id} className="flex-shrink-0 w-[220px] snap-start"
               onMouseEnter={(e) => openHover(form, e.currentTarget)} onMouseLeave={scheduleClose}>
               <button onClick={() => onDetails(form)} className="block w-full text-left transition-transform hover:-translate-y-0.5">
-                <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: cover ? '#0b0b0d' : 'rgba(34,197,94,0.10)' }}>
-                  {cover
-                    ? <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>
-                    : <div className="w-full h-full flex items-center justify-center"><Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/></div>}
+                <div className="relative rounded-xl overflow-hidden w-full aspect-video" style={{ background: 'rgba(34,197,94,0.10)' }}>
+                  <div className="absolute inset-0 flex items-center justify-center"><Briefcase className="w-8 h-8" style={{ color: '#16a34a' }}/></div>
+                  {cover && <img src={resolveCoverUrl(cover)} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')}/>}
                   {status && (
                     <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-md"
                       style={{ background: isCompleted ? '#16a34a' : '#22c55e', color: '#ffffff' }}>

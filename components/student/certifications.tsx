@@ -96,10 +96,9 @@ export function CertificationsSection({ userId, userEmail, C }: { userId: string
         )}
         {/* Badge (credential icon) on the left, no background; title + facts on the right. */}
         <div className="flex items-start gap-3.5 mb-4">
-          <div className="w-16 h-16 flex-shrink-0 flex items-center justify-center">
-            {cert.badge_image_url
-              ? <img src={resolveCoverUrl(cert.badge_image_url)} alt="" className="w-full h-full object-contain" onError={e => (e.currentTarget.style.display = 'none')} />
-              : <Award className="w-12 h-12" style={{ color: C.green }} />}
+          <div className="relative w-16 h-16 flex-shrink-0 flex items-center justify-center">
+            <Award className="w-12 h-12" style={{ color: C.green }} />
+            {cert.badge_image_url && <img src={resolveCoverUrl(cert.badge_image_url)} alt="" className="absolute inset-0 w-full h-full object-contain" onError={e => (e.currentTarget.style.display = 'none')} />}
           </div>
           <div className={`min-w-0 flex-1 ${st?.passed ? 'pr-10' : ''}`}>
             <h3 className="text-lg font-bold leading-tight line-clamp-3" style={{ color: C.text }}>{cert.title}</h3>
