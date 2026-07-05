@@ -30,6 +30,10 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     icons: [
       { src: icon, sizes: '192x192', ...type, purpose: 'any' },
       { src: icon, sizes: '512x512', ...type, purpose: 'any' },
+      // Maskable: logo composited on the brand color, full-bleed, so Android fills
+      // the rounded/adaptive icon shape edge-to-edge instead of plating the square
+      // favicon (which left white margins). Generated per-tenant at request time.
+      { src: '/pwa-icon-maskable', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
   };
 }
