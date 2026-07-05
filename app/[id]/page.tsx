@@ -226,22 +226,13 @@ export default function PublicFormPage() {
   const { id } = useParams();
   const [form, setForm] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [systemDark, setSystemDark] = useState(() =>
-    typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
-  );
   const [studentTheme, setStudentTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window === 'undefined') return 'light';
     return localStorage.getItem('ff-theme') === 'dark' ? 'dark' : 'light';
   });
 
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
-  // Read student's saved theme preference (used for virtual experiences & course overview)
+  // Read student's saved theme preference (used for virtual experiences, course
+  // overview, and the 'auto' appearance mode, which follows the app theme)
   useEffect(() => {
     const handler = () => {
       const v = localStorage.getItem('ff-theme') as 'light' | 'dark' | null;
@@ -255,14 +246,14 @@ export default function PublicFormPage() {
   useEffect(() => {
     if (!form) return;
     const rawMode = form.config?.mode ?? 'dark';
-    const resolved = rawMode === 'auto' ? (systemDark ? 'dark' : 'light') : rawMode;
+    const resolved = rawMode === 'auto' ? studentTheme : rawMode;
     const prev = document.documentElement.getAttribute('data-theme');
     document.documentElement.setAttribute('data-theme', resolved);
     return () => {
       if (prev) document.documentElement.setAttribute('data-theme', prev);
       else document.documentElement.removeAttribute('data-theme');
     };
-  }, [form, systemDark]);
+  }, [form, studentTheme]);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [joinToken, setJoinToken] = useState<string | null>(null);
@@ -691,7 +682,7 @@ export default function PublicFormPage() {
 
   const config = form.config;
   const rawMode: ThemeMode = config.mode ?? 'dark';
-  const resolvedMode: 'light' | 'dark' = rawMode === 'auto' ? (systemDark ? 'dark' : 'light') : rawMode;
+  const resolvedMode: 'light' | 'dark' = rawMode === 'auto' ? studentTheme : rawMode;
   const dark = resolvedMode === 'dark';
   const t = dark ? DARK_P : LIGHT_P;
   const pageUrl = typeof window !== 'undefined' ? window.location.href : '';

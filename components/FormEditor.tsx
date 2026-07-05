@@ -2126,7 +2126,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                   </button>
                   <button onClick={() => updateConfig({ mode: 'auto' })} className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all flex flex-col items-center justify-center" style={{ background: formConfig.mode === 'auto' ? FE.segmentActive : 'transparent', color: formConfig.mode === 'auto' ? FE.segmentActiveText : FE.faint, boxShadow: formConfig.mode === 'auto' ? '0 1px 3px rgba(0,0,0,0.10)' : undefined }}>
                     <span>Auto</span>
-                    <span className="text-[9px] opacity-60 leading-none">Matches device</span>
+                    <span className="text-[9px] opacity-60 leading-none">Matches app theme</span>
                   </button>
                 </div>
               </div>
