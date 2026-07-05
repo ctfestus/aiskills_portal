@@ -12,7 +12,7 @@
 const CACHE_VERSION = 'v1';
 const SHELL_CACHE = `shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
-const PRECACHE = ['/offline.html', '/icons/icon-192.png', '/icons/icon-512.png'];
+const PRECACHE = ['/offline.html'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(PRECACHE)));
@@ -47,7 +47,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return; // never touch cross-origin (Supabase, Cloudinary, CDNs)
 
   // Content-hashed static assets: cache-first.
-  if (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/icons/')) {
+  if (url.pathname.startsWith('/_next/static/')) {
     event.respondWith(
       caches.match(request).then(
         (cached) =>

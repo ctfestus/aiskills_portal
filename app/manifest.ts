@@ -8,6 +8,11 @@ import { getTenantSettings } from '@/lib/get-tenant-settings';
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const t = await getTenantSettings();
   const name = t.appName || t.orgName || 'Learning';
+  // Tenant-resolved app icon (same square brand mark the browser tab + Apple icon use),
+  // NOT a baked-in asset -- so each deployment installs under its own logo.
+  const icon = t.faviconUrl || '/icon.png';
+  const isPng = /\.png($|\?)/i.test(icon);
+  const type = isPng ? { type: 'image/png' } : {};
 
   return {
     id: '/',
@@ -23,9 +28,8 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     theme_color: t.brandColor || '#2563eb',
     categories: ['education'],
     icons: [
-      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      { src: icon, sizes: '192x192', ...type, purpose: 'any' },
+      { src: icon, sizes: '512x512', ...type, purpose: 'any' },
     ],
   };
 }
