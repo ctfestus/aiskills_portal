@@ -61,10 +61,11 @@ export async function POST(req: NextRequest) {
 
   if (!studentIds.length) return NextResponse.json({ ok: true, sent: 0, skipped: 0 });
 
-  const [{ data: courses }, { data: ves }, { data: studentRows }] = await Promise.all([
+  const [{ data: courses }, { data: ves }, { data: studentRows }, { data: cohortAssignments }] = await Promise.all([
     courseIds.length ? supabase.from('courses').select('id, title, slug, cover_image').in('id', courseIds) : Promise.resolve({ data: [] }),
     veIds.length     ? supabase.from('virtual_experiences').select('id, title, slug, cover_image').in('id', veIds) : Promise.resolve({ data: [] }),
-    supabase.from('students').select('id, email, full_name').in('id', studentIds),
+    supabase.from('students').select('id, email, full_name, cohort_id').in('id', studentIds),
+    supabase.from('cohort_assignments').select('content_id, cohort_id').in('content_id', [...courseIds, ...veIds]),
   ]);
 
   // Build unified content map
@@ -74,6 +75,15 @@ export async function POST(req: NextRequest) {
 
   const studentMap = new Map((studentRows ?? []).map((s: any) => [s.id, s]));
 
+  // Only nudge students whose cohort is currently assigned the stalled content. Mirrors the
+  // cohort_assignments scoping used by the weekly-digest and deadline-reminder crons, so learners
+  // with no cohort (or in a cohort the content was never assigned to) are never nudged.
+  const assignedCohortsByContent = new Map<string, Set<string>>();
+  for (const a of cohortAssignments ?? []) {
+    if (!assignedCohortsByContent.has(a.content_id)) assignedCohortsByContent.set(a.content_id, new Set());
+    assignedCohortsByContent.get(a.content_id)!.add(a.cohort_id);
+  }
+
   // Fetch related assignments for stalled courses (smart nudge)
   const { data: relatedAssignments } = courseIds.length
     ? await supabase.from('assignments').select('id, title, related_course').in('related_course', courseIds).eq('status', 'published')
@@ -81,6 +91,7 @@ export async function POST(req: NextRequest) {
   const assignmentMap = new Map((relatedAssignments ?? []).map((a: any) => [a.related_course, a.title]));
 
   // Merge and deduplicate stalled attempts
+  let excludedUnassigned = 0;
   const seen = new Set<string>();
   const candidates: {
     studentId:   string;
@@ -100,6 +111,7 @@ export async function POST(req: NextRequest) {
     const content = contentMap.get(a.course_id);
     const student = studentMap.get(a.student_id);
     if (!content || !student?.email) continue;
+    if (!student.cohort_id || !assignedCohortsByContent.get(a.course_id)?.has(student.cohort_id)) { excludedUnassigned++; continue; }
     candidates.push({ studentId: a.student_id, email: student.email, name: student.full_name || 'there', contentId: a.course_id, contentType: 'course', title: content.title, slug: content.slug ?? a.course_id, coverImage: content.cover_image });
   }
 
@@ -110,6 +122,7 @@ export async function POST(req: NextRequest) {
     const content = contentMap.get(a.ve_id);
     const student = studentMap.get(a.student_id);
     if (!content || !student?.email) continue;
+    if (!student.cohort_id || !assignedCohortsByContent.get(a.ve_id)?.has(student.cohort_id)) { excludedUnassigned++; continue; }
     candidates.push({ studentId: a.student_id, email: student.email, name: student.full_name || 'there', contentId: a.ve_id, contentType: 'virtual_experience', title: content.title, slug: content.slug ?? a.ve_id, coverImage: content.cover_image });
   }
 
@@ -158,8 +171,8 @@ export async function POST(req: NextRequest) {
   }
 
   if (!emailBatch.length) {
-    console.log(`[cron/progress-nudges] sent=0 skipped=${skipped}`);
-    return NextResponse.json({ ok: true, sent: 0, skipped });
+    console.log(`[cron/progress-nudges] sent=0 skipped=${skipped} excludedUnassigned=${excludedUnassigned}`);
+    return NextResponse.json({ ok: true, sent: 0, skipped, excludedUnassigned });
   }
 
   const sentKeys = new Set<string>();
@@ -184,6 +197,6 @@ export async function POST(req: NextRequest) {
     if (toInsert.length) await supabase.from('sent_nudges').insert(toInsert);
   }
 
-  console.log(`[cron/progress-nudges] sent=${sent} skipped=${skipped}`);
-  return NextResponse.json({ ok: true, sent, skipped });
+  console.log(`[cron/progress-nudges] sent=${sent} skipped=${skipped} excludedUnassigned=${excludedUnassigned}`);
+  return NextResponse.json({ ok: true, sent, skipped, excludedUnassigned });
 }
