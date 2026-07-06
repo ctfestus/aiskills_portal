@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, useInView, AnimatePresence } from 'motion/react';
+import { motion, useInView, AnimatePresence, useMotionValue, useSpring, useScroll, useReducedMotion } from 'motion/react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/components/TenantProvider';
@@ -901,6 +901,117 @@ function ElevateTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUr
 }
 
 // --- Modern template helpers ---
+const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
+// Lighten (amt > 0) or darken (amt < 0) a #rrggbb colour
+function shade(hex: string, amt: number): string {
+  const h = (hex || '').replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return hex;
+  const ch = (o: number) => {
+    const v = parseInt(h.slice(o, o + 2), 16);
+    const t = amt < 0 ? 0 : 255;
+    return Math.round(v + (t - v) * Math.abs(amt)).toString(16).padStart(2, '0');
+  };
+  return `#${ch(0)}${ch(2)}${ch(4)}`;
+}
+
+// Scroll-linked rise/blur reveal used across the Modern template
+function MReveal({ children, delay = 0, y = 26, blur = false, className = '' }: {
+  children: React.ReactNode; delay?: number; y?: number; blur?: boolean; className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: '-60px' });
+  const reduced = useReducedMotion();
+  return (
+    <motion.div ref={ref}
+      initial={reduced ? false : { opacity: 0, y, ...(blur ? { filter: 'blur(7px)' } : {}) }}
+      animate={inView ? { opacity: 1, y: 0, ...(blur ? { filter: 'blur(0px)' } : {}) } : undefined}
+      transition={{ duration: 0.7, delay, ease: EASE_OUT }}
+      className={className}>
+      {children}
+    </motion.div>
+  );
+}
+
+// Per-word masked rise for display headings
+function WordReveal({ text, delay = 0, className = '', style }: {
+  text: string; delay?: number; className?: string; style?: React.CSSProperties;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, margin: '-50px' });
+  const reduced = useReducedMotion();
+  const words = (text || '').split(' ').filter(Boolean);
+  if (reduced) return <span className={className} style={style}>{text}</span>;
+  return (
+    <span ref={ref} className={className} style={style}>
+      {words.map((w, i) => (
+        <span key={i} className="inline-block overflow-hidden align-bottom">
+          <motion.span className="inline-block"
+            initial={{ y: '112%' }}
+            animate={inView ? { y: '0%' } : undefined}
+            transition={{ duration: 0.65, delay: delay + i * 0.055, ease: EASE_OUT }}>
+            {w + (i < words.length - 1 ? ' ' : '')}
+          </motion.span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+// Magnetic hover wrapper for primary CTAs
+function Magnetic({ children, strength = 0.16 }: { children: React.ReactNode; strength?: number }) {
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const sx = useSpring(x, { stiffness: 220, damping: 16, mass: 0.3 });
+  const sy = useSpring(y, { stiffness: 220, damping: 16, mass: 0.3 });
+  const reduced = useReducedMotion();
+  if (reduced) return <>{children}</>;
+  return (
+    <motion.div className="inline-block" style={{ x: sx, y: sy }}
+      onMouseMove={e => {
+        const r = e.currentTarget.getBoundingClientRect();
+        x.set((e.clientX - r.left - r.width / 2) * strength);
+        y.set((e.clientY - r.top - r.height / 2) * strength * 1.6);
+      }}
+      onMouseLeave={() => { x.set(0); y.set(0); }}>
+      {children}
+    </motion.div>
+  );
+}
+
+// Thin scroll progress hairline above the nav
+function LandingScrollProgress({ from, to }: { from: string; to: string }) {
+  const { scrollYProgress } = useScroll();
+  const scaleX = useSpring(scrollYProgress, { stiffness: 160, damping: 28, mass: 0.35 });
+  return (
+    <motion.div aria-hidden="true"
+      className="fixed top-0 left-0 right-0 h-[3px] origin-left pointer-events-none"
+      style={{ scaleX, zIndex: 60, background: `linear-gradient(90deg, ${from}, ${to})` }} />
+  );
+}
+
+// Animated section heading: title, growing accent underline, subtext
+function MSectionHeading({ title, sub, color, subColor, accent, hFont, bFont }: {
+  title: string; sub: string; color: string; subColor: string; accent: string; hFont?: string; bFont?: string;
+}) {
+  return (
+    <MReveal blur className="mb-7">
+      <h2 style={{ fontFamily: hFont, fontWeight: 900, fontSize: 'clamp(23px,2.6vw,36px)', color, letterSpacing: '-0.03em', lineHeight: 1.08 }}>{title}</h2>
+      <motion.span aria-hidden="true" className="block h-[3px] w-11 rounded-full origin-left mt-1.5 mb-1.5" style={{ background: accent }}
+        initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true, margin: '-60px' }}
+        transition={{ duration: 0.7, delay: 0.3, ease: EASE_OUT }} />
+      {sub && <p style={{ color: subColor, fontSize: 15, lineHeight: 1.65, fontFamily: bFont ?? hFont, maxWidth: 640 }}>{sub}</p>}
+    </MReveal>
+  );
+}
+
+// Stagger variants for the ad banner slide content
+const bannerStagger = { hide: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.12 } } };
+const bannerItem = {
+  hide: { opacity: 0, y: 16 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE_OUT } },
+};
+
 function groupByField(items: ProgrammeItem[], field: 'category'): [string, ProgrammeItem[]][] {
   const map = new Map<string, ProgrammeItem[]>();
   for (const item of items) {
@@ -926,9 +1037,13 @@ const LAND_C = { card: 'white', text: '#1C1D1F', muted: '#6E7383', faint: '#9CA3
 // --- Ad banner carousel ---
 type AdCard = { label: string; title: string; description: string; ctaText: string; ctaUrl: string; bgColor: string; bgImage: string; imageLayout?: string; };
 
-function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFont?: string; bFont?: string; fullWidth?: boolean }) {
+const BANNER_AUTO_MS = 6500;
+
+function LandingAdBanner({ ads, hFont, bFont, fullWidth, isDark }: { ads: AdCard[]; hFont?: string; bFont?: string; fullWidth?: boolean; isDark?: boolean }) {
   const cards = ads.filter(a => a.title);
   const [idx, setIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const reduced = useReducedMotion();
   const trackRef = useRef<HTMLDivElement>(null);
   const clipRef  = useRef<HTMLDivElement>(null);
   const touchX   = useRef<number | null>(null);
@@ -942,6 +1057,13 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
     obs.observe(clipRef.current);
     return () => obs.disconnect();
   }, []);
+
+  // Gentle auto-advance; paused on hover/touch, off for reduced motion
+  useEffect(() => {
+    if (paused || reduced || max === 0) return;
+    const t = setInterval(() => setIdx(i => (i >= max ? 0 : i + 1)), BANNER_AUTO_MS);
+    return () => clearInterval(t);
+  }, [paused, reduced, max, idx]);
 
   const isMobile = containerW > 0 && containerW < 640;
   const hasSideImage = cards.some(c => c.imageLayout === 'side' && !!c.bgImage);
@@ -961,8 +1083,9 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
   const goTo = (next: number) => setIdx(Math.max(0, Math.min(next, max)));
 
   // Touch swipe (mobile) -- the prev/next arrows are hidden on small screens
-  const onTouchStart = (e: React.TouchEvent) => { touchX.current = e.touches[0].clientX; };
+  const onTouchStart = (e: React.TouchEvent) => { touchX.current = e.touches[0].clientX; setPaused(true); };
   const onTouchEnd = (e: React.TouchEvent) => {
+    setPaused(false);
     if (touchX.current === null) return;
     const dx = e.changedTouches[0].clientX - touchX.current;
     touchX.current = null;
@@ -973,20 +1096,25 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
   if (!cards.length) return null;
 
   return (
+    <MReveal y={22} blur>
     <div>
-      <div className="relative">
+      <div className="relative"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}>
         {/* Left arrow - hidden on mobile, vertically centered on desktop */}
         {max > 0 && !isMobile && (
-          <button onClick={() => goTo(idx - 1)} disabled={idx === 0}
-            className={`absolute top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full grid place-items-center transition-all disabled:opacity-20 outline-none focus:outline-none ${fullWidth ? 'left-3 sm:left-6 bg-white shadow-md hover:shadow-lg' : 'left-0 -translate-x-1/2 hover:bg-white hover:shadow-md'}`}
-            style={{ color: LAND_C.text }}>
+          <button onClick={() => goTo(idx - 1)} disabled={idx === 0} aria-label="Previous slide"
+            className={`absolute top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full grid place-items-center transition-all duration-200 hover:scale-110 active:scale-95 disabled:opacity-20 outline-none focus:outline-none ${fullWidth ? 'left-3 sm:left-6 bg-white shadow-md hover:shadow-xl' : isDark ? 'left-0 -translate-x-1/2 hover:bg-white/10' : 'left-0 -translate-x-1/2 hover:bg-white hover:shadow-md'}`}
+            style={{ color: !fullWidth && isDark ? 'white' : LAND_C.text }}>
             <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
           </button>
         )}
 
         <div ref={clipRef} style={{ overflow: 'hidden', touchAction: 'pan-y' }} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-        <div ref={trackRef} style={{ display: 'flex', gap: GAP, transform: `translateX(-${getTranslate(idx)}px)`, transition: 'transform 0.45s cubic-bezier(0.25,1,0.5,1)' }}>
+        <div ref={trackRef} style={{ display: 'flex', gap: GAP, transform: `translateX(-${getTranslate(idx)}px)`, transition: 'transform 0.65s cubic-bezier(0.22,1,0.36,1)' }}>
           {cards.map((ad, i) => {
+            const active = i === idx;
+            const contentKey = active ? `on-${idx}` : `off-${i}`;
             if (fullWidth) {
               const isSide = ad.imageLayout === 'side' && !!ad.bgImage;
               const baseColor = ad.bgColor || '#0056D2';
@@ -995,106 +1123,119 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
                   {isSide ? (
                     <>
                       <div className="absolute inset-0" style={{ background: baseColor }} />
-                      <div className="absolute top-0 right-0 h-full" style={{ width: isMobile ? '46%' : '54%' }}>
-                        <img src={ad.bgImage} alt="" className="w-full h-full object-contain object-right" />
+                      <div className="absolute top-0 right-0 h-full overflow-hidden" style={{ width: isMobile ? '46%' : '54%' }}>
+                        <motion.img key={contentKey} src={ad.bgImage} alt="" className="w-full h-full object-contain object-right"
+                          animate={active && !reduced ? { scale: [1, 1.05] } : { scale: 1 }}
+                          transition={active && !reduced ? { duration: 8, ease: 'linear' } : { duration: 0.5 }} />
                         <div className="absolute inset-y-0 left-0 pointer-events-none" style={{ width: '35%', background: `linear-gradient(to right, ${baseColor}, transparent)` }} />
                       </div>
                     </>
                   ) : (
-                    <div className="absolute inset-0" style={{ background: ad.bgImage ? `url(${ad.bgImage}) center/cover no-repeat` : baseColor }} />
+                    <motion.div key={`bg-${contentKey}`} className="absolute inset-0"
+                      style={{ background: ad.bgImage ? `url(${ad.bgImage}) center/cover no-repeat` : baseColor }}
+                      animate={active && !reduced && ad.bgImage ? { scale: [1, 1.06] } : { scale: 1 }}
+                      transition={active && !reduced ? { duration: 8, ease: 'linear' } : { duration: 0.5 }} />
                   )}
                   <div className="relative h-full flex items-center max-w-[1240px] mx-auto px-4 sm:px-8 md:px-14">
-                    <div className="rounded-2xl bg-white"
-                      style={{ maxWidth: isMobile ? (isSide ? '52%' : '88%') : 460, padding: isMobile ? '22px 22px' : '36px 40px', boxShadow: '0 6px 30px rgba(0,0,0,0.12)' }}>
+                    <motion.div key={`panel-${contentKey}`} variants={bannerStagger}
+                      initial={active && !reduced ? 'hide' : false} animate="show"
+                      className="rounded-2xl bg-white"
+                      style={{ maxWidth: isMobile ? (isSide ? '52%' : '88%') : 460, padding: isMobile ? '22px 22px' : '36px 40px', boxShadow: '0 12px 44px rgba(0,0,0,0.16)' }}>
                       {ad.label && (
-                        <span className="inline-block text-[10px] font-bold uppercase tracking-widest mb-3"
-                          style={{ color: ad.bgColor || '#0056D2', letterSpacing: '0.12em' }}>
+                        <motion.span variants={bannerItem} className="inline-flex items-center gap-2 text-[10px] font-extrabold uppercase mb-3"
+                          style={{ color: baseColor, letterSpacing: '0.14em' }}>
+                          <span aria-hidden="true" className="inline-block w-4 h-[2px] rounded-full" style={{ background: baseColor }} />
                           {ad.label}
-                        </span>
+                        </motion.span>
                       )}
-                      <h3 className="font-black leading-[1.08]"
-                        style={{ color: LAND_C.text, fontFamily: hFont, letterSpacing: '-0.02em', fontSize: isMobile ? 'clamp(24px,7vw,30px)' : 'clamp(30px,2.8vw,42px)' }}>
+                      <motion.h3 variants={bannerItem} className="font-black leading-[1.08]"
+                        style={{ color: LAND_C.text, fontFamily: hFont, letterSpacing: '-0.025em', fontSize: isMobile ? 'clamp(24px,7vw,30px)' : 'clamp(30px,2.8vw,42px)' }}>
                         {ad.title}
-                      </h3>
+                      </motion.h3>
                       {ad.description && (
-                        <p className="leading-relaxed mt-3"
+                        <motion.p variants={bannerItem} className="leading-relaxed mt-3"
                           style={{ color: LAND_C.muted, fontFamily: bFont ?? hFont, fontSize: isMobile ? 15 : 16 }}>
                           {ad.description}
-                        </p>
+                        </motion.p>
                       )}
                       {ad.ctaText && (
-                        <div className="mt-5">
+                        <motion.div variants={bannerItem} className="mt-5">
                           <Link href={ad.ctaUrl || '/auth'}
-                            className="inline-flex items-center gap-2 font-bold rounded-xl transition-opacity hover:opacity-90"
-                            style={{ background: ad.bgColor || '#0056D2', color: '#fff', fontFamily: hFont, fontSize: isMobile ? 14 : 15, padding: isMobile ? '11px 20px' : '13px 26px' }}>
+                            className="group inline-flex items-center gap-2 font-bold rounded-xl transition-all duration-200 hover:shadow-lg active:scale-[0.98]"
+                            style={{ background: baseColor, color: '#fff', fontFamily: hFont, fontSize: isMobile ? 14 : 15, padding: isMobile ? '11px 20px' : '13px 26px' }}>
                             {ad.ctaText}
-                            <ArrowRight className="w-4 h-4" />
+                            <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
                           </Link>
-                        </div>
+                        </motion.div>
                       )}
-                    </div>
+                    </motion.div>
                   </div>
                 </div>
               );
             }
             const isSide = ad.imageLayout === 'side' && !!ad.bgImage;
-            const bg = isSide
-              ? (ad.bgColor || '#0056D2')
-              : ad.bgImage
-                ? `url(${ad.bgImage}) center/cover no-repeat`
-                : ad.bgColor || '#0056D2';
+            const baseColor = ad.bgColor || '#0056D2';
             const padding = isMobile ? '28px 24px' : '36px';
             const body = (
               <>
                 <div>
                   {ad.label && (
-                    <span className="inline-block text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-md mb-3"
-                      style={{ background: 'rgba(255,255,255,0.22)', color: 'white', letterSpacing: '0.1em' }}>
+                    <motion.span variants={bannerItem} className="inline-block text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-md mb-3"
+                      style={{ background: 'rgba(255,255,255,0.22)', color: 'white', letterSpacing: '0.1em', backdropFilter: 'blur(4px)' }}>
                       {ad.label}
-                    </span>
+                    </motion.span>
                   )}
-                  <h3 className="font-black leading-tight mb-2"
+                  <motion.h3 variants={bannerItem} className="font-black leading-tight mb-2"
                     style={{ color: 'white', fontFamily: hFont, letterSpacing: '-0.025em', fontSize: isMobile ? 'clamp(18px,5vw,24px)' : 'clamp(22px,2.2vw,34px)', maxWidth: isSide ? 'none' : 380 }}>
                     {ad.title}
-                  </h3>
+                  </motion.h3>
                   {!isMobile && (
-                    <p className="leading-relaxed"
+                    <motion.p variants={bannerItem} className="leading-relaxed"
                       style={{ color: 'rgba(255,255,255,0.80)', fontFamily: bFont ?? hFont, fontSize: 15, maxWidth: isSide ? 'none' : 380 }}>
                       {ad.description}
-                    </p>
+                    </motion.p>
                   )}
                 </div>
                 {ad.ctaText && (
-                  <div className="mt-4">
+                  <motion.div variants={bannerItem} className="mt-4">
                     <Link href={ad.ctaUrl || '/auth'}
-                      className="inline-flex items-center gap-2 self-start font-bold rounded-xl transition-opacity hover:opacity-90"
-                      style={{ background: 'white', color: ad.bgColor || '#0056D2', fontFamily: hFont, fontSize: isMobile ? 13 : 14, padding: isMobile ? '10px 18px' : '12px 24px' }}>
+                      className="group inline-flex items-center gap-2 self-start font-bold rounded-xl transition-all duration-200 hover:shadow-lg active:scale-[0.98]"
+                      style={{ background: 'white', color: baseColor, fontFamily: hFont, fontSize: isMobile ? 13 : 14, padding: isMobile ? '10px 18px' : '12px 24px' }}>
                       {ad.ctaText}
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
                     </Link>
-                  </div>
+                  </motion.div>
                 )}
               </>
             );
             return (
-              <div key={i} className="flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer"
+              <div key={i} className="flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer land-shine-host"
                 style={{ width: CARD_W, height: CARD_H }}>
-                <div className="relative w-full h-full transition-transform duration-200 hover:scale-[1.03]"
-                  style={{ background: bg }}>
+                <div className="relative w-full h-full transition-transform duration-300 hover:scale-[1.02]"
+                  style={{ background: isSide ? baseColor : undefined }}>
+                {!isSide && (
+                  <motion.div key={`bg-${contentKey}`} className="absolute inset-0"
+                    style={{ background: ad.bgImage ? `url(${ad.bgImage}) center/cover no-repeat` : baseColor }}
+                    animate={active && !reduced && ad.bgImage ? { scale: [1, 1.07] } : { scale: 1 }}
+                    transition={active && !reduced ? { duration: 8, ease: 'linear' } : { duration: 0.5 }} />
+                )}
                 {!isSide && ad.bgImage && <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.48)' }} />}
+                <span className="land-card-shine" aria-hidden="true" />
                 {isSide ? (
-                  <div className="relative z-10 flex h-full" style={{ height: CARD_H, flexDirection: isMobile ? 'column' : 'row' }}>
+                  <motion.div key={contentKey} variants={bannerStagger} initial={active && !reduced ? 'hide' : false} animate="show"
+                    className="relative z-10 flex h-full" style={{ height: CARD_H, flexDirection: isMobile ? 'column' : 'row' }}>
                     <div className="flex flex-col justify-between" style={{ flex: 1, minWidth: 0, padding }}>
                       {body}
                     </div>
                     <div style={{ flex: isMobile ? '0 0 50%' : '0 0 44%', position: 'relative', overflow: 'hidden' }}>
                       <img src={ad.bgImage} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: isMobile ? 'contain' : 'cover' }} />
                     </div>
-                  </div>
+                  </motion.div>
                 ) : (
-                  <div className="relative z-10 flex flex-col justify-between h-full" style={{ height: CARD_H, padding }}>
+                  <motion.div key={contentKey} variants={bannerStagger} initial={active && !reduced ? 'hide' : false} animate="show"
+                    className="relative z-10 flex flex-col justify-between h-full" style={{ height: CARD_H, padding }}>
                     {body}
-                  </div>
+                  </motion.div>
                 )}
                 </div>
               </div>
@@ -1105,25 +1246,41 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth }: { ads: AdCard[]; hFon
 
         {/* Right arrow - hidden on mobile, vertically centered on desktop */}
         {max > 0 && !isMobile && (
-          <button onClick={() => goTo(idx + 1)} disabled={idx >= max}
-            className={`absolute top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full grid place-items-center transition-all disabled:opacity-20 outline-none focus:outline-none ${fullWidth ? 'right-3 sm:right-6 bg-white shadow-md hover:shadow-lg' : 'right-0 translate-x-1/2 hover:bg-white hover:shadow-md'}`}
-            style={{ color: LAND_C.text }}>
+          <button onClick={() => goTo(idx + 1)} disabled={idx >= max} aria-label="Next slide"
+            className={`absolute top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full grid place-items-center transition-all duration-200 hover:scale-110 active:scale-95 disabled:opacity-20 outline-none focus:outline-none ${fullWidth ? 'right-3 sm:right-6 bg-white shadow-md hover:shadow-xl' : isDark ? 'right-0 translate-x-1/2 hover:bg-white/10' : 'right-0 translate-x-1/2 hover:bg-white hover:shadow-md'}`}
+            style={{ color: !fullWidth && isDark ? 'white' : LAND_C.text }}>
             <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
           </button>
         )}
       </div>
 
-      {/* Dots centered below */}
+      {/* Dots centered below -- the active dot fills with the auto-advance timer */}
       {max > 0 && (
         <div className="flex justify-center gap-2 mt-4">
-          {Array.from({ length: max + 1 }, (_, i) => (
-            <button key={i} onClick={() => goTo(i)}
-              className="rounded-full transition-all"
-              style={{ width: i === idx ? 20 : 7, height: 7, background: i === idx ? LAND_C.text : LAND_C.faint }} />
-          ))}
+          {Array.from({ length: max + 1 }, (_, i) => {
+            const activeDot = i === idx;
+            const base = isDark ? 'rgba(255,255,255,0.25)' : 'rgba(28,29,31,0.20)';
+            const fill = isDark ? '#ffffff' : LAND_C.text;
+            return (
+              <button key={i} onClick={() => goTo(i)} aria-label={`Go to slide ${i + 1}`}
+                className="relative rounded-full overflow-hidden transition-all duration-300"
+                style={{ width: activeDot ? 26 : 7, height: 7, background: base }}>
+                {activeDot && !reduced && !paused && (
+                  <motion.span key={`fill-${idx}`} aria-hidden="true" className="absolute inset-0 origin-left rounded-full"
+                    style={{ background: fill }}
+                    initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
+                    transition={{ duration: BANNER_AUTO_MS / 1000, ease: 'linear' }} />
+                )}
+                {activeDot && (reduced || paused) && (
+                  <span aria-hidden="true" className="absolute inset-0 rounded-full" style={{ background: fill }} />
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
+    </MReveal>
   );
 }
 
@@ -1159,30 +1316,33 @@ function LandingMidAdBanner({ ads, hFont, bFont, isDark }: { ads: AdCard[]; hFon
                 {ad.ctaText && (
                   <div className="mt-1">
                     <Link href={ad.ctaUrl || '/auth'}
-                      className="inline-flex items-center gap-2 self-start font-bold rounded-xl transition-opacity hover:opacity-90"
+                      className="group inline-flex items-center gap-2 self-start font-bold rounded-xl transition-all duration-200 hover:shadow-md active:scale-[0.98]"
                       style={{ background: 'white', color: ad.bgColor || '#0056D2', fontFamily: hFont, fontSize: 13, padding: '10px 20px' }}>
                       {ad.ctaText}
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      <ArrowRight className="w-3.5 h-3.5 transition-transform duration-300 group-hover:translate-x-1" />
                     </Link>
                   </div>
                 )}
               </div>
             );
             return (
-              <div key={i} className="rounded-2xl overflow-hidden" style={{ minHeight: 220 }}>
-                <div className="relative w-full h-full transition-transform duration-200 hover:scale-[1.03]"
-                  style={{ background: bg, minHeight: 220 }}>
-                  {!sideImage && ad.bgImage && <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.48)' }} />}
-                  {sideImage ? (
-                    <div className="relative z-10 flex flex-col sm:flex-row sm:items-stretch" style={{ minHeight: 220 }}>
-                      <div className="flex-1 min-w-0">{body}</div>
-                      <div className="relative w-full h-44 sm:h-auto sm:w-[44%] flex-shrink-0 overflow-hidden">
-                        <img src={ad.bgImage} alt="" className="absolute inset-0 w-full h-full object-contain sm:object-cover" />
+              <MReveal key={i} delay={i * 0.1} y={22}>
+                <div className="rounded-2xl overflow-hidden land-shine-host transition-shadow duration-300 hover:shadow-[0_20px_48px_-20px_rgba(2,32,71,0.4)]" style={{ minHeight: 220 }}>
+                  <div className="relative w-full h-full transition-transform duration-300 hover:scale-[1.02]"
+                    style={{ background: bg, minHeight: 220 }}>
+                    {!sideImage && ad.bgImage && <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.48)' }} />}
+                    <span className="land-card-shine" aria-hidden="true" />
+                    {sideImage ? (
+                      <div className="relative z-10 flex flex-col sm:flex-row sm:items-stretch" style={{ minHeight: 220 }}>
+                        <div className="flex-1 min-w-0">{body}</div>
+                        <div className="relative w-full h-44 sm:h-auto sm:w-[44%] flex-shrink-0 overflow-hidden">
+                          <img src={ad.bgImage} alt="" className="absolute inset-0 w-full h-full object-contain sm:object-cover" />
+                        </div>
                       </div>
-                    </div>
-                  ) : body}
+                    ) : body}
+                  </div>
                 </div>
-              </div>
+              </MReveal>
             );
           })}
         </div>
@@ -1206,7 +1366,7 @@ function LandingCoursePreview({ item, typeColor, user, hFont, bFont, isDark }: {
         {/* Path header */}
         <div className="p-4 pb-0">
           <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-md mb-2" style={{ background: typeColor, color: 'white' }}>Learning Path</span>
-          <h3 className="text-base font-bold leading-snug line-clamp-2 mb-1.5" style={{ color: isDark ? 'white' : '#111', fontFamily: hFont }}>{item.title}</h3>
+          <h3 className="text-lg font-bold leading-snug line-clamp-2 mb-1.5" style={{ color: isDark ? 'white' : '#111', fontFamily: hFont }}>{item.title}</h3>
           {desc && <p className="text-sm leading-relaxed line-clamp-2 mb-0" style={{ color: isDark ? 'rgba(255,255,255,0.65)' : '#555', fontFamily: bFont }}>{desc}</p>}
         </div>
         {/* Course list */}
@@ -1306,66 +1466,67 @@ function LandingCarouselRow({ title, items, type, typeColor, user, hFont, bFont,
 
   return (
     <section className="rounded-2xl p-5 sm:p-6" style={{ background: rowBg }}>
-      {!hideTitle && (
-        <div className="flex items-center justify-between gap-4 mb-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            {(() => { const icon = getToolIcon(title); return icon
-              ? <img src={icon} alt="" className="w-6 h-6 object-contain flex-shrink-0" />
-              : <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: isDark ? 'white' : typeColor }} />;
-            })()}
-            <h3 className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: rowText, fontFamily: hFont }}>{title}</h3>
+      {(() => {
+        const arrowBtn = (dir: number, label: string) => (
+          <button onClick={() => scrollByCards(dir)} aria-label={label}
+            className="w-9 h-9 rounded-full grid place-items-center transition-all duration-200 hover:scale-105 active:scale-95"
+            style={{ border: `1px solid ${rowBorder}`, color: rowMuted }}
+            onMouseEnter={e => { e.currentTarget.style.background = rowText; e.currentTarget.style.borderColor = rowText; e.currentTarget.style.color = isDark ? '#111318' : '#ffffff'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = rowBorder; e.currentTarget.style.color = rowMuted; }}>
+            {dir < 0 ? <ChevronLeft className="w-4 h-4"/> : <ChevronRight className="w-4 h-4"/>}
+          </button>
+        );
+        return !hideTitle ? (
+          <div className="flex items-center justify-between gap-4 mb-0">
+            <MReveal y={14} className="flex items-center gap-2.5 min-w-0">
+              {(() => { const icon = getToolIcon(title); return icon
+                ? <img src={icon} alt="" className="w-6 h-6 object-contain flex-shrink-0" />
+                : <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: isDark ? 'white' : typeColor }} />;
+              })()}
+              <h3 className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: rowText, fontFamily: hFont }}>{title}</h3>
+            </MReveal>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {arrowBtn(-1, 'Scroll left')}
+              {arrowBtn(1, 'Scroll right')}
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
-              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
-              style={{ border: `1px solid ${rowBorder}`, color: rowMuted }}>
-              <ChevronLeft className="w-4 h-4"/>
-            </button>
-            <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
-              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
-              style={{ border: `1px solid ${rowBorder}`, color: rowMuted }}>
-              <ChevronRight className="w-4 h-4"/>
-            </button>
+        ) : (
+          <div className="flex justify-end mb-0">
+            <div className="flex items-center gap-2">
+              {arrowBtn(-1, 'Scroll left')}
+              {arrowBtn(1, 'Scroll right')}
+            </div>
           </div>
-        </div>
-      )}
-      {hideTitle && (
-        <div className="flex justify-end mb-0">
-          <div className="flex items-center gap-2">
-            <button onClick={() => scrollByCards(-1)} aria-label="Scroll left"
-              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
-              style={{ border: `1px solid ${rowBorder}`, color: rowMuted }}>
-              <ChevronLeft className="w-4 h-4"/>
-            </button>
-            <button onClick={() => scrollByCards(1)} aria-label="Scroll right"
-              className="w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70"
-              style={{ border: `1px solid ${rowBorder}`, color: rowMuted }}>
-              <ChevronRight className="w-4 h-4"/>
-            </button>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
-      <div ref={scrollRef} className="flex flex-nowrap gap-4 overflow-x-auto pb-1 mt-4 snap-x"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-        {items.map(item => (
+      <div ref={scrollRef} className="flex flex-nowrap gap-4 overflow-x-auto pt-4 pb-2 snap-x"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitMaskImage: 'linear-gradient(90deg, #000 94%, transparent)', maskImage: 'linear-gradient(90deg, #000 94%, transparent)' }}>
+        {items.map((item, i) => (
           <div key={item.id} className="flex-shrink-0 w-[220px] sm:w-[260px] snap-start"
             onMouseEnter={e => openHover(item, e.currentTarget)}
             onMouseLeave={scheduleClose}>
-            <div className="transition-transform hover:-translate-y-0.5">
-              <div className="relative rounded-xl overflow-hidden w-full aspect-video"
-                style={{ background: item.imageUrl ? '#0b0b0d' : 'transparent' }}>
-                {item.imageUrl
-                  ? <img src={item.imageUrl} alt={item.title} loading="lazy" className="w-full h-full object-cover"/>
-                  : <div className="w-full h-full flex items-center justify-center" style={{ background: LAND_TYPE_GRAD[type] }}>
-                      <BookOpen className="w-8 h-8" style={{ color: 'rgba(255,255,255,0.7)' }}/>
-                    </div>
-                }
+            <MReveal delay={Math.min(i, 6) * 0.055} y={18}>
+              <div className="group cursor-pointer transition-transform duration-300 hover:-translate-y-1">
+                <div className="relative rounded-xl overflow-hidden w-full aspect-video transition-shadow duration-300 group-hover:shadow-[0_14px_30px_-12px_rgba(2,32,71,0.45)]"
+                  style={{ background: item.imageUrl ? '#0b0b0d' : 'transparent' }}>
+                  {item.imageUrl
+                    ? <img src={item.imageUrl} alt={item.title} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.07]"/>
+                    : <div className="w-full h-full flex items-center justify-center transition-transform duration-500 group-hover:scale-[1.07]" style={{ background: LAND_TYPE_GRAD[type] }}>
+                        <BookOpen className="w-8 h-8" style={{ color: 'rgba(255,255,255,0.7)' }}/>
+                      </div>
+                  }
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                    style={{ background: 'linear-gradient(to top, rgba(1,15,35,0.42), transparent 55%)' }} />
+                  <div className="absolute bottom-2 right-2 w-8 h-8 rounded-full grid place-items-center opacity-0 translate-y-1.5 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 shadow-md pointer-events-none"
+                    style={{ background: 'white', color: '#101828' }}>
+                    <ArrowRight className="w-4 h-4" />
+                  </div>
+                </div>
+                <p className="text-[15px] font-bold leading-snug mt-2.5 line-clamp-2" style={{ color: rowText, fontFamily: hFont }}>{item.title}</p>
+                {item.difficulty && <p className="text-[11px] mt-1" style={{ color: rowMuted }}>{item.difficulty}</p>}
               </div>
-              <p className="text-xs mt-2" style={{ color: rowMuted }}>{LAND_TYPE_LABEL[type]}</p>
-              <p className="text-[15px] font-bold leading-snug mt-0.5 line-clamp-2" style={{ color: rowText, fontFamily: hFont }}>{item.title}</p>
-              {item.difficulty && <p className="text-[11px] mt-1" style={{ color: rowMuted }}>{item.difficulty}</p>}
-            </div>
+            </MReveal>
           </div>
         ))}
       </div>
@@ -1393,6 +1554,7 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
   user: any; profile: any; scrolled: boolean; pastHero: boolean; siteConfig: SiteConfig; logoUrl: string; logoDarkUrl: string; appName: string;
 }) {
   const programmes = useProgrammes();
+  const reduced = useReducedMotion();
 
   const {
     primaryColor, accentColor, headingFont, bodyFont,
@@ -1468,10 +1630,29 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
       {bodyFontUrl    && <link rel="stylesheet" href={bodyFontUrl} />}
     <main className="landing-scope min-h-screen overflow-x-hidden antialiased" style={{ background: isPageDark ? '#0d1117' : 'white', fontFamily: bFont }}>
 
+      <style>{`
+        .land-shine-host { position: relative; }
+        .land-card-shine { position: absolute; top: 0; bottom: 0; left: 0; width: 45%; opacity: 0; pointer-events: none; z-index: 15;
+          background: linear-gradient(100deg, transparent, rgba(255,255,255,0.17), transparent);
+          transform: translateX(-130%) skewX(-14deg); }
+        .land-shine-host:hover .land-card-shine { animation: land-sheen 0.9s ease; }
+        @keyframes land-sheen {
+          from { opacity: 1; transform: translateX(-130%) skewX(-14deg); }
+          to   { opacity: 1; transform: translateX(330%) skewX(-14deg); }
+        }
+        @media (prefers-reduced-motion: reduce) { .land-card-shine { display: none; } }
+      `}</style>
+
+      <LandingScrollProgress from={BLUE} to={AMBER} />
+
       {/* NAV */}
-      <nav className="fixed top-0 left-0 right-0 z-50 transition-shadow duration-300"
+      <motion.nav
+        initial={reduced ? false : { y: -16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.55, ease: EASE_OUT }}
+        className="fixed top-0 left-0 right-0 z-50 transition-shadow duration-300"
         style={{
-          background: isPageDark ? '#0d1117' : 'white',
+          background: scrolled ? (isPageDark ? 'rgba(13,17,23,0.82)' : 'rgba(255,255,255,0.85)') : (isPageDark ? '#0d1117' : 'white'),
+          backdropFilter: scrolled ? 'blur(14px) saturate(1.5)' : undefined,
+          WebkitBackdropFilter: scrolled ? 'blur(14px) saturate(1.5)' : undefined,
           boxShadow: scrolled ? `0 2px 20px rgba(0,0,0,${isPageDark ? '0.4' : '0.09'})` : `0 1px 10px rgba(0,0,0,${isPageDark ? '0.25' : '0.06'})`,
         }}>
         <div className="max-w-[1240px] mx-auto px-6 md:px-10 h-16 flex items-center">
@@ -1493,11 +1674,12 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
             {NAV_LINKS.map(nl => (
               <button key={nl.anchor}
                 onClick={() => document.getElementById(nl.anchor)?.scrollIntoView({ behavior: 'smooth' })}
-                className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
-                style={{ color: isPageDark ? 'rgba(255,255,255,0.80)' : '#1C1D1F' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = isPageDark ? 'rgba(255,255,255,0.08)' : '#F7F9FC'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                className="group relative px-3 py-1.5 text-sm font-medium transition-colors"
+                style={{ color: isPageDark ? 'rgba(255,255,255,0.80)' : '#1C1D1F' }}>
                 {nl.label}
+                <span aria-hidden="true"
+                  className="absolute left-3 right-3 bottom-0 h-[2px] rounded-full origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300"
+                  style={{ background: AMBER }} />
               </button>
             ))}
           </div>
@@ -1515,17 +1697,17 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
             )}
           </div>
         </div>
-      </nav>
+      </motion.nav>
 
       {/* AD BANNER */}
       {hideAdBanner !== '1' && (
         adBannerFullWidth === '1' ? (
           <div className="pt-16 md:pt-20">
-            <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} fullWidth />
+            <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} fullWidth isDark={isPageDark} />
           </div>
         ) : (
           <div className="max-w-[1240px] mx-auto px-4 sm:px-6 md:px-10 pb-2 pt-20 md:pt-24">
-            <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} />
+            <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} isDark={isPageDark} />
           </div>
         )
       )}
@@ -1536,12 +1718,9 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
       {courses.length > 0 && (
         <section id="section-courses" className="py-10 md:py-14">
           <div className="max-w-[1240px] mx-auto px-6 md:px-10">
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-1">
-                <h2 style={{ fontFamily: hFont, fontWeight: 900, fontSize: 'clamp(22px,2.5vw,34px)', color: isPageDark ? 'white' : NAVY, letterSpacing: '-0.025em', lineHeight: 1.1 }}>Courses</h2>
-              </div>
-              <p style={{ color: isPageDark ? 'rgba(255,255,255,0.55)' : LAND_C.muted, fontSize: 15, lineHeight: 1.6, fontFamily: bFont ?? hFont }}>Level up your skills with interactive and project-based courses.</p>
-            </div>
+            <MSectionHeading title="Courses" sub="Level up your skills with interactive and project-based courses."
+              color={isPageDark ? 'white' : '#1C1D1F'} subColor={isPageDark ? 'rgba(255,255,255,0.55)' : LAND_C.muted}
+              accent={AMBER} hFont={hFont} bFont={bFont} />
             <div className="space-y-4">
               {courseGroups.map(([cat, items]) => (
                 <LandingCarouselRow key={cat} title={cat} items={items} type="course" typeColor={BLUE} user={user} hFont={hFont} bFont={bFont} isDark={isPageDark} hideTitle={courseGroups.length === 1} />
@@ -1553,14 +1732,17 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
 
       {/* LEARNING PATHS */}
       {paths.length > 0 && (
-        <section id="section-paths" className="py-10 md:py-14" style={{ background: isPageDark ? undefined : BLUE }}>
-          <div className="max-w-[1240px] mx-auto px-6 md:px-10">
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-1">
-                <h2 style={{ fontFamily: hFont, fontWeight: 900, fontSize: 'clamp(22px,2.5vw,34px)', color: 'white', letterSpacing: '-0.025em', lineHeight: 1.1 }}>Learning Paths</h2>
-              </div>
-              <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 15, lineHeight: 1.6, fontFamily: bFont ?? hFont }}>Launch your career in tech with curated courses, virtual experiences and guided projects.</p>
-            </div>
+        <section id="section-paths" className="relative py-10 md:py-14 overflow-hidden"
+          style={{ background: isPageDark
+            ? `linear-gradient(140deg, #0d1117 0%, ${shade(BLUE, -0.72)} 100%)`
+            : `linear-gradient(140deg, ${shade(BLUE, -0.4)} 0%, ${BLUE} 62%, ${shade(BLUE, -0.12)} 100%)` }}>
+          {!reduced && <>
+            <Orb x="78%" y="-40%" size={360} color={shade(BLUE, 0.55)} delay={1} />
+            <Orb x="-6%" y="55%" size={320} color={AMBER} delay={3} />
+          </>}
+          <div className="relative z-10 max-w-[1240px] mx-auto px-6 md:px-10">
+            <MSectionHeading title="Learning Paths" sub="Launch your career in tech with curated courses, virtual experiences and guided projects."
+              color="white" subColor="rgba(255,255,255,0.75)" accent={AMBER} hFont={hFont} bFont={bFont} />
             <LandingCarouselRow title="Learning Paths" items={paths} type="path" typeColor={AMBER} user={user} hFont={hFont} bFont={bFont} isDark transparentBg={!isPageDark} popupDark={isPageDark} hideTitle />
           </div>
         </section>
@@ -1575,12 +1757,9 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
       {ves.length > 0 && (
         <section id="section-ves" className="py-10 md:py-14">
           <div className="max-w-[1240px] mx-auto px-6 md:px-10">
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-1">
-                <h2 style={{ fontFamily: hFont, fontWeight: 900, fontSize: 'clamp(22px,2.5vw,34px)', color: isPageDark ? 'white' : NAVY, letterSpacing: '-0.025em', lineHeight: 1.1 }}>Virtual Experiences</h2>
-              </div>
-              <p style={{ color: isPageDark ? 'rgba(255,255,255,0.55)' : LAND_C.muted, fontSize: 15, lineHeight: 1.6, fontFamily: bFont ?? hFont }}>Gain job-ready skills with virtual internship programs and projects to build your portfolio.</p>
-            </div>
+            <MSectionHeading title="Virtual Experiences" sub="Gain job-ready skills with virtual internship programs and projects to build your portfolio."
+              color={isPageDark ? 'white' : '#1C1D1F'} subColor={isPageDark ? 'rgba(255,255,255,0.55)' : LAND_C.muted}
+              accent={AMBER} hFont={hFont} bFont={bFont} />
             <div className="space-y-4">
               {veGroups.map(([ind, items]) => (
                 <LandingCarouselRow key={ind} title={ind} items={items} type="ve" typeColor={GREEN} user={user} hFont={hFont} bFont={bFont} isDark={isPageDark} hideTitle={veGroups.length === 1} />
@@ -1598,34 +1777,42 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
 
       {/* CTA SECTION */}
       {hideCta !== '1' && (
-        <section className="py-16 md:py-20 text-center"
-          style={{ background: `linear-gradient(140deg,#002050 0%,${BLUE} 100%)` }}>
-          <FadeIn>
-            <div className="max-w-[1240px] mx-auto px-6 md:px-10">
-              <h2 className="mb-3" style={{ fontFamily: hFont, fontWeight: 900, fontSize: 'clamp(28px,4vw,46px)', color: 'white', letterSpacing: '-0.025em' }}>
-                {ctaHeading || `Join ${statsEnrolled || '10,000+'} professionals`}<br />
-                <span style={{ color: AMBER }}>{ctaHeadingAccent || "building Africa's future."}</span>
-              </h2>
-              <p className="mx-auto mb-8 text-base" style={{ color: 'rgba(255,255,255,0.70)', maxWidth: 480, lineHeight: 1.65 }}>
+        <section className="relative py-20 md:py-28 text-center overflow-hidden"
+          style={{ background: `linear-gradient(140deg, ${shade(BLUE, -0.62)} 0%, ${BLUE} 72%, ${shade(BLUE, -0.1)} 100%)` }}>
+          {!reduced && <>
+            <Orb x="-8%" y="-30%" size={430} color={shade(BLUE, 0.4)} delay={0} />
+            <Orb x="72%" y="40%" size={380} color={AMBER} delay={2.5} />
+          </>}
+          <div className="relative z-10 max-w-[1240px] mx-auto px-6 md:px-10">
+            <h2 className="mb-4" style={{ fontFamily: hFont, fontWeight: 900, fontSize: 'clamp(30px,4.2vw,50px)', color: 'white', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+              <WordReveal text={ctaHeading || `Join ${statsEnrolled || '10,000+'} professionals`} /><br />
+              <WordReveal text={ctaHeadingAccent || "building Africa's future."} delay={0.25} style={{ color: AMBER }} />
+            </h2>
+            <MReveal delay={0.35} y={16}>
+              <p className="mx-auto mb-9 text-base" style={{ color: 'rgba(255,255,255,0.72)', maxWidth: 500, lineHeight: 1.7, fontFamily: bFont ?? hFont }}>
                 {ctaSubtext || 'Start learning today. No credit card required. Access your first course free.'}
               </p>
+            </MReveal>
+            <MReveal delay={0.45} y={14}>
               <div className="flex items-center justify-center gap-3 flex-wrap">
-                <Link href={user ? '/student' : '/auth?mode=signup'}
-                  className="inline-flex items-center gap-2 font-bold rounded-lg transition-all hover:opacity-90"
-                  style={{ background: 'white', color: BLUE, padding: '13px 30px', fontSize: 15 }}>
-                  {user ? 'Go to my learning' : (ctaButton || 'Start learning free')}
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
+                <Magnetic>
+                  <Link href={user ? '/student' : '/auth?mode=signup'}
+                    className="group inline-flex items-center gap-2 font-bold rounded-xl transition-shadow duration-300 hover:shadow-[0_16px_40px_-10px_rgba(0,0,0,0.45)]"
+                    style={{ background: 'white', color: BLUE, padding: '14px 32px', fontSize: 15 }}>
+                    {user ? 'Go to my learning' : (ctaButton || 'Start learning free')}
+                    <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                  </Link>
+                </Magnetic>
                 <a href="#browse"
-                  className="inline-flex items-center font-bold rounded-lg transition-all"
+                  className="inline-flex items-center font-bold rounded-xl transition-all"
                   style={{ padding: '13px 30px', fontSize: 15, color: 'white', border: '2px solid rgba(255,255,255,0.32)' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'white'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.32)'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
                   Explore programmes
                 </a>
               </div>
-            </div>
-          </FadeIn>
+            </MReveal>
+          </div>
         </section>
       )}
 
@@ -1633,22 +1820,22 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
       <footer style={{ background: isPageDark ? '#0D1117' : (primaryColor || '#0056D2') }}>
         <div className="max-w-[1240px] mx-auto px-6 md:px-10 pt-12 pb-9">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-8 mb-10">
-            <div className="col-span-2 md:col-span-1">
+            <MReveal y={18} className="col-span-2 md:col-span-1">
               <div className="text-sm font-extrabold mb-2.5" style={{ color: 'white', letterSpacing: '-0.02em' }}>{appName}</div>
               <p className="text-sm leading-relaxed max-w-[240px]" style={{ color: 'rgba(255,255,255,0.38)' }}>{footerTagline}</p>
-            </div>
-            <div>
+            </MReveal>
+            <MReveal y={18} delay={0.1}>
               <div className="text-[11px] font-bold uppercase tracking-widest mb-3.5" style={{ color: 'rgba(255,255,255,0.45)' }}>
                 {footerLinksHeading || 'Learn'}
               </div>
-              <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-2.5 items-start">
                 {[
                   [footerLink1Label || 'Courses',               footerLink1Url || '/auth'],
                   [footerLink2Label || 'Learning Paths',        footerLink2Url || '/auth'],
                   [footerLink3Label || 'Virtual Experiences',   footerLink3Url || '/auth'],
                   [footerLink4Label || 'Certificates',          footerLink4Url || '/auth'],
                 ].filter(([l]) => l).map(([label, href]) => (
-                  <Link key={label} href={href} className="text-sm transition-colors"
+                  <Link key={label} href={href} className="text-sm inline-block transition-all duration-200 hover:translate-x-1"
                     style={{ color: 'rgba(255,255,255,0.40)' }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'white'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.40)'; }}>
@@ -1656,17 +1843,17 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
                   </Link>
                 ))}
               </div>
-            </div>
-            <div>
+            </MReveal>
+            <MReveal y={18} delay={0.18}>
               <div className="text-[11px] font-bold uppercase tracking-widest mb-3.5" style={{ color: 'rgba(255,255,255,0.45)' }}>Account</div>
-              <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-2.5 items-start">
                 {([
                   ['Log in',      '/auth'],
                   ['Sign up',     '/auth?mode=signup'],
                   ['Dashboard',   user ? '/student' : '/auth'],
                   ['Leaderboard', user ? '/student' : '/auth'],
                 ] as const).map(([label, href]) => (
-                  <Link key={label} href={href} className="text-sm transition-colors"
+                  <Link key={label} href={href} className="text-sm inline-block transition-all duration-200 hover:translate-x-1"
                     style={{ color: 'rgba(255,255,255,0.40)' }}
                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'white'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.40)'; }}>
@@ -1674,7 +1861,7 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
                   </Link>
                 ))}
               </div>
-            </div>
+            </MReveal>
           </div>
           <div className="flex items-center justify-between pt-6 flex-wrap gap-3" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
             <p className="text-xs" style={{ color: 'rgba(255,255,255,0.24)' }}>
