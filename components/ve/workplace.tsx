@@ -1,0 +1,316 @@
+'use client';
+
+// Shared primitives for the simulated-workplace surfaces (mail client + team chat)
+// used by VirtualExperienceTaker and AssignmentExperiencePlayer. Presentational
+// only: all progress/AI-review logic stays in the players.
+
+import React from 'react';
+import { FileSpreadsheet, FileText, FileImage, FileCode2, File as FileIcon, Paperclip } from 'lucide-react';
+
+export interface Person {
+  name: string;
+  email?: string;
+  title?: string;
+  color: string;
+}
+
+// -- identity helpers --------------------------------------------------------
+
+export function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+export function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+export function companyDomain(company?: string, title?: string): string {
+  const base = (company || (title || '').split(' - ')[0] || 'workspace')
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
+  return `${base || 'workspace'}.com`;
+}
+
+export function personEmail(name: string, domain: string): string {
+  const local = name.toLowerCase().trim().replace(/[^a-z\s]/g, '').replace(/\s+/g, '.');
+  return `${local || 'me'}@${domain}`;
+}
+
+export function firstNameOf(name: string): string {
+  return (name || '').trim().split(/\s+/)[0] || name;
+}
+
+export function initialsOf(name: string): string {
+  return (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+// Deterministic colleague names for facepiles: seeded by company so a given
+// experience always shows the same team.
+const COLLEAGUE_POOL = [
+  'Amara Diallo', 'Kwame Mensah', 'Lerato Mokoena', 'Chidi Okafor',
+  'Zainab Bello', 'Thandi Nkosi', 'Sefako Asante', 'Nia Abara',
+];
+export function colleaguesFor(seed: string, count = 2): string[] {
+  const h = hashStr(seed || 'team');
+  const out: string[] = [];
+  for (let i = 0; out.length < count && i < COLLEAGUE_POOL.length; i++) {
+    const pick = COLLEAGUE_POOL[(h + i * 3) % COLLEAGUE_POOL.length];
+    if (!out.includes(pick)) out.push(pick);
+  }
+  return out;
+}
+
+// -- simulated workday clock -------------------------------------------------
+
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
+// Deterministic timestamp for a message: the experience plays out across a
+// simulated work week. `dayIdx` = mission index, `seq` = position in the lesson.
+export function workStamp(dayIdx: number, seq: number, key?: string): { day: string; time: string; full: string } {
+  const day = DAY_NAMES[Math.max(0, dayIdx) % DAY_NAMES.length];
+  const jitter = key ? hashStr(key) % 11 : 0;
+  let mins = 9 * 60 + 2 + seq * 47 + jitter; // 9:02 AM onwards
+  if (mins > 16 * 60 + 45) mins = 16 * 60 + 45 - (jitter % 25); // keep inside the workday
+  const h24 = Math.floor(mins / 60);
+  const m = mins % 60;
+  const ampm = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 > 12 ? h24 - 12 : h24;
+  const time = `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+  return { day, time, full: `${day} ${time}` };
+}
+
+// Deterministic pseudo file size so attachments read like real files.
+export function fileSizeFor(name: string): string {
+  const h = hashStr(name || 'file');
+  const kb = 24 + (h % 940);
+  if (kb > 700) return `${(kb / 1000).toFixed(1)} MB`;
+  return `${kb} KB`;
+}
+
+// -- sounds (all soft, all optional) ------------------------------------------
+
+function audioCtx(): AudioContext | null {
+  try {
+    const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    return new Ctx() as AudioContext;
+  } catch { return null; }
+}
+
+// Soft two-tone "new message" chime.
+export function playArrivalChime() {
+  const ctx = audioCtx();
+  if (!ctx) return;
+  try {
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.06, ctx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.55);
+    g.connect(ctx.destination);
+    [880, 1174.66].forEach((freq, i) => {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = freq;
+      o.connect(g);
+      o.start(ctx.currentTime + i * 0.11);
+      o.stop(ctx.currentTime + 0.6);
+    });
+    setTimeout(() => { try { ctx.close(); } catch {} }, 800);
+  } catch { /* no audio */ }
+}
+
+function playTypingClick() {
+  const ctx = audioCtx();
+  if (!ctx) return;
+  try {
+    const n = Math.floor(ctx.sampleRate * 0.025);
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) * 0.18;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain(); g.gain.value = 0.14;
+    src.connect(g); g.connect(ctx.destination);
+    src.start(); src.onended = () => { try { ctx.close(); } catch {} };
+  } catch { /* no audio */ }
+}
+
+export function startTypingSound(durationMs: number) {
+  const end = Date.now() + durationMs;
+  (function tick() { if (Date.now() >= end) return; playTypingClick(); setTimeout(tick, 70 + Math.floor(Math.random() * 110)); })();
+}
+
+// Short filtered-noise sweep: the "message sent" whoosh.
+export function playSendWhoosh() {
+  const ctx = audioCtx();
+  if (!ctx) return;
+  try {
+    const dur = 0.28;
+    const n = Math.floor(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2) * 0.5;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.Q.value = 1.2;
+    f.frequency.setValueAtTime(1500, ctx.currentTime);
+    f.frequency.exponentialRampToValueAtTime(380, ctx.currentTime + dur);
+    const g = ctx.createGain();
+    g.gain.value = 0.16;
+    src.connect(f); f.connect(g); g.connect(ctx.destination);
+    src.start();
+    src.onended = () => { try { ctx.close(); } catch {} };
+  } catch { /* no audio */ }
+}
+
+// Plain-text snippet of an email body, for quoted history under replies.
+export function quoteSnippet(html?: string, max = 110): string {
+  const txt = (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!txt) return '';
+  return txt.length > max ? `${txt.slice(0, max).trimEnd()}...` : txt;
+}
+
+// Tracks which messages have already "arrived" this session so the new-mail
+// animation and chime only fire the first time a message is seen.
+const arrived = new Set<string>();
+export function firstArrival(id: string): boolean {
+  if (arrived.has(id)) return false;
+  arrived.add(id);
+  return true;
+}
+
+// Re-anchor the viewport on a card's interaction zone after an action changed
+// its layout (composer collapsed, thread grew), so the student never has to
+// scroll back to find where they were. MailCard/ChatCard tag their interaction
+// area with `ve-zone-<reqId>`.
+export function anchorZone(reqId: string, delay = 90) {
+  if (typeof document === 'undefined') return;
+  setTimeout(() => {
+    try {
+      document.getElementById(`ve-zone-${reqId}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch { /* older browsers */ }
+  }, delay);
+}
+
+// -- small visual atoms --------------------------------------------------------
+
+export function PersonAvatar({ name, size, color, presence }: {
+  name: string; size: number; color: string; presence?: 'active' | 'away' | 'none';
+}) {
+  const seed = encodeURIComponent(name);
+  const dotSize = Math.max(8, Math.round(size * 0.28));
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <div style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', position: 'relative', background: color }}>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: Math.floor(size * 0.33), fontWeight: 800, color: '#fff' }}>
+          {initialsOf(name)}
+        </div>
+        <img
+          src={`https://api.dicebear.com/8.x/personas/svg?seed=${seed}`}
+          alt=""
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = '0'; }}
+        />
+      </div>
+      {presence && presence !== 'none' && (
+        <span style={{
+          position: 'absolute', right: -1, bottom: -1, width: dotSize, height: dotSize, borderRadius: '50%',
+          background: presence === 'active' ? '#2BAC76' : '#E8A427',
+          border: '2px solid #fff', boxSizing: 'border-box',
+        }} />
+      )}
+    </div>
+  );
+}
+
+export function MeAvatar({ name, size, isDark }: { name: string; size: number; isDark: boolean }) {
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      background: isDark ? 'rgba(255,255,255,0.12)' : '#e8f0fe',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: Math.max(9, Math.floor(size * 0.3)), fontWeight: 700,
+      color: isDark ? '#ddd' : '#1a73e8', letterSpacing: 0.5,
+    }}>
+      {initialsOf(name || 'Me')}
+    </div>
+  );
+}
+
+export function TypingDots({ isDark }: { isDark: boolean }) {
+  return (
+    <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}>
+      {[0, 1, 2].map(i => (
+        <span key={i} className="animate-bounce" style={{
+          width: 6, height: 6, borderRadius: '50%', display: 'inline-block',
+          background: isDark ? '#888' : '#aaa', animationDelay: `${i * 160}ms`,
+        }} />
+      ))}
+    </span>
+  );
+}
+
+// Attachment card with a file-type icon: reads like a real mail attachment.
+export function AttachmentCard({ name, isDark, href, onClick, subtitle }: {
+  name: string; isDark: boolean; href?: string; onClick?: () => void; subtitle?: string;
+}) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const kind = ['csv', 'xlsx', 'xls'].includes(ext) ? 'sheet'
+    : ['pdf', 'doc', 'docx', 'txt', 'md'].includes(ext) ? 'doc'
+    : ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext) ? 'image'
+    : ['py', 'sql', 'js', 'ts', 'json', 'ipynb'].includes(ext) ? 'code'
+    : 'file';
+  const iconColor = kind === 'sheet' ? '#1D8A4E' : kind === 'doc' ? '#D93025' : kind === 'image' ? '#1A73E8' : kind === 'code' ? '#E8710A' : (isDark ? '#aaa' : '#5f6368');
+  const Icon = kind === 'sheet' ? FileSpreadsheet : kind === 'doc' ? FileText : kind === 'image' ? FileImage : kind === 'code' ? FileCode2 : FileIcon;
+  const inner = (
+    <>
+      <div style={{ width: 34, height: 34, borderRadius: 8, background: `${iconColor}1A`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon style={{ width: 17, height: 17, color: iconColor }} />
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: isDark ? '#e8eaed' : '#202124', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>{name}</p>
+        <p style={{ margin: 0, fontSize: 11, color: isDark ? '#888' : '#80868b' }}>{subtitle || fileSizeFor(name)}</p>
+      </div>
+    </>
+  );
+  const style: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 10, padding: '8px 14px 8px 8px', borderRadius: 12,
+    background: isDark ? 'rgba(255,255,255,0.04)' : '#fff',
+    border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#dadce0'}`,
+    textDecoration: 'none', cursor: (href || onClick) ? 'pointer' : 'default',
+  };
+  if (href) return <a href={href} target="_blank" rel="noreferrer" style={style}>{inner}</a>;
+  return <button onClick={onClick} style={{ ...style, textAlign: 'left', font: 'inherit' }}>{inner}</button>;
+}
+
+// Simple pill chip (labels like "Inbox", "Important", tool tags).
+export function Chip({ children, isDark, tone = 'neutral' }: {
+  children: React.ReactNode; isDark: boolean; tone?: 'neutral' | 'accent' | 'warn';
+}) {
+  const palette = tone === 'accent'
+    ? { bg: 'rgba(26,115,232,0.12)', fg: isDark ? '#8ab4f8' : '#1a67d2' }
+    : tone === 'warn'
+    ? { bg: 'rgba(217,48,37,0.1)', fg: isDark ? '#f28b82' : '#c5221f' }
+    : { bg: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)', fg: isDark ? '#bbb' : '#5f6368' };
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 10, fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, background: palette.bg, color: palette.fg, whiteSpace: 'nowrap' }}>
+      {children}
+    </span>
+  );
+}
+
+// One-time keyframes for arrival animations; rendering it more than once is harmless.
+export function WorkplaceKeyframes() {
+  return (
+    <style>{`
+      @keyframes veMailIn { from { opacity: 0; transform: translateY(10px) scale(0.995); } to { opacity: 1; transform: none; } }
+      @keyframes veToastIn { 0% { opacity: 0; transform: translateY(-6px); } 12% { opacity: 1; transform: none; } 82% { opacity: 1; } 100% { opacity: 0; } }
+      @keyframes vePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+      .ve-mail-in { animation: veMailIn 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+      .ve-toast-in { animation: veToastIn 3.4s ease both; }
+      .ve-pulse { animation: vePulse 1.6s ease infinite; }
+    `}</style>
+  );
+}
