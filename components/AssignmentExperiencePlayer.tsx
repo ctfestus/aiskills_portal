@@ -17,7 +17,7 @@ import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
 import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
 import {
   Person, AttachmentCard, ArrivalIndicator, arrivalKindFor, companyDomain, personEmail, firstNameOf,
-  workStamp, startTypingSound, playSendWhoosh, anchorZone, quoteSnippet, colleaguesFor, hashStr,
+  workStamp, startTypingSound, anchorZone, quoteSnippet, colleaguesFor, hashStr,
 } from '@/components/ve/workplace';
 import {
   MailCard, MailThreadMsg, MailTypingRow, MailComposer, MailStatusChip, SmartReplies,
@@ -967,7 +967,6 @@ export default function AssignmentExperiencePlayer({
                                   </div>
                                 );
                                 const handleEfSend = () => {
-                                  try { playSendWhoosh(); } catch {}
                                   setEfTyping(prev => ({ ...prev, [req.id]: true }));
                                   anchorZone(req.id);
                                   const delay = 2000 + Math.floor(Math.random() * 2001);

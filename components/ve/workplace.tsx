@@ -140,31 +140,6 @@ export function startTypingSound(durationMs: number) {
   (function tick() { if (Date.now() >= end) return; playTypingClick(); setTimeout(tick, 70 + Math.floor(Math.random() * 110)); })();
 }
 
-// Short filtered-noise sweep: the "message sent" whoosh.
-export function playSendWhoosh() {
-  const ctx = audioCtx();
-  if (!ctx) return;
-  try {
-    const dur = 0.28;
-    const n = Math.floor(ctx.sampleRate * dur);
-    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2) * 0.5;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const f = ctx.createBiquadFilter();
-    f.type = 'bandpass';
-    f.Q.value = 1.2;
-    f.frequency.setValueAtTime(1500, ctx.currentTime);
-    f.frequency.exponentialRampToValueAtTime(380, ctx.currentTime + dur);
-    const g = ctx.createGain();
-    g.gain.value = 0.16;
-    src.connect(f); f.connect(g); g.connect(ctx.destination);
-    src.start();
-    src.onended = () => { try { ctx.close(); } catch {} };
-  } catch { /* no audio */ }
-}
-
 // Plain-text snippet of an email body, for quoted history under replies.
 export function quoteSnippet(html?: string, max = 110): string {
   const txt = (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();

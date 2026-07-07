@@ -20,7 +20,7 @@ import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRe
 import AiReviewDisclaimer from '@/components/AiReviewDisclaimer';
 import {
   Person, Chip, AttachmentCard, ArrivalIndicator, arrivalKindFor, companyDomain, personEmail, firstNameOf,
-  workStamp, startTypingSound, playSendWhoosh, anchorZone, quoteSnippet, colleaguesFor, hashStr,
+  workStamp, startTypingSound, anchorZone, quoteSnippet, colleaguesFor, hashStr,
 } from '@/components/ve/workplace';
 import {
   MailCard, MailThreadMsg, MailTypingRow, MailComposer, MailStatusChip, SmartReplies,
@@ -1426,7 +1426,6 @@ export default function VirtualExperienceTaker({
                             </div>
                           );
                           const handleEfSend = () => {
-                            try { playSendWhoosh(); } catch {}
                             setEfTyping(prev => ({ ...prev, [req.id]: true }));
                             anchorZone(req.id);
                             const delay = 2000 + Math.floor(Math.random() * 2001);
