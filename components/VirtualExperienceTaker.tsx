@@ -19,7 +19,7 @@ import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
 import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
 import AiReviewDisclaimer from '@/components/AiReviewDisclaimer';
 import {
-  Person, Chip, AttachmentCard, PersonAvatar, companyDomain, personEmail, firstNameOf,
+  Person, Chip, AttachmentCard, ArrivalIndicator, arrivalKindFor, companyDomain, personEmail, firstNameOf,
   workStamp, startTypingSound, playSendWhoosh, anchorZone, quoteSnippet, colleaguesFor, hashStr,
 } from '@/components/ve/workplace';
 import {
@@ -2189,13 +2189,10 @@ export default function VirtualExperienceTaker({
                       const hiddenCount = reqs.length - visibleEnd;
                       if (hiddenCount <= 0) return null;
                       return (
-                        <div className="px-4 sm:px-8 py-4 flex items-center gap-3"
+                        <div className="px-4 sm:px-8 py-4"
                           style={{ borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-                          <PersonAvatar name={manager.name} size={26} color={manager.color} presence="active" />
-                          <span className="animate-pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: accentColor, display: 'inline-block', flexShrink: 0 }} />
-                          <p className="text-[12.5px]" style={{ color: muted, margin: 0 }}>
-                            {hiddenCount === 1 ? '1 more message' : `${hiddenCount} more messages`} on the way - new mail arrives as you complete your work
-                          </p>
+                          <ArrivalIndicator isDark={isDark} accent={accentColor} manager={manager}
+                            hiddenCount={hiddenCount} nextKind={arrivalKindFor(reqs[visibleEnd])} />
                         </div>
                       );
                     })()}
