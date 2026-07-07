@@ -907,7 +907,9 @@ export default function AssignmentExperiencePlayer({
                                           <p style={{ fontSize: 13.5, color: isDark ? '#ddd' : '#333', margin: 0, lineHeight: 1.6 }}>{feedback.feedback}</p>
                                         </div>
                                       </MailThreadMsg>
-                                      {!evaluating && !readOnly && (
+                                      {/* Only a wrong answer gets a way back to the composer - a
+                                          correct one is done, the mission just moves on. */}
+                                      {!evaluating && !readOnly && !feedback.passed && (
                                         <button
                                           onClick={() => {
                                             setEfRounds(prev => ({ ...prev, [req.id]: [...(prev[req.id] || []), { me: sentText, feedback: feedback.feedback, passed: feedback.passed }] }));
