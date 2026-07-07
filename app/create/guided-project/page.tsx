@@ -1360,9 +1360,15 @@ function VirtualExperienceCreatePageInner() {
                       <div style={{ width: 44, height: 44, borderRadius: 10, background: C.pill, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, color: C.text, flexShrink: 0, letterSpacing: 1 }}>
                         {companyInitials}
                       </div>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: C.faint }}>{config.industry} · Virtual Experience</p>
-                        <p className="text-[14px] font-bold mt-0.5" style={{ color: C.text }}>{config.company}</p>
+                        <input
+                          value={config.company || ''}
+                          onChange={e => setConfig(c => c ? { ...c, company: e.target.value } : c)}
+                          className="w-full bg-transparent outline-none text-[14px] font-bold mt-0.5"
+                          style={{ color: C.text }}
+                          placeholder="Company name…"
+                        />
                       </div>
                     </div>
 
