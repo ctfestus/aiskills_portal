@@ -245,7 +245,7 @@ export default function VirtualExperienceTaker({
   const [efTyping,        setEfTyping]        = useState<Record<string, boolean>>({});
   // Thread-based retries for email-framed short answers: each wrong attempt
   // stays in the thread as a sent reply + manager response (session-only).
-  const [efRounds,        setEfRounds]        = useState<Record<string, Array<{ me: string; feedback: string }>>>({});
+  const [efRounds,        setEfRounds]        = useState<Record<string, Array<{ me: string; feedback: string; passed: boolean }>>>({});
   const [efPending,       setEfPending]       = useState<Record<string, string>>({});
 
   const currentMod = modules.find(m => m.id === currentModId);
@@ -1229,6 +1229,11 @@ export default function VirtualExperienceTaker({
                           const rounds = efRounds[req.id] || [];
                           const replyOpen = done || openReplies.has(req.id) || hasContent || rounds.length > 0;
                           const needsEval = !!(req.aiReview || req.expectedAnswer);
+                          // Evaluation always completes the requirement (pass or fail is never a
+                          // gate), so `done` alone can't tell us whether to show the verdict or a
+                          // fresh composer. This flag lets a student who clicked "Reply" after
+                          // seeing feedback bypass the permanently-true `done` state.
+                          const wantsNewReply = needsEval && openReplies.has(req.id);
                           const isTyping = efTyping[req.id];
                           const isReviewing = efReviewing[req.id];
                           const feedback = aiFeedback[req.id];
@@ -1251,6 +1256,7 @@ export default function VirtualExperienceTaker({
                             }
                             const delay = 2000 + Math.floor(Math.random() * 2001);
                             setEfTyping(prev => ({ ...prev, [req.id]: true }));
+                            setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; });
                             anchorZone(req.id);
                             if (req.aiReview) {
                               // AI evaluation path: always marks done (informational feedback)
@@ -1301,7 +1307,7 @@ export default function VirtualExperienceTaker({
                                   setAiFeedback(prev => ({ ...prev, [req.id]: { passed: true, score: 100, feedback: `That is correct, ${firstNameOf(studentName)}. Well done.` } }));
                                   setProgress(prev => { const next = { ...prev, [req.id]: { ...prev[req.id], notes: attempt, completed: true } }; saveProgress(next, currentModId, currentLesId); return next; });
                                 } else {
-                                  setEfRounds(prev => ({ ...prev, [req.id]: [...(prev[req.id] || []), { me: attempt, feedback: `That is not quite right, ${firstNameOf(studentName)}. Take another look at the question and send me a new reply.` }] }));
+                                  setEfRounds(prev => ({ ...prev, [req.id]: [...(prev[req.id] || []), { me: attempt, feedback: `That is not quite right, ${firstNameOf(studentName)}. Take another look at the question and send me a new reply.`, passed: false }] }));
                                 }
                                 anchorZone(req.id);
                               }, delay);
@@ -1315,9 +1321,10 @@ export default function VirtualExperienceTaker({
                                     <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(r.me) }} />
                                   </MailThreadMsg>
                                   <MailThreadMsg isDark={isDark} from={manager} time="Earlier">
-                                    <div style={{ borderRadius: 10, padding: '12px 16px', background: isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)' }}>
-                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#f59e0b', marginBottom: 8 }}>
-                                        <Circle className="w-4 h-4" /> Not quite right
+                                    <div style={{ borderRadius: 10, padding: '12px 16px', background: r.passed ? (isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.06)'), border: `1px solid ${r.passed ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}` }}>
+                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: r.passed ? '#10b981' : '#f59e0b', marginBottom: 8 }}>
+                                        {r.passed ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                                        {r.passed ? 'Correct' : 'Incorrect'}
                                       </div>
                                       <p style={{ fontSize: 13.5, color: isDark ? '#ddd' : '#333', margin: 0, lineHeight: 1.6 }}>{r.feedback}</p>
                                     </div>
@@ -1334,7 +1341,7 @@ export default function VirtualExperienceTaker({
                                 {efMeReply}
                                 <MailTypingRow isDark={isDark} person={manager} />
                               </div>
-                            ) : (isReviewing || (done && needsEval)) ? (
+                            ) : (isReviewing || (done && needsEval && !wantsNewReply)) ? (
                               <div style={{ padding: '16px 22px 20px' }}>
                                 {efMeReply}
                                 {/* Manager: received */}
@@ -1360,10 +1367,24 @@ export default function VirtualExperienceTaker({
                                         <p style={{ fontSize: 13.5, color: isDark ? '#ddd' : '#333', margin: 0, lineHeight: 1.6 }}>{feedback.feedback}</p>
                                       </div>
                                     </MailThreadMsg>
+                                    {!evaluating && !reviewMode && (
+                                      <button
+                                        onClick={() => {
+                                          setEfRounds(prev => ({ ...prev, [req.id]: [...(prev[req.id] || []), { me: sentText, feedback: feedback.feedback, passed: feedback.passed }] }));
+                                          setAiFeedback(prev => ({ ...prev, [req.id]: null }));
+                                          // Clear only the live compose box - keep the already-graded
+                                          // answer in persisted progress until a new reply is actually sent.
+                                          setNoteValues(prev => ({ ...prev, [req.id]: '' }));
+                                          setOpenReplies(prev => new Set([...prev, req.id]));
+                                        }}
+                                        style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 18, border: `1px solid ${isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)'}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: isDark ? '#ddd' : '#444', cursor: 'pointer' }}>
+                                        <Reply className="w-4 h-4" /> Reply
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                               </div>
-                            ) : done ? (
+                            ) : (done && !wantsNewReply) ? (
                               // Simple done (no evaluation)
                               <div style={{ padding: '16px 22px 20px' }}>
                                 {efMeReply}
