@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import {
   Person, PersonAvatar, MeAvatar, AttachmentCard, Chip, TypingDots,
-  WorkplaceKeyframes, firstArrival, playArrivalChime, playSendWhoosh, firstNameOf,
+  WorkplaceKeyframes, firstArrival, playArrivalChime, firstNameOf,
 } from './workplace';
 
 // -- rich text compose box (moved out of the players) --------------------------
@@ -299,7 +299,7 @@ export function SmartReplies({ isDark, accent, options, onPick, label = 'Suggest
       <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: isDark ? '#6b7075' : '#9aa0a6' }}>{label}</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {options.map((opt, i) => (
-          <button key={i} onClick={() => { try { playSendWhoosh(); } catch {} onPick(opt); }}
+          <button key={i} onClick={() => onPick(opt)}
             style={{
               padding: '7px 16px', borderRadius: 18, fontSize: 13, fontWeight: 600,
               border: `1px solid ${accent}55`, color: accent, background: 'transparent', cursor: 'pointer',
@@ -359,7 +359,7 @@ export function MailComposer({
       {extra && <div style={{ padding: '0 14px 10px' }}>{extra}</div>}
       {/* Send bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderTop: `1px solid ${line}` }}>
-        <button onClick={() => { if (!canSend || sending) return; try { playSendWhoosh(); } catch {} onSend(); }} disabled={!canSend || sending}
+        <button onClick={onSend} disabled={!canSend || sending}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 22px', borderRadius: 18,
             background: canSend && !sending ? accent : (isDark ? '#333' : '#e0e0e0'),

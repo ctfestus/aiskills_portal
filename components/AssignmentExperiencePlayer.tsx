@@ -16,8 +16,8 @@ import CodeReviewPlayer from '@/components/CodeReviewPlayer';
 import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
 import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
 import {
-  Person, AttachmentCard, PersonAvatar, companyDomain, personEmail, firstNameOf,
-  workStamp, startTypingSound, playSendWhoosh, anchorZone, quoteSnippet, colleaguesFor, hashStr,
+  Person, AttachmentCard, ArrivalIndicator, arrivalKindFor, companyDomain, personEmail, firstNameOf,
+  workStamp, startTypingSound, anchorZone, quoteSnippet, colleaguesFor, hashStr,
 } from '@/components/ve/workplace';
 import {
   MailCard, MailThreadMsg, MailTypingRow, MailComposer, MailStatusChip, SmartReplies,
@@ -168,7 +168,7 @@ export default function AssignmentExperiencePlayer({
   const [efTyping,        setEfTyping]        = useState<Record<string, boolean>>({});
   // Thread-based retries for email-framed short answers: each wrong attempt
   // stays in the thread as a sent reply + manager response (session-only).
-  const [efRounds,        setEfRounds]        = useState<Record<string, Array<{ me: string; feedback: string }>>>({});
+  const [efRounds,        setEfRounds]        = useState<Record<string, Array<{ me: string; feedback: string; passed: boolean }>>>({});
   const [efPending,       setEfPending]       = useState<Record<string, string>>({});
   const [aiReviewing,     setAiReviewing]     = useState<Record<string, boolean>>({});
   const [aiFeedback,      setAiFeedback]      = useState<Record<string, { passed: boolean; feedback: string; score: number } | null>>({});
@@ -772,6 +772,11 @@ export default function AssignmentExperiencePlayer({
                             const rounds = efRounds[req.id] || [];
                             const replyOpen = isDone || openReplies.has(req.id) || hasContent || rounds.length > 0;
                             const needsEval = !!(req.aiReview || req.expectedAnswer);
+                            // Evaluation always completes the requirement (pass or fail is never a
+                            // gate), so `isDone` alone can't tell us whether to show the verdict or
+                            // a fresh composer. This flag lets a student who clicked "Reply" after
+                            // seeing feedback bypass the permanently-true `isDone` state.
+                            const wantsNewReply = needsEval && openReplies.has(req.id);
                             const isTyping = efTyping[req.id];
                             const isReviewing = efReviewing[req.id];
                             const feedback = aiFeedback[req.id];
@@ -794,6 +799,7 @@ export default function AssignmentExperiencePlayer({
                               }
                               const delay = 2000 + Math.floor(Math.random() * 2001);
                               setEfTyping(prev => ({ ...prev, [req.id]: true }));
+                              setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; });
                               anchorZone(req.id);
                               if (req.aiReview) {
                                 // AI evaluation path: always marks done (informational feedback)
@@ -843,7 +849,7 @@ export default function AssignmentExperiencePlayer({
                                     setAiFeedback(prev => ({ ...prev, [req.id]: { passed: true, score: 100, feedback: `That is correct, ${firstNameOf(studentName)}. Well done.` } }));
                                     updateProgress(req.id, { notes: attempt, completed: true });
                                   } else {
-                                    setEfRounds(prev => ({ ...prev, [req.id]: [...(prev[req.id] || []), { me: attempt, feedback: `That is not quite right, ${firstNameOf(studentName)}. Take another look at the question and send me a new reply.` }] }));
+                                    setEfRounds(prev => ({ ...prev, [req.id]: [...(prev[req.id] || []), { me: attempt, feedback: `That is not quite right, ${firstNameOf(studentName)}. Take another look at the question and send me a new reply.`, passed: false }] }));
                                   }
                                   anchorZone(req.id);
                                 }, delay);
@@ -857,9 +863,10 @@ export default function AssignmentExperiencePlayer({
                                       <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(r.me) }} />
                                     </MailThreadMsg>
                                     <MailThreadMsg isDark={isDark} from={manager} time="Earlier">
-                                      <div style={{ borderRadius: 10, padding: '12px 16px', background: isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)' }}>
-                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: '#f59e0b', marginBottom: 8 }}>
-                                          <Circle className="w-4 h-4" /> Not quite right
+                                      <div style={{ borderRadius: 10, padding: '12px 16px', background: r.passed ? (isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.06)'), border: `1px solid ${r.passed ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}` }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: r.passed ? '#10b981' : '#f59e0b', marginBottom: 8 }}>
+                                          {r.passed ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                                          {r.passed ? 'Correct' : 'Incorrect'}
                                         </div>
                                         <p style={{ fontSize: 13.5, color: isDark ? '#ddd' : '#333', margin: 0, lineHeight: 1.6 }}>{r.feedback}</p>
                                       </div>
@@ -876,7 +883,7 @@ export default function AssignmentExperiencePlayer({
                                   {efMeReply}
                                   <MailTypingRow isDark={isDark} person={manager} />
                                 </div>
-                              ) : (isReviewing || (isDone && needsEval)) ? (
+                              ) : (isReviewing || (isDone && needsEval && !wantsNewReply)) ? (
                                 <div style={{ padding: '16px 22px 20px' }}>
                                   {efMeReply}
                                   <div style={{ marginBottom: feedback ? 18 : 0 }}>
@@ -900,10 +907,24 @@ export default function AssignmentExperiencePlayer({
                                           <p style={{ fontSize: 13.5, color: isDark ? '#ddd' : '#333', margin: 0, lineHeight: 1.6 }}>{feedback.feedback}</p>
                                         </div>
                                       </MailThreadMsg>
+                                      {/* Only a wrong answer gets a way back to the composer - a
+                                          correct one is done, the mission just moves on. */}
+                                      {!evaluating && !readOnly && !feedback.passed && (
+                                        <button
+                                          onClick={() => {
+                                            setEfRounds(prev => ({ ...prev, [req.id]: [...(prev[req.id] || []), { me: sentText, feedback: feedback.feedback, passed: feedback.passed }] }));
+                                            setAiFeedback(prev => ({ ...prev, [req.id]: null }));
+                                            updateProgress(req.id, { notes: '' });
+                                            setOpenReplies(prev => new Set([...prev, req.id]));
+                                          }}
+                                          style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 18, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer' }}>
+                                          <Reply className="w-4 h-4" /> Reply
+                                        </button>
+                                      )}
                                     </div>
                                   )}
                                 </div>
-                              ) : isDone ? (
+                              ) : (isDone && !wantsNewReply) ? (
                                 <div style={{ padding: '16px 22px 20px' }}>
                                   {efMeReply}
                                   <MailStatusChip accent={accent}>Reply sent to {efManager}</MailStatusChip>
@@ -967,7 +988,6 @@ export default function AssignmentExperiencePlayer({
                                   </div>
                                 );
                                 const handleEfSend = () => {
-                                  try { playSendWhoosh(); } catch {}
                                   setEfTyping(prev => ({ ...prev, [req.id]: true }));
                                   anchorZone(req.id);
                                   const delay = 2000 + Math.floor(Math.random() * 2001);
@@ -1398,13 +1418,8 @@ export default function AssignmentExperiencePlayer({
                         const hiddenCount = reqs.length - visibleEnd;
                         if (hiddenCount <= 0) return null;
                         return (
-                          <div className="flex items-center gap-3">
-                            <PersonAvatar name={manager.name} size={26} color={manager.color} presence="active" />
-                            <span className="animate-pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: accent, display: 'inline-block', flexShrink: 0 }} />
-                            <p className="text-[12.5px]" style={{ color: muted, margin: 0 }}>
-                              {hiddenCount === 1 ? '1 more message' : `${hiddenCount} more messages`} on the way - new mail arrives as you complete your work
-                            </p>
-                          </div>
+                          <ArrivalIndicator isDark={isDark} accent={accent} manager={manager}
+                            hiddenCount={hiddenCount} nextKind={arrivalKindFor(reqs[visibleEnd])} />
                         );
                       })()}
                     </div>

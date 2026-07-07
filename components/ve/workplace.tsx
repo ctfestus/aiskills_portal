@@ -140,31 +140,6 @@ export function startTypingSound(durationMs: number) {
   (function tick() { if (Date.now() >= end) return; playTypingClick(); setTimeout(tick, 70 + Math.floor(Math.random() * 110)); })();
 }
 
-// Short filtered-noise sweep: the "message sent" whoosh.
-export function playSendWhoosh() {
-  const ctx = audioCtx();
-  if (!ctx) return;
-  try {
-    const dur = 0.28;
-    const n = Math.floor(ctx.sampleRate * dur);
-    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2) * 0.5;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const f = ctx.createBiquadFilter();
-    f.type = 'bandpass';
-    f.Q.value = 1.2;
-    f.frequency.setValueAtTime(1500, ctx.currentTime);
-    f.frequency.exponentialRampToValueAtTime(380, ctx.currentTime + dur);
-    const g = ctx.createGain();
-    g.gain.value = 0.16;
-    src.connect(f); f.connect(g); g.connect(ctx.destination);
-    src.start();
-    src.onended = () => { try { ctx.close(); } catch {} };
-  } catch { /* no audio */ }
-}
-
 // Plain-text snippet of an email body, for quoted history under replies.
 export function quoteSnippet(html?: string, max = 110): string {
   const txt = (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -298,6 +273,44 @@ export function Chip({ children, isDark, tone = 'neutral' }: {
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 10, fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, background: palette.bg, color: palette.fg, whiteSpace: 'nowrap' }}>
       {children}
     </span>
+  );
+}
+
+// What surface a requirement renders through, so the "more content ahead"
+// indicator can describe it accurately instead of always saying "email".
+export function arrivalKindFor(req: { type: string; emailFrame?: boolean }): 'mail' | 'chat' | 'plain' {
+  if (req.type === 'briefing' || req.type === 'debrief') return 'mail';
+  if (req.type === 'scenario_update' || req.type === 'decision') return 'chat';
+  if (req.emailFrame) return 'mail';
+  return 'plain';
+}
+
+// "N more things ahead" banner shown while sequential arrival is holding
+// content back. Wording and avatar adapt to what the next item actually is -
+// a plain task/MCQ/upload is not "an email".
+export function ArrivalIndicator({ isDark, accent, manager, hiddenCount, nextKind }: {
+  isDark: boolean;
+  accent: string;
+  manager: Person;
+  hiddenCount: number;
+  nextKind: 'mail' | 'chat' | 'plain';
+}) {
+  if (hiddenCount <= 0) return null;
+  const tFaint = isDark ? '#888' : '#666';
+  const noun = nextKind === 'mail' ? (hiddenCount === 1 ? 'email' : 'emails')
+    : nextKind === 'chat' ? (hiddenCount === 1 ? 'message' : 'messages')
+    : (hiddenCount === 1 ? 'step' : 'steps');
+  const preposition = nextKind === 'plain' ? 'ahead' : 'on the way';
+  const pronoun = hiddenCount === 1 ? 'it' : 'the next one';
+  const verb = nextKind === 'plain' ? 'unlocks' : 'arrives';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {nextKind !== 'plain' && <PersonAvatar name={manager.name} size={26} color={manager.color} presence="active" />}
+      <span className="animate-pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: accent, display: 'inline-block', flexShrink: 0 }} />
+      <p style={{ fontSize: 12.5, color: tFaint, margin: 0 }}>
+        {hiddenCount} more {noun} {preposition} - {pronoun} {verb} once you finish this
+      </p>
+    </div>
   );
 }
 
