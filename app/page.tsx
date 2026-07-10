@@ -1071,7 +1071,7 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth, isDark }: { ads: AdCard
     ? (containerW > 0 ? containerW : 1280)
     : (containerW > 0 ? Math.min(646, containerW - 40) : 646);
   const CARD_H = fullWidth
-    ? (isMobile ? 380 : Math.max(320, Math.min(460, Math.round((containerW || 1280) * 0.30))))
+    ? (isMobile ? 380 : Math.max(340, Math.min(500, Math.round((containerW || 1280) * 0.34))))
     : (isMobile && hasSideImage)
       ? 430
       : Math.max(220, Math.round(297 * Math.min(1, CARD_W / 646)));
@@ -1131,38 +1131,43 @@ function LandingAdBanner({ ads, hFont, bFont, fullWidth, isDark }: { ads: AdCard
                       </div>
                     </>
                   ) : (
-                    <motion.div key={`bg-${contentKey}`} className="absolute inset-0"
-                      style={{ background: ad.bgImage ? `url(${ad.bgImage}) center/cover no-repeat` : baseColor }}
-                      animate={active && !reduced && ad.bgImage ? { scale: [1, 1.06] } : { scale: 1 }}
-                      transition={active && !reduced ? { duration: 8, ease: 'linear' } : { duration: 0.5 }} />
+                    <>
+                      <motion.div key={`bg-${contentKey}`} className="absolute inset-0"
+                        style={{ background: ad.bgImage ? `url(${ad.bgImage}) center/cover no-repeat` : baseColor }}
+                        animate={active && !reduced && ad.bgImage ? { scale: [1, 1.06] } : { scale: 1 }}
+                        transition={active && !reduced ? { duration: 8, ease: 'linear' } : { duration: 0.5 }} />
+                      {ad.bgImage && (
+                        <div className="absolute inset-0 pointer-events-none"
+                          style={{ background: 'linear-gradient(90deg, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.34) 48%, rgba(0,0,0,0) 82%)' }} />
+                      )}
+                    </>
                   )}
                   <div className="relative h-full flex items-center max-w-[1240px] mx-auto px-4 sm:px-8 md:px-14">
                     <motion.div key={`panel-${contentKey}`} variants={bannerStagger}
                       initial={active && !reduced ? 'hide' : false} animate="show"
-                      className="rounded-2xl bg-white"
-                      style={{ maxWidth: isMobile ? (isSide ? '52%' : '88%') : 460, padding: isMobile ? '22px 22px' : '36px 40px', boxShadow: '0 12px 44px rgba(0,0,0,0.16)' }}>
+                      style={{ maxWidth: isMobile ? (isSide ? '52%' : '92%') : 620 }}>
                       {ad.label && (
-                        <motion.span variants={bannerItem} className="inline-flex items-center gap-2 text-[10px] font-extrabold uppercase mb-3"
-                          style={{ color: baseColor, letterSpacing: '0.14em' }}>
-                          <span aria-hidden="true" className="inline-block w-4 h-[2px] rounded-full" style={{ background: baseColor }} />
+                        <motion.span variants={bannerItem} className="inline-flex items-center gap-2 text-[10px] font-extrabold uppercase mb-4"
+                          style={{ color: 'rgba(255,255,255,0.85)', letterSpacing: '0.14em' }}>
+                          <span aria-hidden="true" className="inline-block w-4 h-[2px] rounded-full" style={{ background: 'rgba(255,255,255,0.85)' }} />
                           {ad.label}
                         </motion.span>
                       )}
-                      <motion.h3 variants={bannerItem} className="font-black leading-[1.08]"
-                        style={{ color: LAND_C.text, fontFamily: hFont, letterSpacing: '-0.025em', fontSize: isMobile ? 'clamp(24px,7vw,30px)' : 'clamp(30px,2.8vw,42px)' }}>
+                      <motion.h3 variants={bannerItem} className="text-balance leading-[1.12]"
+                        style={{ color: 'white', fontFamily: hFont, fontWeight: 500, letterSpacing: '-0.02em', fontSize: isMobile ? 'clamp(26px,8vw,34px)' : 'clamp(34px,4.4vw,56px)' }}>
                         {ad.title}
                       </motion.h3>
                       {ad.description && (
-                        <motion.p variants={bannerItem} className="leading-relaxed mt-3"
-                          style={{ color: LAND_C.muted, fontFamily: bFont ?? hFont, fontSize: isMobile ? 15 : 16 }}>
+                        <motion.p variants={bannerItem} className="leading-relaxed mt-4"
+                          style={{ color: 'rgba(255,255,255,0.88)', fontFamily: bFont ?? hFont, fontSize: isMobile ? 15 : 17, maxWidth: 560 }}>
                           {ad.description}
                         </motion.p>
                       )}
                       {ad.ctaText && (
-                        <motion.div variants={bannerItem} className="mt-5">
+                        <motion.div variants={bannerItem} className="mt-7">
                           <Link href={ad.ctaUrl || '/auth'}
                             className="group inline-flex items-center gap-2 font-bold rounded-xl transition-all duration-200 hover:shadow-lg active:scale-[0.98]"
-                            style={{ background: baseColor, color: '#fff', fontFamily: hFont, fontSize: isMobile ? 14 : 15, padding: isMobile ? '11px 20px' : '13px 26px' }}>
+                            style={{ background: 'white', color: baseColor, fontFamily: hFont, fontSize: isMobile ? 14 : 15, padding: isMobile ? '11px 20px' : '13px 26px' }}>
                             {ad.ctaText}
                             <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
                           </Link>
