@@ -549,6 +549,10 @@ export default function PythonExercisePlayer({
       const attempts = check.passed ? failedAttempts : failedAttempts + 1;
       if (!check.passed) setFailedAttempts(attempts);
       setFeedback(check);
+      if (onCheckAnswer && check.passed && !check.proof) {
+        setError('Your output matched, but server verification did not complete. Please check your connection and try again.');
+        return;
+      }
       onComplete({ code, output: actualOutput, passed: check.passed, attempts, solutionViewed: solutionRevealed, feedback: check, proof: check.proof } as any);
     } catch (e: any) {
       setError(e?.message || 'Run failed.');

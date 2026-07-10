@@ -644,6 +644,11 @@ export default function SQLExercisePlayer({
         return;
       }
       const attempts = failedAttempts;
+      if (onCheckAnswer && !serverCheck.proof) {
+        setFeedback(serverCheck.feedback);
+        setError('Your result matched, but server verification did not complete. Please check your connection and try again.');
+        return;
+      }
       setFeedback(serverCheck.feedback);
       await onComplete({ query, result: out, passed: true, feedback: serverCheck.feedback, attempts, solutionViewed: solutionRevealed, proof: serverCheck.proof });
     } catch (e: any) {

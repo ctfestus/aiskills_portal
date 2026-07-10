@@ -2281,7 +2281,7 @@ export function CourseTaker({
     const alreadyAnswered = !!answersRef.current[currentQuestion.id];
     const previousCorrect = alreadyAnswered ? isAnswerCorrect(currentQuestion, answersRef.current[currentQuestion.id]) : false;
     const previousSolutionViewed = alreadyAnswered ? (() => { try { return !!JSON.parse(answersRef.current[currentQuestion.id])?.solutionViewed; } catch { return false; } })() : false;
-    const countsAsPassed = !!payload.passed && !payload.skipped && !payload.solutionViewed;
+    const countsAsPassed = !!payload.passed && !!payload.proof && !payload.skipped && !payload.solutionViewed;
     const answer = JSON.stringify({
       query: payload.query,
       passed: countsAsPassed,
@@ -2337,7 +2337,7 @@ export function CourseTaker({
     const alreadyAnswered = !!answersRef.current[currentQuestion.id];
     const previousCorrect = alreadyAnswered ? isAnswerCorrect(currentQuestion, answersRef.current[currentQuestion.id]) : false;
     const previousSolutionViewed = alreadyAnswered ? (() => { try { return !!JSON.parse(answersRef.current[currentQuestion.id])?.solutionViewed; } catch { return false; } })() : false;
-    const countsAsPassed = !!payload.passed && !payload.skipped && !payload.solutionViewed;
+    const countsAsPassed = !!payload.passed && !!payload.proof && !payload.skipped && !payload.solutionViewed;
     const answer = JSON.stringify({
       code: payload.code,
       output: payload.output,
