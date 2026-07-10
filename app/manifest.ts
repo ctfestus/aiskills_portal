@@ -61,8 +61,9 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     id: '/',
     name,
     short_name: name.length > 12 ? name.slice(0, 12).trim() : name,
-    description:
-      process.env.NEXT_PUBLIC_APP_DESCRIPTION ?? `${name} -- practical data and AI skills.`,
+    // From platform branding (platform_settings.app_description). Falls back to the
+    // app name so no tenant ever inherits another tenant's tagline.
+    description: t.appDescription || name,
     start_url: '/',
     scope: '/',
     display: 'standalone',

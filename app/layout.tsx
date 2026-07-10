@@ -30,7 +30,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const t = await getTenantSettings();
   return {
     title: t.appName,
-    description: process.env.NEXT_PUBLIC_APP_DESCRIPTION ?? `${t.appName} -- empowering Africans with practical data and AI skills for work.`,
+    description: t.appDescription || t.appName,
     icons: {
       icon: t.faviconUrl,
       shortcut: t.faviconUrl,

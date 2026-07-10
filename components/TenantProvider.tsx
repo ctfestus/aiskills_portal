@@ -17,6 +17,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         if (!d) return;
         setSettings({
           appName:      d.app_name      || tenant.appName,
+          appDescription: d.app_description || tenant.appDescription,
           orgName:      d.org_name      || tenant.orgName,
           appUrl:       (d.app_url       || tenant.appUrl).replace(/\/$/, ''),
           logoUrl:      d.logo_url      || tenant.logoUrl,
