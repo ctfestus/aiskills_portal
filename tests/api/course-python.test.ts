@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse } from 'next/server';
+import { createHmac } from 'crypto';
 
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api-auth')>()),
@@ -35,6 +36,17 @@ function authed(supabase: any) {
     token: 'test-token',
   } as any);
   mockCreateClient.mockReturnValue(supabase);
+}
+
+function signSqlProof(query: string, courseId = 'course1', studentId = 'student1', questionId = 'sql1'): string {
+  const payload = JSON.stringify({
+    v: 1,
+    courseId,
+    studentId,
+    questionId,
+    query: String(query ?? '').replace(/\s+/g, ' ').trim(),
+  });
+  return `v1:${createHmac('sha256', process.env.SUPABASE_SERVICE_ROLE_KEY || '').update(payload).digest('hex')}`;
 }
 
 const pythonQuestion = {
@@ -215,6 +227,255 @@ describe('POST /api/course Python exercise security', () => {
       solutionViewed: true,
       attempts: 2,
     });
+  });
+
+  it('does not persist SQL progress as passed when server proof is missing', async () => {
+    const inserts: any[] = [];
+    const supabase = {
+      from(table: string) {
+        const state: { op: 'select' | 'insert'; payload?: unknown } = { op: 'select' };
+        let courseAttemptSelects = 0;
+        const result = () => {
+          if (table === 'courses') return { data: { id: 'course1', questions: [sqlQuestion] }, error: null };
+          if (table === 'course_attempts' && state.op === 'insert') return { data: null, error: null };
+          if (table === 'course_attempts') {
+            courseAttemptSelects += 1;
+            if (courseAttemptSelects === 1) return { data: null, error: null }; // active attempt
+            if (courseAttemptSelects === 2) return { data: null, error: null }; // completed pass
+            return { data: null, error: null }; // last attempt
+          }
+          return { data: null, error: null };
+        };
+        const builder: any = {
+          select: () => builder,
+          eq: () => builder,
+          is: () => builder,
+          not: () => builder,
+          order: () => builder,
+          limit: () => builder,
+          single: async () => result(),
+          maybeSingle: async () => result(),
+          insert: (payload: unknown) => {
+            state.op = 'insert';
+            state.payload = payload;
+            inserts.push(payload);
+            return builder;
+          },
+          then: (resolve: any, reject: any) => Promise.resolve(result()).then(resolve, reject),
+        };
+        return builder;
+      },
+    };
+    authed(supabase);
+
+    const res = await post({
+      action: 'save-progress',
+      course_id: 'course1',
+      current_question_index: 1,
+      answers: {
+        sql1: JSON.stringify({ passed: true, query: 'SELECT 1 AS n' }),
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(inserts).toHaveLength(1);
+    const saved = JSON.parse(inserts[0].answers.sql1);
+    expect(saved).toMatchObject({
+      passed: false,
+      verificationFailed: true,
+      query: 'SELECT 1 AS n',
+    });
+    expect(saved.proof).toBeUndefined();
+  });
+
+  it('does not persist SQL progress as passed when server proof is invalid', async () => {
+    const inserts: any[] = [];
+    const supabase = {
+      from(table: string) {
+        const state: { op: 'select' | 'insert'; payload?: unknown } = { op: 'select' };
+        let courseAttemptSelects = 0;
+        const result = () => {
+          if (table === 'courses') return { data: { id: 'course1', questions: [sqlQuestion] }, error: null };
+          if (table === 'course_attempts' && state.op === 'insert') return { data: null, error: null };
+          if (table === 'course_attempts') {
+            courseAttemptSelects += 1;
+            if (courseAttemptSelects === 1) return { data: null, error: null };
+            if (courseAttemptSelects === 2) return { data: null, error: null };
+            return { data: null, error: null };
+          }
+          return { data: null, error: null };
+        };
+        const builder: any = {
+          select: () => builder,
+          eq: () => builder,
+          is: () => builder,
+          not: () => builder,
+          order: () => builder,
+          limit: () => builder,
+          single: async () => result(),
+          maybeSingle: async () => result(),
+          insert: (payload: unknown) => {
+            state.op = 'insert';
+            state.payload = payload;
+            inserts.push(payload);
+            return builder;
+          },
+          then: (resolve: any, reject: any) => Promise.resolve(result()).then(resolve, reject),
+        };
+        return builder;
+      },
+    };
+    authed(supabase);
+
+    const res = await post({
+      action: 'save-progress',
+      course_id: 'course1',
+      current_question_index: 1,
+      answers: {
+        sql1: JSON.stringify({ passed: true, query: 'SELECT 1 AS n', proof: 'v1:fake-proof' }),
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(inserts).toHaveLength(1);
+    const saved = JSON.parse(inserts[0].answers.sql1);
+    expect(saved).toMatchObject({
+      passed: false,
+      verificationFailed: true,
+      query: 'SELECT 1 AS n',
+      proof: 'v1:fake-proof',
+    });
+  });
+
+  it('falls back to full course questions when computed question_types is unavailable', async () => {
+    const inserts: any[] = [];
+    let courseSelects = 0;
+    const supabase = {
+      from(table: string) {
+        const state: { op: 'select' | 'insert'; payload?: unknown } = { op: 'select' };
+        let courseAttemptSelects = 0;
+        const result = () => {
+          if (table === 'courses') {
+            courseSelects += 1;
+            if (courseSelects === 1) return { data: null, error: { code: '42703', message: 'column does not exist' } };
+            return { data: { id: 'course1', questions: [sqlQuestion] }, error: null };
+          }
+          if (table === 'course_attempts' && state.op === 'insert') return { data: null, error: null };
+          if (table === 'course_attempts') {
+            courseAttemptSelects += 1;
+            if (courseAttemptSelects === 1) return { data: null, error: null };
+            if (courseAttemptSelects === 2) return { data: null, error: null };
+            return { data: null, error: null };
+          }
+          return { data: null, error: null };
+        };
+        const builder: any = {
+          select: () => builder,
+          eq: () => builder,
+          is: () => builder,
+          not: () => builder,
+          order: () => builder,
+          limit: () => builder,
+          single: async () => result(),
+          maybeSingle: async () => result(),
+          insert: (payload: unknown) => {
+            state.op = 'insert';
+            state.payload = payload;
+            inserts.push(payload);
+            return builder;
+          },
+          then: (resolve: any, reject: any) => Promise.resolve(result()).then(resolve, reject),
+        };
+        return builder;
+      },
+    };
+    authed(supabase);
+
+    const res = await post({
+      action: 'save-progress',
+      course_id: 'course1',
+      current_question_index: 1,
+      answers: {
+        sql1: JSON.stringify({ passed: true, query: 'SELECT 1 AS n' }),
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(courseSelects).toBe(2);
+    expect(inserts).toHaveLength(1);
+    const saved = JSON.parse(inserts[0].answers.sql1);
+    expect(saved).toMatchObject({
+      passed: false,
+      verificationFailed: true,
+    });
+  });
+
+  it('allows verified SQL progress to replace an old unverified passed answer', async () => {
+    const updates: any[] = [];
+    const proof = signSqlProof('SELECT 1 AS n');
+    const supabase = {
+      from(table: string) {
+        const state: { op: 'select' | 'update'; payload?: unknown } = { op: 'select' };
+        const result = () => {
+          if (table === 'courses') return { data: { id: 'course1', questions: [sqlQuestion] }, error: null };
+          if (table === 'course_attempts' && state.op === 'update') return { data: null, error: null };
+          if (table === 'course_attempts') {
+            return {
+              data: {
+                id: 'attempt1',
+                current_question_index: 0,
+                answers: {
+                  sql1: JSON.stringify({ passed: true, query: 'SELECT 1 AS n' }),
+                },
+                hints_used: [],
+                points: 0,
+                streak: 0,
+              },
+              error: null,
+            };
+          }
+          return { data: null, error: null };
+        };
+        const builder: any = {
+          select: () => builder,
+          eq: () => builder,
+          is: () => builder,
+          not: () => builder,
+          order: () => builder,
+          limit: () => builder,
+          single: async () => result(),
+          maybeSingle: async () => result(),
+          update: (payload: unknown) => {
+            state.op = 'update';
+            state.payload = payload;
+            updates.push(payload);
+            return builder;
+          },
+          then: (resolve: any, reject: any) => Promise.resolve(result()).then(resolve, reject),
+        };
+        return builder;
+      },
+    };
+    authed(supabase);
+
+    const res = await post({
+      action: 'save-progress',
+      course_id: 'course1',
+      current_question_index: 1,
+      answers: {
+        sql1: JSON.stringify({ passed: true, query: 'SELECT 1 AS n', proof }),
+      },
+    });
+
+    expect(res.status).toBe(200);
+    expect(updates).toHaveLength(1);
+    const saved = JSON.parse(updates[0].answers.sql1);
+    expect(saved).toMatchObject({
+      passed: true,
+      query: 'SELECT 1 AS n',
+      proof,
+    });
+    expect(saved.verificationFailed).toBeUndefined();
   });
 
   it('does not accept forged Python passed answers without a server proof', async () => {
