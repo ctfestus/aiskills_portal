@@ -133,7 +133,7 @@ const REQ_META: Record<string, { label: string; color: string; bg: string }> = {
   debrief:     { label: 'Debrief', color: '#14b8a6', bg: 'rgba(20,184,166,0.12)' },
 };
 
-import { safeEmbedUrl as getVideoEmbedUrl } from '@/lib/safe-embed-url';
+import { safeEmbedUrl as getVideoEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
 
 function lessonProgress(lesson: Lesson, progress: Progress): number {
   if (!lesson.requirements.length) return 100;
@@ -877,8 +877,9 @@ export default function VirtualExperienceTaker({
                 {/* Video: above body, padded + rounded */}
                 {embedUrl && (
                   <div className="px-4 sm:px-8 pt-5 sm:pt-7 pb-2">
-                    <div className="rounded-lg overflow-hidden" style={embedUrl.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9' }}>
+                    <div className="rounded-lg overflow-hidden" style={embedUrl.includes('canva.com') || isHtmlEmbedUrl(embedUrl) ? { height: '80vh' } : { aspectRatio: '16/9' }}>
                       <iframe src={embedUrl} className="w-full h-full border-0"
+                        sandbox={isHtmlEmbedUrl(embedUrl) ? 'allow-scripts allow-popups' : undefined}
                         allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
                         allowFullScreen />
                     </div>

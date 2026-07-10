@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { safeEmbedUrl } from '@/lib/safe-embed-url';
+import { safeEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
 import { useTheme } from '@/components/ThemeProvider';
 import { useTenant } from '@/components/TenantProvider';
 import { motion, AnimatePresence } from 'motion/react';
@@ -13,7 +13,7 @@ import {
   Share2,
   Video, BookOpen, Search, Zap, Settings, Upload,
   Download, Link2, FileText, Database, ArrowLeft, Lock, LockOpen,
-  Clock, Users, Globe, Repeat, Code2, RefreshCw, Music,
+  Clock, Users, Globe, Repeat, Code2, RefreshCw, Music, FileCode,
 } from 'lucide-react';
 import { ThemeColor, ThemeMode } from '@/components/AnimatedField';
 import type {
@@ -4262,13 +4262,30 @@ const [isSaving, setIsSaving] = useState(false);
                                 >
                                   <Video className="w-3.5 h-3.5"/> Bunny
                                 </button>
+                                {/* Interactive HTML embed: uploads to the public form-assets bucket; only
+                                    URLs of that shape pass safeEmbedUrl, and players render them sandboxed */}
+                                <label className="cursor-pointer flex-shrink-0" title="Upload an interactive HTML page">
+                                  <input type="file" accept=".html,.htm,text/html" className="hidden" onChange={async e => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    e.target.value = '';
+                                    if (file.size > 10 * 1024 * 1024) { showToast(`HTML file is too large (${(file.size / 1048576).toFixed(1)} MB). Maximum is 10 MB.`); return; }
+                                    try {
+                                      const url = await uploadToStorage(file, 'lesson-html');
+                                      handleUpdateQuestion(q.id, { lesson: { ...q.lesson, videoUrl: url } });
+                                    } catch (err: any) { showToast(err?.message || 'HTML upload failed. Please try again.'); }
+                                  }} />
+                                  <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-opacity hover:opacity-70" style={{ background: C.groupBg, color: C.muted }}>
+                                    <FileCode className="w-3.5 h-3.5"/> HTML
+                                  </div>
+                                </label>
                               </div>
                               {(() => {
                                 const vurl = q.lesson.videoUrl || '';
                                 const embedUrl = safeEmbedUrl(vurl);
                                 return embedUrl ? (
                                   <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
-                                    <iframe src={embedUrl} className="w-full aspect-video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                                    <iframe src={embedUrl} className={isHtmlEmbedUrl(embedUrl) ? 'w-full' : 'w-full aspect-video'} style={isHtmlEmbedUrl(embedUrl) ? { height: 480 } : undefined} sandbox={isHtmlEmbedUrl(embedUrl) ? 'allow-scripts allow-popups' : undefined} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
                                   </div>
                                 ) : null;
                               })()}

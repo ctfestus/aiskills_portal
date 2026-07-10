@@ -106,7 +106,7 @@ function lessonPct(lesson: Lesson, progress: Progress): number {
   return Math.round((done / lesson.requirements.length) * 100);
 }
 
-import { safeEmbedUrl as getEmbedUrl } from '@/lib/safe-embed-url';
+import { safeEmbedUrl as getEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
 
 function normalize(s: string) { return s.toLowerCase().replace(/\s+/g, ' ').trim(); }
 
@@ -480,8 +480,8 @@ export default function AssignmentExperiencePlayer({
               {/* Video */}
               {embedUrl && (
                 <div className="px-6 pt-5">
-                  <div className="rounded-xl overflow-hidden" style={embedUrl.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9', background: '#000' }}>
-                    <iframe src={embedUrl} className="w-full h-full" allowFullScreen allow="autoplay; fullscreen"/>
+                  <div className="rounded-xl overflow-hidden" style={embedUrl.includes('canva.com') || isHtmlEmbedUrl(embedUrl) ? { height: '80vh' } : { aspectRatio: '16/9', background: '#000' }}>
+                    <iframe src={embedUrl} className="w-full h-full" sandbox={isHtmlEmbedUrl(embedUrl) ? 'allow-scripts allow-popups' : undefined} allowFullScreen allow="autoplay; fullscreen"/>
                   </div>
                 </div>
               )}

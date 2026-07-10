@@ -10,6 +10,45 @@
  *   https://evil.com/?x=iframe.mediadelivery.net/embed/123
  * The original URL is returned unchanged so query params are preserved.
  */
+/**
+ * App route that re-serves storage-hosted HTML as a renderable page. Supabase
+ * intentionally serves HTML files as plain text on the default *.supabase.co
+ * domain (anti-phishing), so storage URLs cannot be iframed directly; the
+ * proxy returns real text/html under a CSP sandbox (opaque origin -- the page
+ * cannot touch this app's cookies, storage, or DOM).
+ */
+export const HTML_EMBED_PROXY_PATH = '/api/html-embed';
+
+/**
+ * True for self-contained interactive HTML pages hosted on this project's own
+ * Supabase Storage public form-assets bucket (uploaded via lib/uploadToStorage).
+ * Strict protocol + exact-hostname + path-prefix + extension check.
+ */
+export function isStorageHtmlEmbedUrl(raw: string): boolean {
+  if (!raw) return false;
+  let parsed: URL;
+  try { parsed = new URL(raw); } catch { return false; }
+  if (parsed.protocol !== 'https:') return false;
+
+  let storageHost: string;
+  try { storageHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || '').hostname; } catch { return false; }
+  if (!storageHost || parsed.hostname !== storageHost) return false;
+
+  const path = parsed.pathname.toLowerCase();
+  return path.startsWith('/storage/v1/object/public/form-assets/') &&
+    (path.endsWith('.html') || path.endsWith('.htm'));
+}
+
+/**
+ * True if the URL is an interactive HTML embed in either its stored form (the
+ * storage URL kept in videoUrl) or its served form (the proxy URL safeEmbedUrl
+ * returns). Players use this to size the frame tall and sandbox the iframe.
+ */
+export function isHtmlEmbedUrl(raw: string): boolean {
+  if (!raw) return false;
+  return isStorageHtmlEmbedUrl(raw) || raw.startsWith(`${HTML_EMBED_PROXY_PATH}?`);
+}
+
 export function safeEmbedUrl(raw: string): string | null {
   if (!raw) return null;
 
@@ -20,6 +59,14 @@ export function safeEmbedUrl(raw: string): string | null {
   // Vimeo -- reconstruct canonical embed URL from extracted numeric ID
   const vimeo = raw.match(/vimeo\.com\/(\d+)/);
   if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}`;
+
+  // Already-proxied HTML embed (e.g. copied from a rendered iframe) -- checked
+  // before the absolute-URL parse below since it is a relative path. Only pass
+  // it through when the inner storage URL revalidates.
+  if (raw.startsWith(`${HTML_EMBED_PROXY_PATH}?`)) {
+    const inner = new URLSearchParams(raw.slice(HTML_EMBED_PROXY_PATH.length + 1)).get('url') || '';
+    return isStorageHtmlEmbedUrl(inner) ? raw : null;
+  }
 
   // Parse all other providers strictly -- substring checks are bypassable
   let parsed: URL;
@@ -43,6 +90,13 @@ export function safeEmbedUrl(raw: string): string | null {
     (hostname === 'www.canva.com' || hostname === 'canva.com') &&
     pathname.startsWith('/design/')
   ) return raw.includes('?') ? raw : `${raw}?embed`;
+
+  // Interactive HTML embeds -- .html files on this project's own public
+  // form-assets bucket, served through the sandboxing proxy (see
+  // HTML_EMBED_PROXY_PATH above for why they cannot be iframed directly)
+  if (isStorageHtmlEmbedUrl(raw)) {
+    return `${HTML_EMBED_PROXY_PATH}?url=${encodeURIComponent(raw)}`;
+  }
 
   return null;
 }
