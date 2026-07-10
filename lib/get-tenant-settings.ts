@@ -24,6 +24,7 @@ export const getTenantSettings = unstable_cache(
 
       return {
         appName:      data.app_name      || tenant.appName,
+        appDescription: data.app_description || tenant.appDescription,
         orgName:      data.org_name      || tenant.orgName,
         appUrl:       (data.app_url       || tenant.appUrl).replace(/\/$/, ''),
         logoUrl:      data.logo_url       || tenant.logoUrl,

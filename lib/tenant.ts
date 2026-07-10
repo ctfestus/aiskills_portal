@@ -1,5 +1,6 @@
 export const tenant = {
   appName:         process.env.NEXT_PUBLIC_APP_NAME          ?? '',
+  appDescription:  process.env.NEXT_PUBLIC_APP_DESCRIPTION   ?? '',
   orgName:         process.env.NEXT_PUBLIC_ORG_NAME          ?? '',
   appUrl:          (process.env.NEXT_PUBLIC_APP_URL           ?? '').replace(/\/$/, ''),
   logoUrl:         process.env.NEXT_PUBLIC_LOGO_URL          ?? '',

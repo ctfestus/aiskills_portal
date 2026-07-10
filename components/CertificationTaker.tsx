@@ -20,6 +20,7 @@ import { useTenant } from '@/components/TenantProvider';
 import { supabase } from '@/lib/supabase';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { sanitizeQuestionContent } from '@/lib/sanitize';
+import { setImmersive } from '@/lib/immersive';
 import type { CourseQuestion, CertificationPrepItem, PlaygroundData } from '@/lib/course-schema';
 
 type Phase = 'loading' | 'intro' | 'exam' | 'review' | 'result' | 'blocked';
@@ -61,6 +62,12 @@ export default function CertificationTaker({
   // - tenantBrand = Brand Colour (`brand_color`) -> the hero band. The OVERVIEW uses the BRAND color
   // (NOT primary/ocean -- that convention is only for the instructor editor, which mirrors courses).
   const { brandColor: tenantBrand, primaryColor: tenantPrimary } = useTenant();
+  // This is a chromeless full-screen surface -- hide global chrome (e.g. the PWA
+  // install prompt) for as long as the taker is mounted.
+  useEffect(() => {
+    setImmersive(true);
+    return () => setImmersive(false);
+  }, []);
   // Primary tenant colour for confirmation-popup borders (falls back to the content accent).
   const dialogBorder = tenantPrimary || tenantBrand || accentColor;
   // Questions are NOT in config -- they are delivered by start-attempt (when the clock starts), so a
