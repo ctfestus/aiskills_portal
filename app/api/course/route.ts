@@ -120,7 +120,58 @@ function mergeAnswerFlag(existing: unknown, patch: Record<string, unknown>) {
   });
 }
 
-function shouldAcceptIncomingExerciseAnswer(existing: unknown, incoming: unknown): boolean {
+type ExerciseAnswerContext = {
+  courseId: string;
+  studentId: string;
+  questionId: string;
+};
+
+function questionTypeMap(questions: unknown): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const q of Array.isArray(questions) ? questions : []) {
+    if (!q || typeof q !== 'object') continue;
+    const record = q as Record<string, unknown>;
+    const id = typeof record.id === 'string' ? record.id : '';
+    if (id) map.set(id, String(record.type ?? 'multiple_choice'));
+  }
+  return map;
+}
+
+function isProofRequiredQuestion(type: string | undefined): boolean {
+  return type === 'sql_exercise' || type === 'python_exercise';
+}
+
+function hasValidExerciseProof(type: string | undefined, answer: unknown, ctx: ExerciseAnswerContext): boolean {
+  if (!isProofRequiredQuestion(type)) return false;
+  const parsed = parseAnswer(answer);
+  if (!parsed || typeof parsed !== 'object' || parsed.passed !== true) return false;
+  if (type === 'sql_exercise') {
+    return verifySqlProof(ctx.courseId, ctx.studentId, ctx.questionId, String(parsed.query ?? ''), parsed.proof);
+  }
+  if (type === 'python_exercise') {
+    return verifyPythonProof(ctx.courseId, ctx.questionId, parsed.output, parsed.proof);
+  }
+  return false;
+}
+
+function sanitizeExerciseAnswer(type: string | undefined, answer: unknown, ctx: ExerciseAnswerContext): unknown {
+  if (!isProofRequiredQuestion(type)) return answer;
+  const parsed = parseAnswer(answer);
+  if (!parsed || typeof parsed !== 'object' || parsed.passed !== true) return answer;
+  if (hasValidExerciseProof(type, parsed, ctx)) return answer;
+  return JSON.stringify({
+    ...parsed,
+    passed: false,
+    verificationFailed: true,
+  });
+}
+
+function shouldAcceptIncomingExerciseAnswer(
+  type: string | undefined,
+  existing: unknown,
+  incoming: unknown,
+  ctx: ExerciseAnswerContext,
+): boolean {
   const existingParsed = parseAnswer(existing);
   const incomingParsed = parseAnswer(incoming);
   if (!incomingParsed || typeof incomingParsed !== 'object') return false;
@@ -130,11 +181,12 @@ function shouldAcceptIncomingExerciseAnswer(existing: unknown, incoming: unknown
 
   // A later correct SQL/Python check should replace an earlier failed check when
   // progress is saved before final submission or before a refresh/new session.
-  if (incomingParsed.passed === true && !incomingParsed.proof) return false;
-  if (incomingParsed.passed === true && existingParsed?.passed !== true) return true;
+  const existingVerified = hasValidExerciseProof(type, existing, ctx);
+  const incomingVerified = hasValidExerciseProof(type, incoming, ctx);
+  if (incomingParsed.passed === true) return incomingVerified && !existingVerified;
 
   // Persist a newly-viewed solution/skipped state unless the stored answer already passed.
-  if ((incomingParsed.skipped || incomingParsed.solutionViewed) && existingParsed?.passed !== true) return true;
+  if ((incomingParsed.skipped || incomingParsed.solutionViewed) && !existingVerified) return true;
 
   return false;
 }
@@ -529,8 +581,12 @@ export async function POST(req: NextRequest) {
     try {
       const supabase = adminClient();
 
-      const { data: course } = await supabase.from('courses').select('id').eq('id', course_id).single();
-      if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+      let courseResult = await supabase.from('courses').select('id, question_types').eq('id', course_id).single();
+      if (courseResult.error && (courseResult.error as any).code !== 'PGRST116') {
+        courseResult = await supabase.from('courses').select('id, questions').eq('id', course_id).single();
+      }
+      const course = courseResult.data;
+      if (courseResult.error || !course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
 
       const incomingIndex = Number.isFinite(Number(current_question_index))
         ? Number(current_question_index)
@@ -539,6 +595,7 @@ export async function POST(req: NextRequest) {
       const incomingHints = Array.isArray(hints_used) ? hints_used : [];
       const incomingPoints = Number.isFinite(Number(points)) ? Number(points) : 0;
       const incomingStreak = Number.isFinite(Number(streak)) ? Number(streak) : 0;
+      const qTypes = questionTypeMap((course as any).question_types ?? (course as any).questions);
 
       // Attempt count carried inside a __review_<id> snapshot; used to decide which review state is newer.
       const reviewCount = (val: unknown): number => {
@@ -558,7 +615,15 @@ export async function POST(req: NextRequest) {
         const existingHints = Array.isArray(existing?.hints_used) ? existing.hints_used : [];
 
         // Existing answers win on conflicts so an older tab cannot rewrite completed work.
-        const mergedAnswers: Record<string, string> = { ...incomingAnswers, ...existingAnswers };
+        const mergedAnswers: Record<string, string> = { ...existingAnswers };
+        for (const key of Object.keys(incomingAnswers)) {
+          if (Object.prototype.hasOwnProperty.call(mergedAnswers, key)) continue;
+          mergedAnswers[key] = sanitizeExerciseAnswer(qTypes.get(key), incomingAnswers[key], {
+            courseId: course_id,
+            studentId: sessionUser.id,
+            questionId: key,
+          }) as string;
+        }
         // Exception: review questions are mutable across attempts. When the incoming __review_<id>
         // snapshot has a higher attempt count than the stored one, the newer attempt wins -- both the
         // snapshot and its paired answer key -- so a 2nd attempt's report/score/pass-fail persists
@@ -573,8 +638,10 @@ export async function POST(req: NextRequest) {
         }
         for (const key of Object.keys(incomingAnswers)) {
           if (key.startsWith('__review_')) continue;
-          if (shouldAcceptIncomingExerciseAnswer((existingAnswers as Record<string, string>)[key], incomingAnswers[key])) {
-            mergedAnswers[key] = incomingAnswers[key];
+          const type = qTypes.get(key);
+          const ctx = { courseId: course_id, studentId: sessionUser.id, questionId: key };
+          if (shouldAcceptIncomingExerciseAnswer(type, (existingAnswers as Record<string, string>)[key], incomingAnswers[key], ctx)) {
+            mergedAnswers[key] = sanitizeExerciseAnswer(type, incomingAnswers[key], ctx) as string;
           }
         }
 
@@ -684,10 +751,23 @@ export async function POST(req: NextRequest) {
         // lessonOnly 'viewed' entry is always present, regardless of race timing.
         const questions: any[]              = Array.isArray(courseData.questions) ? courseData.questions : [];
         const persistedAnswers: Record<string, string> = attempt.answers ?? {};
-        const storedAnswers: Record<string, string> = {
-          ...persistedAnswers,
-          ...(final_answers && typeof final_answers === 'object' ? final_answers : {}),
-        };
+        const qTypes = questionTypeMap(questions);
+        const storedAnswers: Record<string, string> = { ...persistedAnswers };
+        const incomingFinalAnswers = final_answers && typeof final_answers === 'object' ? final_answers : {};
+        for (const key of Object.keys(incomingFinalAnswers)) {
+          const type = qTypes.get(key);
+          if (isProofRequiredQuestion(type)) {
+            const ctx = { courseId: course_id, studentId: sessionUser.id, questionId: key };
+            const persistedVerified = hasValidExerciseProof(type, storedAnswers[key], ctx);
+            const incomingVerified = hasValidExerciseProof(type, incomingFinalAnswers[key], ctx);
+            if (persistedVerified && !incomingVerified) {
+              continue;
+            }
+            storedAnswers[key] = sanitizeExerciseAnswer(type, incomingFinalAnswers[key], ctx) as string;
+            continue;
+          }
+          storedAnswers[key] = incomingFinalAnswers[key];
+        }
         const hintsUsed: string[]           = attempt.hints_used ?? [];
         const passmark                      = courseData.passmark ?? 50;
 

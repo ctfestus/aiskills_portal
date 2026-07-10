@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   CheckCircle2, Circle, ChevronDown, ChevronUp, ChevronRight, ChevronLeft,
   Loader2, Lock, Upload as UploadIcon, Link as LinkIcon, CheckCircle, Download,
-  Mail, MessageSquare, Inbox, Paperclip, Send, Reply, X,
-  Bold, Italic, Underline, List, ListOrdered,
+  Paperclip, Send, Reply, X,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { sanitizeRichText, sanitizeEmailContent } from '@/lib/sanitize';
@@ -16,6 +15,17 @@ import DashboardCritiquePlayer from '@/components/DashboardCritiquePlayer';
 import CodeReviewPlayer from '@/components/CodeReviewPlayer';
 import ExcelReviewPlayer from '@/components/ExcelReviewPlayer';
 import { buildReviewNotes, parseReviewNotes, isFullReport } from '@/lib/reviewRecord';
+import {
+  Person, AttachmentCard, ArrivalIndicator, arrivalKindFor, companyDomain, personEmail, firstNameOf,
+  workStamp, startTypingSound, anchorZone, quoteSnippet, colleaguesFor, hashStr,
+} from '@/components/ve/workplace';
+import {
+  MailCard, MailThreadMsg, MailTypingRow, MailComposer, MailStatusChip, SmartReplies,
+  type MailAttachment,
+} from '@/components/ve/MailCard';
+import {
+  ChatCard, ChatMsg, ChatTypingMsg, ChatReaction, ChatThread, ChatDecisionButtons, channelFor,
+} from '@/components/ve/ChatCard';
 
 // -- Types ---
 
@@ -100,94 +110,6 @@ import { safeEmbedUrl as getEmbedUrl } from '@/lib/safe-embed-url';
 
 function normalize(s: string) { return s.toLowerCase().replace(/\s+/g, ' ').trim(); }
 
-function SlackAvatar({ name, size, color }: { name: string; size: number; color: string }) {
-  const seed = encodeURIComponent(name);
-  const initials = name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
-  return (
-    <div style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, position: 'relative', background: color }}>
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: Math.floor(size * 0.33), fontWeight: 800, color: '#fff' }}>
-        {initials}
-      </div>
-      <img
-        src={`https://api.dicebear.com/8.x/personas/svg?seed=${seed}`}
-        alt=""
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-        onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = '0'; }}
-      />
-    </div>
-  );
-}
-
-function playTypingClick() {
-  try {
-    const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
-    const ctx = new Ctx() as AudioContext;
-    const n = Math.floor(ctx.sampleRate * 0.025);
-    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) * 0.18;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    const g = ctx.createGain(); g.gain.value = 0.14;
-    src.connect(g); g.connect(ctx.destination);
-    src.start(); src.onended = () => ctx.close();
-  } catch { /* no AudioContext */ }
-}
-function startTypingSound(durationMs: number) {
-  const end = Date.now() + durationMs;
-  (function tick() { if (Date.now() >= end) return; playTypingClick(); setTimeout(tick, 70 + Math.floor(Math.random() * 110)); })();
-}
-
-function EmailCompose({
-  value, onChange, readOnly, isDark, accentColor, placeholder, noBorder = false,
-}: {
-  value: string; onChange: (html: string) => void; readOnly: boolean;
-  isDark: boolean; accentColor: string; placeholder: string; noBorder?: boolean;
-}) {
-  const editorRef = useRef<HTMLDivElement>(null);
-  const [isEmpty, setIsEmpty] = useState(() => !value?.replace(/<[^>]*>/g, '').trim());
-  useEffect(() => {
-    const el = editorRef.current;
-    if (!el || !value) return;
-    el.innerHTML = value;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const exec = (cmd: string) => {
-    document.execCommand(cmd, false, undefined);
-    const el = editorRef.current;
-    if (el) { el.focus(); onChange(el.innerHTML); setIsEmpty(!el.innerText?.trim()); }
-  };
-  const bd = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.1)';
-  const tc = isDark ? '#f0f0f0' : '#111';
-  const mc = isDark ? '#777' : '#bbb';
-  const tb: React.CSSProperties = { width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', borderRadius: 4, cursor: 'pointer', color: tc, fontSize: 13 };
-  return (
-    <div style={noBorder ? { background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' } : { border: `1px solid ${bd}`, borderRadius: 10, overflow: 'hidden', background: isDark ? 'rgba(255,255,255,0.02)' : '#fff' }}>
-      {!readOnly && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 10px', background: isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc', borderBottom: `1px solid ${bd}` }}>
-          <button onClick={() => exec('bold')} style={tb} title="Bold"><Bold size={14} /></button>
-          <button onClick={() => exec('italic')} style={tb} title="Italic"><Italic size={14} /></button>
-          <button onClick={() => exec('underline')} style={tb} title="Underline"><Underline size={14} /></button>
-          <span style={{ width: 1, height: 16, background: bd, margin: '0 4px', flexShrink: 0 }} />
-          <button onClick={() => exec('insertUnorderedList')} style={tb} title="Bullet list"><List size={14} /></button>
-          <button onClick={() => exec('insertOrderedList')} style={tb} title="Numbered list"><ListOrdered size={14} /></button>
-        </div>
-      )}
-      <div style={{ position: 'relative', minHeight: 120 }}>
-        {isEmpty && !readOnly && (
-          <div style={{ position: 'absolute', top: 14, left: 16, fontSize: 14, color: mc, pointerEvents: 'none', lineHeight: 1.7 }}>{placeholder}</div>
-        )}
-        <div
-          ref={editorRef}
-          contentEditable={!readOnly}
-          suppressContentEditableWarning
-          onInput={() => { const el = editorRef.current; if (!el) return; onChange(el.innerHTML); setIsEmpty(!el.innerText?.trim()); }}
-          style={{ minHeight: 120, padding: '14px 16px', fontSize: 14, lineHeight: 1.7, color: tc, background: 'transparent', outline: 'none', wordBreak: 'break-word' }}
-        />
-      </div>
-    </div>
-  );
-}
 
 // -- Component ---
 
@@ -196,6 +118,17 @@ export default function AssignmentExperiencePlayer({
 }: Props) {
   const accent = '#00b95c';
   const modules = config.modules || [];
+
+  // Simulated workplace identities for the mail/chat surfaces.
+  const workDomain = companyDomain(config.company, config.title);
+  const manager: Person = {
+    name:  config.managerName || 'Project Manager',
+    title: config.managerTitle || 'Project Lead',
+    email: personEmail(config.managerName || 'Project Manager', workDomain),
+    color: '#3b82f6',
+  };
+  const meEmail  = personEmail(studentName || 'me', workDomain);
+  const teamChannel = channelFor(config.role);
 
   // Theme tokens
   const bg       = isDark ? '#1E1F26' : 'white';
@@ -233,6 +166,10 @@ export default function AssignmentExperiencePlayer({
   const [openReplies,     setOpenReplies]     = useState<Set<string>>(new Set());
   const [efReviewing,     setEfReviewing]     = useState<Record<string, boolean>>({});
   const [efTyping,        setEfTyping]        = useState<Record<string, boolean>>({});
+  // Thread-based retries for email-framed short answers: each wrong attempt
+  // stays in the thread as a sent reply + manager response (session-only).
+  const [efRounds,        setEfRounds]        = useState<Record<string, Array<{ me: string; feedback: string; passed: boolean }>>>({});
+  const [efPending,       setEfPending]       = useState<Record<string, string>>({});
   const [aiReviewing,     setAiReviewing]     = useState<Record<string, boolean>>({});
   const [aiFeedback,      setAiFeedback]      = useState<Record<string, { passed: boolean; feedback: string; score: number } | null>>({});
   async function getAuthHeader(): Promise<Record<string, string>> {
@@ -567,400 +504,223 @@ export default function AssignmentExperiencePlayer({
                   <div className="px-6 py-4">
                     <p className="text-[11px] font-bold uppercase tracking-widest mb-4" style={{ color: faint }}>Tasks</p>
                     <div className="space-y-6">
-                      {currentLes.requirements.map(req => {
+                      {currentLes.requirements.map((req, qi) => {
                         const prog    = progress[req.id];
                         const isDone  = prog?.completed ?? false;
+                        const stamp   = workStamp(currentIdx, qi, req.id);
 
-                        // Scenario update - Slack channel style
+                        // Messages arrive sequentially: a requirement only appears once
+                        // everything before it is done AND the manager has finished
+                        // replying (review/preview show the whole conversation).
+                        if (!readOnly && !previewMode && qi > 0 && !currentLes.requirements.slice(0, qi).every(r =>
+                          progress[r.id]?.completed && !typingAcks.has(r.id) && !typingDecisions.has(r.id) && !efTyping[r.id]
+                        )) return null;
+
+                        // Scenario update - team chat surface
                         if (req.type === 'scenario_update') {
-                          const updateColor = '#f59e0b';
                           const subject = req.label || 'Project update';
-                          const manName = config.managerName || 'Project Manager';
-                          const manInit = manName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
-                          const slackBg = isDark ? '#1A1D21' : '#FFFFFF';
-                          const slackHeader = isDark ? '#19171D' : '#F8F8F8';
-                          const slackBorder = isDark ? '#3E4349' : '#DDDDDD';
-                          const slackText = isDark ? '#D1D2D3' : '#1D1C1D';
-                          const slackMuted = isDark ? '#ABABAD' : '#616061';
+                          const acknowledge = () => {
+                            updateProgress(req.id, { completed: true });
+                            setTypingAcks(prev => new Set([...prev, req.id]));
+                            startTypingSound(2200);
+                            anchorZone(req.id);
+                            setTimeout(() => {
+                              setTypingAcks(prev => { const n = new Set(prev); n.delete(req.id); return n; });
+                              anchorZone(req.id);
+                            }, 2500);
+                          };
                           return (
-                            <div key={req.id} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${slackBorder}`, background: slackBg, boxShadow: shadow }}>
-                              <div style={{ background: slackHeader, borderBottom: `1px solid ${slackBorder}`, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span style={{ fontSize: 17, fontWeight: 900, color: slackMuted, lineHeight: 1, marginRight: 2 }}>#</span>
-                                <span style={{ fontSize: 14, fontWeight: 700, color: slackText }}>project-war-room</span>
-                                {!isDone && <span style={{ marginLeft: 6, background: '#CD2553', color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 6px', lineHeight: '16px' }}>1</span>}
-                                <span style={{ marginLeft: 'auto', fontSize: 11, color: slackMuted }}>4 members</span>
-                              </div>
-                              <div style={{ padding: '14px 14px 8px' }}>
-                                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                  <SlackAvatar name={manName} size={28} color={updateColor} />
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                                      <span style={{ fontWeight: 700, fontSize: 14.5, color: slackText }}>{manName}</span>
-                                      <span style={{ fontSize: 11, color: slackMuted }}>Earlier today</span>
-                                    </div>
-                                    <p style={{ fontSize: 14.5, color: slackText, marginTop: 2, lineHeight: 1.5 }}>{subject}</p>
-                                    {req.description && <p style={{ fontSize: 13.5, marginTop: 4, color: slackMuted, lineHeight: 1.5 }}>{req.description}</p>}
-                                    {!isDone && !readOnly ? (
-                                      <button onClick={() => {
-                                        updateProgress(req.id, { completed: true });
-                                        setTypingAcks(prev => new Set([...prev, req.id]));
-                                        startTypingSound(2200);
-                                        setTimeout(() => {
-                                          setTypingAcks(prev => { const n = new Set(prev); n.delete(req.id); return n; });
-                                        }, 2500);
-                                      }} style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 4, border: `1px solid ${slackBorder}`, background: 'transparent', fontSize: 13, color: slackMuted, cursor: 'pointer' }}>
-                                        <span style={{ fontSize: 15 }}>{'👍'}</span> Add reaction
-                                      </button>
+                            <div key={req.id}>
+                              <ChatCard isDark={isDark} reqId={req.id} company={config.company} channel={teamChannel}
+                                members={[manager]} unread={!isDone} muteArrival={readOnly || previewMode}>
+                                <ChatMsg isDark={isDark} author={manager} time={stamp.time}
+                                  reactions={
+                                    !isDone && !readOnly ? (
+                                      <ChatReaction isDark={isDark} accent={accent} emoji={'👍'} onClick={acknowledge} />
                                     ) : isDone ? (
-                                      <div style={{ marginTop: 8 }}>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px', borderRadius: 4, border: `1px solid ${accent}55`, background: `${accent}12`, fontSize: 13, color: accent, fontWeight: 600 }}>
-                                          <span style={{ fontSize: 15 }}>{'👍'}</span> You&nbsp;&nbsp;1
-                                        </span>
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </div>
-                              {isDone && (
-                                <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '10px 14px 14px' }}>
-                                  <p style={{ fontSize: 11.5, color: slackMuted, fontWeight: 600, marginBottom: 10, paddingLeft: 46 }}>1 reply in thread</p>
-                                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                                    <div style={{ width: 28, height: 28, borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: slackMuted, flexShrink: 0 }}>YOU</div>
-                                    {typingAcks.has(req.id) ? (
-                                      <div>
-                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                                          <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>You</span>
-                                          <span style={{ fontSize: 11, color: slackMuted }}>is typing</span>
-                                        </div>
-                                        <div style={{ display: 'flex', gap: 3, alignItems: 'center', marginTop: 6 }}>
-                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '0ms' }} />
-                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '200ms' }} />
-                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '400ms' }} />
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div>
-                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                                          <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>You</span>
-                                          <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
-                                        </div>
-                                        <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>{'Got it, on it. 👍'}</p>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
+                                      <ChatReaction isDark={isDark} accent={accent} emoji={'👍'} count={1} active disabled />
+                                    ) : null
+                                  }>
+                                  <p style={{ margin: 0 }}>{subject}</p>
+                                  {req.description && <p style={{ margin: '4px 0 0', opacity: 0.75 }}>{req.description}</p>}
+                                </ChatMsg>
+                                {isDone && (
+                                  <ChatThread isDark={isDark} label="1 reply in thread">
+                                    {typingAcks.has(req.id)
+                                      ? <ChatTypingMsg isDark={isDark} author="me" meName={studentName} />
+                                      : (
+                                        <ChatMsg isDark={isDark} author="me" meName={studentName} time="Just now">
+                                          {'Got it, on it. 👍'}
+                                        </ChatMsg>
+                                      )}
+                                  </ChatThread>
+                                )}
+                              </ChatCard>
                             </div>
                           );
                         }
 
-                        // Manager brief - Gmail-style email reader
+                        // Manager brief - full mail-client reader with smart replies
                         if (req.type === 'briefing') {
                           const subject = req.label || `${currentLes?.title || 'Mission'} brief`;
-                          const manName = config.managerName || 'Project Manager';
-                          const manEmail = `${manName.toLowerCase().replace(/\s+/g, '.')}@${(config.company || (config.title || '').split(' - ')[0] || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '') || 'workspace'}.com`;
+                          const briefAttachments: MailAttachment[] = [
+                            ...(req.attachments || []).map(a => ({ name: a.name, url: a.url })),
+                            ...(config.dataset ? [{ name: config.dataset.filename || 'dataset.csv', onClick: downloadDataset }] : []),
+                          ];
+                          const acknowledge = (text: string) => {
+                            updateProgress(req.id, { completed: true, notes: text });
+                            setTypingAcks(prev => new Set([...prev, req.id]));
+                            anchorZone(req.id);
+                            setTimeout(() => {
+                              setTypingAcks(prev => { const n = new Set(prev); n.delete(req.id); return n; });
+                              anchorZone(req.id);
+                            }, 2500);
+                          };
                           return (
-                            <div key={req.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: shadow }}>
-                              {/* Subject */}
-                              <div style={{ padding: '22px 22px 0' }}>
-                                <h3 style={{ fontSize: 19, fontWeight: 700, color: text, lineHeight: 1.3, margin: 0 }}>{subject}</h3>
-                              </div>
-                              {/* Sender row */}
-                              <div style={{ padding: '16px 22px 0', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                <SlackAvatar name={manName} size={42} color={accent} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{manName}</span>
-                                    <span style={{ fontSize: 12, color: faint }}>&lt;{manEmail}&gt;</span>
-                                  </div>
-                                  <p style={{ fontSize: 12, color: faint, marginTop: 2, margin: 0 }}>to me &bull; Earlier today</p>
+                            <div key={req.id}>
+                              <MailCard isDark={isDark} accent={accent} reqId={req.id} subject={subject}
+                                sender={manager} toName={studentName} toEmail={meEmail} stamp={stamp}
+                                bodyHtml={req.description ? sanitizeEmailContent(applyNameTags(req.description, studentName)) : undefined}
+                                attachments={briefAttachments.length ? briefAttachments : undefined} company={config.company}
+                                done={isDone} muteArrival={readOnly || previewMode}>
+                                <div style={{ padding: '14px 22px 18px' }}>
+                                  {!isDone && !readOnly ? (
+                                    <SmartReplies isDark={isDark} accent={accent}
+                                      options={['Got it, starting now', 'On it, will update you soon', 'Received, thank you']}
+                                      onPick={acknowledge} />
+                                  ) : isDone ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                      <MailThreadMsg isDark={isDark} from="me" meName={studentName}
+                                        time={typingAcks.has(req.id) ? 'Sending...' : 'Just now'}
+                                        receipt={typingAcks.has(req.id) ? undefined : `Seen by ${firstNameOf(manager.name)} just now`}
+                                        quote={req.description ? `On ${stamp.full}, ${manager.name} wrote: ${quoteSnippet(req.description)}` : undefined}>
+                                        {prog?.notes || 'Got it, starting now'}
+                                      </MailThreadMsg>
+                                      <div><MailStatusChip accent={accent}>Brief acknowledged</MailStatusChip></div>
+                                    </div>
+                                  ) : null}
                                 </div>
-                                {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accent }} />}
-                              </div>
-                              {/* Email body */}
-                              {req.description && (
-                                <div
-                                  className="rich-content"
-                                  dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(applyNameTags(req.description, studentName)) }}
-                                  style={{ padding: '18px 22px', color: isDark ? '#e0e0e0' : '#1f1f1f', fontSize: 14.5, lineHeight: 1.75 }}
-                                />
-                              )}
-                              {/* Attachments */}
-                              {(req.attachments?.length || config.dataset) && (
-                                <div style={{ padding: '0 22px 16px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                  {(req.attachments || []).map((att, i) => (
-                                    <a key={i} href={att.url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${divider}`, fontSize: 12.5, color: muted, textDecoration: 'none' }}>
-                                      <Paperclip className="w-3 h-3" /> {att.name}
-                                    </a>
-                                  ))}
-                                  {config.dataset && (
-                                    <button onClick={downloadDataset} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${divider}`, fontSize: 12.5, color: muted, cursor: 'pointer' }}>
-                                      <Paperclip className="w-3 h-3" /> {config.dataset.filename || 'Dataset'}
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                              {/* Divider */}
-                              <div style={{ height: 1, background: divider, margin: '0 22px' }} />
-                              {/* Reply CTA */}
-                              <div style={{ padding: '14px 22px' }}>
-                                {!isDone && !readOnly ? (
-                                  <button onClick={() => updateProgress(req.id, { completed: true })} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 20px', borderRadius: 24, background: accent, color: '#fff', fontSize: 13.5, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
-                                    <Mail className="w-4 h-4" /> Reply: Got it, starting now
-                                  </button>
-                                ) : (
-                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 13 }}>
-                                    <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Brief acknowledged
-                                  </div>
-                                )}
-                              </div>
+                              </MailCard>
                             </div>
                           );
                         }
 
-                        // Decision point - Slack block kit style
+                        // Decision point - team chat with block-kit buttons
                         if (req.type === 'decision') {
                           const selected = prog?.selectedAnswer ?? '';
                           const selectedIdx = selected ? (req.options ?? []).findIndex(opt => opt === selected) : -1;
                           const feedback = selectedIdx >= 0 ? req.optionFeedback?.[selectedIdx] : '';
-                          const manName = config.managerName || 'Project Manager';
-                          const manInit = manName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
-                          const slackBg = isDark ? '#1A1D21' : '#FFFFFF';
-                          const slackHeader = isDark ? '#19171D' : '#F8F8F8';
-                          const slackBorder = isDark ? '#3E4349' : '#DDDDDD';
-                          const slackText = isDark ? '#D1D2D3' : '#1D1C1D';
-                          const slackMuted = isDark ? '#ABABAD' : '#616061';
+                          const colleague: Person = { name: colleaguesFor(config.company || teamChannel, 1)[0], color: '#E8912D' };
+                          const colleagueLine = ['Good call.', '+1, agreed.', 'Nice - that unblocks us.', 'Makes sense to me.'][hashStr(req.id) % 4];
+                          const chooseDecision = (opt: string) => {
+                            updateProgress(req.id, { selectedAnswer: opt, completed: true });
+                            setTypingDecisions(prev => new Set([...prev, req.id]));
+                            startTypingSound(2800);
+                            anchorZone(req.id);
+                            setTimeout(() => {
+                              setTypingDecisions(prev => { const n = new Set(prev); n.delete(req.id); return n; });
+                              anchorZone(req.id);
+                            }, 3000);
+                          };
                           return (
-                            <div key={req.id} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${slackBorder}`, background: slackBg, boxShadow: shadow }}>
-                              <div style={{ background: slackHeader, borderBottom: `1px solid ${slackBorder}`, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span style={{ fontSize: 17, fontWeight: 900, color: slackMuted, lineHeight: 1, marginRight: 2 }}>#</span>
-                                <span style={{ fontSize: 14, fontWeight: 700, color: slackText }}>project-war-room</span>
-                                <span style={{ marginLeft: 'auto', fontSize: 11, color: slackMuted }}>4 members</span>
-                              </div>
-                              <div style={{ padding: '14px 14px 10px' }}>
-                                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                                  <SlackAvatar name={manName} size={28} color={accent} />
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                                      <span style={{ fontWeight: 700, fontSize: 14.5, color: slackText }}>{manName}</span>
-                                      <span style={{ fontSize: 11, color: slackMuted }}>Earlier today</span>
-                                    </div>
-                                    <p style={{ fontSize: 14.5, color: slackText, marginTop: 2, lineHeight: 1.5 }}>{req.label}</p>
-                                    {req.description && <p style={{ fontSize: 13.5, marginTop: 4, color: slackMuted, lineHeight: 1.5 }}>{req.description}</p>}
-                                    {!isDone && (
-                                      <div style={{ marginTop: 12, border: `1px solid ${slackBorder}`, borderRadius: 6, overflow: 'hidden', maxWidth: 460 }}>
-                                        {(req.options ?? []).filter(Boolean).map((opt, oi) => {
-                                          const letter = String.fromCharCode(65 + oi);
-                                          const opts = (req.options ?? []).filter(Boolean);
-                                          return (
-                                            <button key={`${req.id}-decision-${oi}`} disabled={readOnly}
-                                              onClick={() => {
-                                                updateProgress(req.id, { selectedAnswer: opt, completed: true });
-                                                setTypingDecisions(prev => new Set([...prev, req.id]));
-                                                startTypingSound(2800);
-                                                setTimeout(() => {
-                                                  setTypingDecisions(prev => { const n = new Set(prev); n.delete(req.id); return n; });
-                                                }, 3000);
-                                              }}
-                                              style={{ width: '100%', display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', borderBottom: oi < opts.length - 1 ? `1px solid ${slackBorder}` : 'none', background: 'transparent', textAlign: 'left', cursor: readOnly ? 'default' : 'pointer', fontSize: 13.5, color: slackText }}>
-                                              <span style={{ width: 22, height: 22, borderRadius: '50%', border: `1.5px solid ${isDark ? '#666' : '#CCCCCC'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: slackMuted, flexShrink: 0, marginTop: 1 }}>{letter}</span>
-                                              <span style={{ flex: 1, lineHeight: 1.4 }}>{opt}</span>
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                              {isDone && selected && (
-                                <div style={{ borderTop: `1px solid ${slackBorder}`, padding: '10px 14px 14px' }}>
-                                  <p style={{ fontSize: 11.5, color: slackMuted, fontWeight: 600, marginBottom: 10, paddingLeft: 46 }}>
-                                    {typingDecisions.has(req.id) ? '1 reply in thread' : '2 replies in thread'}
-                                  </p>
-                                  {/* Student reply - immediate */}
-                                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 10 }}>
-                                    <div style={{ width: 28, height: 28, borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.09)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: slackMuted, flexShrink: 0 }}>YOU</div>
-                                    <div>
-                                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                                        <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>You</span>
-                                        <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
-                                      </div>
-                                      <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.4 }}>{selected}</p>
-                                    </div>
-                                  </div>
-                                  {/* Typing indicator or manager response */}
-                                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                                    <SlackAvatar name={manName} size={22} color={accent} />
+                            <div key={req.id}>
+                              <ChatCard isDark={isDark} reqId={req.id} company={config.company} channel={teamChannel}
+                                members={[manager]} unread={!isDone} muteArrival={readOnly || previewMode}>
+                                <ChatMsg isDark={isDark} author={manager} time={stamp.time}>
+                                  <p style={{ margin: 0 }}>{req.label}</p>
+                                  {req.description && <p style={{ margin: '4px 0 0', opacity: 0.75 }}>{req.description}</p>}
+                                  {!isDone && (
+                                    <ChatDecisionButtons isDark={isDark} accent={accent}
+                                      options={(req.options ?? []).filter(Boolean)}
+                                      onPick={chooseDecision} disabled={readOnly} />
+                                  )}
+                                </ChatMsg>
+                                {isDone && selected && (
+                                  <ChatThread isDark={isDark}
+                                    label={typingDecisions.has(req.id) ? '1 reply in thread' : '3 replies in thread'}>
+                                    <ChatMsg isDark={isDark} author="me" meName={studentName} time="Just now">
+                                      {selected}
+                                    </ChatMsg>
                                     {typingDecisions.has(req.id) ? (
-                                      <div>
-                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                                          <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>{manName}</span>
-                                          <span style={{ fontSize: 11, color: slackMuted }}>is typing</span>
-                                        </div>
-                                        <div style={{ display: 'flex', gap: 3, alignItems: 'center', marginTop: 6 }}>
-                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '0ms' }} />
-                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '200ms' }} />
-                                          <span className="animate-bounce" style={{ width: 7, height: 7, borderRadius: '50%', background: slackMuted, display: 'inline-block', animationDelay: '400ms' }} />
-                                        </div>
-                                      </div>
+                                      <ChatTypingMsg isDark={isDark} author={manager} />
                                     ) : (
-                                      <div>
-                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                                          <span style={{ fontWeight: 700, fontSize: 13, color: slackText }}>{manName}</span>
-                                          <span style={{ fontSize: 11, color: slackMuted }}>Just now</span>
-                                        </div>
-                                        <p style={{ fontSize: 13.5, color: slackText, marginTop: 1, lineHeight: 1.5 }}>{feedback || 'Decision recorded. Keep moving forward.'}</p>
-                                      </div>
+                                      <>
+                                        <ChatMsg isDark={isDark} author={manager} time="Just now">
+                                          {feedback || `Noted, ${firstNameOf(studentName)}. Keep moving forward.`}
+                                        </ChatMsg>
+                                        <ChatMsg isDark={isDark} author={colleague} time="Just now">
+                                          {colleagueLine}
+                                        </ChatMsg>
+                                      </>
                                     )}
-                                  </div>
-                                </div>
-                              )}
+                                  </ChatThread>
+                                )}
+                              </ChatCard>
                             </div>
                           );
                         }
 
-                        // Mission debrief - Gmail email thread
+                        // Mission debrief - mail thread with reply composer
                         if (req.type === 'debrief') {
                           const val = prog?.notes ?? '';
-                          const manName = config.managerName || 'Project Manager';
-                          const manEmail = `${manName.toLowerCase().replace(/\s+/g, '.')}@${(config.company || (config.title || '').split(' - ')[0] || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '') || 'workspace'}.com`;
                           const debriefSubject = req.label || `Re: ${currentLes?.title || 'Mission'}`;
                           const hasContent = val.replace(/<[^>]*>/g, '').trim().length > 0;
                           const replyOpen = isDone || openReplies.has(req.id) || hasContent;
                           return (
-                            <div key={req.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: shadow }}>
-                              {/* Subject */}
-                              <div style={{ padding: '22px 22px 0' }}>
-                                <h3 style={{ fontSize: 19, fontWeight: 700, color: text, lineHeight: 1.3, margin: 0 }}>{debriefSubject}</h3>
-                              </div>
-                              {/* Sender row */}
-                              <div style={{ padding: '16px 22px 0', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                <SlackAvatar name={manName} size={42} color={accent} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{manName}</span>
-                                    <span style={{ fontSize: 12, color: faint }}>&lt;{manEmail}&gt;</span>
-                                  </div>
-                                  <p style={{ fontSize: 12, color: faint, marginTop: 2, margin: 0 }}>to me &bull; Earlier today</p>
-                                </div>
-                                {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accent }} />}
-                              </div>
-                              {/* Email body */}
-                              {req.description && (
-                                <div
-                                  className="rich-content"
-                                  dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(applyNameTags(req.description, studentName)) }}
-                                  style={{ padding: '18px 22px', color: isDark ? '#e0e0e0' : '#1f1f1f', fontSize: 14.5, lineHeight: 1.75 }}
-                                />
-                              )}
-                              {/* Divider */}
-                              <div style={{ height: 1, background: divider, margin: '0 22px' }} />
-                              {/* Thread / reply area */}
-                              {!isDone ? (
-                                !replyOpen ? (
-                                  <div style={{ padding: '14px 22px' }}>
-                                    {!readOnly && (
-                                      <button
-                                        onClick={() => setOpenReplies(prev => new Set([...prev, req.id]))}
-                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 6, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer' }}>
-                                        <Reply className="w-4 h-4" /> Reply
-                                      </button>
-                                    )}
-                                  </div>
+                            <div key={req.id}>
+                              <MailCard isDark={isDark} accent={accent} reqId={req.id} subject={debriefSubject}
+                                sender={manager} toName={studentName} toEmail={meEmail} stamp={stamp}
+                                bodyHtml={req.description ? sanitizeEmailContent(applyNameTags(req.description, studentName)) : undefined}
+                                company={config.company} done={isDone} muteArrival={readOnly || previewMode}>
+                                {!isDone ? (
+                                  !replyOpen ? (
+                                    <div style={{ padding: '14px 22px' }}>
+                                      {!readOnly && (
+                                        <button
+                                          onClick={() => setOpenReplies(prev => new Set([...prev, req.id]))}
+                                          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 18, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer' }}>
+                                          <Reply className="w-4 h-4" /> Reply
+                                        </button>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div style={{ padding: '14px 22px 18px' }}>
+                                      <MailComposer isDark={isDark} accent={accent} to={manager} subject={debriefSubject}
+                                        value={val} onChange={(html) => updateProgress(req.id, { notes: html })} canSend={hasContent}
+                                        onSend={() => { if (!hasContent) return; updateProgress(req.id, { notes: val, completed: true }); anchorZone(req.id); }}
+                                        onDiscard={() => { updateProgress(req.id, { notes: '' }); setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; }); }} />
+                                    </div>
+                                  )
                                 ) : (
-                                  <div style={{ padding: '14px 22px 18px' }}>
-                                    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
-                                      <div style={{ padding: '8px 14px', background: subtle, borderBottom: `1px solid ${divider}`, fontSize: 12, color: faint }}>
-                                        Reply to {manName}
-                                      </div>
-                                      <EmailCompose
-                                        value={val}
-                                        onChange={(html) => updateProgress(req.id, { notes: html })}
-                                        readOnly={false}
-                                        isDark={isDark}
-                                        accentColor={accent}
-                                        placeholder="Write your reply..."
-                                        noBorder
-                                      />
-                                      <div style={{ padding: '10px 14px', background: bg, borderTop: `1px solid ${divider}`, display: 'flex', gap: 10, alignItems: 'center' }}>
-                                        <button
-                                          onClick={() => { if (!hasContent) return; updateProgress(req.id, { notes: val, completed: true }); }}
-                                          disabled={!hasContent}
-                                          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: hasContent ? accent : (isDark ? '#333' : '#e0e0e0'), color: hasContent ? '#fff' : (isDark ? '#666' : '#aaa'), fontSize: 13.5, fontWeight: 600, border: 'none', cursor: hasContent ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}>
-                                          <Send className="w-3.5 h-3.5" /> Send
-                                        </button>
-                                        <button
-                                          onClick={() => { updateProgress(req.id, { notes: '' }); setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; }); }}
-                                          style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: 'transparent', fontSize: 13, color: faint, cursor: 'pointer' }}>
-                                          Discard
-                                        </button>
-                                      </div>
-                                    </div>
+                                  <div style={{ padding: '16px 22px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                    <MailThreadMsg isDark={isDark} from="me" meName={studentName}
+                                      receipt={`Seen by ${firstNameOf(manager.name)} just now`}
+                                      quote={req.description ? `On ${stamp.full}, ${manager.name} wrote: ${quoteSnippet(req.description)}` : undefined}>
+                                      <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(val) }} />
+                                    </MailThreadMsg>
+                                    <div><MailStatusChip accent={accent}>Reply sent to {manager.name}</MailStatusChip></div>
                                   </div>
-                                )
-                              ) : (
-                                /* Thread view after sending - shows student reply */
-                                <div style={{ padding: '16px 22px 20px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                    <div style={{ width: 42, height: 42, borderRadius: '50%', background: isDark ? 'rgba(255,255,255,0.12)' : '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: isDark ? '#ddd' : '#1a73e8', flexShrink: 0, letterSpacing: 1 }}>ME</div>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                        <span style={{ fontSize: 14, fontWeight: 700, color: text }}>Me</span>
-                                        <span style={{ fontSize: 12, color: faint }}>Just now</span>
-                                      </div>
-                                      <div
-                                        className="rich-content"
-                                        dangerouslySetInnerHTML={{ __html: sanitizeRichText(val) }}
-                                        style={{ fontSize: 14, color: isDark ? '#e0e0e0' : '#1f1f1f', lineHeight: 1.7 }}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12.5 }}>
-                                    <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Reply sent to {manName}
-                                  </div>
-                                </div>
-                              )}
+                                )}
+                              </MailCard>
                             </div>
                           );
                         }
 
                         // Email frame wrapper for assessment types
                         if (req.emailFrame) {
-                          const efManager = config.managerName || 'Project Manager';
-                          const efEmail = `${efManager.toLowerCase().replace(/\s+/g, '.')}@${(config.company || (config.title || '').split(' - ')[0] || 'workspace').toLowerCase().replace(/[^a-z0-9]/g, '') || 'workspace'}.com`;
+                          const efManager = manager.name;
                           const efSubject = req.label || 'Task Assignment';
-                          const efHeader = (
-                            <>
-                              <div style={{ padding: '22px 22px 0' }}>
-                                <h3 style={{ fontSize: 19, fontWeight: 700, color: text, lineHeight: 1.3, margin: 0 }}>{efSubject}</h3>
-                              </div>
-                              <div style={{ padding: '16px 22px 0', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                <SlackAvatar name={efManager} size={42} color={accent} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{efManager}</span>
-                                    <span style={{ fontSize: 12, color: faint }}>&lt;{efEmail}&gt;</span>
-                                  </div>
-                                  <p style={{ fontSize: 12, color: faint, marginTop: 2, margin: 0 }}>to me &bull; Earlier today</p>
-                                </div>
-                                {isDone && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: accent }} />}
-                              </div>
-                              {(req.emailBody || req.description) && (
-                                <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeEmailContent(applyNameTags(req.emailBody || req.description || '', studentName)) }}
-                                  style={{ padding: '18px 22px', color: isDark ? '#e0e0e0' : '#1f1f1f', fontSize: 14.5, lineHeight: 1.75 }} />
-                              )}
-                              <div style={{ height: 1, background: divider, margin: '0 22px' }} />
-                            </>
-                          );
+                          const efAttachments: MailAttachment[] = (req.attachments || []).map(a => ({ name: a.name, url: a.url }));
                           const efCard = (children: React.ReactNode) => (
-                            <div key={req.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: shadow }}>
-                              {efHeader}
-                              {children}
+                            <div key={req.id}>
+                              <MailCard isDark={isDark} accent={accent} reqId={req.id} subject={efSubject}
+                                sender={manager} toName={studentName} toEmail={meEmail} stamp={stamp}
+                                bodyHtml={(req.emailBody || req.description) ? sanitizeEmailContent(applyNameTags(req.emailBody || req.description || '', studentName)) : undefined}
+                                attachments={efAttachments.length ? efAttachments : undefined}
+                                company={config.company} done={isDone} muteArrival={readOnly || previewMode}>
+                                {children}
+                              </MailCard>
                             </div>
-                          );
-                          const efMeAvatar = (
-                            <div style={{ width: 42, height: 42, borderRadius: '50%', background: isDark ? 'rgba(255,255,255,0.12)' : '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: isDark ? '#ddd' : '#1a73e8', flexShrink: 0, letterSpacing: 1 }}>ME</div>
                           );
 
                           // MCQ: options as reply choices
@@ -972,16 +732,16 @@ export default function AssignmentExperiencePlayer({
                             return efCard(
                               !isDone ? (
                                 <div style={{ padding: '16px 22px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                  <p style={{ fontSize: 12, color: faint, margin: '0 0 4px', fontWeight: 500 }}>Select your answer:</p>
+                                  <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: isDark ? '#6b7075' : '#9aa0a6', margin: '0 0 4px' }}>Reply with your answer</p>
                                   {(req.options || []).map((opt, oi) => {
                                     const letter = oi + 1;
                                     const isSelected = selected === opt;
                                     const isThisWrong = isSelected && isWrong;
-                                    const bgCol = isThisWrong ? 'rgba(239,68,68,0.06)' : isSelected ? `${accent}08` : (isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)');
+                                    const bgCol = isThisWrong ? 'rgba(239,68,68,0.06)' : isSelected ? `${accent}08` : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)');
                                     return (
                                       <button key={oi}
-                                        onClick={() => { if (readOnly || isDone) return; const c = opt === req.correctAnswer; updateProgress(req.id, { selectedAnswer: opt, completed: c }); }}
-                                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, border: 'none', background: bgCol, textAlign: 'left', cursor: 'pointer', fontSize: 14, color: text, transition: 'all 0.15s', width: '100%' }}>
+                                        onClick={() => { if (readOnly || isDone) return; const c = opt === req.correctAnswer; updateProgress(req.id, { selectedAnswer: opt, completed: c }); anchorZone(req.id); }}
+                                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 12, border: `1px solid ${isThisWrong ? 'rgba(239,68,68,0.4)' : isSelected ? `${accent}55` : 'transparent'}`, background: bgCol, textAlign: 'left', cursor: 'pointer', fontSize: 14, color: text, transition: 'all 0.15s', width: '100%' }}>
                                         <span style={{ flex: 1 }}>{opt}</span>
                                         <span style={{ fontSize: 13, fontWeight: 700, flexShrink: 0, fontVariantNumeric: 'tabular-nums', color: isThisWrong ? '#ef4444' : isSelected ? accent : faint }}>{letter}</span>
                                       </button>
@@ -994,55 +754,53 @@ export default function AssignmentExperiencePlayer({
                                   )}
                                 </div>
                               ) : (
-                                <div style={{ padding: '16px 22px 20px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                    {efMeAvatar}
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                        <span style={{ fontSize: 14, fontWeight: 700, color: text }}>Me</span>
-                                        <span style={{ fontSize: 12, color: faint }}>Just now</span>
-                                      </div>
-                                      <p style={{ fontSize: 14, color: text, margin: 0, lineHeight: 1.6 }}>{selected}</p>
-                                    </div>
-                                  </div>
-                                  <div style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12.5 }}>
-                                    <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Correct
-                                  </div>
+                                <div style={{ padding: '16px 22px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                  <MailThreadMsg isDark={isDark} from="me" meName={studentName}
+                                    receipt={`Seen by ${firstNameOf(manager.name)} just now`}>
+                                    {selected}
+                                  </MailThreadMsg>
+                                  <div><MailStatusChip accent={accent}>Correct</MailStatusChip></div>
                                 </div>
                               )
                             );
                           }
 
-                          // Text / Reflection: Reply EmailCompose thread with optional AI evaluation
+                          // Text / Reflection: reply-composer thread with optional AI evaluation
                           if (req.type === 'text' || req.type === 'reflection') {
                             const val = prog?.notes ?? '';
                             const hasContent = val.replace(/<[^>]*>/g, '').trim().length > 0;
-                            const replyOpen = isDone || openReplies.has(req.id) || hasContent;
+                            const rounds = efRounds[req.id] || [];
+                            const replyOpen = isDone || openReplies.has(req.id) || hasContent || rounds.length > 0;
                             const needsEval = !!(req.aiReview || req.expectedAnswer);
+                            // Evaluation always completes the requirement (pass or fail is never a
+                            // gate), so `isDone` alone can't tell us whether to show the verdict or
+                            // a fresh composer. This flag lets a student who clicked "Reply" after
+                            // seeing feedback bypass the permanently-true `isDone` state.
+                            const wantsNewReply = needsEval && openReplies.has(req.id);
                             const isTyping = efTyping[req.id];
                             const isReviewing = efReviewing[req.id];
                             const feedback = aiFeedback[req.id];
                             const evaluating = !!aiReviewing[req.id];
+                            // What the thread shows as "sent": the in-flight attempt first, then saved notes
+                            const sentText = efPending[req.id] || prog?.notes || '';
                             const efMeReply = (
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
-                                {efMeAvatar}
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                    <span style={{ fontSize: 14, fontWeight: 700, color: text }}>Me</span>
-                                    <span style={{ fontSize: 12, color: faint }}>Just now</span>
-                                  </div>
-                                  <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(prog?.notes ?? '') }} style={{ fontSize: 13.5, color: isDark ? '#e0e0e0' : '#1f1f1f', lineHeight: 1.7 }} />
-                                </div>
+                              <div style={{ marginBottom: 18 }}>
+                                <MailThreadMsg isDark={isDark} from="me" meName={studentName}>
+                                  <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(sentText) }} />
+                                </MailThreadMsg>
                               </div>
                             );
                             const handleSend = async () => {
                               if (!hasContent) return;
                               if (!needsEval) {
                                 updateProgress(req.id, { notes: val, completed: true });
+                                anchorZone(req.id);
                                 return;
                               }
                               const delay = 2000 + Math.floor(Math.random() * 2001);
                               setEfTyping(prev => ({ ...prev, [req.id]: true }));
+                              setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; });
+                              anchorZone(req.id);
                               if (req.aiReview) {
                                 // AI evaluation path: always marks done (informational feedback)
                                 setAiReviewing(prev => ({ ...prev, [req.id]: true }));
@@ -1070,72 +828,77 @@ export default function AssignmentExperiencePlayer({
                                 setTimeout(() => {
                                   setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
                                   setEfReviewing(prev => ({ ...prev, [req.id]: true }));
+                                  anchorZone(req.id);
                                 }, delay);
                               } else {
-                                // Manual comparison: no answer revealed, retry allowed on wrong
+                                // Manual comparison: no answer revealed. A wrong attempt stays in the
+                                // thread as a sent reply + manager response, and a fresh empty composer
+                                // opens below - never edit the old message.
+                                const attempt = val;
                                 const normalizeText = (s: string) => s.replace(/<[^>]*>/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
-                                const studentNorm = normalizeText(val);
+                                const studentNorm = normalizeText(attempt);
                                 const expectedNorm = normalizeText(req.expectedAnswer || '');
                                 const passed = studentNorm === expectedNorm || studentNorm.includes(expectedNorm) || expectedNorm.includes(studentNorm);
+                                setEfPending(prev => ({ ...prev, [req.id]: attempt }));
+                                updateProgress(req.id, { notes: '' });
                                 setTimeout(() => {
                                   setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
-                                  setEfReviewing(prev => ({ ...prev, [req.id]: true }));
-                                  setAiFeedback(prev => ({ ...prev, [req.id]: { passed, score: passed ? 100 : 0, feedback: passed ? 'That is correct. Well done.' : 'That is not quite right. Please review the question and try again.' } }));
-                                  if (passed) updateProgress(req.id, { notes: val, completed: true });
+                                  setEfPending(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                                  if (passed) {
+                                    setEfReviewing(prev => ({ ...prev, [req.id]: true }));
+                                    setAiFeedback(prev => ({ ...prev, [req.id]: { passed: true, score: 100, feedback: `That is correct, ${firstNameOf(studentName)}. Well done.` } }));
+                                    updateProgress(req.id, { notes: attempt, completed: true });
+                                  } else {
+                                    setEfRounds(prev => ({ ...prev, [req.id]: [...(prev[req.id] || []), { me: attempt, feedback: `That is not quite right, ${firstNameOf(studentName)}. Take another look at the question and send me a new reply.`, passed: false }] }));
+                                  }
+                                  anchorZone(req.id);
                                 }, delay);
                               }
                             };
-                            const efRetryCompose = (
-                              <div style={{ borderTop: `1px solid ${divider}`, padding: '14px 22px 18px' }}>
-                                <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
-                                  <div style={{ padding: '8px 14px', background: subtle, borderBottom: `1px solid ${divider}`, fontSize: 12, color: faint }}>Reply to {efManager}</div>
-                                  <EmailCompose value={val} onChange={(html) => updateProgress(req.id, { notes: html })} readOnly={false} isDark={isDark} accentColor={accent} placeholder="Write your reply..." noBorder />
-                                  <div style={{ padding: '10px 14px', background: bg, borderTop: `1px solid ${divider}`, display: 'flex', gap: 10, alignItems: 'center' }}>
-                                    <button onClick={handleSend} disabled={!hasContent}
-                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: hasContent ? accent : (isDark ? '#333' : '#e0e0e0'), color: hasContent ? '#fff' : (isDark ? '#666' : '#aaa'), fontSize: 13.5, fontWeight: 600, border: 'none', cursor: hasContent ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}>
-                                      <Send className="w-3.5 h-3.5" /> Send
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                            return efCard(
-                              isTyping ? (
-                                <div style={{ padding: '16px 22px 20px' }}>
-                                  {efMeReply}
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                                    <SlackAvatar name={efManager} size={42} color={accent} />
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '10px 16px', borderRadius: 20, background: subtle }}>
-                                      {[0, 1, 2].map(i => <div key={i} className="w-2 h-2 rounded-full animate-bounce" style={{ background: isDark ? '#888' : '#aaa', animationDelay: `${i * 160}ms` }} />)}
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : (isReviewing || (isDone && needsEval)) ? (
-                                <div style={{ padding: '16px 22px 20px' }}>
-                                  {efMeReply}
-                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: feedback ? 18 : 0 }}>
-                                    <SlackAvatar name={efManager} size={42} color={accent} />
-                                    <div style={{ flex: 1 }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                        <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{efManager}</span>
-                                        <span style={{ fontSize: 12, color: faint }}>Just now</span>
+                            const efHistory = rounds.length > 0 ? (
+                              <div style={{ padding: '16px 22px 0', display: 'flex', flexDirection: 'column', gap: 18 }}>
+                                {rounds.map((r, ri) => (
+                                  <div key={ri} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                                    <MailThreadMsg isDark={isDark} from="me" meName={studentName} time="Earlier">
+                                      <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(r.me) }} />
+                                    </MailThreadMsg>
+                                    <MailThreadMsg isDark={isDark} from={manager} time="Earlier">
+                                      <div style={{ borderRadius: 10, padding: '12px 16px', background: r.passed ? (isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.06)'), border: `1px solid ${r.passed ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}` }}>
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: r.passed ? '#10b981' : '#f59e0b', marginBottom: 8 }}>
+                                          {r.passed ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                                          {r.passed ? 'Correct' : 'Incorrect'}
+                                        </div>
+                                        <p style={{ fontSize: 13.5, color: isDark ? '#ddd' : '#333', margin: 0, lineHeight: 1.6 }}>{r.feedback}</p>
                                       </div>
-                                      <p style={{ fontSize: 13.5, color: isDark ? '#e0e0e0' : '#1f1f1f', margin: '0 0 10px' }}>Thanks for your response. Let me review what you have written.</p>
+                                    </MailThreadMsg>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null;
+                            return efCard(
+                              <>
+                              {efHistory}
+                              {isTyping ? (
+                                <div style={{ padding: '16px 22px 20px' }}>
+                                  {efMeReply}
+                                  <MailTypingRow isDark={isDark} person={manager} />
+                                </div>
+                              ) : (isReviewing || (isDone && needsEval && !wantsNewReply)) ? (
+                                <div style={{ padding: '16px 22px 20px' }}>
+                                  {efMeReply}
+                                  <div style={{ marginBottom: feedback ? 18 : 0 }}>
+                                    <MailThreadMsg isDark={isDark} from={manager}>
+                                      <p style={{ margin: '0 0 10px' }}>Thanks for your response, {firstNameOf(studentName)}. Let me review what you have written.</p>
                                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: evaluating ? subtle : `${accent}12`, color: evaluating ? faint : accent, border: `1px solid ${evaluating ? 'transparent' : accent + '30'}`, fontSize: 12.5 }}>
                                         {evaluating ? <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ display: 'inline' }} /> : <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} />}
                                         {evaluating ? 'Reviewing your answer...' : 'Reviewed'}
                                       </div>
-                                    </div>
+                                    </MailThreadMsg>
                                   </div>
                                   {feedback && (
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, borderTop: `1px solid ${divider}`, paddingTop: 18 }}>
-                                      <SlackAvatar name={efManager} size={42} color={accent} />
-                                      <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{efManager}</span>
-                                          <span style={{ fontSize: 12, color: faint }}>Just now</span>
-                                        </div>
-                                        <p style={{ fontSize: 13.5, color: isDark ? '#e0e0e0' : '#1f1f1f', margin: '0 0 12px' }}>Hi, here is my feedback on your response:</p>
+                                    <div style={{ borderTop: `1px solid ${divider}`, paddingTop: 18 }}>
+                                      <MailThreadMsg isDark={isDark} from={manager}>
+                                        <p style={{ margin: '0 0 12px' }}>Hi, here is my feedback on your response:</p>
                                         <div style={{ borderRadius: 10, padding: '12px 16px', background: feedback.passed ? (isDark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)') : (isDark ? 'rgba(245,158,11,0.08)' : 'rgba(245,158,11,0.06)'), border: `1px solid ${feedback.passed ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}` }}>
                                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: feedback.passed ? '#10b981' : '#f59e0b', marginBottom: 8 }}>
                                             {feedback.passed ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
@@ -1143,43 +906,47 @@ export default function AssignmentExperiencePlayer({
                                           </div>
                                           <p style={{ fontSize: 13.5, color: isDark ? '#ddd' : '#333', margin: 0, lineHeight: 1.6 }}>{feedback.feedback}</p>
                                         </div>
-                                      </div>
+                                      </MailThreadMsg>
+                                      {/* Only a wrong answer gets a way back to the composer - a
+                                          correct one is done, the mission just moves on. */}
+                                      {!evaluating && !readOnly && !feedback.passed && (
+                                        <button
+                                          onClick={() => {
+                                            setEfRounds(prev => ({ ...prev, [req.id]: [...(prev[req.id] || []), { me: sentText, feedback: feedback.feedback, passed: feedback.passed }] }));
+                                            setAiFeedback(prev => ({ ...prev, [req.id]: null }));
+                                            updateProgress(req.id, { notes: '' });
+                                            setOpenReplies(prev => new Set([...prev, req.id]));
+                                          }}
+                                          style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 18, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer' }}>
+                                          <Reply className="w-4 h-4" /> Reply
+                                        </button>
+                                      )}
                                     </div>
                                   )}
-                                  {/* Retry compose for manual wrong answers */}
-                                  {feedback && !feedback.passed && !isDone && !req.aiReview && !readOnly && efRetryCompose}
                                 </div>
-                              ) : isDone ? (
+                              ) : (isDone && !wantsNewReply) ? (
                                 <div style={{ padding: '16px 22px 20px' }}>
                                   {efMeReply}
-                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12.5 }}>
-                                    <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> Reply sent to {efManager}
-                                  </div>
+                                  <MailStatusChip accent={accent}>Reply sent to {efManager}</MailStatusChip>
                                 </div>
                               ) : !replyOpen ? (
                                 <div style={{ padding: '14px 22px' }}>
                                   {!readOnly && (
                                     <button onClick={() => setOpenReplies(prev => new Set([...prev, req.id]))}
-                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 6, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer' }}>
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 18, border: `1px solid ${border}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: text, cursor: 'pointer' }}>
                                       <Reply className="w-4 h-4" /> Reply
                                     </button>
                                   )}
                                 </div>
                               ) : (
                                 <div style={{ padding: '14px 22px 18px' }}>
-                                  <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden' }}>
-                                    <div style={{ padding: '8px 14px', background: subtle, borderBottom: `1px solid ${divider}`, fontSize: 12, color: faint }}>Reply to {efManager}</div>
-                                    <EmailCompose value={val} onChange={(html) => updateProgress(req.id, { notes: html })} readOnly={false} isDark={isDark} accentColor={accent} placeholder="Write your reply..." noBorder />
-                                    <div style={{ padding: '10px 14px', background: bg, borderTop: `1px solid ${divider}`, display: 'flex', gap: 10, alignItems: 'center' }}>
-                                      <button onClick={handleSend} disabled={!hasContent}
-                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 20px', borderRadius: 6, background: hasContent ? accent : (isDark ? '#333' : '#e0e0e0'), color: hasContent ? '#fff' : (isDark ? '#666' : '#aaa'), fontSize: 13.5, fontWeight: 600, border: 'none', cursor: hasContent ? 'pointer' : 'not-allowed', transition: 'all 0.2s' }}>
-                                        <Send className="w-3.5 h-3.5" /> Send
-                                      </button>
-                                      <button onClick={() => { updateProgress(req.id, { notes: '' }); setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; }); }} style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: 'transparent', fontSize: 13, color: faint, cursor: 'pointer' }}>Discard</button>
-                                    </div>
-                                  </div>
+                                  <MailComposer isDark={isDark} accent={accent} to={manager} subject={efSubject}
+                                    value={val} onChange={(html) => updateProgress(req.id, { notes: html })} canSend={hasContent} onSend={handleSend}
+                                    placeholder={rounds.length ? 'Write a new reply...' : 'Write your reply...'}
+                                    onDiscard={() => { updateProgress(req.id, { notes: '' }); setOpenReplies(prev => { const n = new Set(prev); n.delete(req.id); return n; }); }} />
                                 </div>
-                              )
+                              )}
+                              </>
                             );
                           }
 
@@ -1193,39 +960,42 @@ export default function AssignmentExperiencePlayer({
                             const isTask = req.type === 'task';
                             const isDeliverable = req.type === 'deliverable';
                             const efManagerReply = isTask
-                              ? 'Got it, noted. I have recorded that you have completed this task.'
+                              ? `Got it, ${firstNameOf(studentName)} - noted. I have recorded that you have completed this task.`
                               : isDeliverable
-                              ? 'Thanks for your deliverable. I will review it and get back to you shortly.'
-                              : 'Thanks for the submission. I have received it and it is currently under review. I will get back to you shortly.';
+                              ? `Thanks, ${firstNameOf(studentName)}. I will review your deliverable and get back to you shortly.`
+                              : `Thanks for the submission, ${firstNameOf(studentName)}. It is under review - I will get back to you shortly.`;
                             return efCard(
                               (() => {
                                 const isTyping = efTyping[req.id];
                                 const showReply = !isTyping && (efReviewing[req.id] || isDone);
                                 const efMeThread = (
-                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
-                                    {efMeAvatar}
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                        <span style={{ fontSize: 14, fontWeight: 700, color: text }}>Me</span>
-                                        <span style={{ fontSize: 12, color: faint }}>Just now</span>
-                                      </div>
+                                  <div style={{ marginBottom: 18 }}>
+                                    <MailThreadMsg isDark={isDark} from="me" meName={studentName}
+                                      receipt={showReply ? `Seen by ${firstNameOf(manager.name)} just now` : undefined}>
                                       {isTask
                                         ? <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: subtle, border: `1px solid ${border}`, fontSize: 12.5, color: text }}><CheckCircle2 className="w-3 h-3" /> Task marked as done</div>
-                                        : <>
-                                          {fileUrl && <a href={fileUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${border}`, fontSize: 12.5, color: text, textDecoration: 'none' }}><Paperclip className="w-3 h-3" /> {isDeliverable ? 'Deliverable' : 'Attachment'}</a>}
-                                          {linkUrl && <a href={linkUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${border}`, fontSize: 12.5, color: text, textDecoration: 'none', marginLeft: fileUrl ? 8 : 0 }}><LinkIcon className="w-3 h-3" /> {linkUrl.slice(0, 40)}{linkUrl.length > 40 ? '...' : ''}</a>}
-                                        </>
+                                        : (
+                                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                            {fileUrl && (
+                                              <AttachmentCard isDark={isDark} href={fileUrl}
+                                                name={(() => { try { return decodeURIComponent(fileUrl.split('/').pop()?.split('?')[0] || ''); } catch { return ''; } })() || (isDeliverable ? 'Deliverable' : 'Attachment')} />
+                                            )}
+                                            {linkUrl && <a href={linkUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: subtle, border: `1px solid ${border}`, fontSize: 12.5, color: text, textDecoration: 'none' }}><LinkIcon className="w-3 h-3" /> {linkUrl.slice(0, 40)}{linkUrl.length > 40 ? '...' : ''}</a>}
+                                          </div>
+                                        )
                                       }
-                                    </div>
+                                    </MailThreadMsg>
                                   </div>
                                 );
                                 const handleEfSend = () => {
                                   setEfTyping(prev => ({ ...prev, [req.id]: true }));
+                                  anchorZone(req.id);
                                   const delay = 2000 + Math.floor(Math.random() * 2001);
                                   setTimeout(() => {
                                     setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
                                     setEfReviewing(prev => ({ ...prev, [req.id]: true }));
                                     if (!readOnly) updateProgress(req.id, { completed: true });
+                                    anchorZone(req.id);
                                   }, delay);
                                 };
                                 if (!isDone && !isTyping && !efReviewing[req.id]) return (
@@ -1280,32 +1050,16 @@ export default function AssignmentExperiencePlayer({
                                 if (isTyping) return (
                                   <div style={{ padding: '16px 22px 20px' }}>
                                     {efMeThread}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                                      <SlackAvatar name={efManager} size={42} color={accent} />
-                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '10px 16px', borderRadius: 20, background: isDark ? '#2a2a2a' : '#f0f0f0' }}>
-                                        {[0, 1, 2].map(i => (
-                                          <div key={i} className="w-2 h-2 rounded-full animate-bounce" style={{ background: isDark ? '#888' : '#aaa', animationDelay: `${i * 160}ms` }} />
-                                        ))}
-                                      </div>
-                                    </div>
+                                    <MailTypingRow isDark={isDark} person={manager} />
                                   </div>
                                 );
                                 if (showReply) return (
                                   <div style={{ padding: '16px 22px 20px' }}>
                                     {efMeThread}
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                      <SlackAvatar name={efManager} size={42} color={accent} />
-                                      <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{efManager}</span>
-                                          <span style={{ fontSize: 12, color: faint }}>Just now</span>
-                                        </div>
-                                        <p style={{ fontSize: 13.5, color: text, margin: '0 0 10px' }}>{efManagerReply}</p>
-                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12.5 }}>
-                                          <CheckCircle2 className="w-3.5 h-3.5" style={{ display: 'inline' }} /> {isTask ? 'Noted' : 'Received'}
-                                        </div>
-                                      </div>
-                                    </div>
+                                    <MailThreadMsg isDark={isDark} from={manager}>
+                                      <p style={{ margin: '0 0 10px' }}>{efManagerReply}</p>
+                                      <MailStatusChip accent={accent}>{isTask ? 'Noted' : 'Received'}</MailStatusChip>
+                                    </MailThreadMsg>
                                   </div>
                                 );
                                 return null;
@@ -1320,10 +1074,12 @@ export default function AssignmentExperiencePlayer({
                             const typeLabel = req.type === 'dashboard_critique' ? 'dashboard' : req.type === 'code_review' ? 'code' : 'Excel file';
                             const startReview = () => {
                               setEfTyping(prev => ({ ...prev, [req.id]: true }));
+                              anchorZone(req.id);
                               const delay = 2000 + Math.floor(Math.random() * 2001);
                               setTimeout(() => {
                                 setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
                                 setEfReviewing(prev => ({ ...prev, [req.id]: true }));
+                                anchorZone(req.id);
                               }, delay);
                             };
                             const finishReview = () => {};
@@ -1331,14 +1087,13 @@ export default function AssignmentExperiencePlayer({
                               setEfTyping(prev => { const n = { ...prev }; delete n[req.id]; return n; });
                               setEfReviewing(prev => { const n = { ...prev }; delete n[req.id]; return n; });
                             };
-                            return (
-                              <div key={req.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 14, boxShadow: shadow }}>
-                                {efHeader}
+                            return efCard(
+                              <>
                                 {/* Compose: hidden once typing/reviewing starts */}
                                 {!isDone && !efTyping[req.id] && !efReviewing[req.id] && (
                                   <div style={{ padding: '14px 22px 18px' }}>
-                                    <p style={{ fontSize: 12, fontWeight: 500, color: faint, margin: '0 0 10px' }}>
-                                      {req.type === 'dashboard_critique' ? 'Attach your dashboard for review:' : req.type === 'code_review' ? 'Paste or upload your code:' : 'Upload your Excel file:'}
+                                    <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase', color: isDark ? '#6b7075' : '#9aa0a6', margin: '0 0 10px' }}>
+                                      {req.type === 'dashboard_critique' ? 'Attach your dashboard for review' : req.type === 'code_review' ? 'Paste or upload your code' : 'Upload your Excel file'}
                                     </p>
                                     {req.type === 'dashboard_critique' && (
                                       <DashboardCritiquePlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={false}
@@ -1362,93 +1117,58 @@ export default function AssignmentExperiencePlayer({
                                 )}
                                 {/* Manager typing dots */}
                                 {efTyping[req.id] && (
-                                  <div style={{ padding: '16px 22px 20px', borderTop: `1px solid ${divider}` }}>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
-                                      {efMeAvatar}
-                                      <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>Me</span>
-                                          <span style={{ fontSize: 12, color: faint }}>Just now</span>
-                                        </div>
-                                        <p style={{ fontSize: 13, color: muted, margin: 0 }}>Submitted my {typeLabel} for review.</p>
-                                      </div>
+                                  <div style={{ padding: '16px 22px 20px' }}>
+                                    <div style={{ marginBottom: 18 }}>
+                                      <MailThreadMsg isDark={isDark} from="me" meName={studentName}>
+                                        Submitted my {typeLabel} for review.
+                                      </MailThreadMsg>
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                                      <SlackAvatar name={efManager} size={42} color={accent} />
-                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '10px 16px', borderRadius: 20, background: isDark ? '#2a2a2a' : '#f0f0f0' }}>
-                                        {[0, 1, 2].map(i => (
-                                          <div key={i} className="w-2 h-2 rounded-full animate-bounce" style={{ background: isDark ? '#888' : '#aaa', animationDelay: `${i * 160}ms` }} />
-                                        ))}
-                                      </div>
-                                    </div>
+                                    <MailTypingRow isDark={isDark} person={manager} />
                                   </div>
                                 )}
                                 {/* Received reply -- persists into done state so both replies stack */}
                                 {!efTyping[req.id] && (efReviewing[req.id] || isDone) && (
-                                  <div style={{ padding: '16px 22px 20px', borderTop: `1px solid ${divider}` }}>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
-                                      {efMeAvatar}
-                                      <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>Me</span>
-                                          <span style={{ fontSize: 12, color: faint }}>Earlier</span>
-                                        </div>
-                                        <p style={{ fontSize: 13, color: muted, margin: 0 }}>Submitted my {typeLabel} for review.</p>
-                                      </div>
+                                  <div style={{ padding: '16px 22px 20px' }}>
+                                    <div style={{ marginBottom: 18 }}>
+                                      <MailThreadMsg isDark={isDark} from="me" meName={studentName} time="Earlier"
+                                        receipt={`Seen by ${firstNameOf(manager.name)}`}>
+                                        Submitted my {typeLabel} for review.
+                                      </MailThreadMsg>
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                      <SlackAvatar name={efManager} size={42} color={accent} />
-                                      <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{efManager}</span>
-                                          <span style={{ fontSize: 12, color: faint }}>Just now</span>
+                                    <MailThreadMsg isDark={isDark} from={manager}>
+                                      <p style={{ margin: '0 0 10px' }}>Your submission has been received and is currently under review. I will get back to you shortly.</p>
+                                      {!isDone && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: muted, fontSize: 12.5 }}>
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: accent }} /> AI is reviewing your {typeLabel}...
                                         </div>
-                                        <p style={{ fontSize: 13.5, color: text, margin: '0 0 10px' }}>Your submission has been received and is currently under review. I will get back to you shortly.</p>
-                                        {!isDone && (
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: muted, fontSize: 12.5 }}>
-                                            <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: accent }} /> AI is reviewing your {typeLabel}...
-                                          </div>
-                                        )}
-                                        {isDone && (
-                                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, background: `${accent}12`, color: accent, border: `1px solid ${accent}30`, fontSize: 12 }}>
-                                            <CheckCircle2 className="w-3 h-3" /> Review complete
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
+                                      )}
+                                      {isDone && <MailStatusChip accent={accent}>Review complete</MailStatusChip>}
+                                    </MailThreadMsg>
                                   </div>
                                 )}
                                 {/* Manager report -- separate section below, appears once AI finishes */}
                                 {isDone && (
                                   <div style={{ padding: '16px 22px 20px', borderTop: `1px solid ${divider}` }}>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-                                      <SlackAvatar name={efManager} size={42} color={accent} />
-                                      <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                          <span style={{ fontSize: 14, fontWeight: 700, color: text }}>{efManager}</span>
-                                          <span style={{ fontSize: 12, color: faint }}>Just now</span>
-                                          <CheckCircle2 className="w-4 h-4" style={{ color: accent }} />
-                                        </div>
-                                        <p style={{ fontSize: 13.5, color: text, margin: '0 0 18px' }}>Hi, here is the report from the review that has been done.</p>
-                                        <div style={{ background: subtle, borderRadius: 10, padding: 16, border: `1px solid ${border}` }}>
-                                          {req.type === 'dashboard_critique' && savedReport && (
-                                            <DashboardCritiquePlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={true}
-                                              savedResult={savedReport as any} savedImageUrl={undefined} rubric={(req as any).rubric} onComplete={() => {}} />
-                                          )}
-                                          {req.type === 'code_review' && (() => { const r = isFullReport('code_review', savedReport) ? savedReport : undefined; return (
-                                            <CodeReviewPlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={true}
-                                              savedResult={r as any} rubric={req.rubric} schema={req.schema} minScore={req.minScore} onComplete={() => {}} />
-                                          ); })()}
-                                          {req.type === 'excel_review' && (() => { const r = isFullReport('excel_review', savedReport) ? savedReport : undefined; return (
-                                            <ExcelReviewPlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={true}
-                                              savedResult={r as any} context={req.context} rubric={req.rubric} minScore={req.minScore} onComplete={() => {}} />
-                                          ); })()}
-                                        </div>
+                                    <MailThreadMsg isDark={isDark} from={manager}>
+                                      <p style={{ margin: '0 0 18px' }}>Hi, here is the report from the review that has been done.</p>
+                                      <div style={{ background: subtle, borderRadius: 10, padding: 16, border: `1px solid ${border}` }}>
+                                        {req.type === 'dashboard_critique' && savedReport && (
+                                          <DashboardCritiquePlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={true}
+                                            savedResult={savedReport as any} savedImageUrl={undefined} rubric={(req as any).rubric} onComplete={() => {}} />
+                                        )}
+                                        {req.type === 'code_review' && (() => { const r = isFullReport('code_review', savedReport) ? savedReport : undefined; return (
+                                          <CodeReviewPlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={true}
+                                            savedResult={r as any} rubric={req.rubric} schema={req.schema} minScore={req.minScore} onComplete={() => {}} />
+                                        ); })()}
+                                        {req.type === 'excel_review' && (() => { const r = isFullReport('excel_review', savedReport) ? savedReport : undefined; return (
+                                          <ExcelReviewPlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={true}
+                                            savedResult={r as any} context={req.context} rubric={req.rubric} minScore={req.minScore} onComplete={() => {}} />
+                                        ); })()}
                                       </div>
-                                    </div>
+                                    </MailThreadMsg>
                                   </div>
                                 )}
-                              </div>
+                              </>
                             );
                           }
                         }
@@ -1686,6 +1406,22 @@ export default function AssignmentExperiencePlayer({
 
                         return null;
                       })}
+
+                      {/* Incoming-message indicator: the rest of the conversation arrives as work gets done */}
+                      {!readOnly && !previewMode && (() => {
+                        const reqs = currentLes.requirements;
+                        const settled = (r: Requirement) => !!progress[r.id]?.completed && !typingAcks.has(r.id) && !typingDecisions.has(r.id) && !efTyping[r.id];
+                        let visibleEnd = reqs.length;
+                        for (let i = 1; i < reqs.length; i++) {
+                          if (!reqs.slice(0, i).every(settled)) { visibleEnd = i; break; }
+                        }
+                        const hiddenCount = reqs.length - visibleEnd;
+                        if (hiddenCount <= 0) return null;
+                        return (
+                          <ArrivalIndicator isDark={isDark} accent={accent} manager={manager}
+                            hiddenCount={hiddenCount} nextKind={arrivalKindFor(reqs[visibleEnd])} />
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

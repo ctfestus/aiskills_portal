@@ -131,7 +131,7 @@ CREATE TABLE public.courses (
   cover_image     text,
   deadline_days   integer,
   theme           text,
-  mode            text        CHECK (mode IN ('light','dark')),
+  mode            text        CHECK (mode IN ('light','dark','auto')),
   font            text,
   custom_accent   text,
   questions       jsonb       NOT NULL DEFAULT '[]',
@@ -153,6 +153,26 @@ CREATE TABLE public.courses (
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE OR REPLACE FUNCTION public.question_types(c public.courses)
+RETURNS jsonb
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT COALESCE(
+    jsonb_agg(jsonb_build_object(
+      'id',   q->>'id',
+      'type', COALESCE(q->>'type', 'multiple_choice')
+    )),
+    '[]'::jsonb
+  )
+  FROM jsonb_array_elements(
+    CASE
+      WHEN jsonb_typeof(c.questions) = 'array' THEN c.questions
+      ELSE '[]'::jsonb
+    END
+  ) AS q
+$$;
+
 -- ── events (purpose-built — migrated out of forms in migration 030) ──
 CREATE TABLE public.events (
   id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -166,7 +186,7 @@ CREATE TABLE public.events (
   cover_image     text,
   deadline_days   integer,
   theme           text,
-  mode            text        CHECK (mode IN ('light','dark')),
+  mode            text        CHECK (mode IN ('light','dark','auto')),
   font            text,
   custom_accent   text,
   fields          jsonb       NOT NULL DEFAULT '[]',

@@ -747,10 +747,12 @@ function DatasetDetailPane({
   const [workbenchNotice, setWorkbenchNotice] = useState('');
   const [runtime, setRuntime] = useState<SQLRuntime | null>(null);
   const runtimeRef = useRef<SQLRuntime | null>(null);
+  const lastRunSqlRef = useRef('');
   const [query, setQuery] = useState('');
   const [queryResult, setQueryResult] = useState<SQLResult | null>(null);
   const [queryRunning, setQueryRunning] = useState(false);
   const [queryError, setQueryError] = useState('');
+  const [csvExporting, setCsvExporting] = useState(false);
   const [activeOutputTab, setActiveOutputTab] = useState('results');
   const [queryPanePercent, setQueryPanePercent] = useState(40);
   const [workbenchSideWidth, setWorkbenchSideWidth] = useState(230);
@@ -1084,12 +1086,31 @@ function DatasetDetailPane({
     setActiveOutputTab('results');
     try {
       const out = await executeQuery(runtimeRef.current.conn, sqlText);
+      lastRunSqlRef.current = sqlText;
       setQueryResult(out);
     } catch (err) {
       setQueryResult(null);
       setQueryError((err as Error).message || 'Query failed.');
     } finally {
       setQueryRunning(false);
+    }
+  }
+
+  // The results grid shows a capped preview (STUDENT_RESULT_LIMIT rows). Exporting re-runs the
+  // same query with the cap removed so the CSV contains every row, not just the on-screen preview.
+  async function exportQueryCsv() {
+    if (!runtimeRef.current || !queryResult) return;
+    const sqlText = lastRunSqlRef.current || query;
+    const filename = `${dataset.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'query'}_result.csv`;
+    setCsvExporting(true);
+    setQueryError('');
+    try {
+      const full = await executeQuery(runtimeRef.current.conn, sqlText, false, { limit: null });
+      exportToCsv(full, filename);
+    } catch (err) {
+      setQueryError(`Could not export the full result: ${(err as Error).message || 'export failed'}`);
+    } finally {
+      setCsvExporting(false);
     }
   }
 
@@ -1565,9 +1586,9 @@ function DatasetDetailPane({
                           {queryRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} Run
                         </button>
                         {queryResult && (
-                          <button onClick={() => exportToCsv(queryResult, `${dataset.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase() || 'query'}_result.csv`)}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 10, border: 'none', background: C.input, color: C.text, fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: font }}>
-                            <Download size={14} /> CSV
+                          <button onClick={exportQueryCsv} disabled={csvExporting}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 10, border: 'none', background: C.input, color: C.text, fontWeight: 800, fontSize: 13, cursor: csvExporting ? 'default' : 'pointer', opacity: csvExporting ? 0.7 : 1, fontFamily: font }}>
+                            {csvExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} {csvExporting ? 'Preparing CSV...' : 'CSV'}
                           </button>
                         )}
                       </div>

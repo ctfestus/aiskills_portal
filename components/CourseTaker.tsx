@@ -15,6 +15,7 @@ import {
   Check, Play, FileText, FlaskConical, ListChecks,
 } from 'lucide-react';
 import { AnimatedField } from '@/components/AnimatedField';
+import { useTheme } from '@/components/ThemeProvider';
 import type { QuestionType, DownloadItem, CourseQuestion } from '@/lib/course-schema';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { LessonRenderer } from '@/components/lesson/LessonRenderer';
@@ -241,14 +242,8 @@ export function CourseTaker({
   const [hintsUsed, setHintsUsed] = useState<Set<string>>(new Set());
   const [hintVisible, setHintVisible] = useState(false);
 
-  // Feature 4: dark/light auto-match
-  const [systemDark, setSystemDark] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return true;
-  });
-
+  // Feature 4: 'auto' appearance mode follows the app theme the viewer selected.
+  const { theme: appTheme } = useTheme();
 
   // Lesson sheet
   const [lessonOpen, setLessonOpen] = useState(false);
@@ -476,7 +471,7 @@ export function CourseTaker({
     }
   }, [questionType]);
   const fontStyle = { fontFamily: fontOption.cssFamily };
-  const isDark = (config.mode ?? 'dark') === 'auto' ? systemDark : (config.mode ?? 'dark') !== 'light';
+  const isDark = (config.mode ?? 'dark') === 'auto' ? appTheme === 'dark' : (config.mode ?? 'dark') !== 'light';
   const cardBg = isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm';
   const textColor = isDark ? 'text-[#ACB8C5]' : 'text-[#111111]';
   const mutedColor = isDark ? 'text-[#A8B5C2]' : 'text-[#555555]';
@@ -498,14 +493,6 @@ export function CourseTaker({
     }
     return a;
   };
-
-  // Feature 4: listen to system dark mode changes
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
 
   // Initialize arrange order when question changes
   useEffect(() => {
@@ -2294,7 +2281,7 @@ export function CourseTaker({
     const alreadyAnswered = !!answersRef.current[currentQuestion.id];
     const previousCorrect = alreadyAnswered ? isAnswerCorrect(currentQuestion, answersRef.current[currentQuestion.id]) : false;
     const previousSolutionViewed = alreadyAnswered ? (() => { try { return !!JSON.parse(answersRef.current[currentQuestion.id])?.solutionViewed; } catch { return false; } })() : false;
-    const countsAsPassed = !!payload.passed && !payload.skipped && !payload.solutionViewed;
+    const countsAsPassed = !!payload.passed && !!payload.proof && !payload.skipped && !payload.solutionViewed;
     const answer = JSON.stringify({
       query: payload.query,
       passed: countsAsPassed,
@@ -2350,7 +2337,7 @@ export function CourseTaker({
     const alreadyAnswered = !!answersRef.current[currentQuestion.id];
     const previousCorrect = alreadyAnswered ? isAnswerCorrect(currentQuestion, answersRef.current[currentQuestion.id]) : false;
     const previousSolutionViewed = alreadyAnswered ? (() => { try { return !!JSON.parse(answersRef.current[currentQuestion.id])?.solutionViewed; } catch { return false; } })() : false;
-    const countsAsPassed = !!payload.passed && !payload.skipped && !payload.solutionViewed;
+    const countsAsPassed = !!payload.passed && !!payload.proof && !payload.skipped && !payload.solutionViewed;
     const answer = JSON.stringify({
       code: payload.code,
       output: payload.output,
