@@ -9,7 +9,7 @@ import { useTenant } from '@/components/TenantProvider';
 import { useTheme } from '@/components/ThemeProvider';
 import { resolveConfig, type SiteConfig } from '@/lib/site-templates';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
-import { ArrowRight, Check, LayoutDashboard, ChevronDown, ChevronLeft, ChevronRight, User, Settings, LogOut, BookOpen, Calendar, Briefcase, Award, TrendingUp, Users, Zap, BarChart3, GraduationCap, Play } from 'lucide-react';
+import { ArrowRight, Check, LayoutDashboard, ChevronDown, ChevronLeft, ChevronRight, User, Settings, LogOut, BookOpen, Calendar, Briefcase, Award, TrendingUp, Users, Zap, BarChart3, GraduationCap, Play, Brain, Megaphone, Banknote, Palette, Code2, Globe, HeartPulse } from 'lucide-react';
 import { HoverPreviewCard } from '@/components/student/shared';
 import { getToolIcon } from '@/lib/tool-icons';
 import { getFontById, loadGoogleFont } from '@/lib/fonts';
@@ -1034,6 +1034,27 @@ const LAND_TYPE_GRAD  = {
 } as const;
 const LAND_C = { card: 'white', text: '#1C1D1F', muted: '#6E7383', faint: '#9CA3AF', cardBorder: '#E8EBEF' };
 
+// Fallback icon for category rows without a tool icon: match by keyword, then by content type
+const CATEGORY_ICONS: Array<[RegExp, React.ElementType]> = [
+  [/data|analytic|statistic/i,                          BarChart3],
+  [/\bai\b|machine|intelligen/i,                        Brain],
+  [/market|sales|brand|growth/i,                        Megaphone],
+  [/financ|bank|account|invest/i,                       Banknote],
+  [/design|creativ|\bux\b|\bui\b/i,                     Palette],
+  [/cod|program|develop|software|engineer|web|cloud|tech/i, Code2],
+  [/health|medic/i,                                     HeartPulse],
+  [/\bhr\b|people|talent|leadership/i,                  Users],
+  [/language|communicat|global/i,                       Globe],
+  [/automat|productiv/i,                                Zap],
+  [/business|consult|strateg|manage/i,                  Briefcase],
+];
+
+function getCategoryIcon(title: string, type: 'course' | 've' | 'path'): React.ElementType {
+  const hit = CATEGORY_ICONS.find(([re]) => re.test(title));
+  if (hit) return hit[1];
+  return type === 've' ? Briefcase : type === 'path' ? TrendingUp : GraduationCap;
+}
+
 // --- Ad banner carousel ---
 type AdCard = { label: string; title: string; description: string; ctaText: string; ctaUrl: string; bgColor: string; bgImage: string; imageLayout?: string; };
 
@@ -1294,7 +1315,7 @@ function LandingMidAdBanner({ ads, hFont, bFont, isDark }: { ads: AdCard[]; hFon
   const cards = ads.filter(a => a.title);
   if (!cards.length) return null;
   return (
-    <div style={{ background: isDark ? '#0d1117' : 'white' }}>
+    <div style={{ background: isDark ? '#0d1117' : '#f4f7f9' }}>
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 md:px-10 py-8 md:py-10">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {cards.map((ad, i) => {
@@ -1464,7 +1485,7 @@ function LandingCarouselRow({ title, items, type, typeColor, user, hFont, bFont,
   };
   useEffect(() => () => cancelClose(), []);
 
-  const rowBg    = transparentBg ? 'transparent' : (isDark ? '#1E1F26' : '#F0F6FF');
+  const rowBg    = transparentBg ? 'transparent' : (isDark ? '#1E1F26' : 'white');
   const rowText  = isDark ? 'white' : LAND_C.text;
   const rowMuted = isDark ? 'rgba(255,255,255,0.65)' : LAND_C.muted;
   const rowBorder = isDark ? 'rgba(255,255,255,0.25)' : LAND_C.cardBorder;
@@ -1484,9 +1505,10 @@ function LandingCarouselRow({ title, items, type, typeColor, user, hFont, bFont,
         return !hideTitle ? (
           <div className="flex items-center justify-between gap-4 mb-0">
             <MReveal y={14} className="flex items-center gap-2.5 min-w-0">
-              {(() => { const icon = getToolIcon(title); return icon
-                ? <img src={icon} alt="" className="w-6 h-6 object-contain flex-shrink-0" />
-                : <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: isDark ? 'white' : typeColor }} />;
+              {(() => { const icon = getToolIcon(title);
+                if (icon) return <img src={icon} alt="" className="w-6 h-6 object-contain flex-shrink-0" />;
+                const Fallback = getCategoryIcon(title, type);
+                return <Fallback className="w-5 h-5 flex-shrink-0" strokeWidth={2.2} style={{ color: rowText }} />;
               })()}
               <h3 className="text-xl sm:text-2xl font-bold leading-tight truncate" style={{ color: rowText, fontFamily: hFont }}>{title}</h3>
             </MReveal>
@@ -1633,7 +1655,7 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
     <>
       {headingFontUrl && <link rel="stylesheet" href={headingFontUrl} />}
       {bodyFontUrl    && <link rel="stylesheet" href={bodyFontUrl} />}
-    <main className="landing-scope min-h-screen overflow-x-hidden antialiased" style={{ background: isPageDark ? '#0d1117' : 'white', fontFamily: bFont }}>
+    <main className="landing-scope min-h-screen overflow-x-hidden antialiased" style={{ background: isPageDark ? '#0d1117' : '#f4f7f9', fontFamily: bFont }}>
 
       <style>{`
         .land-shine-host { position: relative; }
@@ -1707,12 +1729,16 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
       {/* AD BANNER */}
       {hideAdBanner !== '1' && (
         adBannerFullWidth === '1' ? (
-          <div className="pt-16 md:pt-20">
+          <div>
+            <div className="h-16 md:h-20" style={{ background: isPageDark ? undefined : 'white' }} />
             <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} fullWidth isDark={isPageDark} />
           </div>
         ) : (
-          <div className="max-w-[1240px] mx-auto px-4 sm:px-6 md:px-10 pb-2 pt-20 md:pt-24">
-            <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} isDark={isPageDark} />
+          <div>
+            <div className="h-20 md:h-24" style={{ background: isPageDark ? undefined : 'white' }} />
+            <div className="max-w-[1240px] mx-auto px-4 sm:px-6 md:px-10 pb-2">
+              <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} isDark={isPageDark} />
+            </div>
           </div>
         )
       )}
