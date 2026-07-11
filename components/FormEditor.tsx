@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { safeEmbedUrl } from '@/lib/safe-embed-url';
+import { safeEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
 import { useTheme } from '@/components/ThemeProvider';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -9,7 +9,7 @@ import {
   X, MapPin, ArrowUpRight, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Sparkles,
   Building2, GripVertical, BookOpen, Pencil, Monitor, Smartphone, RotateCcw, ExternalLink, Video, Search,
   HelpCircle, CalendarDays, ClipboardList, Share2, CheckCircle2, Zap, Settings, Upload, Download, Link2, FileText,
-  Lock, LockOpen, Users, Music,
+  Lock, LockOpen, Users, Music, FileCode,
 } from 'lucide-react';
 import type { ThemeColor, ThemeMode } from '@/lib/theme-types';
 import type {
@@ -3386,7 +3386,7 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                     onChange={e => handleUpdateQuestion(q.id, { lesson: { ...q.lesson, videoUrl: e.target.value } })}
                                     className={`${inputCls} flex-1`}
                                     style={inputStyle}
-                                    placeholder="YouTube, Vimeo or Bunny URL..."
+                                    placeholder="YouTube, Vimeo, Bunny or Canva URL..."
                                   />
                                   <button
                                     type="button"
@@ -3397,13 +3397,30 @@ export default function FormEditor({ formId, contentType, onSaved }: FormEditorP
                                   >
                                     <Video className="w-3.5 h-3.5"/> Bunny
                                   </button>
+                                  {/* Interactive HTML embed: uploads to the public form-assets bucket; only
+                                      URLs of that shape pass safeEmbedUrl, and players render them sandboxed */}
+                                  <label className="cursor-pointer flex-shrink-0" title="Upload a self-contained HTML file with inline assets (max 10 MB)">
+                                    <input type="file" accept=".html,.htm,text/html" className="hidden" onChange={async e => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      e.target.value = '';
+                                      if (file.size > 10 * 1024 * 1024) { showToast(`HTML file is too large (${(file.size / 1048576).toFixed(1)} MB). Maximum is 10 MB.`); return; }
+                                      try {
+                                        const url = await uploadToStorage(file, 'lesson-html');
+                                        handleUpdateQuestion(q.id, { lesson: { ...q.lesson, videoUrl: url } });
+                                      } catch (err: any) { showToast(err?.message || 'HTML upload failed. Please try again.'); }
+                                    }} />
+                                    <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-opacity hover:opacity-70" style={{ background: FE.groupBg, color: FE.muted }}>
+                                      <FileCode className="w-3.5 h-3.5"/> HTML
+                                    </div>
+                                  </label>
                                 </div>
                                 {(() => {
                                   const vurl = q.lesson.videoUrl || '';
                                   const embedUrl = safeEmbedUrl(vurl);
                                   return embedUrl ? (
                                     <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${FE.cardBorder}` }}>
-                                      <iframe src={embedUrl} className="w-full aspect-video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                                      <iframe src={embedUrl} className={isHtmlEmbedUrl(embedUrl) ? 'w-full' : 'w-full aspect-video'} style={isHtmlEmbedUrl(embedUrl) ? { height: 480 } : undefined} sandbox={isHtmlEmbedUrl(embedUrl) ? 'allow-scripts allow-popups' : undefined} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
                                     </div>
                                   ) : null;
                                 })()}

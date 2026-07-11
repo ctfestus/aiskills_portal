@@ -2540,14 +2540,38 @@ CREATE POLICY "Public read form-assets"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'form-assets');
 
+-- Executable lesson-html namespace is instructor/admin-only (migration 137).
+-- Role check inlined -- function calls in storage policies can be unreliable.
 CREATE POLICY "Auth users upload form-assets"
   ON storage.objects FOR INSERT TO authenticated
-  WITH CHECK (bucket_id = 'form-assets');
+  WITH CHECK (
+    bucket_id = 'form-assets'
+    AND (
+      name NOT LIKE 'lesson-html/%'
+      OR EXISTS (
+        SELECT 1 FROM public.students
+        WHERE id = (SELECT auth.uid())
+          AND role IN ('admin', 'instructor')
+      )
+    )
+  );
 
 -- Only file owner can update/delete (migration 008 security fix)
 CREATE POLICY "Auth users update form-assets"
   ON storage.objects FOR UPDATE TO authenticated
-  USING (bucket_id = 'form-assets' AND owner = (SELECT auth.uid()));
+  USING (bucket_id = 'form-assets' AND owner = (SELECT auth.uid()))
+  WITH CHECK (
+    bucket_id = 'form-assets'
+    AND owner = (SELECT auth.uid())
+    AND (
+      name NOT LIKE 'lesson-html/%'
+      OR EXISTS (
+        SELECT 1 FROM public.students
+        WHERE id = (SELECT auth.uid())
+          AND role IN ('admin', 'instructor')
+      )
+    )
+  );
 
 CREATE POLICY "Auth users delete form-assets"
   ON storage.objects FOR DELETE TO authenticated

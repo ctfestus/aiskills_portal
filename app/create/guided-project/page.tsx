@@ -3,14 +3,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { uploadToCloudinary, uploadCoverImage } from '@/lib/uploadToCloudinary';
+import { uploadToStorage } from '@/lib/uploadToStorage';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import { ImageLibrary } from '@/components/ImageLibrary';
 import type { LessonDoc } from '@/lib/lesson-doc';
+import { safeEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   ArrowLeft, Sparkles, Loader2, Save, ChevronDown, ChevronRight, ChevronLeft,
   Plus, Trash2, X, Check, RefreshCw, Upload, Pencil, Star, Clock, Download,
-  Link as LinkIcon, FileText, Database, PenLine, Table, GripVertical, Video, Search, Eye, Images, Paperclip, Mail,
+  Link as LinkIcon, FileText, FileCode, Database, PenLine, Table, GripVertical, Video, Search, Eye, Images, Paperclip, Mail,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -1624,7 +1626,33 @@ function VirtualExperienceCreatePageInner() {
                                           style={{ background: '#FF6B35', color: 'white' }}>
                                           <Video className="w-3.5 h-3.5"/> Bunny
                                         </button>
+                                        {/* Interactive HTML embed: uploads to the public form-assets bucket; the
+                                            players render it sandboxed at full height (same treatment as Canva) */}
+                                        <label className="cursor-pointer flex-shrink-0" title="Upload a self-contained HTML file with inline assets (max 10 MB)">
+                                          <input type="file" accept=".html,.htm,text/html" className="hidden" onChange={async e => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            e.target.value = '';
+                                            if (file.size > 10 * 1024 * 1024) { alert(`HTML file is too large (${(file.size / 1048576).toFixed(1)} MB). Maximum is 10 MB.`); return; }
+                                            try {
+                                              const url = await uploadToStorage(file, 'lesson-html');
+                                              updateLesson(mod.id, les.id, { videoUrl: url });
+                                            } catch (err: any) { alert('Upload failed: ' + (err?.message || 'Please try again.')); }
+                                          }} />
+                                          <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium flex-shrink-0"
+                                            style={{ background: C.pill, color: C.muted }}>
+                                            <FileCode className="w-3.5 h-3.5"/> HTML
+                                          </div>
+                                        </label>
                                       </div>
+                                      {(() => {
+                                        const embedUrl = safeEmbedUrl(les.videoUrl || '');
+                                        return embedUrl ? (
+                                          <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.cardBorder}` }}>
+                                            <iframe src={embedUrl} className={isHtmlEmbedUrl(embedUrl) ? 'w-full' : 'w-full aspect-video'} style={isHtmlEmbedUrl(embedUrl) ? { height: 480 } : undefined} sandbox={isHtmlEmbedUrl(embedUrl) ? 'allow-scripts allow-popups' : undefined} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                                          </div>
+                                        ) : null;
+                                      })()}
 
                                       {/* Tasks */}
                                       <div className="space-y-2">

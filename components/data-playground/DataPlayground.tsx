@@ -18,7 +18,7 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { tags as highlightTags } from '@lezer/highlight';
 import { useTenant } from '@/components/TenantProvider';
 import { sanitizeRichText } from '@/lib/sanitize';
-import { safeEmbedUrl } from '@/lib/safe-embed-url';
+import { safeEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
 import {
   executeQuery,
   initSQLRuntimeFromRows,
@@ -1298,9 +1298,10 @@ function DatasetDetailPane({
           )}
         </aside>
 
-        {/* Main content */}
+        {/* Main content. Interactive HTML embeds (dashboard prototypes) get a wider
+            column than text briefs so their side-by-side layouts do not collapse. */}
         <main style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto' }}>
-          <div style={{ maxWidth: 896, margin: '0 auto', padding: 'clamp(12px, 2.5vw, 24px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ maxWidth: activeSection?.videoUrl && isHtmlEmbedUrl(activeSection.videoUrl) ? 1280 : 896, margin: '0 auto', padding: 'clamp(12px, 2.5vw, 24px)', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
             {/* Active phase (primary content, like a VE lesson) */}
             {activeSection ? (
@@ -1327,11 +1328,13 @@ function DatasetDetailPane({
                 {(() => {
                   const embed = activeSection.videoUrl ? safeEmbedUrl(activeSection.videoUrl) : null;
                   if (!embed) return null;
-                  const isCanva = embed.includes('canva.com');
+                  const isHtml = isHtmlEmbedUrl(embed);
+                  const isTall = isHtml || embed.includes('canva.com');
                   return (
                     <div style={{ padding: '18px 24px' }}>
-                      <div style={{ borderRadius: 12, overflow: 'hidden', ...(isCanva ? { height: '88vh' } : { aspectRatio: '16 / 9' }) }}>
+                      <div style={{ borderRadius: 12, overflow: 'hidden', ...(isTall ? { height: '88vh' } : { aspectRatio: '16 / 9' }) }}>
                         <iframe src={embed} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                          sandbox={isHtml ? 'allow-scripts allow-popups' : undefined}
                           allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
                       </div>
                     </div>

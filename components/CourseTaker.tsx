@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { safeEmbedUrl as getVideoEmbedUrl } from '@/lib/safe-embed-url';
+import { safeEmbedUrl as getVideoEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
 import { DARK_C, LIGHT_C } from '@/lib/theme';
 import { resolveCoverUrl } from '@/lib/cloudinary-url';
 import Link from 'next/link';
@@ -3368,10 +3368,11 @@ export function CourseTaker({
                         {/* Video */}
                         {embedUrl && (
                           <div className="px-3 sm:px-8 pt-4 sm:pt-7 pb-2">
-                            <div className="rounded-lg overflow-hidden" style={embedUrl.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9' }}>
+                            <div className="rounded-lg overflow-hidden" style={embedUrl.includes('canva.com') || isHtmlEmbedUrl(embedUrl) ? { height: '80vh' } : { aspectRatio: '16/9' }}>
                               <iframe
                                 src={embedUrl}
                                 className="w-full h-full border-0"
+                                sandbox={isHtmlEmbedUrl(embedUrl) ? 'allow-scripts allow-popups' : undefined}
                                 allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
                                 allowFullScreen
                               />
@@ -3589,10 +3590,11 @@ export function CourseTaker({
                   {REVIEW_TYPES.includes(questionType) && currentQuestion.lesson && (currentQuestion.lesson.doc || currentQuestion.lesson.body || currentQuestion.lesson.videoUrl || currentQuestion.lesson.imageUrl || currentQuestion.lesson.pdfUrl || currentQuestion.lesson.audioUrl) && (
                     <>
                       {currentQuestion.lesson.videoUrl && getVideoEmbedUrl(currentQuestion.lesson.videoUrl) && (
-                        <div className="mb-4 rounded-lg overflow-hidden" style={getVideoEmbedUrl(currentQuestion.lesson.videoUrl)!.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9' }}>
+                        <div className="mb-4 rounded-lg overflow-hidden" style={getVideoEmbedUrl(currentQuestion.lesson.videoUrl)!.includes('canva.com') || isHtmlEmbedUrl(currentQuestion.lesson.videoUrl) ? { height: '80vh' } : { aspectRatio: '16/9' }}>
                           <iframe
                             src={getVideoEmbedUrl(currentQuestion.lesson.videoUrl)!}
                             className="w-full h-full border-0"
+                            sandbox={isHtmlEmbedUrl(currentQuestion.lesson.videoUrl) ? 'allow-scripts allow-popups' : undefined}
                             allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
                             allowFullScreen
                           />
@@ -4020,10 +4022,11 @@ export function CourseTaker({
               <div className="overflow-y-auto flex-1 overscroll-contain">
                 <div className="max-w-2xl mx-auto px-5 sm:px-8 pt-2 pb-5 sm:pt-3 sm:pb-7 space-y-5 sm:space-y-6">
                   {currentQuestion.lesson.videoUrl && getVideoEmbedUrl(currentQuestion.lesson.videoUrl) && (
-                    <div className="rounded-xl overflow-hidden shadow-md" style={{ aspectRatio: '16/9' }}>
+                    <div className="rounded-xl overflow-hidden shadow-md" style={isHtmlEmbedUrl(currentQuestion.lesson.videoUrl) ? { height: '80vh' } : { aspectRatio: '16/9' }}>
                       <iframe
                         src={getVideoEmbedUrl(currentQuestion.lesson.videoUrl)!}
                         className="w-full h-full border-0"
+                        sandbox={isHtmlEmbedUrl(currentQuestion.lesson.videoUrl) ? 'allow-scripts allow-popups' : undefined}
                         allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
                         allowFullScreen
                       />

@@ -3,8 +3,10 @@
 // Extracted verbatim from app/dashboard/page.tsx -- no behavior or styling changes.
 
 import { useState, useEffect, useRef, isValidElement, cloneElement } from 'react';
-import { AlertTriangle, ArrowLeft, ChevronDown, ChevronRight, Database, Download, Edit2, Eye, FileText, GripVertical, Loader2, Plus, Save, Search, Sparkles, Trash2, Upload, Video, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ChevronDown, ChevronRight, Database, Download, Edit2, Eye, FileCode, FileText, GripVertical, Loader2, Plus, Save, Search, Sparkles, Trash2, Upload, Video, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { uploadToStorage } from '@/lib/uploadToStorage';
+import { safeEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
 import { downloadJSON } from '@/lib/dashboard-export';
 import { PexelsImagePicker } from '@/components/PexelsImagePicker';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -669,6 +671,22 @@ export function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                         placeholder="Embed link (optional)"
                         style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 13, color: C.text, padding: '9px 0', fontFamily: 'inherit', minWidth: 0 }}
                       />
+                      {/* Interactive HTML embed: uploads to the public form-assets bucket; the player
+                          renders it sandboxed at full height (same treatment as Canva) */}
+                      <label title="Upload a self-contained HTML file with inline assets (max 10 MB)" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                        <input type="file" accept=".html,.htm,text/html" style={{ display: 'none' }} onChange={async e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          e.target.value = '';
+                          if (file.size > 10 * 1024 * 1024) { setError(`HTML file is too large (${(file.size / 1048576).toFixed(1)} MB). Maximum is 10 MB.`); return; }
+                          setError('');
+                          try {
+                            const url = await uploadToStorage(file, 'lesson-html');
+                            updateAnalystSection(sectionId, { videoUrl: url });
+                          } catch (err: any) { setError(err?.message || 'HTML upload failed. Please try again.'); }
+                        }} />
+                        <FileCode size={15} style={{ color: C.faint }} />
+                      </label>
                     </div>
                     <select
                       value={section.difficulty ?? ''}
@@ -687,6 +705,19 @@ export function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                       style={{ ...inputStyle, background: C.card, fontSize: 13 }}
                     />
                   </div>
+                  {(() => {
+                    const embedUrl = safeEmbedUrl(section.videoUrl ?? '');
+                    if (!embedUrl) return null;
+                    const isHtml = isHtmlEmbedUrl(embedUrl);
+                    return (
+                      <div style={{ borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.cardBorder}` }}>
+                        <iframe src={embedUrl}
+                          style={{ width: '100%', border: 'none', display: 'block', ...(isHtml ? { height: 480 } : { aspectRatio: '16 / 9' }) }}
+                          sandbox={isHtml ? 'allow-scripts allow-popups' : undefined}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                      </div>
+                    );
+                  })()}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {section.tasks.map((task, taskIndex) => {
                       const taskId = task.id || `task-${sectionIndex + 1}-${taskIndex + 1}`;

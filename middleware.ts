@@ -80,7 +80,12 @@ export async function middleware(req: NextRequest) {
 
   try { await supabase.auth.getUser(); } catch { /* session refresh failed -- continue */ }
 
-  res.headers.set('Content-Security-Policy', nonce ? csp : '');
+  // The HTML-embed proxy sets its own CSP (sandbox) on instructor-uploaded
+  // pages; the app CSP's nonce-based script-src would block their inline
+  // scripts, and two CSP headers enforce the intersection of both.
+  if (req.nextUrl.pathname !== '/api/html-embed') {
+    res.headers.set('Content-Security-Policy', nonce ? csp : '');
+  }
   return res;
 }
 
