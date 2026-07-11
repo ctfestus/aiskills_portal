@@ -115,6 +115,17 @@ export default function CertificationTaker({
   const [switchPrompt, setSwitchPrompt] = useState<{ title: string } | null>(null);
   const [warning, setWarning] = useState('');
 
+  // Mobile layout switch. The component is styled inline, so responsive tweaks use this flag
+  // instead of CSS breakpoints (640px matches Tailwind's sm).
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
   const answersRef = useRef<Record<string, string>>({});
   const proctorRef = useRef<Proctor>({ hidden: 0, blur: 0 });
   const indexRef = useRef(0);
@@ -325,11 +336,14 @@ export default function CertificationTaker({
   useEffect(() => {
     if (phase !== 'exam' && phase !== 'review') return;
     const measure = () => {
-      const r = barRef.current?.getBoundingClientRect();
       // Use clientWidth (excludes the vertical scrollbar) so the right edge lines up with the bar,
       // which as a fixed element is laid out against the scrollbar-excluded viewport.
+      const viewportWidth = document.documentElement.clientWidth;
+      // On phones the bar is squeezed between the exit/timer/quit controls; aligning content to it
+      // would leave a sliver of usable width. Use a plain fixed gutter instead.
+      if (viewportWidth <= 640) { setContentPad({ left: 20, right: 20 }); return; }
+      const r = barRef.current?.getBoundingClientRect();
       if (r) {
-        const viewportWidth = document.documentElement.clientWidth;
         const contentWidth = Math.min(r.width, 1000);
         const left = r.left + (r.width - contentWidth) / 2;
         setContentPad({ left: Math.round(left), right: Math.round(viewportWidth - left - contentWidth) });
@@ -708,11 +722,11 @@ export default function CertificationTaker({
           }
         `}</style>
         {/* Top bar */}
-        <div style={{ position: 'sticky', top: 0, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 24px', background: ov.bg }}>
-          {logo ? <img src={logo} alt="" style={{ height: 26, objectFit: 'contain' }} /> : <span style={{ fontWeight: 800, fontSize: 15 }}>{title}</span>}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ position: 'sticky', top: 0, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: isMobile ? '12px 16px' : '14px 24px', background: ov.bg }}>
+          {logo ? <img src={logo} alt="" style={{ height: 26, maxWidth: '40vw', objectFit: 'contain' }} /> : <span style={{ fontWeight: 800, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
             <button onClick={onExit} style={{ color: ov.muted, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}><X className="w-4 h-4" /> Exit</button>
-            <button onClick={startExam} disabled={starting || retakeBlocked} className="cert-cta" style={{ ...ctaPrimary, padding: '9px 18px', fontSize: 13.5, ...(retakeBlocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{retakeBlocked ? 'Retake unavailable' : ctaLabel}</button>
+            <button onClick={startExam} disabled={starting || retakeBlocked} className="cert-cta" style={{ ...ctaPrimary, padding: '9px 18px', fontSize: 13.5, whiteSpace: 'nowrap', ...(retakeBlocked ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }}>{starting && <Loader2 className="w-4 h-4 animate-spin" />}{retakeBlocked ? 'Retake unavailable' : ctaLabel}</button>
           </div>
         </div>
 
@@ -735,7 +749,7 @@ export default function CertificationTaker({
         {/* Hero band - full width, brand primary color. The image is bottom-anchored and flush with the band's bottom edge; the text is vertically centered. No section vertical padding -- the text column supplies its own, so the image can reach the very bottom. */}
         <div style={{ background: heroBg, overflow: 'hidden' }}>
           <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} style={{ maxWidth: 1040, margin: '0 auto', display: 'flex', flexWrap: 'wrap', gap: 40, alignItems: 'stretch', padding: '0 24px' }}>
-            <div style={{ flex: '1 1 360px', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '56px 0' }}>
+            <div style={{ flex: '1 1 360px', minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: isMobile ? '40px 0' : '56px 0' }}>
               <div style={heroEyebrow}><Award style={{ width: 15, height: 15 }} /> Certification</div>
               <h1 style={{ fontSize: 'clamp(32px, 4.4vw, 46px)', fontWeight: 800, lineHeight: 1.07, marginBottom: 16, letterSpacing: '-0.02em', color: '#ffffff' }}>{title}</h1>
               {config?.description && <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.9)', lineHeight: 1.6, marginBottom: 26, maxWidth: 560 }}>{config.description}</p>}
@@ -756,9 +770,9 @@ export default function CertificationTaker({
           </motion.section>
         </div>
 
-        <div style={{ maxWidth: 1040, margin: '0 auto', padding: '36px 24px 72px' }}>
-          {/* Facts strip */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 14 }}>
+        <div style={{ maxWidth: 1040, margin: '0 auto', padding: isMobile ? '28px 20px 56px' : '36px 24px 72px' }}>
+          {/* Facts strip -- the 140px min keeps two columns on phones instead of a single tall stack */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14 }}>
             {facts.map((f, i) => (
               <div key={i} className="cert-card" style={{ ...card, padding: 18 }}>
                 <f.icon className="w-5 h-5" style={{ color: brandColor, marginBottom: 10 }} />
@@ -851,7 +865,7 @@ export default function CertificationTaker({
           )}
 
           {/* Closing CTA - full brand colour band, using the exact hero background. No cert-reveal here: its opacity fade would make the brand band look semi-transparent (faint) mid-scroll. */}
-          <div style={{ marginTop: 48, borderRadius: 24, padding: '56px 32px', textAlign: 'center', overflow: 'hidden', background: heroBg }}>
+          <div style={{ marginTop: 48, borderRadius: 24, padding: isMobile ? '40px 20px' : '56px 32px', textAlign: 'center', overflow: 'hidden', background: heroBg }}>
             <div style={{ width: 60, height: 60, borderRadius: 18, background: 'rgba(255,255,255,0.16)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
               <Award style={{ width: 30, height: 30, color: '#ffffff' }} />
             </div>
@@ -881,13 +895,13 @@ export default function CertificationTaker({
       {protectStyle}
 
       {/* Top bar */}
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 56, zIndex: 60, display: 'flex', alignItems: 'center', gap: 28, padding: '0 56px', background: t.bg }}>
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 56, zIndex: 60, display: 'flex', alignItems: 'center', gap: isMobile ? 14 : 28, padding: isMobile ? '0 16px' : '0 56px', background: t.bg }}>
         <button onClick={() => { if (isPractice) { exitPractice(); } else if (!isPreview && timeLimitMin > 0) { setShowExit(true); } else { onExit(); } }} title={isPractice ? 'Exit practice' : 'Exit (progress saved, resume later)'} style={{ color: t.muted }}><X className="w-5 h-5" /></button>
         <div ref={barRef} style={{ flex: '1 1 0%', width: '100%', maxWidth: 1200, minWidth: 0, margin: '0 auto', height: 9, borderRadius: 999, background: t.track }}>
           <div style={{ height: '100%', width: `${progress}%`, minWidth: progress > 0 ? 9 : 0, background: accentColor, borderRadius: 999, transition: 'width 240ms ease' }} />
         </div>
         {timeLeft !== null && (
-          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, width: 70, fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: timeWarn ? '#f43f5e' : t.muted }}>
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, minWidth: isMobile ? 56 : 70, flexShrink: 0, fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: timeWarn ? '#f43f5e' : t.muted }}>
             <Clock className="w-4 h-4" /> {fmt(timeLeft)}
           </span>
         )}
@@ -928,7 +942,7 @@ export default function CertificationTaker({
       <AnimatePresence>
         {warning && (
           <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-            style={{ position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)', zIndex: 70, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b', fontSize: 12.5, fontWeight: 600 }}>
+            style={{ position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)', zIndex: 70, maxWidth: 'calc(100vw - 24px)', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, background: 'rgba(245,158,11,0.14)', border: '1px solid rgba(245,158,11,0.3)', color: '#f59e0b', fontSize: 12.5, fontWeight: 600 }}>
             <ShieldAlert className="w-4 h-4" /> {warning}
           </motion.div>
         )}
@@ -995,7 +1009,7 @@ export default function CertificationTaker({
 
       {/* Continue (non-exercise only; exercises navigate via their own Next) */}
       {phase === 'exam' && currentQuestion && !isExerciseType(qType) && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: 88, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', background: `linear-gradient(to top, ${t.bg}, transparent)` }}>
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, height: 88, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: isMobile ? '0 16px' : '0 28px', background: `linear-gradient(to top, ${t.bg}, transparent)` }}>
           {returnToReview
             ? <button onClick={() => { setReturnToReview(false); setPhase('review'); }} style={{ color: t.muted, fontSize: 13, fontWeight: 600, background: 'transparent' }}>Back to review</button>
             : <span />}
@@ -1014,7 +1028,7 @@ export default function CertificationTaker({
 
       {/* Final review / summary page -- reached after the last question; the bar is full here. */}
       {phase === 'review' && (
-        <div style={{ maxWidth: 720, margin: '0 auto', padding: '80px 24px 64px' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: isMobile ? '76px 16px 56px' : '80px 24px 64px' }}>
           {/* Animated checkmark with a burst of star sparkles */}
           <div style={{ position: 'relative', width: 132, height: 132, margin: '0 auto 16px' }}>
             <motion.div
@@ -1043,13 +1057,15 @@ export default function CertificationTaker({
           <p style={{ textAlign: 'center', fontSize: 14.5, color: t.muted, marginBottom: 28 }}>Answered questions are final. You can still answer the ones you skipped, then submit.</p>
 
           {/* Summary */}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 44, marginBottom: 30 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: isMobile ? 24 : 44, marginBottom: 30 }}>
             <Stat t={t} Icon={ListChecks} label="Questions" value={total} color={t.muted} />
             <Stat t={t} Icon={CheckCircle2} label="Answered" value={answeredCount} color={accentColor} />
             <Stat t={t} Icon={Circle} label="Not answered" value={total - answeredCount} color={total - answeredCount > 0 ? '#f43f5e' : t.muted} />
           </div>
 
-          <div style={{ display: 'grid', gap: 8 }}>
+          {/* minmax(0,1fr) pins the track to the container; a plain auto track sizes to the widest
+              row's max-content and overflows on long question text (worst on phones). */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 8 }}>
             {questions.map((qq, i) => {
               const ok = isExerciseType((qq as any).type) ? exercisePassed(answers[qq.id]) : !!answers[qq.id];
               // Unanswered questions stay editable while time remains; answered ones are final.
@@ -1163,7 +1179,7 @@ function QuestionView({ q, qType, value, onChange, t, accentColor, sharedPlaygro
           <pre style={{ background: '#0c0d12', border: `1px solid ${t.border}`, borderRadius: 12, padding: 16, width: '100%', margin: '0 0 22px', overflowX: 'auto', fontSize: 13, lineHeight: 1.6, color: '#e4e4e7' }}><code>{q.codeSnippet}</code></pre>
         )}
         {multi && <p style={{ fontSize: 13, color: t.muted, margin: '0 0 14px' }}>Select all that apply.</p>}
-        <div style={{ display: 'grid', gap: 14, width: '100%' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 14, width: '100%' }}>
           {options.map((opt, i) => {
             const selected = isSel(opt);
             const hover = hovered === i && !selected;
@@ -1240,7 +1256,7 @@ function QuestionView({ q, qType, value, onChange, t, accentColor, sharedPlaygro
     body = (
       <>
         <p style={{ textAlign: 'center', fontSize: 13, color: t.muted, marginBottom: 18 }}>Click the options in the correct order.</p>
-        <div style={{ display: 'grid', gap: 12, width: '100%' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 12, width: '100%' }}>
           {options.map((opt, i) => {
             const pos = order.indexOf(opt);
             const selected = pos >= 0;
