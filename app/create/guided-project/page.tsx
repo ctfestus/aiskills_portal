@@ -1628,7 +1628,7 @@ function VirtualExperienceCreatePageInner() {
                                         </button>
                                         {/* Interactive HTML embed: uploads to the public form-assets bucket; the
                                             players render it sandboxed at full height (same treatment as Canva) */}
-                                        <label className="cursor-pointer flex-shrink-0" title="Upload an interactive HTML page">
+                                        <label className="cursor-pointer flex-shrink-0" title="Upload a self-contained HTML file with inline assets (max 10 MB)">
                                           <input type="file" accept=".html,.htm,text/html" className="hidden" onChange={async e => {
                                             const file = e.target.files?.[0];
                                             if (!file) return;

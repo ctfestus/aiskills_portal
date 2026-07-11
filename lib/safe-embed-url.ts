@@ -29,14 +29,17 @@ export function isStorageHtmlEmbedUrl(raw: string): boolean {
   let parsed: URL;
   try { parsed = new URL(raw); } catch { return false; }
   if (parsed.protocol !== 'https:') return false;
+  if (parsed.username || parsed.password) return false;
 
-  let storageHost: string;
-  try { storageHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || '').hostname; } catch { return false; }
-  if (!storageHost || parsed.hostname !== storageHost) return false;
+  let storageOrigin: string;
+  try { storageOrigin = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || '').origin; } catch { return false; }
+  if (!storageOrigin || parsed.origin !== storageOrigin) return false;
 
-  const path = parsed.pathname.toLowerCase();
-  return path.startsWith('/storage/v1/object/public/form-assets/') &&
-    (path.endsWith('.html') || path.endsWith('.htm'));
+  // Keep the folder check case-sensitive because Supabase object names are
+  // case-sensitive and the storage policy protects this exact prefix.
+  const path = parsed.pathname;
+  return path.startsWith('/storage/v1/object/public/form-assets/lesson-html/') &&
+    /\.html?$/i.test(path);
 }
 
 /**

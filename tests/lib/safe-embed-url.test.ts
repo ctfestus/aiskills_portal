@@ -67,8 +67,8 @@ describe('isStorageHtmlEmbedUrl', () => {
   });
 
   it('accepts .htm and uppercase extensions, and ignores query strings', () => {
-    expect(isStorageHtmlEmbedUrl(`${PROJECT_URL}/storage/v1/object/public/form-assets/a.htm`)).toBe(true);
-    expect(isStorageHtmlEmbedUrl(`${PROJECT_URL}/storage/v1/object/public/form-assets/a.HTML`)).toBe(true);
+    expect(isStorageHtmlEmbedUrl(`${PROJECT_URL}/storage/v1/object/public/form-assets/lesson-html/a.htm`)).toBe(true);
+    expect(isStorageHtmlEmbedUrl(`${PROJECT_URL}/storage/v1/object/public/form-assets/lesson-html/a.HTML`)).toBe(true);
     expect(isStorageHtmlEmbedUrl(`${HTML_URL}?download=false`)).toBe(true);
   });
 
@@ -81,9 +81,17 @@ describe('isStorageHtmlEmbedUrl', () => {
   it('rejects non-https, other buckets, non-public paths, and non-html files', () => {
     expect(isStorageHtmlEmbedUrl(HTML_URL.replace('https://', 'http://'))).toBe(false);
     expect(isStorageHtmlEmbedUrl(`${PROJECT_URL}/storage/v1/object/public/datasets/a.html`)).toBe(false);
+    expect(isStorageHtmlEmbedUrl(`${PROJECT_URL}/storage/v1/object/public/form-assets/a.html`)).toBe(false);
+    expect(isStorageHtmlEmbedUrl(`${PROJECT_URL}/storage/v1/object/public/form-assets/other/a.html`)).toBe(false);
+    expect(isStorageHtmlEmbedUrl(`${PROJECT_URL}/storage/v1/object/public/form-assets/LESSON-HTML/a.html`)).toBe(false);
     expect(isStorageHtmlEmbedUrl(`${PROJECT_URL}/storage/v1/object/sign/form-assets/a.html`)).toBe(false);
     expect(isStorageHtmlEmbedUrl(`${PROJECT_URL}/storage/v1/object/public/form-assets/a.pdf`)).toBe(false);
     expect(isStorageHtmlEmbedUrl(`${PROJECT_URL}/storage/v1/object/public/form-assets/a.html.txt`)).toBe(false);
+  });
+
+  it('rejects alternate ports and URLs containing credentials', () => {
+    expect(isStorageHtmlEmbedUrl(HTML_URL.replace('.co/', '.co:444/'))).toBe(false);
+    expect(isStorageHtmlEmbedUrl(HTML_URL.replace('https://', 'https://user:pass@'))).toBe(false);
   });
 
   it('fails closed when the URL is garbage or the env var is unset', () => {

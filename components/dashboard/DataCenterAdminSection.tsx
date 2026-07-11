@@ -673,7 +673,7 @@ export function DataCenterAdminSection({ C }: { C: typeof LIGHT_C }) {
                       />
                       {/* Interactive HTML embed: uploads to the public form-assets bucket; the player
                           renders it sandboxed at full height (same treatment as Canva) */}
-                      <label title="Upload an interactive HTML page" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                      <label title="Upload a self-contained HTML file with inline assets (max 10 MB)" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                         <input type="file" accept=".html,.htm,text/html" style={{ display: 'none' }} onChange={async e => {
                           const file = e.target.files?.[0];
                           if (!file) return;

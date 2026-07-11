@@ -5,6 +5,40 @@ import { isStorageHtmlEmbedUrl } from '@/lib/safe-embed-url';
 const MAX_BYTES = 10 * 1024 * 1024;
 const TIMEOUT_MS = 15_000;
 
+async function readBodyWithLimit(response: Response): Promise<ArrayBuffer | null> {
+  const reader = response.body?.getReader();
+  if (!reader) return new ArrayBuffer(0);
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      total += value.byteLength;
+      if (total > MAX_BYTES) {
+        await reader.cancel('HTML embed exceeds 10 MB');
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new ArrayBuffer(total);
+  const view = new Uint8Array(body);
+  let offset = 0;
+  for (const chunk of chunks) {
+    view.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body;
+}
+
 /**
  * Re-serves instructor-uploaded .html files from the public form-assets bucket
  * as renderable pages. Supabase intentionally serves HTML as plain text on the
@@ -34,12 +68,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: `Upstream returned ${upstream.status}` }, { status: 502 });
     }
 
-    const contentLength = upstream.headers.get('content-length');
-    if (contentLength && parseInt(contentLength, 10) > MAX_BYTES) {
+    const contentLength = Number(upstream.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_BYTES) {
+      await upstream.body?.cancel('HTML embed exceeds 10 MB');
       return NextResponse.json({ error: 'File too large (max 10 MB)' }, { status: 413 });
     }
-    const body = await upstream.arrayBuffer();
-    if (body.byteLength > MAX_BYTES) {
+    const body = await readBodyWithLimit(upstream);
+    if (!body) {
       return NextResponse.json({ error: 'File too large (max 10 MB)' }, { status: 413 });
     }
 
