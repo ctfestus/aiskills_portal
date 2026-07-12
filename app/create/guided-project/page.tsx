@@ -1620,7 +1620,7 @@ function VirtualExperienceCreatePageInner() {
                       return (
                       <SortableVEShell key={mod.id} id={mod.id}>
                         {({ dragHandle: moduleDragHandle }) => (
-                        <div className="rounded-2xl" style={{ background: C.pill }}>
+                        <div className="rounded-2xl group" style={{ background: C.pill }}>
 
                           {/* MODULE HEADER */}
                           <div className="flex items-center gap-2 px-4 pt-3.5 pb-2.5">
