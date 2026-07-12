@@ -890,7 +890,7 @@ export default function PublicFormPage() {
                   </div>
                   <span style={{ fontSize: 10, padding: '3px 9px', borderRadius: 6, background: `${indColor}15`, color: indColor, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', flexShrink: 0 }}>Your Brief</span>
                 </div>
-                <div style={{ padding: '20px 24px', fontSize: 14.5, lineHeight: 1.6, color: gp.body }}
+                <div className="rich-content" style={{ padding: '20px 24px', fontSize: 14.5, lineHeight: 1.6, color: gp.body }}
                   dangerouslySetInnerHTML={{ __html: sanitizeRichText(config.background) || '' }} />
               </div>
             )}
