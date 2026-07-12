@@ -178,6 +178,7 @@ interface ProjectConfig {
   managerName?: string;
   managerTitle?: string;
   badgeImageUrl?: string | null;
+  dataset?: { filename: string; description: string; csvContent?: string; url?: string };
 }
 
 const INDUSTRIES = [
@@ -338,6 +339,7 @@ function VirtualExperienceCreatePageInner() {
   // Dataset state (shared across all modes)
   const [datasetCsv,      setDatasetCsv]      = useState('');
   const [datasetFilename, setDatasetFilename]  = useState('');
+  const [datasetDescription, setDatasetDescription] = useState('');
   const [datasetUrl,      setDatasetUrl]       = useState('');
   const [datasetInputTab, setDatasetInputTab]  = useState<'upload'|'link'>('upload');
   const [uploadingDataset, setUploadingDataset] = useState(false);
@@ -431,6 +433,7 @@ function VirtualExperienceCreatePageInner() {
           setIsShortCourse(!!(ve as any).is_short_course);
           if (cfg.dataset?.url) setDatasetUrl(cfg.dataset.url);
           if (cfg.dataset?.filename) setDatasetFilename(cfg.dataset.filename);
+          if (cfg.dataset?.description) setDatasetDescription(cfg.dataset.description);
           setConfig(cfg as ProjectConfig);
           setStep(2);
           setExpandedModules(new Set((cfg.modules || []).map((m: Module) => m.id)));
@@ -658,7 +661,7 @@ function VirtualExperienceCreatePageInner() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
-      // Merge instructor-provided URL into dataset (whether AI-generated or instructor-provided)
+      // Merge instructor-provided URL/description into dataset (whether AI-generated or instructor-provided)
       if (json.config) {
         if (datasetUrl.trim()) {
           json.config.dataset = { ...(json.config.dataset || {}), url: datasetUrl.trim() };
@@ -666,6 +669,10 @@ function VirtualExperienceCreatePageInner() {
         // If only a URL was given with no CSV, create a minimal dataset entry
         if (!datasetCsv.trim() && datasetUrl.trim() && !json.config.dataset) {
           json.config.dataset = { filename: '', description: '', url: datasetUrl.trim() };
+        }
+        // Instructor-provided description takes precedence over the AI's own
+        if (datasetDescription.trim() && json.config.dataset) {
+          json.config.dataset = { ...json.config.dataset, description: datasetDescription.trim() };
         }
       }
       setConfig(attachLessonDocs(json.config));
@@ -709,9 +716,9 @@ function VirtualExperienceCreatePageInner() {
   const handleManual = () => {
     const ind = INDUSTRIES.find(i => i.id === industry) || INDUSTRIES[0];
     const dataset = datasetCsv.trim()
-      ? { filename: datasetFilename || 'dataset.csv', description: '', csvContent: datasetCsv, url: datasetUrl.trim() || undefined }
+      ? { filename: datasetFilename || 'dataset.csv', description: datasetDescription.trim(), csvContent: datasetCsv, url: datasetUrl.trim() || undefined }
       : datasetUrl.trim()
-        ? { filename: '', description: '', url: datasetUrl.trim() }
+        ? { filename: '', description: datasetDescription.trim(), url: datasetUrl.trim() }
         : undefined;
     const blankConfig: any = {
       isVirtualExperience: true,
@@ -1283,6 +1290,19 @@ function VirtualExperienceCreatePageInner() {
                         </p>
                       </div>
                     )}
+
+                    {(datasetCsv.trim() || datasetUrl.trim()) && (
+                      <div className="space-y-1">
+                        <label className="text-[12px] font-medium" style={{ color: C.faint }}>Description shown to students</label>
+                        <textarea
+                          value={datasetDescription}
+                          onChange={e => setDatasetDescription(e.target.value)}
+                          rows={2}
+                          style={{ ...inp, fontSize: 13, resize: 'vertical', lineHeight: 1.5 } as React.CSSProperties}
+                          placeholder={creationMode === 'ai' ? 'Leave blank to let AI write one, or describe the dataset yourself…' : 'e.g. Q3 regional sales transactions with status and amount columns.'}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1341,7 +1361,7 @@ function VirtualExperienceCreatePageInner() {
           const managerTitle = config.managerTitle || 'Head of Analytics';
           const managerInitials = managerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
           const companyInitials = config.company?.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() || '??';
-          const dataset = (config as any).dataset;
+          const dataset = config.dataset;
 
           return (
           <div className="max-w-4xl mx-auto px-4 py-6">
@@ -1468,11 +1488,17 @@ function VirtualExperienceCreatePageInner() {
 
                     {/* Dataset badge */}
                     {dataset && (
-                      <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: C.pill }}>
-                        <span className="text-base">📊</span>
-                        <div>
+                      <div className="flex items-start gap-2 p-3 rounded-xl" style={{ background: C.pill }}>
+                        <span className="text-base flex-shrink-0 mt-0.5">📊</span>
+                        <div className="flex-1 min-w-0">
                           <p className="text-[12px] font-bold" style={{ color: C.text }}>{dataset.filename || 'Linked Dataset'}</p>
-                          {dataset.description && <p className="text-[11px] mt-0.5" style={{ color: C.muted }}>{dataset.description}</p>}
+                          <input
+                            value={dataset.description || ''}
+                            onChange={e => setConfig(c => c && c.dataset ? { ...c, dataset: { ...c.dataset, description: e.target.value } } : c)}
+                            className="w-full bg-transparent outline-none text-[11px] mt-0.5"
+                            style={{ color: C.muted }}
+                            placeholder="Describe this dataset for students…"
+                          />
                         </div>
                       </div>
                     )}
