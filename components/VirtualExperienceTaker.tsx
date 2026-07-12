@@ -1032,7 +1032,7 @@ export default function VirtualExperienceTaker({
                                     <MailThreadMsg isDark={isDark} from="me" meName={studentName}
                                       time={typingAcks.has(req.id) ? 'Sending...' : 'Just now'}
                                       receipt={typingAcks.has(req.id) ? undefined : `Seen by ${firstNameOf(manager.name)} just now`}
-                                      quote={req.description ? `On ${stamp.full}, ${manager.name} wrote: ${quoteSnippet(req.description)}` : undefined}>
+                                      quote={req.description ? `On ${stamp.full}, ${manager.name} wrote: ${quoteSnippet(applyNameTags(req.description, studentName))}` : undefined}>
                                       {progress[req.id]?.notes || 'Got it, starting now'}
                                     </MailThreadMsg>
                                     <div><MailStatusChip accent={accentColor}>Brief acknowledged</MailStatusChip></div>
@@ -1146,7 +1146,7 @@ export default function VirtualExperienceTaker({
                                 <div style={{ padding: '16px 22px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
                                   <MailThreadMsg isDark={isDark} from="me" meName={studentName}
                                     receipt={`Seen by ${firstNameOf(manager.name)} just now`}
-                                    quote={req.description ? `On ${stamp.full}, ${manager.name} wrote: ${quoteSnippet(req.description)}` : undefined}>
+                                    quote={req.description ? `On ${stamp.full}, ${manager.name} wrote: ${quoteSnippet(applyNameTags(req.description, studentName))}` : undefined}>
                                     <div className="rich-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(noteVal) }} />
                                   </MailThreadMsg>
                                   <div><MailStatusChip accent={accentColor}>Reply sent to {manager.name}</MailStatusChip></div>
