@@ -534,6 +534,27 @@ function VirtualExperienceCreatePageInner() {
     if (m) updateModule(moduleId, { lessons: m.lessons.filter(l => l.id !== lessonId) });
   };
 
+  // Moves a mission to a different milestone (appended at the end), since the
+  // per-milestone drag-and-drop only reorders lessons within their own module.
+  const moveLessonToModule = (fromModuleId: string, lessonId: string, toModuleId: string) => {
+    if (fromModuleId === toModuleId) return;
+    setConfig(c => {
+      if (!c) return c;
+      const from = c.modules.find(m => m.id === fromModuleId);
+      const lesson = from?.lessons.find(l => l.id === lessonId);
+      if (!lesson) return c;
+      return {
+        ...c,
+        modules: c.modules.map(m => {
+          if (m.id === fromModuleId) return { ...m, lessons: m.lessons.filter(l => l.id !== lessonId) };
+          if (m.id === toModuleId) return { ...m, lessons: [...m.lessons, lesson] };
+          return m;
+        }),
+      };
+    });
+    setExpandedModules(prev => new Set([...prev, toModuleId]));
+  };
+
   const addModule = () => {
     const mod: Module = { id: `mod-${uid()}`, title: 'New Milestone', description: '', lessons: [] };
     setConfig(c => c ? { ...c, modules: [...c.modules, mod] } : c);
@@ -554,6 +575,30 @@ function VirtualExperienceCreatePageInner() {
   const removeReq = (moduleId: string, lessonId: string, reqId: string) => {
     const l = config?.modules.find(m=>m.id===moduleId)?.lessons.find(l=>l.id===lessonId);
     if (l) updateLesson(moduleId, lessonId, { requirements: l.requirements.filter(r => r.id !== reqId) });
+  };
+
+  // Moves a task/deliverable to a different mission (appended at the end), since
+  // the per-mission drag-and-drop only reorders requirements within their own lesson.
+  const moveReqToLesson = (fromModuleId: string, fromLessonId: string, reqId: string, toModuleId: string, toLessonId: string) => {
+    if (fromModuleId === toModuleId && fromLessonId === toLessonId) return;
+    setConfig(c => {
+      if (!c) return c;
+      const fromLesson = c.modules.find(m => m.id === fromModuleId)?.lessons.find(l => l.id === fromLessonId);
+      const req = fromLesson?.requirements.find(r => r.id === reqId);
+      if (!req) return c;
+      return {
+        ...c,
+        modules: c.modules.map(m => ({
+          ...m,
+          lessons: m.lessons.map(l => {
+            if (m.id === fromModuleId && l.id === fromLessonId) return { ...l, requirements: l.requirements.filter(r => r.id !== reqId) };
+            if (m.id === toModuleId && l.id === toLessonId) return { ...l, requirements: [...l.requirements, req] };
+            return l;
+          }),
+        })),
+      };
+    });
+    setExpandedModules(prev => new Set([...prev, `${toModuleId}-${toLessonId}`]));
   };
 
   // Bunny picker helpers
@@ -1598,6 +1643,17 @@ function VirtualExperienceCreatePageInner() {
                                           ? <><ChevronDown className="w-3 h-3" /> Hide</>
                                           : <><ChevronRight className="w-3 h-3" /> {reqCount} deliverable{reqCount !== 1 ? 's' : ''}</>}
                                       </button>
+                                      {(config.modules || []).filter(m => m.id !== mod.id).length > 0 && (
+                                        <select value="" title="Move this mission to a different milestone"
+                                          onChange={e => { if (e.target.value) moveLessonToModule(mod.id, les.id, e.target.value); }}
+                                          className="flex-shrink-0"
+                                          style={{ padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.muted, fontSize: 11, maxWidth: 96 }}>
+                                          <option value="">Move to…</option>
+                                          {(config.modules || []).filter(m => m.id !== mod.id).map(m => (
+                                            <option key={m.id} value={m.id}>{m.title}</option>
+                                          ))}
+                                        </select>
+                                      )}
                                       <button onClick={() => removeLesson(mod.id, les.id)}
                                         className="hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                                         style={{ color: C.faint }}>
@@ -1729,6 +1785,36 @@ function VirtualExperienceCreatePageInner() {
                                                   onChange={e => updateReq(mod.id, les.id, req.id, { label: e.target.value })}
                                                   className="flex-1 bg-transparent text-[13px] font-semibold outline-none"
                                                   style={{ color: C.text }} placeholder="Task description…" />
+                                                {(() => {
+                                                  const groups = (config.modules || [])
+                                                    .map(m => ({
+                                                      modId: m.id,
+                                                      modTitle: m.title,
+                                                      lessons: (m.lessons || [])
+                                                        .filter(l => !(m.id === mod.id && l.id === les.id))
+                                                        .map(l => ({ lesId: l.id, lesTitle: l.title })),
+                                                    }))
+                                                    .filter(g => g.lessons.length > 0);
+                                                  if (groups.length === 0) return null;
+                                                  return (
+                                                    <select value="" title="Move this task to a different mission"
+                                                      onChange={e => {
+                                                        const [toModId, toLesId] = e.target.value.split('::');
+                                                        if (toModId && toLesId) moveReqToLesson(mod.id, les.id, req.id, toModId, toLesId);
+                                                      }}
+                                                      className="flex-shrink-0"
+                                                      style={{ padding: '2px 4px', borderRadius: 6, border: `1px solid ${C.cardBorder}`, background: C.card, color: C.muted, fontSize: 11, maxWidth: 96 }}>
+                                                      <option value="">Move to…</option>
+                                                      {groups.map(g => (
+                                                        <optgroup key={g.modId} label={g.modTitle}>
+                                                          {g.lessons.map(l => (
+                                                            <option key={l.lesId} value={`${g.modId}::${l.lesId}`}>{l.lesTitle}</option>
+                                                          ))}
+                                                        </optgroup>
+                                                      ))}
+                                                    </select>
+                                                  );
+                                                })()}
                                                 <button onClick={() => removeReq(mod.id, les.id, req.id)} className="hover:text-red-400 flex-shrink-0" style={{ color: C.faint }}>
                                                   <X className="w-3.5 h-3.5" />
                                                 </button>
