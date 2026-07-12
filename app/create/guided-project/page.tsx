@@ -351,6 +351,11 @@ function VirtualExperienceCreatePageInner() {
   const [datasetInputTab, setDatasetInputTab]  = useState<'upload'|'link'>('upload');
   const [uploadingDataset, setUploadingDataset] = useState(false);
   const datasetRef = useRef<HTMLInputElement>(null);
+  // Replace/remove the dataset directly on an already-generated/saved VE - the step-1
+  // upload screen (and its "Regenerate" way back) is only reachable for a brand-new,
+  // not-yet-saved VE, so editing an existing one had no path to change the dataset at all.
+  const [uploadingDatasetReplace, setUploadingDatasetReplace] = useState(false);
+  const datasetReplaceRef = useRef<HTMLInputElement>(null);
 
   // Step 2 state
   const [step,        setStep]        = useState<1|2>(1);
@@ -786,6 +791,25 @@ function VirtualExperienceCreatePageInner() {
     // Storage upload happens server-side in guided-project-save when the VE is saved
 
     setUploadingDataset(false);
+  };
+
+  // Replace or attach the dataset on an already-generated VE (Overview tab), writing
+  // straight into config.dataset since there is no step-1 draft to feed here.
+  const handleDatasetReplace = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingDatasetReplace(true);
+    try {
+      const text = await file.text();
+      setConfig(c => c ? { ...c, dataset: { filename: file.name, description: c.dataset?.description || '', csvContent: text, url: c.dataset?.url } } : c);
+    } finally {
+      setUploadingDatasetReplace(false);
+      e.target.value = '';
+    }
+  };
+
+  const removeDataset = () => {
+    setConfig(c => c ? { ...c, dataset: undefined } : c);
   };
 
   // AI Improve
@@ -1497,22 +1521,52 @@ function VirtualExperienceCreatePageInner() {
                       </div>
                     )}
 
-                    {/* Dataset badge */}
-                    {dataset && (
-                      <div className="flex items-start gap-2 p-3 rounded-xl" style={{ background: C.pill }}>
-                        <span className="text-base flex-shrink-0 mt-0.5">📊</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-bold" style={{ color: C.text }}>{dataset.filename || 'Linked Dataset'}</p>
-                          <input
-                            value={dataset.description || ''}
-                            onChange={e => setConfig(c => c && c.dataset ? { ...c, dataset: { ...c.dataset, description: e.target.value } } : c)}
-                            className="w-full bg-transparent outline-none text-[11px] mt-0.5"
-                            style={{ color: C.muted }}
-                            placeholder="Describe this dataset for students…"
-                          />
+                    {/* Dataset - replace/attach/remove works here even for an already-saved VE */}
+                    <div className="p-3 rounded-xl" style={{ background: C.pill }}>
+                      <input ref={datasetReplaceRef} type="file" accept=".csv,.tsv,.txt" className="hidden" onChange={handleDatasetReplace} />
+                      {dataset ? (
+                        <div className="flex items-start gap-2">
+                          <span className="text-base flex-shrink-0 mt-0.5">📊</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-[12px] font-bold flex-1 min-w-0 truncate" style={{ color: C.text }}>{dataset.filename || 'Linked Dataset'}</p>
+                              <button onClick={() => datasetReplaceRef.current?.click()} disabled={uploadingDatasetReplace}
+                                className="flex items-center gap-1 text-[11px] font-semibold flex-shrink-0 hover:opacity-70 transition-opacity" style={{ color: C.cta }}>
+                                {uploadingDatasetReplace ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                                {uploadingDatasetReplace ? 'Uploading…' : 'Replace file'}
+                              </button>
+                              <button onClick={removeDataset} title="Remove dataset"
+                                className="flex-shrink-0 hover:text-red-400 transition-colors" style={{ color: C.faint }}>
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <input
+                              value={dataset.description || ''}
+                              onChange={e => setConfig(c => c && c.dataset ? { ...c, dataset: { ...c.dataset, description: e.target.value } } : c)}
+                              className="w-full bg-transparent outline-none text-[11px] mt-0.5"
+                              style={{ color: C.muted }}
+                              placeholder="Describe this dataset for students…"
+                            />
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                              <LinkIcon className="w-3 h-3 flex-shrink-0" style={{ color: C.faint }} />
+                              <input
+                                value={dataset.url || ''}
+                                onChange={e => setConfig(c => c && c.dataset ? { ...c, dataset: { ...c.dataset, url: e.target.value || undefined } } : c)}
+                                className="flex-1 min-w-0 bg-transparent outline-none text-[11px]"
+                                style={{ color: C.muted }}
+                                placeholder="Optional link shown to students instead of/alongside the file…"
+                              />
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <button onClick={() => datasetReplaceRef.current?.click()} disabled={uploadingDatasetReplace}
+                          className="flex items-center gap-2 text-[12px] font-semibold hover:opacity-70 transition-opacity" style={{ color: C.cta }}>
+                          {uploadingDatasetReplace ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                          {uploadingDatasetReplace ? 'Uploading…' : 'Attach a dataset'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
                 </div>)}
