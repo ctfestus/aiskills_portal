@@ -915,6 +915,13 @@ function shade(hex: string, amt: number): string {
   return `#${ch(0)}${ch(2)}${ch(4)}`;
 }
 
+// #rrggbb -> rgba() string with the given alpha
+function hexRgba(hex: string, alpha: number): string {
+  const h = (hex || '').replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return hex;
+  return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${alpha})`;
+}
+
 // Scroll-linked rise/blur reveal used across the Modern template
 function MReveal({ children, delay = 0, y = 26, blur = false, className = '' }: {
   children: React.ReactNode; delay?: number; y?: number; blur?: boolean; className?: string;
@@ -1461,8 +1468,8 @@ function LandingCoursePreview({ item, typeColor, user, hFont, bFont, isDark }: {
   );
 }
 
-function LandingCarouselRow({ title, items, type, typeColor, user, hFont, bFont, isDark, hideTitle, transparentBg, popupDark }: {
-  title: string; items: ProgrammeItem[]; type: 'course' | 've' | 'path'; typeColor: string; user: any; hFont?: string; bFont?: string; isDark?: boolean; hideTitle?: boolean; transparentBg?: boolean; popupDark?: boolean;
+function LandingCarouselRow({ title, items, type, typeColor, user, hFont, bFont, isDark, hideTitle, transparentBg, popupDark, bg }: {
+  title: string; items: ProgrammeItem[]; type: 'course' | 've' | 'path'; typeColor: string; user: any; hFont?: string; bFont?: string; isDark?: boolean; hideTitle?: boolean; transparentBg?: boolean; popupDark?: boolean; bg?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollByCards = (dir: number) => scrollRef.current?.scrollBy({ left: dir * 380, behavior: 'smooth' });
@@ -1485,7 +1492,7 @@ function LandingCarouselRow({ title, items, type, typeColor, user, hFont, bFont,
   };
   useEffect(() => () => cancelClose(), []);
 
-  const rowBg    = transparentBg ? 'transparent' : (isDark ? '#1E1F26' : 'white');
+  const rowBg    = bg ?? (transparentBg ? 'transparent' : (isDark ? '#1E1F26' : 'white'));
   const rowText  = isDark ? 'white' : LAND_C.text;
   const rowMuted = isDark ? 'rgba(255,255,255,0.65)' : LAND_C.muted;
   const rowBorder = isDark ? 'rgba(255,255,255,0.25)' : LAND_C.cardBorder;
@@ -1680,7 +1687,7 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
           background: scrolled ? (isPageDark ? 'rgba(13,17,23,0.82)' : 'rgba(255,255,255,0.85)') : (isPageDark ? '#0d1117' : 'white'),
           backdropFilter: scrolled ? 'blur(14px) saturate(1.5)' : undefined,
           WebkitBackdropFilter: scrolled ? 'blur(14px) saturate(1.5)' : undefined,
-          boxShadow: scrolled ? `0 2px 20px rgba(0,0,0,${isPageDark ? '0.4' : '0.09'})` : `0 1px 10px rgba(0,0,0,${isPageDark ? '0.25' : '0.06'})`,
+          boxShadow: scrolled ? `0 2px 20px rgba(0,0,0,${isPageDark ? '0.4' : '0.09'})` : 'none',
         }}>
         <div className="max-w-[1240px] mx-auto px-6 md:px-10 h-16 flex items-center">
           <div className="flex items-center gap-2.5 mr-8 flex-shrink-0">
@@ -1770,7 +1777,8 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
           <div className="relative z-10 max-w-[1240px] mx-auto px-6 md:px-10">
             <MSectionHeading title="Learning Paths" sub="Launch your career in tech with curated courses, virtual experiences and guided projects."
               color="white" subColor="rgba(255,255,255,0.75)" accent={AMBER} hFont={hFont} bFont={bFont} />
-            <LandingCarouselRow title="Learning Paths" items={paths} type="path" typeColor={AMBER} user={user} hFont={hFont} bFont={bFont} isDark transparentBg={!isPageDark} popupDark={isPageDark} hideTitle />
+            <LandingCarouselRow title="Learning Paths" items={paths} type="path" typeColor={AMBER} user={user} hFont={hFont} bFont={bFont} isDark transparentBg={!isPageDark} popupDark={isPageDark} hideTitle
+              bg={isPageDark ? `linear-gradient(140deg, rgba(13,17,23,0.55) 0%, ${hexRgba(shade(BLUE, -0.72), 0.55)} 100%)` : undefined} />
           </div>
         </section>
       )}
