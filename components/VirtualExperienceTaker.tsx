@@ -134,6 +134,7 @@ const REQ_META: Record<string, { label: string; color: string; bg: string }> = {
 };
 
 import { safeEmbedUrl as getVideoEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
+import { HtmlEmbedFrame } from '@/components/HtmlEmbedFrame';
 
 function lessonProgress(lesson: Lesson, progress: Progress): number {
   if (!lesson.requirements.length) return 100;
@@ -844,7 +845,7 @@ export default function VirtualExperienceTaker({
 
         {/* Lesson content: subtle grey background, single white card */}
         <div ref={mainScrollRef} className="flex-1 overflow-y-auto" style={{ background: isDark ? '#141414' : '#F2F5FA' }}>
-          <div className="max-w-4xl mx-auto w-full px-2 sm:px-4 pt-4 sm:pt-3 pb-4 sm:pb-6 space-y-4">
+          <div className={`${embedUrl && isHtmlEmbedUrl(embedUrl) ? 'max-w-6xl' : 'max-w-4xl'} mx-auto w-full px-2 sm:px-4 pt-4 sm:pt-3 pb-4 sm:pb-6 space-y-4`}>
           {!currentLes && modules.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <BookOpen className="w-10 h-10 mb-3 opacity-20" style={{ color: muted }} />
@@ -877,12 +878,17 @@ export default function VirtualExperienceTaker({
                 {/* Video: above body, padded + rounded */}
                 {embedUrl && (
                   <div className="px-4 sm:px-8 pt-5 sm:pt-7 pb-2">
-                    <div className="rounded-lg overflow-hidden" style={embedUrl.includes('canva.com') || isHtmlEmbedUrl(embedUrl) ? { height: '80vh' } : { aspectRatio: '16/9' }}>
-                      <iframe src={embedUrl} className="w-full h-full border-0"
-                        sandbox={isHtmlEmbedUrl(embedUrl) ? 'allow-scripts allow-popups' : undefined}
-                        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
-                        allowFullScreen />
-                    </div>
+                    {isHtmlEmbedUrl(embedUrl) ? (
+                      <div className="rounded-lg overflow-hidden">
+                        <HtmlEmbedFrame src={embedUrl} />
+                      </div>
+                    ) : (
+                      <div className="rounded-lg overflow-hidden" style={embedUrl.includes('canva.com') ? { height: '80vh' } : { aspectRatio: '16/9' }}>
+                        <iframe src={embedUrl} className="w-full h-full border-0"
+                          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
+                          allowFullScreen />
+                      </div>
+                    )}
                   </div>
                 )}
 

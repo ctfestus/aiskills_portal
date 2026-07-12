@@ -19,6 +19,7 @@ import { tags as highlightTags } from '@lezer/highlight';
 import { useTenant } from '@/components/TenantProvider';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { safeEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
+import { HtmlEmbedFrame } from '@/components/HtmlEmbedFrame';
 import {
   executeQuery,
   initSQLRuntimeFromRows,
@@ -1328,13 +1329,19 @@ function DatasetDetailPane({
                 {(() => {
                   const embed = activeSection.videoUrl ? safeEmbedUrl(activeSection.videoUrl) : null;
                   if (!embed) return null;
-                  const isHtml = isHtmlEmbedUrl(embed);
-                  const isTall = isHtml || embed.includes('canva.com');
+                  if (isHtmlEmbedUrl(embed)) {
+                    return (
+                      <div style={{ padding: '18px 24px' }}>
+                        <div style={{ borderRadius: 12, overflow: 'hidden' }}>
+                          <HtmlEmbedFrame src={embed} height="88vh" />
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
                     <div style={{ padding: '18px 24px' }}>
-                      <div style={{ borderRadius: 12, overflow: 'hidden', ...(isTall ? { height: '88vh' } : { aspectRatio: '16 / 9' }) }}>
+                      <div style={{ borderRadius: 12, overflow: 'hidden', ...(embed.includes('canva.com') ? { height: '88vh' } : { aspectRatio: '16 / 9' }) }}>
                         <iframe src={embed} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-                          sandbox={isHtml ? 'allow-scripts allow-popups' : undefined}
                           allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
                       </div>
                     </div>

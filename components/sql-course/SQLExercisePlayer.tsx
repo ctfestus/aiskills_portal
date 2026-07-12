@@ -33,6 +33,7 @@ import {
 } from '@/lib/sql-engine';
 import { sanitizeRichText } from '@/lib/sanitize';
 import { safeEmbedUrl, isHtmlEmbedUrl } from '@/lib/safe-embed-url';
+import { HtmlEmbedFrame } from '@/components/HtmlEmbedFrame';
 import { LessonRenderer } from '@/components/lesson/LessonRenderer';
 import type { LessonDoc } from '@/lib/lesson-doc';
 
@@ -839,15 +840,20 @@ export default function SQLExercisePlayer({
                 </h2>
               )}
               {lesson?.videoUrl && safeEmbedUrl(lesson.videoUrl) && (
-                <div className="mb-4 rounded-xl overflow-hidden" style={isHtmlEmbedUrl(lesson.videoUrl) ? { height: '80vh' } : { aspectRatio: '16/9' }}>
-                  <iframe
-                    src={safeEmbedUrl(lesson.videoUrl)!}
-                    className="w-full h-full"
-                    sandbox={isHtmlEmbedUrl(lesson.videoUrl) ? 'allow-scripts allow-popups' : undefined}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
+                isHtmlEmbedUrl(lesson.videoUrl) ? (
+                  <div className="mb-4 rounded-xl overflow-hidden">
+                    <HtmlEmbedFrame src={safeEmbedUrl(lesson.videoUrl)!} />
+                  </div>
+                ) : (
+                  <div className="mb-4 rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
+                    <iframe
+                      src={safeEmbedUrl(lesson.videoUrl)!}
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                )
               )}
               {lesson?.imageUrl && (
                 <div className="mb-4 rounded-xl overflow-hidden">
