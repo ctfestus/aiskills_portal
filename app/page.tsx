@@ -1729,16 +1729,12 @@ function ModernTemplate({ user, profile, scrolled, pastHero, siteConfig, logoUrl
       {/* AD BANNER */}
       {hideAdBanner !== '1' && (
         adBannerFullWidth === '1' ? (
-          <div>
-            <div className="h-16 md:h-20" style={{ background: isPageDark ? undefined : 'white' }} />
+          <div className="pt-16 md:pt-20">
             <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} fullWidth isDark={isPageDark} />
           </div>
         ) : (
-          <div>
-            <div className="h-20 md:h-24" style={{ background: isPageDark ? undefined : 'white' }} />
-            <div className="max-w-[1240px] mx-auto px-4 sm:px-6 md:px-10 pb-2">
-              <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} isDark={isPageDark} />
-            </div>
+          <div className="max-w-[1240px] mx-auto px-4 sm:px-6 md:px-10 pb-2 pt-20 md:pt-24">
+            <LandingAdBanner ads={adCards} hFont={hFont} bFont={bFont} isDark={isPageDark} />
           </div>
         )
       )}
