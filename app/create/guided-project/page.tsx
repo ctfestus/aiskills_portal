@@ -334,6 +334,13 @@ function VirtualExperienceCreatePageInner() {
   const [toolsInput,   setToolsInput]   = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
   const [emailStyle,   setEmailStyle]   = useState(false);
+  // Plain-text draft for the Scenario/Background textarea. Deriving the textarea's
+  // `value` fresh from config.background on every render (via this same HTML<->text
+  // conversion) reset the caret to the end on every keystroke, since React reassigns
+  // a controlled input's DOM value whenever the prop is a newly computed string. This
+  // draft is updated directly from the raw keystroke, decoupling display from storage.
+  const [backgroundDraft, setBackgroundDraft] = useState('');
+  const htmlToPlainText = (html: string) => (html || '').replace(/<\/p>\s*<p>/gi, '\n\n').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
   const [generating,  setGenerating]  = useState(false);
   const [genError,    setGenError]    = useState('');
   // Dataset state (shared across all modes)
@@ -434,6 +441,7 @@ function VirtualExperienceCreatePageInner() {
           if (cfg.dataset?.url) setDatasetUrl(cfg.dataset.url);
           if (cfg.dataset?.filename) setDatasetFilename(cfg.dataset.filename);
           if (cfg.dataset?.description) setDatasetDescription(cfg.dataset.description);
+          setBackgroundDraft(htmlToPlainText(cfg.background || ''));
           setConfig(cfg as ProjectConfig);
           setStep(2);
           setExpandedModules(new Set((cfg.modules || []).map((m: Module) => m.id)));
@@ -676,6 +684,7 @@ function VirtualExperienceCreatePageInner() {
         }
       }
       setConfig(attachLessonDocs(json.config));
+      setBackgroundDraft(htmlToPlainText(json.config.background || ''));
       setTitle(json.config.company ? `${json.config.company} - ${effectiveIndustry.charAt(0).toUpperCase()+effectiveIndustry.slice(1)} Project` : 'Virtual Experience');
       setCoverImage(json.config.coverImage || '');
       setExpandedModules(new Set((json.config.modules || []).map((m: Module) => m.id)));
@@ -701,6 +710,7 @@ function VirtualExperienceCreatePageInner() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
       setConfig(attachLessonDocs(json.config));
+      setBackgroundDraft(htmlToPlainText(json.config.background || ''));
       setTitle(json.config.company ? `${json.config.company} - ${effectiveIndustry.charAt(0).toUpperCase()+effectiveIndustry.slice(1)} Project` : 'Virtual Experience');
       setCoverImage(json.config.coverImage || '');
       setExpandedModules(new Set((json.config.modules || []).map((m: Module) => m.id)));
@@ -756,6 +766,7 @@ function VirtualExperienceCreatePageInner() {
       ...(dataset ? { dataset } : {}),
     };
     setConfig(blankConfig);
+    setBackgroundDraft('');
     setTitle(`${ind.label} Virtual Experience`);
     setExpandedModules(new Set([blankConfig.modules[0].id]));
     setStep(2);
@@ -1545,8 +1556,9 @@ function VirtualExperienceCreatePageInner() {
                   <div className="px-5 pb-4">
                     <label className="block text-[12px] font-semibold uppercase tracking-wide mb-1" style={{ color: C.faint }}>Scenario / Background</label>
                     <AiTextarea
-                      value={(config.background || '').replace(/<\/p>\s*<p>/gi, '\n\n').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')}
+                      value={backgroundDraft}
                       onValueChange={text => {
+                        setBackgroundDraft(text);
                         const html = text
                           .split(/\n\n+/)
                           .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
