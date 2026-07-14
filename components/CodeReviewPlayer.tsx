@@ -31,6 +31,8 @@ interface ReviewResult {
   categories: CategoryScore[];
   topRecommendations: string[];
   rubricGrades?: RubricGrade[];
+  language?: string;
+  dialect?: string;
 }
 
 interface Props {
@@ -125,9 +127,10 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
       });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
-      setResult(json);
-      const passed = !minScore || json.overallScore >= minScore;
-      onComplete(json, passed);
+      const enriched: ReviewResult = { ...json, language, ...(language === 'SQL' ? { dialect } : {}) };
+      setResult(enriched);
+      const passed = !minScore || enriched.overallScore >= minScore;
+      onComplete(enriched, passed);
     } catch (err: any) {
       setError(err.message || 'The AI review service is busy right now. Please wait a moment and try again. Your work has not been lost.');
       onReviewError?.();
@@ -337,7 +340,7 @@ export default function CodeReviewPlayer({ reqId, isDark, accentColor, completed
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] mb-3" style={{ color: '#ADEE66' }}>
-                AI Code Review · {language}
+                AI Code Review{result.language ? ` · ${result.language}${result.language === 'SQL' && result.dialect ? ` · ${result.dialect}` : ''}` : ''}
               </p>
               <div className="flex items-baseline gap-2 mb-3">
                 <span style={{ fontSize: 56, fontWeight: 900, lineHeight: 1, color: '#fff', letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums' }}>
