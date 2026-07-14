@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 // Clarification chat turns are cheap flash calls, so the cap is looser than the
 // graded-review routes. Nothing from this route is ever persisted -- the thread
 // lives only in the player's session state by design.
-const RATE_LIMIT = 30;
+const RATE_LIMIT = 20;
 const RATE_WINDOW_SECONDS = 86400;
 const MAX_QUESTION_CHARS = 500;
 const MAX_HISTORY_TURNS = 8;

@@ -56,7 +56,7 @@ describe('POST /api/ve-brief-chat - auth and rate limiting', () => {
   });
 
   it('returns 429 once over the daily cap', async () => {
-    mockGetRedis.mockReturnValue(redisStub(31) as any);
+    mockGetRedis.mockReturnValue(redisStub(21) as any);
     const res = await post({ question: 'One more thing?' });
     expect(res.status).toBe(429);
     expect(mockGenerateJSON).not.toHaveBeenCalled();
