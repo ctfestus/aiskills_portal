@@ -26,6 +26,7 @@ import {
 import {
   ChatCard, ChatMsg, ChatTypingMsg, ChatReaction, ChatThread, ChatDecisionButtons, channelFor,
 } from '@/components/ve/ChatCard';
+import { BriefAskThread } from '@/components/ve/BriefAskThread';
 
 // -- Types ---
 
@@ -170,6 +171,9 @@ export default function AssignmentExperiencePlayer({
   const [typingDecisions, setTypingDecisions] = useState<Set<string>>(new Set());
   const [typingAcks,      setTypingAcks]      = useState<Set<string>>(new Set());
   const [openReplies,     setOpenReplies]     = useState<Set<string>>(new Set());
+  // Floating brief chat: one panel open at a time; seen stops the attention pulse.
+  const [askOpen,         setAskOpen]         = useState<Set<string>>(new Set());
+  const [askSeen,         setAskSeen]         = useState<Set<string>>(new Set());
   const [efReviewing,     setEfReviewing]     = useState<Record<string, boolean>>({});
   const [efTyping,        setEfTyping]        = useState<Record<string, boolean>>({});
   // Thread-based retries for email-framed short answers: each wrong attempt
@@ -640,7 +644,12 @@ export default function AssignmentExperiencePlayer({
                                 sender={manager} toName={studentName} toEmail={meEmail} stamp={stamp}
                                 bodyHtml={req.description ? sanitizeEmailContent(applyNameTags(req.description, studentName)) : undefined}
                                 attachments={briefAttachments.length ? briefAttachments : undefined} company={config.company}
-                                done={isDone} muteArrival={readOnly || previewMode}>
+                                done={isDone} muteArrival={readOnly || previewMode}
+                                chatAction={!readOnly ? {
+                                  label: `Chat with ${firstNameOf(manager.name)}`,
+                                  onClick: () => { setAskOpen(new Set([req.id])); setAskSeen(prev => new Set([...prev, req.id])); },
+                                  attention: !askSeen.has(req.id),
+                                } : undefined}>
                                 <div style={{ padding: '14px 22px 18px' }}>
                                   {!isDone && !readOnly ? (
                                     <SmartReplies isDark={isDark} accent={accent}
@@ -657,6 +666,12 @@ export default function AssignmentExperiencePlayer({
                                       <div><MailStatusChip accent={accent}>Brief acknowledged</MailStatusChip></div>
                                     </div>
                                   ) : null}
+                                  {!readOnly && (
+                                    <BriefAskThread isDark={isDark} accent={accent} manager={manager} studentName={studentName}
+                                      veId={formId} reqId={req.id}
+                                      open={askOpen.has(req.id)}
+                                      onOpenChange={o => setAskOpen(o ? new Set([req.id]) : new Set())} />
+                                  )}
                                 </div>
                               </MailCard>
                             </div>

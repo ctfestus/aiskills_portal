@@ -12,6 +12,7 @@ import {
   Archive, ArchiveX, Trash2, MailOpen, MoreVertical, Star, Reply, Search,
   Settings, ChevronLeft, Printer, CornerUpLeft, Paperclip, Smile, Send,
   Bold, Italic, Underline, List, ListOrdered, CheckCheck, ShieldCheck, Inbox,
+  MessageSquare,
 } from 'lucide-react';
 import {
   Person, PersonAvatar, MeAvatar, AttachmentCard, Chip, TypingDots,
@@ -77,7 +78,7 @@ export interface MailAttachment { name: string; url?: string; onClick?: () => vo
 
 export function MailCard({
   isDark, accent, reqId, subject, sender, toName, toEmail, stamp, bodyHtml,
-  attachments, company, done = false, muteArrival = false, signature = true, children,
+  attachments, company, done = false, muteArrival = false, signature = true, chatAction, children,
 }: {
   isDark: boolean;
   accent: string;
@@ -93,6 +94,9 @@ export function MailCard({
   done?: boolean;
   muteArrival?: boolean;     // review/preview: no chime, no arrival animation
   signature?: boolean;
+  // Optional chat launcher in the action toolbar (e.g. "Chat with Sarah").
+  // attention shows a pulsing dot until the chat has been opened once.
+  chatAction?: { label: string; onClick: () => void; attention?: boolean };
   children?: React.ReactNode;
 }) {
   const [read, setRead] = useState(done);
@@ -136,18 +140,33 @@ export function MailCard({
         <Settings style={{ width: 14, height: 14, color: tFaint }} aria-hidden />
       </div>
 
-      {/* Action toolbar (decorative: sells the client, does not need to work) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '4px 10px', borderBottom: `1px solid ${line}` }} aria-hidden>
-        <span style={iconBtn}><ChevronLeft size={16} /></span>
-        <span style={{ width: 1, height: 14, background: line, margin: '0 4px' }} />
-        <span style={iconBtn}><Archive size={14} /></span>
-        <span style={iconBtn}><ArchiveX size={14} /></span>
-        <span style={iconBtn}><Trash2 size={14} /></span>
-        <span style={{ width: 1, height: 14, background: line, margin: '0 4px' }} />
-        <span style={iconBtn}><MailOpen size={14} /></span>
-        <span style={iconBtn}><Printer size={14} /></span>
+      {/* Action toolbar (decorative except the chat launcher: sells the client) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '4px 10px', borderBottom: `1px solid ${line}` }}>
+        <span aria-hidden style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <span style={iconBtn}><ChevronLeft size={16} /></span>
+          <span style={{ width: 1, height: 14, background: line, margin: '0 4px' }} />
+          <span style={iconBtn}><Archive size={14} /></span>
+          <span style={iconBtn}><ArchiveX size={14} /></span>
+          <span style={iconBtn}><Trash2 size={14} /></span>
+          <span style={{ width: 1, height: 14, background: line, margin: '0 4px' }} />
+          <span style={iconBtn}><MailOpen size={14} /></span>
+          <span style={iconBtn}><Printer size={14} /></span>
+        </span>
+        {chatAction && (
+          <>
+            <span aria-hidden style={{ width: 1, height: 14, background: line, margin: '0 4px' }} />
+            <button onClick={chatAction.onClick} title={chatAction.label}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 14, border: `1px solid ${accent}45`, background: `${accent}16`, color: accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+              <MessageSquare size={13} />
+              {chatAction.label}
+              {chatAction.attention && (
+                <span className="ve-pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: accent }} />
+              )}
+            </button>
+          </>
+        )}
         <span style={{ flex: 1 }} />
-        <span style={iconBtn}><MoreVertical size={14} /></span>
+        <span aria-hidden style={iconBtn}><MoreVertical size={14} /></span>
       </div>
 
       {/* New-mail toast */}

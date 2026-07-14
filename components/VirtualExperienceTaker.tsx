@@ -29,6 +29,7 @@ import {
 import {
   ChatCard, ChatMsg, ChatTypingMsg, ChatReaction, ChatThread, ChatDecisionButtons, channelFor,
 } from '@/components/ve/ChatCard';
+import { BriefAskThread } from '@/components/ve/BriefAskThread';
 
 // Hamburger -- matches the course player (tighter line spacing than lucide's Menu).
 function MenuIcon({ className }: { className?: string }) {
@@ -247,6 +248,9 @@ export default function VirtualExperienceTaker({
   const [typingDecisions, setTypingDecisions] = useState<Set<string>>(new Set());
   const [typingAcks,      setTypingAcks]      = useState<Set<string>>(new Set());
   const [openReplies,     setOpenReplies]     = useState<Set<string>>(new Set());
+  // Floating brief chat: one panel open at a time; seen stops the attention pulse.
+  const [askOpen,         setAskOpen]         = useState<Set<string>>(new Set());
+  const [askSeen,         setAskSeen]         = useState<Set<string>>(new Set());
   const [efReviewing,     setEfReviewing]     = useState<Record<string, boolean>>({});
   const [efTyping,        setEfTyping]        = useState<Record<string, boolean>>({});
   // Thread-based retries for email-framed short answers: each wrong attempt
@@ -1082,7 +1086,12 @@ export default function VirtualExperienceTaker({
                               sender={manager} toName={studentName} toEmail={meEmail} stamp={stamp}
                               bodyHtml={req.description ? sanitizeEmailContent(applyNameTags(req.description, studentName)) : undefined}
                               attachments={briefAttachments} company={config.company}
-                              done={done} muteArrival={reviewMode || previewMode}>
+                              done={done} muteArrival={reviewMode || previewMode}
+                              chatAction={!reviewMode ? {
+                                label: `Chat with ${firstNameOf(manager.name)}`,
+                                onClick: () => { setAskOpen(new Set([req.id])); setAskSeen(prev => new Set([...prev, req.id])); },
+                                attention: !askSeen.has(req.id),
+                              } : undefined}>
                               <div style={{ padding: '14px 22px 18px' }}>
                                 {(config.tools || []).length > 0 && (
                                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
@@ -1104,6 +1113,12 @@ export default function VirtualExperienceTaker({
                                     <div><MailStatusChip accent={accentColor}>Brief acknowledged</MailStatusChip></div>
                                   </div>
                                 ) : null}
+                                {!reviewMode && (
+                                  <BriefAskThread isDark={!!isDark} accent={accentColor} manager={manager} studentName={studentName}
+                                    veId={formId} reqId={req.id}
+                                    open={askOpen.has(req.id)}
+                                    onOpenChange={o => setAskOpen(o ? new Set([req.id]) : new Set())} />
+                                )}
                               </div>
                             </MailCard>
                           </div>
