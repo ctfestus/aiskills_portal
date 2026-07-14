@@ -26,6 +26,7 @@ import {
 import {
   ChatCard, ChatMsg, ChatTypingMsg, ChatReaction, ChatThread, ChatDecisionButtons, channelFor,
 } from '@/components/ve/ChatCard';
+import { BriefAskThread } from '@/components/ve/BriefAskThread';
 
 // -- Types ---
 
@@ -657,6 +658,17 @@ export default function AssignmentExperiencePlayer({
                                       <div><MailStatusChip accent={accent}>Brief acknowledged</MailStatusChip></div>
                                     </div>
                                   ) : null}
+                                  {!readOnly && (
+                                    <div style={{ marginTop: 14 }}>
+                                      <BriefAskThread isDark={isDark} accent={accent} manager={manager} studentName={studentName}
+                                        context={{
+                                          managerName: manager.name, managerTitle: manager.title,
+                                          company: config.company, role: config.role, industry: config.industry,
+                                          missionTitle: currentLes?.title, briefSubject: subject,
+                                          briefBody: req.description, background: config.background,
+                                        }} />
+                                    </div>
+                                  )}
                                 </div>
                               </MailCard>
                             </div>

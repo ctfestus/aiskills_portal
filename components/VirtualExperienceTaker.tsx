@@ -29,6 +29,7 @@ import {
 import {
   ChatCard, ChatMsg, ChatTypingMsg, ChatReaction, ChatThread, ChatDecisionButtons, channelFor,
 } from '@/components/ve/ChatCard';
+import { BriefAskThread } from '@/components/ve/BriefAskThread';
 
 // Hamburger -- matches the course player (tighter line spacing than lucide's Menu).
 function MenuIcon({ className }: { className?: string }) {
@@ -1104,6 +1105,17 @@ export default function VirtualExperienceTaker({
                                     <div><MailStatusChip accent={accentColor}>Brief acknowledged</MailStatusChip></div>
                                   </div>
                                 ) : null}
+                                {!reviewMode && (
+                                  <div style={{ marginTop: 14 }}>
+                                    <BriefAskThread isDark={!!isDark} accent={accentColor} manager={manager} studentName={studentName}
+                                      context={{
+                                        managerName: manager.name, managerTitle: manager.title,
+                                        company: config.company, role: config.role, industry: config.industry,
+                                        missionTitle: currentLes?.title, briefSubject: subject,
+                                        briefBody: req.description, background: config.background,
+                                      }} />
+                                  </div>
+                                )}
                               </div>
                             </MailCard>
                           </div>
