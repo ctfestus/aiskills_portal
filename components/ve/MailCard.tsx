@@ -136,31 +136,37 @@ export function MailCard({
           <span style={{ marginLeft: 4, minWidth: 16, height: 16, borderRadius: 8, background: '#D93025', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>1</span>
         )}
         <span style={{ flex: 1 }} />
-        {chatAction && (
-          <button onClick={chatAction.onClick} title={chatAction.title} aria-label={chatAction.title}
-            style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: '50%', border: 'none', background: 'transparent', color: tMuted, cursor: 'pointer', flexShrink: 0 }}>
-            <MessageSquare size={15} />
-            {chatAction.attention && (
-              <span className="ve-pulse" style={{ position: 'absolute', top: 1, right: 1, width: 7, height: 7, borderRadius: '50%', background: accent, border: `1.5px solid ${barBg}` }} />
-            )}
-          </button>
-        )}
         <Search style={{ width: 14, height: 14, color: tFaint }} aria-hidden />
         <Settings style={{ width: 14, height: 14, color: tFaint }} aria-hidden />
       </div>
 
-      {/* Action toolbar (decorative: sells the client, does not need to work) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '4px 10px', borderBottom: `1px solid ${line}` }} aria-hidden>
-        <span style={iconBtn}><ChevronLeft size={16} /></span>
-        <span style={{ width: 1, height: 14, background: line, margin: '0 4px' }} />
-        <span style={iconBtn}><Archive size={14} /></span>
-        <span style={iconBtn}><ArchiveX size={14} /></span>
-        <span style={iconBtn}><Trash2 size={14} /></span>
-        <span style={{ width: 1, height: 14, background: line, margin: '0 4px' }} />
-        <span style={iconBtn}><MailOpen size={14} /></span>
-        <span style={iconBtn}><Printer size={14} /></span>
+      {/* Action toolbar (decorative except the chat launcher: sells the client) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '4px 10px', borderBottom: `1px solid ${line}` }}>
+        <span aria-hidden style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <span style={iconBtn}><ChevronLeft size={16} /></span>
+          <span style={{ width: 1, height: 14, background: line, margin: '0 4px' }} />
+          <span style={iconBtn}><Archive size={14} /></span>
+          <span style={iconBtn}><ArchiveX size={14} /></span>
+          <span style={iconBtn}><Trash2 size={14} /></span>
+          <span style={{ width: 1, height: 14, background: line, margin: '0 4px' }} />
+          <span style={iconBtn}><MailOpen size={14} /></span>
+          <span style={iconBtn}><Printer size={14} /></span>
+        </span>
+        {chatAction && (
+          <>
+            <span aria-hidden style={{ width: 1, height: 14, background: line, margin: '0 4px' }} />
+            <button onClick={chatAction.onClick} title={chatAction.title}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 14, border: `1px solid ${accent}45`, background: `${accent}16`, color: accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+              <MessageSquare size={13} />
+              Ask a question
+              {chatAction.attention && (
+                <span className="ve-pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: accent }} />
+              )}
+            </button>
+          </>
+        )}
         <span style={{ flex: 1 }} />
-        <span style={iconBtn}><MoreVertical size={14} /></span>
+        <span aria-hidden style={iconBtn}><MoreVertical size={14} /></span>
       </div>
 
       {/* New-mail toast */}
