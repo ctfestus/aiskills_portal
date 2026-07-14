@@ -248,6 +248,7 @@ export default function VirtualExperienceTaker({
   const [typingDecisions, setTypingDecisions] = useState<Set<string>>(new Set());
   const [typingAcks,      setTypingAcks]      = useState<Set<string>>(new Set());
   const [openReplies,     setOpenReplies]     = useState<Set<string>>(new Set());
+  const [askOpen,         setAskOpen]         = useState<Set<string>>(new Set());
   const [efReviewing,     setEfReviewing]     = useState<Record<string, boolean>>({});
   const [efTyping,        setEfTyping]        = useState<Record<string, boolean>>({});
   // Thread-based retries for email-framed short answers: each wrong attempt
@@ -1083,7 +1084,12 @@ export default function VirtualExperienceTaker({
                               sender={manager} toName={studentName} toEmail={meEmail} stamp={stamp}
                               bodyHtml={req.description ? sanitizeEmailContent(applyNameTags(req.description, studentName)) : undefined}
                               attachments={briefAttachments} company={config.company}
-                              done={done} muteArrival={reviewMode || previewMode}>
+                              done={done} muteArrival={reviewMode || previewMode}
+                              chatAction={!reviewMode ? {
+                                title: `Ask ${firstNameOf(manager.name)} a question`,
+                                onClick: () => setAskOpen(prev => new Set([...prev, req.id])),
+                                attention: !askOpen.has(req.id),
+                              } : undefined}>
                               <div style={{ padding: '14px 22px 18px' }}>
                                 {(config.tools || []).length > 0 && (
                                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
@@ -1109,6 +1115,8 @@ export default function VirtualExperienceTaker({
                                   <div style={{ marginTop: 14 }}>
                                     <BriefAskThread isDark={!!isDark} accent={accentColor} manager={manager} studentName={studentName}
                                       modules={config.modules}
+                                      open={askOpen.has(req.id)}
+                                      onOpenChange={o => setAskOpen(prev => { const n = new Set(prev); if (o) n.add(req.id); else n.delete(req.id); return n; })}
                                       context={{
                                         managerName: manager.name, managerTitle: manager.title,
                                         company: config.company, role: config.role, industry: config.industry,

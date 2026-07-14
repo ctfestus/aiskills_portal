@@ -171,6 +171,7 @@ export default function AssignmentExperiencePlayer({
   const [typingDecisions, setTypingDecisions] = useState<Set<string>>(new Set());
   const [typingAcks,      setTypingAcks]      = useState<Set<string>>(new Set());
   const [openReplies,     setOpenReplies]     = useState<Set<string>>(new Set());
+  const [askOpen,         setAskOpen]         = useState<Set<string>>(new Set());
   const [efReviewing,     setEfReviewing]     = useState<Record<string, boolean>>({});
   const [efTyping,        setEfTyping]        = useState<Record<string, boolean>>({});
   // Thread-based retries for email-framed short answers: each wrong attempt
@@ -641,7 +642,12 @@ export default function AssignmentExperiencePlayer({
                                 sender={manager} toName={studentName} toEmail={meEmail} stamp={stamp}
                                 bodyHtml={req.description ? sanitizeEmailContent(applyNameTags(req.description, studentName)) : undefined}
                                 attachments={briefAttachments.length ? briefAttachments : undefined} company={config.company}
-                                done={isDone} muteArrival={readOnly || previewMode}>
+                                done={isDone} muteArrival={readOnly || previewMode}
+                                chatAction={!readOnly ? {
+                                  title: `Ask ${firstNameOf(manager.name)} a question`,
+                                  onClick: () => setAskOpen(prev => new Set([...prev, req.id])),
+                                  attention: !askOpen.has(req.id),
+                                } : undefined}>
                                 <div style={{ padding: '14px 22px 18px' }}>
                                   {!isDone && !readOnly ? (
                                     <SmartReplies isDark={isDark} accent={accent}
@@ -662,6 +668,8 @@ export default function AssignmentExperiencePlayer({
                                     <div style={{ marginTop: 14 }}>
                                       <BriefAskThread isDark={isDark} accent={accent} manager={manager} studentName={studentName}
                                         modules={modules}
+                                        open={askOpen.has(req.id)}
+                                        onOpenChange={o => setAskOpen(prev => { const n = new Set(prev); if (o) n.add(req.id); else n.delete(req.id); return n; })}
                                         context={{
                                           managerName: manager.name, managerTitle: manager.title,
                                           company: config.company, role: config.role, industry: config.industry,

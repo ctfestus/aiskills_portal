@@ -12,6 +12,7 @@ import {
   Archive, ArchiveX, Trash2, MailOpen, MoreVertical, Star, Reply, Search,
   Settings, ChevronLeft, Printer, CornerUpLeft, Paperclip, Smile, Send,
   Bold, Italic, Underline, List, ListOrdered, CheckCheck, ShieldCheck, Inbox,
+  MessageSquare,
 } from 'lucide-react';
 import {
   Person, PersonAvatar, MeAvatar, AttachmentCard, Chip, TypingDots,
@@ -77,7 +78,7 @@ export interface MailAttachment { name: string; url?: string; onClick?: () => vo
 
 export function MailCard({
   isDark, accent, reqId, subject, sender, toName, toEmail, stamp, bodyHtml,
-  attachments, company, done = false, muteArrival = false, signature = true, children,
+  attachments, company, done = false, muteArrival = false, signature = true, chatAction, children,
 }: {
   isDark: boolean;
   accent: string;
@@ -93,6 +94,9 @@ export function MailCard({
   done?: boolean;
   muteArrival?: boolean;     // review/preview: no chime, no arrival animation
   signature?: boolean;
+  // Optional chat launcher in the app bar (e.g. "ask the sender a question").
+  // attention shows a pulsing dot until the chat has been opened once.
+  chatAction?: { title: string; onClick: () => void; attention?: boolean };
   children?: React.ReactNode;
 }) {
   const [read, setRead] = useState(done);
@@ -132,6 +136,15 @@ export function MailCard({
           <span style={{ marginLeft: 4, minWidth: 16, height: 16, borderRadius: 8, background: '#D93025', color: '#fff', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>1</span>
         )}
         <span style={{ flex: 1 }} />
+        {chatAction && (
+          <button onClick={chatAction.onClick} title={chatAction.title} aria-label={chatAction.title}
+            style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: '50%', border: 'none', background: 'transparent', color: tMuted, cursor: 'pointer', flexShrink: 0 }}>
+            <MessageSquare size={15} />
+            {chatAction.attention && (
+              <span className="ve-pulse" style={{ position: 'absolute', top: 1, right: 1, width: 7, height: 7, borderRadius: '50%', background: accent, border: `1.5px solid ${barBg}` }} />
+            )}
+          </button>
+        )}
         <Search style={{ width: 14, height: 14, color: tFaint }} aria-hidden />
         <Settings style={{ width: 14, height: 14, color: tFaint }} aria-hidden />
       </div>

@@ -5,7 +5,7 @@
 // Nothing is persisted anywhere -- the thread lives in component state and is
 // gone when the player unmounts. That is the intended behavior, not a gap.
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { HelpCircle, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Person, firstNameOf } from './workplace';
@@ -38,19 +38,27 @@ export interface OutlineModule {
 
 type Msg = { who: 'me' | 'manager'; text: string };
 
-export function BriefAskThread({ isDark, accent, manager, studentName, context, modules }: {
+export function BriefAskThread({ isDark, accent, manager, studentName, context, modules, open, onOpenChange }: {
   isDark: boolean;
   accent: string;
   manager: Person;
   studentName: string;
   context: BriefChatContext;
   modules?: OutlineModule[];
+  open: boolean;                          // lifted so the mail app bar's chat icon can open it too
+  onOpenChange: (open: boolean) => void;
 }) {
   const [msgs, setMsgs]       = useState<Msg[]>([]);
   const [input, setInput]     = useState('');
-  const [open, setOpen]       = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [error, setError]     = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Opened from the app bar icon: bring the composer into view.
+  useEffect(() => {
+    if (!open) return;
+    try { rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch {}
+  }, [open]);
 
   const line   = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
   const tFaint = isDark ? '#6b7075' : '#9aa0a6';
@@ -89,7 +97,7 @@ export function BriefAskThread({ isDark, accent, manager, studentName, context, 
 
   if (!open && msgs.length === 0) {
     return (
-      <button onClick={() => setOpen(true)}
+      <button onClick={() => onOpenChange(true)}
         style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 18px', borderRadius: 18, border: `1px solid ${isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.18)'}`, background: 'transparent', fontSize: 13.5, fontWeight: 600, color: isDark ? '#ddd' : '#444', cursor: 'pointer' }}>
         <HelpCircle className="w-4 h-4" /> Ask a question
       </button>
@@ -97,7 +105,7 @@ export function BriefAskThread({ isDark, accent, manager, studentName, context, 
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {msgs.map((m, i) => (
         <MailThreadMsg key={i} isDark={isDark} from={m.who === 'me' ? 'me' : manager} meName={studentName}>
           {m.text}
