@@ -1194,7 +1194,7 @@ export default function AssignmentExperiencePlayer({
                                       </MailThreadMsg>
                                     </div>
                                     <MailThreadMsg isDark={isDark} from={manager}>
-                                      <p style={{ margin: '0 0 10px' }}>Your submission has been received and is currently under review. I will get back to you shortly.</p>
+                                      <p style={{ margin: '0 0 10px' }}>Thanks, {firstNameOf(studentName)} - I have received your {typeLabel} and it is currently under review. I will get back to you shortly.</p>
                                       {!isDone && (
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: muted, fontSize: 12.5 }}>
                                           <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: accent }} /> AI is reviewing your {typeLabel}...
@@ -1208,7 +1208,8 @@ export default function AssignmentExperiencePlayer({
                                 {isDone && (
                                   <div style={{ padding: '16px 22px 20px', borderTop: `1px solid ${divider}` }}>
                                     <MailThreadMsg isDark={isDark} from={manager}>
-                                      <p style={{ margin: '0 0 18px' }}>Hi, here is the report from the review that has been done.</p>
+                                      <p style={{ margin: '0 0 4px' }}>Hi {firstNameOf(studentName)},</p>
+                                      <p style={{ margin: '0 0 18px' }}>Thanks for sending over your {typeLabel}. I have completed the review - please find my detailed feedback below.</p>
                                       <div style={{ background: subtle, borderRadius: 10, padding: 16, border: `1px solid ${border}` }}>
                                         {req.type === 'dashboard_critique' && savedReport && (
                                           <DashboardCritiquePlayer reqId={req.id} isDark={isDark} accentColor={accent} completed={true}
@@ -1223,6 +1224,8 @@ export default function AssignmentExperiencePlayer({
                                             savedResult={r as any} context={req.context} rubric={req.rubric} minScore={req.minScore} onComplete={() => {}} />
                                         ); })()}
                                       </div>
+                                      <p style={{ margin: '18px 0 0' }}>Let me know if anything is unclear.</p>
+                                      <p style={{ margin: '4px 0 0' }}>Best,<br />{firstNameOf(manager.name)}</p>
                                     </MailThreadMsg>
                                   </div>
                                 )}
