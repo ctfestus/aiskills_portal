@@ -1115,15 +1115,9 @@ export default function VirtualExperienceTaker({
                                 ) : null}
                                 {!reviewMode && (
                                   <BriefAskThread isDark={!!isDark} accent={accentColor} manager={manager} studentName={studentName}
-                                    modules={config.modules}
+                                    veId={formId} reqId={req.id}
                                     open={askOpen.has(req.id)}
-                                    onOpenChange={o => setAskOpen(o ? new Set([req.id]) : new Set())}
-                                    context={{
-                                      managerName: manager.name, managerTitle: manager.title,
-                                      company: config.company, role: config.role, industry: config.industry,
-                                      missionTitle: currentLes?.title, briefSubject: subject,
-                                      briefBody: req.description, background: config.background,
-                                    }} />
+                                    onOpenChange={o => setAskOpen(o ? new Set([req.id]) : new Set())} />
                                 )}
                               </div>
                             </MailCard>
