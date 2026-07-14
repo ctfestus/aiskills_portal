@@ -94,9 +94,9 @@ export function MailCard({
   done?: boolean;
   muteArrival?: boolean;     // review/preview: no chime, no arrival animation
   signature?: boolean;
-  // Optional chat launcher in the app bar (e.g. "ask the sender a question").
+  // Optional chat launcher in the action toolbar (e.g. "Chat with Sarah").
   // attention shows a pulsing dot until the chat has been opened once.
-  chatAction?: { title: string; onClick: () => void; attention?: boolean };
+  chatAction?: { label: string; onClick: () => void; attention?: boolean };
   children?: React.ReactNode;
 }) {
   const [read, setRead] = useState(done);
@@ -155,10 +155,10 @@ export function MailCard({
         {chatAction && (
           <>
             <span aria-hidden style={{ width: 1, height: 14, background: line, margin: '0 4px' }} />
-            <button onClick={chatAction.onClick} title={chatAction.title}
+            <button onClick={chatAction.onClick} title={chatAction.label}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 14, border: `1px solid ${accent}45`, background: `${accent}16`, color: accent, fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
               <MessageSquare size={13} />
-              Ask a question
+              {chatAction.label}
               {chatAction.attention && (
                 <span className="ve-pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: accent }} />
               )}
