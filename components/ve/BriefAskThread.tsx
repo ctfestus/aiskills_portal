@@ -24,14 +24,27 @@ export interface BriefChatContext {
   studentName?: string;
 }
 
+// Minimal structural view of both players' module trees. Only what the student
+// will see anyway goes to the AI: type, label, instructions. Graded-answer
+// fields (correctAnswer, options, expectedAnswer, rubric) are never read here,
+// so the persona cannot leak them no matter how it is asked.
+export interface OutlineModule {
+  title?: string;
+  lessons?: Array<{
+    title?: string;
+    requirements?: Array<{ type?: string; label?: string; description?: string }>;
+  }>;
+}
+
 type Msg = { who: 'me' | 'manager'; text: string };
 
-export function BriefAskThread({ isDark, accent, manager, studentName, context }: {
+export function BriefAskThread({ isDark, accent, manager, studentName, context, modules }: {
   isDark: boolean;
   accent: string;
   manager: Person;
   studentName: string;
   context: BriefChatContext;
+  modules?: OutlineModule[];
 }) {
   const [msgs, setMsgs]       = useState<Msg[]>([]);
   const [input, setInput]     = useState('');
@@ -50,6 +63,10 @@ export function BriefAskThread({ isDark, accent, manager, studentName, context }
     const history = msgs;
     setMsgs(prev => [...prev, { who: 'me', text: question }]);
     setWaiting(true);
+    const outline = (modules || []).flatMap(m => (m.lessons || []).map(les => ({
+      mission: [m.title, les.title].filter(Boolean).join(' / '),
+      items: (les.requirements || []).map(r => ({ kind: r.type, label: r.label, detail: r.description })),
+    })));
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/ve-brief-chat', {
@@ -58,7 +75,7 @@ export function BriefAskThread({ isDark, accent, manager, studentName, context }
           'Content-Type': 'application/json',
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ question, history, context: { ...context, studentName } }),
+        body: JSON.stringify({ question, history, outline, context: { ...context, studentName } }),
       });
       const json = await res.json();
       if (json.error) throw new Error(json.error);

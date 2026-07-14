@@ -89,6 +89,23 @@ describe('POST /api/ve-brief-chat - generation', () => {
     expect(prompt).not.toContain('<p>');
   });
 
+  it('grounds the prompt in the project plan outline', async () => {
+    mockGenerateJSON.mockResolvedValue({ reply: 'That deliverable is a cleaned CSV.' });
+    const res = await post({
+      question: 'What should the deliverable in part 2 look like?',
+      outline: [
+        { mission: 'Part 1 / Clean the data', items: [{ kind: 'task', label: 'Remove duplicates', detail: '<b>Use</b> the ID column' }] },
+        { mission: 'Part 2 / Report', items: [{ kind: 'deliverable', label: 'Upload cleaned file', detail: 'CSV format' }] },
+      ],
+    });
+    expect(res.status).toBe(200);
+    const prompt = mockGenerateJSON.mock.calls[0][0] as string;
+    expect(prompt).toContain('Full project plan');
+    expect(prompt).toContain('[task] Remove duplicates: Use the ID column');
+    expect(prompt).toContain('[deliverable] Upload cleaned file: CSV format');
+    expect(prompt).not.toContain('<b>');
+  });
+
   it('returns 500 when the model returns no usable reply', async () => {
     mockGenerateJSON.mockResolvedValue({ reply: '' });
     expect((await post({ question: 'Anything?' })).status).toBe(500);

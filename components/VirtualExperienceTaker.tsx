@@ -1108,6 +1108,7 @@ export default function VirtualExperienceTaker({
                                 {!reviewMode && (
                                   <div style={{ marginTop: 14 }}>
                                     <BriefAskThread isDark={!!isDark} accent={accentColor} manager={manager} studentName={studentName}
+                                      modules={config.modules}
                                       context={{
                                         managerName: manager.name, managerTitle: manager.title,
                                         company: config.company, role: config.role, industry: config.industry,

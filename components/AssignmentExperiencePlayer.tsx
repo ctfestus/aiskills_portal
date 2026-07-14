@@ -661,6 +661,7 @@ export default function AssignmentExperiencePlayer({
                                   {!readOnly && (
                                     <div style={{ marginTop: 14 }}>
                                       <BriefAskThread isDark={isDark} accent={accent} manager={manager} studentName={studentName}
+                                        modules={modules}
                                         context={{
                                           managerName: manager.name, managerTitle: manager.title,
                                           company: config.company, role: config.role, industry: config.industry,
